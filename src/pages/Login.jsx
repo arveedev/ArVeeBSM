@@ -178,6 +178,12 @@ function Login() {
   return (
     <div className={`flex min-h-screen flex-col items-center justify-center px-6 ${(isExiting || !hasEntered) ? 'overflow-hidden' : ''}`}>
       <div className="w-full max-w-sm">
+        <img
+          src="/logo.svg"
+          alt="BSM App logo"
+          style={(isExiting || !hasEntered) ? flyTransformUp : undefined}
+          className="mx-auto mb-4 h-20 w-20 rounded-2xl transition-all duration-[1400ms]"
+        />
         <h1
           style={(isExiting || !hasEntered) ? flyTransformUp : undefined}
           className="text-center text-2xl font-semibold text-app-text transition-all duration-[1400ms]"

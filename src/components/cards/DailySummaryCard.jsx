@@ -115,7 +115,8 @@ function DailySummaryCard({ dateFrom, dateTo }) {
       link.href = canvas.toDataURL('image/jpeg', 0.92)
       link.click()
       toast.success('Summary image saved')
-    } catch {
+    } catch (err) {
+      console.error('Summary image export error:', err)
       toast.error('Export failed — try again')
     } finally {
       setExporting(false)
@@ -128,7 +129,7 @@ function DailySummaryCard({ dateFrom, dateTo }) {
         <button
           type="button"
           onClick={handleExport}
-          disabled={exporting || !hasData}
+          disabled={exporting}
           className="flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-95 disabled:opacity-40"
         >
           {exporting ? <Loader size={13} className="animate-spin" /> : <Camera size={13} />}

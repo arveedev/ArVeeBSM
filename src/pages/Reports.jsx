@@ -161,11 +161,6 @@ function Reports() {
       toast.error('Set the Statement period (From and To) before exporting')
       return
     }
-    const allTx = [...(stockTxRaw ?? []).map(enrichStock), ...(sackTxRaw ?? []).map(enrichSack)]
-    if (allTx.length === 0) {
-      toast.error('No transactions in the selected period')
-      return
-    }
 
     setIsExporting(true)
     try {

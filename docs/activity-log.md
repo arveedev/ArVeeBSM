@@ -4194,3 +4194,41 @@ below.
   DEXIE_CLOUD_* env vars there scoped to Production, whitelist the
   production domain via npx dexie-cloud whitelist, and verify the same
   end-to-end flow works on the live deployed site.
+
+## Custom PWA icon/logo (Concept C selected), fixed two report-export bugs that blocked empty-period exports
+
+- Built the full PWA icon set from the user's chosen concept (flattened,
+  modernized two-triangle motif in neon green tones on the app's dark
+  background): public/icon-source.svg (production source), rasterized
+  to icon-192.png, icon-512.png, apple-touch-icon.png (180x180),
+  favicon-32/16.png, and a combined favicon.ico. Added
+  public/manifest.webmanifest (name, theme/background colors, both
+  "any" and "maskable" icon purposes) and linked everything in
+  index.html. Also added the same logo (as logo.svg) to the Login
+  screen above the "BSM App" title, animating in/out with the existing
+  title transition.
+- Found and fixed the actual cause of "reports don't export stock
+  balances when there are no transactions" - Reports.jsx's
+  handleExportPdf had a hard block: `if (allTx.length === 0) {
+  toast.error(...); return }`. The underlying PDF generation logic was
+  already correctly built to handle this exact case (there's an
+  existing code comment confirming "a pile with a beginning balance but
+  zero transactions in this period must still get a row") - the block
+  was the only thing preventing that correct logic from ever running.
+  Removed it entirely (and the now-unused allTx variable).
+- Found and fixed the same root problem in DailySummaryCard.jsx's
+  "Save as image" button: `disabled={exporting || !hasData}` where
+  hasData required at least one transaction - meaning the export button
+  was simply disabled whenever a period had no activity, even though
+  the card already renders a perfectly valid "No transactions in this
+  period" state in that case. Removed the !hasData condition. Also
+  added console.error logging to the export's catch block, which was
+  previously bare and would have hidden any deeper html2canvas failure
+  if one exists beyond this specific bug.
+- Verified with a test covering: PDF export proceeding with zero
+  transactions but a valid period (unchanged: still blocked with no
+  period set), the beginning-balance carry-forward math confirming
+  ending balance equals beginning balance with zero activity, and the
+  image-export button's disabled state no longer factoring in
+  transaction count.
+- Re-verified all 59 .jsx files with the real parser.
