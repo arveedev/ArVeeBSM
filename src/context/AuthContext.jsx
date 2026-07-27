@@ -7,6 +7,7 @@
 
 import { createContext, useContext, useState } from 'react'
 import { db } from '../db/dexie.js'
+import { hashPin } from '../utils/pinHash.js'
 
 const AuthContext = createContext(null)
 
@@ -16,14 +17,48 @@ export const AuthProvider = ({ children }) => {
   /**
    * Validate a 6-digit access code against the local `users` table.
    * Returns the matching user record on success, or null on failure.
+   * If no real user matches, also checks the global visitor access code
+   * (admin-configured) - a match creates a synthetic, view-only session
+   * with no uid/warehouse, since a visitor isn't a real staff account.
+   *
+   * PINs are never stored or compared in plain text - both accessCode
+   * (per user) and visitorAccessCode (global) are stored as SHA-256
+   * hashes, so the entered PIN is hashed here before every lookup.
    */
   const login = async (accessCode) => {
-    const match = await db.users.where('accessCode').equals(accessCode).first()
+    const hashedInput = await hashPin(accessCode)
 
-    if (!match) return null
+    // TEMPORARY DIAGNOSTIC LOGGING - see matching note in db/dexie.js.
+    // Remove once the Dexie Cloud connection is confirmed stable.
+    try {
+      const totalUsers = await db.users.count()
+      console.log(`[DEXIE-CLOUD-DIAGNOSTIC] login attempt - users table has ${totalUsers} total record(s)`)
+    } catch (err) {
+      console.log('[DEXIE-CLOUD-DIAGNOSTIC] login attempt - ERROR counting users table:', err.message)
+    }
 
-    setUser(match)
-    return match
+    let match
+    try {
+      match = await db.users.where('accessCode').equals(hashedInput).first()
+      console.log('[DEXIE-CLOUD-DIAGNOSTIC] login query result:', match ? `matched uid ${match.uid}` : 'no match found')
+    } catch (err) {
+      console.log('[DEXIE-CLOUD-DIAGNOSTIC] login query THREW an error:', err.message, err.stack)
+      throw err
+    }
+
+    if (match) {
+      setUser(match)
+      return match
+    }
+
+    const config = await db.reportConfig.get('global')
+    if (config?.visitorAccessCode && hashedInput === config.visitorAccessCode) {
+      const visitorUser = { role: 'Visitor', nickname: 'Visitor', name: 'Visitor' }
+      setUser(visitorUser)
+      return visitorUser
+    }
+
+    return null
   }
 
   const logout = () => setUser(null)

@@ -8,10 +8,10 @@
 import { stepSerial } from '../../utils/serialNumber.js'
 
 const inputClass =
-  'mt-1 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-center font-mono text-white outline-none transition-colors focus:border-brand-neon'
+  'mt-1 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon'
 
 const stepperButtonClass =
-  'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-lg font-semibold text-neutral-300 transition-all hover:border-neutral-600 hover:text-white active:scale-90'
+  'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-lg font-semibold text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90'
 
 function SerialNumberField({ value, onChange, label = 'Serial No.' }) {
   return (

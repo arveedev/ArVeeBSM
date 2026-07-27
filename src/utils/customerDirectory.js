@@ -4,18 +4,48 @@
 // normalized version of the name (trimmed, lowercased, collapsed
 // whitespace). Records: name, RSBSA, gender, address (new), and whether
 // the customer was last entered as an individual or farmer cooperative.
+//
+// Special case, explicitly scoped - NOT a general mechanism: "Various
+// Farmers" (used on Procurement transactions as shorthand for
+// "whichever farmers sold to this specific warehouse today") gets a
+// different address per warehouse, stored separately. This is
+// deliberately hardcoded to this one name, not applied to every
+// customer - a normal customer has exactly one address, and typing a
+// different one at a different warehouse should simply update it, the
+// same as it always has. Confirmed directly: applying this to all
+// customers was explicitly rejected as bad UX.
 
 import { db } from '../db/dexie.js'
 
 export const normalizeCustomerName = (name = '') =>
   name.trim().toLowerCase().replace(/\s+/g, ' ')
 
+const VARIOUS_FARMERS_NAME = 'various farmers'
+
+/** Resolves the address to actually use for a given warehouse. Only
+ * "Various Farmers" ever has a per-warehouse override - and for this
+ * one name specifically, there is no shared fallback address at all:
+ * a warehouse with no saved entry yet gets a blank address (so the
+ * user enters a new one for THIS warehouse), never the generic
+ * top-level field, which would otherwise leak whatever address a
+ * DIFFERENT warehouse most recently saved. Every other customer still
+ * uses the single generic address regardless of warehouse. */
+const resolveAddress = (customer, warehouseId) => {
+  const isVariousFarmers = customer?.normalizedName === VARIOUS_FARMERS_NAME
+  if (isVariousFarmers) {
+    return (warehouseId && customer?.addressesByWarehouse?.[warehouseId]) || null
+  }
+  return customer?.address ?? null
+}
+
 /**
  * Returns up to `limit` customers whose name starts with or contains
  * `query` (case-insensitive). Only searches once `query` is at least 3
- * characters.
+ * characters. When warehouseId is provided, each result's address is
+ * resolved for that specific warehouse (only actually differs for
+ * "Various Farmers" - see resolveAddress above).
  */
-export const searchCustomers = async (query, limit = 6) => {
+export const searchCustomers = async (query, limit = 6, warehouseId = null) => {
   const normalizedQuery = normalizeCustomerName(query)
   if (normalizedQuery.length < 3) return []
 
@@ -29,15 +59,16 @@ export const searchCustomers = async (query, limit = 6) => {
     return a.name.localeCompare(b.name)
   })
 
-  return matches.slice(0, limit)
+  return matches.slice(0, limit).map((c) => ({ ...c, address: resolveAddress(c, warehouseId) }))
 }
 
 /**
  * Detects a "WS" / "Acting WS" prefix on a partially-typed customer name
  * and, if found, returns matching Warehouse Supervisor users formatted as
- * full suggestion strings (e.g. "WS John Jones", "Acting WS John Jones").
- * Used when a transaction moves stock between warehouses and the
- * "customer" is really another warehouse's supervisor.
+ * full suggestion strings. The "Acting WS" vs "WS" label is derived from
+ * each supervisor's actual capacity (set in the Signatories admin tab),
+ * not from what prefix was typed - typing just "WS" is enough, the app
+ * knows if that supervisor is currently acting.
  *
  * If a supervisor is assigned to more than one warehouse, one suggestion
  * row is returned PER assigned warehouse (e.g. "WS John Jones — ABACORP
@@ -54,8 +85,7 @@ export const searchWarehouseSupervisors = async (query) => {
   const match = WS_PREFIX_PATTERN.exec(query.trim())
   if (!match) return []
 
-  const [, actingPrefix, nameFragment] = match
-  const prefixLabel = actingPrefix ? 'Acting WS' : 'WS'
+  const [, , nameFragment] = match
 
   const users = await db.users.where('role').equals('Warehouse Supervisor').toArray()
   const warehouses = await db.warehouses.toArray()
@@ -68,6 +98,9 @@ export const searchWarehouseSupervisors = async (query) => {
 
   const suggestions = []
   for (const u of matches) {
+    const signatory = await db.signatories.get(u.uid)
+    const prefixLabel = signatory?.capacity === 'Acting Warehouse Supervisor' ? 'Acting WS' : 'WS'
+
     const assignedWarehouses = (u.assignedWarehouses ?? [])
       .map((id) => warehouseMap.get(id))
       .filter(Boolean)
@@ -103,17 +136,31 @@ export const searchWarehouseSupervisors = async (query) => {
 /**
  * Looks up a customer by exact (normalized) name match — used to
  * auto-fill all known fields when the user types or selects a name.
+ * When warehouseId is provided, the returned address is resolved for
+ * that specific warehouse - but only actually differs for "Various
+ * Farmers" (see resolveAddress above); every other customer's address
+ * is the same regardless of warehouse.
  */
-export const findCustomerByName = async (name) => {
+export const findCustomerByName = async (name, warehouseId = null) => {
   const normalizedName = normalizeCustomerName(name)
   if (!normalizedName) return null
-  return db.customers.where('normalizedName').equals(normalizedName).first()
+  const customer = await db.customers.where('normalizedName').equals(normalizedName).first()
+  if (!customer) return null
+  return { ...customer, address: resolveAddress(customer, warehouseId) }
 }
 
 /**
  * Upserts a customer record from whatever a form just saved. Preserves
  * existing fields if newer save doesn't supply them (e.g. an ESR form
  * that doesn't collect RSBSA won't clear an RSBSA set from a prior WSR).
+ *
+ * Only "Various Farmers" ever gets a per-warehouse address override
+ * (addressesByWarehouse) - explicitly scoped to this one name, not a
+ * general mechanism. Every other customer's address is just the single
+ * top-level field, overwritten on each save exactly as it always has
+ * been - entering a different address for the same normal customer at
+ * a different warehouse simply updates it, it does not start tracking
+ * multiple addresses for that person.
  */
 export const rememberCustomer = async ({
   name,
@@ -122,11 +169,17 @@ export const rememberCustomer = async ({
   address = null,
   isFarmerOrg = false,
   farmerCoopMembers = null,
+  warehouseId = null,
 }) => {
   const normalizedName = normalizeCustomerName(name)
   if (!normalizedName) return
 
   const existing = await db.customers.where('normalizedName').equals(normalizedName).first()
+
+  const addressesByWarehouse = { ...(existing?.addressesByWarehouse ?? {}) }
+  if (normalizedName === VARIOUS_FARMERS_NAME && warehouseId && address) {
+    addressesByWarehouse[warehouseId] = address
+  }
 
   const record = {
     customerId: existing?.customerId ?? crypto.randomUUID(),
@@ -135,6 +188,7 @@ export const rememberCustomer = async ({
     rsbsa: rsbsa || existing?.rsbsa || null,
     gender: gender || existing?.gender || null,
     address: address || existing?.address || null,
+    addressesByWarehouse,
     isFarmerOrg,
     farmerCoopMembers: isFarmerOrg
       ? farmerCoopMembers

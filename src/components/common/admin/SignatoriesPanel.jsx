@@ -43,7 +43,7 @@ function CertifiedCorrectSection() {
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-white">Certified Correct</h2>
+      <h2 className="text-base font-semibold text-app-text">Certified Correct</h2>
       <p className="mt-1 text-xs text-neutral-400">
         Configure each Warehouse Supervisor's reporting position once — it
         applies to every warehouse they're assigned to. The name on the
@@ -70,8 +70,11 @@ function CertifiedCorrectSection() {
   )
 }
 
+const CAPACITIES = ['Warehouse Supervisor', 'Acting Warehouse Supervisor']
+
 function SupervisorSignatoryRow({ supervisor, warehouseMap }) {
   const [position, setPosition] = useState('')
+  const [capacity, setCapacity] = useState(CAPACITIES[0])
   const [expanded, setExpanded] = useState(false)
 
   const saved = useLiveQuery(
@@ -81,12 +84,14 @@ function SupervisorSignatoryRow({ supervisor, warehouseMap }) {
 
   useEffect(() => {
     setPosition(saved?.certifiedCorrectPosition ?? '')
+    setCapacity(saved?.capacity ?? CAPACITIES[0])
   }, [saved])
 
   const handleSave = async () => {
     await db.signatories.put({
       warehouseId: supervisor.uid,   // keyed by supervisor uid, not warehouseId
       certifiedCorrectPosition: position.trim(),
+      capacity,
     })
     toast.success('Position saved')
   }
@@ -104,7 +109,7 @@ function SupervisorSignatoryRow({ supervisor, warehouseMap }) {
         className="flex w-full items-center justify-between text-left"
       >
         <div>
-          <p className="text-sm font-medium text-white">{supervisor.name}</p>
+          <p className="text-sm font-medium text-app-text">{supervisor.name}</p>
           <p className="text-xs text-neutral-400">
             {warehouseNames.length > 0
               ? warehouseNames.join(', ')
@@ -120,7 +125,17 @@ function SupervisorSignatoryRow({ supervisor, warehouseMap }) {
       {expanded && (
         <div className="mt-3 space-y-2">
           <div>
-            <label className={labelClass}>Position / Designation</label>
+            <label className={labelClass}>Capacity</label>
+            <select value={capacity} onChange={(e) => setCapacity(e.target.value)} className={inputClass}>
+              {CAPACITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-neutral-500">
+              Used to auto-detect "Acting WS" vs "WS" when this supervisor
+              is suggested as a customer name on a form.
+            </p>
+          </div>
+          <div>
+            <label className={labelClass}>Position / Designation (for reports)</label>
             <input
               type="text"
               value={position}
@@ -148,6 +163,8 @@ function GlobalSignatoriesSection() {
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
 
   const [verifiedCorrect, setVerifiedCorrect] = useState([emptySignatory()])
+  const [bsqaoName, setBsqaoName] = useState('')
+  const [bsqaoPosition, setBsqaoPosition] = useState('')
   const [auditedByName, setAuditedByName] = useState('')
   const [auditedByPosition, setAuditedByPosition] = useState('')
   const [notedByName, setNotedByName] = useState('')
@@ -156,6 +173,8 @@ function GlobalSignatoriesSection() {
   useEffect(() => {
     if (!config) return
     setVerifiedCorrect(config.verifiedCorrect?.length ? config.verifiedCorrect : [emptySignatory()])
+    setBsqaoName(config.bsqao?.name ?? '')
+    setBsqaoPosition(config.bsqao?.position ?? '')
     setAuditedByName(config.auditedByName ?? '')
     setAuditedByPosition(config.auditedByPosition ?? '')
     setNotedByName(config.notedByName ?? '')
@@ -179,8 +198,10 @@ function GlobalSignatoriesSection() {
     )
 
     await db.reportConfig.put({
+      ...config,
       id: 'global',
       verifiedCorrect: cleanedVerified,
+      bsqao: bsqaoName.trim() ? { name: bsqaoName.trim(), position: bsqaoPosition.trim() } : null,
       auditedByName: auditedByName.trim(),
       auditedByPosition: auditedByPosition.trim(),
       notedByName: notedByName.trim(),
@@ -191,7 +212,7 @@ function GlobalSignatoriesSection() {
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-white">
+      <h2 className="text-base font-semibold text-app-text">
         Verified Correct · Audited By · Noted By
       </h2>
       <p className="mt-1 text-xs text-neutral-400">
@@ -201,7 +222,7 @@ function GlobalSignatoriesSection() {
       <div className="mt-4 space-y-5">
         {/* Verified Correct — one or more */}
         <div>
-          <p className="text-sm font-semibold text-white">Verified Correct</p>
+          <p className="text-sm font-semibold text-app-text">Verified Correct</p>
           <div className="mt-2 space-y-2">
             {verifiedCorrect.map((row, i) => (
               <div key={i} className="flex gap-2">
@@ -223,7 +244,7 @@ function GlobalSignatoriesSection() {
                   type="button"
                   onClick={() => removeVerifiedRow(i)}
                   aria-label="Remove signatory"
-                  className="rounded-xl border border-neutral-800 px-2 text-neutral-400 transition-colors hover:border-neutral-600 hover:text-white active:scale-95"
+                  className="rounded-xl border border-neutral-800 px-2 text-neutral-400 transition-colors hover:border-neutral-600 hover:text-app-text active:scale-95"
                 >
                   <X size={16} />
                 </button>
@@ -239,9 +260,30 @@ function GlobalSignatoriesSection() {
           </button>
         </div>
 
+        {/* BSQAO — used as "Verified Correct" specifically on the Pile
+            Layout report. Distinct from the general Verified Correct
+            list above, which is used on stock/sack reports. */}
+        <div>
+          <p className="text-sm font-semibold text-app-text">BSQAO</p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Department head of the quality section — used as "Verified
+            Correct" on the Pile Layout report, same for every warehouse.
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label className={labelClass}>Name</label>
+              <input type="text" value={bsqaoName} onChange={(e) => setBsqaoName(e.target.value)} className={inputClass} placeholder="Full name" />
+            </div>
+            <div>
+              <label className={labelClass}>Position</label>
+              <input type="text" value={bsqaoPosition} onChange={(e) => setBsqaoPosition(e.target.value)} className={inputClass} placeholder="BSQAO" />
+            </div>
+          </div>
+        </div>
+
         {/* Audited By */}
         <div>
-          <p className="text-sm font-semibold text-white">Audited By</p>
+          <p className="text-sm font-semibold text-app-text">Audited By</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <div>
               <label className={labelClass}>Name</label>
@@ -256,7 +298,7 @@ function GlobalSignatoriesSection() {
 
         {/* Noted By */}
         <div>
-          <p className="text-sm font-semibold text-white">Noted By</p>
+          <p className="text-sm font-semibold text-app-text">Noted By</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <div>
               <label className={labelClass}>Name</label>

@@ -43,12 +43,21 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
+import { useSettings } from '../../context/SettingsContext.jsx'
+import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import { db } from '../../db/dexie.js'
 import {
   calculateNetKilos,
   calculateMtsFromSackWeight,
   calculateAverageWeightPerBag,
+  calculateCurrentAge,
+  bestAgeUnit,
   normalizeAgeToDays,
+  liveFormatNumber,
+  parseFormattedNumber,
+  fmtWeight,
+  fmtBags,
+  todayLocalISO,
 } from '../../utils/calculations.js'
 import {
   suggestNextSerial,
@@ -58,7 +67,9 @@ import {
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile } from '../../utils/pileLedger.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
+import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import SerialNumberField from './SerialNumberField.jsx'
+import ValidatedField from './ValidatedField.jsx'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import NewPileDialog from './NewPileDialog.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
@@ -69,10 +80,10 @@ import {
   primaryButtonClass,
   smallButtonClass,
   removeButtonClass,
+  CONDITION_FLAGS,
 } from './shared.js'
 
-const CONDITION_FLAGS = ['GQ', 'TRD', 'INF', 'PD', 'TD']
-const AGE_UNITS = ['Days', 'Months']
+const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 const GENDERS = ['Male', 'Female']
 const PROCUREMENT_TYPE_NAME = 'Procurement'
 const NEW_PILE_OPTION = '__new_pile__'
@@ -82,7 +93,7 @@ const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitiv
 const emptyMember = () => ({ name: '', rsbsa: '', gender: 'Male' })
 
 const blankFormState = {
-  date: new Date().toISOString().slice(0, 10),
+  date: todayLocalISO(),
   linkedDocNo: '',
   customerName: '',
   customerAddress: '',
@@ -106,6 +117,7 @@ const blankFormState = {
 function StockFormBase({ type, title, onClose, prefill }) {
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
+  const { weightUnit, autoAgeMonitoring } = useSettings() ?? {}
 
   const linkedDocLabel = type === 'WSR' ? 'WSI No.' : 'AI No.'
   const linkedDocDeductsFromAi = type !== 'WSR'
@@ -113,6 +125,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [serialNo, setSerialNo] = useState('')
   const [date, setDate] = useState(blankFormState.date)
   const [linkedDocNo, setLinkedDocNo] = useState('')
+  const [linkedAuthorityDate, setLinkedAuthorityDate] = useState(null)
+  const [showAuthorityPicker, setShowAuthorityPicker] = useState(false)
   const [customerName, setCustomerName] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
   const [farmerRsbsa, setFarmerRsbsa] = useState('')
@@ -126,8 +140,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [autoComputeNet, setAutoComputeNet] = useState(true)
   const [manualNetKilos, setManualNetKilos] = useState('')
   const [ageValue, setAgeValue] = useState('')
+  const [monthsValue, setMonthsValue] = useState('0')
+  const [daysValue, setDaysValue] = useState('0')
   const [ageUnit, setAgeUnit] = useState('Days')
-  const [condition, setCondition] = useState('')
+  const [condition, setCondition] = useState('GQ')
+  const [moistureContent, setMoistureContent] = useState('')
   const [farmerOrgEnabled, setFarmerOrgEnabled] = useState(false)
   const [members, setMembers] = useState([emptyMember()])
   const [showNewPileDialog, setShowNewPileDialog] = useState(false)
@@ -140,9 +157,46 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [pendingDelete, setPendingDelete] = useState(false)
 
   const [isSaving, setIsSaving] = useState(false)
+  const [showSaveHint, setShowSaveHint] = useState(false)
+
+  // Live lookup of the linked AI authority, so its remaining balance can
+  // be shown to the user while filling out an issuance - only relevant
+  // for WSI, where linkedDocNo is genuinely an AI reference (WSR's
+  // linkedDocNo means something else entirely, a linked WSI).
+  const linkedAuthority = useLiveQuery(async () => {
+    if (!linkedDocDeductsFromAi || !linkedDocNo.trim()) return null
+    return db.authorities.where('aiNumber').equals(linkedDocNo.trim()).and((a) => a.type === 'AI').first()
+  }, [linkedDocDeductsFromAi, linkedDocNo])
+
+  const authorityRemainingKilos = linkedAuthority?.totalAllocationKilos != null
+    ? Math.max(0, linkedAuthority.totalAllocationKilos - (linkedAuthority.totalIssuedKilos ?? 0))
+    : null
+  const authorityRemainingBags = linkedAuthority?.totalAllocationBags != null
+    ? Math.max(0, linkedAuthority.totalAllocationBags - (linkedAuthority.totalIssuedBags ?? 0))
+    : null
 
   const customerNameRef = useRef(null)
   const scrollContainerRef = useRef(null)
+  const serialFieldRef = useRef(null)
+  const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
+
+  // Tracks whether the actual Serial No. field is currently scrolled
+  // into view within the form's own scroll container - drives the
+  // sticky "{type} # {serialNo}" indicator shown near the top when the
+  // user has scrolled far enough down that they can no longer see
+  // which document they're actually filling in.
+  useEffect(() => {
+    const target = serialFieldRef.current
+    const root = scrollContainerRef.current
+    if (!target || !root) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsSerialFieldVisible(entry.isIntersecting),
+      { root, threshold: 0 }
+    )
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [])
 
   const piles = useLiveQuery(async () => {
     if (!currentWarehouse) return []
@@ -176,13 +230,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isProcurement])
 
-  useEffect(() => {
-    if (selectedPile?.varietyId) {
-      setVarietyId(selectedPile.varietyId)
-      setSackSelection('')
-    }
-  }, [selectedPile])
-
   const sackOptions = [...(sackTypes ?? [])]
     .filter((s) => !selectedVariety || s.category === selectedVariety.category)
     .sort((a, b) => byAlpha(a.code, b.code))
@@ -199,7 +246,42 @@ function StockFormBase({ type, title, onClose, prefill }) {
         }))
     )
 
+  // The variety-category filter above can legitimately (or transiently,
+  // e.g. right after an update where the variety momentarily doesn't
+  // match) exclude the currently-selected sack type from the visible
+  // list - leaving <select value={sackSelection}> with no matching
+  // <option> to display, so it renders blank even though the underlying
+  // value is completely correct. Always add the current selection back
+  // in if it's missing, so what's already chosen never visually
+  // disappears just because of the category filter.
+  if (sackSelection && !sackOptions.some((o) => o.key === sackSelection)) {
+    const [selectedSackTypeId, selectedCondition] = sackSelection.split('::')
+    const rawSackType = (sackTypes ?? []).find((s) => s.sackTypeId === selectedSackTypeId)
+    if (rawSackType && rawSackType.weights?.[selectedCondition] != null) {
+      sackOptions.push({
+        key: sackSelection,
+        sackTypeId: selectedSackTypeId,
+        code: rawSackType.code,
+        condition: selectedCondition,
+        label: `${rawSackType.code} - ${selectedCondition}`,
+        weight: rawSackType.weights[selectedCondition],
+      })
+    }
+  }
+
   const selectedSack = sackOptions.find((o) => o.key === sackSelection)
+
+  // Suggested bags to exactly complete the linked AI's remaining
+  // balance - optional to use (a tappable suggestion, not auto-filled).
+  // Most AI records are kilos-only (totalAllocationBags is null), so
+  // this is derived from the kilos balance using the app's standard
+  // 50kg/bag conversion when a direct bags balance isn't available.
+  // (The gross-kilos suggestion is computed further below, after
+  // bagsNum is declared - it needs the user's ACTUAL entered bags
+  // count, not this estimate, per explicit correction.)
+  const suggestedBagsToComplete = linkedDocDeductsFromAi && authorityRemainingKilos != null
+    ? (authorityRemainingBags ?? Math.round(authorityRemainingKilos / 50))
+    : null
 
   useEffect(() => {
     if (sackSelection) return
@@ -213,9 +295,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   // Suggest a starting serial for THIS warehouse's series whenever the
   // warehouse changes (or on first mount) — only while not mid-edit of an
-  // existing series entry.
+  // existing series entry, and not when opening from a report row tap
+  // (which supplies its own serialNo via prefill and must not be
+  // overwritten by this suggestion).
   useEffect(() => {
     if (loadedTransaction) return
+    if (prefill?.serialNo) return
     if (!currentWarehouseId) return
     let cancelled = false
     suggestNextSerial(type, currentWarehouseId).then((serial) => {
@@ -227,27 +312,125 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, currentWarehouseId])
 
+  const applyPileDefaults = (targetPileId) => {
+    if (type !== 'WSI') return
+    const pile = (piles ?? []).find((p) => p.pileId === targetPileId)
+    if (!pile) return
+
+    if (pile.initialAgeValue != null) {
+      const currentAge = calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring)
+      const best = bestAgeUnit(currentAge)
+      setAgeUnit(best.unit)
+      if (best.unit === 'Months + Days') {
+        setMonthsValue(liveFormatNumber(String(best.months)))
+        setDaysValue(liveFormatNumber(String(best.days)))
+      } else {
+        setAgeValue(liveFormatNumber(String(best.value)))
+      }
+    }
+
+    if (pile.moistureContent != null) {
+      setMoistureContent(liveFormatNumber(String(pile.moistureContent)))
+    }
+  }
+
   useEffect(() => {
     if (!prefill) return
     if (prefill.aiNumber) setLinkedDocNo(prefill.aiNumber)
+    if (prefill.authorityDate) setLinkedAuthorityDate(prefill.authorityDate)
     if (prefill.customerName) setCustomerName(prefill.customerName)
     if (prefill.pileId) setPileId(prefill.pileId)
     if (prefill.varietyId) {
       setVarietyId(prefill.varietyId)
       if (!prefill.pileId) setPileFilterVarietyId(prefill.varietyId)
     }
-    if (prefill.numberOfBags != null) setNumberOfBags(String(prefill.numberOfBags))
-    if (prefill.grossKilos != null) setGrossKilos(String(prefill.grossKilos))
+    if (prefill.numberOfBags != null) setNumberOfBags(liveFormatNumber(String(prefill.numberOfBags)))
+    if (prefill.grossKilos != null) setGrossKilos(liveFormatNumber(String(prefill.grossKilos)))
     if (prefill.autoComputeNet === false) setAutoComputeNet(false)
-    if (prefill.netKilos != null) setManualNetKilos(String(prefill.netKilos))
+    if (prefill.netKilos != null) setManualNetKilos(liveFormatNumber(String(prefill.netKilos)))
+    // serialNo from a report row tap — set it and trigger the existing-
+    // transaction lookup so Update/Delete appears automatically.
+    if (prefill.serialNo) {
+      setSerialNo(prefill.serialNo)
+      setTimeout(() => checkAndLoadSerial(prefill.serialNo), 150)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill])
 
-  const bagsNum = Number(numberOfBags) || 0
-  const grossNum = Number(grossKilos) || 0
+  // Separate from the prefill effect above on purpose: piles loads
+  // asynchronously (useLiveQuery), and the prefill effect only depends
+  // on [prefill], so if piles hadn't resolved yet the moment that effect
+  // first ran, pile-derived defaults (age, moisture content) would
+  // silently find nothing and never retry - this is exactly the bug
+  // reported (age not filling when opening WSI from the pile action
+  // sheet). Watching piles here lets this retry correctly once the data
+  // actually arrives, without risking the whole prefill effect re-firing
+  // (and resetting fields the user may have already started editing) on
+  // unrelated piles changes.
+  const appliedPileDefaultsRef = useRef(null)
+
+  useEffect(() => {
+    if (!prefill?.pileId) return
+    if (appliedPileDefaultsRef.current === prefill.pileId) return // already applied once for this prefill
+    const pile = (piles ?? []).find((p) => p.pileId === prefill.pileId)
+    if (!pile) return // piles still loading - effect re-runs once it arrives, ref not yet marked
+    applyPileDefaults(prefill.pileId)
+    appliedPileDefaultsRef.current = prefill.pileId
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.pileId, piles])
+
+  // Same reasoning as the pile-age effect above: transactionTypes loads
+  // asynchronously, so this retries once it arrives rather than only
+  // trying at the moment the prefill effect first runs.
+  const appliedTransactionTypeRef = useRef(null)
+
+  useEffect(() => {
+    if (!prefill?.transactionTypeName) return
+    if (appliedTransactionTypeRef.current === prefill.transactionTypeName) return
+    const match = (transactionTypes ?? []).find((t) => t.name === prefill.transactionTypeName)
+    if (!match) return
+    setTransactionTypeId(match.transactionTypeId)
+    appliedTransactionTypeRef.current = prefill.transactionTypeName
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.transactionTypeName, transactionTypes])
+
+  const bagsNum = parseFormattedNumber(numberOfBags)
+
+  // Suggested gross kilos to complete the AI's remaining net-kilos
+  // balance, using the ACTUAL number of bags the user has already
+  // entered (bagsNum) - NOT suggestedBagsToComplete's balance-derived
+  // estimate. If the user typed a different bags count than the
+  // suggestion, the gross-kilos math must reflect what they actually
+  // entered, since that's what determines the real tare weight being
+  // added. Requires both an MTS sack type selected (for the tare
+  // weight) and an actual bags count entered (> 0) - shows null
+  // otherwise rather than a number that doesn't reflect the real input.
+  // Two gates, both must pass, before showing the gross-kilos
+  // suggestion - purpose: only suggest when this issuance is actually
+  // COMPLETING the AI (not a smaller partial/initial issuance out of a
+  // much larger remaining balance):
+  //   1. The bags the user actually entered must match the suggested
+  //      completion bags count - if they don't match, the user isn't
+  //      trying to complete the balance with this entry, so showing a
+  //      "complete the balance" suggestion doesn't make sense.
+  //   2. The estimated net kilos from those bags (bagsNum * 50) must be
+  //      within 1000kg of the actual authority balance - a looser,
+  //      kilos-scale sanity check using the more precise
+  //      authorityRemainingKilos value, since bagsNum*50 is only ever
+  //      an estimate.
+  const bagsMatchesSuggestion = suggestedBagsToComplete != null && bagsNum === suggestedBagsToComplete
+  const estimatedKilosCloseToBalance = authorityRemainingKilos != null
+    && Math.abs(bagsNum * 50 - authorityRemainingKilos) <= 1000
+
+  const suggestedGrossKilosToComplete = linkedDocDeductsFromAi && authorityRemainingKilos != null && selectedSack && bagsNum > 0
+    && bagsMatchesSuggestion && estimatedKilosCloseToBalance
+    ? authorityRemainingKilos + bagsNum * selectedSack.weight
+    : null
+
+  const grossNum = parseFormattedNumber(grossKilos)
   const mts = calculateMtsFromSackWeight(selectedSack?.weight ?? 0, bagsNum)
   const computedNetKilos = calculateNetKilos(grossNum, mts)
-  const netKilos = autoComputeNet ? computedNetKilos : Number(manualNetKilos) || 0
+  const netKilos = autoComputeNet ? computedNetKilos : parseFormattedNumber(manualNetKilos)
   const avgWeightPerBag = calculateAverageWeightPerBag(netKilos, bagsNum)
 
   // Available stock on the selected pile, for issuances. When editing an
@@ -264,6 +447,23 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const overKilos = isIssuance && availableKilos != null && netKilos > availableKilos
   const overBags = isIssuance && availableBags != null && bagsNum > availableBags
 
+  // Gates the Save button - mirrors validateForm's synchronous checks
+  // (serial-uniqueness is async and stays a save-time-only safety net,
+  // not part of this live gate).
+  const canSave = Boolean(currentWarehouseId)
+    && Boolean(transactionTypeId)
+    && Boolean(serialNo.trim())
+    && Boolean(customerName.trim())
+    && Boolean(pileId)
+    && (Boolean(selectedPile) || Boolean(varietyId))
+    && (Boolean(numberOfBags) || Boolean(grossKilos))
+    && Boolean(sackSelection)
+    && moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))
+    && (!linkedDocDeductsFromAi || Boolean(linkedDocNo.trim()))
+    && (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== '')
+    && !overKilos
+    && (!farmerOrgEnabled || members.every((m) => m.name.trim()))
+
   const updateMember = (index, field, value) => {
     setMembers((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)))
   }
@@ -278,11 +478,18 @@ function StockFormBase({ type, title, onClose, prefill }) {
       return
     }
     setPileId(value)
+    const pile = (piles ?? []).find((p) => p.pileId === value)
+    if (pile?.varietyId) {
+      setVarietyId(pile.varietyId)
+      setSackSelection('')
+    }
+    applyPileDefaults(value)
   }
 
   const handlePileCreated = (pile) => {
     setPileId(pile.pileId)
     setVarietyId(pile.varietyId)
+    setSackSelection('')
     setShowNewPileDialog(false)
   }
 
@@ -294,6 +501,35 @@ function StockFormBase({ type, title, onClose, prefill }) {
       setFarmerOrgEnabled(true)
       if (customer.farmerCoopMembers?.length) setMembers(customer.farmerCoopMembers)
     }
+  }
+
+  const handleSelectAuthority = (authority) => {
+    setLinkedDocNo(authority.aiNumber ?? '')
+    setLinkedAuthorityDate(authority.date ?? null)
+    setCustomerName(authority.customerName ?? '')
+    if (authority.varietyId) {
+      setVarietyId(authority.varietyId)
+      setPileFilterVarietyId(authority.varietyId)
+    }
+    if (authority.transactionTypeName) {
+      const match = (transactionTypes ?? []).find((t) => t.name === authority.transactionTypeName)
+      if (match) setTransactionTypeId(match.transactionTypeId)
+    }
+
+    const kilosRemaining = authority.totalAllocationKilos != null
+      ? parseFloat((authority.totalAllocationKilos - (authority.totalIssuedKilos ?? 0)).toFixed(2))
+      : null
+    const bagsRemaining = authority.totalAllocationBags != null
+      ? parseFloat((authority.totalAllocationBags - (authority.totalIssuedBags ?? 0)).toFixed(2))
+      : null
+
+    if (bagsRemaining != null && bagsRemaining > 0) setNumberOfBags(liveFormatNumber(String(bagsRemaining)))
+    if (kilosRemaining != null && kilosRemaining > 0) {
+      setAutoComputeNet(false)
+      setManualNetKilos(liveFormatNumber(String(kilosRemaining)))
+    }
+
+    setShowAuthorityPicker(false)
   }
 
   const scrollToCustomerName = () => {
@@ -317,13 +553,18 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setSackSelection(
       tx.mtsSackTypeId && tx.mtsCondition ? `${tx.mtsSackTypeId}::${tx.mtsCondition}` : ''
     )
-    setNumberOfBags(tx.numberOfBags != null ? String(tx.numberOfBags) : '')
-    setGrossKilos(tx.grossKilos != null ? String(tx.grossKilos) : '')
+    setNumberOfBags(tx.numberOfBags != null ? liveFormatNumber(String(tx.numberOfBags)) : '')
+    setGrossKilos(tx.grossKilos != null ? liveFormatNumber(String(tx.grossKilos)) : '')
     setAutoComputeNet(tx.autoComputeNet ?? true)
-    setManualNetKilos(tx.autoComputeNet ? '' : String(tx.netKilos ?? ''))
-    setAgeValue(tx.ageValue != null ? String(tx.ageValue) : '')
+    setManualNetKilos(tx.autoComputeNet ? '' : liveFormatNumber(String(tx.netKilos ?? '')))
+    setAgeValue(tx.ageValue != null ? liveFormatNumber(String(tx.ageValue)) : '')
     setAgeUnit(tx.ageUnit ?? 'Days')
+    if (tx.ageUnit === 'Months + Days' && tx.initialAgeValue != null) {
+      setMonthsValue(liveFormatNumber(String(Math.floor(tx.initialAgeValue / 30))))
+      setDaysValue(liveFormatNumber(String(tx.initialAgeValue % 30)))
+    }
     setCondition(tx.condition ?? '')
+    setMoistureContent(tx.moistureContent != null ? liveFormatNumber(String(tx.moistureContent)) : '')
     setFarmerOrgEnabled(Boolean(tx.farmerCoops?.length))
     setMembers(tx.farmerCoops?.length ? tx.farmerCoops : [emptyMember()])
   }
@@ -340,6 +581,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setNumberOfBags('')
     setGrossKilos('')
     setManualNetKilos('')
+    setMoistureContent('')
     setFarmerOrgEnabled(false)
     setMembers([emptyMember()])
   }
@@ -379,6 +621,10 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (!loaded) resetToBlankEntry(nextSerial)
   }
 
+  const initialAgeDays = ageUnit === 'Months + Days'
+    ? Math.round((parseFormattedNumber(monthsValue) || 0) * 30 + (parseFormattedNumber(daysValue) || 0))
+    : (ageValue === '' ? 0 : normalizeAgeToDays(parseFormattedNumber(ageValue), ageUnit))
+
   const buildTransactionPayload = (overrides = {}) => ({
     type,
     serialNo: serialNo.trim(),
@@ -392,17 +638,18 @@ function StockFormBase({ type, title, onClose, prefill }) {
     transactionTypeId: transactionTypeId || null,
     pileId,
     varietyId: varietyId || null,
-    mtsSackTypeId: selectedSack ? selectedSack.sackTypeId : null,
-    mtsCondition: selectedSack ? selectedSack.condition : null,
+    mtsSackTypeId: sackSelection ? sackSelection.split('::')[0] : null,
+    mtsCondition: sackSelection ? sackSelection.split('::')[1] : null,
     numberOfBags: numberOfBags === '' ? null : bagsNum,
     grossKilos: grossKilos === '' ? null : grossNum,
     mts,
     autoComputeNet,
     netKilos,
-    ageValue: ageValue === '' ? null : Number(ageValue),
+    ageValue: ageUnit === 'Months + Days' ? initialAgeDays : (ageValue === '' ? null : parseFormattedNumber(ageValue)),
     ageUnit,
-    initialAgeValue: ageValue === '' ? 0 : normalizeAgeToDays(ageValue, ageUnit),
+    initialAgeValue: initialAgeDays,
     condition,
+    moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
     farmerRsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
     farmerGender: isProcurement ? farmerGender || null : null,
     farmerCoops: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
@@ -439,9 +686,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
       toast.error('Select a Condition')
       return false
     }
+    if (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent))) {
+      toast.error('Moisture Content (MC %) is required')
+      return false
+    }
     if (overKilos) {
       toast.error(
-        `Net Kilos (${netKilos.toFixed(2)}) exceeds available stock (${availableKilos.toFixed(2)} kg) on this pile`
+        `Net Kilos (${fmtWeight(netKilos, weightUnit)}) exceeds available stock (${fmtWeight(availableKilos, weightUnit)}) on this pile`
       )
       return false
     }
@@ -494,6 +745,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
       gender: isProcurement ? farmerGender || null : null,
       isFarmerOrg: farmerOrgEnabled,
       farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
+      warehouseId: currentWarehouseId,
     })
 
     if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
@@ -535,6 +787,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
       gender: isProcurement ? farmerGender || null : null,
       isFarmerOrg: farmerOrgEnabled,
       farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
+      warehouseId: currentWarehouseId,
     })
 
     if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
@@ -560,6 +813,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
 
     await db.transactions.delete(loadedTransaction.id)
+    queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
 
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
@@ -574,7 +828,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-xl font-semibold text-white">{title}</h1>
+          <h1 className="text-xl font-semibold text-app-text">{title}</h1>
           <button
             type="button"
             onClick={onClose}
@@ -587,28 +841,40 @@ function StockFormBase({ type, title, onClose, prefill }) {
         </div>
 
         {sortedWarehouses.length > 1 ? (
-          <select
-            value={currentWarehouseId ?? ''}
-            onChange={(e) => {
-              setCurrentWarehouseId(e.target.value)
-              setPileId('')
-              setVarietyId('')
-              setSackSelection('')
-              setLoadedTransaction(null)
-            }}
-            className="mt-2 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-300 outline-none focus:border-brand-neon"
-          >
-            {sortedWarehouses.map((w) => (
-              <option key={w.warehouseId} value={w.warehouseId}>
-                {w.code} — {w.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-2">
+            <label className="text-xs font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
+            <select
+              value={currentWarehouseId ?? ''}
+              onChange={(e) => {
+                setCurrentWarehouseId(e.target.value)
+                setPileId('')
+                setVarietyId('')
+                setSackSelection('')
+                setLoadedTransaction(null)
+              }}
+              className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon"
+            >
+              {sortedWarehouses.map((w) => (
+                <option key={w.warehouseId} value={w.warehouseId}>
+                  {w.code} — {w.name}
+                </option>
+              ))}
+            </select>
+          </div>
         ) : currentWarehouse ? (
-          <p className="mt-1 text-xs text-neutral-500">
-            {currentWarehouse.code} — {currentWarehouse.name}
-          </p>
+          <div className="mt-2 rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Warehouse</p>
+            <p className="text-base font-bold text-app-text">
+              {currentWarehouse.code} — {currentWarehouse.name}
+            </p>
+          </div>
         ) : null}
+
+        {!isSerialFieldVisible && serialNo && (
+          <p className="mt-2 rounded-xl border-2 border-brand-neon bg-brand-neon/10 px-3 py-2.5 text-center font-mono text-lg font-bold text-brand-neon shadow-[0_0_16px_-4px_rgba(0,255,163,0.4)]">
+            {type} # {serialNo}
+          </p>
+        )}
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
@@ -619,14 +885,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
             </div>
           )}
 
-          <div>
+          <div ref={serialFieldRef}>
             <label className={labelClass}>Serial No.</label>
             <div className="mt-1 flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleStepBack}
                 aria-label="Previous serial"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-white active:scale-90"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
               >
                 <ChevronLeft size={18} />
               </button>
@@ -634,14 +900,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 type="text"
                 value={serialNo}
                 onChange={(e) => handleSerialChange(e.target.value)}
-                className="mt-0 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-center font-mono text-white outline-none transition-colors focus:border-brand-neon"
+                className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
                 placeholder="0000000"
               />
               <button
                 type="button"
                 onClick={handleStepForward}
                 aria-label="Next serial"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-white active:scale-90"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
               >
                 <ChevronRight size={18} />
               </button>
@@ -664,13 +930,40 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
           <div>
             <label className={labelClass}>{linkedDocLabel}</label>
-            <input
-              type="text"
-              value={linkedDocNo}
-              onChange={(e) => setLinkedDocNo(e.target.value)}
-              className={inputClass}
-              placeholder={type === 'WSR' ? 'Optional' : '26219637'}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={linkedDocNo}
+                onChange={(e) => setLinkedDocNo(e.target.value)}
+                className={`${inputClass} ${linkedDocDeductsFromAi && !linkedDocNo.trim() ? '!border-brand-amber' : ''}`}
+                placeholder={type === 'WSR' ? 'Optional' : '26219637'}
+              />
+              {linkedDocDeductsFromAi && (
+                <button
+                  type="button"
+                  onClick={() => setShowAuthorityPicker(true)}
+                  className="shrink-0 rounded-xl border border-brand-neon/40 px-3 text-xs font-medium text-brand-neon"
+                >
+                  Browse
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Nature of Transaction</label>
+            <select
+              value={transactionTypeId}
+              onChange={(e) => setTransactionTypeId(e.target.value)}
+              className={`${inputClass} ${!transactionTypeId ? '!border-brand-amber' : ''}`}
+            >
+              <option value="">Select…</option>
+              {sortedTransactionTypes.map((t) => (
+                <option key={t.transactionTypeId} value={t.transactionTypeId}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <CustomerNameAutocomplete
@@ -678,6 +971,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
             value={customerName}
             onChange={setCustomerName}
             onMatch={handleCustomerMatch}
+            warehouseId={currentWarehouseId}
           />
 
           <div>
@@ -721,104 +1015,104 @@ function StockFormBase({ type, title, onClose, prefill }) {
             </div>
           )}
 
-          <div>
-            <label className={labelClass}>Nature of Transaction</label>
-            <select
-              value={transactionTypeId}
-              onChange={(e) => setTransactionTypeId(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Select…</option>
-              {sortedTransactionTypes.map((t) => (
-                <option key={t.transactionTypeId} value={t.transactionTypeId}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClass}>Pile ID</label>
-            <select
-              value={pileId}
-              onChange={(e) => handlePileChange(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Select pile…</option>
-              {sortedPiles.map((p) => {
-                const variety = sortedVarieties.find((v) => v.varietyId === p.varietyId)
-                return (
-                  <option key={p.pileId} value={p.pileId}>
-                    {p.pileName} ({variety ? variety.name : p.cerealType})
-                  </option>
-                )
-              })}
-              <option value={NEW_PILE_OPTION}>+ New Pile</option>
-            </select>
-            {pileFilterVarietyId && (
-              <p className="mt-1 text-xs text-neutral-500">
-                Showing only piles matching the linked authority's variety.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className={labelClass}>Variety Type</label>
-            {selectedPile ? (
-              <div className={readOnlyClass}>
-                {selectedVariety ? `${selectedVariety.name} (${selectedVariety.category})` : '—'}
-              </div>
-            ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Pile ID</label>
               <select
-                value={varietyId}
-                onChange={(e) => {
-                  setVarietyId(e.target.value)
-                  setSackSelection('')
-                }}
-                className={inputClass}
+                value={pileId}
+                onChange={(e) => handlePileChange(e.target.value)}
+                className={`${inputClass} ${!pileId ? '!border-brand-amber' : ''}`}
               >
-                <option value="">Select variety…</option>
-                {sortedVarieties.map((v) => (
-                  <option key={v.varietyId} value={v.varietyId}>
-                    {v.name} ({v.category})
+                <option value="">Select pile…</option>
+                {sortedPiles.map((p) => {
+                  const variety = sortedVarieties.find((v) => v.varietyId === p.varietyId)
+                  return (
+                    <option key={p.pileId} value={p.pileId}>
+                      {p.pileName} ({variety ? variety.name : p.cerealType})
+                    </option>
+                  )
+                })}
+                <option value={NEW_PILE_OPTION}>+ New Pile</option>
+              </select>
+              {pileFilterVarietyId && (
+                <p className="mt-1 text-xs text-neutral-500">
+                  Showing only piles matching the linked authority's variety.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className={labelClass}>Variety Type</label>
+              {selectedPile ? (
+                <div className={readOnlyClass}>
+                  {selectedVariety ? `${selectedVariety.name} (${selectedVariety.category})` : '—'}
+                </div>
+              ) : (
+                <select
+                  value={varietyId}
+                  onChange={(e) => {
+                    setVarietyId(e.target.value)
+                    setSackSelection('')
+                  }}
+                  className={`${inputClass} ${!varietyId ? '!border-brand-amber' : ''}`}
+                >
+                  <option value="">Select variety…</option>
+                  {sortedVarieties.map((v) => (
+                    <option key={v.varietyId} value={v.varietyId}>
+                      {v.name} ({v.category})
+                    </option>
+                  ))}
+                </select>
+              )}
+              {selectedPile && (
+                <p className="mt-1 text-xs text-neutral-500">
+                  Locked to this pile's variety — piles never mix varieties.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>MC % (Moisture Content)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={moistureContent}
+                onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
+                className={`${inputClass} ${moistureContent === '' ? '!border-brand-amber' : ''}`}
+                placeholder="13.90"
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>MTS — Sack Code &amp; Condition</label>
+              <select
+                value={sackSelection}
+                onChange={(e) => setSackSelection(e.target.value)}
+                className={`${inputClass} ${!sackSelection ? '!border-brand-amber' : ''}`}
+              >
+                <option value="">Select sack code…</option>
+                {sackOptions.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
                   </option>
                 ))}
               </select>
-            )}
-            {selectedPile && (
-              <p className="mt-1 text-xs text-neutral-500">
-                Locked to this pile's variety — piles never mix varieties.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className={labelClass}>MTS — Sack Code &amp; Condition</label>
-            <select
-              value={sackSelection}
-              onChange={(e) => setSackSelection(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Select sack code…</option>
-              {sackOptions.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            {sackOptions.length === 0 && (
-              <p className="mt-1 text-xs text-neutral-500">
-                {selectedVariety
-                  ? `No ${selectedVariety.category} sack types configured with a weight yet.`
-                  : 'Select a variety to see matching sack types.'}
-              </p>
-            )}
+              {sackOptions.length === 0 && (
+                <p className="mt-1 text-xs text-neutral-500">
+                  {selectedVariety
+                    ? `No ${selectedVariety.category} sack types configured with a weight yet.`
+                    : 'Select a variety to see matching sack types.'}
+                </p>
+              )}
+            </div>
           </div>
 
           {selectedPile && isIssuance && (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-400">
-              Available on {selectedPile.pileName}: {availableBags?.toLocaleString()} bags ·{' '}
-              {availableKilos?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+              Available on {selectedPile.pileName}: {fmtBags(availableBags)} bags ·{' '}
+              {fmtWeight(availableKilos, weightUnit)}
             </div>
           )}
 
@@ -826,11 +1120,10 @@ function StockFormBase({ type, title, onClose, prefill }) {
             <div>
               <label className={labelClass}>Number of Bags</label>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.01"
                 value={numberOfBags}
-                onChange={(e) => setNumberOfBags(e.target.value)}
+                onChange={(e) => setNumberOfBags(liveFormatNumber(e.target.value))}
                 className={`${inputClass} ${overBags ? 'border-brand-amber' : ''}`}
                 placeholder="0"
               />
@@ -839,18 +1132,39 @@ function StockFormBase({ type, title, onClose, prefill }) {
                   Exceeds available bags — allowed for some transaction types.
                 </p>
               )}
+              {suggestedBagsToComplete != null && suggestedBagsToComplete > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setNumberOfBags(liveFormatNumber(String(suggestedBagsToComplete)))}
+                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
+                >
+                  Use {suggestedBagsToComplete.toLocaleString()} bags to complete AI balance
+                </button>
+              )}
             </div>
             <div>
               <label className={labelClass}>Gross Kilos</label>
-              <input
-                type="number"
+              <ValidatedField
                 inputMode="decimal"
-                step="0.01"
                 value={grossKilos}
-                onChange={(e) => setGrossKilos(e.target.value)}
-                className={inputClass}
+                onChange={(e) => setGrossKilos(liveFormatNumber(e.target.value))}
                 placeholder="0.00"
+                validate={(v) => {
+                  if (v === '') return null // not yet entered - no opinion until the user actually leaves it blank on purpose
+                  const num = parseFormattedNumber(v)
+                  if (!(num > 0)) return { valid: false, message: 'Gross Kilos must be greater than 0' }
+                  return { valid: true }
+                }}
               />
+              {suggestedGrossKilosToComplete != null && suggestedGrossKilosToComplete > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setGrossKilos(liveFormatNumber(suggestedGrossKilosToComplete.toFixed(2)))}
+                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
+                >
+                  Use {fmtWeight(suggestedGrossKilosToComplete, weightUnit, 'Gross')} to complete AI balance
+                </button>
+              )}
             </div>
           </div>
 
@@ -876,22 +1190,21 @@ function StockFormBase({ type, title, onClose, prefill }) {
             <label className={labelClass}>Net Kilos</label>
             {autoComputeNet ? (
               <div className={`${readOnlyClass} ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
-                {netKilos.toFixed(2)}
+                {fmtWeight(netKilos, weightUnit)}
               </div>
             ) : (
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.01"
                 value={manualNetKilos}
-                onChange={(e) => setManualNetKilos(e.target.value)}
+                onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value))}
                 className={`${inputClass} ${overKilos ? 'border-brand-crimson' : ''}`}
                 placeholder="0.00"
               />
             )}
             {overKilos && (
               <p className="mt-1 text-xs text-brand-crimson">
-                Cannot exceed available Net Kilos ({availableKilos.toFixed(2)} kg) — this is a hard limit.
+                Cannot exceed available Net Kilos ({fmtWeight(availableKilos, weightUnit)}) — this is a hard limit.
               </p>
             )}
             {bagsNum > 0 && !overKilos && (
@@ -899,21 +1212,51 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 Average weight per bag: {avgWeightPerBag.toFixed(2)} kg
               </p>
             )}
+            {linkedDocDeductsFromAi && authorityRemainingKilos != null && (
+              <p className="mt-1 text-xs text-brand-neon">
+                AI balance remaining: {fmtWeight(authorityRemainingKilos, weightUnit, 'Net')}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Age</label>
-              <input
-                type="number"
-                inputMode="decimal"
-                value={ageValue}
-                onChange={(e) => setAgeValue(e.target.value)}
-                className={inputClass}
-                placeholder="0"
-              />
-            </div>
-            <div>
+            {ageUnit === 'Months + Days' ? (
+              <>
+                <div>
+                  <label className={labelClass}>Months</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={monthsValue}
+                    onChange={(e) => setMonthsValue(liveFormatNumber(e.target.value))}
+                    className={`${inputClass} ${monthsValue === '' ? '!border-brand-amber' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Days</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={daysValue}
+                    onChange={(e) => setDaysValue(liveFormatNumber(e.target.value))}
+                    className={`${inputClass} ${daysValue === '' ? '!border-brand-amber' : ''}`}
+                  />
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className={labelClass}>Age</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={ageValue}
+                  onChange={(e) => setAgeValue(liveFormatNumber(e.target.value))}
+                  className={`${inputClass} ${ageValue === '' ? '!border-brand-amber' : ''}`}
+                  placeholder="0"
+                />
+              </div>
+            )}
+            <div className={ageUnit === 'Months + Days' ? 'col-span-2' : ''}>
               <label className={labelClass}>Unit</label>
               <select
                 value={ageUnit}
@@ -955,7 +1298,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
           {isProcurement && (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-white">Farmers Organization</span>
+                <span className="text-sm font-medium text-app-text">Farmers Organization</span>
                 <button
                   type="button"
                   onClick={() => setFarmerOrgEnabled((v) => !v)}
@@ -1042,7 +1385,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
               type="button"
               onClick={handleUpdate}
               disabled={isSaving}
-              className="flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-neutral-950 transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+              className="flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
               Update
             </button>
@@ -1050,20 +1393,30 @@ function StockFormBase({ type, title, onClose, prefill }) {
               type="button"
               onClick={() => setPendingDelete(true)}
               disabled={isSaving}
-              className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+              className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
               Delete
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className={`w-full ${primaryButtonClass}`}
-          >
-            Save
-          </button>
+          <div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!canSave) { setShowSaveHint(true); return }
+                handleSave()
+              }}
+              disabled={isSaving}
+              className={`w-full rounded-xl py-3 text-sm font-semibold transition-all ${
+                canSave ? `${primaryButtonClass}` : 'border border-brand-neon/40 text-brand-neon/40'
+              }`}
+            >
+              Save
+            </button>
+            {showSaveHint && !canSave && (
+              <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
+            )}
+          </div>
         )}
       </div>
 
@@ -1073,6 +1426,16 @@ function StockFormBase({ type, title, onClose, prefill }) {
           varieties={sortedVarieties}
           onCreated={handlePileCreated}
           onClose={() => setShowNewPileDialog(false)}
+        />
+      )}
+
+      {showAuthorityPicker && currentWarehouseId && (
+        <AuthorityPickerModal
+          type="AI"
+          warehouseId={currentWarehouseId}
+          filterVarietyId={varietyId || null}
+          onSelect={handleSelectAuthority}
+          onClose={() => setShowAuthorityPicker(false)}
         />
       )}
 

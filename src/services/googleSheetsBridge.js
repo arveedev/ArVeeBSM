@@ -1,119 +1,134 @@
-// Google Sheets bridge — Phase 6.
+// Google Sheets bridge — live integration with the user's existing Apps
+// Script Web App (this app does not deploy or own that script).
 //
-// This app does NOT own or deploy the Google Apps Script (GAS) behind the
-// configured Web App URL — that's an existing script the user already has
-// running on their spreadsheet, with its own functions for other purposes.
-// This module only describes the contract this app NEEDS from it, so the
-// user (or whoever maintains that script) can add matching endpoints
-// without touching or replacing anything already there.
+// ─── One-way flows only (confirmed, no conflict resolution needed) ────
+//   AI/SIA authorities:  Sheets -> App only (this app never writes them)
+//   Transactions:        App -> Sheets only, as a backup log, not a
+//                         live source of truth for anything the app reads
 //
-// One Web App URL (admin-configurable in the Admin Dashboard's "Google
-// Sheets" tab, can be changed at any time) fronts a spreadsheet with
-// multiple named sheets:
-//   - an AI sheet    (Authority to Issue allocations — stock docs)
-//   - a SIA sheet    (Sack Issuance Authority allocations — sack docs)
-//   - a receipts backup sheet (WSR — matches the user's EXISTING sheet
-//     schema, see below)
-//   - an issues backup sheet (WSI — new, mirrors the receipts schema)
-//   - a sacks-receipts backup sheet (ESR — new)
-//   - a sacks-issues backup sheet (ESI — new)
+// ─── Multi-year sheet sources ──────────────────────────────────────
+// The user creates a fresh spreadsheet copy every year rather than
+// letting one sheet grow unbounded (see db.sheetSources, managed from
+// the admin "Sheet Sources" tab). Authorities are synced from EVERY
+// configured source, not just whichever one covers today - an AI/SIA
+// from December still has real remaining balance to issue against in
+// January, so year-boundary authorities must never be silently dropped
+// just because the calendar rolled over. Transaction backups, by
+// contrast, are written to whichever ONE source's date range covers
+// today (see getActiveSheetSource).
 //
-// The exact sheet *names* are also admin-configurable, since the existing
-// spreadsheet may already use its own naming convention.
+// ─── Write allowlist (structural, not just convention) ────────────
+// This app must NEVER be able to write to the AI/SIA sheets, or any
+// sheet outside an explicit, named list - WRITE_ALLOWLIST_KEYS below is
+// that list, and pushTransactionBackup() checks against it before every
+// single write. Adding a new writable sheet means deliberately adding
+// its key here; nothing is writable by default.
 //
-// ─── Receipts (WSR) backup row shape — matches the user's EXISTING sheet ──
+// ─── Warehouse matching ────────────────────────────────────────────
+// The AI/SIA sheets use short nicknames for warehouses that don't
+// always match this app's own warehouse codes, and the same real
+// warehouse sometimes has multiple typo'd spellings in the sheet.
+// db.warehouseAliases (admin-configured in Warehouses) maps every
+// sheet-side nickname to the correct canonical warehouseId - this is
+// looked up instead of matching against warehouse.code directly.
 //
-// The user already has a "DATA_ENTRY"-style receipts sheet with these
-// columns (sample row, reformatted for clarity):
-//   Timestamp, Date, Transaction, Variety, Bags, Net Kilos, Warehouse Name,
-//   Customer Name, Province, Net Bags, WH Code, WSR #, Batch No, Col_15
-// Col_15 is the age column: BLANK when age was entered in Days, and only
-// populated (with a plain number, e.g. 8) when age was entered in Months.
-// `Net Bags` = Net Kilos / 50 (matches calculateNetBags in calculations.js).
-// `Timestamp` is when the row was actually written (server time); `Date`
-// is the date typed into the form. This app's pushTransactionBackup()
-// reproduces this exact column order/shape for WSR so it can append
-// directly into that existing sheet without any restructuring on the
-// user's end.
+// ─── SIA multi-row convention (confirmed, not the old compact format) ──
+// Each row is ONE sack type + ONE condition + its own piece count. An
+// SIA needing multiple sack types/conditions is multiple rows sharing
+// the same SIA number - NOT a single row with a compound
+// "PPMG50/PPRE50" + "65 bn/17 sh" string (that format was found to be
+// genuinely ambiguous and to spill into overflow columns with no fixed
+// meaning - see docs/activity-log.md for the specific examples that
+// ruled it out). Each row becomes its OWN authority record, so an SIA's
+// different sack-type/condition portions can be issued against and
+// completed independently, matching how completion already works
+// per-record elsewhere in this app.
 //
-// ─── New sheets (Issues + Sacks) — same shape, new sheets ────────────────
-//
-// WSI backup rows use the SAME column shape as WSR above, but an "AI #"
-// column replaces "WSR #" / "Batch No" is replaced with the AI Number
-// reference, and the sheet itself is new (the user has no Issues sheet
-// yet). ESR/ESI (sacks) use a related but pieces-based shape — see the
-// `buildBackupRow` function below for the exact per-type column lists.
-//
-// AI Number and SIA Number are NOT the same field — an AI allocation has
-// its own reference number (`aiNumber`), and a SIA allocation has a
-// separate, independent reference number (`siaNumber`). Both are returned
-// to this app under their own field name; nothing is shared or reused
-// between the two record types.
+// ─── Delta sync via Last Modified ──────────────────────────────────
+// Both AI and SIA sheets have a Last Modified column (N), auto-stamped
+// by an onEdit trigger already deployed on the user's script. Each
+// sheetSource tracks its own lastSyncedAt; sync requests only rows
+// modified since then, rather than re-fetching and diffing the entire
+// sheet on every check.
 //
 // ─── Contract this app expects from the existing GAS Web App ──────────
 //
-// GET  {webAppUrl}?action=fetchAuthorities&sheet={sheetName}&type=AI
-//   -> { status: "SUCCESS", rows: [ { aiNumber, assignedWarehouseCode,
-//        customerName, varietyName, totalAllocationBags,
-//        totalAllocationKilos }, ... ] }
-//
-// GET  {webAppUrl}?action=fetchAuthorities&sheet={sheetName}&type=SIA
-//   -> { status: "SUCCESS", rows: [ { siaNumber, assignedWarehouseCode,
-//        customerName, sackCode, condition, totalAllocationBags,
-//        totalAllocationKilos }, ... ] }
+// GET  {webAppUrl}?action=fetchAuthorities&sheet={sheetName}&type=AI&modifiedSince={isoString|omitted}
+//   -> { status: "SUCCESS", rows: [ { ...raw sheet columns as JSON... } ] }
+//   (modifiedSince omitted on a source's first-ever sync — fetch everything)
 //
 // POST {webAppUrl}  body: { action: "appendTransaction", sheet: sheetName,
 //        row: { ...see buildBackupRow() per document type... } }
 //   -> { status: "SUCCESS" }
 //
-// If the existing script uses different action names, parameter names, or
-// response shapes, adjust the request-building/response-parsing in this
-// file to match — don't change the script to match this file.
+// If the existing script uses different action/parameter names or
+// response shapes, adjust the request-building/response-parsing here —
+// don't change the script to match this file.
 //
 // All functions degrade gracefully (return a typed failure, never throw)
 // since network access is never guaranteed in this offline-first app —
 // callers are expected to check `.ok` before using `.data`.
 
 import { db } from '../db/dexie.js'
-
-/** Reads the current bridge configuration, or null if never configured. */
-export const getSheetsConfig = async () => {
-  const config = await db.googleSheetsConfig.get('global')
-  return config ?? null
-}
-
-/** Saves/updates the bridge configuration (admin UI calls this on Save). */
-export const saveSheetsConfig = async (partial) => {
-  const existing = await getSheetsConfig()
-  await db.googleSheetsConfig.put({
-    id: 'global',
-    webAppUrl: '',
-    aiSheetName: 'AI',
-    siaSheetName: 'SIA',
-    receiptsSheetName: 'DATA_ENTRY',
-    issuesSheetName: 'Issues Backup',
-    sacksReceiptsSheetName: 'Sacks Receipts Backup',
-    sacksIssuesSheetName: 'Sacks Issues Backup',
-    lastSyncedAt: null,
-    ...existing,
-    ...partial,
-  })
-}
-
-const isConfigured = (config) => Boolean(config?.webAppUrl?.trim())
+import { normalizeWarehouseAlias } from '../utils/warehouseMatching.js'
+import { todayLocalISO } from '../utils/calculations.js'
 
 /**
- * Fetches AI or SIA allocation rows from the configured Sheet and returns
- * them mapped to the shape `db.authorities` expects. Does NOT write to
- * Dexie itself — see `syncAuthoritiesFromSheets` for the full pull+merge.
+ * Converts a raw sheet cell to a real number or null - critically,
+ * treats an empty string the same as null/undefined. A bare `?? null`
+ * does NOT catch empty strings (only null/undefined), and Number('')
+ * silently coerces to 0 rather than throwing - meaning a genuinely
+ * blank BAG or NET KG cell (very common on TRANSFER/MILLING-type rows
+ * that only fill in one of the two) was being stored as an allocation
+ * of literal 0, which then read as "0 allocated, 0 issued = Complete"
+ * and got the authority wrongly marked done with no real data at all.
  */
-const fetchAuthorityRows = async (config, type) => {
-  const sheetName = type === 'AI' ? config.aiSheetName : config.siaSheetName
+const toNumberOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isNaN(num) ? null : num
+}
 
-  const url = new URL(config.webAppUrl)
+// The ONLY sheet-name keys this app is ever allowed to write to. AI/SIA
+// are deliberately absent - there is no code path that can add them
+// without editing this list directly, which is the point.
+const WRITE_ALLOWLIST_KEYS = [
+  'receiptsSheetName',
+  'issuesSheetName',
+  'sacksReceiptsSheetName',
+  'sacksIssuesSheetName',
+]
+
+/** Every configured sheet source, oldest first. */
+const getAllSheetSources = async () => db.sheetSources.orderBy('dateFrom').toArray()
+
+/** The single source whose date range covers today, or null if none does
+ * (e.g. no source configured yet for the current year). Used only for
+ * WRITING new transaction backups - authority sync always uses every
+ * source, never just this one. */
+const getActiveSheetSource = async () => {
+  const today = todayLocalISO()
+  const sources = await getAllSheetSources()
+  return sources.find((s) => s.dateFrom <= today && (!s.dateTo || today <= s.dateTo)) ?? null
+}
+
+const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false
+
+/**
+ * Fetches AI or SIA rows from one sheet source, using its own
+ * lastSyncedAt for a delta request when available (first sync for a
+ * source fetches everything).
+ */
+const fetchAuthorityRows = async (source, type) => {
+  const sheetName = type === 'AI' ? source.aiSheetName : source.siaSheetName
+
+  const url = new URL(source.webAppUrl)
   url.searchParams.set('action', 'fetchAuthorities')
   url.searchParams.set('sheet', sheetName)
   url.searchParams.set('type', type)
+  if (source.lastSyncedAt) {
+    url.searchParams.set('modifiedSince', source.lastSyncedAt)
+  }
 
   const response = await fetch(url.toString())
   if (!response.ok) {
@@ -129,127 +144,22 @@ const fetchAuthorityRows = async (config, type) => {
 }
 
 /**
- * Pulls AI and SIA rows from the configured Sheet and upserts them into
- * `db.authorities` — AI rows matched/keyed by `aiNumber`, SIA rows matched/
- * keyed by `siaNumber` (these are distinct reference numbers, never
- * shared). Existing `totalIssuedBags`/`totalIssuedKilos` are preserved
- * across re-syncs (only the allocation side is ever overwritten from the
- * Sheet — issuance is tracked locally as forms are saved).
- *
- * Returns { ok: true, aiCount, siaCount } on success, or
- * { ok: false, reason } on any failure (not configured, offline, bad
- * response, etc.) — never throws, since this may run unattended on a
- * background timer.
+ * Upserts a single AI authority row, matched by aiNumber. Preserves any
+ * existing totalIssued* values rather than resetting them, since
+ * issuance is tracked locally as forms are saved, never overwritten
+ * from the Sheet. SIA authorities use upsertSiaAuthority instead - see
+ * its own comment for why they need different merge logic (an array of
+ * sack lines, not a single value).
  */
-export const syncAuthoritiesFromSheets = async () => {
-  const config = await getSheetsConfig()
-
-  if (!isConfigured(config)) {
-    return { ok: false, reason: 'not_configured' }
-  }
-
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, reason: 'offline' }
-  }
-
-  try {
-    const [warehouses, varieties] = await Promise.all([
-      db.warehouses.toArray(),
-      db.varietyTypes.toArray(),
-    ])
-    const warehouseByCode = new Map(warehouses.map((w) => [w.code, w.warehouseId]))
-    const varietyByName = new Map(varieties.map((v) => [v.name, v.varietyId]))
-
-    const [aiRows, siaRows] = await Promise.all([
-      fetchAuthorityRows(config, 'AI'),
-      fetchAuthorityRows(config, 'SIA'),
-    ])
-
-    let aiCount = 0
-    let siaCount = 0
-
-    for (const row of aiRows) {
-      // Skip placeholder rows that only have the AI number but no actual
-      // allocation data yet (e.g. pre-printed serials not yet issued).
-      const aiNum = String(row['AI #'] ?? '').trim()
-      if (!aiNum || !row['NAME OF CUSTOMER']) continue
-
-      await upsertAuthority({
-        type: 'AI',
-        aiNumber: aiNum,
-        siaNumber: null,
-        assignedWarehouse: warehouseByCode.get(String(row['ISSUING WHSE'] ?? '').trim()) ?? null,
-        customerName: String(row['NAME OF CUSTOMER'] ?? '').trim(),
-        varietyId: varietyByName.get(String(row['VARIETY CODE'] ?? '').trim()) ?? null,
-        transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
-        totalAllocationBags: row['BAG'] ?? null,
-        totalAllocationKilos: row['NET KG'] ?? null,
-        remarks: row['REMARKS'] ?? null,
-        note1: row['Note1'] ?? null,
-        note2: row['Note2'] ?? null,
-        note3: row['Note3'] ?? null,
-      })
-      aiCount += 1
-    }
-
-    for (const row of siaRows) {
-      // Skip placeholder rows that only have the SIA number but no data.
-      const siaNum = String(row['SIA'] ?? '').trim()
-      if (!siaNum || !row['CUSTOMER']) continue
-
-      // Parse "# OF BAGS" — the raw value from the sheet may be a plain
-      // number (e.g. 2500) or a mixed string (e.g. "65 bn / 17 sh").
-      // Parsing the mixed-sack-type format is deferred to a later phase;
-      // for now we store the raw value and total if it's a plain number.
-      const rawPieces = row['# OF BAGS']
-      const totalPieces = typeof rawPieces === 'number'
-        ? rawPieces
-        : null // complex multi-sack string — stored as rawSiaAllocation
-
-      await upsertAuthority({
-        type: 'SIA',
-        aiNumber: null,
-        siaNumber: siaNum,
-        assignedWarehouse: warehouseByCode.get(String(row['ISSUED FROM'] ?? '').trim()) ?? null,
-        customerName: String(row['CUSTOMER'] ?? '').trim(),
-        sackTypeRaw: String(row['TYPE/CAPACITY'] ?? '').trim(),
-        transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
-        totalAllocationBags: totalPieces,
-        rawSiaAllocation: typeof rawPieces === 'string' ? rawPieces : null,
-        totalAllocationKilos: null,
-        remarks: row['REMARKS'] ?? null,
-      })
-      siaCount += 1
-    }
-
-    await saveSheetsConfig({ lastSyncedAt: new Date().toISOString() })
-
-    return { ok: true, aiCount, siaCount }
-  } catch (error) {
-    return { ok: false, reason: 'request_failed', error: error.message }
-  }
-}
-
-/** Upserts a single authority row, matched by its own type's reference
- * number (aiNumber for AI, siaNumber for SIA — never the other one), and
- * preserves any existing totalIssued* values rather than resetting them
- * to 0. New fields from the real sheet (remarks, notes, rawSiaAllocation,
- * transactionTypeName) are merged in on each sync. */
 const upsertAuthority = async (incoming) => {
-  const refField = incoming.type === 'AI' ? 'aiNumber' : 'siaNumber'
-  const refValue = incoming[refField]
-
-  const existing = await db.authorities
-    .where(refField)
-    .equals(refValue)
-    .and((a) => a.type === incoming.type)
-    .first()
+  const existing = await db.authorities.where('aiNumber').equals(incoming.aiNumber).and((a) => a.type === 'AI').first()
 
   if (existing) {
     await db.authorities.update(existing.authId, {
       ...incoming,
       totalIssuedBags: existing.totalIssuedBags ?? 0,
       totalIssuedKilos: existing.totalIssuedKilos ?? 0,
+      manuallyCompleted: existing.manuallyCompleted ?? false,
     })
   } else {
     await db.authorities.add({
@@ -258,43 +168,288 @@ const upsertAuthority = async (incoming) => {
       totalIssuedBags: 0,
       totalIssuedKilos: 0,
       status: 'Pending',
+      manuallyCompleted: false,
     })
   }
 }
 
-const SHEET_NAME_BY_TYPE = {
-  WSR: 'receiptsSheetName',
-  WSI: 'issuesSheetName',
-  ESR: 'sacksReceiptsSheetName',
-  ESI: 'sacksIssuesSheetName',
+/**
+ * Upserts a SIA authority, matched by siaNumber alone - one authority
+ * record per SIA number now (per explicit correction: a SIA spanning
+ * multiple sack types/conditions is ONE authority with a sackLines
+ * array, not separate records per line). Merges the incoming sackLines
+ * with any existing ones by (sackTypeId, condition), preserving each
+ * line's own totalIssuedBags progress rather than resetting it -
+ * issuance is tracked locally as ESI forms are saved, never overwritten
+ * from the Sheet. A sack line that no longer appears in the incoming
+ * data (e.g. removed from the sheet) is dropped; a genuinely new line
+ * starts at 0 issued.
+ */
+const upsertSiaAuthority = async (incoming) => {
+  // Every record sharing this SIA number - under the previous
+  // architecture (one record per sack-type+condition combination) there
+  // could be several. Only one becomes the canonical record below; any
+  // others are leftover duplicates from that old design and are deleted
+  // entirely, since they predate the sackLines field and would
+  // otherwise sit forever showing no sack type and 0 pieces.
+  const allMatching = await db.authorities.where('siaNumber').equals(incoming.siaNumber).and((a) => a.type === 'SIA').toArray()
+
+  // Prefer an existing record that already has a sackLines array (i.e.
+  // one already migrated to the new shape) as the canonical one to
+  // update, so its issued-progress history is preserved; otherwise fall
+  // back to whichever came first.
+  const existing = allMatching.find((a) => Array.isArray(a.sackLines)) ?? allMatching[0]
+
+  const existingLineFor = (sackTypeId, condition) =>
+    existing?.sackLines?.find((l) => l.sackTypeId === sackTypeId && l.condition === condition)
+
+  const mergedLines = incoming.sackLines.map((line) => {
+    const match = existingLineFor(line.sackTypeId, line.condition)
+    return { ...line, totalIssuedBags: match?.totalIssuedBags ?? 0 }
+  })
+
+  const staleDuplicateIds = allMatching.filter((a) => a.authId !== existing?.authId).map((a) => a.authId)
+  if (staleDuplicateIds.length > 0) {
+    await db.authorities.bulkDelete(staleDuplicateIds)
+  }
+
+  if (existing) {
+    await db.authorities.update(existing.authId, {
+      date: incoming.date,
+      assignedWarehouse: incoming.assignedWarehouse,
+      customerName: incoming.customerName,
+      transactionTypeName: incoming.transactionTypeName,
+      remarks: incoming.remarks,
+      sackLines: mergedLines,
+      sourceId: incoming.sourceId,
+    })
+  } else {
+    await db.authorities.add({
+      authId: crypto.randomUUID(),
+      type: 'SIA',
+      siaNumber: incoming.siaNumber,
+      aiNumber: null,
+      date: incoming.date,
+      assignedWarehouse: incoming.assignedWarehouse,
+      customerName: incoming.customerName,
+      transactionTypeName: incoming.transactionTypeName,
+      remarks: incoming.remarks,
+      sackLines: mergedLines,
+      sourceId: incoming.sourceId,
+      manuallyCompleted: false,
+    })
+  }
+}
+
+let syncInProgress = false
+
+/**
+ * Pulls AI and SIA rows from every configured sheet source and upserts
+ * them into db.authorities. Never throws - returns { ok, aiCount,
+ * siaCount } on success or { ok: false, reason } on any failure, since
+ * this may run unattended on a background timer.
+ *
+ * Guarded against overlapping runs: the background worker fires this
+ * every 5 minutes and again on reconnect, and a manual "Sync Now" tap
+ * could easily land while one of those is still in flight (a full sync
+ * can take several seconds fetching and processing many rows) - two
+ * concurrent runs reading db.authorities before either has written its
+ * result is a genuine way to end up with duplicate SIA records, since
+ * both would conclude "no canonical record exists yet" independently.
+ */
+export const syncAuthoritiesFromSheets = async () => {
+  if (syncInProgress) return { ok: false, reason: 'already_syncing' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  const sources = await getAllSheetSources()
+  if (sources.length === 0) return { ok: false, reason: 'not_configured' }
+
+  syncInProgress = true
+  try {
+    const [warehouses, aliases, varieties, sackTypes] = await Promise.all([
+      db.warehouses.toArray(),
+      db.warehouseAliases.toArray(),
+      db.varietyTypes.toArray(),
+      db.sackTypes.toArray(),
+    ])
+    const warehouseByAlias = new Map(aliases.map((a) => [a.alias, a.warehouseId]))
+    const varietyByCode = new Map(varieties.map((v) => [v.name, v.varietyId]))
+    const sackTypeByCode = new Map(sackTypes.map((s) => [s.code, s.sackTypeId]))
+
+    let aiCount = 0
+    let siaCount = 0
+
+    for (const source of sources) {
+      const [aiRows, siaRows] = await Promise.all([
+        fetchAuthorityRows(source, 'AI'),
+        fetchAuthorityRows(source, 'SIA'),
+      ])
+
+      for (const row of aiRows) {
+        // Skip reserved-but-unused authority numbers - only the number
+        // itself is present, no actual allocation data yet.
+        const aiNum = String(row['AI #'] ?? '').trim()
+        if (!aiNum || !row['NAME OF CUSTOMER']) continue
+
+        // Skip anything dated before this source's Date From - this is
+        // the actual mechanism behind "ignore old experiments in the
+        // sheet" (checking row['DATE'] first since the admin was asked
+        // to rename the AI sheet's date column away from the year-
+        // specific "DATE (2026)", but falling back to the old name in
+        // case that rename hasn't happened yet).
+        const aiDateRaw = row['DATE'] ?? row['DATE (2026)']
+        const aiDate = aiDateRaw ? String(aiDateRaw).slice(0, 10) : null
+        if (aiDate && aiDate < source.dateFrom) continue
+
+        await upsertAuthority({
+          type: 'AI',
+          aiNumber: aiNum,
+          siaNumber: null,
+          sackTypeId: null,
+          condition: null,
+          date: aiDate,
+          assignedWarehouse: warehouseByAlias.get(normalizeWarehouseAlias(row['ISSUING WHSE'])) ?? null,
+          customerName: String(row['NAME OF CUSTOMER'] ?? '').trim(),
+          varietyId: varietyByCode.get(String(row['VARIETY CODE'] ?? '').trim()) ?? null,
+          transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
+          totalAllocationBags: toNumberOrNull(row['BAG']),
+          totalAllocationKilos: toNumberOrNull(row['NET KG']),
+          remarks: row['REMARKS'] ?? null,
+          orNumber: row['OR No.'] ?? null,
+          ageGroup: row['Note3'] ?? null, // sheet column repurposed for age group, AI only
+          note1: row['Note1'] ?? null,
+          note2: row['Note2'] ?? null,
+          sourceId: source.id,
+        })
+        aiCount += 1
+      }
+
+      // Parse each SIA row individually first (same validation/skip
+      // rules as before), then group by SIA number below - one SIA can
+      // span multiple rows (one per sack type + condition), and per the
+      // user's explicit correction, these must become ONE authority
+      // record with all of them together, not separate records.
+      const parsedSiaRows = []
+      for (const row of siaRows) {
+        const siaNum = String(row['SIA'] ?? '').trim()
+        if (!siaNum || !row['CUSTOMER']) continue
+
+        // Same Date From filter as AI, above.
+        const siaDateRaw = row['DATE']
+        const siaDate = siaDateRaw ? String(siaDateRaw).slice(0, 10) : null
+        if (siaDate && siaDate < source.dateFrom) continue
+
+        // Multi-row convention: this row is exactly one sack type + one
+        // condition + its own piece count. The condition sometimes
+        // still arrives embedded in # OF BAGS itself (e.g. "487 bn")
+        // rather than in the separate CONDITION column - safe to parse
+        // directly here since each row now names exactly one sack type,
+        // unlike the old multi-value compact format ("65 bn / 17 sh")
+        // which remains genuinely ambiguous and is still skipped below.
+        const sackCode = String(row['TYPE/CAPACITY'] ?? '').trim()
+        const rawBags = row['# OF BAGS']
+        const embeddedMatch = typeof rawBags === 'string' ? rawBags.trim().match(/^(\d+)\s*(bn|sh|us)$/i) : null
+
+        let pieces = typeof rawBags === 'number' ? rawBags : null
+        let condition = String(row['CONDITION'] ?? '').trim().toUpperCase() || null
+        if (embeddedMatch) {
+          pieces = Number(embeddedMatch[1])
+          condition = embeddedMatch[2].toUpperCase()
+        }
+
+        // A row using the old compact/compound format (a slash in the
+        // sack type, or a non-numeric piece count) doesn't match the
+        // multi-row convention this parser expects - skip it rather
+        // than guess at an ambiguous split, matching the earlier
+        // decision to require manual review for that format instead of
+        // parsing it automatically.
+        if (sackCode.includes('/') || pieces == null) continue
+
+        parsedSiaRows.push({
+          siaNumber: siaNum,
+          sackTypeId: sackTypeByCode.get(sackCode) ?? null,
+          condition,
+          pieces,
+          date: siaDate,
+          assignedWarehouse: warehouseByAlias.get(normalizeWarehouseAlias(row['ISSUED FROM'])) ?? null,
+          customerName: String(row['CUSTOMER'] ?? '').trim(),
+          transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
+          remarks: row['REMARKS'] ?? null,
+        })
+      }
+
+      // Group the parsed rows by SIA number - each group becomes one
+      // authority record with a sackLines array. Shared metadata
+      // (customer, warehouse, date, transaction type, remarks) comes
+      // from the group's first row, since these describe the SIA as a
+      // whole, not any one sack-type line within it.
+      const siaGroups = new Map()
+      for (const parsed of parsedSiaRows) {
+        if (!siaGroups.has(parsed.siaNumber)) siaGroups.set(parsed.siaNumber, [])
+        siaGroups.get(parsed.siaNumber).push(parsed)
+      }
+
+      for (const [siaNum, group] of siaGroups) {
+        const first = group[0]
+        await upsertSiaAuthority({
+          siaNumber: siaNum,
+          date: first.date,
+          assignedWarehouse: first.assignedWarehouse,
+          customerName: first.customerName,
+          transactionTypeName: first.transactionTypeName,
+          remarks: first.remarks,
+          sackLines: group.map((g) => ({
+            sackTypeId: g.sackTypeId,
+            condition: g.condition,
+            totalAllocationBags: g.pieces,
+          })),
+          sourceId: source.id,
+        })
+        siaCount += 1
+      }
+
+      await db.sheetSources.update(source.id, { lastSyncedAt: new Date().toISOString() })
+    }
+
+    return { ok: true, aiCount, siaCount }
+  } catch (error) {
+    return { ok: false, reason: 'request_failed', error: error.message }
+  } finally {
+    syncInProgress = false
+  }
 }
 
 /**
  * Builds the backup row payload for a given transaction, in the exact
- * column shape its target sheet expects.
- *
- * WSR matches the user's EXISTING receipts sheet column-for-column:
- *   Timestamp, Date, Transaction, Variety, Bags, Net Kilos, Warehouse Name,
- *   Customer Name, Province, Net Bags, WH Code, WSR #, Batch No, Col_15
- * `Col_15` (age) is left blank when ageUnit is 'Days' and only populated
- * with a plain number when ageUnit is 'Months' — matching the real sheet's
- * existing behavior exactly (8 in that column means "8 months old"; a
- * days-based age is not recorded in this column at all).
- *
- * WSI reuses the same shape, with "WSR #" replaced by "AI #" (no "Batch
- * No" equivalent — Batch No was specific to milling receipts).
- *
- * ESR/ESI (sacks) use a pieces-based shape since there's no kilos/bags
- * concept for sack documents — Pieces replaces Bags/Net Kilos/Net Bags,
- * and "WSR #"/"AI #" are replaced by "ESI #"/"SIA #" respectively.
+ * column shape its target sheet expects. See the per-type comments
+ * inline - WSR/WSI share a shape (a "Batch No" vs "AI #" column), ESR/
+ * ESI share a different, pieces-based shape.
  */
+/**
+ * Formats "now" as M/D/YYYY H:MM:SS in the LOCAL timezone - e.g.
+ * "7/22/2026 23:29:28" - for the Timestamp column in backup rows.
+ * Deliberately not new Date().toISOString() (always UTC, and a
+ * machine-readable format, not the human-readable one requested) -
+ * same reasoning as todayLocalISO() elsewhere in this codebase.
+ */
+const formatLocalTimestamp = () => {
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const day = now.getDate()
+  const year = now.getFullYear()
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const seconds = String(now.getSeconds()).padStart(2, '0')
+  return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`
+}
+
 const buildBackupRow = (transaction, context) => {
   const { warehouseCode, warehouseName, provinceCode, varietyName, transactionTypeName } = context
   const ageInMonths = transaction.ageUnit === 'Months' ? transaction.ageValue : null
 
   if (transaction.type === 'WSR') {
     return {
-      Timestamp: new Date().toISOString(),
+      Timestamp: formatLocalTimestamp(),
       Date: transaction.date,
       Transaction: transactionTypeName ?? '',
       Variety: varietyName ?? '',
@@ -306,14 +461,15 @@ const buildBackupRow = (transaction, context) => {
       'Net Bags': transaction.numberOfBags != null ? transaction.netKilos / 50 : null,
       'WH Code': warehouseCode ?? null,
       'WSR #': transaction.serialNo,
+      'WSI #': transaction.linkedDocNo ?? null,
       'Batch No': transaction.batchNo ?? null,
-      Col_15: ageInMonths,
+      AGE: ageInMonths,
     }
   }
 
   if (transaction.type === 'WSI') {
     return {
-      Timestamp: new Date().toISOString(),
+      Timestamp: formatLocalTimestamp(),
       Date: transaction.date,
       Transaction: transactionTypeName ?? '',
       Variety: varietyName ?? '',
@@ -325,7 +481,8 @@ const buildBackupRow = (transaction, context) => {
       'Net Bags': transaction.numberOfBags != null ? transaction.netKilos / 50 : null,
       'WH Code': warehouseCode ?? null,
       'AI #': transaction.aiNumber ?? null,
-      Col_15: ageInMonths,
+      'WSI #': transaction.serialNo,
+      AGE: ageInMonths,
     }
   }
 
@@ -333,7 +490,7 @@ const buildBackupRow = (transaction, context) => {
   const totalPieces = transaction.sackLines?.reduce((sum, l) => sum + (l.pieces ?? 0), 0) ?? null
 
   return {
-    Timestamp: new Date().toISOString(),
+    Timestamp: formatLocalTimestamp(),
     Date: transaction.date,
     Transaction: transactionTypeName ?? '',
     'Warehouse Name': warehouseName ?? '',
@@ -342,45 +499,171 @@ const buildBackupRow = (transaction, context) => {
     'WH Code': warehouseCode ?? null,
     Pieces: totalPieces,
     [transaction.type === 'ESR' ? 'ESI #' : 'SIA #']: transaction.linkedDocNo ?? null,
+    [transaction.type === 'ESR' ? 'ESR#' : 'ESI#']: transaction.serialNo,
   }
 }
 
+const SHEET_NAME_KEY_BY_TYPE = {
+  WSR: 'receiptsSheetName',
+  WSI: 'issuesSheetName',
+  ESR: 'sacksReceiptsSheetName',
+  ESI: 'sacksIssuesSheetName',
+}
+
+// Each sheet's own serial number column, matching buildBackupRow's
+// column names exactly - used as the match key for update/delete.
+const SERIAL_COLUMN_BY_TYPE = {
+  WSR: 'WSR #',
+  WSI: 'WSI #',
+  ESR: 'ESR#',
+  ESI: 'ESI#',
+}
+
 /**
- * Appends one backup row to the appropriate sheet for a saved transaction
- * (a separate sheet per document type — see SHEET_NAME_BY_TYPE). Called
- * from the sync worker once a transaction has synced to Firestore
- * (Step 6.4) — this is a secondary, best-effort backup, not the primary
- * store, so failures here are logged but never block anything else in
- * the app.
+ * POSTs a JSON body to the Sheets Web App with a few retry attempts on
+ * transient failure (network blips, Apps Script cold-start latency, or
+ * any other momentary issue) before giving up. Apps Script Web Apps are
+ * known for variable reliability under load - a short, immediate retry
+ * resolves most of these without ever surfacing as a visible failure,
+ * rather than making every transient hiccup wait for the next full
+ * sync cycle (5 minutes, or the next save) to self-heal.
  */
-export const pushTransactionBackup = async (transaction, context = {}) => {
-  const config = await getSheetsConfig()
-  if (!isConfigured(config)) return { ok: false, reason: 'not_configured' }
+const postToSheetsWithRetry = async (url, body, maxAttempts = 3) => {
+  let lastError = null
 
-  const sheetNameKey = SHEET_NAME_BY_TYPE[transaction.type]
-  if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        // Content-Type is deliberately text/plain, NOT application/json -
+        // Google Apps Script Web Apps don't handle CORS preflight (OPTIONS)
+        // requests, and application/json triggers one from the browser
+        // (it's not a CORS-safelisted content type; text/plain is). Apps
+        // Script's doPost still reads e.postData.contents as the raw JSON
+        // string regardless of the declared Content-Type, so this changes
+        // nothing server-side. Do not change this back to application/json.
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body),
+      })
 
-  const sheetName = config[sheetNameKey]
-  const row = buildBackupRow(transaction, context)
-
-  try {
-    const response = await fetch(config.webAppUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'appendTransaction',
-        sheet: sheetName,
-        row,
-      }),
-    })
-
-    if (!response.ok) {
-      return { ok: false, reason: 'request_failed' }
+      if (!response.ok) {
+        lastError = { ok: false, reason: 'request_failed', httpStatus: response.status }
+      } else {
+        const payload = await response.json()
+        if (payload.status === 'SUCCESS') return { ok: true }
+        lastError = { ok: false, reason: 'bad_response', message: payload.message ?? null }
+      }
+    } catch (error) {
+      lastError = { ok: false, reason: 'request_failed', error: error.message }
     }
 
-    const payload = await response.json()
-    return payload.status === 'SUCCESS' ? { ok: true } : { ok: false, reason: 'bad_response' }
-  } catch (error) {
-    return { ok: false, reason: 'request_failed', error: error.message }
+    if (attempt < maxAttempts) {
+      // Short, increasing delay between attempts (300ms, 600ms) - long
+      // enough to ride out a momentary blip, short enough not to make
+      // the user wait noticeably if it does eventually succeed.
+      await new Promise((resolve) => setTimeout(resolve, attempt * 300))
+    }
   }
+
+  return lastError
+}
+
+/**
+ * Appends one backup row to the appropriate sheet for a saved
+ * transaction, using whichever configured source's date range covers
+ * today. Checked against WRITE_ALLOWLIST_KEYS before every write - this
+ * is the structural guarantee that this app can never write to AI/SIA
+ * or any sheet outside the four backup logs, not just a convention.
+ */
+export const pushTransactionBackup = async (transaction, context = {}) => {
+  const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[transaction.type]
+  if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
+  if (!WRITE_ALLOWLIST_KEYS.includes(sheetNameKey)) return { ok: false, reason: 'not_allowlisted' }
+
+  const source = await getActiveSheetSource()
+  if (!source) return { ok: false, reason: 'no_active_source' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  const sheetName = source[sheetNameKey]
+  const row = buildBackupRow(transaction, context)
+
+  return postToSheetsWithRetry(source.webAppUrl, {
+    action: 'appendTransaction',
+    sheet: sheetName,
+    serialColumn: SERIAL_COLUMN_BY_TYPE[transaction.type],
+    row,
+  })
+}
+
+/**
+ * Updates an existing backup row in place, found by the transaction's
+ * own serialNo (the 'Serial No' column every backup row now carries
+ * consistently). Used when an already-saved WSR/WSI/ESR/ESI is edited,
+ * so the Sheet stays in sync with what the app actually has rather than
+ * accumulating a stale duplicate of the original values.
+ */
+export const updateTransactionBackup = async (transaction, context = {}) => {
+  const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[transaction.type]
+  if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
+  if (!WRITE_ALLOWLIST_KEYS.includes(sheetNameKey)) return { ok: false, reason: 'not_allowlisted' }
+
+  const source = await getActiveSheetSource()
+  if (!source) return { ok: false, reason: 'no_active_source' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  const sheetName = source[sheetNameKey]
+  const row = buildBackupRow(transaction, context)
+
+  return postToSheetsWithRetry(source.webAppUrl, {
+    action: 'updateTransaction',
+    sheet: sheetName,
+    matchColumn: SERIAL_COLUMN_BY_TYPE[transaction.type],
+    matchValue: transaction.serialNo,
+    // NOTE: warehouseCode is sent here but api.gs currently does NOT
+    // enforce it as a match requirement - an earlier attempt to require
+    // it caused a serious regression (a mismatch for any reason made
+    // findRowIndexByMatch report "not found" even when the row genuinely
+    // existed, triggering the append-fallback and creating duplicate
+    // rows) and was reverted server-side. This field is harmless to
+    // keep sending (unused by the server for now), but do not assume
+    // it's actually being checked - serial-number-only matching is
+    // what's currently active. If cross-warehouse serial collisions
+    // ever need addressing, do it via a verified, carefully-tested
+    // approach, not by re-adding a hard requirement here without being
+    // able to confirm it against real data first.
+    warehouseCode: context.warehouseCode ?? null,
+    row,
+  })
+}
+
+/**
+ * Deletes an existing backup row, found by serialNo + transaction type
+ * (used both for a real-time delete attempt and for replaying a queued
+ * offline deletion, where only these survive - the local transaction
+ * record itself is already gone by the time this runs). warehouseCode
+ * is passed along but NOT currently enforced server-side - an earlier
+ * attempt to require it as a match condition caused a real regression
+ * (false "not found" results triggering duplicate-row creation on
+ * update) and was reverted. See updateTransactionBackup's comment for
+ * the full explanation - do not re-add a hard warehouseCode
+ * requirement without being able to verify it against real data first.
+ */
+export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => {
+  const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[type]
+  if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
+  if (!WRITE_ALLOWLIST_KEYS.includes(sheetNameKey)) return { ok: false, reason: 'not_allowlisted' }
+
+  const source = await getActiveSheetSource()
+  if (!source) return { ok: false, reason: 'no_active_source' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  const sheetName = source[sheetNameKey]
+
+  return postToSheetsWithRetry(source.webAppUrl, {
+    action: 'deleteTransaction',
+    sheet: sheetName,
+    matchColumn: SERIAL_COLUMN_BY_TYPE[type],
+    matchValue: serialNo,
+    warehouseCode: warehouseCode ?? null,
+  })
 }

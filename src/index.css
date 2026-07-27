@@ -11,3 +11,98 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* Fade-in used when the authenticated app content first mounts (right
+   after login) - syncs with Login.jsx's own fade-out timing (500ms)
+   so the transition reads as one smooth crossfade rather than the
+   login screen fading to black then the home page just appearing. */
+@keyframes appFadeIn {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
+.animate-app-fade-in {
+  animation: appFadeIn 350ms ease-out;
+}
+
+/* Light theme overrides. Deliberately brute-force: explicit rules for
+   every exact utility class (including opacity variants) actually used
+   app-wide, rather than a CSS-variable-in-Tailwind-config approach -
+   that approach was technically correct per Tailwind's own docs but
+   failed to render correctly twice in testing, for reasons that could
+   not be diagnosed without being able to run the actual build. Plain
+   CSS class overrides with !important are blunter but do not depend on
+   any special Tailwind mechanism, so they are not vulnerable to
+   whatever caused the previous approach to fail.
+   brand.contrast (#0A0A0A, dark text on the green accent or a light
+   pile-box fill) is intentionally untouched here - it must stay dark
+   regardless of theme. */
+.light body { background-color: #F4F4F5; color: #171717; }
+
+.light .bg-neutral-950 { background-color: #F4F4F5 !important; }
+.light .bg-neutral-900 { background-color: #FFFFFF !important; }
+.light .bg-neutral-800 { background-color: #E4E4E7 !important; }
+.light .bg-neutral-700 { background-color: #D4D4D4 !important; }
+.light .bg-neutral-700\/30 { background-color: rgba(212, 212, 212, 0.3) !important; }
+
+.light .border-neutral-800 { border-color: #D4D4D4 !important; }
+.light .border-neutral-800\/30 { border-color: rgba(212, 212, 212, 0.3) !important; }
+.light .border-neutral-800\/50 { border-color: rgba(212, 212, 212, 0.5) !important; }
+.light .border-neutral-700 { border-color: #A3A3A3 !important; }
+.light .border-neutral-600 { border-color: #737373 !important; }
+
+.light .text-neutral-300 { color: #262626 !important; }
+.light .text-neutral-400 { color: #1F1F1F !important; }
+.light .text-neutral-500 { color: #1A1A1A !important; }
+.light .text-neutral-600 { color: #171717 !important; }
+.light .text-neutral-700 { color: #171717 !important; }
+
+.light .text-app-text { color: #171717 !important; }
+
+/* Brand accents deepened slightly so they read as a crisp accent rather
+   than washed-out glare against a white background. */
+.light .bg-brand-neon { background-color: #00B377 !important; }
+.light .bg-brand-neon\/10 { background-color: rgba(0, 179, 119, 0.1) !important; }
+.light .bg-brand-neon\/15 { background-color: rgba(0, 179, 119, 0.15) !important; }
+.light .bg-brand-neon\/20 { background-color: rgba(0, 179, 119, 0.2) !important; }
+.light .bg-brand-neon\/30 { background-color: rgba(0, 179, 119, 0.3) !important; }
+.light .border-brand-neon, .light .\!border-brand-neon { border-color: #00754A !important; }
+.light .border-brand-neon\/30 { border-color: rgba(0, 117, 74, 0.4) !important; }
+.light .border-brand-neon\/40, .light .\!border-brand-neon\/40 { border-color: rgba(0, 117, 74, 0.5) !important; }
+.light .border-brand-neon\/50 { border-color: rgba(0, 117, 74, 0.6) !important; }
+.light .text-brand-neon { color: #00754A !important; }
+.light .text-brand-neon\/70 { color: rgba(0, 117, 74, 0.8) !important; }
+.light .text-brand-neon\/40 { color: rgba(0, 117, 74, 0.6) !important; }
+
+.light .text-blue-400 { color: #1D4ED8 !important; }
+.light .border-blue-400 { border-color: #1D4ED8 !important; }
+.light .bg-blue-400\/10 { background-color: rgba(29, 78, 216, 0.12) !important; }
+
+.light .bg-brand-amber\/10 { background-color: rgba(217, 119, 6, 0.1) !important; }
+.light .bg-brand-amber\/15 { background-color: rgba(217, 119, 6, 0.15) !important; }
+.light .border-brand-amber, .light .\!border-brand-amber { border-color: #D97706 !important; }
+.light .border-brand-amber\/30 { border-color: rgba(217, 119, 6, 0.3) !important; }
+.light .border-brand-amber\/40, .light .\!border-brand-amber\/40 { border-color: rgba(217, 119, 6, 0.4) !important; }
+.light .text-brand-amber { color: #D97706 !important; }
+
+.light .bg-brand-crimson { background-color: #DC2626 !important; }
+.light .bg-brand-crimson\/10 { background-color: rgba(220, 38, 38, 0.1) !important; }
+.light .bg-brand-crimson\/20 { background-color: rgba(220, 38, 38, 0.2) !important; }
+.light .bg-brand-crimson\/30 { background-color: rgba(220, 38, 38, 0.3) !important; }
+.light .border-brand-crimson, .light .\!border-brand-crimson { border-color: #DC2626 !important; }
+.light .border-brand-crimson\/40, .light .\!border-brand-crimson\/40 { border-color: rgba(220, 38, 38, 0.4) !important; }
+.light .border-brand-crimson\/50 { border-color: rgba(220, 38, 38, 0.5) !important; }
+.light .text-brand-crimson { color: #DC2626 !important; }
+
+/* One-time bounce-in entrance animation for popovers/menus appearing on
+   tap - Tailwind's built-in animate-bounce loops forever, which reads as
+   broken for a menu that should settle after appearing once. */
+@keyframes bounce-in {
+  0% { transform: scale(0.3) translateY(-10px); opacity: 0; }
+  50% { transform: scale(1.05) translateY(2px); opacity: 1; }
+  70% { transform: scale(0.95) translateY(-1px); }
+  100% { transform: scale(1) translateY(0); }
+}
+.animate-bounce-in {
+  animation: bounce-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}

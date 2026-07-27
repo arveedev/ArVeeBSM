@@ -10,6 +10,8 @@ const SettingsContext = createContext(null)
 
 const DEFAULTS = {
   autoAgeMonitoring: true,
+  theme: 'dark',
+  weightUnit: 'kg', // 'kg' (net kilos) or 'mt' (metric tons)
 }
 
 export const SettingsProvider = ({ children }) => {
@@ -20,7 +22,14 @@ export const SettingsProvider = ({ children }) => {
     db.table('settings')
       .get('global')
       .then((saved) => {
-        if (saved) setSettings((prev) => ({ ...prev, ...saved }))
+        if (saved) {
+          // weightUnit is intentionally excluded from what's restored -
+          // it always starts back at the default (kg) on every fresh
+          // load, per explicit request, even though it's still saved
+          // to Dexie for the update mechanism to work during a session.
+          const { weightUnit, ...rest } = saved
+          setSettings((prev) => ({ ...prev, ...rest }))
+        }
       })
       .catch(() => {
         // Table may not exist in older schema versions — default is fine.

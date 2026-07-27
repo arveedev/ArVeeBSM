@@ -21,17 +21,18 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Check } from 'lucide-react'
 import { db } from '../../db/dexie.js'
-import { calculateAuthorityStatus } from '../../utils/calculations.js'
-import { resolveSiaSackLines } from '../../utils/siaParsing.js'
+import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
+import { useSettings } from '../../context/SettingsContext.jsx'
+import CompletedAuthorityModal from './CompletedAuthorityModal.jsx'
 
 const TOP_TABS = ['AI', 'SIA']
-const SUB_TABS = ['Pending', 'Completed']
 
 function AuthorityMonitor() {
   const { accessibleWarehouses, currentWarehouseId, setCurrentWarehouseId } = useWarehouse() ?? {}
+  const { weightUnit } = useSettings() ?? {}
   const [topTab, setTopTab] = useState('AI')
-  const [subTab, setSubTab] = useState('Pending')
+  const [showCompleted, setShowCompleted] = useState(false)
 
   const accessibleIds = (accessibleWarehouses ?? []).map((w) => w.warehouseId)
   const accessibleIdsKey = accessibleIds.join(',')
@@ -47,27 +48,33 @@ function AuthorityMonitor() {
   // return, even if the data isn't used in the null branch.
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
+  const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
+  const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
+  const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
+
+  // Palay is green, Rice is blue - applied to the AI/SIA type+number
+  // line for quick visual distinction now that this list can get
+  // crowded. AI's category comes from its variety; SIA's from its sack
+  // type (SIA has no variety of its own).
+  const categoryColor = (a) => {
+    const category = a.type === 'AI' ? varietyMap.get(a.varietyId)?.category : sackTypeMap.get(a.sackLines?.[0]?.sackTypeId)?.category
+    if (category === 'Rice') return 'text-blue-400'
+    if (category === 'Palay') return 'text-brand-neon'
+    return 'text-app-text'
+  }
 
   if (!authorities || authorities.length === 0) return null
 
-  const isComplete = (a) => {
-    if (a.manuallyCompleted) return true
-    const { status } = calculateAuthorityStatus(
-      a.totalAllocationKilos ?? a.totalAllocationBags,
-      a.totalIssuedKilos ?? a.totalIssuedBags
-    )
-    return status === 'Complete'
-  }
-
-  const filtered = authorities
-    .filter((a) => a.type === topTab)
-    .filter((a) => (subTab === 'Completed' ? isComplete(a) : !isComplete(a)))
+  const typeAuthorities = authorities.filter((a) => a.type === topTab)
+  const filtered = typeAuthorities
+    .filter((a) => !isAuthorityComplete(a))
     .sort((a, b) => {
       const aRef = a.type === 'AI' ? a.aiNumber : a.siaNumber
       const bRef = b.type === 'AI' ? b.aiNumber : b.siaNumber
       return (aRef ?? '').localeCompare(bRef ?? '')
     })
+  const completedList = typeAuthorities.filter(isAuthorityComplete)
 
   const handleOpen = (authority) => {
     if (authority.assignedWarehouse && authority.assignedWarehouse !== currentWarehouseId) {
@@ -86,37 +93,28 @@ function AuthorityMonitor() {
 
       window.openTransactionForm('WSI', {
         aiNumber: authority.aiNumber,
+        authorityDate: authority.date ?? null,
         customerName: authority.customerName,
         varietyId: authority.varietyId,
+        transactionTypeName: authority.transactionTypeName,
         numberOfBags: bagsRemaining != null && bagsRemaining > 0 ? bagsRemaining : null,
         netKilos: kilosRemaining != null && kilosRemaining > 0 ? kilosRemaining : null,
         autoComputeNet: false,
       })
     } else {
-      const piecesRemaining = authority.totalAllocationBags != null
-        ? Math.max(0, authority.totalAllocationBags - (authority.totalIssuedBags ?? 0))
-        : null
-
-      // Resolve sack lines from the allocation, then scale pieces down to
-      // the remaining balance so the form reflects what's still owed, not
-      // the original total that may already be partially fulfilled.
-      const allSackLines = resolveSiaSackLines(authority, sackTypes)
-      let sackLines = allSackLines
-
-      if (allSackLines.length > 0 && piecesRemaining != null) {
-        const totalResolved = allSackLines.reduce((s, l) => s + (l.pieces ?? 0), 0)
-        const ratio = totalResolved > 0 ? piecesRemaining / totalResolved : 0
-        sackLines = allSackLines.map((l) => ({
-          ...l,
-          pieces: Math.round(l.pieces * ratio),
-        })).filter((l) => l.pieces > 0)
-      }
+      const remainingLines = (authority.sackLines ?? [])
+        .map((l) => ({
+          sackTypeId: l.sackTypeId,
+          condition: l.condition,
+          pieces: Math.max(0, (l.totalAllocationBags ?? 0) - (l.totalIssuedBags ?? 0)),
+        }))
+        .filter((l) => l.pieces > 0)
 
       window.openTransactionForm('ESI', {
         linkedDocNo: authority.siaNumber,
         customerName: authority.customerName,
-        sackLines,
-        rawSiaAllocation: sackLines.length === 0 ? authority.rawSiaAllocation : null,
+        transactionTypeName: authority.transactionTypeName,
+        sackLines: remainingLines,
       })
     }
   }
@@ -130,16 +128,20 @@ function AuthorityMonitor() {
 
   return (
     <div className="mt-6">
-      <h2 className="text-sm font-semibold text-white">AI / SIA Monitor</h2>
+      <h2 className="text-sm font-semibold text-app-text">AI / SIA Monitor</h2>
 
-      <div className="mt-2 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+      <div className="relative mt-2 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+        <div
+          className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+          style={{ transform: topTab === TOP_TABS[0] ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+        />
         {TOP_TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setTopTab(tab)}
-            className={`flex-1 rounded-lg py-1.5 text-sm font-medium transition-all active:scale-95 ${
-              topTab === tab ? 'bg-brand-neon text-neutral-950' : 'text-neutral-400 hover:text-white'
+            className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors active:scale-95 ${
+              topTab === tab ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
             }`}
           >
             {tab}
@@ -147,43 +149,46 @@ function AuthorityMonitor() {
         ))}
       </div>
 
-      <div className="mt-2 flex gap-4 border-b border-neutral-800 px-1">
-        {SUB_TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setSubTab(tab)}
-            className={`-mb-px border-b-2 pb-1.5 text-xs font-medium transition-colors ${
-              subTab === tab
-                ? 'border-brand-neon text-white'
-                : 'border-transparent text-neutral-500 hover:text-neutral-300'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="mt-2 flex items-center justify-between border-b border-neutral-800 px-1 pb-1.5">
+        <span className="text-xs font-medium text-app-text">Pending</span>
+        <button
+          type="button"
+          onClick={() => setShowCompleted(true)}
+          className="text-xs font-medium text-brand-neon hover:underline"
+        >
+          View Completed
+        </button>
       </div>
 
       <ul className="mt-2 space-y-2">
         {filtered.length === 0 && (
           <p className="py-3 text-center text-xs text-neutral-500">
-            No {subTab.toLowerCase()} {topTab} records.
+            No pending {topTab} records.
           </p>
         )}
 
         {filtered.map((a) => {
+          const isSia = a.type === 'SIA'
+          const totalAllocBags = isSia
+            ? (a.sackLines ?? []).reduce((s, l) => s + (l.totalAllocationBags ?? 0), 0)
+            : a.totalAllocationBags
+          const totalIssuedBags = isSia
+            ? (a.sackLines ?? []).reduce((s, l) => s + (l.totalIssuedBags ?? 0), 0)
+            : a.totalIssuedBags
+
           const kilos = calculateAuthorityStatus(a.totalAllocationKilos, a.totalIssuedKilos)
-          const bags = calculateAuthorityStatus(a.totalAllocationBags, a.totalIssuedBags)
+          const bags = calculateAuthorityStatus(totalAllocBags, totalIssuedBags)
           const status = kilos.status ?? bags.status
-          const unitLabel = a.type === 'SIA' ? 'pieces' : 'bags'
+          const unitLabel = isSia ? 'pieces' : 'bags'
           const variety = a.type === 'AI' ? varietyMap.get(a.varietyId) : null
+          const warehouse = warehouseMap.get(a.assignedWarehouse)
 
           const progressColor =
             status === 'Over-Issued'
               ? 'text-brand-crimson'
               : status === 'Complete'
                 ? 'text-brand-neon'
-                : 'text-white'
+                : 'text-app-text'
 
           return (
             <li
@@ -215,39 +220,44 @@ function AuthorityMonitor() {
                 className="flex flex-1 items-center justify-between gap-3 py-2 pr-3 text-left active:scale-[0.99]"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-white">
+                  <p className={`truncate text-sm font-medium ${categoryColor(a)}`}>
                     {a.type} · {a.type === 'AI' ? a.aiNumber : a.siaNumber}
                   </p>
                   <p className="truncate text-xs text-neutral-400">
+                    {warehouse ? `${warehouse.code} — ${warehouse.name}` : a.assignedWarehouse}
+                  </p>
+                  <p className="break-words text-xs text-neutral-400">
                     {a.customerName}
                     {a.transactionTypeName ? ` — ${a.transactionTypeName}` : ''}
                   </p>
-                  <p className="truncate text-xs text-neutral-500">
+                  <p className="break-words text-xs text-neutral-500">
                     {a.type === 'AI' && variety ? `${variety.name} (${variety.category})` : ''}
-                    {a.type === 'SIA' && a.sackTypeRaw
-                      ? `${a.sackTypeRaw}${a.rawSiaAllocation ? ` — ${a.rawSiaAllocation}` : ''}`
+                    {isSia && (a.sackLines ?? []).length > 0
+                      ? a.sackLines.map((l) => `${sackTypeMap.get(l.sackTypeId)?.code ?? '?'} ${l.condition ?? ''}`).join(', ')
                       : ''}
                   </p>
+                  {a.date && (
+                    <p className="truncate text-xs text-neutral-600">{String(a.date).slice(0, 10)}</p>
+                  )}
+                  {authorityExtraDetails(a).length > 0 && (
+                    <p className="break-words text-xs text-neutral-600">
+                      {authorityExtraDetails(a).map((d) => `${d.label}: ${d.value}`).join(' · ')}
+                    </p>
+                  )}
                 </div>
 
                 <div className="shrink-0 text-right">
-                  {a.manuallyCompleted ? (
-                    <span className="text-sm font-semibold text-brand-neon">Completed</span>
-                  ) : (
-                    <>
-                      {a.totalAllocationKilos != null && (
-                        <p className={`text-base font-semibold leading-tight ${progressColor}`}>
-                          {(a.totalIssuedKilos ?? 0).toFixed(2)}
-                          <span className="text-neutral-500"> / {a.totalAllocationKilos.toFixed(2)} kg</span>
-                        </p>
-                      )}
-                      {a.totalAllocationBags != null && (
-                        <p className={`text-base font-semibold leading-tight ${progressColor}`}>
-                          {(a.totalIssuedBags ?? 0).toLocaleString()}
-                          <span className="text-neutral-500"> / {a.totalAllocationBags.toLocaleString()} {unitLabel}</span>
-                        </p>
-                      )}
-                    </>
+                  {a.totalAllocationKilos != null && (
+                    <p className={`text-base font-semibold leading-tight ${progressColor}`}>
+                      {fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}
+                      <span className="text-neutral-500"> / {fmtWeight(a.totalAllocationKilos, weightUnit)}</span>
+                    </p>
+                  )}
+                  {totalAllocBags != null && (
+                    <p className={`text-base font-semibold leading-tight ${progressColor}`}>
+                      {fmtBags(totalIssuedBags ?? 0)}
+                      <span className="text-neutral-500"> / {fmtBags(totalAllocBags)} {unitLabel}</span>
+                    </p>
                   )}
                 </div>
               </button>
@@ -255,6 +265,17 @@ function AuthorityMonitor() {
           )
         })}
       </ul>
+
+      {showCompleted && (
+        <CompletedAuthorityModal
+          authorities={completedList}
+          type={topTab}
+          varietyMap={varietyMap}
+          sackTypeMap={sackTypeMap}
+          warehouseMap={warehouseMap}
+          onClose={() => setShowCompleted(false)}
+        />
+      )}
     </div>
   )
 }

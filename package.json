@@ -12,18 +12,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.1",
-    "dexie": "^4.0.8",
-    "dexie-react-hooks": "^1.1.7",
-    "firebase": "^10.13.1",
-    "react-hot-toast": "^2.4.1",
     "date-fns": "^3.6.0",
-    "lucide-react": "^0.383.0",
+    "dexie": "^4.0.8",
+    "dexie-cloud-addon": "^4.4.13",
+    "dexie-react-hooks": "^1.1.7",
+    "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
-    "html2canvas": "^1.4.1"
+    "lucide-react": "^0.383.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^6.26.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

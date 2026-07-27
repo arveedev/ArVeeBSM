@@ -7,6 +7,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
+import { normalizeWarehouseAlias } from '../../../utils/warehouseMatching.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import {
   inputClass,
@@ -24,20 +25,30 @@ function WarehousesPanel() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [provinceId, setProvinceId] = useState('')
+  const [aliases, setAliases] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
 
   const provinces = useLiveQuery(() => db.provinces.toArray(), [])
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), [])
+  const branches = useLiveQuery(() => db.branches.toArray(), [])
+  const allAliases = useLiveQuery(() => db.warehouseAliases.toArray(), []) ?? []
 
   const provinceMap = new Map((provinces ?? []).map((p) => [p.provinceId, p]))
+  const branchMap = new Map((branches ?? []).map((b) => [b.branchId, b]))
   const sortedWarehouses = [...(warehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  const aliasesByWarehouse = new Map()
+  for (const a of allAliases) {
+    if (!aliasesByWarehouse.has(a.warehouseId)) aliasesByWarehouse.set(a.warehouseId, [])
+    aliasesByWarehouse.get(a.warehouseId).push(a.displayLabel)
+  }
 
   const resetForm = () => {
     setCode('')
     setName('')
     setAddress('')
     setProvinceId('')
+    setAliases('')
     setEditingId(null)
   }
 
@@ -50,14 +61,38 @@ function WarehousesPanel() {
     const normalizedCode = code.trim()
     const normalizedName = name.trim()
 
-    // Warehouse codes may repeat (e.g. shared facility codes), but names
-    // must be unique.
     const existing = await db.warehouses.where('name').equals(normalizedName).first()
     if (existing && existing.warehouseId !== editingId) {
       toast.error('That warehouse name is already registered')
       return
     }
 
+    // Sheet aliases must be globally unique - the same nickname can't map
+    // to two different warehouses, or a sync would have no way to know
+    // which one a given sheet row actually means. Uniqueness (and later
+    // matching) is checked on the NORMALIZED form (whitespace/hyphens
+    // ignored) so visually-different-but-equivalent spellings like
+    // "ABACORP" and "ABACORP-A" can never end up registered separately -
+    // per the confirmed rule, those are the same warehouse, while
+    // "ABACORP" vs "ABACORP A" genuinely are not (extra letter, not
+    // just formatting).
+    const rawAliases = aliases.split(',').map((a) => a.trim()).filter(Boolean)
+    const seenNormalized = new Map() // normalized -> original, to de-dupe within this same input
+    for (const raw of rawAliases) {
+      seenNormalized.set(normalizeWarehouseAlias(raw), raw)
+    }
+    const cleanedAliases = [...seenNormalized.entries()].map(([normalized, displayLabel]) => ({ normalized, displayLabel }))
+
+    for (const { normalized, displayLabel } of cleanedAliases) {
+      const aliasOwner = await db.warehouseAliases.get(normalized)
+      if (aliasOwner && aliasOwner.warehouseId !== editingId) {
+        const ownerWarehouse = (warehouses ?? []).find((w) => w.warehouseId === aliasOwner.warehouseId)
+        toast.error(`Alias "${displayLabel}" is already used by ${ownerWarehouse?.name ?? 'another warehouse'}`)
+        return
+      }
+    }
+
+    let warehouseId = editingId
     if (editingId) {
       await db.warehouses.update(editingId, {
         code: normalizedCode,
@@ -67,14 +102,27 @@ function WarehousesPanel() {
       })
       toast.success('Warehouse updated')
     } else {
+      warehouseId = crypto.randomUUID()
       await db.warehouses.add({
-        warehouseId: crypto.randomUUID(),
+        warehouseId,
         code: normalizedCode,
         name: normalizedName,
         address: address.trim() || null,
         provinceId,
       })
       toast.success('Warehouse saved')
+    }
+
+    // Replace this warehouse's aliases wholesale - simpler and safer than
+    // diffing add/remove, and this list is short enough that it's cheap.
+    const existingForThisWarehouse = await db.warehouseAliases.where('warehouseId').equals(warehouseId).toArray()
+    await db.warehouseAliases.bulkDelete(existingForThisWarehouse.map((a) => a.alias))
+    if (cleanedAliases.length > 0) {
+      await db.warehouseAliases.bulkAdd(cleanedAliases.map(({ normalized, displayLabel }) => ({
+        alias: normalized,
+        displayLabel,
+        warehouseId,
+      })))
     }
 
     resetForm()
@@ -86,6 +134,7 @@ function WarehousesPanel() {
     setName(warehouse.name)
     setAddress(warehouse.address ?? '')
     setProvinceId(warehouse.provinceId)
+    setAliases((aliasesByWarehouse.get(warehouse.warehouseId) ?? []).join(', '))
   }
 
   const confirmDelete = async () => {
@@ -99,13 +148,15 @@ function WarehousesPanel() {
     }
 
     await db.warehouses.delete(warehouseId)
+    const orphanedAliases = await db.warehouseAliases.where('warehouseId').equals(warehouseId).toArray()
+    await db.warehouseAliases.bulkDelete(orphanedAliases.map((a) => a.alias))
     if (editingId === warehouseId) resetForm()
     toast.success('Warehouse deleted')
   }
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-white">Warehouses</h2>
+      <h2 className="text-base font-semibold text-app-text">Warehouses</h2>
 
       <div className="mt-4 space-y-3">
         <div>
@@ -138,7 +189,7 @@ function WarehousesPanel() {
             className={inputClass}
           >
             <option value="">Select province…</option>
-            {(provinces ?? []).map((p) => (
+            {[...(provinces ?? [])].sort((a, b) => byAlpha(a.name, b.name)).map((p) => (
               <option key={p.provinceId} value={p.provinceId}>
                 {p.code} — {p.name}
               </option>
@@ -157,9 +208,25 @@ function WarehousesPanel() {
           />
         </div>
 
+        <div>
+          <label className={labelClass}>Sheet Aliases</label>
+          <input
+            type="text"
+            value={aliases}
+            onChange={(e) => setAliases(e.target.value)}
+            className={inputClass}
+            placeholder="e.g. BSI B, BSI-B (comma-separated)"
+          />
+          <p className="mt-1 text-xs text-neutral-500">
+            Every nickname the AI/SIA sheet uses for this warehouse, so a
+            sync knows they all mean this one - separate genuinely
+            different warehouses instead (don't alias them together).
+          </p>
+        </div>
+
         <div className="flex gap-2">
           <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>
-            Save
+            {editingId ? 'Update' : 'Save'}
           </button>
           {editingId && (
             <button type="button" onClick={resetForm} className={secondaryButtonClass}>
@@ -174,13 +241,23 @@ function WarehousesPanel() {
           {sortedWarehouses.map((w) => (
             <li key={w.warehouseId} className={listItemClass}>
               <div>
-                <p className="font-medium text-white">
+                <p className="font-medium text-app-text">
                   {w.code} · {w.name}
                 </p>
                 <p className="text-xs text-neutral-400">
                   {provinceMap.get(w.provinceId)?.code ?? '—'}
+                  {(() => {
+                    const prov = provinceMap.get(w.provinceId)
+                    const branch = prov?.branchId ? branchMap.get(prov.branchId) : null
+                    return branch ? ` · ${branch.name}` : ''
+                  })()}
                 </p>
                 {w.address && <p className="text-xs text-neutral-500">{w.address}</p>}
+                {(aliasesByWarehouse.get(w.warehouseId) ?? []).length > 0 && (
+                  <p className="mt-0.5 text-xs text-brand-neon">
+                    Aliases: {aliasesByWarehouse.get(w.warehouseId).join(', ')}
+                  </p>
+                )}
               </div>
               <div className="flex gap-3">
                 <button

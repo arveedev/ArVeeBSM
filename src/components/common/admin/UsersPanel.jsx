@@ -10,6 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
+import { hashPin } from '../../../utils/pinHash.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import {
   inputClass,
@@ -63,7 +64,12 @@ function UsersPanel() {
   }
 
   const handleSave = async () => {
-    if (form.accessCode.length !== 6) {
+    const isNewUser = !editingId
+    if (isNewUser && form.accessCode.length !== 6) {
+      toast.error('Access PIN must be exactly 6 digits')
+      return
+    }
+    if (form.accessCode && form.accessCode.length !== 6) {
       toast.error('Access PIN must be exactly 6 digits')
       return
     }
@@ -80,14 +86,20 @@ function UsersPanel() {
       return
     }
 
-    const existing = await db.users.where('accessCode').equals(form.accessCode).first()
-    if (existing && existing.uid !== editingId) {
-      toast.error('That access PIN is already registered')
-      return
+    // PINs are never stored or compared in plain text - hash before any
+    // uniqueness check or save. A blank PIN field while editing means
+    // "keep the current PIN unchanged", not "clear it".
+    let hashedAccessCode
+    if (form.accessCode) {
+      hashedAccessCode = await hashPin(form.accessCode)
+      const existing = await db.users.where('accessCode').equals(hashedAccessCode).first()
+      if (existing && existing.uid !== editingId) {
+        toast.error('That access PIN is already registered')
+        return
+      }
     }
 
     const record = {
-      accessCode: form.accessCode,
       role: form.role,
       name: form.name.trim(),
       nickname: form.nickname.trim(),
@@ -96,6 +108,7 @@ function UsersPanel() {
       // warehouses are added.
       assignedWarehouses: isAdmin ? [] : form.assignedWarehouses,
     }
+    if (hashedAccessCode) record.accessCode = hashedAccessCode
 
     if (editingId) {
       await db.users.update(editingId, record)
@@ -111,7 +124,7 @@ function UsersPanel() {
   const handleEdit = (user) => {
     setEditingId(user.uid)
     setForm({
-      accessCode: user.accessCode,
+      accessCode: '', // never pre-filled - the stored value is a hash, not the real PIN, and leaving this blank means "keep current" on save
       role: user.role,
       name: user.name ?? '',
       nickname: user.nickname ?? '',
@@ -148,11 +161,13 @@ function UsersPanel() {
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-white">Users</h2>
+      <h2 className="text-base font-semibold text-app-text">Users</h2>
 
       <div className="mt-4 space-y-3">
         <div>
-          <label className={labelClass}>Access PIN (6 digits)</label>
+          <label className={labelClass}>
+            Access PIN (6 digits){editingId ? ' — leave blank to keep current PIN' : ''}
+          </label>
           <input
             type="number"
             inputMode="numeric"
@@ -161,7 +176,7 @@ function UsersPanel() {
               updateField('accessCode', e.target.value.replace(/[^0-9]/g, '').slice(0, 6))
             }
             className={inputClass}
-            placeholder="••••••"
+            placeholder={editingId ? 'Leave blank to keep current PIN' : '••••••'}
           />
         </div>
 
@@ -224,7 +239,7 @@ function UsersPanel() {
                         {group.items.map((w) => (
                           <label
                             key={w.warehouseId}
-                            className="flex items-center gap-2 text-sm text-white"
+                            className="flex items-center gap-2 text-sm text-app-text"
                           >
                             <input
                               type="checkbox"
@@ -260,11 +275,11 @@ function UsersPanel() {
           {sortedUsers.map((u) => (
             <li key={u.uid} className={listItemClass}>
               <div>
-                <p className="font-medium text-white">
+                <p className="font-medium text-app-text">
                   {u.nickname} · {u.role}
                 </p>
                 <p className="text-xs text-neutral-400">
-                  {u.name} — {describeAccess(u)} — PIN ••••{u.accessCode.slice(-2)}
+                  {u.name} — {describeAccess(u)}
                 </p>
               </div>
               <div className="flex gap-3">

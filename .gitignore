@@ -7,6 +7,22 @@ dist-ssr
 .env
 .env.local
 
+# Dexie Cloud credentials - contains the actual client secret, never commit
+dexie-cloud.key
+dexie-cloud.json
+
+# Vercel CLI's local project-linking metadata - machine-specific, not shared source
+.vercel
+
+# Exported cloud/local data dumps - contain real business data (customer
+# names, hashed PINs, etc.), never commit these
+*.ndjson
+dexie-cloud-data.json/
+dexie-cloud-data.json.zip
+
+# Office-suite lock files (e.g. from opening dexie-cloud.key in a spreadsheet app)
+.~lock.*
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json

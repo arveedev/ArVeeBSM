@@ -5,10 +5,8 @@ import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { SettingsProvider } from './context/SettingsContext.jsx'
 import { WarehouseProvider } from './context/WarehouseContext.jsx'
-import { enableDevTools } from './utils/devTools.js'
+import { PageHeaderProvider } from './context/PageHeaderContext.jsx'
 import './index.css'
-
-enableDevTools()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -16,7 +14,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <AuthProvider>
         <SettingsProvider>
           <WarehouseProvider>
-            <App />
+            <PageHeaderProvider>
+              <App />
+            </PageHeaderProvider>
           </WarehouseProvider>
         </SettingsProvider>
       </AuthProvider>

@@ -95,7 +95,7 @@ function GoogleSheetsPanel() {
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-white">Google Sheets</h2>
+      <h2 className="text-base font-semibold text-app-text">Google Sheets</h2>
       <p className="mt-1 text-xs text-neutral-400">
         This points at your EXISTING Apps Script Web App — the app does not
         deploy or generate its own script. One URL fronts a spreadsheet
@@ -206,7 +206,7 @@ function GoogleSheetsPanel() {
             type="button"
             onClick={handleSyncNow}
             disabled={isSyncing}
-            className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-white active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-95 disabled:opacity-50"
           >
             <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
             {isSyncing ? 'Syncing…' : 'Sync Now'}

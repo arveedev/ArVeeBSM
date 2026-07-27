@@ -5,19 +5,24 @@
 // AI/SIA allocations. Tabs are ordered to follow the dependency chain —
 // Provinces -> Warehouses -> Users.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import ProvincesPanel from '../components/common/admin/ProvincesPanel.jsx'
+import BranchesPanel from '../components/common/admin/BranchesPanel.jsx'
 import WarehousesPanel from '../components/common/admin/WarehousesPanel.jsx'
 import UsersPanel from '../components/common/admin/UsersPanel.jsx'
 import VarietyTypesPanel from '../components/common/admin/VarietyTypesPanel.jsx'
 import SackTypesPanel from '../components/common/admin/SackTypesPanel.jsx'
 import AuthoritiesInfoPanel from '../components/common/admin/AuthoritiesInfoPanel.jsx'
 import SignatoriesPanel from '../components/common/admin/SignatoriesPanel.jsx'
+import VisitorAccessPanel from '../components/common/admin/VisitorAccessPanel.jsx'
 import TransactionTypesPanel from '../components/common/admin/TransactionTypesPanel.jsx'
-import GoogleSheetsPanel from '../components/common/admin/GoogleSheetsPanel.jsx'
+import SheetSourcesPanel from '../components/common/admin/SheetSourcesPanel.jsx'
+import BackupPanel from '../components/common/admin/BackupPanel.jsx'
 
 const TABS = [
   { id: 'provinces', label: 'Provinces', Panel: ProvincesPanel },
+  { id: 'branches', label: 'Branches', Panel: BranchesPanel },
   { id: 'warehouses', label: 'Warehouses', Panel: WarehousesPanel },
   { id: 'users', label: 'Users', Panel: UsersPanel },
   { id: 'varieties', label: 'Varieties', Panel: VarietyTypesPanel },
@@ -25,22 +30,27 @@ const TABS = [
   { id: 'txtypes', label: 'Transaction Types', Panel: TransactionTypesPanel },
   { id: 'authorities', label: 'AI / SIA', Panel: AuthoritiesInfoPanel },
   { id: 'signatories', label: 'Signatories', Panel: SignatoriesPanel },
-  { id: 'sheets', label: 'Google Sheets', Panel: GoogleSheetsPanel },
+  { id: 'visitor', label: 'Visitor Access', Panel: VisitorAccessPanel },
+  { id: 'sheets', label: 'Sheet Sources', Panel: SheetSourcesPanel },
+  { id: 'backup', label: 'Backup', Panel: BackupPanel },
 ]
 
 function AdminDashboard() {
+  const { setPageHeader } = usePageHeader() ?? {}
   const [activeTab, setActiveTab] = useState('provinces')
   const active = TABS.find((t) => t.id === activeTab) ?? TABS[0]
   const ActivePanel = active.Panel
 
+  useEffect(() => {
+    setPageHeader?.({
+      title: 'Admin Dashboard',
+      subtitle: 'Configure provinces, warehouses, users, varieties, and sack types.',
+    })
+  }, [])
+
   return (
     <div className="min-h-screen px-4 pb-24 pt-6">
-      <h1 className="text-xl font-semibold text-white">Admin Dashboard</h1>
-      <p className="mt-1 text-sm text-neutral-400">
-        Configure provinces, warehouses, users, varieties, and sack types.
-      </p>
-
-      <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+      <div className="flex gap-2 overflow-x-auto pb-2">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -48,8 +58,8 @@ function AdminDashboard() {
             onClick={() => setActiveTab(tab.id)}
             className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95 ${
               activeTab === tab.id
-                ? 'bg-brand-neon text-neutral-950'
-                : 'border border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-neutral-600 hover:text-white'
+                ? 'bg-brand-neon text-brand-contrast'
+                : 'border border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-neutral-600 hover:text-app-text'
             }`}
           >
             {tab.label}

@@ -62,18 +62,18 @@ export const resolveSiaSackLines = (authority, sackTypes = []) => {
   const sackType = sackTypes.find((s) => s.code === sackTypeRaw.trim())
   if (!sackType) return []
 
-  // Plain numeric allocation, no condition breakdown in the sheet — only
-  // pre-fill a condition if this sack type has exactly one configured.
+  // Plain numeric allocation, no condition breakdown in the sheet -
+  // pre-fill the condition too if this sack type has exactly one
+  // configured, otherwise still pre-fill the sack type itself (leaving
+  // condition blank for the user to pick) rather than pre-filling
+  // nothing at all.
   if (typeof authority.totalAllocationBags === 'number') {
     const availableConditions = CONDITION_CODES.filter((c) => sackType.weights?.[c] != null)
-    if (availableConditions.length === 1) {
-      return [{
-        sackTypeId: sackType.sackTypeId,
-        condition: availableConditions[0],
-        pieces: authority.totalAllocationBags,
-      }]
-    }
-    return []
+    return [{
+      sackTypeId: sackType.sackTypeId,
+      condition: availableConditions.length === 1 ? availableConditions[0] : '',
+      pieces: authority.totalAllocationBags,
+    }]
   }
 
   // "65 bn / 17 sh" style breakdown.

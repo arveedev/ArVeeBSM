@@ -28,7 +28,7 @@ const initialsOf = (name = '') =>
     .join('')
 
 const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
-  { value, onChange, onMatch },
+  { value, onChange, onMatch, warehouseId = null, required = true },
   ref
 ) {
   const [suggestions, setSuggestions] = useState([])
@@ -51,14 +51,14 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
         return
       }
 
-      searchCustomers(value).then((results) => {
+      searchCustomers(value, 6, warehouseId).then((results) => {
         if (!cancelled) setSuggestions(results)
       })
     })
 
     // Auto-fill if what's currently typed is already an exact match,
     // even if the user didn't pick it from the dropdown.
-    findCustomerByName(value).then((match) => {
+    findCustomerByName(value, warehouseId).then((match) => {
       if (!cancelled && match) onMatch(match)
     })
 
@@ -66,7 +66,7 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value])
+  }, [value, warehouseId])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -96,7 +96,7 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
           setShowSuggestions(true)
         }}
         onFocus={() => setShowSuggestions(true)}
-        className={inputClass}
+        className={`${inputClass} ${required && !(value ?? '').trim() ? '!border-brand-amber' : ''}`}
         placeholder="Name"
         autoComplete="off"
       />
@@ -129,7 +129,7 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
                 </span>
 
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 truncate text-sm text-white">
+                  <span className="flex items-center gap-1.5 truncate text-sm text-app-text">
                     {c.name}
                     {c.warehouseLabel && (
                       <span className="shrink-0 rounded-full bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-amber">

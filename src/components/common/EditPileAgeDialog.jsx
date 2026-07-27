@@ -20,31 +20,68 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
-import { normalizeAgeToDays } from '../../utils/calculations.js'
+import { normalizeAgeToDays, fmtAge, todayLocalISO, bestAgeUnit, liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
 import { inputClass, labelClass, primaryButtonClass } from '../forms/shared.js'
 
-const AGE_UNITS = ['Days', 'Months']
+const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 
 function EditPileAgeDialog({ pile, currentAge, onClose }) {
-  const [ageValue, setAgeValue] = useState(String(currentAge))
-  const [ageUnit, setAgeUnit] = useState('Days')
+  const initial = bestAgeUnit(currentAge)
+  const [ageValue, setAgeValue] = useState(liveFormatNumber(String(initial.unit === 'Months + Days' ? currentAge : initial.value)))
+  const [ageUnit, setAgeUnit] = useState(initial.unit)
+  const [monthsValue, setMonthsValue] = useState(liveFormatNumber(String(initial.months)))
+  const [daysValue, setDaysValue] = useState(liveFormatNumber(String(initial.days)))
   const [isSaving, setIsSaving] = useState(false)
 
-  const handleSave = async () => {
-    const parsed = Number(ageValue)
-    if (Number.isNaN(parsed) || parsed < 0) {
-      toast.error('Enter a valid age')
-      return
-    }
+  // The current age in days, regardless of which unit is currently
+  // displayed - used to convert correctly when the user switches units,
+  // rather than leaving the same raw number in place under a new unit
+  // (e.g. switching from Days to Months should turn "30" into "1", not
+  // leave "30" displayed as if it meant 30 months).
+  const currentDays = () => {
+    if (ageUnit === 'Months + Days') return Math.round((parseFormattedNumber(monthsValue) || 0) * 30 + (parseFormattedNumber(daysValue) || 0))
+    return normalizeAgeToDays(parseFormattedNumber(ageValue) || 0, ageUnit)
+  }
 
-    const days = normalizeAgeToDays(parsed, ageUnit)
+  const handleUnitChange = (newUnit) => {
+    const days = currentDays()
+    if (newUnit === 'Months + Days') {
+      setMonthsValue(liveFormatNumber(String(Math.floor(days / 30))))
+      setDaysValue(liveFormatNumber(String(days % 30)))
+    } else if (newUnit === 'Months') {
+      setAgeValue(liveFormatNumber(String(Math.round(days / 30))))
+    } else {
+      setAgeValue(liveFormatNumber(String(days)))
+    }
+    setAgeUnit(newUnit)
+  }
+
+  const handleSave = async () => {
+    let days
+
+    if (ageUnit === 'Months + Days') {
+      const months = parseFormattedNumber(monthsValue) || 0
+      const extraDays = parseFormattedNumber(daysValue) || 0
+      if (months < 0 || extraDays < 0) {
+        toast.error('Enter a valid age')
+        return
+      }
+      days = Math.round(months * 30 + extraDays)
+    } else {
+      const parsed = parseFormattedNumber(ageValue)
+      if (Number.isNaN(parsed) || parsed < 0) {
+        toast.error('Enter a valid age')
+        return
+      }
+      days = normalizeAgeToDays(parsed, ageUnit)
+    }
 
     setIsSaving(true)
     await db.piles.update(pile.pileId, {
       initialAgeValue: days,
-      dateOfReceipt: new Date().toISOString().slice(0, 10),
+      dateOfReceipt: todayLocalISO(),
     })
-    toast.success(`${pile.pileName} age set to ${parsed} ${ageUnit.toLowerCase()}`)
+    toast.success(`${pile.pileName} age set to ${fmtAge(days)}`)
     setIsSaving(false)
     onClose()
   }
@@ -59,7 +96,7 @@ function EditPileAgeDialog({ pile, currentAge, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white">Edit Age</h2>
+          <h2 className="text-base font-semibold text-app-text">Edit Age</h2>
           <button
             type="button"
             onClick={onClose}
@@ -74,22 +111,48 @@ function EditPileAgeDialog({ pile, currentAge, onClose }) {
         <p className="mt-1 text-xs text-neutral-500">{pile.pileName}</p>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <div>
-            <label className={labelClass}>Age</label>
-            <input
-              type="number"
-              inputMode="numeric"
-              value={ageValue}
-              onChange={(e) => setAgeValue(e.target.value)}
-              className={inputClass}
-              autoFocus
-            />
-          </div>
-          <div>
+          {ageUnit === 'Months + Days' ? (
+            <>
+              <div>
+                <label className={labelClass}>Months</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={monthsValue}
+                  onChange={(e) => setMonthsValue(liveFormatNumber(e.target.value))}
+                  className={inputClass}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Days</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={daysValue}
+                  onChange={(e) => setDaysValue(liveFormatNumber(e.target.value))}
+                  className={inputClass}
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className={labelClass}>Age</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={ageValue}
+                onChange={(e) => setAgeValue(liveFormatNumber(e.target.value))}
+                className={inputClass}
+                autoFocus
+              />
+            </div>
+          )}
+          <div className={ageUnit === 'Months + Days' ? 'col-span-2' : ''}>
             <label className={labelClass}>Unit</label>
             <select
               value={ageUnit}
-              onChange={(e) => setAgeUnit(e.target.value)}
+              onChange={(e) => handleUnitChange(e.target.value)}
               className={inputClass}
             >
               {AGE_UNITS.map((u) => (

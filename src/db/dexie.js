@@ -2,8 +2,10 @@
 // definitions. Implements Step 2.1.
 
 import Dexie from 'dexie'
+import dexieCloud from 'dexie-cloud-addon'
+import { hashPin } from '../utils/pinHash.js'
 
-export const db = new Dexie('BSMDatabase')
+export const db = new Dexie('BSMDatabase', { addons: [dexieCloud] })
 
 db.version(1).stores({
   users: 'uid, accessCode, role, assignedWarehouse',
@@ -265,4 +267,325 @@ db.version(10).stores({
   googleSheetsConfig: 'id',
   customers: 'customerId, normalizedName',
   settings: 'id',
+})
+
+// v11 — Branches + MC % on transactions.
+//
+// - New `branches` table — each branch has a name (e.g. "ALBAY BRANCH")
+//   and an address (e.g. "PIER SITE, LEGAZPI CITY") that appear in the
+//   NFA report header. Multiple warehouses belong to one branch; each
+//   warehouse gains a `branchId` indexed field. The Admin Dashboard gets
+//   a new Branches panel for managing this.
+//
+// - `transactions` gains `moistureContent` (a numeric field, max 2
+//   decimal places, required on WSR/WSI/WTS) — this is the MC % column
+//   seen on every NFA stock statement. It was missing from the app
+//   entirely; reports cannot be generated correctly without it.
+db.version(11).stores({
+  users: 'uid, accessCode, role, *assignedWarehouses',
+  piles: 'pileId, warehouseId, pileName, cerealType, varietyId',
+  transactions:
+    'id, type, serialNo, status, date, pileId, warehouseId, isSynced, aiNumber, siaNumber, [type+warehouseId+serialNo]',
+  authorities: 'authId, type, aiNumber, siaNumber, assignedWarehouse, status, manuallyCompleted',
+  provinces: 'provinceId, code, name',
+  warehouses: 'warehouseId, code, name, provinceId, branchId',
+  varietyTypes: 'varietyId, category, name',
+  sackTypes: 'sackTypeId, category, code',
+  signatories: 'warehouseId',
+  reportConfig: 'id',
+  transactionTypes: 'transactionTypeId, name',
+  googleSheetsConfig: 'id',
+  customers: 'customerId, normalizedName',
+  settings: 'id',
+  branches: 'branchId, name',
+})
+
+// v12 — Branch → Province → Warehouse hierarchy.
+//
+// The correct NFA structure is: a branch covers one or more provinces,
+// and a warehouse belongs to a province, so branch membership is derived
+// automatically (warehouse.provinceId → province.branchId → branch).
+// This avoids the v11 mistake of assigning branchId directly on the
+// warehouse — you'd have to keep two things in sync when moving warehouses.
+//
+// - `provinces` gains `branchId` (indexed) — the single field that
+//   connects the whole chain.
+// - `warehouses` drops `branchId` — it's now derived, never stored.
+// - `branches` gains `provinceCode` display field (non-indexed, cosmetic).
+db.version(12).stores({
+  users: 'uid, accessCode, role, *assignedWarehouses',
+  piles: 'pileId, warehouseId, pileName, cerealType, varietyId',
+  transactions:
+    'id, type, serialNo, status, date, pileId, warehouseId, isSynced, aiNumber, siaNumber, [type+warehouseId+serialNo]',
+  authorities: 'authId, type, aiNumber, siaNumber, assignedWarehouse, status, manuallyCompleted',
+  provinces: 'provinceId, code, name, branchId',
+  warehouses: 'warehouseId, code, name, provinceId',
+  varietyTypes: 'varietyId, category, name',
+  sackTypes: 'sackTypeId, category, code',
+  signatories: 'warehouseId',
+  reportConfig: 'id',
+  transactionTypes: 'transactionTypeId, name',
+  googleSheetsConfig: 'id',
+  customers: 'customerId, normalizedName',
+  settings: 'id',
+  branches: 'branchId, name',
+})
+
+// v13 — Branch region, WTS dual-sided form support, initial balances.
+//
+// - `branches` gains `region` (non-indexed string, e.g. "V") — needed for
+//   the NFA report header which shows REGION / PROVINCE / CODE / WHSE.
+// - `transactions` gains `isInitialBalance` (boolean) — flags a synthetic
+//   "beginning balance" entry created when a pile is initialized with
+//   starting stock, so reports can compute correct beginning-balance
+//   figures without these entries appearing as visible WSR/WSI rows in
+//   the statement/recap pages.
+// - New `sackInventory` table (id, warehouseId indexed) — stores
+//   per-warehouse initial sack piece counts (sackTypeId + condition +
+//   pieces), seeded once when a warehouse's ongoing inventory is entered
+//   into the app for the first time. Used only for beginning-balance
+//   calculations on the sack MTS report; never appears as an ESR/ESI row.
+db.version(13).stores({
+  users: 'uid, accessCode, role, *assignedWarehouses',
+  piles: 'pileId, warehouseId, pileName, cerealType, varietyId',
+  transactions:
+    'id, type, serialNo, status, date, pileId, warehouseId, isSynced, aiNumber, siaNumber, isInitialBalance, [type+warehouseId+serialNo]',
+  authorities: 'authId, type, aiNumber, siaNumber, assignedWarehouse, status, manuallyCompleted',
+  provinces: 'provinceId, code, name, branchId',
+  warehouses: 'warehouseId, code, name, provinceId',
+  varietyTypes: 'varietyId, category, name',
+  sackTypes: 'sackTypeId, category, code',
+  signatories: 'warehouseId',
+  reportConfig: 'id',
+  transactionTypes: 'transactionTypeId, name',
+  googleSheetsConfig: 'id',
+  customers: 'customerId, normalizedName',
+  settings: 'id',
+  branches: 'branchId, name',
+  sackInventory: 'id, warehouseId',
+})
+
+// v14 - Pile Layout report.
+// piles gain purity and dateProcured (optional, free text - real dates
+// procured are ranges like "MAR 24 TO APR 4, 2025", not a strict date).
+// warehouses gain classifierName - the Classifier is a signatory-only
+// name, not a login user, so it lives as a plain field on the warehouse.
+// New pileLayoutBoxes table stores the grid layout per warehouse: each
+// box has a grid position/span and either a pileId (shows real pile
+// data) or null (Vacant, shown with just its own label).
+db.version(14).stores({
+  users: 'uid, accessCode, role, *assignedWarehouses',
+  piles: 'pileId, warehouseId, pileName, cerealType, varietyId',
+  transactions:
+    'id, type, serialNo, status, date, pileId, warehouseId, isSynced, aiNumber, siaNumber, isInitialBalance, [type+warehouseId+serialNo]',
+  authorities: 'authId, type, aiNumber, siaNumber, assignedWarehouse, status, manuallyCompleted',
+  provinces: 'provinceId, code, name, branchId',
+  warehouses: 'warehouseId, code, name, provinceId',
+  varietyTypes: 'varietyId, category, name',
+  sackTypes: 'sackTypeId, category, code',
+  signatories: 'warehouseId',
+  reportConfig: 'id',
+  transactionTypes: 'transactionTypeId, name',
+  googleSheetsConfig: 'id',
+  customers: 'customerId, normalizedName',
+  settings: 'id',
+  branches: 'branchId, name',
+  sackInventory: 'id, warehouseId',
+  pileLayoutBoxes: 'id, warehouseId',
+})
+
+// v15 — live Google Sheets integration groundwork (schema only; the sync
+// worker itself is a separate, later step).
+//
+// warehouseAliases: the AI/SIA sheet uses short nicknames for warehouses
+// (e.g. "ABACORP A", "BSI B") that don't always match this app's own
+// warehouse codes, and the same real warehouse sometimes appears under
+// multiple typo'd spellings in the sheet ("BSI B" / "BSI-B", "CTD GID 2" /
+// "CTD GID2" - confirmed the same warehouse, just data-entry
+// inconsistency, vs "ABACORP" / "ABACORP A" - confirmed genuinely
+// different warehouses). A dedicated alias table lets an admin map every
+// sheet-side spelling to the correct canonical warehouseId, independent
+// of the warehouse's own `code`/`name` fields.
+//
+// sheetSources: supports more than one Sheets URL/date-range at once (the
+// user creates a fresh spreadsheet copy each year to avoid one sheet
+// growing unbounded) - each source has its own webAppUrl, sheet names,
+// and a [dateFrom, dateTo] range it's authoritative for. A sync or report
+// spanning a year boundary queries every source whose range overlaps and
+// merges the results, rather than assuming a single fixed URL.
+db.version(15).stores({
+  warehouseAliases: 'alias, warehouseId',
+  sheetSources: 'id, dateFrom, dateTo',
+}).upgrade(async (tx) => {
+  // Seed the real-world transaction natures confirmed present in the
+  // live AI/SIA sheet data, which go well beyond what this app's admin
+  // table previously offered - added only if not already present by
+  // name, so this is safe to run even if some already exist.
+  const REAL_TRANSACTION_TYPES = [
+    'SALES', 'SALES (BIDDING)', 'TRANSFER', 'MILLING', 'TEST MILLING',
+    'REMILLING', 'TEST RE-MILLING', 'REPILING', 'DUMPING', 'PIK',
+    'RECLASSIFICATION', 'REBAGGING', 'BAGGING', 'FILLERS',
+    'SAMPLE WEIGHING', 'MECH DRYING',
+  ]
+  const existing = await tx.table('transactionTypes').toArray()
+  const existingNames = new Set(existing.map((t) => t.name))
+  for (const name of REAL_TRANSACTION_TYPES) {
+    if (!existingNames.has(name)) {
+      await tx.table('transactionTypes').add({
+        transactionTypeId: crypto.randomUUID(),
+        name,
+      })
+    }
+  }
+})
+
+// v16 — CRITICAL fix: PIN hashing was introduced (accessCode and
+// visitorAccessCode are now hashed, never plain text - see
+// utils/pinHash.js) without migrating existing plain-text values
+// already in the database. Without this migration, every existing user
+// is locked out permanently: login hashes the entered PIN and compares
+// it against a stored value that's still plain text, which can never
+// match. A SHA-256 hash is always exactly 64 hex characters; a 6-digit
+// PIN never is, so "already hashed vs. still plain text" is detected
+// reliably by length alone - safe to run even if some records were
+// already migrated (re-hashing an already-64-char value would produce
+// a new, different 64-char string and break login just the same, so
+// this only touches values that are NOT already 64 hex characters).
+db.version(16).stores({}).upgrade(async (tx) => {
+  const isAlreadyHashed = (value) => typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value)
+
+  const users = await tx.table('users').toArray()
+  for (const user of users) {
+    if (user.accessCode && !isAlreadyHashed(user.accessCode)) {
+      await tx.table('users').update(user.uid, { accessCode: await hashPin(user.accessCode) })
+    }
+  }
+
+  const config = await tx.table('reportConfig').get('global')
+  if (config?.visitorAccessCode && !isAlreadyHashed(config.visitorAccessCode)) {
+    await tx.table('reportConfig').update('global', {
+      visitorAccessCode: await hashPin(config.visitorAccessCode),
+    })
+  }
+})
+
+// v17 — CRITICAL: forces every sheet source's next authority sync to be
+// a FULL re-fetch instead of a delta sync. The SIA architecture rework
+// (one record per SIA number with a sackLines array, instead of one
+// record per sack-type+condition) requires every existing SIA row to be
+// reprocessed under the new schema - but the delta-sync optimization
+// only ever fetches rows changed since lastSyncedAt, so any row that
+// hasn't been re-edited in the sheet since it was first synced (the
+// common case) would never be fetched again, and its old, pre-rework
+// local record would sit forever with no sackLines field at all -
+// confirmed directly from a live authorities dump showing exactly this:
+// two old-shape records for the same SIA number, neither with sackLines.
+// Clearing lastSyncedAt makes the very next sync fetch everything fresh,
+// letting upsertSiaAuthority's own duplicate-cleanup logic finally run
+// against these rows and consolidate them correctly.
+db.version(17).stores({}).upgrade(async (tx) => {
+  const sources = await tx.table('sheetSources').toArray()
+  for (const source of sources) {
+    await tx.table('sheetSources').update(source.id, { lastSyncedAt: null })
+  }
+})
+
+// v18 — Firestore removed entirely (dead code from before the Dexie
+// Cloud decision - never actually configured with real credentials).
+// Google Sheets backup is now the only cloud write path, and it needs
+// to mirror not just new saves but edits and deletions too, matched by
+// each transaction's own serialNo. Deletion is an immediate hard local
+// delete (unchanged) - by the time an offline delete could retry, the
+// local record is already gone, so pendingSheetDeletions remembers just
+// enough (serialNo, type) to replay the deletion once back online,
+// independent of the transactions table itself.
+db.version(18).stores({
+  pendingSheetDeletions: 'id, serialNo, type',
+})
+
+// v19 — marks existing transactions that were already isSynced: true
+// (under the old, now-removed Firestore-based sync) as hasBeenBackedUp
+// too. The old code pushed a Sheets backup row alongside every
+// Firestore upload, so these transactions already have a corresponding
+// row in the Sheet - without this migration, editing one of them later
+// would incorrectly append a duplicate row instead of updating the
+// existing one, since hasBeenBackedUp would default to falsy.
+db.version(19).stores({}).upgrade(async (tx) => {
+  const alreadySynced = await tx.table('transactions').filter((t) => t.isSynced === true).toArray()
+  for (const t of alreadySynced) {
+    await tx.table('transactions').update(t.id, { hasBeenBackedUp: true })
+  }
+})
+
+db.version(20).stores({}).upgrade(async (tx) => {
+  const allTableNames = [
+    'authorities', 'branches', 'customers', 'googleSheetsConfig',
+    'pendingSheetDeletions', 'pileLayoutBoxes', 'piles', 'provinces',
+    'reportConfig', 'sackInventory', 'sackTypes', 'settings',
+    'sheetSources', 'signatories', 'transactionTypes', 'transactions',
+    'users', 'varietyTypes', 'warehouseAliases', 'warehouses',
+  ]
+  for (const name of allTableNames) {
+    await tx.table(name).toCollection().modify((record) => {
+      if (!record.realmId) record.realmId = 'rlm-public'
+    })
+  }
+})
+
+// v21 — reverses v20's realmId assignment. rlm-public turned out to be
+// the wrong approach: writes to it are only permitted for the database
+// OWNER, not an arbitrary logged-in user, so an anonymous/service
+// account could never actually push data there (confirmed via a
+// cloud-side data export showing none of our tables had ever
+// synced). Switching instead to a real, authenticated shared service
+// account (see fetchTokens below) - every Dexie Cloud user
+// automatically has full read/write access to their OWN private
+// realm, so clearing realmId back to unset lets records default to
+// that realm instead, with no special permission setup needed at all.
+db.version(21).stores({}).upgrade(async (tx) => {
+  const allTableNames = [
+    'authorities', 'branches', 'customers', 'googleSheetsConfig',
+    'pendingSheetDeletions', 'pileLayoutBoxes', 'piles', 'provinces',
+    'reportConfig', 'sackInventory', 'sackTypes', 'settings',
+    'sheetSources', 'signatories', 'transactionTypes', 'transactions',
+    'users', 'varietyTypes', 'warehouseAliases', 'warehouses',
+  ]
+  for (const name of allTableNames) {
+    await tx.table(name).toCollection().modify((record) => {
+      if (record.realmId === 'rlm-public') delete record.realmId
+    })
+  }
+})
+
+db.cloud.configure({
+  databaseUrl: 'https://z15dzktxq.dexie.cloud',
+  requireAuth: true,
+  nameSuffix: false,
+  // Custom auth: rather than Dexie Cloud's own email-OTP login screen,
+  // every device silently authenticates as the same shared service
+  // account via our own Vercel serverless endpoint (see
+  // /api/dexie-cloud-tokens.js), which holds the actual client
+  // credentials server-side - they are never exposed to the browser.
+  // PIN login remains the app's real, user-facing authentication;
+  // this is invisible infrastructure underneath it.
+  fetchTokens: (tokenParams) =>
+    fetch('/api/dexie-cloud-tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tokenParams),
+    }).then((res) => res.json()),
+})
+
+// TEMPORARY DIAGNOSTIC LOGGING - added specifically to investigate two
+// prior failed connection attempts that broke PIN login. Logs every
+// syncState/currentUser change to the browser console with a clearly
+// tagged prefix, so if login fails again, we have direct visibility
+// into what the sync connection was doing at that exact moment,
+// instead of just "invalid PIN" with nothing further to go on.
+// Remove once the connection is confirmed stable.
+db.cloud.syncState.subscribe((state) => {
+  console.log('[DEXIE-CLOUD-DIAGNOSTIC] syncState:', JSON.stringify(state))
+})
+db.cloud.currentUser.subscribe((user) => {
+  console.log('[DEXIE-CLOUD-DIAGNOSTIC] currentUser:', JSON.stringify(user))
 })

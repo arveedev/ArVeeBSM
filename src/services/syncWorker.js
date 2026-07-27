@@ -1,22 +1,24 @@
-// Background synchronization engine — Steps 2.3 & 2.4.
+// Background synchronization engine.
 //
 // Scans the local Dexie `transactions` table for records that have not yet
-// been pushed to Firestore (isSynced === false), uploads each one, and
-// flips the local isSynced flag to true once Firestore confirms the write.
+// been backed up to the Google Sheet (isSynced === false - repurposed from
+// an earlier Firestore-based design; Firestore was never actually
+// configured with real credentials and has been removed entirely -
+// Dexie Cloud is the device-to-device sync layer, this worker's only job
+// now is the Sheets backup log), pushes each one, and flips the local
+// isSynced flag to true once the Sheet confirms the write.
 
-import { collection, doc, setDoc } from 'firebase/firestore'
 import { db } from '../db/dexie.js'
-import { firestore } from './firebase.js'
-import { pushTransactionBackup, syncAuthoritiesFromSheets } from './googleSheetsBridge.js'
+import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, syncAuthoritiesFromSheets } from './googleSheetsBridge.js'
 
 let isSyncing = false
 
 /**
- * Process the local sync queue: push every unsynced transaction to
- * Firestore and mark it as synced on success.
- *
- * Returns a summary of how many records were synced / failed, so the UI
- * can surface results via toast.
+ * Process the local backup queue: push every not-yet-backed-up
+ * transaction to the Google Sheet (appending it the first time,
+ * updating its existing row on any later re-sync after an edit), then
+ * drains any queued offline deletions. Returns a summary of how many
+ * records were synced / failed, so the UI can surface results via toast.
  */
 export const processSyncQueue = async () => {
   if (isSyncing) {
@@ -35,46 +37,67 @@ export const processSyncQueue = async () => {
     // .filter() is used instead of .where('isSynced').equals(false) because
     // IndexedDB cannot reliably index boolean values across browsers —
     // filter() guarantees every record is checked regardless of index support.
-    const pending = await db.transactions.filter((tx) => tx.isSynced === false).toArray()
+    const pending = await db.transactions.filter((tx) => tx.isSynced === false && !tx.isInitialBalance).toArray()
 
     for (const tx of pending) {
       try {
-        // `isSynced` is Local Dexie Only (Section 3.2) — strip it before
-        // uploading so the cloud copy doesn't carry a stale local-state field.
-        const { isSynced, ...payload } = tx
+        const pile = tx.pileId ? await db.piles.get(tx.pileId) : null
+        const warehouse = pile ? await db.warehouses.get(pile.warehouseId) : null
+        const province = warehouse ? await db.provinces.get(warehouse.provinceId) : null
+        const variety = tx.varietyId ? await db.varietyTypes.get(tx.varietyId) : null
+        const transactionType = tx.transactionTypeId
+          ? await db.transactionTypes.get(tx.transactionTypeId)
+          : null
 
-        // Conflict-free multi-device upload: each transaction's deterministic
-        // serialNo (Section 3.1) means two offline nodes never collide, so a
-        // plain setDoc keyed by the local `id` is safe.
-        await setDoc(doc(collection(firestore, 'transactions'), tx.id), payload)
-        await db.transactions.update(tx.id, { isSynced: true })
-        synced += 1
+        const context = {
+          warehouseCode: warehouse?.code ?? null,
+          warehouseName: warehouse?.name ?? null,
+          provinceCode: province?.code ?? null,
+          varietyName: variety?.name ?? null,
+          transactionTypeName: transactionType?.name ?? null,
+        }
 
-        // Best-effort backup row to the Google Sheet (Step 6.4) — failures
-        // here are logged but never block the Firestore sync result, since
-        // Firestore is the primary cloud store and the Sheet is a secondary
-        // durable log.
-        try {
-          const pile = tx.pileId ? await db.piles.get(tx.pileId) : null
-          const warehouse = pile ? await db.warehouses.get(pile.warehouseId) : null
-          const province = warehouse ? await db.provinces.get(warehouse.provinceId) : null
-          const variety = tx.varietyId ? await db.varietyTypes.get(tx.varietyId) : null
-          const transactionType = tx.transactionTypeId
-            ? await db.transactionTypes.get(tx.transactionTypeId)
-            : null
+        // hasBeenBackedUp persists even after isSynced is reset to false
+        // by a later edit - it's what tells this apart from a genuinely
+        // new, never-backed-up transaction, so an edit updates the
+        // existing Sheet row instead of appending a stale duplicate.
+        const result = tx.hasBeenBackedUp
+          ? await updateTransactionBackup(tx, context)
+          : await pushTransactionBackup(tx, context)
 
-          await pushTransactionBackup(tx, {
-            warehouseCode: warehouse?.code ?? null,
-            warehouseName: warehouse?.name ?? null,
-            provinceCode: province?.code ?? null,
-            varietyName: variety?.name ?? null,
-            transactionTypeName: transactionType?.name ?? null,
-          })
-        } catch (backupErr) {
-          console.error(`Sheets backup failed for transaction ${tx.id}:`, backupErr)
+        if (result.ok) {
+          await db.transactions.update(tx.id, { isSynced: true, hasBeenBackedUp: true })
+          synced += 1
+        } else {
+          console.error(
+            `Sheets backup ${tx.hasBeenBackedUp ? 'update' : 'append'} failed for ${tx.type} ${tx.serialNo}:`,
+            result
+          )
+          failed += 1
         }
       } catch (err) {
-        console.error(`Sync failed for transaction ${tx.id}:`, err)
+        console.error(`Sheets backup failed for transaction ${tx.id} (${tx.type} ${tx.serialNo}):`, err)
+        failed += 1
+      }
+    }
+
+    // Drain queued offline deletions - by the time these can retry, the
+    // local transaction record itself is already gone (a real hard
+    // delete happens immediately, locally), so only serialNo/type
+    // survive to replay the deletion against the Sheet.
+    const queuedDeletions = await db.pendingSheetDeletions.toArray()
+    for (const deletion of queuedDeletions) {
+      try {
+        const result = await deleteTransactionBackup(deletion.serialNo, deletion.type, deletion.warehouseCode)
+        if (result.ok) {
+          await db.pendingSheetDeletions.delete(deletion.id)
+          synced += 1
+        } else {
+          console.error(`Sheets delete-backup failed for ${deletion.type} ${deletion.serialNo}:`, result)
+          failed += 1
+        }
+      } catch (err) {
+        console.error(`Sheets delete-backup failed for serial ${deletion.serialNo}:`, err)
         failed += 1
       }
     }
@@ -83,6 +106,58 @@ export const processSyncQueue = async () => {
   }
 
   return { synced, failed }
+}
+
+/**
+ * Registers a hook that fires an immediate (best-effort) sync attempt
+ * whenever ANY new transaction record is created, on top of the
+ * existing on-load/on-reconnect triggers. Without this, a user who
+ * stays continuously online and saves several transactions in a row
+ * would have nothing upload until the next unrelated 'online' event or
+ * app reload - which might never happen in a single long session.
+ * Centralized on the Dexie table itself (rather than added to every
+ * form's own save handler individually) so it can never be missed by a
+ * future form that saves transactions a different way. Deferred to the
+ * next tick so the Dexie transaction this hook runs inside fully
+ * commits before processSyncQueue queries the table again; fire-and-
+ * forget since processSyncQueue already guards against overlapping runs
+ * and handles its own errors.
+ */
+/**
+ * Call this when a transaction is deleted locally, so the deletion
+ * also reflects in the Sheet backup. Tries immediately; if that fails
+ * (offline, or any other error), queues it in pendingSheetDeletions so
+ * the next successful sync retries it - the local transaction record
+ * is already gone by then (a real hard delete happens immediately), so
+ * only serialNo/type need to survive to replay the deletion later.
+ */
+export const queueTransactionDeletion = async (serialNo, type, warehouseCode) => {
+  try {
+    const result = await deleteTransactionBackup(serialNo, type, warehouseCode)
+    if (result.ok) return
+  } catch {
+    // fall through to queueing below
+  }
+  await db.pendingSheetDeletions.add({ id: crypto.randomUUID(), serialNo, type, warehouseCode })
+}
+
+let immediateSyncRegistered = false
+
+export const registerImmediateSyncOnSave = () => {
+  if (immediateSyncRegistered) return
+  immediateSyncRegistered = true
+  db.transactions.hook('creating', () => {
+    setTimeout(() => { processSyncQueue() }, 0)
+  })
+  // Editing an existing transaction (db.transactions.update) is a
+  // completely separate Dexie hook from creating a new one - without
+  // this, an edit with no other new transaction happening to be saved
+  // afterward would never sync until the 5-minute timer or a reload,
+  // exactly the gap reported: "updates only sync when the user makes
+  // another transaction".
+  db.transactions.hook('updating', () => {
+    setTimeout(() => { processSyncQueue() }, 0)
+  })
 }
 
 /**

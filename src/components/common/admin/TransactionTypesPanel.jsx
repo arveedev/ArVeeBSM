@@ -76,7 +76,7 @@ function TransactionTypesPanel() {
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-white">Transaction Types</h2>
+      <h2 className="text-base font-semibold text-app-text">Transaction Types</h2>
       <p className="mt-1 text-xs text-neutral-400">
         The "Nature of Transaction" options shown on every WSR/WSI/WTS/ESR/ESI
         form — e.g. Milling, Procurement, Transfer, Sales.
@@ -110,7 +110,7 @@ function TransactionTypesPanel() {
         <ul className="mt-4 space-y-2">
           {sortedTypes.map((t) => (
             <li key={t.transactionTypeId} className={listItemClass}>
-              <p className="font-medium text-white">{t.name}</p>
+              <p className="font-medium text-app-text">{t.name}</p>
               <div className="flex gap-3">
                 <button
                   type="button"

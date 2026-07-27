@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { Toaster, toast } from 'react-hot-toast'
 import Login from './pages/Login.jsx'
 import Home from './pages/Home.jsx'
@@ -11,6 +11,8 @@ import Settings from './pages/Settings.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import ProtectedRoute from './components/common/ProtectedRoute.jsx'
 import BottomNav from './components/layout/BottomNav.jsx'
+import AppHeader from './components/layout/AppHeader.jsx'
+import { useSettings } from './context/SettingsContext.jsx'
 import TransactionModal from './components/common/TransactionModal.jsx'
 import WSRForm from './components/forms/WSRForm.jsx'
 import WSIForm from './components/forms/WSIForm.jsx'
@@ -18,7 +20,7 @@ import WTSForm from './components/forms/WTSForm.jsx'
 import ESIForm from './components/forms/ESIForm.jsx'
 import ESRForm from './components/forms/ESRForm.jsx'
 import { useAuth } from './context/AuthContext.jsx'
-import { startSyncWorker, startAuthoritySyncWorker } from './services/syncWorker.js'
+import { startSyncWorker, startAuthoritySyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 
 const FORM_COMPONENTS = {
   WSR: WSRForm,
@@ -30,11 +32,36 @@ const FORM_COMPONENTS = {
 
 function App() {
   const { user } = useAuth()
+  const { theme } = useSettings() ?? {}
+  const { pathname } = useLocation()
   const [isTransactionModalOpen, setTransactionModalOpen] = useState(false)
   const [activeFormType, setActiveFormType] = useState(null)
+  // The form itself covers the full screen (fixed inset-0), but without
+  // this the page behind it is still technically scrollable even though
+  // visually hidden - producing two scrollbars side by side on desktop
+  // (the form's own internal scroll, and the underlying page's).
+  useEffect(() => {
+    document.body.style.overflow = activeFormType ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [activeFormType])
   const [activeFormPrefill, setActiveFormPrefill] = useState(null)
 
   const isAdmin = user?.role === 'Admin'
+  const isVisitor = user?.role === 'Visitor'
+
+  // Theme defaults to dark (no .light class) - only toggled on when the
+  // persisted preference explicitly says 'light'.
+  useEffect(() => {
+    document.documentElement.classList.toggle('light', theme === 'light')
+  }, [theme])
+
+  // Always start a newly-navigated-to page at the top, rather than
+  // carrying over whatever scroll position the previous page was left
+  // at - e.g. switching from a long scrolled-down list to a different
+  // tab shouldn't land the user mid-page on the new one.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
 
   const openForm = (type, prefill = null) => {
     setActiveFormType(type)
@@ -57,6 +84,8 @@ function App() {
   }, [])
 
   useEffect(() => {
+    registerImmediateSyncOnSave()
+
     const cleanup = startSyncWorker((result) => {
       if (result.synced > 0) {
         toast.success(`Synced ${result.synced} record${result.synced === 1 ? '' : 's'} to cloud`)
@@ -78,21 +107,22 @@ function App() {
   }, [user])
 
   return (
-    <div className="min-h-screen bg-neutral-950">
+    <div className={`min-h-screen bg-neutral-950 ${pathname !== '/login' ? 'animate-app-fade-in' : ''}`}>
+      {user && pathname !== '/login' && !activeFormType && <AppHeader />}
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
           path="/"
           element={
             <ProtectedRoute>
-              {isAdmin ? <AdminHome /> : <Home />}
+              {isAdmin || isVisitor ? <AdminHome /> : <Home />}
             </ProtectedRoute>
           }
         />
         <Route
           path="/piles"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute denyRoles={['Visitor']}>
               <Piles />
             </ProtectedRoute>
           }
@@ -100,7 +130,7 @@ function App() {
         <Route
           path="/monitoring"
           element={
-            <ProtectedRoute requireRole="Admin">
+            <ProtectedRoute requireRole={['Admin', 'Visitor']}>
               <AdminMonitoring />
             </ProtectedRoute>
           }
@@ -108,7 +138,7 @@ function App() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute denyRoles={['Visitor']}>
               <Reports />
             </ProtectedRoute>
           }
@@ -116,7 +146,7 @@ function App() {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute denyRoles={['Visitor']}>
               <Settings />
             </ProtectedRoute>
           }
@@ -131,21 +161,25 @@ function App() {
         />
       </Routes>
 
-      {user && (
+      {user && pathname !== '/login' && (
         <>
           <BottomNav onFabClick={() => setTransactionModalOpen(true)} />
-          <TransactionModal
-            open={isTransactionModalOpen}
-            onClose={() => setTransactionModalOpen(false)}
-            onSelectType={(type) => openForm(type)}
-          />
-          {activeFormType &&
-            (() => {
-              const FormComponent = FORM_COMPONENTS[activeFormType]
-              return (
-                <FormComponent onClose={closeForm} prefill={activeFormPrefill} />
-              )
-            })()}
+          {!isVisitor && (
+            <>
+              <TransactionModal
+                open={isTransactionModalOpen}
+                onClose={() => setTransactionModalOpen(false)}
+                onSelectType={(type) => openForm(type)}
+              />
+              {activeFormType &&
+                (() => {
+                  const FormComponent = FORM_COMPONENTS[activeFormType]
+                  return (
+                    <FormComponent onClose={closeForm} prefill={activeFormPrefill} />
+                  )
+                })()}
+            </>
+          )}
         </>
       )}
 

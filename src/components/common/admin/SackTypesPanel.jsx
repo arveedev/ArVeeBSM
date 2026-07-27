@@ -8,6 +8,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
+import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import {
   inputClass,
@@ -43,7 +44,7 @@ function SackTypesPanel() {
   }
 
   const updateWeight = (conditionCode, value) => {
-    setWeights((w) => ({ ...w, [conditionCode]: value }))
+    setWeights((w) => ({ ...w, [conditionCode]: liveFormatNumber(value) }))
   }
 
   const handleSave = async () => {
@@ -61,7 +62,7 @@ function SackTypesPanel() {
         continue
       }
 
-      const num = Number(raw)
+      const num = parseFormattedNumber(raw)
       if (Number.isNaN(num) || num < 0) {
         toast.error(`Weight for ${label} (${conditionCode}) must be a valid number`)
         return
@@ -96,9 +97,9 @@ function SackTypesPanel() {
     setCategory(sackType.category)
     setCode(sackType.code)
     setWeights({
-      BN: sackType.weights?.BN ?? '',
-      SH: sackType.weights?.SH ?? '',
-      US: sackType.weights?.US ?? '',
+      BN: sackType.weights?.BN != null ? liveFormatNumber(String(sackType.weights.BN)) : '',
+      SH: sackType.weights?.SH != null ? liveFormatNumber(String(sackType.weights.SH)) : '',
+      US: sackType.weights?.US != null ? liveFormatNumber(String(sackType.weights.US)) : '',
     })
   }
 
@@ -112,7 +113,7 @@ function SackTypesPanel() {
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-white">Sack Types</h2>
+      <h2 className="text-base font-semibold text-app-text">Sack Types</h2>
       <p className="mt-1 text-xs text-neutral-400">
         Every sack code has three conditions — Brand New (BN), Second Hand
         (SH), and Unserviceable (US). Weights (kg) are optional and can be
@@ -155,9 +156,8 @@ function SackTypesPanel() {
                   {label} ({conditionCode})
                 </span>
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  step="0.001"
                   value={weights[conditionCode]}
                   onChange={(e) => updateWeight(conditionCode, e.target.value)}
                   className={`${inputClass} text-center`}
@@ -185,7 +185,7 @@ function SackTypesPanel() {
           {sortedSackTypes.map((s) => (
             <li key={s.sackTypeId} className={`${listItemClass} items-start`}>
               <div>
-                <p className="font-medium text-white">
+                <p className="font-medium text-app-text">
                   {s.code} · {s.category}
                 </p>
                 <p className="text-xs text-neutral-400">

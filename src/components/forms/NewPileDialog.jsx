@@ -1,27 +1,42 @@
 // New Pile dialog — opened when the user selects "New Pile" from the Pile
 // ID dropdown on a stock form. Lets them create a pile on the spot
-// (category + variety + name) without leaving the transaction they're
-// filling out; the new pile is added to db.piles and auto-selected back
-// on the parent form.
+// (category + variety + name), optionally seeded with a beginning balance
+// for warehouses whose ongoing inventory is being entered into the app
+// for the first time.
 //
 // A pile is permanently locked to one variety for its whole lifetime —
 // there is no "change variety later" flow, by design.
+//
+// Beginning balance handling: if bags or kilos are entered, a synthetic
+// WSR transaction is created with isInitialBalance: true. This keeps it
+// out of visible statement/recap rows (excluded there) while still
+// counting toward a report's beginning-balance figure (included in the
+// prior-transactions sum, since that query does not filter the flag out).
 
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
-import { db } from '../../db/dexie.js'
-import { inputClass, labelClass, primaryButtonClass } from './shared.js'
+import { createPileWithBeginningBalance } from '../../utils/pileLedger.js'
+import { liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
+import { inputClass, labelClass, primaryButtonClass, CONDITION_FLAGS } from './shared.js'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
+const AGE_UNITS = ['Days', 'Months']
 
 function NewPileDialog({ warehouseId, varieties, onCreated, onClose }) {
   const [pileName, setPileName] = useState('')
   const [category, setCategory] = useState('Rice')
   const [varietyId, setVarietyId] = useState('')
+  const [beginBags, setBeginBags] = useState('')
+  const [beginKilos, setBeginKilos] = useState('')
+  const [beginAge, setBeginAge] = useState('')
+  const [beginAgeUnit, setBeginAgeUnit] = useState('Days')
+  const [beginCondition, setBeginCondition] = useState('GQ')
   const [isSaving, setIsSaving] = useState(false)
 
-  const categoryVarieties = varieties.filter((v) => v.category === category)
+  const categoryVarieties = varieties
+    .filter((v) => v.category === category)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 
   const handleCreate = async () => {
     if (!pileName.trim()) {
@@ -35,19 +50,18 @@ function NewPileDialog({ warehouseId, varieties, onCreated, onClose }) {
 
     setIsSaving(true)
 
-    const pile = {
-      pileId: crypto.randomUUID(),
+    const pile = await createPileWithBeginningBalance({
       warehouseId,
-      pileName: pileName.trim(),
-      cerealType: category,
+      pileName,
+      category,
       varietyId,
-      currentBags: 0,
-      currentKilos: 0,
-      initialAgeValue: 0,
-      dateOfReceipt: new Date().toISOString().slice(0, 10),
-    }
+      bags: beginBags === '' ? 0 : parseFormattedNumber(beginBags),
+      kilos: beginKilos === '' ? 0 : parseFormattedNumber(beginKilos),
+      age: beginAge === '' ? 0 : parseFormattedNumber(beginAge),
+      ageUnit: beginAgeUnit,
+      condition: beginCondition,
+    })
 
-    await db.piles.add(pile)
     toast.success(`Pile "${pile.pileName}" created`)
     setIsSaving(false)
     onCreated(pile)
@@ -59,11 +73,11 @@ function NewPileDialog({ warehouseId, varieties, onCreated, onClose }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4"
+        className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white">New Pile</h2>
+          <h2 className="text-base font-semibold text-app-text">New Pile</h2>
           <button
             type="button"
             onClick={onClose}
@@ -131,6 +145,87 @@ function NewPileDialog({ warehouseId, varieties, onCreated, onClose }) {
             A pile's variety can never be changed once created — every bag
             stored in it is treated as this variety.
           </p>
+
+          <div className="border-t border-neutral-800 pt-3">
+            <p className="text-xs font-semibold uppercase text-neutral-500">
+              Beginning Balance (optional)
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              Use this to seed stock already on hand at this warehouse —
+              not a receipt or issuance, just a starting point.
+            </p>
+
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Bags</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={beginBags}
+                  onChange={(e) => setBeginBags(liveFormatNumber(e.target.value))}
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Net Kilos</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={beginKilos}
+                  onChange={(e) => setBeginKilos(liveFormatNumber(e.target.value))}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelClass}>Age</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={beginAge}
+                  onChange={(e) => setBeginAge(liveFormatNumber(e.target.value))}
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Unit</label>
+                <select
+                  value={beginAgeUnit}
+                  onChange={(e) => setBeginAgeUnit(e.target.value)}
+                  className={inputClass}
+                >
+                  {AGE_UNITS.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-2">
+              <label className={labelClass}>Condition</label>
+              <div className="mt-1 grid grid-cols-5 gap-1">
+                {CONDITION_FLAGS.map((flag) => (
+                  <button
+                    key={flag}
+                    type="button"
+                    onClick={() => setBeginCondition(flag)}
+                    className={`rounded-lg border py-1.5 text-xs font-medium transition-all active:scale-95 ${
+                      beginCondition === flag
+                        ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
+                        : 'border-neutral-800 bg-neutral-950 text-neutral-400'
+                    }`}
+                  >
+                    {flag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
           <button
             type="button"
