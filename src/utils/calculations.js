@@ -285,14 +285,25 @@ export const parseFormattedNumber = (str) => parseFloat(stripFormatting(str)) ||
  * disrupted mid-entry (e.g. "1234.5" while still typing the second
  * decimal digit doesn't get prematurely rounded).
  */
-export const liveFormatNumber = (rawValue) => {
+/**
+ * Live-formats a number input string as the user types: strips existing
+ * commas, re-inserts them at the correct thousand positions, preserves a
+ * trailing decimal point and partial decimal digits so typing isn't
+ * disrupted mid-entry (e.g. "1234.5" while still typing the second
+ * decimal digit doesn't get prematurely rounded).
+ *
+ * decimalPlaces defaults to 2 (matches most fields: bags, kilos, MC%,
+ * age). Fields needing finer precision (e.g. sack weight-by-condition,
+ * which needs values like 0.095 or 0.102) can pass 3 explicitly.
+ */
+export const liveFormatNumber = (rawValue, decimalPlaces = 2) => {
   if (rawValue === '' || rawValue == null) return ''
   const cleaned = stripFormatting(rawValue).replace(/[^0-9.]/g, '')
   const parts = cleaned.split('.')
   const intPart = parts[0].replace(/^0+(?=\d)/, '') || '0'
   const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   if (parts.length > 1) {
-    return `${formattedInt}.${parts[1].slice(0, 2)}`
+    return `${formattedInt}.${parts[1].slice(0, decimalPlaces)}`
   }
   return cleaned.endsWith('.') ? `${formattedInt}.` : formattedInt
 }

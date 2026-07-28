@@ -19,7 +19,7 @@ export const listItemClass =
 
 // Icon-only action buttons (edit/delete) in list rows.
 export const iconButtonClass =
-  'rounded-lg p-1 transition-all hover:scale-110 active:scale-95'
+  'rounded-lg p-2 transition-all hover:scale-110 active:scale-95'
 
 export const editIconClass = `${iconButtonClass} text-neutral-400 hover:text-app-text hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]`
 

@@ -4232,3 +4232,59 @@ below.
   image-export button's disabled state no longer factoring in
   transaction count.
 - Re-verified all 59 .jsx files with the real parser.
+
+## CRITICAL FIX: sack weight-by-condition was silently truncating to 2 decimal places, corrupting real calculations
+
+- Found the root cause: liveFormatNumber (used for nearly every number
+  input across the whole app) hardcoded a 2-decimal-place limit at
+  `parts[1].slice(0, 2)`. This silently truncated values like 0.095 to
+  0.09 and 0.102 to 0.10 the moment the user typed them, before the
+  value was ever saved - meaning the actual stored weight was already
+  wrong, corrupting every downstream MTS/net-kilos calculation that
+  reads it.
+- Fixed by making the decimal precision configurable per call site via
+  a new optional parameter (liveFormatNumber(value, decimalPlaces)),
+  defaulting to 2 to leave every other field in the app (bags, kilos,
+  MC%, age, etc.) completely unaffected. SackTypesPanel.jsx's weight-
+  by-condition fields now explicitly request 3 decimal places, both
+  when typing a new value and when loading an existing value for
+  editing (the edit path needed the same fix, or an existing 3-decimal
+  value would display truncated and risk being silently re-saved
+  wrong).
+- Verified with an 8-case test covering the exact three values the
+  user reported (0.095, 0.075, 0.102), confirming every other call
+  site's default 2-decimal behavior is completely unchanged, that the
+  corrected values parse back to the exact right number for
+  calculations, and that natural mid-typing behavior (partial decimal
+  entry) still works.
+
+## Mobile touch-target sizing sweep (real-device testing findings)
+
+- Bottom nav icons: 20px -> 24px.
+- Edit/delete icons across all 8 admin panels (fixed via one shared
+  constant, iconButtonClass, so a single change applied everywhere at
+  once): padding p-1 -> p-2, icons -> 20px.
+- Settings pile list: fixed the exact bug reported - now shows Net Kgs
+  instead of net bags, stacked vertically (bags on top, Net Kgs below)
+  instead of crammed inline on one line, matching the admin/visitor
+  home page's established pattern. Edit/delete icons there fixed too.
+- Piles.jsx pile layout toolbar (Move/Delete): 16px -> 20px icons.
+- WarehouseDetailModal back button: 18px/p-2 -> 22px/p-2.5.
+- AppHeader logout button and theme toggle: both 36px (h-9 w-9) -> 44px
+  (h-11 w-11) buttons with 20px icons, matching standard touch-target
+  size recommendations.
+- ConfirmDialog's Cancel/Confirm buttons (including the Logout
+  confirmation): padding py-2 -> py-3.
+- Re-verified all 59 .jsx files with the real parser.
+
+## STILL REMAINING from this batch (not yet done)
+- Piles page pile list - average weight overflow (move below Net Kg
+  instead of inline).
+- Reports "Save as image" not downloading to phone gallery - needs
+  investigation into mobile browser download behavior, likely needs a
+  different approach than the current programmatic download link
+  (e.g. Web Share API).
+- Pile layout tab interaction redesign for mobile (tap to show details
+  + move/delete icons, removing rename-via-tap on mobile only, keeping
+  desktop hover behavior unchanged) - the biggest remaining piece,
+  needs its own focused pass.

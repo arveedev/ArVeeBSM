@@ -244,10 +244,10 @@ function BranchesPanel() {
               </div>
               <div className="flex shrink-0 gap-2">
                 <button type="button" onClick={() => handleEdit(branch)} aria-label="Edit" className={editIconClass}>
-                  <Pencil size={15} />
+                  <Pencil size={20} />
                 </button>
                 <button type="button" onClick={() => setPendingDelete(branch)} aria-label="Delete" className={deleteIconClass}>
-                  <Trash2 size={15} />
+                  <Trash2 size={20} />
                 </button>
               </div>
             </li>

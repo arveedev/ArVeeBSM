@@ -142,7 +142,7 @@ function VarietyTypesPanel() {
                         aria-label="Edit"
                         className={editIconClass}
                       >
-                        <Pencil size={18} />
+                        <Pencil size={20} />
                       </button>
                       <button
                         type="button"
@@ -150,7 +150,7 @@ function VarietyTypesPanel() {
                         aria-label="Delete"
                         className={deleteIconClass}
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={20} />
                       </button>
                     </div>
                   </li>

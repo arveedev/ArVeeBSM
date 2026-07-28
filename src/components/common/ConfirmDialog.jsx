@@ -74,14 +74,14 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-95"
+            className="flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-3 text-sm font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-95"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-1 rounded-xl bg-brand-crimson px-3 py-2 text-sm font-semibold text-app-text transition-all hover:brightness-110 hover:shadow-[0_0_16px_rgba(239,68,68,0.45)] active:scale-95"
+            className="flex-1 rounded-xl bg-brand-crimson px-3 py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 hover:shadow-[0_0_16px_rgba(239,68,68,0.45)] active:scale-95"
           >
             {confirmLabel}
           </button>

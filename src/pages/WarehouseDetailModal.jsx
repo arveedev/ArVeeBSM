@@ -93,9 +93,9 @@ function WarehouseDetailModal({ warehouse, onClose }) {
             type="button"
             onClick={onClose}
             aria-label="Back"
-            className="rounded-full border border-brand-crimson/40 bg-neutral-900 p-2 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
+            className="rounded-full border border-brand-crimson/40 bg-neutral-900 p-2.5 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={22} />
           </button>
         </div>
       </div>

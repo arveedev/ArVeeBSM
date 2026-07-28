@@ -11,7 +11,7 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db } from '../db/dexie.js'
-import { fmtBags, fmtNetBags, normalizeAgeToDays, todayLocalISO, liveFormatNumber, parseFormattedNumber } from '../utils/calculations.js'
+import { fmtBags, fmtWeight, normalizeAgeToDays, todayLocalISO, liveFormatNumber, parseFormattedNumber } from '../utils/calculations.js'
 import { createPileWithBeginningBalance } from '../utils/pileLedger.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, SACK_CONDITIONS } from '../components/common/admin/shared.js'
 import { CONDITION_FLAGS } from '../components/forms/shared.js'
@@ -118,12 +118,12 @@ function ClassifierSection({ warehouseId }) {
       ) : (
         <div className="mt-3 flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
           <span className="text-sm text-app-text">{savedName}</span>
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={() => setIsEditing(true)} aria-label="Edit" className="text-neutral-400 hover:text-app-text">
-              <Pencil size={14} />
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setIsEditing(true)} aria-label="Edit" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-app-text active:scale-90">
+              <Pencil size={20} />
             </button>
-            <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Delete" className="text-neutral-400 hover:text-brand-crimson">
-              <Trash2 size={14} />
+            <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Delete" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-brand-crimson active:scale-90">
+              <Trash2 size={20} />
             </button>
           </div>
         </div>
@@ -349,11 +349,11 @@ function SackBalanceSection({ warehouseId }) {
               </span>
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-brand-neon">{fmtBags(entry.pieces)} pcs</span>
-                <button type="button" onClick={() => handleEdit(entry)} aria-label="Edit" className="text-neutral-400 hover:text-app-text">
-                  <Pencil size={14} />
+                <button type="button" onClick={() => handleEdit(entry)} aria-label="Edit" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-app-text active:scale-90">
+                  <Pencil size={20} />
                 </button>
-                <button type="button" onClick={() => setPendingDelete(entry)} aria-label="Delete" className="text-neutral-400 hover:text-brand-crimson">
-                  <Trash2 size={14} />
+                <button type="button" onClick={() => setPendingDelete(entry)} aria-label="Delete" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-brand-crimson active:scale-90">
+                  <Trash2 size={20} />
                 </button>
               </div>
             </li>
@@ -377,6 +377,7 @@ function SackBalanceSection({ warehouseId }) {
 // that would incorrectly show up as a receipt in reports.
 function PileBalanceSection({ warehouseId }) {
   const { headerHeight, stickyIndicatorHeight } = usePageHeader() ?? {}
+  const { weightUnit } = useSettings() ?? {}
   const [pileName, setPileName] = useState('')
   const [category, setCategory] = useState('Rice')
   const [varietyId, setVarietyId] = useState('')
@@ -683,19 +684,20 @@ function PileBalanceSection({ warehouseId }) {
       {sortedPiles.length > 0 && (
         <ul className="mt-2 space-y-1.5">
           {sortedPiles.map((p) => (
-            <li key={p.pileId} className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
-              <span className="text-sm text-app-text">
+            <li key={p.pileId} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
+              <span className="truncate text-sm text-app-text">
                 {p.pileName} <span className="text-xs text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? ''}</span>
               </span>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-brand-neon">
-                  {fmtBags(p.currentBags)} bags · {fmtNetBags((p.currentKilos ?? 0) / 50)} net bags
-                </span>
-                <button type="button" onClick={() => handleEdit(p)} aria-label="Edit" className="text-neutral-400 hover:text-app-text">
-                  <Pencil size={14} />
+              <div className="text-right">
+                <p className="whitespace-nowrap text-sm font-semibold text-brand-neon">{fmtBags(p.currentBags)} bags</p>
+                <p className="whitespace-nowrap text-sm font-semibold text-brand-neon">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => handleEdit(p)} aria-label="Edit" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-app-text active:scale-90">
+                  <Pencil size={20} />
                 </button>
-                <button type="button" onClick={() => confirmDelete(p)} aria-label="Delete" className="text-neutral-400 hover:text-brand-crimson">
-                  <Trash2 size={14} />
+                <button type="button" onClick={() => confirmDelete(p)} aria-label="Delete" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-brand-crimson active:scale-90">
+                  <Trash2 size={20} />
                 </button>
               </div>
             </li>

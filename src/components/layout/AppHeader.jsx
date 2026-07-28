@@ -109,22 +109,22 @@ function AppHeader() {
               type="button"
               onClick={() => updateSetting?.('theme', isLight ? 'dark' : 'light')}
               aria-label="Toggle dark/light mode"
-              className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all active:scale-90 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all active:scale-90 ${
                 isLight
                   ? 'border-brand-neon bg-neutral-900 text-brand-neon shadow-[0_0_12px_rgba(0,255,163,0.6)]'
                   : 'border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-brand-neon/50 hover:text-brand-neon'
               }`}
             >
-              {isLight ? <Sun size={16} /> : <Moon size={16} />}
+              {isLight ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
             <button
               type="button"
               onClick={() => setConfirmingLogout(true)}
               aria-label="Logout"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
             >
-              <LogOut size={16} />
+              <LogOut size={20} />
             </button>
           </div>
         </div>

@@ -91,7 +91,7 @@ function NavItem({ to, label, Icon }) {
         }`
       }
     >
-      <Icon size={20} />
+      <Icon size={24} />
       <span>{label}</span>
     </NavLink>
   )

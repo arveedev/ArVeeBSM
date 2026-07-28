@@ -791,11 +791,11 @@ function Piles() {
                 <>
                   <button type="button" onClick={handleStartMove}
                     className="flex items-center justify-center rounded-xl border border-brand-amber/40 px-4 text-brand-amber">
-                    <Move size={16} />
+                    <Move size={20} />
                   </button>
                   <button type="button" onClick={() => setPendingDelete({ id: editingBoxId })}
                     className="flex items-center justify-center rounded-xl border border-brand-crimson/40 px-4 text-brand-crimson">
-                    <Trash2 size={16} />
+                    <Trash2 size={20} />
                   </button>
                 </>
               )}

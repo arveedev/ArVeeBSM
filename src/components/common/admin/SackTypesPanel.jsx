@@ -44,7 +44,7 @@ function SackTypesPanel() {
   }
 
   const updateWeight = (conditionCode, value) => {
-    setWeights((w) => ({ ...w, [conditionCode]: liveFormatNumber(value) }))
+    setWeights((w) => ({ ...w, [conditionCode]: liveFormatNumber(value, 3) }))
   }
 
   const handleSave = async () => {
@@ -97,9 +97,9 @@ function SackTypesPanel() {
     setCategory(sackType.category)
     setCode(sackType.code)
     setWeights({
-      BN: sackType.weights?.BN != null ? liveFormatNumber(String(sackType.weights.BN)) : '',
-      SH: sackType.weights?.SH != null ? liveFormatNumber(String(sackType.weights.SH)) : '',
-      US: sackType.weights?.US != null ? liveFormatNumber(String(sackType.weights.US)) : '',
+      BN: sackType.weights?.BN != null ? liveFormatNumber(String(sackType.weights.BN), 3) : '',
+      SH: sackType.weights?.SH != null ? liveFormatNumber(String(sackType.weights.SH), 3) : '',
+      US: sackType.weights?.US != null ? liveFormatNumber(String(sackType.weights.US), 3) : '',
     })
   }
 
@@ -201,7 +201,7 @@ function SackTypesPanel() {
                   aria-label="Edit"
                   className={editIconClass}
                 >
-                  <Pencil size={18} />
+                  <Pencil size={20} />
                 </button>
                 <button
                   type="button"
@@ -209,7 +209,7 @@ function SackTypesPanel() {
                   aria-label="Delete"
                   className={deleteIconClass}
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={20} />
                 </button>
               </div>
             </li>
