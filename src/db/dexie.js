@@ -557,6 +557,36 @@ db.version(21).stores({}).upgrade(async (tx) => {
   }
 })
 
+// v22 - adds serialCounters, an explicit last-used-serial tracker per
+// (warehouseId, type), and backfills it from whatever transaction
+// history already exists locally on this device. See serialNumber.js
+// for the full explanation of why this is needed on top of (not
+// instead of) the existing scan-all-transactions approach.
+db.version(22).stores({
+  serialCounters: '[warehouseId+type], warehouseId, type',
+}).upgrade(async (tx) => {
+  const allTx = await tx.table('transactions').toArray()
+  const best = new Map() // key: `${warehouseId}::${type}` -> parsed serial info
+
+  const SERIAL_PATTERN = /^(.*?)(\d+)$/
+  for (const t of allTx) {
+    if (!t.warehouseId || !t.type || !t.serialNo) continue
+    const match = SERIAL_PATTERN.exec(String(t.serialNo).trim())
+    if (!match) continue
+    const [, prefix, digits] = match
+    const number = parseInt(digits, 10)
+    const key = `${t.warehouseId}::${t.type}`
+    const current = best.get(key)
+    if (!current || number > current.number) {
+      best.set(key, { warehouseId: t.warehouseId, type: t.type, prefix, digits: digits.length, number })
+    }
+  }
+
+  for (const record of best.values()) {
+    await tx.table('serialCounters').put({ ...record, updatedAt: new Date().toISOString() })
+  }
+})
+
 db.cloud.configure({
   databaseUrl: 'https://z15dzktxq.dexie.cloud',
   requireAuth: true,

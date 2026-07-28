@@ -33,6 +33,7 @@ import {
   isSerialTaken,
   stepSerial,
   findTransactionBySerial,
+  recordSerialUsed,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
@@ -411,6 +412,7 @@ const SackFormBase = forwardRef(function SackFormBase(
 
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
     await db.transactions.add(transaction)
+    await recordSerialUsed(type, currentWarehouseId, serialNo.trim())
     await rememberCustomer({
       name: customerName.trim(),
       address: customerAddress.trim() || null,

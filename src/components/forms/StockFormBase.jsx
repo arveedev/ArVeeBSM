@@ -64,6 +64,7 @@ import {
   isSerialTaken,
   stepSerial,
   findTransactionBySerial,
+  recordSerialUsed,
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile } from '../../utils/pileLedger.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
@@ -737,6 +738,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
 
     await db.transactions.add(transaction)
+    await recordSerialUsed(type, currentWarehouseId, serialNo.trim())
     await applyTransactionToPile(transaction)
     await rememberCustomer({
       name: customerName.trim(),

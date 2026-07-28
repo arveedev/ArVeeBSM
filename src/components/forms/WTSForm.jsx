@@ -28,7 +28,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
-import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial } from '../../utils/serialNumber.js'
+import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed } from '../../utils/serialNumber.js'
 import {
   liveFormatNumber,
   parseFormattedNumber,
@@ -430,6 +430,7 @@ function WTSForm({ onClose, prefill }) {
     setIsSaving(true)
     const tx = { id: crypto.randomUUID(), ...buildPayload() }
     await db.transactions.add(tx)
+    await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim())
     await applyWtsToPiles(tx)
     toast.success(`WTS saved — ${serialNo.trim()}`)
     resetForm(stepSerial(serialNo.trim(), 1))

@@ -12,7 +12,7 @@ import { primaryButtonClass } from './shared.js'
 const ALL_TABLES = [
   'authorities', 'branches', 'customers', 'googleSheetsConfig',
   'pendingSheetDeletions', 'pileLayoutBoxes', 'piles', 'provinces',
-  'reportConfig', 'sackInventory', 'sackTypes', 'settings',
+  'reportConfig', 'sackInventory', 'sackTypes', 'serialCounters', 'settings',
   'sheetSources', 'signatories', 'transactionTypes', 'transactions',
   'users', 'varietyTypes', 'warehouseAliases', 'warehouses',
 ]

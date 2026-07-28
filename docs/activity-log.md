@@ -4389,3 +4389,42 @@ below.
   with no prefix, null safety, and a false-positive guard for a
   legitimate mid-name hyphen.
 - Re-verified all 59 .jsx files with the real parser.
+
+## CRITICAL FIX: app now durably remembers the last serial number per warehouse per document type
+
+- Diagnosed the root cause: suggestNextSerial already correctly scanned
+  local db.transactions for the highest existing serial per (type,
+  warehouse) - this genuinely works fine on a single device across
+  days, since past transactions never get deleted from local storage.
+  The real gap is that this only works if THIS device's own local
+  database happens to already contain every prior transaction for that
+  warehouse - which breaks down if a different device/staff member is
+  used for the same warehouse, or if local storage is ever cleared or
+  reset. Each device only reliably knows about what it itself created.
+- Added a new serialCounters table (schema v22) - an explicit, fast,
+  durable tracker of the last-used serial per (warehouseId, type).
+  Backfilled automatically from whatever transaction history already
+  exists locally on upgrade, so no warehouse loses its current
+  progress. New recordSerialUsed() function updates this tracker right
+  after every successful save, called from all three transaction forms
+  (StockFormBase, SackFormBase, WTSForm) - never moves the counter
+  backwards (e.g. re-saving an older, already-recorded document).
+- suggestNextSerial now checks the tracker AND still scans local
+  transaction history, taking whichever of the two is actually higher
+  - this means the tracker can never cause a regression even if it's
+  ever missing (falls back to the scan, exactly like before) or stale
+  (the scan catches up). Since this table participates in the same
+  Dexie Cloud connection as every other table, it also benefits from
+  cross-device sync now that the connection is confirmed working -
+  meaning a different device handling the same warehouse can pick up
+  the correct next serial without needing that device's own local copy
+  of every prior transaction.
+- Added serialCounters to BackupPanel's export list for completeness.
+- Verified with an 8-case test covering: a genuinely fresh warehouse,
+  the actual bug scenario (tracker present via sync but local
+  transaction history empty - a different device), backward
+  compatibility (no tracker yet, falls back to the scan exactly like
+  the old behavior), the tracker being ahead of the scan, the scan
+  being ahead of a stale tracker (confirming reconciliation never
+  regresses), and recordSerialUsed's never-move-backwards guard.
+- Re-verified all 59 .jsx files with the real parser.

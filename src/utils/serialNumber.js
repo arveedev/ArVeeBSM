@@ -8,7 +8,7 @@
 // Rules:
 //  - The serial is the FIRST field on every form, fully editable.
 //  - On form load, the system suggests "one higher than the highest
-//    existing serial for this (type, warehouse)" as a starting point.
+//    known serial for this (type, warehouse)" as a starting point.
 //  - Uniqueness is checked per (type, warehouseId) — switching the
 //    warehouse on a form changes which serial pool applies.
 //  - A -/+ stepper nudges the serial by 1. If stepping back (-) lands on
@@ -18,6 +18,19 @@
 //    series-navigation logic.
 //  - Serials may contain a non-numeric prefix (e.g. "B11766626"); +/-
 //    only operates on the trailing numeric run, prefix preserved.
+//
+// serialCounters (added for the "app doesn't remember the last serial"
+// fix): an explicit, fast tracker of the last-used serial per
+// (warehouseId, type), kept up to date via recordSerialUsed - called
+// by every form right after a successful save. This exists ON TOP OF
+// (not instead of) scanning local transaction history, because that
+// scan alone is only correct if this specific device's local database
+// happens to already contain every prior transaction for that
+// warehouse - which isn't guaranteed if a different device was used
+// for the same warehouse, or if local storage was ever cleared/reset.
+// suggestNextSerial takes whichever of the two sources is actually
+// higher, so the tracker can never cause a regression even if it's
+// ever missing or stale for some reason.
 
 import { db } from '../db/dexie.js'
 
@@ -55,15 +68,52 @@ export const stepSerial = (serial, delta) => {
 }
 
 /**
+ * Records that a serial was just used for this (type, warehouse) -
+ * called right after a transaction is successfully saved. Updates the
+ * fast serialCounters tracker only if this serial's number is higher
+ * than what's currently tracked (never moves the counter backwards,
+ * e.g. if an old, lower-numbered document gets edited/re-saved).
+ */
+export const recordSerialUsed = async (type, warehouseId, serialNo) => {
+  const parsed = parseSerial(serialNo)
+  if (!parsed || !warehouseId) return
+
+  const key = [warehouseId, type]
+  const existing = await db.serialCounters.get(key)
+  if (existing && existing.number >= parsed.number) return
+
+  await db.serialCounters.put({
+    warehouseId,
+    type,
+    prefix: parsed.prefix,
+    digits: parsed.digits,
+    number: parsed.number,
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+/**
  * Suggests a starting serial for a new document of this (type, warehouse):
- * one higher than the highest existing serial in that pool. Falls back to
+ * one higher than the highest known serial in that pool. Falls back to
  * `fallback` (default "1") if no prior documents exist for this
  * warehouse — every warehouse's series starts fresh from 1, since each
  * warehouse keeps its own independent series per document type rather
  * than sharing a single running count across warehouses.
+ *
+ * Checks the fast serialCounters tracker first (an explicit record kept
+ * up to date via recordSerialUsed on every save - see the file header
+ * for why this exists on top of just scanning local transactions: a
+ * device's local transaction history alone isn't a reliable source if
+ * a different device was used for the same warehouse, or if local
+ * storage was ever cleared). Still reconciles against a full scan of
+ * local transaction history as a safety net, taking whichever of
+ * the two is actually higher - so the tracker can never cause the
+ * suggestion to go backwards even if it's ever missing or stale.
  */
 export const suggestNextSerial = async (type, warehouseId, fallback = '1') => {
   if (!warehouseId) return fallback
+
+  const tracked = await db.serialCounters.get([warehouseId, type])
 
   const existing = await db.transactions
     .where('type')
@@ -71,7 +121,7 @@ export const suggestNextSerial = async (type, warehouseId, fallback = '1') => {
     .and((tx) => tx.warehouseId === warehouseId)
     .toArray()
 
-  let best = null
+  let best = tracked ? { prefix: tracked.prefix, number: tracked.number, digits: tracked.digits } : null
   for (const tx of existing) {
     const parsed = parseSerial(tx.serialNo)
     if (!parsed) continue
