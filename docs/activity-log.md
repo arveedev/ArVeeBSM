@@ -4288,3 +4288,104 @@ below.
   + move/delete icons, removing rename-via-tap on mobile only, keeping
   desktop hover behavior unchanged) - the biggest remaining piece,
   needs its own focused pass.
+
+## Fixed pile-list average-weight overflow, fixed image export not reaching phone gallery
+
+- HomePiles.jsx: stacked the average-weight-per-bag value below Net Kg
+  instead of cramming both onto one line ("Net {kg} ({avg})"), which
+  was overflowing/misaligning on narrow phone screens - matches the
+  stacked-value pattern already established elsewhere.
+- Fixed the actual cause of "Save as image" not reaching the phone
+  gallery: a programmatic <a download> link with a data URL often
+  doesn't trigger a real gallery save on mobile browsers - the file
+  can land somewhere in internal storage with no visible confirmation.
+  Switched to the Web Share API (navigator.share with files) when the
+  browser supports sharing files, which opens the native share sheet
+  with a "Save Image"/"Save to Photos" option that reliably reaches
+  the gallery - this is the reliable, mobile-first path. Desktop or
+  browsers without file-sharing support still get the original direct-
+  download behavior as a fallback. Added clearer toast messaging for
+  both paths (telling the user to pick "Save Image" from the share
+  sheet, or to check Downloads/gallery for the fallback path), and
+  suppressed the error toast specifically for AbortError, which fires
+  when a user simply closes the share sheet without choosing anything
+  - not a real failure.
+- Verified with a test covering the share/fallback branching logic and
+  the AbortError-specific suppression.
+- Re-verified all 59 .jsx files with the real parser.
+
+## Pile layout tab interaction redesign - tap-to-details instead of straight-to-rename
+
+- Replaced the pile layout tab's tap/click behavior: previously, tapping
+  or clicking a pile box jumped straight into the full rename/assign
+  form. Now it shows a lightweight details+actions popup instead
+  (reusing the same field layout and smart viewport-aware positioning
+  already used by the existing hover-preview tooltip) with Move and
+  Delete buttons.
+- Mobile (touch-primary devices, detected via matchMedia
+  '(pointer: coarse)') does NOT get an Edit/rename button on an already-
+  occupied box, per explicit request - only Move and Delete. A VACANT
+  box is a deliberate exception: it still shows an "Assign" button on
+  mobile too, since assigning a pile to an empty slot is a different,
+  necessary action, not the "rename an existing pile" capability being
+  restricted.
+- Desktop keeps its existing hover-preview tooltip completely unchanged
+  (shows automatically on mouse-enter, read-only, no interaction
+  needed) - the popup for a subsequent click is a separate mechanism
+  layered on top, and is suppressed for a box already covered by the
+  interactive popup to avoid two overlapping tooltips for the same box.
+  Desktop's version of the popup includes the Edit button, opening the
+  original full rename/assign form exactly as before - full renaming
+  ability is untouched for desktop, only removed from mobile's
+  tap flow on occupied boxes specifically.
+- Reused editingBoxId as the shared "which box is selected" state
+  (handleStartMove and the delete confirmation already depended on it),
+  rather than introducing a separate state - the presence/absence of
+  assignForm now decides whether the lightweight popup or the full form
+  is shown for the same selected box.
+- Verified with a 12-case test covering the tap-toggle behavior, the
+  Edit/Assign button's visibility rules across all four device/vacancy
+  combinations, the dynamic Edit vs Assign label, and the hover-tooltip
+  suppression logic.
+- Re-verified all 59 .jsx files with the real parser.
+
+## CRITICAL FIX #2: Net Kilos precision extended to 3 decimals throughout the app, plus Google Sheets warehouse name prefix stripping
+
+- Net Kilos precision was capped in multiple places, not just the input
+  formatting layer fixed for sack weights earlier:
+  - calculateNetKilos itself hardcoded .toFixed(2) on the actual
+    Gross - MTS calculation, silently discarding a third decimal from
+    any MTS value that now has 3-decimal precision (following the
+    earlier sack-weight fix) - this was corrupting the real stored
+    value, not just its display.
+  - fmtKilos (the display formatter used by fmtWeight everywhere a
+    "Net Kgs"/"Gross Kgs" figure is shown) only rendered 2 decimals,
+    which would have hidden the third decimal even after the
+    calculation itself was fixed.
+  - Every Gross Kilos and Net Kilos input across the app (StockFormBase
+    - both the live input and the manual net-kilos override, including
+    all their prefill/load-for-edit paths and the "use suggested gross
+    kilos" button; WTSForm's both sides; Settings' pile Net Kilos
+    field, both live and load-for-edit; NewPileDialog's beginning Net
+    Kilos) all still called liveFormatNumber at its 2-decimal default.
+  - Fixed all of the above to use/accept 3 decimals, and updated the
+    "0.00" placeholders on these specific fields to "0.000" to set the
+    right expectation.
+- Google Sheets sync: found that warehouse.name itself has a leading
+  province/warehouse-code-style prefix baked in from an earlier naming
+  convention (e.g. "ALB-ABACORP A"), which was being sent to Sheets
+  verbatim. Added stripWarehouseCodePrefix (generalized - strips any
+  leading 2-5 uppercase-letter prefix followed by a hyphen, not
+  hardcoded to just "ALB-", since other provinces have their own
+  prefixes) applied once in buildBackupRow so it covers every
+  transaction type's 'Warehouse Name' field consistently. The app's own
+  internal warehouse.name is completely untouched - this only affects
+  what gets sent to the Sheet.
+- Verified with an 11-case test covering the full net-kilos precision
+  chain (MTS calculation -> net kilos calculation -> display -> input
+  fields, confirming unrelated fields like MC%/bags/age remain
+  unaffected at 2 decimals), and the warehouse-prefix stripping across
+  the exact reported example, a different province's prefix, a name
+  with no prefix, null safety, and a false-positive guard for a
+  legitimate mid-name hyphen.
+- Re-verified all 59 .jsx files with the real parser.

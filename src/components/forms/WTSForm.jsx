@@ -130,8 +130,8 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
           <div>
             <label className={labelClass}>Gross Kilos</label>
             <input type="text" inputMode="decimal" value={side.grossKilos}
-              onChange={(e) => setSide((s) => ({ ...s, grossKilos: liveFormatNumber(e.target.value) }))}
-              className={`${inputClass} ${side.grossKilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.00" />
+              onChange={(e) => setSide((s) => ({ ...s, grossKilos: liveFormatNumber(e.target.value, 3) }))}
+              className={`${inputClass} ${side.grossKilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.000" />
           </div>
         </div>
         {(side.bags !== '' || side.grossKilos !== '') && (
@@ -258,7 +258,7 @@ function WTSForm({ onClose, prefill }) {
       sackTypeId: tx.issuedSackTypeId ?? '',
       condition: tx.issuedCondition ?? '',
       bags: tx.issuedBags != null ? liveFormatNumber(String(tx.issuedBags)) : '',
-      grossKilos: tx.issuedGrossKilos != null ? liveFormatNumber(String(tx.issuedGrossKilos)) : '',
+      grossKilos: tx.issuedGrossKilos != null ? liveFormatNumber(String(tx.issuedGrossKilos), 3) : '',
       stockCondition: tx.issuedStockCondition ?? 'Good',
     })
     setReceivedSide({
@@ -267,7 +267,7 @@ function WTSForm({ onClose, prefill }) {
       sackTypeId: tx.receivedSackTypeId ?? '',
       condition: tx.receivedCondition ?? '',
       bags: tx.receivedBags != null ? liveFormatNumber(String(tx.receivedBags)) : '',
-      grossKilos: tx.receivedGrossKilos != null ? liveFormatNumber(String(tx.receivedGrossKilos)) : '',
+      grossKilos: tx.receivedGrossKilos != null ? liveFormatNumber(String(tx.receivedGrossKilos), 3) : '',
       stockCondition: tx.receivedStockCondition ?? 'Good',
     })
   }

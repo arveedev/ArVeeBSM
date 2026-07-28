@@ -443,8 +443,17 @@ const formatLocalTimestamp = () => {
   return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`
 }
 
+// Strips a leading province/warehouse-code-style prefix (e.g. "ALB-",
+// "CAM-") from a warehouse name before it's sent to Google Sheets - the
+// app's own warehouse.name field has these baked in from an earlier
+// naming convention, but the Sheet should only ever show the plain
+// name (e.g. "ALB-ABACORP A" -> "ABACORP A").
+const stripWarehouseCodePrefix = (name) =>
+  (name ?? '').replace(/^[A-Z]{2,5}-/, '')
+
 const buildBackupRow = (transaction, context) => {
-  const { warehouseCode, warehouseName, provinceCode, varietyName, transactionTypeName } = context
+  const { warehouseCode, provinceCode, varietyName, transactionTypeName } = context
+  const warehouseName = stripWarehouseCodePrefix(context.warehouseName)
   const ageInMonths = transaction.ageUnit === 'Months' ? transaction.ageValue : null
 
   if (transaction.type === 'WSR') {

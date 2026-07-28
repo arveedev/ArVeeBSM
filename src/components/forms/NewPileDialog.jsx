@@ -173,9 +173,9 @@ function NewPileDialog({ warehouseId, varieties, onCreated, onClose }) {
                   type="text"
                   inputMode="decimal"
                   value={beginKilos}
-                  onChange={(e) => setBeginKilos(liveFormatNumber(e.target.value))}
+                  onChange={(e) => setBeginKilos(liveFormatNumber(e.target.value, 3))}
                   className={inputClass}
-                  placeholder="0.00"
+                  placeholder="0.000"
                 />
               </div>
             </div>

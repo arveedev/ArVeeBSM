@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, X, Move } from 'lucide-react'
+import { Plus, Trash2, X, Move, Pencil } from 'lucide-react'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
@@ -120,6 +120,9 @@ function Piles() {
   const [moving, setMoving] = useState(null)
 
   const [hoveredBoxId, setHoveredBoxId] = useState(null)
+  const [isTouchDevice] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
+  )
   const longPressTimer = useRef(null)
   const containerRef = useRef(null)
   const [scale, setScale] = useState(1)
@@ -254,6 +257,17 @@ function Piles() {
     setPileId(box.pileId ?? '')
     setLabel(box.label ?? '')
     setAssignForm({ region: { rowStart: box.rowStart, rowSpan: box.rowSpan, colStart: box.colStart, colSpan: box.colSpan } })
+  }
+
+  // Tapping/clicking a box now shows a lightweight details+actions popup
+  // (Move/Delete, plus an Edit button on desktop only) instead of
+  // jumping straight into the full rename/assign form - that form is
+  // now reserved for the explicit Edit button. Reuses editingBoxId as
+  // the "which box is selected" state (handleStartMove and delete
+  // already depend on it); leaving assignForm null is what keeps the
+  // popup showing instead of the full form.
+  const handleTapBox = (box) => {
+    setEditingBoxId((current) => (current === box.id ? null : box.id))
   }
 
   // Move: reposition an existing box without changing its size. The box
@@ -541,7 +555,7 @@ function Piles() {
                   key={box.id}
                   type="button"
                   disabled={Boolean(drawing || moving)}
-                  onClick={() => !drawing && handleEditBox(box)}
+                  onClick={() => !drawing && handleTapBox(box)}
                   onMouseEnter={() => setHoveredBoxId(box.id)}
                   onMouseLeave={() => setHoveredBoxId(null)}
                   onTouchStart={() => handleLongPressStart(box.id)}
@@ -667,7 +681,7 @@ function Piles() {
             pixel size regardless of how much the grid itself is shrunk
             to fit the screen. Sized to fit every field at once - never
             truncated - and clamped to stay within this container. */}
-        {hoveredBoxId && (() => {
+        {hoveredBoxId && hoveredBoxId !== editingBoxId && (() => {
           const box = boxes.find((b) => b.id === hoveredBoxId)
           if (!box) return null
           const pile = box.pileId ? pileMap.get(box.pileId) : null
@@ -748,10 +762,118 @@ function Piles() {
             document.body
           )
         })()}
+
+        {editingBoxId && !assignForm && !moving && (() => {
+          const box = boxes.find((b) => b.id === editingBoxId)
+          if (!box) return null
+          const pile = box.pileId ? pileMap.get(box.pileId) : null
+          const variety = pile ? varietyMap.get(pile.varietyId) : null
+          const isVacant = !pile
+
+          const fields = isVacant ? [] : [
+            variety?.name && ['Variety', variety.name],
+            pile.currentBags != null && ['Bags', fmtBags(pile.currentBags)],
+            pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
+            pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring))],
+            pile.condition && ['Condition', pile.condition],
+            pile.moistureContent && ['MC', pile.moistureContent],
+            pile.purity && ['Purity', pile.purity],
+            pile.dateProcured && ['Procured', pile.dateProcured],
+          ].filter(Boolean)
+
+          const popupWidth = 220
+
+          const screenLeft = (box.colStart - 1) * BASE_CELL_PX * scale
+          const screenTop = (box.rowStart - 1) * BASE_CELL_PX * scale
+          const screenRight = screenLeft + box.colSpan * BASE_CELL_PX * scale
+          const screenBottom = screenTop + box.rowSpan * BASE_CELL_PX * scale
+
+          const containerRect = containerRef.current?.getBoundingClientRect()
+          const containerOrigin = { x: containerRect?.left ?? 0, y: containerRect?.top ?? 0 }
+          const viewportLeft = containerOrigin.x + screenLeft
+          const viewportTop = containerOrigin.y + screenTop
+          const viewportRight = containerOrigin.x + screenRight
+          const viewportBottom = containerOrigin.y + screenBottom
+
+          const HEADER_HEIGHT = 64
+          const BOTTOM_NAV_HEIGHT = 64
+          const usableTop = HEADER_HEIGHT
+          const usableBottom = window.innerHeight - BOTTOM_NAV_HEIGHT
+
+          const isRightHalf = viewportLeft > window.innerWidth / 2
+          const isBottomHalf = viewportTop > (usableTop + usableBottom) / 2
+          const positionStyle = {
+            position: 'fixed',
+            ...(isRightHalf
+              ? { right: Math.max(8, window.innerWidth - viewportRight) }
+              : { left: viewportLeft }),
+            ...(isBottomHalf
+              ? { bottom: Math.max(8, window.innerHeight - viewportBottom) }
+              : { top: Math.max(usableTop + 8, viewportTop) }),
+          }
+
+          return createPortal(
+            <div
+              className="fixed z-40 rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
+              style={{ ...positionStyle, width: popupWidth }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>
+                <button
+                  type="button"
+                  onClick={() => setEditingBoxId(null)}
+                  aria-label="Close"
+                  className="shrink-0 rounded-lg p-1 text-neutral-500 transition-colors hover:text-app-text"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              {isVacant ? (
+                <p className="mt-1 text-sm text-neutral-500">VACANT</p>
+              ) : (
+                <div className="mt-1 space-y-1">
+                  {fields.map(([lbl, val]) => (
+                    <div key={lbl} className="flex justify-between gap-3 text-sm">
+                      <span className="text-neutral-400">{lbl}</span>
+                      <span className="font-medium text-app-text">{val}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 flex gap-2 border-t border-neutral-800 pt-3">
+                <button
+                  type="button"
+                  onClick={handleStartMove}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-amber/40 py-2 text-xs font-medium text-brand-amber transition-all active:scale-95"
+                >
+                  <Move size={16} /> Move
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete({ id: editingBoxId })}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-crimson/40 py-2 text-xs font-medium text-brand-crimson transition-all active:scale-95"
+                >
+                  <Trash2 size={16} /> Delete
+                </button>
+                {(!isTouchDevice || isVacant) && (
+                  <button
+                    type="button"
+                    onClick={() => handleEditBox(box)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                  >
+                    <Pencil size={16} /> {isVacant ? 'Assign' : 'Edit'}
+                  </button>
+                )}
+              </div>
+            </div>,
+            document.body
+          )
+        })()}
       </div>
 
       <p className="mt-1 text-xs text-neutral-500">
-        Hover a pile (or long-press on mobile) to see its full details.
+        {isTouchDevice ? 'Tap a pile to see its details, move, or delete it.' : 'Hover a pile to preview it, or click for details, move, delete, or edit.'}
       </p>
 
       {assignForm && (

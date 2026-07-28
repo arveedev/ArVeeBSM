@@ -433,7 +433,7 @@ function PileBalanceSection({ warehouseId }) {
     setCategory(variety?.category ?? 'Rice')
     setVarietyId(pile.varietyId)
     setBags(liveFormatNumber(String(pile.currentBags ?? 0)))
-    setKilos(liveFormatNumber(String(pile.currentKilos ?? 0)))
+    setKilos(liveFormatNumber(String(pile.currentKilos ?? 0), 3))
     setAge(liveFormatNumber(String(pile.initialAgeValue ?? 0)))
     setAgeUnit('Days')
     setCondition(seed?.condition ?? 'GQ')
@@ -597,8 +597,8 @@ function PileBalanceSection({ warehouseId }) {
           </div>
           <div>
             <label className={labelClass}>Net Kilos</label>
-            <input type="text" inputMode="decimal" value={kilos} onChange={(e) => setKilos(liveFormatNumber(e.target.value))}
-              className={`${inputClass} ${kilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.00" />
+            <input type="text" inputMode="decimal" value={kilos} onChange={(e) => setKilos(liveFormatNumber(e.target.value, 3))}
+              className={`${inputClass} ${kilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.000" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">

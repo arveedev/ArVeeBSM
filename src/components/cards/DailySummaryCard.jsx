@@ -110,12 +110,33 @@ function DailySummaryCard({ dateFrom, dateTo }) {
         scale: 2,
         useCORS: true,
       })
-      const link = document.createElement('a')
-      link.download = `BSM-Summary-${currentWarehouse?.code ?? 'WH'}-${effectiveFrom}.jpg`
-      link.href = canvas.toDataURL('image/jpeg', 0.92)
-      link.click()
-      toast.success('Summary image saved')
+      const filename = `BSM-Summary-${currentWarehouse?.code ?? 'WH'}-${effectiveFrom}.jpg`
+
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+      const file = new File([blob], filename, { type: 'image/jpeg' })
+
+      // Mobile browsers often don't actually save a programmatic download
+      // link to the photo gallery - the file just lands somewhere in
+      // internal storage, invisible to the user. The Web Share API's
+      // native share sheet includes a "Save Image"/"Save to Photos"
+      // option that reliably does reach the gallery, so it's preferred
+      // whenever the browser supports sharing files.
+      if (navigator.canShare?.({ files: [file] })) {
+        toast.success('Choose "Save Image" to add it to your photo gallery')
+        await navigator.share({ files: [file], title: filename })
+      } else {
+        const link = document.createElement('a')
+        link.download = filename
+        link.href = URL.createObjectURL(blob)
+        link.click()
+        URL.revokeObjectURL(link.href)
+        toast.success('Summary image saved - check your Downloads folder or gallery')
+      }
     } catch (err) {
+      // AbortError fires when the user simply closes the share sheet
+      // without picking anything - not a real failure, don't show an
+      // error toast for it.
+      if (err?.name === 'AbortError') return
       console.error('Summary image export error:', err)
       toast.error('Export failed — try again')
     } finally {

@@ -6,7 +6,7 @@
  * (Section 4.1)
  */
 export const calculateNetKilos = (grossKilos, mts) => {
-  return parseFloat((Number(grossKilos) - Number(mts)).toFixed(2))
+  return parseFloat((Number(grossKilos) - Number(mts)).toFixed(3))
 }
 
 /**
@@ -245,7 +245,7 @@ export const fmtBags = (n) => {
 /** Formats kilos with commas and 2 decimal places. 427309.97 → "427,309.97" */
 export const fmtKilos = (n) => {
   if (n == null) return '—'
-  return Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
 /** Formats net bags (kilos/50) with commas and 2 decimal places. */

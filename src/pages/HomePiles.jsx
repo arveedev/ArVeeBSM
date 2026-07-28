@@ -82,9 +82,10 @@ function HomePiles() {
                       {fmtBags(p.currentBags ?? 0)} bags
                       <span className="ml-1.5 text-xs font-normal text-neutral-500">({fmtNetBags(netBags)} net bags)</span>
                     </span>
-                    <span className="text-xs text-neutral-400">
-                      Net {fmtWeight(p.currentKilos ?? 0, weightUnit)} ({avgWeight.toFixed(2)})
-                    </span>
+                    <div className="text-right">
+                      <p className="whitespace-nowrap text-xs text-neutral-400">Net {fmtWeight(p.currentKilos ?? 0, weightUnit)}</p>
+                      <p className="whitespace-nowrap text-xs text-neutral-500">avg {avgWeight.toFixed(2)}</p>
+                    </div>
                   </div>
                 </div>
 

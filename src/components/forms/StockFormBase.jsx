@@ -345,9 +345,9 @@ function StockFormBase({ type, title, onClose, prefill }) {
       if (!prefill.pileId) setPileFilterVarietyId(prefill.varietyId)
     }
     if (prefill.numberOfBags != null) setNumberOfBags(liveFormatNumber(String(prefill.numberOfBags)))
-    if (prefill.grossKilos != null) setGrossKilos(liveFormatNumber(String(prefill.grossKilos)))
+    if (prefill.grossKilos != null) setGrossKilos(liveFormatNumber(String(prefill.grossKilos), 3))
     if (prefill.autoComputeNet === false) setAutoComputeNet(false)
-    if (prefill.netKilos != null) setManualNetKilos(liveFormatNumber(String(prefill.netKilos)))
+    if (prefill.netKilos != null) setManualNetKilos(liveFormatNumber(String(prefill.netKilos), 3))
     // serialNo from a report row tap — set it and trigger the existing-
     // transaction lookup so Update/Delete appears automatically.
     if (prefill.serialNo) {
@@ -526,7 +526,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (bagsRemaining != null && bagsRemaining > 0) setNumberOfBags(liveFormatNumber(String(bagsRemaining)))
     if (kilosRemaining != null && kilosRemaining > 0) {
       setAutoComputeNet(false)
-      setManualNetKilos(liveFormatNumber(String(kilosRemaining)))
+      setManualNetKilos(liveFormatNumber(String(kilosRemaining), 3))
     }
 
     setShowAuthorityPicker(false)
@@ -1147,8 +1147,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
               <ValidatedField
                 inputMode="decimal"
                 value={grossKilos}
-                onChange={(e) => setGrossKilos(liveFormatNumber(e.target.value))}
-                placeholder="0.00"
+                onChange={(e) => setGrossKilos(liveFormatNumber(e.target.value, 3))}
+                placeholder="0.000"
                 validate={(v) => {
                   if (v === '') return null // not yet entered - no opinion until the user actually leaves it blank on purpose
                   const num = parseFormattedNumber(v)
@@ -1159,7 +1159,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
               {suggestedGrossKilosToComplete != null && suggestedGrossKilosToComplete > 0 && (
                 <button
                   type="button"
-                  onClick={() => setGrossKilos(liveFormatNumber(suggestedGrossKilosToComplete.toFixed(2)))}
+                  onClick={() => setGrossKilos(liveFormatNumber(suggestedGrossKilosToComplete.toFixed(3), 3))}
                   className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
                 >
                   Use {fmtWeight(suggestedGrossKilosToComplete, weightUnit, 'Gross')} to complete AI balance
@@ -1197,9 +1197,9 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 type="text"
                 inputMode="decimal"
                 value={manualNetKilos}
-                onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value))}
+                onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
                 className={`${inputClass} ${overKilos ? 'border-brand-crimson' : ''}`}
-                placeholder="0.00"
+                placeholder="0.000"
               />
             )}
             {overKilos && (
