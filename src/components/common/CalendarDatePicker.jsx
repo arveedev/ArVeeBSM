@@ -131,7 +131,7 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
       {isOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
           <div
-            className="w-72 max-w-full rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl"
+            className="max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
           <div className="flex items-center justify-between">

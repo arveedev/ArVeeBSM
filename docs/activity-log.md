@@ -4528,3 +4528,63 @@ below.
   status, the report's CANCELLED display logic, and the 3-decimal
   report formatting fix.
 - Re-verified all 59 .jsx files with the real parser.
+
+## CRITICAL FIX: findTransactionBySerial excluded Cancelled records entirely, breaking navigation to them; Cancelled checkbox restructured
+
+- Found the real cause of the reported bug: findTransactionBySerial
+  (the shared function all three transaction forms use when navigating
+  to a serial via the stepper or direct entry) explicitly filtered to
+  `tx.status === 'Active'` only. This meant navigating to a Cancelled
+  serial found NOTHING at all - the app silently treated it as an
+  empty slot and reset to a blank new-entry form, which is exactly why
+  the Cancelled checkbox appeared unchecked again. The record was never
+  actually being loaded in the first place. Fixed by removing the
+  status filter entirely - Cancelled is just as real and existing a
+  record as Active, and must be recognized identically when navigating.
+- Restructured the Cancelled checkbox across all three forms
+  (StockFormBase, SackFormBase, WTSForm) per explicit correction:
+  - Moved out of the footer into the form body, positioned right after
+    Condition (or the equivalent last field for Sack/WTS's structure).
+  - Removed the descriptive sub-text; styled as red bold text instead.
+  - The red border + dimming effect is now scoped to ONLY the range
+    from Date through Condition - Serial No. and its navigation arrows
+    are completely outside this wrapper and stay fully visible and
+    usable regardless of cancelled state, fixing the issue where the
+    whole scrollable body (including the serial nav) was being dimmed
+    to 40% opacity, making navigation look disabled even though it
+    technically still worked.
+- Verified with an 8-case test covering: the Cancelled-record-now-found
+  fix specifically (the actual critical bug), the Active-record-still-
+  found-correctly regression check, a genuinely nonexistent serial
+  still correctly returning nothing, the checkbox restoration logic on
+  load for both statuses, and confirming the serial nav's own styling
+  never changes based on cancelled state while the scoped wrapper's
+  styling does.
+- Re-verified all 59 .jsx files with the real parser.
+
+## STILL NOT DONE (explicitly, so this isn't mistaken for complete):
+- Preventing navigation to genuinely non-existent series (the bigger,
+  separate Google-Sheets-lookup-based feature) - not started.
+- CalendarDatePicker overflow issue - not yet investigated.
+- Visual movement feedback on serial back/forward navigation - not yet
+  implemented.
+
+## CalendarDatePicker height overflow fixed, navigation flash animation added to all three forms
+
+- Fixed the CalendarDatePicker overflow: the popover had a width
+  constraint (w-72 max-w-full) but NO height constraint at all - on a
+  short viewport (small phone, landscape, keyboard partially visible),
+  the calendar's full height (header + weekday row + 6 day rows) could
+  exceed available vertical space and overflow off-screen with no way
+  to reach the rest. Added max-h-[90vh] with overflow-y-auto as a
+  scroll fallback.
+- Added a brief, direction-aware slide animation to the serial number
+  field row (StockFormBase, SackFormBase, WTSForm) whenever the user
+  steps backward or forward - slides in from the left when going back,
+  from the right when going forward, giving clear visual confirmation
+  that navigation actually happened and the data below is genuinely
+  different, per explicit request for visual clarity during navigation.
+- Verified with a test covering the animation class selection logic
+  for both directions and the idle state, plus the CalendarDatePicker
+  height-constraint fix.
+- Re-verified all 59 .jsx files with the real parser.

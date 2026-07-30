@@ -159,6 +159,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
+  const [navFlash, setNavFlash] = useState(null)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
   // Live lookup of the linked AI authority, so its remaining balance can
@@ -617,12 +618,16 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const handleStepBack = async () => {
     const prevSerial = stepSerial(serialNo.trim(), -1)
     setSerialNo(prevSerial)
+    setNavFlash('back')
+    setTimeout(() => setNavFlash(null), 250)
     await checkAndLoadSerial(prevSerial)
   }
 
   const handleStepForward = async () => {
     const nextSerial = stepSerial(serialNo.trim(), 1)
     setSerialNo(nextSerial)
+    setNavFlash('forward')
+    setTimeout(() => setNavFlash(null), 250)
     const loaded = await checkAndLoadSerial(nextSerial)
     if (!loaded) resetToBlankEntry(nextSerial)
   }
@@ -863,7 +868,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const isEditMode = Boolean(loadedTransaction)
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isCancelled ? 'border-4 border-brand-crimson' : ''}`}>
+    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold text-app-text">{title}</h1>
@@ -915,7 +920,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
         )}
       </div>
 
-      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto px-4 pb-28 pt-4 transition-opacity ${isCancelled ? 'opacity-40' : ''}`}>
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
         <div className="space-y-3">
           {isEditMode && (
             <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
@@ -925,7 +930,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
           <div ref={serialFieldRef}>
             <label className={labelClass}>Serial No.</label>
-            <div className="mt-1 flex items-center gap-2">
+            <div className={`mt-1 flex items-center gap-2 ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`}>
               <button
                 type="button"
                 onClick={handleStepBack}
@@ -955,6 +960,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
             </p>
           </div>
 
+          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
             <input
@@ -1332,6 +1338,17 @@ function StockFormBase({ type, title, onClose, prefill }) {
               })}
             </div>
           </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm font-semibold text-brand-crimson">
+            <input
+              type="checkbox"
+              checked={isCancelled}
+              onChange={(e) => setIsCancelled(e.target.checked)}
+              className="h-5 w-5 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
+            />
+            Cancelled
+          </label>
 
           {isProcurement && (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
@@ -1417,16 +1434,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-6">
-        <label className="mb-3 flex items-center gap-2 text-sm text-neutral-300">
-          <input
-            type="checkbox"
-            checked={isCancelled}
-            onChange={(e) => setIsCancelled(e.target.checked)}
-            className="h-5 w-5 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
-          />
-          Cancelled
-          <span className="text-xs text-neutral-500">(this document was voided - clears all other fields)</span>
-        </label>
         {isEditMode ? (
           <div className="flex gap-3">
             <button

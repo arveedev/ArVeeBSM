@@ -106,3 +106,21 @@ body {
 .animate-bounce-in {
   animation: bounce-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+/* Brief direction-aware slide feedback when stepping the serial number
+   backward/forward - confirms the navigation actually happened and the
+   data below is genuinely different, not just a static number change. */
+@keyframes nav-slide-from-left {
+  0% { transform: translateX(-14px); opacity: 0.3; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes nav-slide-from-right {
+  0% { transform: translateX(14px); opacity: 0.3; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.animate-nav-back {
+  animation: nav-slide-from-left 0.22s ease-out;
+}
+.animate-nav-forward {
+  animation: nav-slide-from-right 0.22s ease-out;
+}

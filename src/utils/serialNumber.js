@@ -158,6 +158,6 @@ export const findTransactionBySerial = async (type, warehouseId, serialNo) => {
   return db.transactions
     .where('type')
     .equals(type)
-    .and((tx) => tx.warehouseId === warehouseId && tx.serialNo === serialNo && tx.status === 'Active')
+    .and((tx) => tx.warehouseId === warehouseId && tx.serialNo === serialNo)
     .first()
 }
