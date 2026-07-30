@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react'
 // Must match the transition duration used on the box below.
 const BOX_ANIMATION_MS = 220
 
-function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', onConfirm, onCancel, icon: Icon }) {
+function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon }) {
   const [shouldRender, setShouldRender] = useState(open)
   const [hasEntered, setHasEntered] = useState(false)
 
@@ -76,7 +76,7 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
             onClick={onCancel}
             className="flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-3 text-sm font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-95"
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"

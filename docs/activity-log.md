@@ -4588,3 +4588,57 @@ below.
   for both directions and the idle state, plus the CalendarDatePicker
   height-constraint fix.
 - Re-verified all 59 .jsx files with the real parser.
+
+## Redesigned the Cancelled checkbox flow (StockFormBase only so far) - confirmation modal auto-saves, no Save button needed
+
+- Fixed the reported bug where unchecking Cancelled + pressing Save
+  failed validation (required name/pile/etc.) - the checkbox no longer
+  drives isCancelled directly or goes through the normal Save button at
+  all. Checking it now shows a confirmation modal ("Void WSR #123?"
+  with Void/Cancel buttons); confirming immediately writes the
+  Cancelled record to the database right then - no Save press needed,
+  since a void document has no real data to validate. Unchecking shows
+  a separate Yes/No confirmation ("Make this available again?");
+  confirming Yes deletes the Cancelled record entirely (not just flips
+  a flag back to an incomplete "Active" record that would fail
+  validation) - this is what genuinely frees the serial for a fresh
+  entry.
+- Voiding an existing ACTIVE transaction (not just a brand-new blank
+  serial) correctly reverses its prior pile/authority effects first,
+  since it no longer represents a real movement once voided - reusing
+  the same reversal logic already used by Update/Delete.
+- Extracted buildCancelledPayload as its own standalone function
+  (previously only reachable via the isCancelled-branching
+  buildTransactionPayload) so the void handler can build a cancelled
+  record directly and immediately, without depending on React's
+  asynchronous state update timing for isCancelled.
+- Made the checkbox itself bigger (5x5 -> 7x7) and centered, since it
+  was reported as too small/hard to tap reliably.
+- Added an optional cancelLabel prop to ConfirmDialog (defaults to
+  'Cancel', unaffected everywhere else) specifically to support the
+  Yes/No wording for the un-void confirmation.
+- Verified with a 9-case test covering the pending-action state
+  transitions, new-vs-existing record handling on void, the reversal-
+  only-when-previously-Active guard, and the un-void delete-and-reset
+  behavior.
+- Re-verified all 59 .jsx files with the real parser.
+
+## STILL NOT DONE from this batch of feedback (explicitly, so not mistaken for complete):
+- SackFormBase.jsx and WTSForm.jsx need the identical void/un-void
+  modal redesign - not yet applied, still using the old direct-toggle
+  checkbox from the previous round.
+- Navigation animation: too fast, and currently wraps the back/forward
+  buttons too (should only animate the serial number itself); a
+  staggered "flow down" reveal animation for the field inputs is not
+  yet added.
+- CalendarDatePicker overflow - reported as still happening despite the
+  height-cap fix; needs re-investigation, likely a different root cause
+  than what was already addressed.
+- Sticky serial number indicator - currently only appears once scroll
+  reaches the Date label, not as soon as the serial number itself
+  scrolls out of view; not yet fixed.
+- Amber "reviewing existing" banner and save/void toast messaging need
+  to explicitly say when a document is cancelled/void, and when it's
+  been reverted - not yet updated.
+- Form entrance/exit animation for the three transaction forms
+  themselves - not yet implemented.

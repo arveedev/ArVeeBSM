@@ -41,7 +41,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
@@ -159,6 +159,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
+  const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
@@ -636,7 +637,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     ? Math.round((parseFormattedNumber(monthsValue) || 0) * 30 + (parseFormattedNumber(daysValue) || 0))
     : (ageValue === '' ? 0 : normalizeAgeToDays(parseFormattedNumber(ageValue), ageUnit))
 
-  const buildTransactionPayload = (overrides = {}) => (isCancelled ? {
+  const buildCancelledPayload = (overrides = {}) => ({
     type,
     serialNo: serialNo.trim(),
     status: 'Cancelled',
@@ -666,7 +667,9 @@ function StockFormBase({ type, title, onClose, prefill }) {
     farmerCoops: null,
     isSynced: false,
     ...overrides,
-  } : {
+  })
+
+  const buildTransactionPayload = (overrides = {}) => (isCancelled ? buildCancelledPayload(overrides) : {
     type,
     serialNo: serialNo.trim(),
     status: 'Active',
@@ -860,6 +863,56 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
+    const freedSerial = serialNo.trim()
+    resetToBlankEntry(freedSerial)
+    setIsSaving(false)
+  }
+
+  // Voiding bypasses the normal Save button entirely - confirming
+  // immediately writes the Cancelled record, since a void document
+  // has no real data to validate (serial/date/warehouse are all that
+  // matter). If an existing Active transaction is being voided, its
+  // prior pile/authority effects are reversed first, since it no
+  // longer represents a real movement.
+  const handleConfirmVoid = async () => {
+    setPendingVoidAction(null)
+    setIsSaving(true)
+    if (loadedTransaction && loadedTransaction.status !== 'Cancelled') {
+      await reverseTransactionFromPile(loadedTransaction)
+      if (loadedTransaction.aiNumber) {
+        await adjustAuthorityBalance(
+          loadedTransaction.aiNumber,
+          -(loadedTransaction.numberOfBags ?? 0),
+          -(loadedTransaction.netKilos ?? 0)
+        )
+      }
+    }
+    const cancelledRecord = loadedTransaction
+      ? buildCancelledPayload({ id: loadedTransaction.id })
+      : { id: crypto.randomUUID(), ...buildCancelledPayload() }
+    if (loadedTransaction) {
+      await db.transactions.update(loadedTransaction.id, cancelledRecord)
+    } else {
+      await db.transactions.add(cancelledRecord)
+    }
+    await recordSerialUsed(type, currentWarehouseId, serialNo.trim())
+    setIsCancelled(true)
+    setLoadedTransaction(cancelledRecord)
+    toast.success(`${type} ${serialNo.trim()} has been cancelled/voided`)
+    setIsSaving(false)
+  }
+
+  // Un-voiding deletes the Cancelled record entirely (not just flips a
+  // flag) - this is what actually makes the serial available again for
+  // a fresh entry, rather than leaving behind an incomplete "Active"
+  // record that would immediately fail the normal validation rules.
+  const handleConfirmUnvoid = async () => {
+    setPendingVoidAction(null)
+    if (!loadedTransaction) { setIsCancelled(false); return }
+    setIsSaving(true)
+    await db.transactions.delete(loadedTransaction.id)
+    queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
+    toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
     setIsSaving(false)
@@ -1340,12 +1393,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
           </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm font-semibold text-brand-crimson">
+          <label className="flex items-center justify-center gap-2 py-1 text-base font-semibold text-brand-crimson">
             <input
               type="checkbox"
               checked={isCancelled}
-              onChange={(e) => setIsCancelled(e.target.checked)}
-              className="h-5 w-5 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
+              onChange={(e) => setPendingVoidAction(e.target.checked ? 'void' : 'unvoid')}
+              className="h-7 w-7 shrink-0 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
             />
             Cancelled
           </label>
@@ -1500,6 +1553,27 @@ function StockFormBase({ type, title, onClose, prefill }) {
         description="This reverses its effect on the pile and any linked AI/SIA balance, and frees this serial number. This cannot be undone."
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingVoidAction === 'void'}
+        icon={AlertTriangle}
+        title={`Void ${type} #${serialNo.trim()}?`}
+        description="This immediately marks the series as cancelled - no data required, and no need to press Save."
+        confirmLabel="Void"
+        onConfirm={handleConfirmVoid}
+        onCancel={() => setPendingVoidAction(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingVoidAction === 'unvoid'}
+        icon={AlertTriangle}
+        title={`Make ${type} #${serialNo.trim()} available again?`}
+        description="This removes the cancelled marker entirely, so the serial is free for a fresh entry."
+        confirmLabel="Yes"
+        cancelLabel="No"
+        onConfirm={handleConfirmUnvoid}
+        onCancel={() => setPendingVoidAction(null)}
       />
     </div>
   )
