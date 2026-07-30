@@ -4493,3 +4493,38 @@ below.
   (requireAuth, StockFormBase Gross Kilos on navigation) were actually
   fixed and verified in this same pass; everything else in the list is
   logged but NOT yet started.
+
+## Cancelled checkbox added to all three transaction forms, 3-decimal precision fixed in reports, subtle login credit
+
+- Added a Cancelled checkbox to StockFormBase, SackFormBase, and
+  WTSForm (both sides) - per explicit request, a reversible way to
+  record that a serial number in the sequence was voided rather than
+  leaving a mysterious gap. When checked: the form dims (opacity-40 on
+  the field area) with a red border around the whole form; the actual
+  saved record's status becomes 'Cancelled' with every field blanked
+  except serial number, date, and warehouse; validation and the save
+  gate both relax to only require warehouse + serial; loading an
+  existing cancelled document correctly restores the checkbox state,
+  and starting a fresh entry correctly resets it.
+- pdfGenerator.js: both the stock report and sack report now show
+  "CANCELLED" in the customer-name column for voided documents.
+- Found and fixed a real duplication bug while implementing the 3-
+  decimal report request: pdfGenerator.js had its OWN separate, local
+  fmtKilos function, completely independent from the one already fixed
+  to 3 decimals in calculations.js earlier - meaning every exported
+  report was still silently showing truncated 2-decimal kilos values
+  even after the underlying calculation and in-app display were
+  already correct. Fixed this report-local copy to match. Confirmed
+  pileLayoutPdfGenerator.js already correctly imports the shared,
+  already-fixed version - no change needed there.
+- Login page: added subtle "by ArVee" credit text, positioned at the
+  lower-middle of the screen. Deliberately uses reduced opacity rather
+  than a specific hardcoded color, so it stays consistently barely-
+  visible in both dark and light themes instead of risking becoming
+  too visible in one of them.
+- Verified with a 12-case test covering canSave gating relaxation
+  across all three forms when cancelled, the payload correctly
+  blanking non-essential fields while retaining serial/date/warehouse/
+  status, the report's CANCELLED display logic, and the 3-decimal
+  report formatting fix.
+- Re-verified all 59 .jsx files with the real parser.

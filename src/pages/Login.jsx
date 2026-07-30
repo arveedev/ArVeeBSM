@@ -176,7 +176,10 @@ function Login() {
   }
 
   return (
-    <div className={`flex min-h-screen flex-col items-center justify-center px-6 ${(isExiting || !hasEntered) ? 'overflow-hidden' : ''}`}>
+    <div className={`relative flex min-h-screen flex-col items-center justify-center px-6 ${(isExiting || !hasEntered) ? 'overflow-hidden' : ''}`}>
+      <p className="pointer-events-none absolute bottom-14 left-1/2 -translate-x-1/2 select-none text-xs tracking-wide text-neutral-500 opacity-20">
+        by ArVee
+      </p>
       <div className="w-full max-w-sm">
         <img
           src="/logo.svg"

@@ -158,6 +158,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [pendingDelete, setPendingDelete] = useState(false)
 
   const [isSaving, setIsSaving] = useState(false)
+  const [isCancelled, setIsCancelled] = useState(false)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
   // Live lookup of the linked AI authority, so its remaining balance can
@@ -451,19 +452,21 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // Gates the Save button - mirrors validateForm's synchronous checks
   // (serial-uniqueness is async and stays a save-time-only safety net,
   // not part of this live gate).
-  const canSave = Boolean(currentWarehouseId)
-    && Boolean(transactionTypeId)
-    && Boolean(serialNo.trim())
-    && Boolean(customerName.trim())
-    && Boolean(pileId)
-    && (Boolean(selectedPile) || Boolean(varietyId))
-    && (Boolean(numberOfBags) || Boolean(grossKilos))
-    && Boolean(sackSelection)
-    && moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))
-    && (!linkedDocDeductsFromAi || Boolean(linkedDocNo.trim()))
-    && (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== '')
-    && !overKilos
-    && (!farmerOrgEnabled || members.every((m) => m.name.trim()))
+  const canSave = isCancelled
+    ? Boolean(currentWarehouseId) && Boolean(serialNo.trim())
+    : Boolean(currentWarehouseId)
+      && Boolean(transactionTypeId)
+      && Boolean(serialNo.trim())
+      && Boolean(customerName.trim())
+      && Boolean(pileId)
+      && (Boolean(selectedPile) || Boolean(varietyId))
+      && (Boolean(numberOfBags) || Boolean(grossKilos))
+      && Boolean(sackSelection)
+      && moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))
+      && (!linkedDocDeductsFromAi || Boolean(linkedDocNo.trim()))
+      && (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== '')
+      && !overKilos
+      && (!farmerOrgEnabled || members.every((m) => m.name.trim()))
 
   const updateMember = (index, field, value) => {
     setMembers((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)))
@@ -542,6 +545,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // edit, switching the footer to Update/Delete.
   const loadTransactionIntoForm = (tx) => {
     setLoadedTransaction(tx)
+    setIsCancelled(tx.status === 'Cancelled')
     setDate(tx.date ?? blankFormState.date)
     setLinkedDocNo(tx.linkedDocNo ?? tx.aiNumber ?? '')
     setCustomerName(tx.customerName ?? '')
@@ -572,6 +576,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const resetToBlankEntry = (nextSerial) => {
     setLoadedTransaction(null)
+    setIsCancelled(false)
     setSerialNo(nextSerial)
     setDate(blankFormState.date)
     setLinkedDocNo('')
@@ -626,7 +631,37 @@ function StockFormBase({ type, title, onClose, prefill }) {
     ? Math.round((parseFormattedNumber(monthsValue) || 0) * 30 + (parseFormattedNumber(daysValue) || 0))
     : (ageValue === '' ? 0 : normalizeAgeToDays(parseFormattedNumber(ageValue), ageUnit))
 
-  const buildTransactionPayload = (overrides = {}) => ({
+  const buildTransactionPayload = (overrides = {}) => (isCancelled ? {
+    type,
+    serialNo: serialNo.trim(),
+    status: 'Cancelled',
+    date,
+    warehouseId: currentWarehouseId,
+    linkedDocNo: null,
+    aiNumber: null,
+    customerName: null,
+    customerAddress: null,
+    transactionTypeId: null,
+    pileId: null,
+    varietyId: null,
+    mtsSackTypeId: null,
+    mtsCondition: null,
+    numberOfBags: null,
+    grossKilos: null,
+    mts: null,
+    autoComputeNet: true,
+    netKilos: null,
+    ageValue: null,
+    ageUnit: 'Days',
+    initialAgeValue: null,
+    condition: null,
+    moistureContent: null,
+    farmerRsbsa: null,
+    farmerGender: null,
+    farmerCoops: null,
+    isSynced: false,
+    ...overrides,
+  } : {
     type,
     serialNo: serialNo.trim(),
     status: 'Active',
@@ -671,6 +706,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
       toast.error(`Serial ${serialNo.trim()} is already used for a ${type} document at this warehouse`)
       return false
     }
+    if (isCancelled) return true
     if (!customerName.trim()) {
       toast.error('Name is required')
       return false
@@ -827,10 +863,10 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const isEditMode = Boolean(loadedTransaction)
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isCancelled ? 'border-4 border-brand-crimson' : ''}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-xl font-semibold text-app-text">{title}</h1>
+          <h1 className="text-2xl font-bold text-app-text">{title}</h1>
           <button
             type="button"
             onClick={onClose}
@@ -879,7 +915,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
         )}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
+      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto px-4 pb-28 pt-4 transition-opacity ${isCancelled ? 'opacity-40' : ''}`}>
         <div className="space-y-3">
           {isEditMode && (
             <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
@@ -1381,6 +1417,16 @@ function StockFormBase({ type, title, onClose, prefill }) {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-6">
+        <label className="mb-3 flex items-center gap-2 text-sm text-neutral-300">
+          <input
+            type="checkbox"
+            checked={isCancelled}
+            onChange={(e) => setIsCancelled(e.target.checked)}
+            className="h-5 w-5 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
+          />
+          Cancelled
+          <span className="text-xs text-neutral-500">(this document was voided - clears all other fields)</span>
+        </label>
         {isEditMode ? (
           <div className="flex gap-3">
             <button

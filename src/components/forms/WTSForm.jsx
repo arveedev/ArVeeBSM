@@ -174,6 +174,7 @@ function WTSForm({ onClose, prefill }) {
   const [loadedTransaction, setLoadedTransaction] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isCancelled, setIsCancelled] = useState(false)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
   const scrollContainerRef = useRef(null)
@@ -248,6 +249,7 @@ function WTSForm({ onClose, prefill }) {
 
   const loadTransactionIntoForm = (tx) => {
     setLoadedTransaction(tx)
+    setIsCancelled(tx.status === 'Cancelled')
     setDate(tx.date ?? todayLocalISO())
     setAiNumber(tx.aiNumber ?? '')
     setTransactionTypeId(tx.transactionTypeId ?? '')
@@ -274,6 +276,7 @@ function WTSForm({ onClose, prefill }) {
 
   const resetForm = (nextSerial) => {
     setLoadedTransaction(null)
+    setIsCancelled(false)
     setSerialNo(nextSerial)
     setDate(todayLocalISO())
     setAiNumber('')
@@ -313,6 +316,36 @@ function WTSForm({ onClose, prefill }) {
   }
 
   const buildPayload = (overrides = {}) => {
+    if (isCancelled) {
+      return {
+        type: 'WTS',
+        serialNo: serialNo.trim(),
+        status: 'Cancelled',
+        date,
+        warehouseId: currentWarehouseId,
+        aiNumber: null,
+        transactionTypeId: null,
+        moistureContent: null,
+        issuedPileId: null,
+        issuedVarietyId: null,
+        issuedSackTypeId: null,
+        issuedCondition: null,
+        issuedBags: null,
+        issuedGrossKilos: null,
+        issuedNetKilos: null,
+        issuedStockCondition: null,
+        receivedPileId: null,
+        receivedVarietyId: null,
+        receivedSackTypeId: null,
+        receivedCondition: null,
+        receivedBags: null,
+        receivedGrossKilos: null,
+        receivedNetKilos: null,
+        receivedStockCondition: null,
+        isSynced: false,
+        ...overrides,
+      }
+    }
     const issuedNetKilos = computeSideNetKilos(issuedSide, sackTypeMap)
     const receivedNetKilos = computeSideNetKilos(receivedSide, sackTypeMap)
     return {
@@ -397,13 +430,15 @@ function WTSForm({ onClose, prefill }) {
 
   // Gates the Save button - mirrors validate()'s synchronous checks
   // (serial-uniqueness is async and stays a save-time-only safety net).
-  const canSave = Boolean(currentWarehouseId)
-    && Boolean(serialNo.trim())
-    && Boolean(aiNumber.trim())
-    && Boolean(transactionTypeId)
-    && sideIsComplete(issuedSide)
-    && sideIsComplete(receivedSide)
-    && moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))
+  const canSave = isCancelled
+    ? Boolean(currentWarehouseId) && Boolean(serialNo.trim())
+    : Boolean(currentWarehouseId)
+      && Boolean(serialNo.trim())
+      && Boolean(aiNumber.trim())
+      && Boolean(transactionTypeId)
+      && sideIsComplete(issuedSide)
+      && sideIsComplete(receivedSide)
+      && moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))
 
   const validate = async (excludeId = null) => {
     if (!currentWarehouseId) { toast.error('No warehouse selected'); return false }
@@ -412,6 +447,7 @@ function WTSForm({ onClose, prefill }) {
       toast.error(`WTS ${serialNo.trim()} already exists in this warehouse`)
       return false
     }
+    if (isCancelled) return true
     if (!aiNumber.trim()) { toast.error('AI No. is required'); return false }
     if (!transactionTypeId) { toast.error('Nature of Transaction is required'); return false }
     if (!sideIsComplete(issuedSide) || !sideIsComplete(receivedSide)) {
@@ -462,7 +498,7 @@ function WTSForm({ onClose, prefill }) {
   const isEditMode = Boolean(loadedTransaction)
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isCancelled ? 'border-4 border-brand-crimson' : ''}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-xl font-semibold text-app-text">WTS</h1>
@@ -493,7 +529,7 @@ function WTSForm({ onClose, prefill }) {
         )}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4 space-y-3">
+      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto px-4 pb-28 pt-4 space-y-3 transition-opacity ${isCancelled ? 'opacity-40' : ''}`}>
         {isEditMode && (
           <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
             Reviewing WTS {loadedTransaction.serialNo} — Update or Delete below.
@@ -569,6 +605,16 @@ function WTSForm({ onClose, prefill }) {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-6">
+        <label className="mb-3 flex items-center gap-2 text-sm text-neutral-300">
+          <input
+            type="checkbox"
+            checked={isCancelled}
+            onChange={(e) => setIsCancelled(e.target.checked)}
+            className="h-5 w-5 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
+          />
+          Cancelled
+          <span className="text-xs text-neutral-500">(this document was voided - clears all other fields)</span>
+        </label>
         {isEditMode ? (
           <div className="flex gap-3">
             <button type="button" onClick={handleUpdate} disabled={isSaving}
