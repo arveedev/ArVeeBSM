@@ -589,7 +589,16 @@ db.version(22).stores({
 
 db.cloud.configure({
   databaseUrl: 'https://z15dzktxq.dexie.cloud',
-  requireAuth: true,
+  // requireAuth MUST be false for an offline-first app. When true,
+  // Dexie Cloud refuses to run ANY operation - including purely local
+  // reads/writes that have nothing to do with syncing - until it has a
+  // currently-valid auth token. Our service account's token expires
+  // roughly hourly and can only be refreshed by calling our own
+  // network-dependent endpoint, so requireAuth: true meant the entire
+  // local database froze solid the moment connectivity dropped, and
+  // stayed frozen until it came back - this is what caused serial
+  // numbers (and everything else) to appear to "reset" while offline.
+  requireAuth: false,
   nameSuffix: false,
   // Custom auth: rather than Dexie Cloud's own email-OTP login screen,
   // every device silently authenticates as the same shared service
@@ -604,6 +613,19 @@ db.cloud.configure({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tokenParams),
     }).then((res) => res.json()),
+})
+
+// With requireAuth false, Dexie Cloud won't automatically try to
+// authenticate on its own - this proactively kicks off the login
+// (needed so writes can actually sync once a connection exists)
+// whenever the app starts. Deliberately fire-and-forget: not awaited,
+// and any failure (e.g. no network at all) is swallowed here rather
+// than surfaced - the app must keep working fully offline regardless
+// of whether this succeeds, fails, or is still in progress.
+db.cloud.login().catch(() => {
+  // Offline at startup, or the endpoint is temporarily unreachable -
+  // this is expected and fine. Dexie Cloud will retry on its own once
+  // connectivity returns; local reads/writes are never affected.
 })
 
 // TEMPORARY DIAGNOSTIC LOGGING - added specifically to investigate two

@@ -555,9 +555,9 @@ function StockFormBase({ type, title, onClose, prefill }) {
       tx.mtsSackTypeId && tx.mtsCondition ? `${tx.mtsSackTypeId}::${tx.mtsCondition}` : ''
     )
     setNumberOfBags(tx.numberOfBags != null ? liveFormatNumber(String(tx.numberOfBags)) : '')
-    setGrossKilos(tx.grossKilos != null ? liveFormatNumber(String(tx.grossKilos)) : '')
+    setGrossKilos(tx.grossKilos != null ? liveFormatNumber(String(tx.grossKilos), 3) : '')
     setAutoComputeNet(tx.autoComputeNet ?? true)
-    setManualNetKilos(tx.autoComputeNet ? '' : liveFormatNumber(String(tx.netKilos ?? '')))
+    setManualNetKilos(tx.autoComputeNet ? '' : liveFormatNumber(String(tx.netKilos ?? ''), 3))
     setAgeValue(tx.ageValue != null ? liveFormatNumber(String(tx.ageValue)) : '')
     setAgeUnit(tx.ageUnit ?? 'Days')
     if (tx.ageUnit === 'Months + Days' && tx.initialAgeValue != null) {

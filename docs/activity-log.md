@@ -4428,3 +4428,68 @@ below.
   being ahead of a stale tracker (confirming reconciliation never
   regresses), and recordSerialUsed's never-move-backwards guard.
 - Re-verified all 59 .jsx files with the real parser.
+
+## CRITICAL FIX: requireAuth was breaking offline-first behavior entirely
+
+- Found the actual cause of "serial number reverts to 1 when offline,
+  and stays reverted even after reconnecting": requireAuth: true (set
+  when the custom fetchTokens auth was wired up) makes Dexie Cloud
+  block EVERY database operation - including purely local reads and
+  writes that have nothing to do with syncing - until a currently-valid
+  auth token is available. Our service account's token expires roughly
+  hourly and can only refresh via a network call to our own endpoint,
+  so any connectivity loss froze the ENTIRE local database solid until
+  reconnection - this is the exact opposite of offline-first, and
+  likely explains a wide range of "the app seems to forget things when
+  offline" symptoms beyond just serial numbers.
+- Fixed: requireAuth is now false (correct for an offline-first app),
+  with an explicit, deliberately non-blocking background db.cloud.login()
+  call added right after configure() - this proactively attempts
+  authentication (needed for sync/write permissions) whenever a
+  connection exists, but a failure or slow attempt (e.g. genuinely
+  offline at startup) is silently swallowed and never blocks or delays
+  the app, which must keep working fully offline regardless.
+
+## CRITICAL FIX: StockFormBase's Gross Kilos reverted to 2 decimals when navigating back to an existing serial
+
+- Confirmed and fixed the exact bug reported: loadTransactionIntoForm
+  (the function that runs when navigating to an existing serial via
+  the stepper or direct entry) called liveFormatNumber on grossKilos
+  and the manual netKilos override WITHOUT the `, 3` argument added
+  earlier in this session - silently reformatting a correctly-saved
+  3-decimal value down to 2 decimals the moment the form was reopened.
+  If the user then touched anything else on the form, the now-truncated
+  Gross Kilos would cascade into a wrong Net Kilos and Net Bags,
+  corrupting data that was originally entered correctly. Fixed both
+  call sites to explicitly request 3 decimals, matching the actual
+  precision rule everywhere else.
+- Verified with a 3-case test confirming a 3-decimal value now survives
+  the full load-and-redisplay cycle intact.
+- Re-verified all 59 .jsx files with the real parser.
+
+## Massive pilot-testing feedback backlog logged in full
+
+- Received one very large, multi-part feedback message covering roughly
+  28 distinct items after real pilot testing, ranging from critical
+  data-integrity bugs (MTS sack blank on navigation, Sheets-only serial
+  numbers not recognized by the app, duplicate Authority numbers,
+  pending-AI-list wrongly scoped by variety instead of warehouse,
+  per-cereal-type serial series, unclear hard-limit error source,
+  SIA not auto-filling ESI, AI completion tolerance, Age not syncing to
+  Sheets) through high-priority workflow gaps (OR# field, pile-number
+  data trapped in the wrong column, new roles, AI net-bags display,
+  pile-layout update bug, Date Received/Procured label logic, pile
+  layout full-view-on-mobile requirement, StockFormBase title size,
+  Procurement-bags-without-SIA reminder, customer list edit ability,
+  Test Milling trial selector, Milling batch number, a cross-warehouse
+  Milling/Test-Milling monitor) down to lower-priority polish (custom
+  date picker everywhere, several admin/visitor home card refinements,
+  a layout overflow report, By-Products color treatment).
+- Given the sheer scope, logged the ENTIRE list in full detail in
+  handoff.md under a new prioritized backlog section (critical /
+  high-priority / lower-priority tiers, each numbered), specifically so
+  none of it gets lost regardless of how many future sessions it takes
+  to work through - per explicit request. Only the two items above
+  (requireAuth, StockFormBase Gross Kilos on navigation) were actually
+  fixed and verified in this same pass; everything else in the list is
+  logged but NOT yet started.

@@ -514,6 +514,213 @@ re-reading the actual discussion.
   URL - corrected.
 
 ## In Progress / Not Yet Done
+
+### MASSIVE BACKLOG FROM PILOT TESTING FEEDBACK (2026-07-30) - work through in this priority order
+
+This was a single very large feedback message after real pilot testing.
+Two items were already fixed at the time of writing (see activity-log
+for full detail): (1) the requireAuth: true bug that froze the entire
+local database offline - now false, with a non-blocking background
+db.cloud.login() call added; (2) the confirmed StockFormBase bug where
+navigating back to an existing serial reformatted Gross Kilos (and the
+manual Net Kilos override) to 2 decimals via a missing `, 3` argument to
+liveFormatNumber, silently discarding real saved precision and
+cascading into wrong Net Kilos/Net Bags on any subsequent edit.
+
+**CRITICAL / DATA-INTEGRITY BUGS (fix first, actively corrupting or
+risking real data):**
+
+1. MTS Sack Code & Condition sometimes shows blank when navigating back
+   to an existing serial via StockFormBase, even though the underlying
+   saved value (mtsSackTypeId/mtsCondition) is correct and the field
+   names match what's saved. Investigated: there's already a documented
+   fallback in the sackOptions computation (re-adds the current
+   selection if the category filter would otherwise exclude it), but
+   couldn't confirm from static review why it might still fail live -
+   needs live reproduction/debugging. Candidate causes to check: sackTypes
+   loading asynchronously (useLiveQuery) and not yet resolved at the
+   moment of first render with a loaded transaction; the referenced
+   sackTypeId no longer existing if a sack type was renamed/deleted since
+   the transaction was saved.
+
+2. Serial numbers that exist in the Google Sheets backup but were never
+   entered on the web app itself (e.g. entered by another means, or from
+   before the app existed) show as blank / have no autofill data when
+   navigated to - risk of accidental duplicate serial/transaction
+   creation, since the app doesn't recognize the Sheet already has that
+   serial's data. Needs a mechanism to recognize and surface
+   Sheets-only historical data as real, loadable records (not just
+   syncing new local writes outward) - likely needs a pull-based import
+   path from the Sheet's existing schema.
+
+3. Duplicate Authority numbers can occur: if the Sheet is used to update
+   an authority, instead of it syncing as an update, it can add a
+   second authority row with the same number and different data.
+   Authority number must be the unique source of truth - needs a
+   "last modified" timestamp-based conflict resolution so the app
+   always ends up with one authoritative, most-recent record per
+   authority number, never a duplicate.
+
+4. Pending AI list, when selecting a pending AI, is currently
+   (incorrectly) restricted by variety - it should show ALL pending AIs
+   for the user's assigned warehouse(s), regardless of variety. If the
+   selected AI has a different variety than whatever was previously
+   selected, the pile selection should reset and the variety should
+   update to match the AI's actual variety - not the other way around.
+
+5. Cereal-type-specific serial series: apparently each warehouse keeps a
+   genuinely SEPARATE serial series per cereal type (Rice, Palay,
+   By-Products) - not one shared series per (warehouse, document type)
+   as currently implemented. StockFormBase needs a tab/selector for
+   Rice / Palay / By-Products, each maintaining its own independent
+   series, so switching between them doesn't disrupt continuity for
+   either. This is a significant change to the serial-number and
+   possibly the schema/keying model (serialCounters is currently keyed
+   [warehouseId+type] - would need to become
+   [warehouseId+type+cerealCategory] or similar).
+
+6. Hard-limit error clarity: when a transaction is blocked by a limit,
+   the inline error currently doesn't make clear WHICH limit is actually
+   binding - the authority's remaining balance, or the specific pile's
+   available stock. Confirmed real confusion case: authority had
+   10,000.000 net kgs remaining, pile only had 20.000 net kgs, and the
+   shown error just said "20.000 net kg limit" with no indication it
+   was the pile, not the authority, causing hours of user confusion.
+   Must always explicitly state which of the two is the actual
+   constraint.
+
+7. SIA does not auto-fill the ESI form when selected from the pending
+   list, unlike how StockFormBase's AI-picker auto-fills its form. The
+   SIA number does end up correctly placed in the input box (and the
+   balance is correctly recognized once the rest is filled manually),
+   but none of the other fields populate automatically - needs to match
+   StockFormBase's existing auto-fill behavior.
+
+8. AI/authority "complete" status: if actual net kgs issued exceeds the
+   authorized amount by 0.01 or more (small overage), it should still
+   be marked Complete rather than left in a Pending/partial state.
+
+9. Age is not currently synced to Google Sheets at all - suspected cause:
+   the sheet has no way to represent a day-based vs month-based age (the
+   local schema stores ageUnit + ageValue, but Sheets only sees a number
+   with no unit context). Needs: (a) a new "Age Unit" column added to the
+   relevant Sheet(s) alongside the existing age number column, (b) the
+   Apps Script updated to write both, (c) a ONE-TIME backfill of the
+   already-recorded age data from the app's own database into the
+   existing Sheet rows, so the user does not have to re-encode anything
+   manually to fix historical rows.
+
+**HIGH PRIORITY (real workflow/UX bugs, not silently corrupting data
+but actively blocking or confusing real usage):**
+
+10. OR# (Official Receipt number) input needed for Sales transactions -
+    optional field, but must be shown wherever relevant (reports, etc.)
+    once entered.
+
+11. For Milling / Test Milling AI transactions specifically, the pile
+    number (e.g. "Pile 1", "Pile 2B") is currently being entered into
+    the OR# column/field - needs its own proper, correctly-labeled
+    field/column instead of being crammed into OR#.
+
+12. New user roles needed: Acting Warehouse Supervisor, Acting Warehouse
+    Assistant, MPO III (Mechanical Plant Operator III), Acting MPO III.
+
+13. AI balance displays should also show the balance in net bags, not
+    only net kgs.
+
+14. Pile layout "Create Pile" card does not update everything correctly
+    when the user edits/updates an existing pile via that card -
+    some fields silently fail to refresh/save. Needs investigation.
+
+15. "Date Procured" label should read "Date Received" specifically when
+    the cereal type is Rice, and stay "Date Procured" for Palay - applies
+    everywhere this label appears: pile details display, exported PDF,
+    AND the create-pile-layout card.
+
+16. Pile layout tab must always show the FULL layout in view on any
+    screen size, including small phones - no panning/scrolling needed to
+    see the whole grid (the existing tap/hover-for-details mechanism is
+    specifically meant to substitute for needing to scroll around).
+    Despite fitting everything on screen, pile name text within each box
+    must still stay large enough to read clearly.
+
+17. StockFormBase's form title (currently probably small/subtle) needs
+    to be visually larger/more prominent, so the user has no doubt
+    whether they're on a WSR, WSI, ESR, ESI, or WTS form.
+
+18. StockFormBase "Confirmation of transaction is Procurement" case:
+    store the number of bags used for every Procurement transaction, and
+    show a running total on the user's home page (between the stock
+    overview and monitor overview sections), styled in amber and clearly
+    noticeable. This is meant to remind the user that Procurement bags
+    don't yet have a corresponding SIA. Once an ESI transaction is made
+    using an SIA whose issued bags match the recorded Procurement bag
+    count, the notification should clear. If the SIA's piece count is
+    either MORE or LESS than the actual Procurement bag count, warn the
+    user clearly either way (over or under) - ask the user for
+    clarification on exact wording/thresholds if this is ambiguous when
+    building it.
+
+19. Admin ability to edit (and delete) the customer list is needed -
+    currently customers can apparently only be added, not edited/removed.
+
+20. Test Milling transactions need a Trial selector (Trial 1/2/3) that
+    prevents duplicate trial entries - once Trial 1 has data, only
+    Trial 2 and 3 should remain selectable, etc. Each Test Milling also
+    has its own Test Milling Order (TMO) number, sourced from a sheet
+    named "TMO" - can be clarified/refined later.
+
+21. Milling transactions need a Batch Number selector, sourced from a
+    sheet named "MO" - can be clarified/refined later.
+
+22. Test Milling and Milling need their own dedicated monitor, visible to
+    ALL users (not scoped to assigned warehouse like everything else) -
+    both on Admin/Visitor pages and regular user pages. Rationale: palay
+    might be issued from Warehouse 1 but rice recovery received at
+    Warehouse 2 (and sacks can be shuffled between warehouses by the
+    miller too) - this monitor is meant to give every user visibility
+    into the full picture regardless of which warehouse they're
+    assigned to, so e.g. Warehouse 1 knows Warehouse 2 already received
+    the recovery and can issue the next batch. NFA-owned Ricemills/
+    Mechanical Dryers follow a different rule (no TMO/MO number) but
+    still need to be represented in this same monitor somehow - explore
+    later.
+
+**LOWER PRIORITY / POLISH (can wait, but keep in the backlog):**
+
+23. Use the custom CalendarDatePicker for every remaining native date
+    input still in the app (sweep for any leftover <input type="date">).
+
+24. Admin/visitor home, "Stock Breakdown - Warehouse & Category" card:
+    larger warehouse name in clearer white; Rice/Palay labels+values
+    should get the same blue/green color treatment used elsewhere;
+    remove the duplicated "ALB-" - currently showing "ALB . ALB-ABACORP"
+    (double prefix) - should read "ALB . ABACORP"; make the Rice/Palay
+    values themselves bigger for readability, since this card's values
+    specifically don't risk overflow.
+
+25. Admin/Visitor home, "Net Bags by Province & Category" card: add a
+    branch total below it (Rice + Palay only, explicitly excluding
+    By-Products).
+
+26. General layout adjustment needed - bottom nav or some part of the
+    app is described as "almost falling out of the display" on the
+    admin/visitor home page - needs investigation on the actual device.
+
+27. By-Products needs its own consistent color treatment across the app:
+    hex #F2B949, same treatment as the Rice (blue) / Palay (green)
+    colors.
+
+28. Icons/pages sizing sweep - continue checking for any remaining
+    small touch targets not yet caught by the earlier mobile sizing
+    sweep.
+
+Given the sheer size of this list, work through it roughly in the
+numbered order above within each priority tier, verifying and shipping
+incrementally rather than attempting everything in one pass - this
+mirrors how every fix in this project has been handled so far (small
+verified batches, not large unverified ones).
+
 1. CORRECTION to earlier tracking: startAuthoritySyncWorker()
    (src/services/syncWorker.js) already exists and is wired into
    App.jsx - runs on app load, every 5 minutes, and on reconnect. This
