@@ -4642,3 +4642,47 @@ below.
   been reverted - not yet updated.
 - Form entrance/exit animation for the three transaction forms
   themselves - not yet implemented.
+
+## Google Sheets CANCELLED text, PDF report was silently excluding cancelled documents, Authority list imbalance fixed
+
+- Found and fixed the actual reason cancelled documents never appeared
+  in exported PDF reports: Reports.jsx's statement-period queries
+  explicitly filtered to `status === 'Active'` only, excluding Cancelled
+  transactions before they ever reached the row-building code (where
+  the earlier "CANCELLED" display fix lives) - they were being filtered
+  out upstream, never actually reaching that code at all. Fixed the two
+  visible-row queries to include both Active and Cancelled. Deliberately
+  left the two separate beginning-balance queries as Active-only, since
+  those compute carried-forward totals and a cancelled document has no
+  real quantity that should contribute to any sum.
+- Google Sheets sync: added the same CANCELLED substitution to the
+  'Customer Name' field sent to Sheets for WSR, WSI, and ESR/ESI (WTS
+  has no customer field at all, so needed no change) - previously only
+  the local PDF/report display showed this, not the actual data pushed
+  to the backup sheet.
+- Fixed the Authority list imbalance shown in the screenshot: the
+  issued/allocation values were rendered as one long combined line
+  ("70,000.000 kg / 129,950.000 kg"), and since that column never
+  shrinks, a long combined string could force the AI/SIA number itself
+  (the most important field) down to unreadable truncation. Restacked
+  each pair vertically (issued on top, allocation below, both much
+  shorter individually) instead of trying to fit both on one wide line
+  - this is the same "stack instead of cramming onto one line" pattern
+  already used successfully elsewhere in the app.
+- Verified with an 8-case test covering the Sheets CANCELLED
+  substitution, the report query correctly including Cancelled for
+  visible rows while correctly excluding it from beginning-balance sums,
+  and confirming the stacked line lengths are meaningfully shorter than
+  the old combined string that was causing the squeeze.
+- Re-verified all 59 .jsx files with the real parser.
+
+## STILL NOT DONE from the ongoing feedback (explicitly, so not mistaken for complete):
+- Pile layout PDF export text sizing (adaptive to box size/content,
+  fixing the too-small/too-sparse and inconsistent-across-boxes issues
+  shown in the two sample exports) - not yet started, this is a
+  substantial, separate visual design task.
+- Everything still pending from the prior round: SackFormBase/WTSForm
+  void redesign, navigation animation scope/speed, staggered field
+  cascade, CalendarDatePicker overflow (still reported happening),
+  sticky serial indicator timing, cancelled-state toast/banner wording,
+  form entrance/exit animation.

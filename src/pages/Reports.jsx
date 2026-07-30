@@ -81,7 +81,7 @@ function Reports() {
     if (!currentWarehouseId || !stmtFrom || !stmtTo) return []
     return db.transactions
       .where('warehouseId').equals(currentWarehouseId)
-      .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active' && !t.isInitialBalance && t.date >= stmtFrom && t.date <= stmtTo)
+      .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && (t.status === 'Active' || t.status === 'Cancelled') && !t.isInitialBalance && t.date >= stmtFrom && t.date <= stmtTo)
       .toArray()
   }, [currentWarehouseId, stmtFrom, stmtTo])
 
@@ -91,7 +91,7 @@ function Reports() {
     if (!currentWarehouseId || !stmtFrom || !stmtTo) return []
     return db.transactions
       .where('warehouseId').equals(currentWarehouseId)
-      .and((t) => ['ESR', 'ESI'].includes(t.type) && t.status === 'Active' && !t.isInitialBalance && t.date >= stmtFrom && t.date <= stmtTo)
+      .and((t) => ['ESR', 'ESI'].includes(t.type) && (t.status === 'Active' || t.status === 'Cancelled') && !t.isInitialBalance && t.date >= stmtFrom && t.date <= stmtTo)
       .toArray()
   }, [currentWarehouseId, stmtFrom, stmtTo])
 

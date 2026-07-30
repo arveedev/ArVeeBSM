@@ -248,16 +248,16 @@ function AuthorityMonitor() {
 
                 <div className="shrink-0 text-right">
                   {a.totalAllocationKilos != null && (
-                    <p className={`text-base font-semibold leading-tight ${progressColor}`}>
-                      {fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}
-                      <span className="text-neutral-500"> / {fmtWeight(a.totalAllocationKilos, weightUnit)}</span>
-                    </p>
+                    <div className={`leading-tight ${progressColor}`}>
+                      <p className="text-sm font-semibold">{fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}</p>
+                      <p className="text-xs text-neutral-500">/ {fmtWeight(a.totalAllocationKilos, weightUnit)}</p>
+                    </div>
                   )}
                   {totalAllocBags != null && (
-                    <p className={`text-base font-semibold leading-tight ${progressColor}`}>
-                      {fmtBags(totalIssuedBags ?? 0)}
-                      <span className="text-neutral-500"> / {fmtBags(totalAllocBags)} {unitLabel}</span>
-                    </p>
+                    <div className={`mt-1 leading-tight ${progressColor}`}>
+                      <p className="text-sm font-semibold">{fmtBags(totalIssuedBags ?? 0)}</p>
+                      <p className="text-xs text-neutral-500">/ {fmtBags(totalAllocBags)} {unitLabel}</p>
+                    </div>
                   )}
                 </div>
               </button>
