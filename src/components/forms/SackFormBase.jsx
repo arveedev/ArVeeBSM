@@ -25,7 +25,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { db } from '../../db/dexie.js'
 import {
@@ -71,6 +71,7 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [unresolvedSiaHint, setUnresolvedSiaHint] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
+  const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
@@ -340,7 +341,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (!loaded) resetToBlankEntry(nextSerial)
   }
 
-  const buildTransactionPayload = (overrides = {}) => (isCancelled ? {
+  const buildCancelledPayload = (overrides = {}) => ({
     type,
     serialNo: serialNo.trim(),
     status: 'Cancelled',
@@ -355,7 +356,9 @@ const SackFormBase = forwardRef(function SackFormBase(
     aiNumber: null,
     isSynced: false,
     ...overrides,
-  } : {
+  })
+
+  const buildTransactionPayload = (overrides = {}) => (isCancelled ? buildCancelledPayload(overrides) : {
     type,
     serialNo: serialNo.trim(),
     status: 'Active',
@@ -494,6 +497,47 @@ const SackFormBase = forwardRef(function SackFormBase(
     queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
+    const freedSerial = serialNo.trim()
+    resetToBlankEntry(freedSerial)
+    setIsSaving(false)
+  }
+
+  // Voiding bypasses the normal Save button - confirming immediately
+  // writes the Cancelled record, since a void document has no real
+  // data to validate. If an existing Active transaction had an SIA
+  // link, that balance is reversed first, since it no longer
+  // represents a real issuance.
+  const handleConfirmVoid = async () => {
+    setPendingVoidAction(null)
+    setIsSaving(true)
+    if (loadedTransaction && loadedTransaction.status !== 'Cancelled' && loadedTransaction.siaNumber) {
+      await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
+    }
+    const cancelledRecord = loadedTransaction
+      ? buildCancelledPayload({ id: loadedTransaction.id })
+      : { id: crypto.randomUUID(), ...buildCancelledPayload() }
+    if (loadedTransaction) {
+      await db.transactions.update(loadedTransaction.id, cancelledRecord)
+    } else {
+      await db.transactions.add(cancelledRecord)
+    }
+    await recordSerialUsed(type, currentWarehouseId, serialNo.trim())
+    setIsCancelled(true)
+    setLoadedTransaction(cancelledRecord)
+    toast.success(`${type} ${serialNo.trim()} has been cancelled/voided`)
+    setIsSaving(false)
+  }
+
+  // Un-voiding deletes the Cancelled record entirely, making the
+  // serial genuinely available again rather than leaving behind an
+  // incomplete "Active" record that would fail validation.
+  const handleConfirmUnvoid = async () => {
+    setPendingVoidAction(null)
+    if (!loadedTransaction) { setIsCancelled(false); return }
+    setIsSaving(true)
+    await db.transactions.delete(loadedTransaction.id)
+    queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
+    toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
     setIsSaving(false)
@@ -764,12 +808,12 @@ const SackFormBase = forwardRef(function SackFormBase(
           </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm font-semibold text-brand-crimson">
+          <label className="flex items-center justify-center gap-2 py-1 text-base font-semibold text-brand-crimson">
             <input
               type="checkbox"
               checked={isCancelled}
-              onChange={(e) => setIsCancelled(e.target.checked)}
-              className="h-5 w-5 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
+              onChange={(e) => setPendingVoidAction(e.target.checked ? 'void' : 'unvoid')}
+              className="h-7 w-7 shrink-0 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
             />
             Cancelled
           </label>
@@ -824,6 +868,27 @@ const SackFormBase = forwardRef(function SackFormBase(
         description="This reverses any linked SIA balance and frees this serial number. This cannot be undone."
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingVoidAction === 'void'}
+        icon={AlertTriangle}
+        title={`Void ${type} #${serialNo.trim()}?`}
+        description="This immediately marks the series as cancelled - no data required, and no need to press Save."
+        confirmLabel="Void"
+        onConfirm={handleConfirmVoid}
+        onCancel={() => setPendingVoidAction(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingVoidAction === 'unvoid'}
+        icon={AlertTriangle}
+        title={`Make ${type} #${serialNo.trim()} available again?`}
+        description="This removes the cancelled marker entirely, so the serial is free for a fresh entry."
+        confirmLabel="Yes"
+        cancelLabel="No"
+        onConfirm={handleConfirmUnvoid}
+        onCancel={() => setPendingVoidAction(null)}
       />
 
       {showAuthorityPicker && currentWarehouseId && (

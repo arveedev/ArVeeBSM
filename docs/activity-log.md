@@ -4686,3 +4686,35 @@ below.
   cascade, CalendarDatePicker overflow (still reported happening),
   sticky serial indicator timing, cancelled-state toast/banner wording,
   form entrance/exit animation.
+
+## Cereal category preserved on cancelled records for correct report grouping, void/un-void redesign replicated to SackFormBase and WTSForm
+
+- StockFormBase's buildCancelledPayload now preserves cerealCategory
+  (derived from whatever variety is currently selected at the moment of
+  cancellation) - a deliberate, narrow exception to the "blank
+  everything else" rule, needed so a cancelled document still shows
+  under its correct Rice/Palay section in reports instead of an
+  "Unknown" catch-all. Reports.jsx's enrichStock now prefers this
+  stored value over the normal variety-lookup derivation (which would
+  otherwise resolve to Unknown, since a cancelled record's varietyId is
+  null). Acknowledged limitation: if a serial is voided before any
+  variety was ever selected, it still falls back to Unknown - proper
+  resolution is the planned per-cereal-type series tabs, where the
+  category will be known unambiguously from which tab is active.
+- Replicated the full void/un-void confirmation-modal redesign to
+  SackFormBase.jsx and WTSForm.jsx, matching StockFormBase exactly:
+  checking Cancelled shows a "Void #___?" confirmation that immediately
+  writes the record (no Save needed); unchecking shows a Yes/No
+  "available again?" confirmation that deletes the record entirely
+  rather than leaving an incomplete Active record; the checkbox is
+  centered and enlarged in both.
+  - SackFormBase: voiding an existing Active transaction reverses its
+    SIA balance if linked (sacks have no running inventory field to
+    reverse, since availability is computed live from history).
+  - WTSForm: voiding an existing Active transaction reverses both
+    sides' pile effects via the existing reverseWtsFromPiles function.
+- Verified with a 12-case test covering both forms' reversal-only-when-
+  previously-Active guards (including the SIA-link-specific condition
+  for sacks), and the cereal-category preservation/report-enrichment
+  logic in both directions.
+- Re-verified all 59 .jsx files with the real parser.

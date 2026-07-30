@@ -643,6 +643,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
     status: 'Cancelled',
     date,
     warehouseId: currentWarehouseId,
+    // Deliberately preserved (unlike every other field below) so a
+    // cancelled document still shows under its correct Rice/Palay
+    // section in reports, instead of an "Unknown" catch-all - this is
+    // an interim fix ahead of the planned per-cereal-type series tabs,
+    // where the cereal category will be known unambiguously from
+    // which tab is active rather than needing this fallback at all.
+    cerealCategory: selectedVariety?.category ?? null,
     linkedDocNo: null,
     aiNumber: null,
     customerName: null,

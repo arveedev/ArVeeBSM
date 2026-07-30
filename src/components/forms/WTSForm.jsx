@@ -24,7 +24,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
@@ -175,6 +175,7 @@ function WTSForm({ onClose, prefill }) {
   const [pendingDelete, setPendingDelete] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
+  const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
@@ -320,36 +321,38 @@ function WTSForm({ onClose, prefill }) {
     if (!loaded) resetForm(next)
   }
 
+  const buildCancelledPayload = (overrides = {}) => ({
+    type: 'WTS',
+    serialNo: serialNo.trim(),
+    status: 'Cancelled',
+    date,
+    warehouseId: currentWarehouseId,
+    aiNumber: null,
+    transactionTypeId: null,
+    moistureContent: null,
+    issuedPileId: null,
+    issuedVarietyId: null,
+    issuedSackTypeId: null,
+    issuedCondition: null,
+    issuedBags: null,
+    issuedGrossKilos: null,
+    issuedNetKilos: null,
+    issuedStockCondition: null,
+    receivedPileId: null,
+    receivedVarietyId: null,
+    receivedSackTypeId: null,
+    receivedCondition: null,
+    receivedBags: null,
+    receivedGrossKilos: null,
+    receivedNetKilos: null,
+    receivedStockCondition: null,
+    isSynced: false,
+    ...overrides,
+  })
+
   const buildPayload = (overrides = {}) => {
     if (isCancelled) {
-      return {
-        type: 'WTS',
-        serialNo: serialNo.trim(),
-        status: 'Cancelled',
-        date,
-        warehouseId: currentWarehouseId,
-        aiNumber: null,
-        transactionTypeId: null,
-        moistureContent: null,
-        issuedPileId: null,
-        issuedVarietyId: null,
-        issuedSackTypeId: null,
-        issuedCondition: null,
-        issuedBags: null,
-        issuedGrossKilos: null,
-        issuedNetKilos: null,
-        issuedStockCondition: null,
-        receivedPileId: null,
-        receivedVarietyId: null,
-        receivedSackTypeId: null,
-        receivedCondition: null,
-        receivedBags: null,
-        receivedGrossKilos: null,
-        receivedNetKilos: null,
-        receivedStockCondition: null,
-        isSynced: false,
-        ...overrides,
-      }
+      return buildCancelledPayload(overrides)
     }
     const issuedNetKilos = computeSideNetKilos(issuedSide, sackTypeMap)
     const receivedNetKilos = computeSideNetKilos(receivedSide, sackTypeMap)
@@ -500,6 +503,43 @@ function WTSForm({ onClose, prefill }) {
     setIsSaving(false)
   }
 
+  // Voiding bypasses the normal Save button - confirming immediately
+  // writes the Cancelled record. If an existing Active transaction is
+  // being voided, both sides' prior pile effects are reversed first,
+  // since it no longer represents a real transfer.
+  const handleConfirmVoid = async () => {
+    setPendingVoidAction(null)
+    setIsSaving(true)
+    if (loadedTransaction && loadedTransaction.status !== 'Cancelled') {
+      await reverseWtsFromPiles(loadedTransaction)
+    }
+    const cancelledRecord = loadedTransaction
+      ? buildCancelledPayload({ id: loadedTransaction.id })
+      : { id: crypto.randomUUID(), ...buildCancelledPayload() }
+    if (loadedTransaction) {
+      await db.transactions.update(loadedTransaction.id, cancelledRecord)
+    } else {
+      await db.transactions.add(cancelledRecord)
+    }
+    await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim())
+    setIsCancelled(true)
+    setLoadedTransaction(cancelledRecord)
+    toast.success(`WTS ${serialNo.trim()} has been cancelled/voided`)
+    setIsSaving(false)
+  }
+
+  // Un-voiding deletes the Cancelled record entirely, making the
+  // serial genuinely available again.
+  const handleConfirmUnvoid = async () => {
+    setPendingVoidAction(null)
+    if (!loadedTransaction) { setIsCancelled(false); return }
+    setIsSaving(true)
+    await db.transactions.delete(loadedTransaction.id)
+    toast.success(`WTS ${serialNo.trim()} is no longer cancelled — available again`)
+    resetForm(serialNo.trim())
+    setIsSaving(false)
+  }
+
   const isEditMode = Boolean(loadedTransaction)
 
   return (
@@ -610,12 +650,12 @@ function WTSForm({ onClose, prefill }) {
         />
         </div>
 
-        <label className="flex items-center gap-2 text-sm font-semibold text-brand-crimson">
+        <label className="flex items-center justify-center gap-2 py-1 text-base font-semibold text-brand-crimson">
           <input
             type="checkbox"
             checked={isCancelled}
-            onChange={(e) => setIsCancelled(e.target.checked)}
-            className="h-5 w-5 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
+            onChange={(e) => setPendingVoidAction(e.target.checked ? 'void' : 'unvoid')}
+            className="h-7 w-7 shrink-0 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
           />
           Cancelled
         </label>
@@ -661,6 +701,27 @@ function WTSForm({ onClose, prefill }) {
         description="This reverses its effect on both piles' totals. This cannot be undone."
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingVoidAction === 'void'}
+        icon={AlertTriangle}
+        title={`Void WTS #${serialNo.trim()}?`}
+        description="This immediately marks the series as cancelled - no data required, and no need to press Save."
+        confirmLabel="Void"
+        onConfirm={handleConfirmVoid}
+        onCancel={() => setPendingVoidAction(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingVoidAction === 'unvoid'}
+        icon={AlertTriangle}
+        title={`Make WTS #${serialNo.trim()} available again?`}
+        description="This removes the cancelled marker entirely, so the serial is free for a fresh entry."
+        confirmLabel="Yes"
+        cancelLabel="No"
+        onConfirm={handleConfirmUnvoid}
+        onCancel={() => setPendingVoidAction(null)}
       />
     </div>
   )

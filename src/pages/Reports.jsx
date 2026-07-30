@@ -98,7 +98,7 @@ function Reports() {
   const enrichStock = (t) => ({
     ...t,
     varietyName: varietyMap.get(t.varietyId)?.name ?? '',
-    cerealCategory: varietyMap.get(t.varietyId)?.category ?? 'Unknown',
+    cerealCategory: t.cerealCategory ?? varietyMap.get(t.varietyId)?.category ?? 'Unknown',
     transactionTypeName: txTypeMap.get(t.transactionTypeId)?.name ?? '',
   })
 
