@@ -4984,3 +4984,49 @@ below.
 - Re-verified all 60 .jsx files with the real parser (59 existing +
   the new AnimatedBanner.jsx), and confirmed index.css's braces remain
   balanced after the animation timing edits.
+
+## CRITICAL FIX: race condition in serial navigation causing "jumping"/wrong-data during rapid navigation, especially on WSR
+
+- Diagnosed the WSR-specific symptoms (slow, sometimes wrong data
+  shown, no console errors) as a genuine race condition, not a
+  failure: checkAndLoadSerial had NO guard against out-of-order async
+  resolution. If a user navigates rapidly (multiple quick steps/types
+  before a slower lookup resolves - especially a Sheet lookup for a
+  serial not found locally, which takes noticeably longer the larger
+  the sheet is, and WSR's DATA_ENTRY sheet is plausibly the largest/
+  busiest of all four), overlapping requests can resolve in ANY order.
+  Without a guard, whichever one happens to finish LAST wins and
+  overwrites the form - even if the user has already moved on to a
+  completely different serial. This explains "no error logged" (the
+  requests aren't failing, they're just slow and unordered) and
+  "sometimes jumps series / shows different data" precisely.
+- Added a request-token guard (latestRequestedSerial ref) to all three
+  forms: every call to checkAndLoadSerial records itself as "the
+  latest request," and every point where it would apply a result
+  (loading a found record, importing a Sheet row, clearing the form
+  when nothing is found) first checks whether it's still the latest
+  request - a stale/superseded result is discarded entirely rather
+  than applied. Extended this same guard into the CALLERS
+  (handleSerialChange, handleStepForward) too, since their own
+  resetToBlankEntry/resetForm fallback calls had the identical
+  vulnerability one level up.
+- Added a visible loading indicator (spinner + "Looking up serial…")
+  next to the serial field in StockFormBase and SackFormBase, replacing
+  the static helper text while a lookup is in flight - so a genuinely
+  slow lookup (e.g. for WSR) reads as "working" rather than
+  "unresponsive/broken." Only the request that currently owns the
+  latest token clears the indicator, so a stale request finishing
+  doesn't prematurely hide it while a newer one is still working.
+- Verified with an 8-case test built directly around the reported
+  race scenario (three overlapping requests resolving out of the
+  order they were started, confirming only the genuinely-current one
+  is ever applied), plus the caller-level reset guard and the loading-
+  indicator ownership logic.
+- Re-verified all 60 .jsx files with the real parser.
+- NOTE: this fixes the data-correctness symptom (wrong/jumping data)
+  directly and with high confidence. It does NOT by itself fix
+  underlying slowness for a genuinely very large sheet like WSR's - if
+  the floor/lookup is still consistently slow or failing specifically
+  for WSR after this fix, the new console.error logging added
+  previously (fetchSerialFloorFromSheet / fetchTransactionBySerial)
+  should now actually surface why on the next reproduction attempt.

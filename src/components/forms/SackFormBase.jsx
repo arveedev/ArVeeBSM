@@ -352,35 +352,48 @@ const SackFormBase = forwardRef(function SackFormBase(
     setSackLines([emptySackLine()])
   }
 
+  const latestRequestedSerial = useRef(null)
+  const [isLookingUp, setIsLookingUp] = useState(false)
+
   const checkAndLoadSerial = async (serial) => {
     if (!currentWarehouseId) return false
-    const existing = await findTransactionBySerial(type, currentWarehouseId, serial)
-    if (existing) {
-      loadTransactionIntoForm(existing)
-      return true
-    }
-
-    // Not found locally - check the Sheet before treating this serial as genuinely blank.
-    const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
-    if (sheetResult.ok && sheetResult.row) {
-      const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId })
-      await db.transactions.add(imported)
-      await recordSerialUsed(type, currentWarehouseId, serial)
-      loadTransactionIntoForm(imported)
-      if (imported.needsCompletion) {
-        toast('Pulled from historical Sheet data - the sack breakdown by type/condition was not tracked there and needs to be entered before saving further changes.', { icon: '📋', duration: 6000 })
+    latestRequestedSerial.current = serial
+    setIsLookingUp(true)
+    try {
+      const existing = await findTransactionBySerial(type, currentWarehouseId, serial)
+      if (latestRequestedSerial.current !== serial) return false
+      if (existing) {
+        loadTransactionIntoForm(existing)
+        return true
       }
-      return true
-    }
 
-    if (loadedTransaction) setLoadedTransaction(null)
-    return false
+      // Not found locally - check the Sheet before treating this serial as genuinely blank.
+      const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+      if (latestRequestedSerial.current !== serial) return false
+      if (sheetResult.ok && sheetResult.row) {
+        const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId })
+        await db.transactions.add(imported)
+        await recordSerialUsed(type, currentWarehouseId, serial)
+        if (latestRequestedSerial.current !== serial) return false
+        loadTransactionIntoForm(imported)
+        if (imported.needsCompletion) {
+          toast('Pulled from historical Sheet data - the sack breakdown by type/condition was not tracked there and needs to be entered before saving further changes.', { icon: '📋', duration: 6000 })
+        }
+        return true
+      }
+
+      if (latestRequestedSerial.current !== serial) return false
+      if (loadedTransaction) setLoadedTransaction(null)
+      return false
+    } finally {
+      if (latestRequestedSerial.current === serial) setIsLookingUp(false)
+    }
   }
 
   const handleSerialChange = async (value) => {
     setSerialNo(value)
     const loaded = await checkAndLoadSerial(value)
-    if (!loaded && value.trim()) resetToBlankEntry(value)
+    if (!loaded && value.trim() && latestRequestedSerial.current === value) resetToBlankEntry(value)
   }
 
   const handleSerialBlur = () => {
@@ -416,7 +429,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
-    if (!loaded) resetToBlankEntry(nextSerial)
+    if (!loaded && latestRequestedSerial.current === nextSerial) resetToBlankEntry(nextSerial)
   }
 
   const buildCancelledPayload = (overrides = {}) => ({
@@ -725,7 +738,14 @@ const SackFormBase = forwardRef(function SackFormBase(
               </button>
             </div>
             <p className="mt-1 text-xs text-neutral-500">
-              Type a serial directly to jump to it — existing data loads automatically.
+              {isLookingUp ? (
+                <span className="inline-flex items-center gap-1.5 text-brand-neon">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-neon border-t-transparent" />
+                  Looking up serial…
+                </span>
+              ) : (
+                'Type a serial directly to jump to it — existing data loads automatically.'
+              )}
             </p>
           </div>
 

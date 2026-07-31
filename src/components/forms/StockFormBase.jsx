@@ -658,44 +658,66 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   // Checks whether a given serial has existing data for this (type,
   // warehouse) and, if so, loads it. Returns true if it loaded something.
+  // Guards against a real race condition: if the user navigates
+  // rapidly (multiple quick step/type actions before a slower lookup
+  // - especially a Sheet lookup for a serial not found locally, which
+  // can take noticeably longer for a large sheet - has resolved),
+  // overlapping async calls can resolve out of order. Without this
+  // guard, whichever call happens to finish LAST wins and overwrites
+  // the form, even if the user has already moved on to a different
+  // serial - this is what caused navigation to sometimes "jump" or
+  // show a different serial's data than what's actually being viewed.
+  const latestRequestedSerial = useRef(null)
+  const [isLookingUp, setIsLookingUp] = useState(false)
+
   const checkAndLoadSerial = async (serial) => {
     if (!currentWarehouseId) return false
-    const existing = await findTransactionBySerial(type, currentWarehouseId, serial)
-    if (existing) {
-      loadTransactionIntoForm(existing)
-      return true
-    }
-
-    // Not found locally - that alone doesn't mean it never existed, so
-    // check the Sheet before treating this serial as genuinely blank.
-    const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
-    if (sheetResult.ok && sheetResult.row) {
-      const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), v.varietyId]))
-      const imported = mapSheetRowToTransaction(type, sheetResult.row, {
-        warehouseId: currentWarehouseId,
-        varietyByName,
-      })
-      await db.transactions.add(imported)
-      await recordSerialUsed(type, currentWarehouseId, serial)
-      loadTransactionIntoForm(imported)
-      if (imported.needsCompletion) {
-        toast('Pulled from historical Sheet data - Pile and MTS Sack need to be filled in before saving further changes.', { icon: '📋', duration: 6000 })
+    latestRequestedSerial.current = serial
+    setIsLookingUp(true)
+    try {
+      const existing = await findTransactionBySerial(type, currentWarehouseId, serial)
+      if (latestRequestedSerial.current !== serial) return false // superseded by a newer request - discard this stale result
+      if (existing) {
+        loadTransactionIntoForm(existing)
+        return true
       }
-      return true
-    }
 
-    if (loadedTransaction) {
-      // Stepped/typed away from the loaded entry onto a blank serial —
-      // return to normal new-entry mode.
-      setLoadedTransaction(null)
+      // Not found locally - that alone doesn't mean it never existed, so
+      // check the Sheet before treating this serial as genuinely blank.
+      const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+      if (latestRequestedSerial.current !== serial) return false // superseded - discard
+      if (sheetResult.ok && sheetResult.row) {
+        const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), v.varietyId]))
+        const imported = mapSheetRowToTransaction(type, sheetResult.row, {
+          warehouseId: currentWarehouseId,
+          varietyByName,
+        })
+        await db.transactions.add(imported)
+        await recordSerialUsed(type, currentWarehouseId, serial)
+        if (latestRequestedSerial.current !== serial) return false // superseded during the write - discard
+        loadTransactionIntoForm(imported)
+        if (imported.needsCompletion) {
+          toast('Pulled from historical Sheet data - Pile and MTS Sack need to be filled in before saving further changes.', { icon: '📋', duration: 6000 })
+        }
+        return true
+      }
+
+      if (latestRequestedSerial.current !== serial) return false // superseded - discard
+      if (loadedTransaction) {
+        // Stepped/typed away from the loaded entry onto a blank serial —
+        // return to normal new-entry mode.
+        setLoadedTransaction(null)
+      }
+      return false
+    } finally {
+      if (latestRequestedSerial.current === serial) setIsLookingUp(false)
     }
-    return false
   }
 
   const handleSerialChange = async (value) => {
     setSerialNo(value)
     const loaded = await checkAndLoadSerial(value)
-    if (!loaded && value.trim()) resetToBlankEntry(value)
+    if (!loaded && value.trim() && latestRequestedSerial.current === value) resetToBlankEntry(value)
   }
 
   // Checked on blur (not on every keystroke, which would interrupt
@@ -738,7 +760,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
-    if (!loaded) resetToBlankEntry(nextSerial)
+    if (!loaded && latestRequestedSerial.current === nextSerial) resetToBlankEntry(nextSerial)
   }
 
   const initialAgeDays = ageUnit === 'Months + Days'
@@ -1134,7 +1156,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
               </button>
             </div>
             <p className="mt-1 text-xs text-neutral-500">
-              Type a serial directly to jump to it — existing data loads automatically.
+              {isLookingUp ? (
+                <span className="inline-flex items-center gap-1.5 text-brand-neon">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-neon border-t-transparent" />
+                  Looking up serial…
+                </span>
+              ) : (
+                'Type a serial directly to jump to it — existing data loads automatically.'
+              )}
             </p>
           </div>
 

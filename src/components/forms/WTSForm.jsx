@@ -303,13 +303,18 @@ function WTSForm({ onClose, prefill }) {
     setReceivedSide(emptySide())
   }
 
+  const latestRequestedSerial = useRef(null)
+
   const checkAndLoadSerial = async (serial) => {
     if (!currentWarehouseId) return false
+    latestRequestedSerial.current = serial
     const existing = await findTransactionBySerial('WTS', currentWarehouseId, serial)
+    if (latestRequestedSerial.current !== serial) return false
     if (existing) {
       loadTransactionIntoForm(existing)
       return true
     }
+    if (latestRequestedSerial.current !== serial) return false
     if (loadedTransaction) setLoadedTransaction(null)
     return false
   }
@@ -317,7 +322,7 @@ function WTSForm({ onClose, prefill }) {
   const handleSerialChange = async (value) => {
     setSerialNo(value)
     const loaded = await checkAndLoadSerial(value)
-    if (!loaded && value.trim()) resetForm(value)
+    if (!loaded && value.trim() && latestRequestedSerial.current === value) resetForm(value)
   }
 
   const handleStepBack = async () => {
@@ -334,7 +339,7 @@ function WTSForm({ onClose, prefill }) {
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(next)
-    if (!loaded) resetForm(next)
+    if (!loaded && latestRequestedSerial.current === next) resetForm(next)
   }
 
   const buildCancelledPayload = (overrides = {}) => ({
