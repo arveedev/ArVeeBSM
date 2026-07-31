@@ -6,10 +6,35 @@
 // page load requires re-entering the PIN.
 
 import { createContext, useContext, useState } from 'react'
+import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { hashPin } from '../utils/pinHash.js'
+import { preloadTransactionsForUser } from '../services/transactionPreload.js'
 
 const AuthContext = createContext(null)
+
+// Fire-and-forget wrapper around preloadTransactionsForUser - login
+// itself must never wait on this, since preload can take a while for a
+// warehouse's first-ever pull. A single toast (fixed id, updates in
+// place rather than stacking a new one per warehouse/type step) gives
+// lightweight visibility without being intrusive. Any failure is
+// swallowed here (already logged to the console by the underlying
+// fetch functions) - the app must keep working normally either way,
+// since preload is a performance optimization, not a requirement.
+const runPreloadWithFeedback = async (user) => {
+  const toastId = 'transaction-preload'
+  try {
+    await preloadTransactionsForUser(user, {
+      onProgress: ({ warehouseName, type }) => {
+        toast.loading(`Preparing ${type} data for ${warehouseName}…`, { id: toastId })
+      },
+    })
+    toast.dismiss(toastId)
+  } catch (err) {
+    console.error('Transaction preload failed:', err)
+    toast.dismiss(toastId)
+  }
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
@@ -48,6 +73,7 @@ export const AuthProvider = ({ children }) => {
 
     if (match) {
       setUser(match)
+      runPreloadWithFeedback(match)
       return match
     }
 

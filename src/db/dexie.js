@@ -587,6 +587,17 @@ db.version(22).stores({
   }
 })
 
+// v23 - preloadState tracks whether a (warehouseId, type) combination
+// has had its full transaction history preloaded from the Sheet yet,
+// and when it was last checked - see transactionPreload.js. This is
+// what lets the app do a full pull only once per warehouse/type (the
+// first time it's actually used), and a lightweight "anything new
+// since last time" check on every login after that, instead of
+// re-pulling everything from scratch every time.
+db.version(23).stores({
+  preloadState: '[warehouseId+type], warehouseId, type',
+})
+
 db.cloud.configure({
   databaseUrl: 'https://z15dzktxq.dexie.cloud',
   // requireAuth MUST be false for an offline-first app. When true,

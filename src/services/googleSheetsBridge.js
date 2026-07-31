@@ -975,3 +975,55 @@ export const fetchSerialFloorFromSheet = async (type, warehouseName) => {
   }
   return { ok: true, min, max }
 }
+
+/**
+ * Bulk-fetches every row for a (type, list of warehouse names) across
+ * every configured sheet source, optionally only rows modified since a
+ * given timestamp. This is the core of preloading - pulling a user's
+ * assigned warehouse(s) worth of history in one pass at login, rather
+ * than looking up one serial at a time during navigation. Returns
+ * results per source so the caller can track per-source Last Modified
+ * watermarks independently.
+ */
+export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSince } = {}) => {
+  const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[type]
+  if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+  if (!warehouseNames || warehouseNames.length === 0) return { ok: true, bySource: [] }
+
+  const sources = await getAllSheetSources()
+  const bySource = []
+
+  for (const source of sources) {
+    const sheetName = source[sheetNameKey]
+    if (!sheetName) continue
+
+    const url = new URL(source.webAppUrl)
+    url.searchParams.set('action', 'fetchTransactionsBulk')
+    url.searchParams.set('sheet', sheetName)
+    url.searchParams.set('warehouseColumn', 'Warehouse Name')
+    url.searchParams.set('warehouseValues', warehouseNames.join(','))
+    if (modifiedSince) url.searchParams.set('modifiedSince', modifiedSince)
+
+    try {
+      const response = await fetch(url.toString())
+      if (!response.ok) {
+        console.error(`fetchTransactionsBulk: HTTP ${response.status} for ${type} on sheet "${sheetName}"`)
+        bySource.push({ sourceId: source.id, ok: false, rows: [] })
+        continue
+      }
+      const payload = await response.json()
+      if (payload.status === 'SUCCESS') {
+        bySource.push({ sourceId: source.id, ok: true, rows: payload.rows ?? [] })
+      } else {
+        console.error(`fetchTransactionsBulk: non-SUCCESS response for ${type} on sheet "${sheetName}":`, payload)
+        bySource.push({ sourceId: source.id, ok: false, rows: [] })
+      }
+    } catch (err) {
+      console.error(`fetchTransactionsBulk: request failed for ${type} on sheet "${sheetName}":`, err)
+      bySource.push({ sourceId: source.id, ok: false, rows: [] })
+    }
+  }
+
+  return { ok: true, bySource }
+}

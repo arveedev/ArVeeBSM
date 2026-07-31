@@ -38,6 +38,7 @@ import {
 } from '../../utils/serialNumber.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet } from '../../services/googleSheetsBridge.js'
+import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO } from '../../utils/calculations.js'
@@ -209,8 +210,12 @@ const SackFormBase = forwardRef(function SackFormBase(
         if (Number.isNaN(num)) continue
         if (localMin === null || num < localMin) localMin = num
       }
-      const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
-      const sheetMin = sheetResult.ok ? sheetResult.min : null
+      const preloaded = await isPreloadComplete(currentWarehouseId, type)
+      let sheetMin = null
+      if (!preloaded) {
+        const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
+        sheetMin = sheetResult.ok ? sheetResult.min : null
+      }
       const candidates = [localMin, sheetMin].filter((n) => n != null)
       const floor = candidates.length > 0 ? Math.min(...candidates) : null
       if (!cancelled) setFloorSerialNumber(floor)
@@ -367,8 +372,13 @@ const SackFormBase = forwardRef(function SackFormBase(
         return true
       }
 
-      // Not found locally - check the Sheet before treating this serial as genuinely blank.
-      const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+      // Not found locally - check the Sheet before treating this serial
+      // as genuinely blank, UNLESS this (warehouse, type) is already
+      // fully preloaded, in which case local data is comprehensive.
+      const preloaded = await isPreloadComplete(currentWarehouseId, type)
+      const sheetResult = preloaded
+        ? { ok: true, row: null }
+        : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
       if (latestRequestedSerial.current !== serial) return false
       if (sheetResult.ok && sheetResult.row) {
         const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId })

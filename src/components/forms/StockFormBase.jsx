@@ -69,6 +69,7 @@ import {
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile } from '../../utils/pileLedger.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet } from '../../services/googleSheetsBridge.js'
+import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
@@ -368,8 +369,16 @@ function StockFormBase({ type, title, onClose, prefill }) {
         if (localMin === null || num < localMin) localMin = num
       }
 
-      const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
-      const sheetMin = sheetResult.ok ? sheetResult.min : null
+      // Once this (warehouse, type) has been fully preloaded, local
+      // data alone is already comprehensive - skip the Sheet lookup
+      // entirely rather than pay for a slow network round-trip on
+      // every warehouse/type change for no benefit.
+      const preloaded = await isPreloadComplete(currentWarehouseId, type)
+      let sheetMin = null
+      if (!preloaded) {
+        const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
+        sheetMin = sheetResult.ok ? sheetResult.min : null
+      }
 
       const candidates = [localMin, sheetMin].filter((n) => n != null)
       const floor = candidates.length > 0 ? Math.min(...candidates) : null
@@ -682,9 +691,15 @@ function StockFormBase({ type, title, onClose, prefill }) {
         return true
       }
 
-      // Not found locally - that alone doesn't mean it never existed, so
-      // check the Sheet before treating this serial as genuinely blank.
-      const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+      // Not found locally - that alone doesn't mean it never existed,
+      // UNLESS this (warehouse, type) has already been fully preloaded,
+      // in which case local data is already comprehensive and "not
+      // found" is a definitive answer - skip the slow Sheet lookup
+      // entirely in that case.
+      const preloaded = await isPreloadComplete(currentWarehouseId, type)
+      const sheetResult = preloaded
+        ? { ok: true, row: null }
+        : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
       if (latestRequestedSerial.current !== serial) return false // superseded - discard
       if (sheetResult.ok && sheetResult.row) {
         const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), v.varietyId]))

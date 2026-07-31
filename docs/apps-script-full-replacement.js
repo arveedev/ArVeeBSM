@@ -30,6 +30,14 @@
  * new actions are read-only and are not subject to WRITE_ALLOWLIST -
  * they cannot modify anything.
  *
+ * UPDATED AGAIN: added fetchTransactionsBulk (GET, read-only) - returns
+ * every row for a sheet matching a given set of warehouse names in one
+ * response, optionally filtered by Last Modified (modifiedSince), for
+ * preloading a user's assigned warehouse(s) worth of transaction
+ * history into the app in one pass at login, instead of looking a
+ * single serial up at a time during navigation. Also read-only, not
+ * subject to WRITE_ALLOWLIST.
+ *
  * ── Safety, enforced here, not just trusted from the calling app ──
  * This app must NEVER write to the AI or SIA sheets - WRITE_ALLOWLIST
  * below is checked on every single write request BEFORE anything
@@ -213,6 +221,49 @@ function doGet(e) {
 
       const range = findSerialRange(sheet, matchColumn, warehouseColumn, warehouseValue);
       return jsonResponse({ status: 'SUCCESS', min: range.min, max: range.max });
+    }
+
+    if (action === 'fetchTransactionsBulk') {
+      const sheetName = e.parameter.sheet;
+      const warehouseColumn = e.parameter.warehouseColumn || null;
+      // Comma-separated list of warehouse names to include - kept as a
+      // single request rather than one call per warehouse, since a
+      // user can be assigned to more than one.
+      const warehouseValuesRaw = e.parameter.warehouseValues || '';
+      const warehouseValues = warehouseValuesRaw
+        ? warehouseValuesRaw.split(',').map((v) => v.trim()).filter(Boolean)
+        : [];
+      const modifiedSince = e.parameter.modifiedSince || null;
+
+      if (!sheetName) {
+        return jsonResponse({ status: 'ERROR', message: 'Missing sheet parameter' });
+      }
+
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        return jsonResponse({ status: 'ERROR', message: `Sheet "${sheetName}" not found` });
+      }
+
+      let rows = sheetToObjects(sheet);
+
+      if (warehouseColumn && warehouseValues.length > 0) {
+        const wanted = new Set(warehouseValues);
+        rows = rows.filter((row) => wanted.has(String(row[warehouseColumn] ?? '').trim()));
+      }
+
+      if (modifiedSince) {
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        const lastModHeader = headers[LAST_MODIFIED_COLUMN_INDEX];
+        const cutoff = new Date(modifiedSince);
+        rows = rows.filter((row) => {
+          const stamped = row[lastModHeader];
+          if (!stamped) return true; // never stamped - include rather than risk dropping it
+          return new Date(stamped) >= cutoff;
+        });
+      }
+
+      return jsonResponse({ status: 'SUCCESS', rows });
     }
 
     if (action !== 'fetchAuthorities') {

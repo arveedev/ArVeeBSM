@@ -5030,3 +5030,56 @@ below.
   for WSR after this fix, the new console.error logging added
   previously (fetchSerialFloorFromSheet / fetchTransactionBySerial)
   should now actually surface why on the next reproduction attempt.
+
+## Major architecture change: preload transaction history at login instead of on-demand per-navigation lookups
+
+- Confirmed design with the user before building (three rules): never
+  overwrite an app-created record (preload only fills gaps), full pull
+  only the first time a warehouse/type combination is used with an
+  incremental "anything new since last check" pull after that, and
+  resumable-by-construction (state saved per warehouse+type as each
+  finishes, not all at once).
+- Apps Script: added fetchTransactionsBulk (read-only, not subject to
+  WRITE_ALLOWLIST) - returns every row matching a set of warehouse
+  names in one response, optionally filtered by Last Modified. Built as
+  an extension of the already-deployed, already-verified script file
+  (docs/apps-script-full-replacement.js) - rigorously re-diffed doPost
+  and every existing helper function as byte-for-byte unchanged before
+  adding anything, learning from the earlier mistake of reconstructing
+  from memory.
+- Schema v23: new preloadState table, [warehouseId+type] keyed, tracks
+  completion and last-checked timestamp per combination.
+- New src/services/transactionPreload.js: preloadTransactionsForUser
+  fetches existing local serials into a Set first (fast O(1) membership
+  checks instead of one DB query per fetched row), then imports only
+  genuinely-missing rows via the existing mapSheetRowToTransaction
+  reverse-mapper. isPreloadComplete() exposes the completion check for
+  other code to skip network calls once local data is comprehensive.
+  WTS excluded (no Sheet backup exists for it); Admin/Visitor users
+  excluded (not scoped to specific warehouses, would be prohibitively
+  expensive to preload for them).
+- Hooked into AuthContext's login() - fires in the background after
+  successful login (never blocks the UI), with a single updating toast
+  for lightweight progress visibility.
+- The actual performance payoff: StockFormBase and SackFormBase's floor
+  calculation and checkAndLoadSerial's Sheet fallback both now check
+  isPreloadComplete() first and skip the network round-trip entirely
+  once a warehouse/type is fully preloaded - this is the real fix for
+  WSR's reported slowness, addressing the root cause (a network call
+  during every navigation) rather than working around its symptoms.
+- Verified with a 13-case test covering the never-overwrite guarantee,
+  full-vs-incremental pull logic, the resumability behavior under a
+  simulated interruption, the WTS/Admin/Visitor exclusion rules, and
+  the local-data-skips-network optimization.
+- Re-verified all 60 .jsx files with the real parser, plus every
+  directly-touched non-.jsx file (googleSheetsBridge.js,
+  transactionPreload.js, AuthContext.jsx, dexie.js) individually.
+
+## STILL NOT DONE for this feature:
+- WTSForm was NOT updated to check isPreloadComplete (correctly, since
+  WTS is excluded from preload entirely - no change needed there).
+- No dedicated progress UI beyond the lightweight toast - could be
+  made more prominent/detailed later if needed.
+- The Apps Script file needs to be deployed by the user before any of
+  this can function end-to-end - see the delivered
+  apps-script-full-replacement.js.
