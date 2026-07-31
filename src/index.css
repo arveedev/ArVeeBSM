@@ -111,16 +111,39 @@ body {
    backward/forward - confirms the navigation actually happened and the
    data below is genuinely different, not just a static number change. */
 @keyframes nav-slide-from-left {
-  0% { transform: translateX(-14px); opacity: 0.3; }
+  0% { transform: translateX(-20px); opacity: 0.2; }
   100% { transform: translateX(0); opacity: 1; }
 }
 @keyframes nav-slide-from-right {
-  0% { transform: translateX(14px); opacity: 0.3; }
+  0% { transform: translateX(20px); opacity: 0.2; }
   100% { transform: translateX(0); opacity: 1; }
 }
 .animate-nav-back {
-  animation: nav-slide-from-left 0.22s ease-out;
+  animation: nav-slide-from-left 0.45s ease-out;
 }
 .animate-nav-forward {
-  animation: nav-slide-from-right 0.22s ease-out;
+  animation: nav-slide-from-right 0.45s ease-out;
 }
+
+/* Staggered "flow down" reveal for the field block below the serial
+   number, triggered alongside the nav slide animation above - each
+   field cascades in with a slight increasing delay rather than all
+   appearing at once, reinforcing that the data below is freshly
+   loaded, not just a static re-render. */
+@keyframes stagger-field-in {
+  0% { opacity: 0; transform: translateY(-6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.stagger-fields > * {
+  animation: stagger-field-in 0.28s ease-out both;
+}
+.stagger-fields > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-fields > *:nth-child(2) { animation-delay: 25ms; }
+.stagger-fields > *:nth-child(3) { animation-delay: 50ms; }
+.stagger-fields > *:nth-child(4) { animation-delay: 75ms; }
+.stagger-fields > *:nth-child(5) { animation-delay: 100ms; }
+.stagger-fields > *:nth-child(6) { animation-delay: 125ms; }
+.stagger-fields > *:nth-child(7) { animation-delay: 150ms; }
+.stagger-fields > *:nth-child(8) { animation-delay: 175ms; }
+.stagger-fields > *:nth-child(9) { animation-delay: 200ms; }
+.stagger-fields > *:nth-child(n+10) { animation-delay: 225ms; }

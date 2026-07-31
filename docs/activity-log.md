@@ -4893,3 +4893,42 @@ below.
   text sizing, navigation animation refinements, CalendarDatePicker
   overflow, sticky serial timing, cancelled-state messaging, form
   entrance/exit animation).
+
+## Fixed navigation animation scope/speed, added staggered field cascade, added form entrance/exit animation - all three transaction forms
+
+- Fixed the reported bug: the navigation slide animation was applied to
+  the whole row (both arrow buttons plus the input), when it should
+  only ever have applied to the serial number itself. Moved the
+  animation class from the wrapping div to just the <input> element in
+  all three forms.
+- Slowed the navigation animation down from 220ms to 450ms per explicit
+  "too fast" feedback, with a slightly larger slide distance (14px ->
+  20px) to make it clearly noticeable at the new speed.
+- Added a new staggered "flow down" cascade animation for the field
+  block below the serial number - each field now fades/slides in with
+  a slight increasing delay (25ms apart) rather than all appearing at
+  once, giving a fast, smooth visual cue that the data below is freshly
+  loaded. Triggered alongside the existing nav-slide animation.
+  Adjusted the navFlash-clearing timeout to 550ms so it fully covers
+  the stagger cascade's total duration, avoiding a visual cutoff on the
+  last few fields.
+- Added entrance/exit animation to all three forms themselves (slide up
+  + fade in on open, slide down + fade out on close) - using the same
+  two-effect mount pattern already established elsewhere in this app.
+  The close (X) button now triggers the exit animation and delays the
+  actual unmount by 220ms to let it play out, instead of disappearing
+  instantly.
+- Verified with a 7-case test covering the animation-scope fix (buttons
+  never receive the class, only the input), the timing increase, the
+  stagger-cascade-vs-clear-timeout math, and the entrance/exit class
+  logic across all three states (initial, entered, closing).
+- Re-verified all 59 .jsx files with the real parser.
+
+## STILL NOT DONE (explicitly, so not mistaken for complete):
+- CalendarDatePicker overflow - still reported happening, not yet
+  re-investigated with a fresh angle.
+- Sticky serial number indicator timing (appears too late on scroll).
+- Cancelled-state toast/banner wording refinements.
+- Pile layout PDF export text sizing.
+- WTS historical Sheet lookup + floor/EOF (explicitly set aside per
+  the user's own request this session).

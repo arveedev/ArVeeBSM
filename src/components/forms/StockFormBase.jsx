@@ -168,6 +168,17 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const isAdmin = user?.role === 'Admin'
   const [floorSerialNumber, setFloorSerialNumber] = useState(null) // lowest known real serial number (local + Sheet combined) for this (type, warehouse)
   const [showFloorWarning, setShowFloorWarning] = useState(false)
+  const [hasEntered, setHasEntered] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+
+  // Two-effect pattern (same as elsewhere in this app): guarantees the
+  // browser paints the initial off-screen state before animating in,
+  // rather than the transition being skipped because both states
+  // applied within the same render/paint cycle.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setHasEntered(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
   const [showSaveHint, setShowSaveHint] = useState(false)
 
   // Live lookup of the linked AI authority, so its remaining balance can
@@ -697,7 +708,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
     setSerialNo(prevSerial)
     setNavFlash('back')
-    setTimeout(() => setNavFlash(null), 250)
+    setTimeout(() => setNavFlash(null), 550)
     await checkAndLoadSerial(prevSerial)
   }
 
@@ -712,7 +723,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     const nextSerial = stepSerial(serialNo.trim(), 1)
     setSerialNo(nextSerial)
     setNavFlash('forward')
-    setTimeout(() => setNavFlash(null), 250)
+    setTimeout(() => setNavFlash(null), 550)
     const loaded = await checkAndLoadSerial(nextSerial)
     if (!loaded) resetToBlankEntry(nextSerial)
   }
@@ -1013,14 +1024,19 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const isEditMode = Boolean(loadedTransaction)
 
+  const handleCloseWithAnimation = () => {
+    setIsClosing(true)
+    setTimeout(onClose, 220)
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[220ms] ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold text-app-text">{title}</h1>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCloseWithAnimation}
             disabled={isSaving}
             aria-label="Close"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 hover:shadow-[0_0_12px_rgba(239,68,68,0.4)] active:scale-90 disabled:opacity-50"
@@ -1082,7 +1098,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
           <div ref={serialFieldRef}>
             <label className={labelClass}>Serial No.</label>
-            <div className={`mt-1 flex items-center gap-2 ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`}>
+            <div className="mt-1 flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleStepBack}
@@ -1096,7 +1112,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 value={serialNo}
                 onChange={(e) => handleSerialChange(e.target.value)}
                 onBlur={handleSerialBlur}
-                className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
+                className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`}
                 placeholder="0000000"
               />
               <button
@@ -1113,7 +1129,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
             </p>
           </div>
 
-          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''}`}>
+          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
             <input
