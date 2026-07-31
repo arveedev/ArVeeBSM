@@ -28,6 +28,7 @@ import { ChevronLeft, ChevronRight, X, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
+import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter } from '../../utils/serialNumber.js'
 import {
@@ -181,8 +182,14 @@ function WTSForm({ onClose, prefill }) {
   const [isClosing, setIsClosing] = useState(false)
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setHasEntered(true))
-    return () => cancelAnimationFrame(frame)
+    let raf2
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setHasEntered(true))
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
   }, [])
   const [navFlash, setNavFlash] = useState(null)
   const [showSaveHint, setShowSaveHint] = useState(false)
@@ -309,14 +316,15 @@ function WTSForm({ onClose, prefill }) {
 
   const handleSerialChange = async (value) => {
     setSerialNo(value)
-    await checkAndLoadSerial(value)
+    const loaded = await checkAndLoadSerial(value)
+    if (!loaded && value.trim()) resetForm(value)
   }
 
   const handleStepBack = async () => {
     const prev = stepSerial(serialNo.trim(), -1)
     setSerialNo(prev)
     setNavFlash('back')
-    setTimeout(() => setNavFlash(null), 550)
+    setTimeout(() => setNavFlash(null), 750)
     await checkAndLoadSerial(prev)
   }
 
@@ -324,7 +332,7 @@ function WTSForm({ onClose, prefill }) {
     const next = stepSerial(serialNo.trim(), 1)
     setSerialNo(next)
     setNavFlash('forward')
-    setTimeout(() => setNavFlash(null), 550)
+    setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(next)
     if (!loaded) resetForm(next)
   }
@@ -555,11 +563,11 @@ function WTSForm({ onClose, prefill }) {
   const isEditMode = Boolean(loadedTransaction)
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[220ms] ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[380ms] ease-out ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-xl font-semibold text-app-text">WTS</h1>
-          <button type="button" onClick={() => { setIsClosing(true); setTimeout(onClose, 220) }} disabled={isSaving} aria-label="Close"
+          <button type="button" onClick={() => { setIsClosing(true); setTimeout(onClose, 380) }} disabled={isSaving} aria-label="Close"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90 disabled:opacity-50">
             <X size={18} />
           </button>
@@ -587,11 +595,9 @@ function WTSForm({ onClose, prefill }) {
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4 space-y-3">
-        {isEditMode && (
-          <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
-            Reviewing WTS {loadedTransaction.serialNo} — Update or Delete below.
-          </div>
-        )}
+        <AnimatedBanner show={isEditMode} className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
+          Reviewing WTS {loadedTransaction?.serialNo} — Update or Delete below.
+        </AnimatedBanner>
 
         <div ref={serialFieldRef}>
           <label className={labelClass}>WTS No.</label>

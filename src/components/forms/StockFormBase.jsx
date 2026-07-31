@@ -77,6 +77,7 @@ import ValidatedField from './ValidatedField.jsx'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import NewPileDialog from './NewPileDialog.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
+import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import {
   inputClass,
   labelClass,
@@ -175,9 +176,20 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // browser paints the initial off-screen state before animating in,
   // rather than the transition being skipped because both states
   // applied within the same render/paint cycle.
+  // Double-RAF (not single) - reliably guarantees the browser has
+  // actually painted the initial off-screen state before the
+  // transition starts. A single RAF's callback can fire before that
+  // paint has genuinely happened, which is what caused the animation
+  // to look like an abrupt snap/shake instead of a smooth slide.
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setHasEntered(true))
-    return () => cancelAnimationFrame(frame)
+    let raf2
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setHasEntered(true))
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
   }, [])
   const [showSaveHint, setShowSaveHint] = useState(false)
 
@@ -682,7 +694,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const handleSerialChange = async (value) => {
     setSerialNo(value)
-    await checkAndLoadSerial(value)
+    const loaded = await checkAndLoadSerial(value)
+    if (!loaded && value.trim()) resetToBlankEntry(value)
   }
 
   // Checked on blur (not on every keystroke, which would interrupt
@@ -708,7 +721,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
     setSerialNo(prevSerial)
     setNavFlash('back')
-    setTimeout(() => setNavFlash(null), 550)
+    setTimeout(() => setNavFlash(null), 750)
     await checkAndLoadSerial(prevSerial)
   }
 
@@ -723,7 +736,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     const nextSerial = stepSerial(serialNo.trim(), 1)
     setSerialNo(nextSerial)
     setNavFlash('forward')
-    setTimeout(() => setNavFlash(null), 550)
+    setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
     if (!loaded) resetToBlankEntry(nextSerial)
   }
@@ -1026,11 +1039,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const handleCloseWithAnimation = () => {
     setIsClosing(true)
-    setTimeout(onClose, 220)
+    setTimeout(onClose, 380)
   }
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[220ms] ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[380ms] ease-out ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold text-app-text">{title}</h1>
@@ -1084,17 +1097,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
         <div className="space-y-3">
-          {isEditMode && (
-            <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
-              Reviewing existing {type} {loadedTransaction.serialNo} — Update or Delete below.
-            </div>
-          )}
+          <AnimatedBanner show={isEditMode} className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
+            Reviewing existing {type} {loadedTransaction?.serialNo} — Update or Delete below.
+          </AnimatedBanner>
 
-          {loadedTransaction?.needsCompletion && (
-            <div className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
-              This record was pulled from historical Sheet data. Pile and MTS Sack were not tracked there and need to be filled in below before further changes can be saved.
-            </div>
-          )}
+          <AnimatedBanner show={Boolean(loadedTransaction?.needsCompletion)} className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
+            This record was pulled from historical Sheet data. Pile and MTS Sack were not tracked there and need to be filled in below before further changes can be saved.
+          </AnimatedBanner>
 
           <div ref={serialFieldRef}>
             <label className={labelClass}>Serial No.</label>

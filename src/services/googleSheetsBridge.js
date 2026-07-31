@@ -908,12 +908,19 @@ export const fetchTransactionBySerial = async (type, warehouseName, serialNo) =>
 
     try {
       const response = await fetch(url.toString())
-      if (!response.ok) continue
+      if (!response.ok) {
+        console.error(`fetchTransactionBySerial: HTTP ${response.status} for ${type} #${serialNo} on sheet "${sheetName}"`)
+        continue
+      }
       const payload = await response.json()
       if (payload.status === 'SUCCESS' && payload.row) {
         return { ok: true, row: payload.row, sourceId: source.id }
       }
-    } catch {
+      if (payload.status !== 'SUCCESS') {
+        console.error(`fetchTransactionBySerial: non-SUCCESS response for ${type} #${serialNo} on sheet "${sheetName}":`, payload)
+      }
+    } catch (err) {
+      console.error(`fetchTransactionBySerial: request failed for ${type} #${serialNo} on sheet "${sheetName}":`, err)
       // This source failed (network blip, bad URL, etc.) - try the next one.
       continue
     }
@@ -950,13 +957,19 @@ export const fetchSerialFloorFromSheet = async (type, warehouseName) => {
 
     try {
       const response = await fetch(url.toString())
-      if (!response.ok) continue
+      if (!response.ok) {
+        console.error(`fetchSerialFloorFromSheet: HTTP ${response.status} for ${type} on sheet "${sheetName}"`)
+        continue
+      }
       const payload = await response.json()
       if (payload.status === 'SUCCESS') {
         if (payload.min != null && (min === null || payload.min < min)) min = payload.min
         if (payload.max != null && (max === null || payload.max > max)) max = payload.max
+      } else {
+        console.error(`fetchSerialFloorFromSheet: non-SUCCESS response for ${type} on sheet "${sheetName}":`, payload)
       }
-    } catch {
+    } catch (err) {
+      console.error(`fetchSerialFloorFromSheet: request failed for ${type} on sheet "${sheetName}":`, err)
       continue
     }
   }

@@ -43,6 +43,7 @@ import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO } from '../../utils/calculations.js'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
+import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import {
   inputClass,
@@ -82,8 +83,14 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [isClosing, setIsClosing] = useState(false)
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setHasEntered(true))
-    return () => cancelAnimationFrame(frame)
+    let raf2
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setHasEntered(true))
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
   }, [])
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
@@ -372,7 +379,8 @@ const SackFormBase = forwardRef(function SackFormBase(
 
   const handleSerialChange = async (value) => {
     setSerialNo(value)
-    await checkAndLoadSerial(value)
+    const loaded = await checkAndLoadSerial(value)
+    if (!loaded && value.trim()) resetToBlankEntry(value)
   }
 
   const handleSerialBlur = () => {
@@ -398,7 +406,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     }
     setSerialNo(prevSerial)
     setNavFlash('back')
-    setTimeout(() => setNavFlash(null), 550)
+    setTimeout(() => setNavFlash(null), 750)
     await checkAndLoadSerial(prevSerial)
   }
 
@@ -406,7 +414,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     const nextSerial = stepSerial(serialNo.trim(), 1)
     setSerialNo(nextSerial)
     setNavFlash('forward')
-    setTimeout(() => setNavFlash(null), 550)
+    setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
     if (!loaded) resetToBlankEntry(nextSerial)
   }
@@ -628,13 +636,13 @@ const SackFormBase = forwardRef(function SackFormBase(
       && sackLines.some((l) => l.sackTypeId && l.condition && l.pieces !== '')
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[220ms] ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[380ms] ease-out ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-xl font-semibold text-app-text">{title}</h1>
           <button
             type="button"
-            onClick={() => { setIsClosing(true); setTimeout(onClose, 220) }}
+            onClick={() => { setIsClosing(true); setTimeout(onClose, 380) }}
             disabled={isSaving}
             aria-label="Close"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 hover:shadow-[0_0_12px_rgba(239,68,68,0.4)] active:scale-90 disabled:opacity-50"
@@ -679,18 +687,14 @@ const SackFormBase = forwardRef(function SackFormBase(
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
         <div className="space-y-3">
-          {isEditMode && (
-            <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
-              Reviewing existing {type} {loadedTransaction.serialNo} — Update or Delete below.
-            </div>
-          )}
+          <AnimatedBanner show={isEditMode} className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
+            Reviewing existing {type} {loadedTransaction?.serialNo} — Update or Delete below.
+          </AnimatedBanner>
 
-          {loadedTransaction?.needsCompletion && (
-            <div className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
-              This record was pulled from historical Sheet data. The sack breakdown by type/condition was not tracked there
-              {loadedTransaction.totalPiecesRaw != null && <> — the Sheet's recorded total was <strong>{loadedTransaction.totalPiecesRaw} pieces</strong></>}, and needs to be entered below before further changes can be saved.
-            </div>
-          )}
+          <AnimatedBanner show={Boolean(loadedTransaction?.needsCompletion)} className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
+            This record was pulled from historical Sheet data. The sack breakdown by type/condition was not tracked there
+            {loadedTransaction?.totalPiecesRaw != null && <> — the Sheet's recorded total was <strong>{loadedTransaction.totalPiecesRaw} pieces</strong></>}, and needs to be entered below before further changes can be saved.
+          </AnimatedBanner>
 
           <div ref={serialFieldRef}>
             <label className={labelClass}>Serial No.</label>

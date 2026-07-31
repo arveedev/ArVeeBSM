@@ -4932,3 +4932,55 @@ below.
 - Pile layout PDF export text sizing.
 - WTS historical Sheet lookup + floor/EOF (explicitly set aside per
   the user's own request this session).
+
+## CRITICAL FIX: manual serial entry never reset the form on no-match, animation smoothness overhaul, banner slide/fade
+
+- Found and fixed the critical bug behind "typing a nonexistent series
+  shows blank or the previous series' data, with no warning at all":
+  handleSerialChange (fired on every keystroke while typing) called
+  checkAndLoadSerial but never called resetToBlankEntry when nothing
+  was found - unlike handleStepForward, which already did this
+  correctly. This meant the individual field states (customer name,
+  pile, variety, bags, kilos, etc.) from whatever was previously loaded
+  simply stayed on screen, since only the loadedTransaction reference
+  itself was being cleared. Fixed in all three forms to match
+  handleStepForward's existing correct pattern.
+- Added error logging to fetchSerialFloorFromSheet and
+  fetchTransactionBySerial, both of which were silently swallowing
+  every failure (bad HTTP status, thrown exception, non-SUCCESS
+  response) via a bare `continue` with no trace anywhere - meaning if
+  one type's sheet consistently failed (e.g. WSR, plausibly the
+  largest/most-used sheet, timing out), the function would still
+  behave as if nothing were wrong. This does not fix the underlying
+  WSR-specific floor issue directly (couldn't be reproduced without
+  live access) but makes it actually diagnosable via devtools console
+  going forward - needs the user to reproduce with devtools open and
+  share what gets logged to pin down the real cause.
+- Animation smoothness overhaul, all three forms:
+  - Form entrance/exit switched from single to double
+    requestAnimationFrame - a single RAF's callback can fire before
+    the browser has genuinely painted the "before" state, which is
+    exactly what caused the animation to look like an abrupt snap/
+    shake instead of a smooth slide. Duration increased 220ms -> 380ms,
+    slide distance increased for a more visible, deliberate motion.
+  - Stagger field cascade: duration increased 280ms -> 400ms, distance
+    increased, delay spacing increased (25ms -> 35ms apart) for a
+    smoother, more visible flow instead of a quick jitter. The
+    navFlash-clearing timeout extended to 750ms to fully cover the
+    new, longer total cascade time.
+  - Built a new reusable AnimatedBanner component (delayed-unmount
+    pattern - CSS alone can't animate an element's removal, so the
+    element stays mounted through a brief exit animation before
+    actually being removed) and wired it into every "reviewing
+    existing" / "needs completion" banner across all three forms,
+    replacing plain conditional rendering that appeared/disappeared
+    instantly with no transition at all.
+- Verified with a 10-case test covering the manual-entry reset fix
+  (including the "don't reset on the field going empty" edge case),
+  the AnimatedBanner state machine across all three states, and timing
+  consistency checks confirming every clear/unmount timeout is neither
+  too short (cutting an animation off) nor mismatched from the
+  animation it's meant to cover.
+- Re-verified all 60 .jsx files with the real parser (59 existing +
+  the new AnimatedBanner.jsx), and confirmed index.css's braces remain
+  balanced after the animation timing edits.
