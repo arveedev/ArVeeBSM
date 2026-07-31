@@ -398,15 +398,26 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (!currentWarehouseId) { setFloorSerialNumber(null); return }
     let cancelled = false
     ;(async () => {
-      const preloaded = await isPreloadComplete(currentWarehouseId, type)
-      let sheetMin = null
-      if (!preloaded) {
-        const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
-        sheetMin = sheetResult.ok ? sheetResult.min : null
+      try {
+        const preloaded = await isPreloadComplete(currentWarehouseId, type)
+        let sheetMin = null
+        if (!preloaded) {
+          const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
+          sheetMin = sheetResult.ok ? sheetResult.min : null
+        }
+        const candidates = [localFloorMin, sheetMin].filter((n) => n != null)
+        const floor = candidates.length > 0 ? Math.min(...candidates) : null
+        if (!cancelled) setFloorSerialNumber(floor)
+      } catch (err) {
+        // Without this catch, any failure here (e.g. isPreloadComplete
+        // or fetchSerialFloorFromSheet throwing) would leave
+        // floorSerialNumber stuck at its initial null forever, with no
+        // trace anywhere - which looks exactly like "the floor/EOF
+        // never blocks anything." Falls back to whatever the local
+        // floor alone says, rather than leaving it undefined entirely.
+        console.error(`Floor calculation failed for ${type} (warehouse ${currentWarehouseId}):`, err)
+        if (!cancelled) setFloorSerialNumber(localFloorMin)
       }
-      const candidates = [localFloorMin, sheetMin].filter((n) => n != null)
-      const floor = candidates.length > 0 ? Math.min(...candidates) : null
-      if (!cancelled) setFloorSerialNumber(floor)
     })()
     return () => { cancelled = true }
   }, [type, currentWarehouseId, currentWarehouse?.name, localFloorMin, activeCategory])

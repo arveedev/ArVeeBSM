@@ -5239,3 +5239,40 @@ below.
 - Given the severity (complete login lockout for every user), this fix
   is being packaged and delivered immediately, ahead of any further
   Rice/Palay/By Products tab work.
+
+## EOF/floor broke everywhere after the critical login fix - defensive fix + diagnostics added, root cause not yet fully confirmed
+
+- User reports the floor/EOF, which previously only had an issue
+  specifically on WSR, is now not working on ANY type after the
+  critical login-fix deployment.
+- Investigated serialNumber.js's serialCounters key usage thoroughly -
+  found no key-shape mismatches (every reference correctly uses the
+  new counterKey() helper). isPreloadComplete's preloadState lookup
+  uses the unchanged [warehouseId+type] 2-part key, which was never
+  touched by the v24/v25 fix - also looks correct on inspection.
+- HONEST STATUS: could not definitively reproduce or confirm the exact
+  root cause without live access. What WAS found and fixed: the floor
+  calculation effect (in both StockFormBase and SackFormBase) had NO
+  error handling at all - if isPreloadComplete or
+  fetchSerialFloorFromSheet throws for ANY reason, the effect would
+  fail completely silently, leaving floorSerialNumber stuck at its
+  initial null value forever, with zero trace anywhere. This presents
+  exactly as "the floor/EOF never blocks anything" - which matches the
+  reported symptom precisely, even though the underlying trigger for
+  such a throw hasn't been confirmed. Added try/catch with console.error
+  logging around the whole calculation in both forms, falling back to
+  the local floor alone (which comes from a separate, already-working
+  useLiveQuery) rather than leaving the floor undefined entirely if the
+  Sheet-side portion fails.
+- This makes the failure mode resilient (floor now degrades to
+  "local-only, still blocks based on what's known locally" instead of
+  "completely disabled") and, critically, diagnosable - if the issue
+  persists, the actual thrown error will now appear in the browser
+  console starting with "Floor calculation failed for...", which is
+  needed to identify the true root cause with certainty.
+- Re-verified all 60 .jsx files with the real parser.
+- REQUESTING: if the floor still doesn't block correctly after this
+  fix, please check the browser console for this new error message and
+  share its exact contents - this is necessary to pin down what's
+  actually throwing, since static code review alone could not
+  conclusively identify it.

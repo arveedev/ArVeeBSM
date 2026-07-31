@@ -217,15 +217,20 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (!currentWarehouseId) { setFloorSerialNumber(null); return }
     let cancelled = false
     ;(async () => {
-      const preloaded = await isPreloadComplete(currentWarehouseId, type)
-      let sheetMin = null
-      if (!preloaded) {
-        const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
-        sheetMin = sheetResult.ok ? sheetResult.min : null
+      try {
+        const preloaded = await isPreloadComplete(currentWarehouseId, type)
+        let sheetMin = null
+        if (!preloaded) {
+          const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
+          sheetMin = sheetResult.ok ? sheetResult.min : null
+        }
+        const candidates = [localFloorMin, sheetMin].filter((n) => n != null)
+        const floor = candidates.length > 0 ? Math.min(...candidates) : null
+        if (!cancelled) setFloorSerialNumber(floor)
+      } catch (err) {
+        console.error(`Floor calculation failed for ${type} (warehouse ${currentWarehouseId}):`, err)
+        if (!cancelled) setFloorSerialNumber(localFloorMin)
       }
-      const candidates = [localFloorMin, sheetMin].filter((n) => n != null)
-      const floor = candidates.length > 0 ? Math.min(...candidates) : null
-      if (!cancelled) setFloorSerialNumber(floor)
     })()
     return () => { cancelled = true }
   }, [type, currentWarehouseId, currentWarehouse?.name, localFloorMin])
