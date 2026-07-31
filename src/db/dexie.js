@@ -609,17 +609,28 @@ db.version(23).stores({
 // is simply clearing the table. It self-heals correctly the next time
 // a serial is suggested, via the existing scan-based fallback that
 // already exists for exactly this kind of "tracker missing" case.
+// v24 - CRITICAL FIX: this version previously tried to redefine
+// serialCounters' primary key structure directly (2-part key to
+// 3-part key) in a single .stores() call, which Dexie does NOT
+// support ("UpgradeError: Not yet support for changing primary key")
+// - this broke the database upgrade entirely for every user, blocking
+// login completely. The correct, Dexie-supported pattern is to DELETE
+// a table whose key needs to change in one version, then recreate it
+// fresh with the new key structure in a LATER version - see v25 below.
+// serialCounters is purely a performance cache (never the source of
+// truth - see serialNumber.js), so deleting it entirely is completely
+// safe; it self-heals via the existing scan-based fallback the next
+// time a serial is suggested.
 db.version(24).stores({
-  serialCounters: '[warehouseId+type+cerealCategory], warehouseId, type',
+  serialCounters: null,
 }).upgrade(async (tx) => {
-  await tx.table('serialCounters').clear()
-
   // Backfill cerealCategory on existing WSR/WSI transactions, derived
   // from their variety's category - without this, every transaction
   // created before this feature existed would have no cerealCategory
   // at all, making it invisible to both the Rice and Palay tabs' serial
   // calculations (suggestNextSerial, the floor, uniqueness checks) once
-  // those start filtering by category.
+  // those start filtering by category. Unrelated to the serialCounters
+  // key change above, so unaffected by that issue.
   const varieties = await tx.table('varietyTypes').toArray()
   const categoryByVarietyId = new Map(varieties.map((v) => [v.varietyId, v.category]))
 
@@ -632,6 +643,15 @@ db.version(24).stores({
         if (category) record.cerealCategory = category
       })
   }
+})
+
+// v25 - recreates serialCounters fresh with the new 3-part key
+// (warehouseId + type + cerealCategory), now that v24 has already
+// deleted the old, incompatible version of this table. This is what
+// actually lets WSR/WSI maintain separate serial series per cereal
+// category (Rice/Palay/By Products).
+db.version(25).stores({
+  serialCounters: '[warehouseId+type+cerealCategory], warehouseId, type',
 })
 
 db.cloud.configure({

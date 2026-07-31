@@ -5204,3 +5204,38 @@ below.
   #50 and Palay #50 for the same warehouse are correctly distinct, not
   a collision), the color assignments, and the tab-switch reset logic.
 - Re-verified all 60 .jsx files with the real parser.
+
+## CRITICAL PRODUCTION-BREAKING FIX: login completely blocked for all users due to a broken schema migration
+
+- Root cause: v24's migration tried to redefine serialCounters' primary
+  key structure directly in a single .stores() call (from a 2-part key
+  [warehouseId+type] to a 3-part key
+  [warehouseId+type+cerealCategory]). Dexie does NOT support changing a
+  table's primary key in place - this throws "UpgradeError: Not yet
+  support for changing primary key", which breaks the ENTIRE database
+  upgrade transaction, meaning db.open() never succeeds, meaning every
+  single query (including the users table lookup that login itself
+  depends on) throws - this is exactly what was blocking login
+  completely for everyone.
+- Fixed by splitting into two separate version steps, the correct
+  Dexie-supported pattern for changing a table's key structure: v24 now
+  DELETES the old serialCounters table (serialCounters: null - a safe
+  operation, not subject to the "changing primary key" restriction
+  since it's outright removal, not redefinition) and keeps only the
+  unrelated cerealCategory backfill on the transactions table (which
+  was never the problem). v25 then recreates serialCounters fresh with
+  the new 3-part key, now that the old incompatible definition is
+  already gone. serialCounters is purely a performance cache (never the
+  source of truth), so losing its existing contents entirely is
+  completely safe - it self-heals via the existing scan-based fallback
+  the next time a serial is suggested.
+- Verified with a 5-case sanity test confirming: v24 correctly deletes
+  rather than redefines, v25 correctly recreates with the new key
+  structure, the original broken in-place redefinition is completely
+  gone, every version number in the file is in strictly ascending
+  order (required by Dexie), and v25 is now the correct highest
+  version.
+- Re-verified all 60 .jsx files with the real parser.
+- Given the severity (complete login lockout for every user), this fix
+  is being packaged and delivered immediately, ahead of any further
+  Rice/Palay/By Products tab work.
