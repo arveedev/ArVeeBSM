@@ -36,6 +36,7 @@ import {
   recordSerialUsed,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
+import { fetchTransactionBySerial, mapSheetRowToTransaction } from '../../services/googleSheetsBridge.js'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO } from '../../utils/calculations.js'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
@@ -315,6 +316,20 @@ const SackFormBase = forwardRef(function SackFormBase(
       loadTransactionIntoForm(existing)
       return true
     }
+
+    // Not found locally - check the Sheet before treating this serial as genuinely blank.
+    const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+    if (sheetResult.ok && sheetResult.row) {
+      const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId })
+      await db.transactions.add(imported)
+      await recordSerialUsed(type, currentWarehouseId, serial)
+      loadTransactionIntoForm(imported)
+      if (imported.needsCompletion) {
+        toast('Pulled from historical Sheet data - the sack breakdown by type/condition was not tracked there and needs to be entered before saving further changes.', { icon: '📋', duration: 6000 })
+      }
+      return true
+    }
+
     if (loadedTransaction) setLoadedTransaction(null)
     return false
   }
@@ -610,6 +625,13 @@ const SackFormBase = forwardRef(function SackFormBase(
           {isEditMode && (
             <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
               Reviewing existing {type} {loadedTransaction.serialNo} — Update or Delete below.
+            </div>
+          )}
+
+          {loadedTransaction?.needsCompletion && (
+            <div className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
+              This record was pulled from historical Sheet data. The sack breakdown by type/condition was not tracked there
+              {loadedTransaction.totalPiecesRaw != null && <> — the Sheet's recorded total was <strong>{loadedTransaction.totalPiecesRaw} pieces</strong></>}, and needs to be entered below before further changes can be saved.
             </div>
           )}
 

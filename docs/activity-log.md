@@ -4718,3 +4718,102 @@ below.
   for sacks), and the cereal-category preservation/report-enrichment
   logic in both directions.
 - Re-verified all 59 .jsx files with the real parser.
+
+## Data integrity feature (Sheets historical lookup): Apps Script addition + client-side lookup functions built - foundational piece, NOT yet fully wired into the forms
+
+- Reviewed the actual deployed Apps Script source (user-provided) rather
+  than guessing at its structure - confirmed existing helpers
+  (findRowIndexByMatch, sheetToObjects), the WRITE_ALLOWLIST (WSR/WSI/
+  ESR/ESI only - WTS has no Sheet backup at all, so this feature will
+  never apply to WTS), and the Last-Modified column convention.
+- Wrote docs/apps-script-addition.js - the precise addition needed on
+  top of the existing script (two new helper functions plus two new
+  doGet actions: fetchTransactionBySerial for single-record lookup,
+  fetchSerialFloor for floor/EOF detection) - does not touch or replace
+  any existing working logic. The user needs to add this to their
+  actual Apps Script project and redeploy before any of this can
+  function end-to-end.
+- Important design decision: the new lookup matches on serial AND
+  warehouse name together (via a new findRowIndexByDoubleMatch helper),
+  not serial alone - since a single spreadsheet can hold multiple
+  warehouses' rows in the same tab, and two different warehouses could
+  legitimately both have e.g. a "WSR #50". Matching on both prevents
+  ever silently pulling the wrong warehouse's data.
+- Built the client-side half in googleSheetsBridge.js:
+  fetchTransactionBySerial(type, warehouseName, serialNo) and
+  fetchSerialFloorFromSheet(type, warehouseName) - both search EVERY
+  configured sheet source (not just today's active one), since a
+  historical record could sit in any past source's date range.
+- Re-verified all 59 .jsx files with the real parser.
+
+## STILL NOT DONE for this feature (substantial remaining work):
+- Reverse-mapping a fetched Sheet row (which stores human-readable
+  values like customer/variety/pile NAMES) back into a usable local
+  transaction object (matching names to the app's own varietyId/pileId
+  records, with a safe fallback to raw read-only text display when a
+  name can't be cleanly matched).
+- Actually calling fetchTransactionBySerial from checkAndLoadSerial in
+  all three forms when a serial isn't found locally, and saving the
+  result into the local database so it behaves identically to an
+  app-created record from then on.
+- The floor/EOF UI logic: blocking the stepper with a toast at the true
+  floor, the warning modal for manually typing below it, and the
+  Admin-role bypass that allows going below the floor to genuinely
+  backfill undocumented history.
+- Everything else still pending from the earlier UI-polish round (pile
+  layout PDF text sizing, navigation animation refinements,
+  CalendarDatePicker overflow, sticky serial timing, cancelled-state
+  messaging, form entrance/exit animation).
+
+## Historical Sheet-data lookup wired into StockFormBase and SackFormBase - the core data-recognition fix, with an important honest limitation
+
+- Deployed Apps Script confirmed live (user redeployed the full-
+  replacement file). Built mapSheetRowToTransaction in
+  googleSheetsBridge.js - converts a raw Sheet row into a usable local
+  transaction object.
+- IMPORTANT LIMITATION surfaced and designed around, not hidden:
+  reviewing the Sheet's actual columns confirmed it never tracked which
+  Pile a transaction affected, nor MTS Sack Type/Condition, moisture
+  content, or grain condition - there is no column for any of these,
+  so they are genuinely unrecoverable, not just hard to parse. The
+  mapping function always leaves these null rather than guessing, and
+  sets needsCompletion: true on any imported non-cancelled record.
+  Variety IS recoverable, but only by name-matching against the app's
+  own variety records - an unmatched name (e.g. since renamed) safely
+  falls back to null with the raw name preserved for display, never
+  silently forced into a guessed match.
+- checkAndLoadSerial in both StockFormBase and SackFormBase now falls
+  back to this Sheet lookup whenever a serial isn't found locally -
+  this is the actual fix for the original problem (a serial with no
+  local record no longer means "blank/available", it now means "check
+  the Sheet before assuming that"). A successful pull saves the record
+  into the local database immediately (isSynced: true, since it
+  already exists in the Sheet and must never be pushed back out),
+  marks the serial as used via recordSerialUsed, and loads it into the
+  form exactly like any other existing record.
+- Added a persistent, prominent amber banner (not just a toast, which
+  could be missed) when viewing a record with needsCompletion set,
+  clearly telling the user which fields are missing and need to be
+  filled in before further changes can be saved - for sacks, this also
+  shows the Sheet's original total pieces count as a reference target
+  for reconstructing the type/condition breakdown.
+- WTS was confirmed to have no Sheet backup at all (not in
+  WRITE_ALLOWLIST), so this feature intentionally does not apply there
+  - there is nothing to look up.
+- Verified with a 13-case test covering date parsing (ISO timestamp vs
+  plain date), variety name matching and its safe-fallback behavior,
+  confirming Pile/MTS are always null and never guessed, the
+  needsCompletion flag's behavior for both cancelled and active pulled
+  records, the sack total-pieces preservation, and the isSynced
+  true flag preventing an imported record from being redundantly
+  pushed back to the Sheet it came from.
+- Re-verified all 59 .jsx files with the real parser.
+
+## STILL NOT DONE for this feature:
+- Floor/EOF detection and blocking UI (stepper toast, manual-entry
+  warning modal, Admin bypass) - fetchSerialFloorFromSheet exists but
+  isn't called from anywhere yet.
+- Everything still pending from earlier rounds (pile layout PDF text
+  sizing, navigation animation refinements, CalendarDatePicker
+  overflow, sticky serial timing, cancelled-state messaging, form
+  entrance/exit animation).

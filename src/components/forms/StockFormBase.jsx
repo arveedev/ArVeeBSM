@@ -67,6 +67,7 @@ import {
   recordSerialUsed,
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile } from '../../utils/pileLedger.js'
+import { fetchTransactionBySerial, mapSheetRowToTransaction } from '../../services/googleSheetsBridge.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import SerialNumberField from './SerialNumberField.jsx'
@@ -603,6 +604,25 @@ function StockFormBase({ type, title, onClose, prefill }) {
       loadTransactionIntoForm(existing)
       return true
     }
+
+    // Not found locally - that alone doesn't mean it never existed, so
+    // check the Sheet before treating this serial as genuinely blank.
+    const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+    if (sheetResult.ok && sheetResult.row) {
+      const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), v.varietyId]))
+      const imported = mapSheetRowToTransaction(type, sheetResult.row, {
+        warehouseId: currentWarehouseId,
+        varietyByName,
+      })
+      await db.transactions.add(imported)
+      await recordSerialUsed(type, currentWarehouseId, serial)
+      loadTransactionIntoForm(imported)
+      if (imported.needsCompletion) {
+        toast('Pulled from historical Sheet data - Pile and MTS Sack need to be filled in before saving further changes.', { icon: '📋', duration: 6000 })
+      }
+      return true
+    }
+
     if (loadedTransaction) {
       // Stepped/typed away from the loaded entry onto a blank serial —
       // return to normal new-entry mode.
@@ -985,6 +1005,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
           {isEditMode && (
             <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
               Reviewing existing {type} {loadedTransaction.serialNo} — Update or Delete below.
+            </div>
+          )}
+
+          {loadedTransaction?.needsCompletion && (
+            <div className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
+              This record was pulled from historical Sheet data. Pile and MTS Sack were not tracked there and need to be filled in below before further changes can be saved.
             </div>
           )}
 

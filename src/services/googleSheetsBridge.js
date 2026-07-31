@@ -676,3 +676,170 @@ export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => 
     warehouseCode: warehouseCode ?? null,
   })
 }
+
+/**
+ * Converts a raw Sheet row (keyed by the Sheet's own human-readable
+ * column headers) into a usable local transaction object. Recovers
+ * everything the Sheet actually stores; genuinely cannot recover Pile
+ * or MTS Sack Type/Condition, since the Sheet has no column for either
+ * - those come back null, and needsCompletion is set to true so the
+ * UI can clearly tell the user this record needs those fields filled
+ * in before it can be saved further, rather than silently presenting
+ * an incomplete record as if it were whole.
+ *
+ * varietyByName: a Map of variety name (lowercased, trimmed) -> varietyId,
+ * built by the caller from its own already-loaded variety list - kept
+ * as a plain parameter rather than a fresh query here, since the form
+ * calling this already has that data in memory.
+ */
+export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName }) => {
+  const rawDate = row['Date']
+  // Sheet dates come back as full ISO timestamps (e.g.
+  // "2026-06-15T00:00:00.000Z") - take just the date part, in the
+  // Sheet's local time, not UTC-shifted (which could land on the
+  // wrong day depending on timezone).
+  const date = typeof rawDate === 'string' && rawDate.includes('T')
+    ? rawDate.slice(0, 10)
+    : (rawDate ?? '')
+
+  const isCancelled = String(row['Customer Name'] ?? '').trim().toUpperCase() === 'CANCELLED'
+  const varietyName = row['Variety'] ?? null
+  const matchedVarietyId = varietyName
+    ? varietyByName?.get(String(varietyName).trim().toLowerCase()) ?? null
+    : null
+
+  const base = {
+    id: crypto.randomUUID(),
+    type,
+    warehouseId,
+    date,
+    status: isCancelled ? 'Cancelled' : 'Active',
+    customerName: isCancelled ? null : (row['Customer Name'] ?? null),
+    isSynced: true, // it already exists in the Sheet - no need to push it back
+    fromSheetImport: true,
+    needsCompletion: !isCancelled, // Cancelled records have nothing left to complete
+  }
+
+  if (type === 'WSR' || type === 'WSI') {
+    return {
+      ...base,
+      serialNo: row[type === 'WSR' ? 'WSR #' : 'WSI #'],
+      linkedDocNo: type === 'WSR' ? (row['WSI #'] ?? null) : (row['AI #'] ?? null),
+      aiNumber: type === 'WSI' ? (row['AI #'] ?? null) : null,
+      varietyId: matchedVarietyId,
+      varietyNameRaw: matchedVarietyId ? null : varietyName, // preserved for display only if we couldn't match it
+      numberOfBags: row['Bags'] ?? null,
+      netKilos: row['Net Kilos'] ?? null,
+      grossKilos: null, // not stored in the Sheet - MTS/gross split is unrecoverable
+      autoComputeNet: false,
+      pileId: null,
+      mtsSackTypeId: null,
+      mtsCondition: null,
+      moistureContent: null,
+      condition: null,
+      ageValue: row['AGE'] ?? null,
+      ageUnit: row['AGE'] != null ? 'Months' : 'Days',
+      initialAgeValue: row['AGE'] ?? null,
+    }
+  }
+
+  // ESR / ESI - sacks
+  return {
+    ...base,
+    serialNo: row[type === 'ESR' ? 'ESR#' : 'ESI#'],
+    linkedDocNo: row[type === 'ESR' ? 'ESI #' : 'SIA #'] ?? null,
+    sackLines: [], // per-sack-type/condition breakdown isn't stored in the Sheet, only the Pieces total
+    totalPiecesRaw: row['Pieces'] ?? null,
+  }
+}
+
+/**
+ * Looks up a single transaction by serial number directly from the
+ * Sheet - used when a serial isn't found in the local database, since
+ * that alone doesn't mean it never existed: it may have been recorded
+ * before this app was ever used, or entered by some other means. This
+ * is what lets the app recognize and correctly display/edit historical
+ * data the app itself never created.
+ *
+ * Searches EVERY configured sheet source, not just today's active one
+ * (getActiveSheetSource), since a historical record could sit in any
+ * past source's date range - we don't know its date until we find it.
+ * Matches on serial AND warehouse name together (via the new
+ * fetchTransactionBySerial Apps Script action) - a single spreadsheet
+ * can hold multiple warehouses' rows, so serial alone isn't a safe
+ * enough match on its own.
+ */
+export const fetchTransactionBySerial = async (type, warehouseName, serialNo) => {
+  const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[type]
+  if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  const sources = await getAllSheetSources()
+  for (const source of sources) {
+    const sheetName = source[sheetNameKey]
+    if (!sheetName) continue
+
+    const url = new URL(source.webAppUrl)
+    url.searchParams.set('action', 'fetchTransactionBySerial')
+    url.searchParams.set('sheet', sheetName)
+    url.searchParams.set('matchColumn', SERIAL_COLUMN_BY_TYPE[type])
+    url.searchParams.set('matchValue', serialNo)
+    url.searchParams.set('warehouseColumn', 'Warehouse Name')
+    url.searchParams.set('warehouseValue', warehouseName ?? '')
+
+    try {
+      const response = await fetch(url.toString())
+      if (!response.ok) continue
+      const payload = await response.json()
+      if (payload.status === 'SUCCESS' && payload.row) {
+        return { ok: true, row: payload.row, sourceId: source.id }
+      }
+    } catch {
+      // This source failed (network blip, bad URL, etc.) - try the next one.
+      continue
+    }
+  }
+  return { ok: true, row: null }
+}
+
+/**
+ * Finds the lowest and highest serial number the Sheet actually has on
+ * record for this (type, warehouse) - used for the "floor" check, so
+ * regular users can't navigate below real, existing history. Searches
+ * every configured source and combines the results, since the true
+ * floor could be established by the oldest source while the true
+ * ceiling comes from the newest.
+ */
+export const fetchSerialFloorFromSheet = async (type, warehouseName) => {
+  const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[type]
+  if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  const sources = await getAllSheetSources()
+  let min = null, max = null
+
+  for (const source of sources) {
+    const sheetName = source[sheetNameKey]
+    if (!sheetName) continue
+
+    const url = new URL(source.webAppUrl)
+    url.searchParams.set('action', 'fetchSerialFloor')
+    url.searchParams.set('sheet', sheetName)
+    url.searchParams.set('matchColumn', SERIAL_COLUMN_BY_TYPE[type])
+    url.searchParams.set('warehouseColumn', 'Warehouse Name')
+    url.searchParams.set('warehouseValue', warehouseName ?? '')
+
+    try {
+      const response = await fetch(url.toString())
+      if (!response.ok) continue
+      const payload = await response.json()
+      if (payload.status === 'SUCCESS') {
+        if (payload.min != null && (min === null || payload.min < min)) min = payload.min
+        if (payload.max != null && (max === null || payload.max > max)) max = payload.max
+      }
+    } catch {
+      continue
+    }
+  }
+  return { ok: true, min, max }
+}
