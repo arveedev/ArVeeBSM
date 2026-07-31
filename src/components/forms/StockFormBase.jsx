@@ -128,6 +128,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const linkedDocLabel = type === 'WSR' ? 'WSI No.' : 'AI No.'
   const linkedDocDeductsFromAi = type !== 'WSR'
 
+  // WSR and WSI keep genuinely separate serial series per cereal
+  // category (Rice vs Palay) within the same warehouse, per explicit
+  // request - ESR/ESI don't have this distinction.
+  const isCategoryScoped = type === 'WSR' || type === 'WSI'
+  const [cerealCategory, setCerealCategory] = useState('Rice')
+  const activeCategory = isCategoryScoped ? cerealCategory : null
+
   const [serialNo, setSerialNo] = useState('')
   const [date, setDate] = useState(blankFormState.date)
   const [linkedDocNo, setLinkedDocNo] = useState('')
@@ -242,7 +249,9 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
 
-  const sortedVarieties = [...(varieties ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  const sortedVarieties = [...(varieties ?? [])]
+    .filter((v) => !isCategoryScoped || v.category === activeCategory)
+    .sort((a, b) => byAlpha(a.name, b.name))
   const sortedTransactionTypes = [...(transactionTypes ?? [])].sort((a, b) => byAlpha(a.name, b.name))
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
@@ -338,14 +347,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (prefill?.serialNo) return
     if (!currentWarehouseId) return
     let cancelled = false
-    suggestNextSerial(type, currentWarehouseId).then((serial) => {
+    suggestNextSerial(type, currentWarehouseId, '1', activeCategory).then((serial) => {
       if (!cancelled) setSerialNo(serial)
     })
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, currentWarehouseId])
+  }, [type, currentWarehouseId, activeCategory])
 
   // Determine the true floor (lowest known real serial number) for this
   // (type, warehouse), combining local transaction history with the
@@ -363,9 +372,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // once new data silently arrived in the background.
   const localTxForFloor = useLiveQuery(
     () => currentWarehouseId
-      ? db.transactions.where('type').equals(type).and((tx) => tx.warehouseId === currentWarehouseId).toArray()
+      ? db.transactions.where('type').equals(type)
+          .and((tx) => tx.warehouseId === currentWarehouseId && (activeCategory == null || tx.cerealCategory === activeCategory))
+          .toArray()
       : Promise.resolve([]),
-    [type, currentWarehouseId]
+    [type, currentWarehouseId, activeCategory]
   )
   const localFloorMin = (() => {
     if (!localTxForFloor) return null
@@ -398,7 +409,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
       if (!cancelled) setFloorSerialNumber(floor)
     })()
     return () => { cancelled = true }
-  }, [type, currentWarehouseId, currentWarehouse?.name, localFloorMin])
+  }, [type, currentWarehouseId, currentWarehouse?.name, localFloorMin, activeCategory])
 
   const applyPileDefaults = (targetPileId) => {
     if (type !== 'WSI') return
@@ -631,6 +642,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // edit, switching the footer to Update/Delete.
   const loadTransactionIntoForm = (tx) => {
     setLoadedTransaction(tx)
+    if (isCategoryScoped && tx.cerealCategory) setCerealCategory(tx.cerealCategory)
     setIsCancelled(tx.status === 'Cancelled')
     setDate(tx.date ?? blankFormState.date)
     setLinkedDocNo(tx.linkedDocNo ?? tx.aiNumber ?? '')
@@ -697,7 +709,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     latestRequestedSerial.current = serial
     setIsLookingUp(true)
     try {
-      const existing = await findTransactionBySerial(type, currentWarehouseId, serial)
+      const existing = await findTransactionBySerial(type, currentWarehouseId, serial, activeCategory)
       if (latestRequestedSerial.current !== serial) return false // superseded by a newer request - discard this stale result
       if (existing) {
         loadTransactionIntoForm(existing)
@@ -721,7 +733,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
           varietyByName,
         })
         await db.transactions.add(imported)
-        await recordSerialUsed(type, currentWarehouseId, serial)
+        await recordSerialUsed(type, currentWarehouseId, serial, activeCategory)
         if (latestRequestedSerial.current !== serial) return false // superseded during the write - discard
         loadTransactionIntoForm(imported)
         if (imported.needsCompletion) {
@@ -777,7 +789,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const handleFloorWarningAcknowledge = async () => {
     setShowFloorWarning(false)
-    const latest = await suggestNextSerial(type, currentWarehouseId)
+    const latest = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
     setSerialNo(latest)
     await checkAndLoadSerial(latest)
   }
@@ -807,7 +819,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // an interim fix ahead of the planned per-cereal-type series tabs,
     // where the cereal category will be known unambiguously from
     // which tab is active rather than needing this fallback at all.
-    cerealCategory: selectedVariety?.category ?? null,
+    cerealCategory: activeCategory ?? selectedVariety?.category ?? null,
     linkedDocNo: null,
     aiNumber: null,
     customerName: null,
@@ -838,6 +850,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     type,
     serialNo: serialNo.trim(),
     status: 'Active',
+    cerealCategory: activeCategory,
     date,
     warehouseId: currentWarehouseId,
     linkedDocNo: linkedDocNo.trim() || null,
@@ -875,7 +888,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
       toast.error('Serial No. is required')
       return false
     }
-    if (await isSerialTaken(type, currentWarehouseId, serialNo.trim(), excludeId)) {
+    if (await isSerialTaken(type, currentWarehouseId, serialNo.trim(), excludeId, activeCategory)) {
       toast.error(`Serial ${serialNo.trim()} is already used for a ${type} document at this warehouse`)
       return false
     }
@@ -947,7 +960,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
 
     await db.transactions.add(transaction)
-    await recordSerialUsed(type, currentWarehouseId, serialNo.trim())
+    await recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory)
     await applyTransactionToPile(transaction)
     await rememberCustomer({
       name: customerName.trim(),
@@ -1024,7 +1037,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
 
     await db.transactions.delete(loadedTransaction.id)
-    await recalculateSerialCounter(type, currentWarehouseId)
+    await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
     queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
 
     toast.success(`${type} ${serialNo.trim()} deleted`)
@@ -1061,7 +1074,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     } else {
       await db.transactions.add(cancelledRecord)
     }
-    await recordSerialUsed(type, currentWarehouseId, serialNo.trim())
+    await recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory)
     setIsCancelled(true)
     setLoadedTransaction(cancelledRecord)
     toast.success(`${type} ${serialNo.trim()} has been cancelled/voided`)
@@ -1077,12 +1090,21 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
     await db.transactions.delete(loadedTransaction.id)
-    await recalculateSerialCounter(type, currentWarehouseId)
+    await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
     queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
     setIsSaving(false)
+  }
+
+  const handleCategoryTabChange = (nextCategory) => {
+    if (nextCategory === cerealCategory) return
+    setCerealCategory(nextCategory)
+    setLoadedTransaction(null)
+    setPileId('')
+    setVarietyId('')
+    setSackSelection('')
   }
 
   const isEditMode = Boolean(loadedTransaction)
@@ -1137,6 +1159,27 @@ function StockFormBase({ type, title, onClose, prefill }) {
             </p>
           </div>
         ) : null}
+
+        {isCategoryScoped && (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {[
+              { key: 'Rice', label: 'Rice', activeClasses: 'border-blue-400 bg-blue-400/10 text-blue-400' },
+              { key: 'Palay', label: 'Palay', activeClasses: 'border-brand-neon bg-brand-neon/10 text-brand-neon' },
+              { key: 'By Products', label: 'By Products', activeClasses: 'border-brand-byproduct bg-brand-byproduct/10 text-brand-byproduct' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => handleCategoryTabChange(tab.key)}
+                className={`rounded-lg border-2 py-2.5 text-sm font-bold transition-all active:scale-95 ${
+                  cerealCategory === tab.key ? tab.activeClasses : 'border-neutral-800 bg-neutral-900 text-neutral-500'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!isSerialFieldVisible && serialNo && (
           <p className="mt-2 rounded-xl border-2 border-brand-neon bg-brand-neon/10 px-3 py-2.5 text-center font-mono text-lg font-bold text-brand-neon shadow-[0_0_16px_-4px_rgba(0,255,163,0.4)]">

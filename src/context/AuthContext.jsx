@@ -25,8 +25,8 @@ const runPreloadWithFeedback = async (user) => {
   const toastId = 'transaction-preload'
   try {
     await preloadTransactionsForUser(user, {
-      onProgress: ({ warehouseName, type }) => {
-        toast.loading(`Preparing ${type} data for ${warehouseName}…`, { id: toastId })
+      onProgress: ({ type, warehouseCount }) => {
+        toast.loading(`Preparing ${type} data for ${warehouseCount} warehouse${warehouseCount === 1 ? '' : 's'}…`, { id: toastId })
       },
     })
     toast.dismiss(toastId)

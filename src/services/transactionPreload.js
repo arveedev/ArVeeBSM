@@ -39,7 +39,7 @@
 // count. This was the primary cause of a very slow first preload.
 
 import { db } from '../db/dexie.js'
-import { fetchTransactionsBulk, mapSheetRowToTransaction } from './googleSheetsBridge.js'
+import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix } from './googleSheetsBridge.js'
 import { recordSerialUsed } from '../utils/serialNumber.js'
 
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
@@ -61,11 +61,23 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
   const validWarehouses = warehouses.filter(Boolean)
   if (validWarehouses.length === 0) return
 
-  const warehouseIdByName = new Map(validWarehouses.map((w) => [w.name, w.warehouseId]))
+  const warehouseIdByName = new Map()
+  for (const w of validWarehouses) {
+    warehouseIdByName.set(w.name.trim(), w.warehouseId)
+    const stripped = stripWarehouseCodePrefix(w.name).trim()
+    if (stripped && stripped !== w.name.trim()) warehouseIdByName.set(stripped, w.warehouseId)
+  }
 
   for (const type of PRELOAD_TYPES) {
     onProgress?.({ type, warehouseCount: validWarehouses.length })
-    await preloadOneType(type, validWarehouses, warehouseIdByName)
+    try {
+      await preloadOneType(type, validWarehouses, warehouseIdByName)
+    } catch (err) {
+      // A failure in one type must not abort the others - without this,
+      // an error partway through (e.g. WSR) would silently prevent
+      // WSI/ESR/ESI from ever being attempted at all.
+      console.error(`preloadTransactionsForUser: preload failed for ${type}:`, err)
+    }
   }
 }
 
@@ -109,7 +121,14 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
   const processGroup = async (group, modifiedSince) => {
     if (group.length === 0) return
     const result = await fetchTransactionsBulk(type, group.map((w) => w.name), { modifiedSince })
-    if (!result.ok) return // network/offline - preloadState left as-is for this group, retried next login
+    if (!result.ok) {
+      console.error(`preloadOneType: fetchTransactionsBulk did not succeed for ${type}, warehouses:`, group.map((w) => w.name), result)
+      return // network/offline - preloadState left as-is for this group, retried next login
+    }
+
+    const totalRowsSeen = result.bySource.reduce((sum, s) => sum + (s.ok ? s.rows.length : 0), 0)
+    let importedCount = 0
+    let skippedNoWarehouseMatch = 0
 
     for (const sourceResult of result.bySource) {
       if (!sourceResult.ok) continue
@@ -118,8 +137,11 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
         if (!serialNo) continue
 
         const rowWarehouseName = row['Warehouse Name']
-        const rowWarehouseId = warehouseIdByName.get(rowWarehouseName)
-        if (!rowWarehouseId) continue // row belongs to a warehouse outside this batch - skip
+        const rowWarehouseId = warehouseIdByName.get(String(rowWarehouseName ?? '').trim())
+        if (!rowWarehouseId) {
+          skippedNoWarehouseMatch++
+          continue // row belongs to a warehouse outside this batch, OR the name didn't match anything we're looking for - skip
+        }
 
         const existingSerials = existingSerialsByWarehouse.get(rowWarehouseId)
         if (existingSerials?.has(String(serialNo))) continue // app-created record already exists - never overwrite it
@@ -131,6 +153,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
         const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName })
         await db.transactions.add(imported)
         existingSerials?.add(String(serialNo))
+        importedCount++
 
         const num = parseInt(String(serialNo).replace(/\D/g, ''), 10)
         if (!Number.isNaN(num)) {
@@ -141,6 +164,8 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
         }
       }
     }
+
+    console.log(`preloadOneType(${type}): saw ${totalRowsSeen} row(s) from the Sheet, imported ${importedCount}, skipped ${skippedNoWarehouseMatch} for no warehouse-name match (expected names: ${group.map((w) => w.name).join(', ')})`)
 
     // Only mark this batch's warehouses complete after their fetch
     // genuinely succeeded - a network failure above already returned
@@ -155,10 +180,15 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     }
   }
 
-  await Promise.all([
+  const groupResults = await Promise.allSettled([
     processGroup(needsFull, undefined),
     processGroup(needsIncremental, oldestIncrementalCheck),
   ])
+  groupResults.forEach((result, i) => {
+    if (result.status === 'rejected') {
+      console.error(`preloadOneType: ${i === 0 ? 'full-pull' : 'incremental'} group failed for ${type}:`, result.reason)
+    }
+  })
 
   for (const [warehouseId, { serialNo }] of highestImportedByWarehouse) {
     await recordSerialUsed(type, warehouseId, serialNo)

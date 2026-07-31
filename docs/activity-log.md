@@ -5121,3 +5121,86 @@ below.
   parallelization time-bound change, and the reactive floor correctly
   picking up newly-preloaded data without a stale value persisting.
 - Re-verified all 60 .jsx files with the real parser.
+
+## Fixed "Preparing data for undefined" toast, added resilience and warehouse-name matching robustness to preload
+
+- Fixed the confirmed bug: the previous preload rewrite (batching per
+  type instead of per warehouse) changed onProgress's payload shape,
+  but AuthContext.jsx's toast handler still destructured the old
+  per-warehouse shape (warehouseName), which no longer existed -
+  producing "Preparing WSR data for undefined". Fixed to match the
+  actual new payload (type + warehouseCount).
+- Added resilience the EOF investigation surfaced was missing: a
+  failure in ONE type's preload previously aborted the entire loop
+  silently, meaning if WSR threw partway through for any reason,
+  WSI/ESR/ESI would never even be attempted. Now each type is wrapped
+  in its own try/catch and logged, so one failure can't take down the
+  rest. Also switched the full-pull/incremental group processing from
+  Promise.all to Promise.allSettled, so one group failing doesn't
+  discard the other group's already-successful results.
+- Found and fixed a plausible real cause of WSR-specific data not
+  importing: warehouse-name matching between the app and Sheet rows
+  was exact-string-only, but this project's own history confirms
+  warehouse.name inconsistently carries a code prefix (e.g.
+  "ALB-ABACORP A") depending on when a row was written - older
+  historical rows (exactly what preload most needs) would have the
+  prefixed name, while rows written after the earlier
+  stripWarehouseCodePrefix fix would have the stripped version.
+  Exported stripWarehouseCodePrefix and used it to build a matching map
+  that recognizes BOTH forms for the same warehouse, plus trimmed
+  string comparison throughout.
+- Added diagnostic logging (rows seen vs imported vs skipped-for-no-
+  warehouse-match, with the exact expected names listed) so if data
+  still doesn't import correctly, the actual cause is now visible
+  rather than silently indistinguishable from "genuinely nothing to
+  import."
+- Verified with a 6-case test covering the corrected toast message,
+  both warehouse-name forms resolving to the same warehouse, an
+  unrelated name correctly not matching, and the per-type resilience
+  fix ensuring all four types are still attempted even if one throws.
+- Re-verified all 60 .jsx files with the real parser.
+
+## Rice/Palay/By Products series tabs for WSR and WSI - functional now, with one honest known limitation
+
+- Added By Products as the third cereal category tab, per explicit
+  request - uses 'By Products' (space, not hyphen) to match the exact
+  string already used by VarietyTypesPanel's existing CATEGORIES array,
+  and its own dedicated color (#F2B949, added as brand-byproduct in
+  tailwind.config.js, with light-theme darkened overrides matching the
+  existing pattern used for brand-neon).
+- Schema v24: serialCounters' key extended to [warehouseId+type+
+  cerealCategory], with non-category-scoped types (ESR/ESI/WTS) using a
+  fixed 'ALL' sentinel to keep every record's key shape consistent.
+  Migration backfills cerealCategory onto every EXISTING WSR/WSI
+  transaction (derived from its variety's category) - without this,
+  pre-existing data would have become invisible to the new
+  category-aware calculations once they started filtering by category,
+  a real correctness gap, not just cosmetic.
+- serialNumber.js: every core function (suggestNextSerial,
+  recordSerialUsed, recalculateSerialCounter, isSerialTaken,
+  findTransactionBySerial) now takes an optional cerealCategory
+  parameter, defaulting to null (no filtering) - every non-WSR/WSI
+  caller is completely unaffected.
+- StockFormBase.jsx: added the three-tab selector (Rice/Palay/By
+  Products, shown only for WSR/WSI), threaded activeCategory through
+  all 9 serial-function call sites, filtered the variety dropdown to
+  the active tab's category, made the reactive floor query category-
+  aware, and switching tabs now correctly clears the loaded
+  transaction/pile/variety selection (a different tab is a genuinely
+  different series) and re-triggers the next-serial suggestion for the
+  new category. buildTransactionPayload and buildCancelledPayload both
+  now save cerealCategory on every WSR/WSI record going forward.
+- KNOWN LIMITATION, not yet resolved: the Sheet-based on-demand lookup
+  (fetchTransactionBySerial, used when a serial isn't found locally)
+  is NOT category-aware, since the Sheet has no cereal-category column
+  of its own (only Variety, which maps to one) - this would need Apps
+  Script changes to properly disambiguate. In practice this only
+  matters for a warehouse/type that hasn't finished preloading yet;
+  once preload completes, the reactive local query correctly
+  takes over and the Sheet fallback is skipped entirely. Flagging this
+  clearly rather than let it go unnoticed.
+- Verified with an 11-case test covering the exact category string
+  value, tracker-key independence across all three categories (Rice
+  #50 and Palay #50 for the same warehouse are correctly distinct, not
+  a collision), the color assignments, and the tab-switch reset logic.
+- Re-verified all 60 .jsx files with the real parser.

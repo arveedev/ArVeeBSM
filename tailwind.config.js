@@ -21,6 +21,7 @@ export default {
           neon: '#00FFA3',
           amber: '#F59E0B',
           crimson: '#EF4444',
+          byproduct: '#F2B949',
           // Fixed, never theme-variable - this is contrast text sitting
           // on the brand-neon accent or a light pile-box fill, not on
           // the app's background, so it must always stay dark.

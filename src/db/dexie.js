@@ -598,6 +598,42 @@ db.version(23).stores({
   preloadState: '[warehouseId+type], warehouseId, type',
 })
 
+// v24 - serialCounters' key gains cerealCategory, since WSR and WSI
+// now maintain genuinely separate serial series per Rice vs Palay (see
+// serialNumber.js for the full explanation). ESR/ESI/WTS aren't
+// category-scoped and use a fixed 'ALL' placeholder to keep every
+// record's key shape consistent. serialCounters is purely a
+// performance cache layered over the real source of truth (actual
+// transactions) - changing its key structure means old records under
+// the previous 2-part key are no longer valid, so the safe migration
+// is simply clearing the table. It self-heals correctly the next time
+// a serial is suggested, via the existing scan-based fallback that
+// already exists for exactly this kind of "tracker missing" case.
+db.version(24).stores({
+  serialCounters: '[warehouseId+type+cerealCategory], warehouseId, type',
+}).upgrade(async (tx) => {
+  await tx.table('serialCounters').clear()
+
+  // Backfill cerealCategory on existing WSR/WSI transactions, derived
+  // from their variety's category - without this, every transaction
+  // created before this feature existed would have no cerealCategory
+  // at all, making it invisible to both the Rice and Palay tabs' serial
+  // calculations (suggestNextSerial, the floor, uniqueness checks) once
+  // those start filtering by category.
+  const varieties = await tx.table('varietyTypes').toArray()
+  const categoryByVarietyId = new Map(varieties.map((v) => [v.varietyId, v.category]))
+
+  for (const docType of ['WSR', 'WSI']) {
+    await tx.table('transactions')
+      .where('type').equals(docType)
+      .modify((record) => {
+        if (record.cerealCategory) return // already set (e.g. a Cancelled record that already preserved it)
+        const category = categoryByVarietyId.get(record.varietyId)
+        if (category) record.cerealCategory = category
+      })
+  }
+})
+
 db.cloud.configure({
   databaseUrl: 'https://z15dzktxq.dexie.cloud',
   // requireAuth MUST be false for an offline-first app. When true,

@@ -74,6 +74,12 @@ body {
 .light .text-brand-neon\/70 { color: rgba(0, 117, 74, 0.8) !important; }
 .light .text-brand-neon\/40 { color: rgba(0, 117, 74, 0.6) !important; }
 
+.light .bg-brand-byproduct { background-color: #92690E !important; }
+.light .bg-brand-byproduct\/10 { background-color: rgba(146, 105, 14, 0.1) !important; }
+.light .border-brand-byproduct { border-color: #92690E !important; }
+.light .border-brand-byproduct\/40 { border-color: rgba(146, 105, 14, 0.5) !important; }
+.light .text-brand-byproduct { color: #92690E !important; }
+
 .light .text-blue-400 { color: #1D4ED8 !important; }
 .light .border-blue-400 { border-color: #1D4ED8 !important; }
 .light .bg-blue-400\/10 { background-color: rgba(29, 78, 216, 0.12) !important; }

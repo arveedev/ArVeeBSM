@@ -448,7 +448,7 @@ const formatLocalTimestamp = () => {
 // app's own warehouse.name field has these baked in from an earlier
 // naming convention, but the Sheet should only ever show the plain
 // name (e.g. "ALB-ABACORP A" -> "ABACORP A").
-const stripWarehouseCodePrefix = (name) =>
+export const stripWarehouseCodePrefix = (name) =>
   (name ?? '').replace(/^[A-Z]{2,5}-/, '')
 
 const buildBackupRow = (transaction, context) => {
