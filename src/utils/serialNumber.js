@@ -93,6 +93,50 @@ export const recordSerialUsed = async (type, warehouseId, serialNo) => {
 }
 
 /**
+ * Recomputes the serialCounters tracker for this (type, warehouse) from
+ * what's actually left in local transaction history - call this after
+ * ANY deletion (a normal Delete, or an un-void that removes a Cancelled
+ * record). Without this, deleting the highest-numbered serial leaves
+ * the tracker stale, still pointing at a number that no longer exists
+ * - suggestNextSerial would then skip straight past a serial that's
+ * now genuinely available again (e.g. #506 un-voided and deleted, but
+ * the next new entry gets suggested as #507 instead of the now-free
+ * #506). Sets the tracker to the actual remaining highest, or removes
+ * the tracker entry entirely if nothing is left at all.
+ */
+export const recalculateSerialCounter = async (type, warehouseId) => {
+  if (!warehouseId) return
+
+  const remaining = await db.transactions
+    .where('type')
+    .equals(type)
+    .and((tx) => tx.warehouseId === warehouseId)
+    .toArray()
+
+  let best = null
+  for (const tx of remaining) {
+    const parsed = parseSerial(tx.serialNo)
+    if (!parsed) continue
+    if (!best || parsed.number > best.number) best = parsed
+  }
+
+  const key = [warehouseId, type]
+  if (!best) {
+    await db.serialCounters.delete(key)
+    return
+  }
+
+  await db.serialCounters.put({
+    warehouseId,
+    type,
+    prefix: best.prefix,
+    digits: best.digits,
+    number: best.number,
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+/**
  * Suggests a starting serial for a new document of this (type, warehouse):
  * one higher than the highest known serial in that pool. Falls back to
  * `fallback` (default "1") if no prior documents exist for this

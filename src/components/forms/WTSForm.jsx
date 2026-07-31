@@ -28,7 +28,7 @@ import { ChevronLeft, ChevronRight, X, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
-import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed } from '../../utils/serialNumber.js'
+import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter } from '../../utils/serialNumber.js'
 import {
   liveFormatNumber,
   parseFormattedNumber,
@@ -498,6 +498,7 @@ function WTSForm({ onClose, prefill }) {
     setIsSaving(true)
     await reverseWtsFromPiles(loadedTransaction)
     await db.transactions.delete(loadedTransaction.id)
+    await recalculateSerialCounter('WTS', currentWarehouseId)
     toast.success(`WTS ${serialNo.trim()} deleted`)
     resetForm(serialNo.trim())
     setIsSaving(false)
@@ -535,6 +536,7 @@ function WTSForm({ onClose, prefill }) {
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
     await db.transactions.delete(loadedTransaction.id)
+    await recalculateSerialCounter('WTS', currentWarehouseId)
     toast.success(`WTS ${serialNo.trim()} is no longer cancelled — available again`)
     resetForm(serialNo.trim())
     setIsSaving(false)

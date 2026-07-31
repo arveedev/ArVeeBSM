@@ -34,6 +34,7 @@ import {
   stepSerial,
   findTransactionBySerial,
   recordSerialUsed,
+  recalculateSerialCounter,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction } from '../../services/googleSheetsBridge.js'
@@ -509,6 +510,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     }
 
     await db.transactions.delete(loadedTransaction.id)
+    await recalculateSerialCounter(type, currentWarehouseId)
     queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
@@ -551,6 +553,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
     await db.transactions.delete(loadedTransaction.id)
+    await recalculateSerialCounter(type, currentWarehouseId)
     queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()

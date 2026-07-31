@@ -4817,3 +4817,27 @@ below.
   sizing, navigation animation refinements, CalendarDatePicker
   overflow, sticky serial timing, cancelled-state messaging, form
   entrance/exit animation).
+
+## CRITICAL FIX: un-voiding (or deleting) the highest serial left the tracker stale, skipping the now-free number
+
+- Found the exact reported bug: recordSerialUsed only ever moves the
+  serialCounters tracker FORWARD (correctly, to prevent regressions) -
+  but nothing ever moved it back down when the highest-numbered record
+  was deleted. So un-voiding #506 (which deletes the Cancelled record
+  entirely) left the tracker still pointing at 506, meaning the next
+  session's suggested serial was 507 - skipping straight past the
+  genuinely-available #506. The same bug applied to an ordinary Delete
+  of the highest serial too, not just un-void.
+- Added recalculateSerialCounter - recomputes the tracker from what's
+  actually left in local transaction history for that (type,
+  warehouse), or removes the tracker entry entirely if nothing remains
+  at all. Called after every deletion in all three forms (both the
+  normal Delete flow and the un-void flow), so the tracker always
+  reflects reality rather than a stale high-water mark.
+- Verified with a 7-case test built directly around the reported
+  scenario (503-506 present, 506 un-voided/deleted, tracker correctly
+  recalculates to 505, next suggestion correctly becomes 506 instead of
+  507), plus the normal-delete case, the delete-the-only-one edge case,
+  and confirming deleting a non-highest serial doesn't disturb the
+  correct tracker value.
+- Re-verified all 59 .jsx files with the real parser.
