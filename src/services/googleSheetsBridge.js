@@ -992,11 +992,10 @@ export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSinc
   if (!warehouseNames || warehouseNames.length === 0) return { ok: true, bySource: [] }
 
   const sources = await getAllSheetSources()
-  const bySource = []
 
-  for (const source of sources) {
+  const fetchOneSource = async (source) => {
     const sheetName = source[sheetNameKey]
-    if (!sheetName) continue
+    if (!sheetName) return null
 
     const url = new URL(source.webAppUrl)
     url.searchParams.set('action', 'fetchTransactionsBulk')
@@ -1009,21 +1008,22 @@ export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSinc
       const response = await fetch(url.toString())
       if (!response.ok) {
         console.error(`fetchTransactionsBulk: HTTP ${response.status} for ${type} on sheet "${sheetName}"`)
-        bySource.push({ sourceId: source.id, ok: false, rows: [] })
-        continue
+        return { sourceId: source.id, ok: false, rows: [] }
       }
       const payload = await response.json()
       if (payload.status === 'SUCCESS') {
-        bySource.push({ sourceId: source.id, ok: true, rows: payload.rows ?? [] })
-      } else {
-        console.error(`fetchTransactionsBulk: non-SUCCESS response for ${type} on sheet "${sheetName}":`, payload)
-        bySource.push({ sourceId: source.id, ok: false, rows: [] })
+        return { sourceId: source.id, ok: true, rows: payload.rows ?? [] }
       }
+      console.error(`fetchTransactionsBulk: non-SUCCESS response for ${type} on sheet "${sheetName}":`, payload)
+      return { sourceId: source.id, ok: false, rows: [] }
     } catch (err) {
       console.error(`fetchTransactionsBulk: request failed for ${type} on sheet "${sheetName}":`, err)
-      bySource.push({ sourceId: source.id, ok: false, rows: [] })
+      return { sourceId: source.id, ok: false, rows: [] }
     }
   }
+
+  const results = await Promise.all(sources.map(fetchOneSource))
+  const bySource = results.filter(Boolean)
 
   return { ok: true, bySource }
 }

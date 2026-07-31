@@ -5083,3 +5083,41 @@ below.
 - The Apps Script file needs to be deployed by the user before any of
   this can function end-to-end - see the delivered
   apps-script-full-replacement.js.
+
+## CRITICAL FIX: preload was 15 minutes due to a real inefficiency, floor still not updating after preload finished
+
+- Found the actual cause of the slow preload: preloadTransactionsForUser
+  looped per-warehouse and made a SEPARATE fetchTransactionsBulk call
+  for each one, even though that function already accepts a list of
+  warehouse names and can fetch several at once - if a user is assigned
+  to multiple warehouses, this multiplied the network call count by
+  however many warehouses they had, on top of every configured sheet
+  source already being hit sequentially inside each call. Rewrote the
+  preload logic to batch: per type, ALL warehouses needing a full pull
+  are fetched in ONE request, and all warehouses needing only an
+  incremental check are fetched in a SEPARATE single request - at most
+  2 calls per type total, completely independent of warehouse count.
+- Also parallelized fetchTransactionsBulk's per-source loop (was
+  awaiting each configured sheet source sequentially one at a time;
+  now uses Promise.all) - total time for that call is now bounded by
+  the single slowest source instead of the sum of every source, which
+  compounds the speedup further when several sheet sources are
+  configured. This benefits every caller of fetchTransactionsBulk, not
+  just preload.
+- Found and fixed the floor-not-updating bug: the floor calculation was
+  a one-time async effect that ran once when the form opened. Since
+  preload runs in the background and can still be running (or finishes
+  well after) that moment, there was nothing to trigger a recompute
+  once new historical data silently arrived - the floor could get
+  stuck showing a stale value indefinitely, in both StockFormBase and
+  SackFormBase. Replaced the local-data portion with a reactive
+  useLiveQuery, which automatically re-runs whenever local transaction
+  data changes for that (type, warehouse) - including the moment
+  preload inserts new rows - so the floor now updates itself with no
+  separate coordination needed.
+- Verified with a 9-case test covering the network-call-count reduction
+  (confirming the new approach's cost is genuinely independent of
+  warehouse count, unlike the old per-warehouse looping), the
+  parallelization time-bound change, and the reactive floor correctly
+  picking up newly-preloaded data without a stale value persisting.
+- Re-verified all 60 .jsx files with the real parser.

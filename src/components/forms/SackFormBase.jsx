@@ -196,32 +196,39 @@ const SackFormBase = forwardRef(function SackFormBase(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, currentWarehouseId])
 
+  const localTxForFloor = useLiveQuery(
+    () => currentWarehouseId
+      ? db.transactions.where('type').equals(type).and((tx) => tx.warehouseId === currentWarehouseId).toArray()
+      : Promise.resolve([]),
+    [type, currentWarehouseId]
+  )
+  const localFloorMin = (() => {
+    if (!localTxForFloor) return null
+    let min = null
+    for (const tx of localTxForFloor) {
+      const num = parseInt(String(tx.serialNo ?? '').replace(/\D/g, ''), 10)
+      if (Number.isNaN(num)) continue
+      if (min === null || num < min) min = num
+    }
+    return min
+  })()
+
   useEffect(() => {
     if (!currentWarehouseId) { setFloorSerialNumber(null); return }
     let cancelled = false
     ;(async () => {
-      const localTx = await db.transactions
-        .where('type').equals(type)
-        .and((tx) => tx.warehouseId === currentWarehouseId)
-        .toArray()
-      let localMin = null
-      for (const tx of localTx) {
-        const num = parseInt(String(tx.serialNo ?? '').replace(/\D/g, ''), 10)
-        if (Number.isNaN(num)) continue
-        if (localMin === null || num < localMin) localMin = num
-      }
       const preloaded = await isPreloadComplete(currentWarehouseId, type)
       let sheetMin = null
       if (!preloaded) {
         const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
         sheetMin = sheetResult.ok ? sheetResult.min : null
       }
-      const candidates = [localMin, sheetMin].filter((n) => n != null)
+      const candidates = [localFloorMin, sheetMin].filter((n) => n != null)
       const floor = candidates.length > 0 ? Math.min(...candidates) : null
       if (!cancelled) setFloorSerialNumber(floor)
     })()
     return () => { cancelled = true }
-  }, [type, currentWarehouseId, currentWarehouse?.name])
+  }, [type, currentWarehouseId, currentWarehouse?.name, localFloorMin])
 
   useEffect(() => {
     if (!prefill) return

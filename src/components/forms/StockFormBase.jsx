@@ -354,38 +354,51 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // established yet" (still loading, or genuinely nothing on record
   // anywhere), in which case floor checks are skipped entirely rather
   // than risk blocking on incomplete information.
+  // Reactive local floor: automatically recomputes whenever local
+  // transaction data for this (type, warehouse) changes - crucially,
+  // including when background preload inserts new historical rows.
+  // The previous one-time-effect approach could get stuck showing a
+  // stale floor if preload was still running (or finished later) when
+  // the form first opened, since nothing would trigger a recompute
+  // once new data silently arrived in the background.
+  const localTxForFloor = useLiveQuery(
+    () => currentWarehouseId
+      ? db.transactions.where('type').equals(type).and((tx) => tx.warehouseId === currentWarehouseId).toArray()
+      : Promise.resolve([]),
+    [type, currentWarehouseId]
+  )
+  const localFloorMin = (() => {
+    if (!localTxForFloor) return null
+    let min = null
+    for (const tx of localTxForFloor) {
+      const num = parseInt(String(tx.serialNo ?? '').replace(/\D/g, ''), 10)
+      if (Number.isNaN(num)) continue
+      if (min === null || num < min) min = num
+    }
+    return min
+  })()
+
+  // Sheet fallback: only needed until this (warehouse, type) is fully
+  // preloaded, at which point local data alone is already
+  // comprehensive and this is skipped entirely, avoiding a slow
+  // network round-trip for no benefit. Re-runs whenever the reactive
+  // local floor changes, so it stays in sync with preload completing.
   useEffect(() => {
     if (!currentWarehouseId) { setFloorSerialNumber(null); return }
     let cancelled = false
     ;(async () => {
-      const localTx = await db.transactions
-        .where('type').equals(type)
-        .and((tx) => tx.warehouseId === currentWarehouseId)
-        .toArray()
-      let localMin = null
-      for (const tx of localTx) {
-        const num = parseInt(String(tx.serialNo ?? '').replace(/\D/g, ''), 10)
-        if (Number.isNaN(num)) continue
-        if (localMin === null || num < localMin) localMin = num
-      }
-
-      // Once this (warehouse, type) has been fully preloaded, local
-      // data alone is already comprehensive - skip the Sheet lookup
-      // entirely rather than pay for a slow network round-trip on
-      // every warehouse/type change for no benefit.
       const preloaded = await isPreloadComplete(currentWarehouseId, type)
       let sheetMin = null
       if (!preloaded) {
         const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
         sheetMin = sheetResult.ok ? sheetResult.min : null
       }
-
-      const candidates = [localMin, sheetMin].filter((n) => n != null)
+      const candidates = [localFloorMin, sheetMin].filter((n) => n != null)
       const floor = candidates.length > 0 ? Math.min(...candidates) : null
       if (!cancelled) setFloorSerialNumber(floor)
     })()
     return () => { cancelled = true }
-  }, [type, currentWarehouseId, currentWarehouse?.name])
+  }, [type, currentWarehouseId, currentWarehouse?.name, localFloorMin])
 
   const applyPileDefaults = (targetPileId) => {
     if (type !== 'WSI') return

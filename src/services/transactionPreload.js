@@ -26,19 +26,31 @@
 //     Sheet lookup (fetchTransactionBySerial, already built) remains
 //     the safety net for them if they navigate into unpreloaded
 //     territory.
+//
+// Batching: per type, ALL of a user's warehouses needing a full pull
+// are fetched in ONE request (fetchTransactionsBulk already accepts a
+// list of warehouse names), and all warehouses needing only an
+// incremental check are fetched in a SEPARATE single request - instead
+// of one request per warehouse. A user with several assigned
+// warehouses previously multiplied the network call count by however
+// many warehouses they had; this reduces it to at most 2 calls per
+// type (each of which is itself parallelized across every configured
+// sheet source - see fetchTransactionsBulk), regardless of warehouse
+// count. This was the primary cause of a very slow first preload.
 
 import { db } from '../db/dexie.js'
 import { fetchTransactionsBulk, mapSheetRowToTransaction } from './googleSheetsBridge.js'
 import { recordSerialUsed } from '../utils/serialNumber.js'
 
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
+const SERIAL_COLUMN_BY_TYPE = { WSR: 'WSR #', WSI: 'WSI #', ESR: 'ESR#', ESI: 'ESI#' }
 
 /**
  * Preloads transaction history for every warehouse the given user is
  * assigned to. Safe to call on every login - already-complete
  * (warehouseId, type) combinations just do a quick incremental check
  * instead of a full re-pull. onProgress(status) is called before each
- * (warehouseId, type) step, e.g. for a UI progress indicator.
+ * type's batch, e.g. for a UI progress indicator.
  */
 export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
   if (!user || user.role === 'Admin' || user.role === 'Visitor') return
@@ -49,75 +61,108 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
   const validWarehouses = warehouses.filter(Boolean)
   if (validWarehouses.length === 0) return
 
-  const warehouseNames = validWarehouses.map((w) => w.name)
   const warehouseIdByName = new Map(validWarehouses.map((w) => [w.name, w.warehouseId]))
 
   for (const type of PRELOAD_TYPES) {
-    for (const warehouse of validWarehouses) {
-      onProgress?.({ warehouseName: warehouse.name, type })
-      await preloadOne(warehouse, type, warehouseNames, warehouseIdByName)
-    }
+    onProgress?.({ type, warehouseCount: validWarehouses.length })
+    await preloadOneType(type, validWarehouses, warehouseIdByName)
   }
 }
 
-const preloadOne = async (warehouse, type, allWarehouseNames, warehouseIdByName) => {
-  const key = [warehouse.warehouseId, type]
-  const state = await db.preloadState.get(key)
-  const isFirstPull = !state || !state.complete
+const preloadOneType = async (type, warehouses, warehouseIdByName) => {
+  // Split into two groups: warehouses that have never completed a
+  // preload for this type (need everything), and warehouses that
+  // already have (only need whatever's changed since). Each group gets
+  // exactly one batched network request covering all warehouses in it.
+  const states = await db.preloadState.bulkGet(warehouses.map((w) => [w.warehouseId, type]))
+  const needsFull = []
+  const needsIncremental = []
+  let oldestIncrementalCheck = null
 
-  // Every already-existing local serial for this (warehouse, type),
-  // fetched once upfront into a Set for fast membership checks -
-  // avoids one database query per fetched row, which would be far too
-  // slow for a warehouse with any meaningful amount of history.
+  warehouses.forEach((warehouse, i) => {
+    const state = states[i]
+    if (!state || !state.complete) {
+      needsFull.push(warehouse)
+    } else {
+      needsIncremental.push(warehouse)
+      if (!oldestIncrementalCheck || state.lastCheckedAt < oldestIncrementalCheck) {
+        oldestIncrementalCheck = state.lastCheckedAt
+      }
+    }
+  })
+
+  // Existing local serials for every one of these warehouses, fetched
+  // once for the whole type rather than once per warehouse - avoids
+  // one database query per fetched row later.
+  const warehouseIds = warehouses.map((w) => w.warehouseId)
   const localTx = await db.transactions
     .where('type').equals(type)
-    .and((tx) => tx.warehouseId === warehouse.warehouseId)
+    .and((tx) => warehouseIds.includes(tx.warehouseId))
     .toArray()
-  const existingSerials = new Set(localTx.map((tx) => tx.serialNo))
+  const existingSerialsByWarehouse = new Map(warehouseIds.map((id) => [id, new Set()]))
+  for (const tx of localTx) {
+    existingSerialsByWarehouse.get(tx.warehouseId)?.add(tx.serialNo)
+  }
 
-  const result = await fetchTransactionsBulk(type, [warehouse.name], {
-    modifiedSince: isFirstPull ? undefined : state.lastCheckedAt,
-  })
-  if (!result.ok) return // network/offline - leave preloadState as-is, retried next login
+  const highestImportedByWarehouse = new Map()
 
-  let highestImportedSerial = null
+  const processGroup = async (group, modifiedSince) => {
+    if (group.length === 0) return
+    const result = await fetchTransactionsBulk(type, group.map((w) => w.name), { modifiedSince })
+    if (!result.ok) return // network/offline - preloadState left as-is for this group, retried next login
 
-  for (const sourceResult of result.bySource) {
-    if (!sourceResult.ok) continue
-    for (const row of sourceResult.rows) {
-      const serialColumn = type === 'WSR' ? 'WSR #' : type === 'WSI' ? 'WSI #' : type === 'ESR' ? 'ESR#' : 'ESI#'
-      const serialNo = row[serialColumn]
-      if (!serialNo) continue
-      if (existingSerials.has(String(serialNo))) continue // app-created record already exists - never overwrite it
+    for (const sourceResult of result.bySource) {
+      if (!sourceResult.ok) continue
+      for (const row of sourceResult.rows) {
+        const serialNo = row[SERIAL_COLUMN_BY_TYPE[type]]
+        if (!serialNo) continue
 
-      const rowWarehouseName = row['Warehouse Name']
-      const rowWarehouseId = warehouseIdByName.get(rowWarehouseName) ?? warehouse.warehouseId
+        const rowWarehouseName = row['Warehouse Name']
+        const rowWarehouseId = warehouseIdByName.get(rowWarehouseName)
+        if (!rowWarehouseId) continue // row belongs to a warehouse outside this batch - skip
 
-      const varietyByName = type === 'WSR' || type === 'WSI'
-        ? new Map((await db.varietyTypes.toArray()).map((v) => [v.name.trim().toLowerCase(), v.varietyId]))
-        : undefined
+        const existingSerials = existingSerialsByWarehouse.get(rowWarehouseId)
+        if (existingSerials?.has(String(serialNo))) continue // app-created record already exists - never overwrite it
 
-      const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName })
-      await db.transactions.add(imported)
-      existingSerials.add(String(serialNo))
+        const varietyByName = type === 'WSR' || type === 'WSI'
+          ? new Map((await db.varietyTypes.toArray()).map((v) => [v.name.trim().toLowerCase(), v.varietyId]))
+          : undefined
 
-      const num = parseInt(String(serialNo).replace(/\D/g, ''), 10)
-      if (!Number.isNaN(num) && (highestImportedSerial === null || num > highestImportedSerial)) {
-        highestImportedSerial = String(serialNo)
+        const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName })
+        await db.transactions.add(imported)
+        existingSerials?.add(String(serialNo))
+
+        const num = parseInt(String(serialNo).replace(/\D/g, ''), 10)
+        if (!Number.isNaN(num)) {
+          const current = highestImportedByWarehouse.get(rowWarehouseId)
+          if (!current || num > current.num) {
+            highestImportedByWarehouse.set(rowWarehouseId, { num, serialNo: String(serialNo) })
+          }
+        }
       }
+    }
+
+    // Only mark this batch's warehouses complete after their fetch
+    // genuinely succeeded - a network failure above already returned
+    // early, leaving preloadState untouched for a clean retry next login.
+    for (const warehouse of group) {
+      await db.preloadState.put({
+        warehouseId: warehouse.warehouseId,
+        type,
+        complete: true,
+        lastCheckedAt: new Date().toISOString(),
+      })
     }
   }
 
-  if (highestImportedSerial) {
-    await recordSerialUsed(type, warehouse.warehouseId, highestImportedSerial)
-  }
+  await Promise.all([
+    processGroup(needsFull, undefined),
+    processGroup(needsIncremental, oldestIncrementalCheck),
+  ])
 
-  await db.preloadState.put({
-    warehouseId: warehouse.warehouseId,
-    type,
-    complete: true,
-    lastCheckedAt: new Date().toISOString(),
-  })
+  for (const [warehouseId, { serialNo }] of highestImportedByWarehouse) {
+    await recordSerialUsed(type, warehouseId, serialNo)
+  }
 }
 
 /**
