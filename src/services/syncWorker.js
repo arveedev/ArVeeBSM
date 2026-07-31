@@ -41,10 +41,14 @@ export const processSyncQueue = async () => {
 
     for (const tx of pending) {
       try {
-        const pile = tx.pileId ? await db.piles.get(tx.pileId) : null
-        const warehouse = pile ? await db.warehouses.get(pile.warehouseId) : null
+        // warehouseId is a direct field on every transaction type - using
+        // it directly (rather than deriving it via the pile) also
+        // correctly handles Cancelled records, which have pileId: null
+        // but still carry their own warehouseId; deriving via pile alone
+        // would leave a cancelled record's Sheet row with blank
+        // warehouse info.
+        const warehouse = tx.warehouseId ? await db.warehouses.get(tx.warehouseId) : null
         const province = warehouse ? await db.provinces.get(warehouse.provinceId) : null
-        const variety = tx.varietyId ? await db.varietyTypes.get(tx.varietyId) : null
         const transactionType = tx.transactionTypeId
           ? await db.transactionTypes.get(tx.transactionTypeId)
           : null
@@ -53,8 +57,17 @@ export const processSyncQueue = async () => {
           warehouseCode: warehouse?.code ?? null,
           warehouseName: warehouse?.name ?? null,
           provinceCode: province?.code ?? null,
-          varietyName: variety?.name ?? null,
           transactionTypeName: transactionType?.name ?? null,
+        }
+
+        if (tx.type === 'WTS') {
+          const issuedVariety = tx.issuedVarietyId ? await db.varietyTypes.get(tx.issuedVarietyId) : null
+          const receivedVariety = tx.receivedVarietyId ? await db.varietyTypes.get(tx.receivedVarietyId) : null
+          context.issuedVarietyName = issuedVariety?.name ?? null
+          context.receivedVarietyName = receivedVariety?.name ?? null
+        } else {
+          const variety = tx.varietyId ? await db.varietyTypes.get(tx.varietyId) : null
+          context.varietyName = variety?.name ?? null
         }
 
         // hasBeenBackedUp persists even after isSynced is reset to false

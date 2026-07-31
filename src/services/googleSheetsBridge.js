@@ -512,6 +512,61 @@ const buildBackupRow = (transaction, context) => {
   }
 }
 
+/**
+ * WTS (Warehouse Transfer Slip) is an in-warehouse transfer, not a
+ * receipt or issuance from an outside party - but per explicit request,
+ * it still needs to be recorded on both the receipts and issues Sheets
+ * (using the WTS serial number as the identifying value in both, not a
+ * separate WSR/WSI serial), since those are the two sheets the app
+ * already syncs to and searches for historical lookups. Returns two
+ * separate row objects - receivedRow shaped like a WSR row (goes to
+ * the receipts sheet), issuedRow shaped like a WSI row (goes to the
+ * issues sheet) - rather than one row like buildBackupRow, since WTS
+ * genuinely needs both.
+ */
+const buildWtsBackupRows = (transaction, context) => {
+  const { warehouseCode, provinceCode, transactionTypeName } = context
+  const warehouseName = stripWarehouseCodePrefix(context.warehouseName)
+  const isCancelled = transaction.status === 'Cancelled'
+
+  const receivedRow = {
+    Timestamp: formatLocalTimestamp(),
+    Date: transaction.date,
+    Transaction: transactionTypeName ?? '',
+    Variety: context.receivedVarietyName ?? '',
+    Bags: transaction.receivedBags ?? null,
+    'Net Kilos': transaction.receivedNetKilos ?? null,
+    'Warehouse Name': warehouseName ?? '',
+    'Customer Name': isCancelled ? 'CANCELLED' : null,
+    Province: provinceCode ?? '',
+    'Net Bags': transaction.receivedBags != null ? transaction.receivedNetKilos / 50 : null,
+    'WH Code': warehouseCode ?? null,
+    'WSR #': transaction.serialNo,
+    'WSI #': null,
+    'Batch No': null,
+    AGE: null,
+  }
+
+  const issuedRow = {
+    Timestamp: formatLocalTimestamp(),
+    Date: transaction.date,
+    Transaction: transactionTypeName ?? '',
+    Variety: context.issuedVarietyName ?? '',
+    Bags: transaction.issuedBags ?? null,
+    'Net Kilos': transaction.issuedNetKilos ?? null,
+    'Warehouse Name': warehouseName ?? '',
+    'Customer Name': isCancelled ? 'CANCELLED' : null,
+    Province: provinceCode ?? '',
+    'Net Bags': transaction.issuedBags != null ? transaction.issuedNetKilos / 50 : null,
+    'WH Code': warehouseCode ?? null,
+    'AI #': transaction.aiNumber ?? null,
+    'WSI #': transaction.serialNo,
+    AGE: null,
+  }
+
+  return { receivedRow, issuedRow }
+}
+
 const SHEET_NAME_KEY_BY_TYPE = {
   WSR: 'receiptsSheetName',
   WSI: 'issuesSheetName',
@@ -585,6 +640,27 @@ const postToSheetsWithRetry = async (url, body, maxAttempts = 3) => {
  * or any sheet outside the four backup logs, not just a convention.
  */
 export const pushTransactionBackup = async (transaction, context = {}) => {
+  if (transaction.type === 'WTS') {
+    const source = await getActiveSheetSource()
+    if (!source) return { ok: false, reason: 'no_active_source' }
+    if (!isOnline()) return { ok: false, reason: 'offline' }
+
+    const { receivedRow, issuedRow } = buildWtsBackupRows(transaction, context)
+    const [receivedResult, issuedResult] = await Promise.all([
+      postToSheetsWithRetry(source.webAppUrl, {
+        action: 'appendTransaction', sheet: source.receiptsSheetName,
+        serialColumn: 'WSR #', row: receivedRow,
+      }),
+      postToSheetsWithRetry(source.webAppUrl, {
+        action: 'appendTransaction', sheet: source.issuesSheetName,
+        serialColumn: 'WSI #', row: issuedRow,
+      }),
+    ])
+    return (receivedResult.ok && issuedResult.ok)
+      ? { ok: true }
+      : { ok: false, reason: 'wts_partial_failure', receivedResult, issuedResult }
+  }
+
   const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[transaction.type]
   if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
   if (!WRITE_ALLOWLIST_KEYS.includes(sheetNameKey)) return { ok: false, reason: 'not_allowlisted' }
@@ -609,9 +685,31 @@ export const pushTransactionBackup = async (transaction, context = {}) => {
  * own serialNo (the 'Serial No' column every backup row now carries
  * consistently). Used when an already-saved WSR/WSI/ESR/ESI is edited,
  * so the Sheet stays in sync with what the app actually has rather than
- * accumulating a stale duplicate of the original values.
+ * accumulating a stale duplicate of the original values. WTS updates
+ * both its receipts-side and issues-side rows together.
  */
 export const updateTransactionBackup = async (transaction, context = {}) => {
+  if (transaction.type === 'WTS') {
+    const source = await getActiveSheetSource()
+    if (!source) return { ok: false, reason: 'no_active_source' }
+    if (!isOnline()) return { ok: false, reason: 'offline' }
+
+    const { receivedRow, issuedRow } = buildWtsBackupRows(transaction, context)
+    const [receivedResult, issuedResult] = await Promise.all([
+      postToSheetsWithRetry(source.webAppUrl, {
+        action: 'updateTransaction', sheet: source.receiptsSheetName,
+        matchColumn: 'WSR #', matchValue: transaction.serialNo, row: receivedRow,
+      }),
+      postToSheetsWithRetry(source.webAppUrl, {
+        action: 'updateTransaction', sheet: source.issuesSheetName,
+        matchColumn: 'WSI #', matchValue: transaction.serialNo, row: issuedRow,
+      }),
+    ])
+    return (receivedResult.ok && issuedResult.ok)
+      ? { ok: true }
+      : { ok: false, reason: 'wts_partial_failure', receivedResult, issuedResult }
+  }
+
   const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[transaction.type]
   if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
   if (!WRITE_ALLOWLIST_KEYS.includes(sheetNameKey)) return { ok: false, reason: 'not_allowlisted' }
@@ -656,8 +754,29 @@ export const updateTransactionBackup = async (transaction, context = {}) => {
  * update) and was reverted. See updateTransactionBackup's comment for
  * the full explanation - do not re-add a hard warehouseCode
  * requirement without being able to verify it against real data first.
+ * WTS deletes both its receipts-side and issues-side rows together.
  */
 export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => {
+  if (type === 'WTS') {
+    const source = await getActiveSheetSource()
+    if (!source) return { ok: false, reason: 'no_active_source' }
+    if (!isOnline()) return { ok: false, reason: 'offline' }
+
+    const [receivedResult, issuedResult] = await Promise.all([
+      postToSheetsWithRetry(source.webAppUrl, {
+        action: 'deleteTransaction', sheet: source.receiptsSheetName,
+        matchColumn: 'WSR #', matchValue: serialNo, warehouseCode: warehouseCode ?? null,
+      }),
+      postToSheetsWithRetry(source.webAppUrl, {
+        action: 'deleteTransaction', sheet: source.issuesSheetName,
+        matchColumn: 'WSI #', matchValue: serialNo, warehouseCode: warehouseCode ?? null,
+      }),
+    ])
+    return (receivedResult.ok && issuedResult.ok)
+      ? { ok: true }
+      : { ok: false, reason: 'wts_partial_failure', receivedResult, issuedResult }
+  }
+
   const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[type]
   if (!sheetNameKey) return { ok: false, reason: 'unsupported_type' }
   if (!WRITE_ALLOWLIST_KEYS.includes(sheetNameKey)) return { ok: false, reason: 'not_allowlisted' }

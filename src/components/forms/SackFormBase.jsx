@@ -37,7 +37,8 @@ import {
   recalculateSerialCounter,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
-import { fetchTransactionBySerial, mapSheetRowToTransaction } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet } from '../../services/googleSheetsBridge.js'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO } from '../../utils/calculations.js'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
@@ -73,6 +74,10 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [unresolvedSiaHint, setUnresolvedSiaHint] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
+  const [floorSerialNumber, setFloorSerialNumber] = useState(null)
+  const [showFloorWarning, setShowFloorWarning] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
   const [showSaveHint, setShowSaveHint] = useState(false)
@@ -175,6 +180,29 @@ const SackFormBase = forwardRef(function SackFormBase(
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, currentWarehouseId])
+
+  useEffect(() => {
+    if (!currentWarehouseId) { setFloorSerialNumber(null); return }
+    let cancelled = false
+    ;(async () => {
+      const localTx = await db.transactions
+        .where('type').equals(type)
+        .and((tx) => tx.warehouseId === currentWarehouseId)
+        .toArray()
+      let localMin = null
+      for (const tx of localTx) {
+        const num = parseInt(String(tx.serialNo ?? '').replace(/\D/g, ''), 10)
+        if (Number.isNaN(num)) continue
+        if (localMin === null || num < localMin) localMin = num
+      }
+      const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
+      const sheetMin = sheetResult.ok ? sheetResult.min : null
+      const candidates = [localMin, sheetMin].filter((n) => n != null)
+      const floor = candidates.length > 0 ? Math.min(...candidates) : null
+      if (!cancelled) setFloorSerialNumber(floor)
+    })()
+    return () => { cancelled = true }
+  }, [type, currentWarehouseId, currentWarehouse?.name])
 
   useEffect(() => {
     if (!prefill) return
@@ -340,8 +368,27 @@ const SackFormBase = forwardRef(function SackFormBase(
     await checkAndLoadSerial(value)
   }
 
+  const handleSerialBlur = () => {
+    if (isAdmin || loadedTransaction || floorSerialNumber == null) return
+    const typedNumber = parseInt(serialNo.trim().replace(/\D/g, ''), 10)
+    if (Number.isNaN(typedNumber)) return
+    if (typedNumber < floorSerialNumber) setShowFloorWarning(true)
+  }
+
+  const handleFloorWarningAcknowledge = async () => {
+    setShowFloorWarning(false)
+    const latest = await suggestNextSerial(type, currentWarehouseId)
+    setSerialNo(latest)
+    await checkAndLoadSerial(latest)
+  }
+
   const handleStepBack = async () => {
     const prevSerial = stepSerial(serialNo.trim(), -1)
+    const prevNumber = parseInt(prevSerial.replace(/\D/g, ''), 10)
+    if (!isAdmin && floorSerialNumber != null && !Number.isNaN(prevNumber) && prevNumber < floorSerialNumber) {
+      toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
+      return
+    }
     setSerialNo(prevSerial)
     setNavFlash('back')
     setTimeout(() => setNavFlash(null), 250)
@@ -653,6 +700,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                 type="text"
                 value={serialNo}
                 onChange={(e) => handleSerialChange(e.target.value)}
+                onBlur={handleSerialBlur}
                 className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
                 placeholder="0000000"
               />
@@ -914,6 +962,17 @@ const SackFormBase = forwardRef(function SackFormBase(
         cancelLabel="No"
         onConfirm={handleConfirmUnvoid}
         onCancel={() => setPendingVoidAction(null)}
+      />
+
+      <ConfirmDialog
+        open={showFloorWarning}
+        icon={AlertTriangle}
+        title={`Series #${serialNo.trim()} does not exist`}
+        description={`No ${type} records exist before #${floorSerialNumber} for this warehouse. Tap OK to return to the latest available serial.`}
+        confirmLabel="OK"
+        cancelLabel="OK"
+        onConfirm={handleFloorWarningAcknowledge}
+        onCancel={handleFloorWarningAcknowledge}
       />
 
       {showAuthorityPicker && currentWarehouseId && (

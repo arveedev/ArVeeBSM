@@ -4841,3 +4841,55 @@ below.
   and confirming deleting a non-highest serial doesn't disturb the
   correct tracker value.
 - Re-verified all 59 .jsx files with the real parser.
+
+## WTS now pushes to both receipts and issues Sheets - core sync wiring done, historical lookup/floor extension not yet done
+
+- Confirmed WTS transactions were NEVER pushed to Sheets at all
+  previously (no entry in SHEET_NAME_KEY_BY_TYPE meant pushTransactionBackup
+  returned 'unsupported_type' immediately) - every WTS transaction ever
+  created had been silently retrying forever in the sync queue with no
+  visible indication.
+- Added buildWtsBackupRows - builds two separate rows (receivedRow
+  shaped like a WSR row, issuedRow shaped like a WSI row) from a single
+  WTS transaction, both carrying the SAME WTS serial number (not a
+  separate WSR/WSI serial) in their respective serial columns, per
+  explicit request.
+- pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup
+  all now special-case type === 'WTS': push/update/delete BOTH rows (one
+  on the receipts sheet, one on the issues sheet) in parallel, requiring
+  both to succeed for an overall ok result - a partial failure (one side
+  written, one side failed) is flagged rather than silently treated as
+  success, so it isn't lost track of.
+- Fixed a related real bug found while doing this: syncWorker.js's
+  warehouse lookup was deriving warehouse only via the transaction's
+  pile (pile.warehouseId) - meaning a Cancelled record (pileId: null)
+  was syncing with completely blank warehouse info. Switched to use
+  tx.warehouseId directly (present on every transaction type,
+  including WTS which has no single pile at all), which also naturally
+  supports WTS's dual-variety context (issuedVarietyName +
+  receivedVarietyName looked up separately, instead of the single
+  varietyName every other type uses).
+- Wired queueTransactionDeletion into WTSForm's delete and un-void
+  flows, which never called it before (matching the pattern already
+  used in StockFormBase/SackFormBase) - WTS deletions now actually
+  reach the Sheets backup instead of only ever removing the local copy.
+- Verified with a 13-case test covering: both rows correctly sharing
+  the WTS serial in their own respective columns, each row correctly
+  carrying its own side's variety/bags/kilos without mixing them up,
+  warehouse prefix stripping applying to both, Cancelled status
+  reflecting on both rows, and the both-must-succeed combination logic
+  for push/update/delete.
+- Re-verified all 59 .jsx files with the real parser.
+
+## STILL NOT DONE for WTS (explicitly, so not mistaken for complete):
+- checkAndLoadSerial in WTSForm does NOT yet fall back to a Sheet
+  lookup - WTS can now genuinely have historical Sheet data (since it's
+  finally being pushed), but the pull-in logic (mapSheetRowToTransaction
+  reconstructing a WTS from combining its received-side and issued-side
+  rows) has not been built.
+- The floor/EOF blocking feature (built for StockFormBase/SackFormBase
+  in the prior round) has not been extended to WTSForm.
+- Everything else still pending from earlier rounds (pile layout PDF
+  text sizing, navigation animation refinements, CalendarDatePicker
+  overflow, sticky serial timing, cancelled-state messaging, form
+  entrance/exit animation).

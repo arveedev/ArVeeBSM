@@ -68,7 +68,8 @@ import {
   recalculateSerialCounter,
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile } from '../../utils/pileLedger.js'
-import { fetchTransactionBySerial, mapSheetRowToTransaction } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet } from '../../services/googleSheetsBridge.js'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import SerialNumberField from './SerialNumberField.jsx'
@@ -163,6 +164,10 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
+  const [floorSerialNumber, setFloorSerialNumber] = useState(null) // lowest known real serial number (local + Sheet combined) for this (type, warehouse)
+  const [showFloorWarning, setShowFloorWarning] = useState(false)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
   // Live lookup of the linked AI authority, so its remaining balance can
@@ -317,6 +322,38 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, currentWarehouseId])
+
+  // Determine the true floor (lowest known real serial number) for this
+  // (type, warehouse), combining local transaction history with the
+  // Sheet's own record - fetched once per warehouse/type change and
+  // cached, not re-fetched on every navigation. null means "no floor
+  // established yet" (still loading, or genuinely nothing on record
+  // anywhere), in which case floor checks are skipped entirely rather
+  // than risk blocking on incomplete information.
+  useEffect(() => {
+    if (!currentWarehouseId) { setFloorSerialNumber(null); return }
+    let cancelled = false
+    ;(async () => {
+      const localTx = await db.transactions
+        .where('type').equals(type)
+        .and((tx) => tx.warehouseId === currentWarehouseId)
+        .toArray()
+      let localMin = null
+      for (const tx of localTx) {
+        const num = parseInt(String(tx.serialNo ?? '').replace(/\D/g, ''), 10)
+        if (Number.isNaN(num)) continue
+        if (localMin === null || num < localMin) localMin = num
+      }
+
+      const sheetResult = await fetchSerialFloorFromSheet(type, currentWarehouse?.name)
+      const sheetMin = sheetResult.ok ? sheetResult.min : null
+
+      const candidates = [localMin, sheetMin].filter((n) => n != null)
+      const floor = candidates.length > 0 ? Math.min(...candidates) : null
+      if (!cancelled) setFloorSerialNumber(floor)
+    })()
+    return () => { cancelled = true }
+  }, [type, currentWarehouseId, currentWarehouse?.name])
 
   const applyPileDefaults = (targetPileId) => {
     if (type !== 'WSI') return
@@ -637,12 +674,38 @@ function StockFormBase({ type, title, onClose, prefill }) {
     await checkAndLoadSerial(value)
   }
 
+  // Checked on blur (not on every keystroke, which would interrupt
+  // typing) - if nothing was found for this serial anywhere (not
+  // loaded, meaning checkAndLoadSerial's local+Sheet lookups both came
+  // up empty) and it's below the known floor, a regular user gets a
+  // clear warning instead of silently being allowed to create a
+  // duplicate/out-of-sequence entry. Admins bypass this, since they
+  // may be intentionally backfilling genuinely undocumented history.
+  const handleSerialBlur = () => {
+    if (isAdmin || loadedTransaction || floorSerialNumber == null) return
+    const typedNumber = parseInt(serialNo.trim().replace(/\D/g, ''), 10)
+    if (Number.isNaN(typedNumber)) return
+    if (typedNumber < floorSerialNumber) setShowFloorWarning(true)
+  }
+
   const handleStepBack = async () => {
     const prevSerial = stepSerial(serialNo.trim(), -1)
+    const prevNumber = parseInt(prevSerial.replace(/\D/g, ''), 10)
+    if (!isAdmin && floorSerialNumber != null && !Number.isNaN(prevNumber) && prevNumber < floorSerialNumber) {
+      toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
+      return
+    }
     setSerialNo(prevSerial)
     setNavFlash('back')
     setTimeout(() => setNavFlash(null), 250)
     await checkAndLoadSerial(prevSerial)
+  }
+
+  const handleFloorWarningAcknowledge = async () => {
+    setShowFloorWarning(false)
+    const latest = await suggestNextSerial(type, currentWarehouseId)
+    setSerialNo(latest)
+    await checkAndLoadSerial(latest)
   }
 
   const handleStepForward = async () => {
@@ -1032,6 +1095,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 type="text"
                 value={serialNo}
                 onChange={(e) => handleSerialChange(e.target.value)}
+                onBlur={handleSerialBlur}
                 className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
                 placeholder="0000000"
               />
@@ -1610,6 +1674,17 @@ function StockFormBase({ type, title, onClose, prefill }) {
         cancelLabel="No"
         onConfirm={handleConfirmUnvoid}
         onCancel={() => setPendingVoidAction(null)}
+      />
+
+      <ConfirmDialog
+        open={showFloorWarning}
+        icon={AlertTriangle}
+        title={`Series #${serialNo.trim()} does not exist`}
+        description={`No ${type} records exist before #${floorSerialNumber} for this warehouse. Tap OK to return to the latest available serial.`}
+        confirmLabel="OK"
+        cancelLabel="OK"
+        onConfirm={handleFloorWarningAcknowledge}
+        onCancel={handleFloorWarningAcknowledge}
       />
     </div>
   )

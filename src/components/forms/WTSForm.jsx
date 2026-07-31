@@ -28,6 +28,7 @@ import { ChevronLeft, ChevronRight, X, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
+import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter } from '../../utils/serialNumber.js'
 import {
   liveFormatNumber,
@@ -499,6 +500,7 @@ function WTSForm({ onClose, prefill }) {
     await reverseWtsFromPiles(loadedTransaction)
     await db.transactions.delete(loadedTransaction.id)
     await recalculateSerialCounter('WTS', currentWarehouseId)
+    queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
     toast.success(`WTS ${serialNo.trim()} deleted`)
     resetForm(serialNo.trim())
     setIsSaving(false)
@@ -537,6 +539,7 @@ function WTSForm({ onClose, prefill }) {
     setIsSaving(true)
     await db.transactions.delete(loadedTransaction.id)
     await recalculateSerialCounter('WTS', currentWarehouseId)
+    queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
     toast.success(`WTS ${serialNo.trim()} is no longer cancelled — available again`)
     resetForm(serialNo.trim())
     setIsSaving(false)
