@@ -11,6 +11,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import AuthorityMonitor from '../components/common/AuthorityMonitor.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
+import SectionErrorBoundary from '../components/common/SectionErrorBoundary.jsx'
 import ProcurementBagsNotification from '../components/common/ProcurementBagsNotification.jsx'
 import PalayDryingStatus from '../components/common/WetPalayNotification.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
@@ -91,12 +92,20 @@ function Home() {
 
       {inventoryTab === 'stocks' ? <HomeStocks /> : <HomeSacks />}
 
-      <ProcurementBagsNotification />
-      <PalayDryingStatus />
+      <SectionErrorBoundary label="Procurement notification">
+        <ProcurementBagsNotification />
+      </SectionErrorBoundary>
+      <SectionErrorBoundary label="Palay drying status">
+        <PalayDryingStatus />
+      </SectionErrorBoundary>
 
       <AuthorityMonitor />
 
-      {hasMillingOrders && <MillingMonitor />}
+      {hasMillingOrders && (
+        <SectionErrorBoundary label="Milling monitor">
+          <MillingMonitor />
+        </SectionErrorBoundary>
+      )}
     </div>
   )
 }

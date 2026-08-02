@@ -10,6 +10,7 @@ import AdminHomeStocks from './AdminHomeStocks.jsx'
 import AdminHomeSacks from './AdminHomeSacks.jsx'
 import WarehouseDetailModal from './WarehouseDetailModal.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
+import SectionErrorBoundary from '../components/common/SectionErrorBoundary.jsx'
 
 function AdminHome() {
   const { user } = useAuth()
@@ -49,7 +50,9 @@ function AdminHome() {
 
       {hasMillingOrders && (
         <div className="mt-4">
-          <MillingMonitor />
+          <SectionErrorBoundary label="Milling monitor">
+            <MillingMonitor />
+          </SectionErrorBoundary>
         </div>
       )}
 

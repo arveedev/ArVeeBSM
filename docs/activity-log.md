@@ -6844,3 +6844,65 @@ test cases across 14 suites, all passing.
 ## Milling/Test Milling/Drying/Ricemill feature is code-complete.
 ## Ready for packaging, pending the live Sheet/deployment verification
 ## already flagged.
+
+## Production error triage: 422 sync errors, app crash, error boundary added
+
+User reported three distinct issues from live testing of the packaged
+build, right after admin login.
+
+**1. Dexie Cloud 422 errors - ROOT CAUSE FOUND AND FIXED WITH
+CONFIDENCE:** millingOrders, ricemillAllocations, and
+privateMillerAllocations were added to the local schema this session
+but never registered with Dexie Cloud's own schema - pushing changes
+for a table the cloud backend doesn't recognize gets rejected (422),
+which was blocking sync in a repeating connect-error-retry loop. Added
+all three to unsyncedTables (matching the existing pattern already
+used for serialCounters/preloadState). millingOrders is a pure
+read-only cache re-fetched fresh from the Sheet on every device
+regardless, so this is correct behavior for it either way.
+ricemillAllocations/privateMillerAllocations will NOT sync across
+devices until they're properly registered with the Dexie Cloud schema
+- each device keeps its own local copy for now. FLAGGING THIS
+EXPLICITLY as a known limitation, not silently worked around.
+
+**2. Uncaught TypeError crashing the entire app on login - COULD NOT
+CONCLUSIVELY PINPOINT THE EXACT LINE:** The reported stack trace
+referenced a minified bundle hash (index-B9MOyW94.js) that doesn't
+match a fresh build from current source, so the exact line:column
+couldn't be mapped back to source with certainty. Audited every
+useLiveQuery call and .map()/.filter()/spread operation across every
+file created or modified this entire session for unguarded undefined
+access - found all of them already correctly guarded (?? [] / ?? null
+fallbacks present everywhere checked). Could not find a smoking gun
+through static analysis alone.
+
+**3. Defensive fix added regardless, given severity:** built
+SectionErrorBoundary.jsx - this codebase had NO error boundary
+anywhere before this, meaning any single component's render crash
+takes down the entire app rather than failing contained. Wrapped the
+three newest, least battle-tested components (ProcurementBagsNotification,
+PalayDryingStatus, MillingMonitor) in both Home.jsx and AdminHome.jsx.
+This does not identify the original root cause with certainty, but
+ensures that if the crash recurs in one of these specific components,
+it will show a small contained "couldn't load" message instead of
+crashing the whole page - and the console error will be much easier to
+find and report back for a definitive fix.
+
+**4. "no warehouse-name match" preload warnings - assessed as likely
+benign:** the warehouse names logged (ALB-NFA OWNED, CTD-NFAO RM, etc.)
+appear to be the new Ricemill/Mechanical Dryer facility-type test
+warehouses - these wouldn't have regular WSR/WSI/ESR/ESI data in the
+normal preload Sheet, so "0 rows seen" for them is expected, not
+necessarily a bug. Not changed.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production `npm run build`, which
+succeeds) and the complete regression suite re-run - 88 test cases
+across 14 suites, all passing.
+
+HONEST FLAG: item 2 above (the actual crash) is NOT confirmed fixed -
+only made non-fatal via the error boundary, IF it recurs in one of the
+three wrapped components. If it happens in a DIFFERENT component not
+wrapped, or the boundary itself doesn't catch it (error boundaries
+don't catch errors in event handlers, async code, or the boundary's
+own render), the next console log will be essential for a real fix.

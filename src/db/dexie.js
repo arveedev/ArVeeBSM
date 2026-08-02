@@ -711,7 +711,16 @@ db.cloud.configure({
   // tracking may not handle that kind of structural change cleanly,
   // and excluding the table from sync sidesteps the problem entirely
   // rather than needing the cloud side to reconcile it.
-  unsyncedTables: ['serialCounters', 'preloadState'],
+  // millingOrders/ricemillAllocations/privateMillerAllocations were
+  // added locally this session but never registered with Dexie
+  // Cloud's schema - pushing changes for a table the cloud backend
+  // doesn't recognize is rejected (422), which was blocking sync
+  // entirely. millingOrders is a pure read-only cache re-fetched
+  // fresh from the Sheet on every device anyway, so excluding it is
+  // correct regardless. ricemillAllocations/privateMillerAllocations
+  // will NOT sync across devices until properly registered with the
+  // Dexie Cloud schema - each device keeps its own local copy for now.
+  unsyncedTables: ['serialCounters', 'preloadState', 'millingOrders', 'ricemillAllocations', 'privateMillerAllocations'],
   // requireAuth MUST be false for an offline-first app. When true,
   // Dexie Cloud refuses to run ANY operation - including purely local
   // reads/writes that have nothing to do with syncing - until it has a
