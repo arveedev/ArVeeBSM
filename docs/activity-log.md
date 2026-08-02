@@ -7202,3 +7202,38 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 88 test cases
 across 14 suites, all passing.
+
+## MO/TMO not auto-populating - added a diagnostic, most likely still the Apps Script deployment gap
+
+Per clarification: the AI/SIA sheet's OR# column contains text pile
+names (e.g. "PILE 4B"), not plain numbers - the earlier crash fix
+(String() normalization) is still correct and safe for text values
+too (a no-op for anything already a string), so no change needed
+there.
+
+Separately reported: the MO/TMO number, batch, and trial fields still
+aren't auto-populating for Milling/Test Milling transactions at all.
+Re-verified the matching logic itself (linkedMillingOrder comparing
+db.authorities.aiNumber against db.millingOrders.aiNumber) is correct,
+and confirmed both sides normalize consistently
+(String(...).trim()) - so a simple whitespace/casing mismatch isn't
+the likely cause. This continues to point to the same gap flagged
+several turns ago: if the user's actually-deployed Apps Script doesn't
+yet contain fetchMillingOrders (added this session), db.millingOrders
+would be permanently empty regardless of how correct the client-side
+matching code is, and the lookup would silently find nothing every
+time.
+
+Since this can't be verified or fixed from the app's own code, added
+a visible diagnostic instead of leaving the fields blank with no
+explanation: when an AI/SIA is selected for a Milling/Test Milling
+transaction but no matching MO/TMO is found, an amber message now
+explains exactly what to check (whether the Milling Operations monitor
+shows anything at all on Home, and whether the AI/SIA number matches
+the sheet's Column H/I exactly). Added to all 4 locations (MO and TMO,
+in both StockFormBase.jsx for stock and SackFormBase.jsx for sacks).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 88 test cases
+across 14 suites, all passing.

@@ -1007,9 +1007,19 @@ const SackFormBase = forwardRef(function SackFormBase(
             const availableMoOrders = millingOrderOptions.filter((o) => !o.fulfilled || o.number === moNumber)
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'ESR'
+            const noMatchFound = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !moNumber
 
             return (
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                {noMatchFound && (
+                  <p className="mb-2 rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
+                    No MO found matching SIA "{linkedSiaAuthority.siaNumber}". Check that: (1) the
+                    MO sheet sync has actually run (see the Milling Operations monitor on Home - if
+                    it's not showing at all, the sync hasn't succeeded), and (2) this SIA's number
+                    matches exactly what's in the MO sheet's Column I.
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>MO Number</label>
                   {isDerived ? (
@@ -1051,6 +1061,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                     placeholder="Auto-filled from MO"
                   />
                 </div>
+                </div>
               </div>
             )
           })()}
@@ -1058,9 +1069,19 @@ const SackFormBase = forwardRef(function SackFormBase(
           {isTestMilling && (() => {
             const availableTmoNumbers = millingOrderOptions.filter((o) => !o.fulfilled || o.number === tmoNumber)
             const isDerived = type !== 'ESR'
+            const noMatchFound = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !tmoNumber
 
             return (
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                {noMatchFound && (
+                  <p className="mb-2 rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
+                    No TMO found matching SIA "{linkedSiaAuthority.siaNumber}". Check that: (1) the
+                    TMO sheet sync has actually run (see the Milling Operations monitor on Home - if
+                    it's not showing at all, the sync hasn't succeeded), and (2) this SIA's number
+                    matches exactly what's in the TMO sheet's Column I.
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>TMO Number</label>
                   {isDerived ? (
@@ -1105,6 +1126,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                       </option>
                     ))}
                   </select>
+                </div>
                 </div>
               </div>
             )
