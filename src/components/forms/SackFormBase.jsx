@@ -41,7 +41,7 @@ import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFro
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
-import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName } from '../../utils/calculations.js'
+import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName, isAuthorityComplete } from '../../utils/calculations.js'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
@@ -57,6 +57,10 @@ import {
 
 const SACK_CONDITION_CODES = ['BN', 'SH', 'US']
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
+
+// Display-only, mirrors StockFormBase.jsx exactly - see that file for
+// the full explanation. Never alters the underlying stored value.
+const stripMoTmoPrefix = (value) => (value ?? '').replace(/^(MO|TMO)\s*No\.?\s*/i, '').trim() || value
 const emptySackLine = () => ({ sackTypeId: '', condition: '', pieces: '' })
 
 const SackFormBase = forwardRef(function SackFormBase(
@@ -266,6 +270,10 @@ const SackFormBase = forwardRef(function SackFormBase(
   }, [type, linkedSiaAuthority?.siaNumber, isMilling, isTestMilling])
 
   useEffect(() => {
+    // Only applies to the create-new flow - see StockFormBase.jsx's
+    // identical fix for the full explanation of why this must never
+    // run while editing an existing transaction.
+    if (loadedTransaction) return
     if (type === 'ESR' || (!isMilling && !isTestMilling)) return
     if (linkedMillingOrder) {
       if (isMilling) {
@@ -282,7 +290,7 @@ const SackFormBase = forwardRef(function SackFormBase(
       if (isMilling) { setMoNumber(''); setBatchNumber('') }
       else if (isTestMilling) setTmoNumber('')
     }
-  }, [linkedMillingOrder, isMilling, isTestMilling, type])
+  }, [linkedMillingOrder, isMilling, isTestMilling, type, loadedTransaction])
 
   const getSiaRemainingPieces = (sackTypeId, condition) => {
     const line = linkedSiaAuthority?.sackLines?.find((l) => l.sackTypeId === sackTypeId && l.condition === condition)
@@ -1007,10 +1015,18 @@ const SackFormBase = forwardRef(function SackFormBase(
             const availableMoOrders = millingOrderOptions.filter((o) => !o.fulfilled || o.number === moNumber)
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'ESR'
-            const noMatchFound = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !moNumber
+            const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !moNumber
+            const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedSiaAuthority)
+            const noMatchFound = noneMatchedAtAll && !likelyAlreadyCompleted
 
             return (
               <div>
+                {likelyAlreadyCompleted && (
+                  <p className="mb-2 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-3 py-2 text-xs text-brand-neon">
+                    This SIA's milling operation appears to already be completed (marked DONE) -
+                    that's why no MO Number shows here. This is expected, not an error.
+                  </p>
+                )}
                 {noMatchFound && (
                   <p className="mb-2 rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
                     No MO found matching SIA "{linkedSiaAuthority.siaNumber}". Check that: (1) the
@@ -1069,10 +1085,18 @@ const SackFormBase = forwardRef(function SackFormBase(
           {isTestMilling && (() => {
             const availableTmoNumbers = millingOrderOptions.filter((o) => !o.fulfilled || o.number === tmoNumber)
             const isDerived = type !== 'ESR'
-            const noMatchFound = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !tmoNumber
+            const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !tmoNumber
+            const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedSiaAuthority)
+            const noMatchFound = noneMatchedAtAll && !likelyAlreadyCompleted
 
             return (
               <div>
+                {likelyAlreadyCompleted && (
+                  <p className="mb-2 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-3 py-2 text-xs text-brand-neon">
+                    This SIA's milling operation appears to already be completed (marked DONE) -
+                    that's why no TMO Number shows here. This is expected, not an error.
+                  </p>
+                )}
                 {noMatchFound && (
                   <p className="mb-2 rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
                     No TMO found matching SIA "{linkedSiaAuthority.siaNumber}". Check that: (1) the

@@ -221,9 +221,10 @@ function doGet(e) {
 
       // Read by raw column POSITION, not header name - column A = index
       // 0, C = index 2, D = index 3, E = index 4, G = index 6, L = index
-      // 11. Skip row 1 (header row).
+      // 11. Data starts on row 4 (rows 1-3 are header/metadata), so
+      // skip the first 3 rows.
       const values = sheet.getDataRange().getValues();
-      const dataRows = values.slice(1);
+      const dataRows = values.slice(3);
 
       const orders = dataRows
         .filter((row) => row[0]) // skip fully blank rows
@@ -470,7 +471,9 @@ function doPost(e) {
 
       const values = sheet.getDataRange().getValues();
       let foundRow = -1;
-      for (let i = 1; i < values.length; i++) {
+      // Data starts on row 4 (rows 1-3 are header/metadata) - matches
+      // fetchMillingOrders' same offset.
+      for (let i = 3; i < values.length; i++) {
         const row = values[i];
         const prefix = String(row[0] ?? '').trim();
         const letter = String(row[2] ?? '').trim();

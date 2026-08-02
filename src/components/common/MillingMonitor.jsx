@@ -21,6 +21,12 @@ const fmtDate = (s) => {
 function MillingOrderDetail({ order, onClose }) {
   const { weightUnit } = useSettings() ?? {}
   const allTx = [...order.issueTx, ...order.receiptTx].sort((a, b) => (a.date < b.date ? -1 : 1))
+  const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
+  const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
+  const piles = useLiveQuery(() => db.piles.toArray(), []) ?? []
+  const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w.name]))
+  const varietyMap = new Map(varieties.map((v) => [v.varietyId, v.name]))
+  const pileMap = new Map(piles.map((p) => [p.pileId, p.pileName]))
 
   // Recovery percent expressed as an equivalent net bags figure, per
   // explicit request - a 50kg bag is the standard conversion used
@@ -83,14 +89,14 @@ function MillingOrderDetail({ order, onClose }) {
         )}
 
         <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-neutral-500">Transaction History</p>
-        <ul className="mt-1.5 space-y-1.5">
+        <ul className="mt-1.5 space-y-2">
           {allTx.length === 0 && <p className="py-2 text-center text-xs text-neutral-500">No transactions recorded yet.</p>}
           {allTx.map((t) => {
             const isIssue = t.type === 'WSI' || t.type === 'ESI'
             const isSack = t.type === 'ESI' || t.type === 'ESR'
-            const amount = isSack
-              ? `${fmtBags((t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} pcs`
-              : `${fmtBags(t.numberOfBags)} bags / ${fmtWeight(t.netKilos ?? 0, weightUnit)}`
+            const bagsOrPieces = isSack
+              ? (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
+              : t.numberOfBags
             return (
               <li key={t.id} className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
                 <div className="flex items-center justify-between">
@@ -100,7 +106,35 @@ function MillingOrderDetail({ order, onClose }) {
                   </span>
                   <span className="text-neutral-500">{fmtDate(t.date)}</span>
                 </div>
-                <p className="mt-0.5 text-neutral-400">{amount} · {t.serialNo}</p>
+                <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-neutral-400">
+                  <div>
+                    <p className="text-[10px] uppercase text-neutral-600">Miller</p>
+                    <p className="text-app-text">{t.customerName ?? order.ricemillName ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-neutral-600">Warehouse</p>
+                    <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-neutral-600">Variety</p>
+                    <p className="text-app-text">{varietyMap.get(t.varietyId) ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-neutral-600">Pile</p>
+                    <p className="text-app-text">{t.pileId ? (pileMap.get(t.pileId) ?? '—') : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-neutral-600">{isSack ? 'Pieces' : 'Bags'}</p>
+                    <p className="text-app-text">{fmtBags(bagsOrPieces)}</p>
+                  </div>
+                  {!isSack && (
+                    <div>
+                      <p className="text-[10px] uppercase text-neutral-600">Net Kgs</p>
+                      <p className="text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1.5 text-[10px] text-neutral-600">{t.serialNo}</p>
               </li>
             )
           })}

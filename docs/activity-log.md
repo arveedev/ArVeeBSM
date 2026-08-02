@@ -7438,3 +7438,47 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 101 test cases
 across 15 suites, all passing.
+
+## CRITICAL: editing an existing transaction stopped auto-filling category tab and Milling fields - found and fixed
+
+User reported: tapping a transaction from Reports to edit/update/
+delete no longer auto-fills the cereal tab or the Milling/Test Milling
+fields, as a direct consequence of this session's additions. Found
+TWO distinct, separate bugs, both now fixed.
+
+**Bug 1 - Milling derivation effect clobbering loaded values:** the
+useEffect that auto-derives moNumber/tmoNumber/batchNumber from the
+linked AI/SIA (built for the CREATE-NEW flow) was also firing during
+EDIT. Editing an already-completed Milling transaction is the common
+case (edits usually happen after the fact), and a completed MO/TMO is
+removed from the local cache once marked DONE - so linkedMillingOrder
+very often no longer resolves a fresh match during edit, triggering
+the effect's "no match, clear it" branch immediately after
+loadTransactionIntoForm had just correctly set the real, historical
+value. Fixed in both StockFormBase.jsx and SackFormBase.jsx by gating
+the entire effect behind loadedTransaction - it now only ever runs
+during the create-new flow, never while editing.
+
+**Bug 2 - category-filtered lookup couldn't find the row it needed to
+find (StockFormBase.jsx only, stock side):** findTransactionBySerial
+filters by cerealCategory when one is supplied. The edit-from-Reports
+flow passes only a serialNo (not a category, since the whole point is
+to discover it), and the form's active tab defaults to Rice on open -
+so editing a Palay or By Products transaction meant the lookup was
+filtered by the WRONG category before the correct one was ever known,
+silently returning nothing. A genuine chicken-and-egg bug. Fixed by
+adding an explicit skipCategoryFilter parameter to checkAndLoadSerial,
+used specifically for the edit-from-Reports call site - the category
+tab still gets set correctly afterward, by loadTransactionIntoForm
+itself, once the real transaction is actually found.
+SackFormBase.jsx's own lookup never filtered by category in the first
+place (sacks have no category tabs), so this half of the fix didn't
+apply there.
+
+Verified with a 5-case test covering both fixes' guard conditions
+directly.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 106 test cases
+across 16 suites, all passing.

@@ -11,6 +11,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import AuthorityMonitor from '../components/common/AuthorityMonitor.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
+import { Factory, ChevronDown, ChevronUp } from 'lucide-react'
 import SectionErrorBoundary from '../components/common/SectionErrorBoundary.jsx'
 import ProcurementBagsNotification from '../components/common/ProcurementBagsNotification.jsx'
 import PalayDryingStatus from '../components/common/WetPalayNotification.jsx'
@@ -28,6 +29,7 @@ function Home() {
   const hasMillingOrders = (useLiveQuery(() => db.millingOrders.count(), []) ?? 0) > 0
 
   const [inventoryTab, setInventoryTab] = useState('stocks')
+  const [showMillingMonitor, setShowMillingMonitor] = useState(false)
   const warehouseSectionRef = useRef(null)
 
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
@@ -99,13 +101,32 @@ function Home() {
         <PalayDryingStatus />
       </SectionErrorBoundary>
 
-      <AuthorityMonitor />
-
       {hasMillingOrders && (
         <SectionErrorBoundary label="Milling monitor">
-          <MillingMonitor />
+          <button
+            type="button"
+            onClick={() => setShowMillingMonitor((o) => !o)}
+            className="flex w-full items-center justify-between rounded-2xl border-2 border-brand-amber bg-neutral-900 px-4 py-3 text-left transition-all active:scale-[0.99]"
+          >
+            <span className="flex items-center gap-2">
+              <Factory size={20} className="text-brand-amber" />
+              <span className="text-sm font-bold text-app-text">Milling Operations</span>
+            </span>
+            {showMillingMonitor ? (
+              <ChevronUp size={20} className="text-neutral-500" />
+            ) : (
+              <ChevronDown size={20} className="text-neutral-500" />
+            )}
+          </button>
+          {showMillingMonitor && (
+            <div className="mt-3">
+              <MillingMonitor />
+            </div>
+          )}
         </SectionErrorBoundary>
       )}
+
+      <AuthorityMonitor />
     </div>
   )
 }

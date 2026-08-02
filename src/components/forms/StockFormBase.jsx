@@ -60,6 +60,7 @@ import {
   todayLocalISO,
   isMillingTypeName,
   isTestMillingTypeName,
+  isAuthorityComplete,
 } from '../../utils/calculations.js'
 import {
   suggestNextSerial,
@@ -96,6 +97,14 @@ const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 const GENDERS = ['Male', 'Female']
 const PROCUREMENT_TYPE_NAME = 'Procurement'
 const SALES_TYPE_NAME = 'Sales'
+
+// Display-only: strips a leading "MO No." / "TMO No." prefix (any
+// casing/spacing) for readability, since the full stored value can be
+// long enough to get cut off in a compact field. The underlying
+// moNumber/tmoNumber state is NEVER altered by this - only what's
+// shown on screen. What gets saved to the transaction, and pushed
+// through to the Sheet, is always the complete, untouched value.
+const stripMoTmoPrefix = (value) => (value ?? '').replace(/^(MO|TMO)\s*No\.?\s*/i, '').trim() || value
 const NEW_PILE_OPTION = '__new_pile__'
 
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
@@ -250,6 +259,16 @@ function StockFormBase({ type, title, onClose, prefill }) {
   }, [type, linkedAuthority?.aiNumber, isMilling, isTestMilling])
 
   useEffect(() => {
+    // Only applies to the create-new flow - editing an existing
+    // transaction must never let this clobber the historical moNumber/
+    // tmoNumber that loadTransactionIntoForm already correctly loaded.
+    // This was a real bug: editing an already-completed Milling
+    // transaction (very common, since edits usually happen after the
+    // fact) meant linkedMillingOrder often no longer resolved a fresh
+    // match (the MO/TMO gets removed from the local cache once marked
+    // DONE) - so the "no match, clear it" branch below was silently
+    // wiping out the correct, already-saved value on every edit.
+    if (loadedTransaction) return
     if (type === 'WSR' || (!isMilling && !isTestMilling)) return
     if (linkedMillingOrder) {
       if (isMilling) {
@@ -266,7 +285,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
       if (isMilling) { setMoNumber(''); setBatchNumber('') }
       else if (isTestMilling) setTmoNumber('')
     }
-  }, [linkedMillingOrder, isMilling, isTestMilling, type])
+  }, [linkedMillingOrder, isMilling, isTestMilling, type, loadedTransaction])
 
   const authorityRemainingKilos = linkedAuthority?.totalAllocationKilos != null
     ? Math.max(0, linkedAuthority.totalAllocationKilos - (linkedAuthority.totalIssuedKilos ?? 0))
@@ -600,7 +619,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // transaction lookup so Update/Delete appears automatically.
     if (prefill.serialNo) {
       setSerialNo(prefill.serialNo)
-      setTimeout(() => checkAndLoadSerial(prefill.serialNo), 150)
+      setTimeout(() => checkAndLoadSerial(prefill.serialNo, true), 150)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill])
@@ -670,6 +689,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     )
     if (!matchedPile) return // piles still loading - retries once it arrives
     setPileId(matchedPile.pileId)
+    applyPileDefaults(matchedPile.pileId)
     appliedPileFromOrNumberRef.current = prefillOrNumber
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill?.orNumber, prefill?.transactionTypeName, prefill?.pileId, piles])
@@ -846,7 +866,10 @@ function StockFormBase({ type, title, onClose, prefill }) {
       const matchedPile = (piles ?? []).find(
         (p) => p.pileName.trim().toLowerCase() === authorityOrNumber.toLowerCase()
       )
-      if (matchedPile) setPileId(matchedPile.pileId)
+      if (matchedPile) {
+        setPileId(matchedPile.pileId)
+        applyPileDefaults(matchedPile.pileId)
+      }
     }
 
     const kilosRemaining = authority.totalAllocationKilos != null
@@ -946,12 +969,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const latestRequestedSerial = useRef(null)
   const [isLookingUp, setIsLookingUp] = useState(false)
 
-  const checkAndLoadSerial = async (serial) => {
+  const checkAndLoadSerial = async (serial, skipCategoryFilter = false) => {
     if (!currentWarehouseId) return false
     latestRequestedSerial.current = serial
     setIsLookingUp(true)
     try {
-      const existing = await findTransactionBySerial(type, currentWarehouseId, serial, activeCategory)
+      const existing = await findTransactionBySerial(type, currentWarehouseId, serial, skipCategoryFilter ? null : activeCategory)
       if (latestRequestedSerial.current !== serial) return false // superseded by a newer request - discard this stale result
       if (existing) {
         loadTransactionIntoForm(existing)
@@ -1617,15 +1640,27 @@ function StockFormBase({ type, title, onClose, prefill }) {
             const availableMoOrders = millingOrderOptions.filter((o) => !o.fulfilled || o.number === moNumber)
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'WSR'
-            // An AI is selected, this is Milling, but nothing matched -
-            // distinguishes "haven't picked an AI yet" (nothing to show)
-            // from "picked one but no MO was found for it" (a real sync
-            // or data problem worth surfacing directly, rather than
-            // leaving blank fields with no explanation).
-            const noMatchFound = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !moNumber
+            const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !moNumber
+            // A completed MO is deleted from the local cache once marked
+            // DONE on the Sheet (per the sync logic - a DONE row is
+            // filtered out and cleaned up as stale) - so by the time it's
+            // gone, there's no direct way to ask "was this one already
+            // finished?" The AI's own completion status is the best
+            // available signal: if the AI itself is fully issued, the
+            // milling operation almost certainly already finished too,
+            // and an amber warning here would be actively misleading
+            // rather than helpful.
+            const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedAuthority)
+            const noMatchFound = noneMatchedAtAll && !likelyAlreadyCompleted
 
             return (
               <div>
+                {likelyAlreadyCompleted && (
+                  <p className="mb-2 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-3 py-2 text-xs text-brand-neon">
+                    This AI's milling operation appears to already be completed (marked DONE) -
+                    that's why no MO Number shows here. This is expected, not an error.
+                  </p>
+                )}
                 {noMatchFound && (
                   <p className="mb-2 rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
                     No MO found matching AI "{linkedAuthority.aiNumber}". Check that: (1) the MO
@@ -1640,7 +1675,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
                   {isDerived ? (
                     <input
                       type="text"
-                      value={moNumber}
+                      value={stripMoTmoPrefix(moNumber)}
                       readOnly
                       disabled
                       className={`${inputClass} bg-neutral-800 text-neutral-400`}
@@ -1665,7 +1700,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
                     >
                       <option value="">Select…</option>
                       {availableMoOrders.map((o) => (
-                        <option key={o.number} value={o.number}>{o.number} - {o.ricemillName}</option>
+                        <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
                       ))}
                     </select>
                   )}
@@ -1689,10 +1724,18 @@ function StockFormBase({ type, title, onClose, prefill }) {
           {isTestMilling && (() => {
             const availableTmoNumbers = millingOrderOptions.filter((o) => !o.fulfilled || o.number === tmoNumber)
             const isDerived = type !== 'WSR'
-            const noMatchFound = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !tmoNumber
+            const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !tmoNumber
+            const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedAuthority)
+            const noMatchFound = noneMatchedAtAll && !likelyAlreadyCompleted
 
             return (
               <div>
+                {likelyAlreadyCompleted && (
+                  <p className="mb-2 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-3 py-2 text-xs text-brand-neon">
+                    This AI's milling operation appears to already be completed (marked DONE) -
+                    that's why no TMO Number shows here. This is expected, not an error.
+                  </p>
+                )}
                 {noMatchFound && (
                   <p className="mb-2 rounded-lg border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
                     No TMO found matching AI "{linkedAuthority.aiNumber}". Check that: (1) the TMO
@@ -1707,7 +1750,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
                   {isDerived ? (
                     <input
                       type="text"
-                      value={tmoNumber}
+                      value={stripMoTmoPrefix(tmoNumber)}
                       readOnly
                       disabled
                       className={`${inputClass} bg-neutral-800 text-neutral-400`}
@@ -1727,7 +1770,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
                     >
                       <option value="">Select…</option>
                       {availableTmoNumbers.map((o) => (
-                        <option key={o.number} value={o.number}>{o.number} - {o.ricemillName}</option>
+                        <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
                       ))}
                     </select>
                   )}
