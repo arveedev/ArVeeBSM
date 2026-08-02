@@ -71,13 +71,26 @@ function AuthorityMonitor() {
   if (!authorities || authorities.length === 0) return null
 
   const typeAuthorities = authorities.filter((a) => a.type === topTab)
-  const filtered = typeAuthorities
-    .filter((a) => !isAuthorityComplete(a))
-    .sort((a, b) => {
+  const filtered = (() => {
+    const withoutCompleted = typeAuthorities.filter((a) => !isAuthorityComplete(a))
+    // Same defensive dedup as AuthorityPickerModal.jsx - the monitor
+    // should never show the same AI/SIA number twice regardless of
+    // whether sync-level cleanup has caught up yet.
+    const byRef = new Map()
+    for (const a of withoutCompleted) {
+      const ref = a.type === 'AI' ? a.aiNumber : a.siaNumber
+      if (!ref) continue
+      const existing = byRef.get(ref)
+      if (!existing || (a.totalIssuedKilos ?? 0) > (existing.totalIssuedKilos ?? 0)) {
+        byRef.set(ref, a)
+      }
+    }
+    return [...byRef.values()].sort((a, b) => {
       const aRef = a.type === 'AI' ? a.aiNumber : a.siaNumber
       const bRef = b.type === 'AI' ? b.aiNumber : b.siaNumber
-      return (aRef ?? '').localeCompare(bRef ?? '')
+      return (aRef ?? '').localeCompare(bRef ?? '', undefined, { numeric: true })
     })
+  })()
   const completedList = typeAuthorities.filter(isAuthorityComplete)
 
   const handleOpen = (authority) => {

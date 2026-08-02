@@ -7359,3 +7359,82 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 101 test cases
 across 15 suites, all passing.
+
+## CRITICAL: CalendarDatePicker - real, severe bug found and fixed with certainty
+
+Per exact reported behavior ("tapping shows the calendar, selecting a
+date dismisses it but doesn't change the value, even switching months
+dismisses it") - traced this to a genuine structural bug in the
+component itself, not specific to Beginning Balances at all.
+
+ROOT CAUSE: the calendar popup renders via createPortal(...,
+document.body) - meaning it is NOT a DOM descendant of containerRef
+(which only ever wrapped the trigger button), even though it appears
+visually attached to it. The outside-click detection
+(document.addEventListener('mousedown', handleOutside)) only checked
+containerRef.current.contains(e.target) - since the portaled content
+lives in a completely separate DOM subtree, EVERY click inside the
+calendar itself (month navigation buttons, day cells, everything) was
+being misclassified as an outside click, closing the picker
+immediately. Because mousedown fires before click, this could close
+(and unmount) the popup before the day cell's own onClick handler
+(handleDayTap, which is the only place onChange ever fires) got a
+chance to actually run - explaining both symptoms exactly: month nav
+appearing to "dismiss" the picker, and tapping a day dismissing it
+without the value changing.
+
+Fixed by adding a second ref (popupRef) specifically for the portaled
+content, and checking both refs before treating a click as outside.
+This is a shared, widely-used component - the fix applies everywhere
+it's used, not just Beginning Balances.
+
+## Authority picker/monitor - duplicate entries and sort order fixed
+
+Found genuine gaps in both AuthorityPickerModal.jsx and
+AuthorityMonitor.jsx: neither had ANY deduplication logic - the
+pending list was a direct, unfiltered map from db.authorities, so any
+duplicate records still present in the database (even after the
+sync-level dedup fix from an earlier session) would show as separate
+entries. Added UI-level dedup by aiNumber/siaNumber as a defensive
+safety net (keeping whichever duplicate has more actual issued
+progress), independent of whatever state the underlying sync-level
+cleanup is in. Also fixed the sort itself - previously plain
+localeCompare (lexicographic), which would incorrectly order e.g.
+"AI-10" before "AI-2" - switched to numeric-aware sorting
+(localeCompare with { numeric: true }) so numbers embedded in the
+reference strings sort naturally.
+
+## MO/TMO sync - found a real, silent error-handling gap
+
+User confirmed the MO/TMO sheets have correct data and the AI number
+genuinely matches, yet nothing still shows - this ruled out both the
+matching logic and a simple data/config mistake. Found a real bug:
+syncMillingOrdersFromSheets had NO try/catch at all (unlike
+syncAuthoritiesFromSheets, which does), meaning any failure inside it
+- a network error, or the Apps Script returning something other than
+the expected {status: 'SUCCESS', orders: [...]} shape - became a
+silent, unhandled promise rejection with no visible error, no user-
+facing indication, and (critically) no log clear enough to diagnose
+from the outside.
+
+This connects directly to evidence already visible in the user's own
+earlier console log: "Uncaught (in promise) Error: Unexpected
+response shape from Apps Script" - this is EXACTLY the error
+fetchMillingOrderRows throws when the Apps Script's response doesn't
+match the expected shape, which continues to point at the same Apps
+Script deployment gap flagged multiple times this session (the
+user's live Apps Script likely does not yet contain the
+fetchMillingOrders action added this session).
+
+Fixed the missing try/catch (matching the existing pattern in
+syncAuthoritiesFromSheets exactly) so this failure is now caught,
+logged clearly to the console with an explicit prefix, and returned as
+a normal {ok: false, ...} result - this doesn't fix the underlying
+Apps Script gap (which requires the user's own redeploy action), but
+means any future occurrence will be genuinely diagnosable rather than
+a bare, contextless "Uncaught (in promise)" message.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 101 test cases
+across 15 suites, all passing.

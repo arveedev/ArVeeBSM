@@ -57,6 +57,15 @@ const buildMonthGrid = (year, month) => {
 const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true }, ref) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef(null)
+  // The actual calendar popup renders via createPortal(document.body) -
+  // it is NOT a DOM descendant of containerRef (which only wraps the
+  // trigger button), even though it appears visually attached to it.
+  // Outside-click detection needs its own ref for the portaled content
+  // specifically - without this, every click inside the calendar
+  // itself (month navigation, day cells) was being misclassified as
+  // an outside click and closing the picker immediately, before the
+  // actual selection could ever register.
+  const popupRef = useRef(null)
 
   useImperativeHandle(ref, () => ({
     open: () => setIsOpen(true),
@@ -81,7 +90,9 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
   useEffect(() => {
     if (!isOpen) return
     const handleOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setIsOpen(false)
+      const insideTrigger = containerRef.current && containerRef.current.contains(e.target)
+      const insidePopup = popupRef.current && popupRef.current.contains(e.target)
+      if (!insideTrigger && !insidePopup) setIsOpen(false)
     }
     document.addEventListener('mousedown', handleOutside)
     document.addEventListener('touchstart', handleOutside)
@@ -132,6 +143,7 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
       {isOpen && createPortal(
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
           <div
+            ref={popupRef}
             className="max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >

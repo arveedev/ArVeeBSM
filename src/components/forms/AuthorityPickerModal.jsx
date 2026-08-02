@@ -39,13 +39,32 @@ function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
     return 'text-app-text'
   }
 
-  const pending = authorities
-    .filter((a) => !isAuthorityComplete(a))
-    .sort((a, b) => {
+  const pending = (() => {
+    const filtered = authorities.filter((a) => !isAuthorityComplete(a))
+    // Defensive dedup at the UI level, regardless of whether any
+    // underlying sync-level cleanup has caught up yet - the picker
+    // should never show the same AI/SIA number twice. Keeps whichever
+    // record has more actual issued progress recorded (the same
+    // "prefer the one with real activity" rule already used
+    // server-side), falling back to the first seen if neither does.
+    const byRef = new Map()
+    for (const a of filtered) {
+      const ref = type === 'AI' ? a.aiNumber : a.siaNumber
+      if (!ref) continue
+      const existing = byRef.get(ref)
+      if (!existing || (a.totalIssuedKilos ?? 0) > (existing.totalIssuedKilos ?? 0)) {
+        byRef.set(ref, a)
+      }
+    }
+    return [...byRef.values()].sort((a, b) => {
       const aRef = type === 'AI' ? a.aiNumber : a.siaNumber
       const bRef = type === 'AI' ? b.aiNumber : b.siaNumber
-      return (aRef ?? '').localeCompare(bRef ?? '')
+      // numeric: true makes this a natural sort - "AI-2" correctly
+      // comes before "AI-10", not after it as plain string comparison
+      // would put it.
+      return (aRef ?? '').localeCompare(bRef ?? '', undefined, { numeric: true })
     })
+  })()
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>

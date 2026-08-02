@@ -374,6 +374,15 @@ export const syncMillingOrdersFromSheets = async () => {
     }
 
     return { ok: true, count }
+  } catch (error) {
+    // Previously uncaught - any failure here (network error, malformed
+    // Apps Script response, etc.) became a silent unhandled promise
+    // rejection with no visible error anywhere, making this
+    // impossible to diagnose from the outside. Logged explicitly so
+    // it at least shows up clearly in the console instead of a bare
+    // "Uncaught (in promise)" with no context.
+    console.error('[syncMillingOrdersFromSheets] sync failed:', error)
+    return { ok: false, reason: 'request_failed', error: error.message }
   } finally {
     syncInProgress = false
   }
