@@ -136,6 +136,18 @@ const SackFormBase = forwardRef(function SackFormBase(
 
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
 
+  // Needed here, ahead of takenTrialNumbers below (the earliest
+  // consumer in this file) - a useLiveQuery callback runs IMMEDIATELY
+  // on mount, so referencing isMilling/isTestMilling before their
+  // declaration point would throw a temporal-dead-zone
+  // ReferenceError on every single render. (An earlier fix moved this
+  // ahead of linkedMillingOrder only, missing that takenTrialNumbers
+  // sits even earlier in the file.)
+  const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
+  const selectedTransactionType = (transactionTypes ?? []).find((t) => t.transactionTypeId === transactionTypeId)
+  const isMilling = selectedTransactionType?.name === 'Milling'
+  const isTestMilling = selectedTransactionType?.name === 'Test Milling'
+
   // Which trial numbers (1/2/3) already exist for this TMO, across
   // EVERY warehouse, tracked independently per document type (ESI vs
   // ESR each need their own complete set of 3) - same approach as the
@@ -184,8 +196,6 @@ const SackFormBase = forwardRef(function SackFormBase(
       return { ...order, recoveredTrials: [...recoveredTrials], fulfilled }
     })
   }, [isMilling, isTestMilling]) ?? []
-
-  const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
 
   // Available pieces per sackTypeId+condition for this warehouse - the
   // hard cap on ESI issuances, mirroring how Net Kilos hard-caps a WSI.
@@ -246,17 +256,6 @@ const SackFormBase = forwardRef(function SackFormBase(
   // are DERIVED from that SIA - not picked independently. Only applies
   // to the issue side (ESI); the receipt side (ESR) has no SIA of its
   // own to key off, so it keeps its own MO/TMO picker.
-  //
-  // Needed here (moved up from where it's conceptually grouped with
-  // the rest of the derived-field logic below) because
-  // linkedMillingOrder's useLiveQuery callback runs IMMEDIATELY on
-  // mount - referencing isMilling/isTestMilling before their original
-  // declaration point further down the component would throw a
-  // temporal-dead-zone ReferenceError on every single render.
-  const selectedTransactionType = (transactionTypes ?? []).find((t) => t.transactionTypeId === transactionTypeId)
-  const isMilling = selectedTransactionType?.name === 'Milling'
-  const isTestMilling = selectedTransactionType?.name === 'Test Milling'
-
   const linkedMillingOrder = useLiveQuery(async () => {
     if (type === 'ESR' || !linkedSiaAuthority?.siaNumber) return null
     if (!isMilling && !isTestMilling) return null

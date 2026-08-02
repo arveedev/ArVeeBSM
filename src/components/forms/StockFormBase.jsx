@@ -627,6 +627,28 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill?.pileId, piles])
 
+  // Same async-safe reasoning as the pileId effect above, applied to
+  // the cereal-type tab switch: varieties also loads asynchronously,
+  // and the main prefill effect only depends on [prefill] - if
+  // varieties hadn't resolved yet the moment that effect first ran
+  // (very likely, since this runs right on form mount while queries
+  // are still in flight), the category lookup would silently find
+  // nothing and never retry, leaving the tab stuck on the default
+  // 'Rice' regardless of the authority's actual variety. This is
+  // exactly the reported bug (tapping a Palay authority still opens
+  // the form on the Rice tab).
+  const appliedCategoryRef = useRef(null)
+
+  useEffect(() => {
+    if (!isCategoryScoped || !prefill?.varietyId) return
+    if (appliedCategoryRef.current === prefill.varietyId) return
+    const matchedVariety = (varieties ?? []).find((v) => v.varietyId === prefill.varietyId)
+    if (!matchedVariety?.category) return // varieties still loading - retries once it arrives
+    setCerealCategory(matchedVariety.category)
+    appliedCategoryRef.current = prefill.varietyId
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.varietyId, varieties, isCategoryScoped])
+
   // For Milling/Test Milling authorities, the pile isn't passed
   // directly - it's derived from the authority's own orNumber field
   // (the Sheet's OR# column intentionally holds the pile name for

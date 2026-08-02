@@ -7095,3 +7095,68 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 88 test cases
 across 14 suites, all passing.
+
+## CRITICAL: ESR/ESI crash - same TDZ bug class, incomplete earlier fix
+
+Same source-map technique. Traced "Cannot access 'Mt' before
+initialization" to SackFormBase.jsx, isTestMilling.
+
+ROOT CAUSE: my earlier fix for this exact bug class only checked
+isMilling/isTestMilling's position relative to linkedMillingOrder and
+moved it to right before that. It did NOT check that takenTrialNumbers
+- a completely separate query - sits even EARLIER in the file (line
+143 vs linkedMillingOrder's ~260), and also references isTestMilling.
+I incorrectly reported this file as "confirmed clean" in an earlier
+session entry - I was wrong; I only checked the one consumer I already
+knew about, not all of them.
+
+Fixed properly this time by moving the full dependency chain
+(transactionTypes -> selectedTransactionType -> isMilling/isTestMilling)
+to before takenTrialNumbers specifically, the earliest consumer in the
+file - not just before whichever consumer I happened to be looking at.
+Removed the now-duplicate later declarations. Re-verified
+StockFormBase.jsx's own ordering is correct end-to-end (isMilling/
+isTestMilling before ALL of linkedMillingOrder, millingOrderOptions,
+AND takenTrialNumbers, not just the first one checked).
+
+## Real bug found and fixed: cereal-type tab not auto-selecting when opening a transaction from the home monitor
+
+Per explicit report: tapping a Palay authority to add a transaction
+opened the form on the Rice tab instead. Traced this to the exact same
+class of race condition already fixed once before for pileId
+(documented in the code's own comment at the time, which explained the
+pattern but was never applied to this second case): the tab-switching
+logic already existed and looked correct, but lived inside the main
+prefill effect, which only depends on [prefill] - not on varieties,
+which loads asynchronously via useLiveQuery. If varieties hadn't
+resolved yet the moment that effect first ran (highly likely, since
+this fires right on form mount while queries are still in flight), the
+category lookup silently found nothing and never retried, leaving the
+tab stuck on the default 'Rice' regardless of the authority's actual
+variety.
+
+Fixed by adding a separate, async-safe effect (mirroring the existing
+pileId effect's exact pattern - ref-tracked, retries once varieties
+actually arrives) specifically for the category tab switch. Left the
+original attempt in the main prefill effect in place too (harmless -
+it succeeds immediately in the common case where varieties is already
+loaded, e.g. reopening the form later in the same session).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 88 test cases
+across 14 suites, all passing.
+
+## STILL NEEDS CLARIFICATION - not addressed this entry:
+User also reported "View Transactions should only show if partial
+exists" as not working. Re-verified this logic already exists exactly
+as described in AuthorityMonitor.jsx (the regular Home.jsx monitor) -
+hasPartialIssuance check correctly gates the choice popup vs going
+straight to create. However, AdminMonitoring.jsx (the separate bottom-
+nav "Monitor" tab, used by admin/visitor) has NO such logic at all -
+it always opens straight to AuthorityReconciliationPanel with no way
+to add a transaction from there. Genuinely unclear which of these two
+the user meant - needs clarification before building anything, since
+AdminMonitoring.jsx doesn't currently have transaction-creation
+capability at all and would need more than a small fix if that's what
+was meant.
