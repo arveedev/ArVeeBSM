@@ -272,6 +272,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
     ? Math.max(0, linkedAuthority.totalAllocationKilos - (linkedAuthority.totalIssuedKilos ?? 0))
     : null
   const authorityRemainingBags = linkedAuthority?.totalAllocationBags != null
+    ? Math.max(0, linkedAuthority.totalAllocationBags - (linkedAuthority.totalIssuedBags ?? 0))
+    : null
 
   // Which trial numbers (1/2/3) already exist for this TMO, across
   // EVERY warehouse - not just the current one, since the TMO itself
@@ -327,8 +329,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
       .toArray()
     return [...new Set(existing.map((t) => t.trialNumber).filter(Boolean))]
   }, [isTestMilling, tmoNumber, type, loadedTransaction]) ?? []
-    ? Math.max(0, linkedAuthority.totalAllocationBags - (linkedAuthority.totalIssuedBags ?? 0))
-    : null
 
   const customerNameRef = useRef(null)
   const scrollContainerRef = useRef(null)

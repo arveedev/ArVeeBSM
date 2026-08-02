@@ -7043,3 +7043,55 @@ sweep + check-imports.cjs) and the complete regression suite re-run -
   the Regional Authority Number reading, etc.) - the user needs to
   redeploy docs/apps-script-full-replacement.js to their actual Apps
   Script project. Not something fixable from the app's own code.
+
+## CRITICAL: WSR form (and likely all stock forms) still crashing - a DIFFERENT bug this time, also found and fixed with certainty
+
+The error boundary added last entry worked exactly as designed - it
+caught this crash and kept the rest of the app alive, which is why
+the user could see the console error clearly this time instead of a
+fully dead app. But the form itself still didn't render.
+
+Used the same source-map translation technique again. Traced
+"Cannot read properties of undefined (reading 'totalAllocationBags')"
+to StockFormBase.jsx.
+
+ROOT CAUSE: a genuine editing accident from an earlier turn's fix (the
+one that moved isMilling/isTestMilling declarations earlier in the
+file to fix the temporal-dead-zone bug). During that edit, a
+pre-existing multi-line ternary got split apart: authorityRemainingBags'
+declaration line landed in one place, but its OWN ternary body (the
+"? Math.max(...) : null" part) got orphaned and ended up incorrectly
+attached to a completely unrelated expression (takenTrialNumbers)
+several dozen lines later instead. This was syntactically VALID
+JavaScript (an empty array is truthy, so `[] ? X : Y` parses fine),
+which is exactly why it silently passed every parse check and the
+build - but semantically catastrophic: takenTrialNumbers evaluated to
+Math.max(0, linkedAuthority.totalAllocationBags - ...) instead of the
+array of trial numbers it was supposed to be, and crashed immediately
+whenever linkedAuthority was undefined (i.e. most of the time, any
+transaction not linked to an AI).
+
+Fixed by restoring authorityRemainingBags' complete ternary in its
+correct original location, and removing the orphaned fragment from
+where it had been incorrectly attached to takenTrialNumbers.
+
+Audited SackFormBase.jsx for the same corruption pattern (edited at
+the same time, same session, same kind of change) - confirmed intact,
+no similar splitting occurred there. Also swept StockFormBase.jsx
+itself for every other multi-line ternary in the file and manually
+verified the two most at-risk ones (both directly using
+authorityRemainingKilos/authorityRemainingBags) are correctly attached
+to their own conditions.
+
+LESSON: this kind of corruption is syntactically invisible - it will
+never be caught by a parse check or successful build, only by either
+careful manual review of the exact lines being changed, or by
+actually exercising the code path at runtime. Both of this session's
+last two crashes were real, distinct bugs (not the same one
+recurring) - flagging this pattern explicitly since it's now happened
+twice from edits made in the same general area of this file.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 88 test cases
+across 14 suites, all passing.
