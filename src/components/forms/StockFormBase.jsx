@@ -227,6 +227,19 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // to the issue side (WSI), since that's the only side with an
   // existing AI link; the receipt side (WSR) has no AI of its own to
   // key off, so it keeps its own MO/TMO picker.
+  // Needed here (moved up from where they're conceptually grouped
+  // with the rest of the derived-field logic below) because
+  // linkedMillingOrder's useLiveQuery callback runs IMMEDIATELY on
+  // mount - referencing isMilling/isTestMilling before their original
+  // declaration point further down the component would throw a
+  // temporal-dead-zone ReferenceError on every single render.
+  const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
+  const selectedTransactionType = (transactionTypes ?? []).find(
+    (t) => t.transactionTypeId === transactionTypeId
+  )
+  const isMilling = selectedTransactionType?.name === MILLING_TYPE_NAME
+  const isTestMilling = selectedTransactionType?.name === TEST_MILLING_TYPE_NAME
+
   const linkedMillingOrder = useLiveQuery(async () => {
     if (type === 'WSR' || !linkedAuthority?.aiNumber) return null
     if (!isMilling && !isTestMilling) return null
@@ -347,7 +360,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), [])
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
-  const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
 
   const sortedVarieties = [...(varieties ?? [])]
     .filter((v) => !isCategoryScoped || v.category === activeCategory)
@@ -362,13 +374,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const selectedPile = (piles ?? []).find((p) => p.pileId === pileId)
   const selectedVariety = sortedVarieties.find((v) => v.varietyId === varietyId)
-  const selectedTransactionType = sortedTransactionTypes.find(
-    (t) => t.transactionTypeId === transactionTypeId
-  )
   const isProcurement = selectedTransactionType?.name === PROCUREMENT_TYPE_NAME
   const isSales = selectedTransactionType?.name === SALES_TYPE_NAME
-  const isMilling = selectedTransactionType?.name === MILLING_TYPE_NAME
-  const isTestMilling = selectedTransactionType?.name === TEST_MILLING_TYPE_NAME
 
   useEffect(() => {
     if (!isProcurement && farmerOrgEnabled) {

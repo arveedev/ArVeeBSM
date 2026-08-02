@@ -10,6 +10,7 @@ import Reports from './pages/Reports.jsx'
 import Settings from './pages/Settings.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import ProtectedRoute from './components/common/ProtectedRoute.jsx'
+import SectionErrorBoundary from './components/common/SectionErrorBoundary.jsx'
 import BottomNav from './components/layout/BottomNav.jsx'
 import AppHeader from './components/layout/AppHeader.jsx'
 import { useSettings } from './context/SettingsContext.jsx'
@@ -175,7 +176,9 @@ function App() {
                 (() => {
                   const FormComponent = FORM_COMPONENTS[activeFormType]
                   return (
-                    <FormComponent onClose={closeForm} prefill={activeFormPrefill} />
+                    <SectionErrorBoundary label={`${activeFormType} form`} onClose={closeForm}>
+                      <FormComponent onClose={closeForm} prefill={activeFormPrefill} />
+                    </SectionErrorBoundary>
                   )
                 })()}
             </>

@@ -6968,3 +6968,78 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 88 test cases
 across 14 suites, all passing.
+
+## CRITICAL: All transaction forms (WSR/WSI/ESR/ESI) broken - found and fixed with certainty
+
+Used the same source-map translation technique - traced the exact
+"Cannot access 'Lt' before initialization" error to
+StockFormBase.jsx, involving isMilling and linkedAuthority.
+
+ROOT CAUSE, MY OWN BUG from the AI/SIA-first flow redesign a few
+turns ago: linkedMillingOrder (a useLiveQuery whose callback runs
+IMMEDIATELY on mount) referenced isMilling/isTestMilling - but those
+were declared ~140 lines LATER in the same component. This is a
+textbook JavaScript temporal-dead-zone error: referencing a
+const-declared variable before its own declaration line has executed
+throws a ReferenceError, and since useLiveQuery's callback runs
+synchronously on mount (not lazily), this fired on every single
+render of the form. SackFormBase.jsx had the identical bug (same
+pattern, added at the same time). WTSForm.jsx has no Milling logic at
+all and was never actually broken itself - it only appeared broken
+because an uncaught render error with no root-level error boundary
+anywhere in the app crashes React's entire tree, taking every other
+feature down with whichever form failed first.
+
+Fixed by moving isMilling/isTestMilling/selectedTransactionType (and,
+in StockFormBase.jsx, the transactionTypes query itself) earlier in
+both components, before linkedMillingOrder's declaration - removed
+the now-duplicate later declarations in both files.
+
+Given what this demonstrated (one component's crash took down
+literally everything), also added a root-level error boundary
+specifically around the dynamically-rendered transaction form in
+App.jsx - exactly where this crash happened. Extended
+SectionErrorBoundary.jsx with an optional onClose action in its
+fallback, since a crashed form still needs to give the user a way to
+close the modal rather than being stuck looking at a small error
+message with no way out.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 88 test cases
+across 14 suites, all passing.
+
+## Beginning Balances made accessible to regular users, not admin-only
+
+Per explicit correction - this was built as an admin-only Dashboard
+tab, but should be per-user (any user managing their own assigned
+warehouse's data). Made BeginningBalancesPanel accept an optional
+warehouseId prop - when supplied (from Settings.jsx, which already
+has its own page-level warehouse selector), it uses that directly and
+skips its own internal warehouse picker entirely, rather than showing
+a redundant second selector on the same page. Still remains available
+in Admin Dashboard too (with its own internal selector, for an admin
+managing any warehouse) - added to Settings.jsx additionally, not
+moved/removed from admin.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs) and the complete regression suite re-run -
+88 test cases across 14 suites, all passing.
+
+## STILL OPEN - flagged honestly, not yet addressed this entry:
+- Fullscreen pile layout mismatch: user reports it looks "totally
+  different" from the real pile layout - not aligned, not formatted,
+  missing tap/detail options. This was built as a SEPARATE
+  reimplementation of the grid rendering (a known risk I flagged when
+  I built it) rather than reusing the actual Piles.jsx rendering logic
+  - needs a proper rebuild reusing the real component, not another
+  patch.
+- Milling/Test Milling still not appearing despite Sheet columns
+  being configured - user's console shows 404 errors on their Apps
+  Script URL (script.googleusercontent.com/macros/echo... 404, and
+  "fetchTransactionsBulk: HTTP 404 for ESR"). This strongly suggests
+  their DEPLOYED Google Apps Script does not yet contain this
+  session's code changes (fetchMillingOrders, markMillingOrderDone,
+  the Regional Authority Number reading, etc.) - the user needs to
+  redeploy docs/apps-script-full-replacement.js to their actual Apps
+  Script project. Not something fixable from the app's own code.

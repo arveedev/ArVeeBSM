@@ -18,6 +18,7 @@ import { inputClass, labelClass, primaryButtonClass, byAlpha } from '../componen
 import { CONDITION_FLAGS } from '../components/forms/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
+import BeginningBalancesPanel from '../components/common/admin/BeginningBalancesPanel.jsx'
 import ValidatedField from '../components/forms/ValidatedField.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 
@@ -644,6 +645,7 @@ function Settings() {
 
       {currentWarehouseId && <ClassifierSection warehouseId={currentWarehouseId} />}
       {currentWarehouseId && <PileBalanceSection warehouseId={currentWarehouseId} />}
+      {currentWarehouseId && <BeginningBalancesPanel warehouseId={currentWarehouseId} />}
     </div>
   )
 }

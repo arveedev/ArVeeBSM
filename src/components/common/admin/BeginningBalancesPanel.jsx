@@ -292,10 +292,15 @@ function SacksBeginningBalances({ warehouseId }) {
   )
 }
 
-function BeginningBalancesPanel() {
+function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
   const { accessibleWarehouses, currentWarehouseId, setCurrentWarehouseId } = useWarehouse() ?? {}
   const [tab, setTab] = useState('piles')
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  // When an external warehouseId is supplied (e.g. Settings.jsx already
+  // has its own page-level warehouse selector), use it directly and
+  // skip this panel's own internal selector entirely - showing two
+  // warehouse pickers on the same page would be confusing.
+  const effectiveWarehouseId = externalWarehouseId ?? currentWarehouseId
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
@@ -306,7 +311,7 @@ function BeginningBalancesPanel() {
         confused with live, transaction-accumulated stock.
       </p>
 
-      {sortedWarehouses.length > 1 && (
+      {!externalWarehouseId && sortedWarehouses.length > 1 && (
         <select
           value={currentWarehouseId ?? ''}
           onChange={(e) => setCurrentWarehouseId?.(e.target.value)}
@@ -323,8 +328,8 @@ function BeginningBalancesPanel() {
 
       <div className="mt-3">
         {tab === 'piles'
-          ? <PilesBeginningBalances warehouseId={currentWarehouseId} />
-          : <SacksBeginningBalances warehouseId={currentWarehouseId} />}
+          ? <PilesBeginningBalances warehouseId={effectiveWarehouseId} />
+          : <SacksBeginningBalances warehouseId={effectiveWarehouseId} />}
       </div>
     </section>
   )

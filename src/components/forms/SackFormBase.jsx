@@ -246,6 +246,17 @@ const SackFormBase = forwardRef(function SackFormBase(
   // are DERIVED from that SIA - not picked independently. Only applies
   // to the issue side (ESI); the receipt side (ESR) has no SIA of its
   // own to key off, so it keeps its own MO/TMO picker.
+  //
+  // Needed here (moved up from where it's conceptually grouped with
+  // the rest of the derived-field logic below) because
+  // linkedMillingOrder's useLiveQuery callback runs IMMEDIATELY on
+  // mount - referencing isMilling/isTestMilling before their original
+  // declaration point further down the component would throw a
+  // temporal-dead-zone ReferenceError on every single render.
+  const selectedTransactionType = (transactionTypes ?? []).find((t) => t.transactionTypeId === transactionTypeId)
+  const isMilling = selectedTransactionType?.name === 'Milling'
+  const isTestMilling = selectedTransactionType?.name === 'Test Milling'
+
   const linkedMillingOrder = useLiveQuery(async () => {
     if (type === 'ESR' || !linkedSiaAuthority?.siaNumber) return null
     if (!isMilling && !isTestMilling) return null
@@ -283,9 +294,6 @@ const SackFormBase = forwardRef(function SackFormBase(
   const sortedSackTypes = [...(sackTypes ?? [])].sort((a, b) => byAlpha(a.code, b.code))
   const sackTypeMap = new Map((sackTypes ?? []).map((s) => [s.sackTypeId, s]))
   const sortedTransactionTypes = [...(transactionTypes ?? [])].sort((a, b) => byAlpha(a.name, b.name))
-  const selectedTransactionType = (transactionTypes ?? []).find((t) => t.transactionTypeId === transactionTypeId)
-  const isMilling = selectedTransactionType?.name === 'Milling'
-  const isTestMilling = selectedTransactionType?.name === 'Test Milling'
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
   useEffect(() => {
