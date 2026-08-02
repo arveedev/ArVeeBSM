@@ -68,7 +68,7 @@ import {
   recalculateSerialCounter,
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile } from '../../utils/pileLedger.js'
-import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
@@ -79,6 +79,7 @@ import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import NewPileDialog from './NewPileDialog.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
+import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import {
   inputClass,
   labelClass,
@@ -92,6 +93,9 @@ import {
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 const GENDERS = ['Male', 'Female']
 const PROCUREMENT_TYPE_NAME = 'Procurement'
+const SALES_TYPE_NAME = 'Sales'
+const MILLING_TYPE_NAME = 'Milling'
+const TEST_MILLING_TYPE_NAME = 'Test Milling'
 const NEW_PILE_OPTION = '__new_pile__'
 
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
@@ -159,6 +163,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [condition, setCondition] = useState('GQ')
   const [moistureContent, setMoistureContent] = useState('')
   const [farmerOrgEnabled, setFarmerOrgEnabled] = useState(false)
+  const [orNumber, setOrNumber] = useState('')
+  const [moNumber, setMoNumber] = useState('')
+  const [batchNumber, setBatchNumber] = useState('')
+  const [tmoNumber, setTmoNumber] = useState('')
+  const [trialNumber, setTrialNumber] = useState('')
   const [members, setMembers] = useState([emptyMember()])
   const [showNewPileDialog, setShowNewPileDialog] = useState(false)
   const [pileFilterVarietyId, setPileFilterVarietyId] = useState(null)
@@ -170,6 +179,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [pendingDelete, setPendingDelete] = useState(false)
 
   const [isSaving, setIsSaving] = useState(false)
+  const [pendingTrial3Confirm, setPendingTrial3Confirm] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
@@ -210,10 +220,100 @@ function StockFormBase({ type, title, onClose, prefill }) {
     return db.authorities.where('aiNumber').equals(linkedDocNo.trim()).and((a) => a.type === 'AI').first()
   }, [linkedDocDeductsFromAi, linkedDocNo])
 
+  // Per the correct operational flow: it always starts with the AI,
+  // especially for issuance. When the selected AI is for a Milling or
+  // Test Milling operation, the MO/TMO number, batch, and miller name
+  // are DERIVED from that AI - not picked independently. Only applies
+  // to the issue side (WSI), since that's the only side with an
+  // existing AI link; the receipt side (WSR) has no AI of its own to
+  // key off, so it keeps its own MO/TMO picker.
+  const linkedMillingOrder = useLiveQuery(async () => {
+    if (type === 'WSR' || !linkedAuthority?.aiNumber) return null
+    if (!isMilling && !isTestMilling) return null
+    return db.millingOrders
+      .where('type').equals(isMilling ? 'MO' : 'TMO')
+      .and((o) => o.aiNumber === linkedAuthority.aiNumber)
+      .first()
+  }, [type, linkedAuthority?.aiNumber, isMilling, isTestMilling])
+
+  useEffect(() => {
+    if (type === 'WSR' || (!isMilling && !isTestMilling)) return
+    if (linkedMillingOrder) {
+      if (isMilling) {
+        setMoNumber(linkedMillingOrder.number)
+        setBatchNumber(linkedMillingOrder.batchCurrent != null ? String(linkedMillingOrder.batchCurrent) : '')
+      } else if (isTestMilling) {
+        setTmoNumber(linkedMillingOrder.number)
+      }
+      if (linkedMillingOrder.ricemillName) setCustomerName(linkedMillingOrder.ricemillName)
+    } else {
+      // The AI changed (or was cleared) and no longer matches any MO/
+      // TMO - clear whatever was previously derived rather than
+      // leaving a stale, now-mismatched number sitting in the form.
+      if (isMilling) { setMoNumber(''); setBatchNumber('') }
+      else if (isTestMilling) setTmoNumber('')
+    }
+  }, [linkedMillingOrder, isMilling, isTestMilling, type])
+
   const authorityRemainingKilos = linkedAuthority?.totalAllocationKilos != null
     ? Math.max(0, linkedAuthority.totalAllocationKilos - (linkedAuthority.totalIssuedKilos ?? 0))
     : null
   const authorityRemainingBags = linkedAuthority?.totalAllocationBags != null
+
+  // Which trial numbers (1/2/3) already exist for this TMO, across
+  // EVERY warehouse - not just the current one, since the TMO itself
+  // is the reference for fulfillment, and a trial recorded at any
+  // warehouse counts toward it.
+  // Available MO/TMO numbers from the synced (read-only) reference
+  // sheet data, with fulfillment computed so the picker can exclude
+  // anything already fulfilled - a Milling batch is fulfilled when its
+  // received net kilos (summed across every warehouse, not just this
+  // one) meet or exceed issued kilos x the sheet's recovery percent; a
+  // Test Milling TMO is fulfilled only once all 3 trials have SOME
+  // amount recovered AND the user has explicitly confirmed Trial 3 as
+  // complete (never inferred just from 3 trials existing).
+  const millingOrderOptions = useLiveQuery(async () => {
+    if (!isMilling && !isTestMilling) return []
+    const orderType = isMilling ? 'MO' : 'TMO'
+    const orders = await db.millingOrders.where('type').equals(orderType).toArray()
+    const numberField = isMilling ? 'moNumber' : 'tmoNumber'
+
+    const allRelevantTx = await db.transactions
+      .where(numberField).anyOf(orders.map((o) => o.number))
+      .and((t) => t.status === 'Active')
+      .toArray()
+
+    return orders.map((order) => {
+      const forThisOrder = allRelevantTx.filter((t) => t[numberField] === order.number)
+
+      if (isMilling) {
+        const issuedKg = forThisOrder.filter((t) => t.type === 'WSI').reduce((s, t) => s + (t.netKilos ?? 0), 0)
+        const receivedKg = forThisOrder.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
+        const expectedKg = order.recoveryPercent != null ? issuedKg * (order.recoveryPercent / 100) : null
+        const fulfilled = expectedKg != null && expectedKg > 0 && receivedKg >= expectedKg
+        return { ...order, issuedKg, receivedKg, expectedKg, fulfilled }
+      }
+
+      // Test Milling - fulfilled needs all 3 trials recovered (any
+      // amount > 0 on the WSR side) AND the explicit Trial 3
+      // confirmation flag.
+      const recoveredTrials = new Set(
+        forThisOrder.filter((t) => t.type === 'WSR' && (t.netKilos ?? 0) > 0).map((t) => t.trialNumber)
+      )
+      const allThreeRecovered = ['1', '2', '3'].every((n) => recoveredTrials.has(n))
+      const fulfilled = allThreeRecovered && order.trial3Confirmed === true
+      return { ...order, recoveredTrials: [...recoveredTrials], fulfilled }
+    })
+  }, [isMilling, isTestMilling]) ?? []
+
+  const takenTrialNumbers = useLiveQuery(async () => {
+    if (!isTestMilling || !tmoNumber.trim()) return []
+    const existing = await db.transactions
+      .where('tmoNumber').equals(tmoNumber.trim())
+      .and((t) => t.status === 'Active' && t.type === type && (!loadedTransaction || t.id !== loadedTransaction.id))
+      .toArray()
+    return [...new Set(existing.map((t) => t.trialNumber).filter(Boolean))]
+  }, [isTestMilling, tmoNumber, type, loadedTransaction]) ?? []
     ? Math.max(0, linkedAuthority.totalAllocationBags - (linkedAuthority.totalIssuedBags ?? 0))
     : null
 
@@ -256,6 +356,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
   const sortedPiles = [...(piles ?? [])]
+    .filter((p) => !isCategoryScoped || p.cerealType === activeCategory)
     .filter((p) => !pileFilterVarietyId || p.varietyId === pileFilterVarietyId)
     .sort((a, b) => byAlpha(a.pileName, b.pileName))
 
@@ -265,6 +366,9 @@ function StockFormBase({ type, title, onClose, prefill }) {
     (t) => t.transactionTypeId === transactionTypeId
   )
   const isProcurement = selectedTransactionType?.name === PROCUREMENT_TYPE_NAME
+  const isSales = selectedTransactionType?.name === SALES_TYPE_NAME
+  const isMilling = selectedTransactionType?.name === MILLING_TYPE_NAME
+  const isTestMilling = selectedTransactionType?.name === TEST_MILLING_TYPE_NAME
 
   useEffect(() => {
     if (!isProcurement && farmerOrgEnabled) {
@@ -275,7 +379,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   }, [isProcurement])
 
   const sackOptions = [...(sackTypes ?? [])]
-    .filter((s) => !selectedVariety || s.category === selectedVariety.category)
+    .filter((s) => !selectedVariety || selectedVariety.category === 'By Products' || s.category === selectedVariety.category)
     .sort((a, b) => byAlpha(a.code, b.code))
     .flatMap((s) =>
       ['BN', 'SH', 'US']
@@ -309,6 +413,24 @@ function StockFormBase({ type, title, onClose, prefill }) {
         condition: selectedCondition,
         label: `${rawSackType.code} - ${selectedCondition}`,
         weight: rawSackType.weights[selectedCondition],
+      })
+    } else {
+      // The sack type record itself is gone (deleted/renamed since this
+      // transaction was saved), or its weight configuration no longer
+      // includes this condition - the ABOVE fallback can't reconstruct
+      // a real option in either case, which previously left the
+      // dropdown blank with zero indication of why, even though the
+      // underlying saved value is completely correct. Show what was
+      // actually saved anyway, clearly marked as no longer configured,
+      // rather than making it look like the data is simply missing.
+      sackOptions.push({
+        key: sackSelection,
+        sackTypeId: selectedSackTypeId,
+        code: rawSackType?.code ?? selectedSackTypeId,
+        condition: selectedCondition,
+        label: `${rawSackType?.code ?? '?'} - ${selectedCondition} (no longer configured)`,
+        weight: rawSackType?.weights?.[selectedCondition] ?? null,
+        isStale: true,
       })
     }
   }
@@ -453,6 +575,15 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (prefill.varietyId) {
       setVarietyId(prefill.varietyId)
       if (!prefill.pileId) setPileFilterVarietyId(prefill.varietyId)
+      // Switch to the tab matching this variety's category - without
+      // this, the prefilled variety could be invisible in the dropdown
+      // if the form happened to be sitting on a different tab (e.g.
+      // Rice tab active, but the authority's variety is actually
+      // Palay).
+      if (isCategoryScoped) {
+        const matchedVariety = (varieties ?? []).find((v) => v.varietyId === prefill.varietyId)
+        if (matchedVariety?.category) setCerealCategory(matchedVariety.category)
+      }
     }
     if (prefill.numberOfBags != null) setNumberOfBags(liveFormatNumber(String(prefill.numberOfBags)))
     if (prefill.grossKilos != null) setGrossKilos(liveFormatNumber(String(prefill.grossKilos), 3))
@@ -488,6 +619,30 @@ function StockFormBase({ type, title, onClose, prefill }) {
     appliedPileDefaultsRef.current = prefill.pileId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill?.pileId, piles])
+
+  // For Milling/Test Milling authorities, the pile isn't passed
+  // directly - it's derived from the authority's own orNumber field
+  // (the Sheet's OR# column intentionally holds the pile name for
+  // these transaction types). Same async-safe pattern as the pileId
+  // effect above: piles loads asynchronously, so this retries once it
+  // actually arrives.
+  const appliedPileFromOrNumberRef = useRef(null)
+
+  useEffect(() => {
+    if (prefill?.pileId) return // an explicit pileId already takes priority
+    if (
+      !prefill?.orNumber?.trim()
+      || (prefill?.transactionTypeName !== 'Milling' && prefill?.transactionTypeName !== 'Test Milling')
+    ) return
+    if (appliedPileFromOrNumberRef.current === prefill.orNumber) return
+    const matchedPile = (piles ?? []).find(
+      (p) => p.pileName.trim().toLowerCase() === prefill.orNumber.trim().toLowerCase()
+    )
+    if (!matchedPile) return // piles still loading - retries once it arrives
+    setPileId(matchedPile.pileId)
+    appliedPileFromOrNumberRef.current = prefill.orNumber
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.orNumber, prefill?.transactionTypeName, prefill?.pileId, piles])
 
   // Same reasoning as the pile-age effect above: transactionTypes loads
   // asynchronously, so this retries once it arrives rather than only
@@ -591,7 +746,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
     setPileId(value)
     const pile = (piles ?? []).find((p) => p.pileId === value)
-    if (pile?.varietyId) {
+    if (pile?.cerealType === 'By Products') {
+      // A By Products pile can hold any mix of its cereal type's
+      // varieties - don't assume this transaction is the same variety
+      // the pile happened to be created with, leave it for the user to
+      // choose explicitly each time.
+      setVarietyId('')
+      setSackSelection('')
+    } else if (pile?.varietyId) {
       setVarietyId(pile.varietyId)
       setSackSelection('')
     }
@@ -600,7 +762,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const handlePileCreated = (pile) => {
     setPileId(pile.pileId)
-    setVarietyId(pile.varietyId)
+    setVarietyId(pile.cerealType === 'By Products' ? '' : pile.varietyId)
     setSackSelection('')
     setShowNewPileDialog(false)
   }
@@ -620,12 +782,40 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setLinkedAuthorityDate(authority.date ?? null)
     setCustomerName(authority.customerName ?? '')
     if (authority.varietyId) {
+      // If a pile is already selected and belongs to a different
+      // variety than this AI, it's no longer valid for this
+      // transaction - the AI's variety is the one that must win here.
+      const currentPile = (piles ?? []).find((p) => p.pileId === pileId)
+      if (currentPile && currentPile.varietyId !== authority.varietyId) {
+        setPileId('')
+      }
       setVarietyId(authority.varietyId)
       setPileFilterVarietyId(authority.varietyId)
+      // Switch to the matching tab here too, for the same reason as
+      // the prefill path (opening the form from the home page monitor).
+      if (isCategoryScoped) {
+        const matchedVariety = (varieties ?? []).find((v) => v.varietyId === authority.varietyId)
+        if (matchedVariety?.category) setCerealCategory(matchedVariety.category)
+      }
     }
     if (authority.transactionTypeName) {
       const match = (transactionTypes ?? []).find((t) => t.name === authority.transactionTypeName)
       if (match) setTransactionTypeId(match.transactionTypeId)
+    }
+
+    // For Milling/Test Milling authorities specifically, the Sheet's
+    // OR# column intentionally holds the pile name (e.g. "Pile 1",
+    // "Pile 2B") rather than an actual OR number - this is where the
+    // app should READ that pile assignment from and auto-select it,
+    // not a misplaced field to relocate.
+    if (
+      (authority.transactionTypeName === 'Milling' || authority.transactionTypeName === 'Test Milling')
+      && authority.orNumber?.trim()
+    ) {
+      const matchedPile = (piles ?? []).find(
+        (p) => p.pileName.trim().toLowerCase() === authority.orNumber.trim().toLowerCase()
+      )
+      if (matchedPile) setPileId(matchedPile.pileId)
     }
 
     const kilosRemaining = authority.totalAllocationKilos != null
@@ -660,6 +850,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setCustomerName(tx.customerName ?? '')
     setCustomerAddress(tx.customerAddress ?? '')
     setFarmerRsbsa(tx.farmerRsbsa ?? '')
+    setOrNumber(tx.orNumber ?? '')
+    setMoNumber(tx.moNumber ?? '')
+    setBatchNumber(tx.batchNumber ?? '')
+    setTmoNumber(tx.tmoNumber ?? '')
+    setTrialNumber(tx.trialNumber ?? '')
     setFarmerGender(tx.farmerGender ?? '')
     setTransactionTypeId(tx.transactionTypeId ?? '')
     setPileId(tx.pileId ?? '')
@@ -699,6 +894,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setMoistureContent('')
     setFarmerOrgEnabled(false)
     setMembers([emptyMember()])
+    setOrNumber('')
+    setMoNumber('')
+    setBatchNumber('')
+    setTmoNumber('')
+    setTrialNumber('')
   }
 
   // Checks whether a given serial has existing data for this (type,
@@ -738,7 +938,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
         : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
       if (latestRequestedSerial.current !== serial) return false // superseded - discard
       if (sheetResult.ok && sheetResult.row) {
-        const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), v.varietyId]))
+        const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
         const imported = mapSheetRowToTransaction(type, sheetResult.row, {
           warehouseId: currentWarehouseId,
           varietyByName,
@@ -886,6 +1086,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
     farmerRsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
     farmerGender: isProcurement ? farmerGender || null : null,
     farmerCoops: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
+    orNumber: isSales ? orNumber.trim() || null : null,
+    recordedByName: user?.name ?? user?.nickname ?? null,
+    moNumber: isMilling ? moNumber.trim() || null : null,
+    batchNumber: isMilling ? batchNumber.trim() || null : null,
+    tmoNumber: isTestMilling ? tmoNumber.trim() || null : null,
+    trialNumber: isTestMilling ? trialNumber || null : null,
     isSynced: false,
     ...overrides,
   })
@@ -926,7 +1132,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
     if (overKilos) {
       toast.error(
-        `Net Kilos (${fmtWeight(netKilos, weightUnit)}) exceeds available stock (${fmtWeight(availableKilos, weightUnit)}) on this pile`
+        `Net Kilos (${fmtWeight(netKilos, weightUnit)}) exceeds this pile's available stock (${fmtWeight(availableKilos, weightUnit)}) - a pile limit, not the AI balance`
       )
       return false
     }
@@ -956,16 +1162,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     })
   }
 
-  const handleSave = async () => {
-    if (overBags && !overKilos) {
-      // Bags-over is a soft warning the user already saw inline — allow
-      // it through, since some transaction types legitimately exceed the
-      // bag count (net kilos is the hard limit, per clarification).
-    }
-
-    const ok = await validateForm()
-    if (!ok) return
-
+  const performSave = async (trial3Confirmed) => {
     setIsSaving(true)
 
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
@@ -987,12 +1184,72 @@ function StockFormBase({ type, title, onClose, prefill }) {
       await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum, netKilos)
     }
 
+    // The transaction saves regardless of the answer - it's a real
+    // recorded event either way. Only an explicit "Yes" here marks
+    // trial3Confirmed, which is what actually gates overall TMO
+    // fulfillment - never inferred just from 3 trial records existing.
+    if (trial3Confirmed) {
+      await db.millingOrders.where('orderId').equals(`TMO::${tmoNumber.trim()}`).modify({ trial3Confirmed: true })
+
+      // Fulfilled the moment all 3 trials have SOME recovery AND this
+      // confirmation just landed - write DONE to the sheet. Queries
+      // fresh rather than relying on the reactive list, which may not
+      // yet reflect the transaction just saved above.
+      const trialTx = await db.transactions
+        .where('tmoNumber').equals(tmoNumber.trim())
+        .and((t) => t.type === 'WSR' && t.status === 'Active' && (t.netKilos ?? 0) > 0)
+        .toArray()
+      const recoveredTrials = new Set(trialTx.map((t) => t.trialNumber))
+      if (['1', '2', '3'].every((n) => recoveredTrials.has(n))) {
+        await markMillingOrderDone('TMO', tmoNumber.trim())
+      }
+    }
+
+    // Milling: check if this MO's recovery has now been fully met by
+    // this save, and write DONE if so.
+    if (type === 'WSR' && isMilling && moNumber.trim()) {
+      const order = await db.millingOrders.where('orderId').equals(`MO::${moNumber.trim()}`).first()
+      if (order?.recoveryPercent != null) {
+        const moTx = await db.transactions
+          .where('moNumber').equals(moNumber.trim())
+          .and((t) => t.status === 'Active')
+          .toArray()
+        const issuedKg = moTx.filter((t) => t.type === 'WSI').reduce((s, t) => s + (t.netKilos ?? 0), 0)
+        const receivedKg = moTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
+        const expectedKg = issuedKg * (order.recoveryPercent / 100)
+        if (expectedKg > 0 && receivedKg >= expectedKg) {
+          await markMillingOrderDone('MO', moNumber.trim())
+        }
+      }
+    }
+
     toast.success(`${type} saved — ${serialNo.trim()}`)
 
     const next = stepSerial(serialNo.trim(), 1)
     resetToBlankEntry(next)
     setIsSaving(false)
     scrollToCustomerName()
+  }
+
+  const handleSave = async () => {
+    if (overBags && !overKilos) {
+      // Bags-over is a soft warning the user already saw inline — allow
+      // it through, since some transaction types legitimately exceed the
+      // bag count (net kilos is the hard limit, per clarification).
+    }
+
+    const ok = await validateForm()
+    if (!ok) return
+
+    // A Test Milling receipt for Trial 3 specifically needs an explicit
+    // confirmation before it can ever count toward TMO fulfillment -
+    // per the requirement that this is asked, not inferred.
+    if (type === 'WSR' && isTestMilling && trialNumber === '3' && netKilos > 0) {
+      setPendingTrial3Confirm(true)
+      return
+    }
+
+    await performSave(false)
   }
 
   const handleUpdate = async () => {
@@ -1252,13 +1509,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
           <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              onClick={(e) => e.currentTarget.showPicker?.()}
-              className={`${inputClass} cursor-pointer`}
-            />
+            <CalendarDatePicker value={date} onChange={setDate} />
           </div>
 
           <div>
@@ -1318,6 +1569,131 @@ function StockFormBase({ type, title, onClose, prefill }) {
             />
           </div>
 
+          {isSales && (
+            <div>
+              <label className={labelClass}>OR # (optional)</label>
+              <input
+                type="text"
+                value={orNumber}
+                onChange={(e) => setOrNumber(e.target.value)}
+                className={inputClass}
+                placeholder="Official Receipt number"
+              />
+            </div>
+          )}
+
+          {isMilling && (() => {
+            const availableMoOrders = millingOrderOptions.filter((o) => !o.fulfilled || o.number === moNumber)
+            const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
+            const isDerived = type !== 'WSR'
+
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>MO Number</label>
+                  {isDerived ? (
+                    <input
+                      type="text"
+                      value={moNumber}
+                      readOnly
+                      disabled
+                      className={`${inputClass} bg-neutral-800 text-neutral-400`}
+                      placeholder="Select an AI above first"
+                    />
+                  ) : (
+                    <select
+                      value={moNumber}
+                      onChange={(e) => {
+                        const nextNumber = e.target.value
+                        setMoNumber(nextNumber)
+                        const order = millingOrderOptions.find((o) => o.number === nextNumber)
+                        setBatchNumber(order?.batchCurrent != null ? String(order.batchCurrent) : '')
+                        // Auto-fills the miller's name into Customer Name -
+                        // this is what actually makes the miller flow into
+                        // the customer directory (via rememberCustomer),
+                        // so they show up in the same admin customer list
+                        // rather than needing separate manual entry.
+                        if (order?.ricemillName) setCustomerName(order.ricemillName)
+                      }}
+                      className={`${inputClass} ${!moNumber.trim() ? '!border-brand-amber' : ''}`}
+                    >
+                      <option value="">Select…</option>
+                      {availableMoOrders.map((o) => (
+                        <option key={o.number} value={o.number}>{o.number} - {o.ricemillName}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Batch</label>
+                  <input
+                    type="text"
+                    value={selectedOrder ? `${selectedOrder.batchCurrent} of ${selectedOrder.batchTotal}` : ''}
+                    readOnly
+                    disabled
+                    className={`${inputClass} bg-neutral-800 text-neutral-400`}
+                    placeholder="Auto-filled from MO"
+                  />
+                </div>
+              </div>
+            )
+          })()}
+
+          {isTestMilling && (() => {
+            const availableTmoNumbers = millingOrderOptions.filter((o) => !o.fulfilled || o.number === tmoNumber)
+            const isDerived = type !== 'WSR'
+
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>TMO Number</label>
+                  {isDerived ? (
+                    <input
+                      type="text"
+                      value={tmoNumber}
+                      readOnly
+                      disabled
+                      className={`${inputClass} bg-neutral-800 text-neutral-400`}
+                      placeholder="Select an AI above first"
+                    />
+                  ) : (
+                    <select
+                      value={tmoNumber}
+                      onChange={(e) => {
+                        const nextNumber = e.target.value
+                        setTmoNumber(nextNumber)
+                        setTrialNumber('')
+                        const order = millingOrderOptions.find((o) => o.number === nextNumber)
+                        if (order?.ricemillName) setCustomerName(order.ricemillName)
+                      }}
+                      className={`${inputClass} ${!tmoNumber.trim() ? '!border-brand-amber' : ''}`}
+                    >
+                      <option value="">Select…</option>
+                      {availableTmoNumbers.map((o) => (
+                        <option key={o.number} value={o.number}>{o.number} - {o.ricemillName}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Trial</label>
+                  <select
+                    value={trialNumber}
+                    onChange={(e) => setTrialNumber(e.target.value)}
+                    className={`${inputClass} ${!trialNumber ? '!border-brand-amber' : ''}`}
+                  >
+                    <option value="">Select…</option>
+                    {['1', '2', '3'].map((n) => (
+                      <option key={n} value={n} disabled={takenTrialNumbers.includes(n) && n !== trialNumber}>
+                        Trial {n}{takenTrialNumbers.includes(n) && n !== trialNumber ? ' (used)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )
+          })()}
+
           {isProcurement && (
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1376,7 +1752,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
             <div>
               <label className={labelClass}>Variety Type</label>
-              {selectedPile ? (
+              {selectedPile && selectedPile.cerealType !== 'By Products' ? (
                 <div className={readOnlyClass}>
                   {selectedVariety ? `${selectedVariety.name} (${selectedVariety.category})` : '—'}
                 </div>
@@ -1548,6 +1924,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
             {linkedDocDeductsFromAi && authorityRemainingKilos != null && (
               <p className="mt-1 text-xs text-brand-neon">
                 AI balance remaining: {fmtWeight(authorityRemainingKilos, weightUnit, 'Net')}
+                {' '}({(authorityRemainingBags ?? Math.round(authorityRemainingKilos / 50)).toLocaleString()} bags)
               </p>
             )}
           </div>
@@ -1722,7 +2099,34 @@ function StockFormBase({ type, title, onClose, prefill }) {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-6">
+      {pendingTrial3Confirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+            <p className="text-base font-semibold text-app-text">Has Trial 3 been completed?</p>
+            <p className="mt-1 text-sm text-neutral-400">
+              This TMO can only be marked fulfilled once Trial 3 is confirmed complete. If not, this receipt still saves, but the TMO stays unfulfilled.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setPendingTrial3Confirm(false); performSave(false) }}
+                className="flex-1 rounded-xl border border-neutral-700 py-2.5 text-sm font-medium text-neutral-300"
+              >
+                Not Yet
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPendingTrial3Confirm(false); performSave(true) }}
+                className="flex-1 rounded-xl bg-brand-neon py-2.5 text-sm font-semibold text-brand-contrast"
+              >
+                Yes, Complete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         {isEditMode ? (
           <div className="flex gap-3">
             <button
@@ -1768,6 +2172,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
         <NewPileDialog
           warehouseId={currentWarehouse.warehouseId}
           varieties={sortedVarieties}
+          lockedCategory={activeCategory}
           onCreated={handlePileCreated}
           onClose={() => setShowNewPileDialog(false)}
         />
@@ -1777,7 +2182,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
         <AuthorityPickerModal
           type="AI"
           warehouseId={currentWarehouseId}
-          filterVarietyId={varietyId || null}
           onSelect={handleSelectAuthority}
           onClose={() => setShowAuthorityPicker(false)}
         />

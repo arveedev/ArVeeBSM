@@ -42,6 +42,7 @@ function AuthoritiesInfoPanel() {
       : sackTypeMap.get(a.sackLines?.[0]?.sackTypeId)?.category
     if (category === 'Rice') return 'text-blue-400'
     if (category === 'Palay') return 'text-brand-neon'
+    if (category === 'By Products') return 'text-brand-byproduct'
     return 'text-app-text'
   }
 

@@ -53,6 +53,7 @@ function AdminMonitoring() {
     const category = a.type === 'AI' ? varietyMap.get(a.varietyId)?.category : sackTypeMap.get(a.sackLines?.[0]?.sackTypeId)?.category
     if (category === 'Rice') return 'text-blue-400'
     if (category === 'Palay') return 'text-brand-neon'
+    if (category === 'By Products') return 'text-brand-byproduct'
     return 'text-app-text'
   }
 
@@ -74,7 +75,7 @@ function AdminMonitoring() {
   const completedList = typeAuthorities.filter(isAuthorityComplete)
 
   return (
-    <div className="min-h-screen px-4 pb-24 pt-6">
+    <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
         <div
           className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -96,7 +97,7 @@ function AdminMonitoring() {
         ))}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
+      <div className="sticky top-16 z-30 -mx-4 mt-3 flex items-center gap-2 bg-neutral-950 px-4 py-2">
         <div className="relative flex-1">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
           <input

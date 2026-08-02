@@ -41,7 +41,7 @@ function BottomNav({ onFabClick }) {
 
   if (isVisitor) {
     return (
-      <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900">
+      <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
         <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
         <div className="mx-auto grid h-16 max-w-md grid-cols-2 items-center">
           <NavItem to="/" label="Home" Icon={Home} />
@@ -52,7 +52,7 @@ function BottomNav({ onFabClick }) {
   }
 
   return (
-    <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900">
+    <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
       <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
       <div className="mx-auto grid h-16 max-w-md grid-cols-5 items-center">
         <NavItem to="/" label="Home" Icon={Home} />

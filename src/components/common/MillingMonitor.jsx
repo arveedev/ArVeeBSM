@@ -1,0 +1,210 @@
+// Milling / Test Milling Operations Monitor - mirrors the existing
+// AuthorityMonitor pattern (pending list, Completed toggle, tap to
+// expand detail), but for MO/TMO operations instead of AI/SIA
+// authorities. Shows both stock (WSR/WSI) and sack (ESR/ESI) activity
+// together, since a milling operation always involves both.
+
+import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { AlertTriangle, ChevronRight, X } from 'lucide-react'
+import { db } from '../../db/dexie.js'
+import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
+import { fmtBags, fmtWeight } from '../../utils/calculations.js'
+import { useSettings } from '../../context/SettingsContext.jsx'
+
+const fmtDate = (s) => {
+  if (!s) return '—'
+  const d = new Date(s + 'T00:00:00')
+  return d.toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function MillingOrderDetail({ order, onClose }) {
+  const { weightUnit } = useSettings() ?? {}
+  const allTx = [...order.issueTx, ...order.receiptTx].sort((a, b) => (a.date < b.date ? -1 : 1))
+
+  // Recovery percent expressed as an equivalent net bags figure, per
+  // explicit request - a 50kg bag is the standard conversion used
+  // throughout this app's own weight calculations.
+  const expectedBagsEquivalent = order.type === 'MO' && order.recoveryPercent != null
+    ? Math.round((order.issuedKilos * (order.recoveryPercent / 100)) / 50)
+    : null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={onClose}>
+      <div
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-base font-bold text-app-text">{order.number}</p>
+            <p className="text-sm text-neutral-400">{order.ricemillName}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 text-neutral-400 hover:text-app-text">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+            <p className="text-xs text-neutral-500">{order.type === 'MO' ? 'Batch' : 'Trials Recovered'}</p>
+            <p className="font-semibold text-app-text">
+              {order.type === 'MO'
+                ? `${order.batchCurrent} of ${order.batchTotal}`
+                : `${(order.recoveredTrials ?? []).length} of 3`}
+            </p>
+          </div>
+          <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+            <p className="text-xs text-neutral-500">Status</p>
+            <p className={`font-semibold ${order.fulfilled ? 'text-brand-neon' : 'text-brand-amber'}`}>
+              {order.fulfilled ? 'Fulfilled' : 'Pending'}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+            <p className="text-xs text-neutral-500">Issued</p>
+            <p className="font-semibold text-app-text">{fmtBags(order.issuedPieces)} sacks</p>
+            <p className="font-semibold text-app-text">{fmtWeight(order.issuedKilos, weightUnit, 'Net')}</p>
+          </div>
+          <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+            <p className="text-xs text-neutral-500">Received</p>
+            <p className="font-semibold text-app-text">{fmtBags(order.receivedPieces)} sacks</p>
+            <p className="font-semibold text-app-text">{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
+          </div>
+        </div>
+
+        {expectedBagsEquivalent != null && (
+          <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
+            <p className="text-xs text-neutral-500">Expected Recovery ({order.recoveryPercent}%)</p>
+            <p className="font-semibold text-app-text">≈ {fmtBags(expectedBagsEquivalent)} bags</p>
+          </div>
+        )}
+
+        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-neutral-500">Transaction History</p>
+        <ul className="mt-1.5 space-y-1.5">
+          {allTx.length === 0 && <p className="py-2 text-center text-xs text-neutral-500">No transactions recorded yet.</p>}
+          {allTx.map((t) => {
+            const isIssue = t.type === 'WSI' || t.type === 'ESI'
+            const isSack = t.type === 'ESI' || t.type === 'ESR'
+            const amount = isSack
+              ? `${fmtBags((t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} pcs`
+              : `${fmtBags(t.numberOfBags)} bags / ${fmtWeight(t.netKilos ?? 0, weightUnit)}`
+            return (
+              <li key={t.id} className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className={`font-semibold ${isIssue ? 'text-brand-crimson' : 'text-brand-neon'}`}>
+                    {isIssue ? 'Issued' : 'Received'} {isSack ? '(Sacks)' : '(Stock)'}
+                    {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
+                  </span>
+                  <span className="text-neutral-500">{fmtDate(t.date)}</span>
+                </div>
+                <p className="mt-0.5 text-neutral-400">{amount} · {t.serialNo}</p>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+function MillingMonitor() {
+  const [topTab, setTopTab] = useState('MO')
+  const [showCompleted, setShowCompleted] = useState(false)
+  const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
+  const [selectedOrder, setSelectedOrder] = useState(null)
+
+  const orders = useLiveQuery(() => computeMillingOrderStatuses(topTab), [topTab]) ?? []
+  const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
+
+  // Regional Authority Number comes from the AI/SIA the order links to
+  // (via the order's own aiNumber/siaNumber), not stored on the order
+  // directly.
+  const regionalAuthByOrder = new Map(
+    orders.map((o) => {
+      const auth = authorities.find((a) => (o.aiNumber && a.aiNumber === o.aiNumber) || (o.siaNumber && a.siaNumber === o.siaNumber))
+      return [o.orderId, auth?.regionalAuthorityNumber ?? null]
+    })
+  )
+
+  const filtered = orders.filter((o) => {
+    if (o.fulfilled !== showCompleted) return false
+    if (regionalAuthFilter.trim() && regionalAuthByOrder.get(o.orderId) !== regionalAuthFilter.trim()) return false
+    return true
+  })
+
+  const availableRegionalAuthNumbers = [...new Set([...regionalAuthByOrder.values()].filter(Boolean))].sort()
+
+  return (
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold text-app-text">Milling Operations</h2>
+        <button
+          type="button"
+          onClick={() => setShowCompleted((v) => !v)}
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${showCompleted ? 'bg-brand-neon text-brand-contrast' : 'border border-neutral-700 text-neutral-400'}`}
+        >
+          {showCompleted ? 'Showing Completed' : 'Show Completed'}
+        </button>
+      </div>
+
+      <div className="mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
+        {['MO', 'TMO'].map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTopTab(t)}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium ${topTab === t ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}
+          >
+            {t === 'MO' ? 'Milling' : 'Test Milling'}
+          </button>
+        ))}
+      </div>
+
+      {availableRegionalAuthNumbers.length > 0 && (
+        <select
+          value={regionalAuthFilter}
+          onChange={(e) => setRegionalAuthFilter(e.target.value)}
+          className="mt-3 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-app-text"
+        >
+          <option value="">All Regional Authority Numbers</option>
+          {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+      )}
+
+      <ul className="mt-3 space-y-1.5">
+        {filtered.length === 0 && (
+          <p className="py-4 text-center text-xs text-neutral-500">
+            No {showCompleted ? 'completed' : 'pending'} {topTab} operations.
+          </p>
+        )}
+        {filtered.map((o) => (
+          <li key={o.orderId}>
+            <button
+              type="button"
+              onClick={() => setSelectedOrder(o)}
+              className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99]"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-app-text">{o.number}</p>
+                <p className="truncate text-xs text-neutral-500">{o.ricemillName}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {!o.fulfilled && (o.issuedKilos > 0 || o.issuedPieces > 0) && (
+                  <AlertTriangle size={14} className="text-brand-amber" />
+                )}
+                <ChevronRight size={18} className="text-neutral-600" />
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {selectedOrder && <MillingOrderDetail order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
+    </div>
+  )
+}
+
+export default MillingMonitor

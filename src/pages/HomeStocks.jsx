@@ -31,7 +31,8 @@ function SummaryCard({ label, value, sub = false }) {
   )
 }
 
-const categoryColor = (cerealType) => (cerealType === 'Rice' ? 'text-blue-400' : 'text-brand-neon')
+const categoryColor = (cerealType) =>
+  cerealType === 'Rice' ? 'text-blue-400' : cerealType === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
 
 /** Sorts age-bucket labels into their canonical chronological order for
  * this cereal type, rather than object insertion order. Falls back to
@@ -164,7 +165,7 @@ function HomeStocks({ warehouseId } = {}) {
                 </div>
               )
             })}
-            <div className={`mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : 'border-brand-neon bg-brand-neon/10'}`}>
+            <div className={`mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}>
               <span className="truncate text-xs font-medium text-neutral-500">Total ({cerealType})</span>
               <div className="text-right">
                 <p className={`whitespace-nowrap text-sm font-bold ${color}`}>

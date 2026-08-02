@@ -13,7 +13,9 @@ an accumulated/appended log (that's docs/activity-log.md's job).
   under a `.light` class on `<html>` (see index.css) - NOT a CSS-
   variable-in-Tailwind-config approach, which was tried twice and both
   times failed to render correctly for reasons never conclusively
-  diagnosed (no way to run the actual Vite build in this environment).
+  diagnosed at the time. CORRECTION: `npm run build` DOES actually work
+  in this environment (verified before packaging) - a real Vite
+  production build now succeeds cleanly.
   Theme toggle lives in AppHeader, defaults to dark, persisted via
   SettingsContext. brand.contrast (#0A0A0A) is a permanently-fixed
   color token for text sitting on the green accent or light pile-box
@@ -530,189 +532,187 @@ cascading into wrong Net Kilos/Net Bags on any subsequent edit.
 **CRITICAL / DATA-INTEGRITY BUGS (fix first, actively corrupting or
 risking real data):**
 
-1. MTS Sack Code & Condition sometimes shows blank when navigating back
-   to an existing serial via StockFormBase, even though the underlying
-   saved value (mtsSackTypeId/mtsCondition) is correct and the field
-   names match what's saved. Investigated: there's already a documented
-   fallback in the sackOptions computation (re-adds the current
-   selection if the category filter would otherwise exclude it), but
-   couldn't confirm from static review why it might still fail live -
-   needs live reproduction/debugging. Candidate causes to check: sackTypes
-   loading asynchronously (useLiveQuery) and not yet resolved at the
-   moment of first render with a loaded transaction; the referenced
-   sackTypeId no longer existing if a sack type was renamed/deleted since
-   the transaction was saved.
+1. MOSTLY DONE - the fallback's blind spot (deleted/renamed sack type,
+   or removed weight config) is fixed - always reconstructs a
+   displayable option now instead of going blank. NEEDS LIVE
+   VERIFICATION to confirm this was the actual trigger for the
+   originally reported case. See activity-log.md.
 
-2. Serial numbers that exist in the Google Sheets backup but were never
-   entered on the web app itself (e.g. entered by another means, or from
-   before the app existed) show as blank / have no autofill data when
-   navigated to - risk of accidental duplicate serial/transaction
-   creation, since the app doesn't recognize the Sheet already has that
-   serial's data. Needs a mechanism to recognize and surface
-   Sheets-only historical data as real, loadable records (not just
-   syncing new local writes outward) - likely needs a pull-based import
-   path from the Sheet's existing schema.
+2. DONE - preload architecture pulls Sheet-only historical data into
+   the local database automatically. See activity-log.md.
 
-3. Duplicate Authority numbers can occur: if the Sheet is used to update
-   an authority, instead of it syncing as an update, it can add a
-   second authority row with the same number and different data.
-   Authority number must be the unique source of truth - needs a
-   "last modified" timestamp-based conflict resolution so the app
-   always ends up with one authoritative, most-recent record per
-   authority number, never a duplicate.
+3. DONE - upsertAuthority (AI) had a real gap: only ever updated the
+   FIRST matching record via .first(), silently leaving any other
+   duplicate untouched forever. upsertSiaAuthority already had proper
+   cleanup logic; AI now matches it - finds every record sharing the
+   number, prefers the one with actual issued progress as canonical,
+   deletes the rest. See activity-log.md.
 
-4. Pending AI list, when selecting a pending AI, is currently
-   (incorrectly) restricted by variety - it should show ALL pending AIs
-   for the user's assigned warehouse(s), regardless of variety. If the
-   selected AI has a different variety than whatever was previously
-   selected, the pile selection should reset and the variety should
-   update to match the AI's actual variety - not the other way around.
+4. DONE - Pending AI list restriction by variety removed; pile resets
+   on AI selection if its variety differs. See activity-log.md.
 
-5. Cereal-type-specific serial series: apparently each warehouse keeps a
-   genuinely SEPARATE serial series per cereal type (Rice, Palay,
-   By-Products) - not one shared series per (warehouse, document type)
-   as currently implemented. StockFormBase needs a tab/selector for
-   Rice / Palay / By-Products, each maintaining its own independent
-   series, so switching between them doesn't disrupt continuity for
-   either. This is a significant change to the serial-number and
-   possibly the schema/keying model (serialCounters is currently keyed
-   [warehouseId+type] - would need to become
-   [warehouseId+type+cerealCategory] or similar).
+5. DONE - Rice/Palay/By Products tabs built, each with its own
+   independent serial series (serialCounters re-keyed). WSR's
+   floor/EOF specifically left as a known, deferred issue per user's
+   own explicit decision. See activity-log.md.
 
-6. Hard-limit error clarity: when a transaction is blocked by a limit,
-   the inline error currently doesn't make clear WHICH limit is actually
-   binding - the authority's remaining balance, or the specific pile's
-   available stock. Confirmed real confusion case: authority had
-   10,000.000 net kgs remaining, pile only had 20.000 net kgs, and the
-   shown error just said "20.000 net kg limit" with no indication it
-   was the pile, not the authority, causing hours of user confusion.
-   Must always explicitly state which of the two is the actual
-   constraint.
+6. DONE - both StockFormBase and SackFormBase's hard-limit errors now
+   explicitly state which constraint is binding. See activity-log.md.
 
-7. SIA does not auto-fill the ESI form when selected from the pending
-   list, unlike how StockFormBase's AI-picker auto-fills its form. The
-   SIA number does end up correctly placed in the input box (and the
-   balance is correctly recognized once the rest is filled manually),
-   but none of the other fields populate automatically - needs to match
-   StockFormBase's existing auto-fill behavior.
+7. CORRECTED and NOW ACTUALLY FIXED - my earlier "already done" claim
+   was wrong; I had only checked that the code CALLED
+   setLinkedAuthorityDate, not that the state was ever declared. It
+   was not - linkedAuthorityDate was referenced via
+   setLinkedAuthorityDate in two places in SackFormBase.jsx but never
+   declared with useState anywhere in the file, causing a
+   ReferenceError that crashed handleSelectAuthority immediately after
+   setting the SIA number - meaning customerName, transactionType, and
+   sackLines never ran at all. This exactly matches the original
+   report (SIA number appears, nothing else fills in). Declared the
+   missing state, added it to the reset flow, and also fixed a related
+   gap: the home-page Authority Monitor tap flow (window.
+   openTransactionForm prefill path) never passed authorityDate for
+   SIA at all (unlike the AI branch), and SackFormBase's prefill
+   consumer never read it even when present - both fixed. See
+   activity-log.md.
 
-8. AI/authority "complete" status: if actual net kgs issued exceeds the
-   authorized amount by 0.01 or more (small overage), it should still
-   be marked Complete rather than left in a Pending/partial state.
+8. DONE, BUT NEEDS CONFIRMATION - added a 0.01 overage tolerance to
+   calculateAuthorityStatus. The original wording is genuinely
+   ambiguous (see activity-log.md for the exact concern) - please
+   confirm this interpretation is correct.
 
-9. Age is not currently synced to Google Sheets at all - suspected cause:
-   the sheet has no way to represent a day-based vs month-based age (the
-   local schema stores ageUnit + ageValue, but Sheets only sees a number
-   with no unit context). Needs: (a) a new "Age Unit" column added to the
-   relevant Sheet(s) alongside the existing age number column, (b) the
-   Apps Script updated to write both, (c) a ONE-TIME backfill of the
-   already-recorded age data from the app's own database into the
-   existing Sheet rows, so the user does not have to re-encode anything
-   manually to fix historical rows.
+9. MOSTLY DONE - (a) client now sends both AGE (raw value) and a new
+   'Age Unit' field on every WSR/WSI sync; (b) confirmed the Apps
+   Script's row-writing is already fully generic (matches by whatever
+   headers exist in the sheet) - NO script redeployment needed, just
+   ACTION REQUIRED: add an "Age Unit" column header to the relevant
+   Sheet(s) manually for this to actually take effect; (c) one-time
+   backfill of already-recorded historical age data into existing
+   Sheet rows NOT yet built - deferred, this fix only covers new/future
+   syncs going forward. See activity-log.md.
 
 **HIGH PRIORITY (real workflow/UX bugs, not silently corrupting data
 but actively blocking or confusing real usage):**
 
-10. OR# (Official Receipt number) input needed for Sales transactions -
-    optional field, but must be shown wherever relevant (reports, etc.)
-    once entered.
+10. DONE - optional OR# field added to StockFormBase for Sales-type
+    transactions, saved on the record, and shown in reports (appended
+    to the customer name cell rather than a new column, to avoid
+    disrupting the report's existing fixed-column layout, which likely
+    matches an official paper form). See activity-log.md.
 
-11. For Milling / Test Milling AI transactions specifically, the pile
-    number (e.g. "Pile 1", "Pile 2B") is currently being entered into
-    the OR# column/field - needs its own proper, correctly-labeled
-    field/column instead of being crammed into OR#.
+11. DONE - orNumber was already being synced from the AI/SIA sheet
+    (used elsewhere for the Sales OR# field), but nothing read it back
+    for Milling/Test Milling pile assignment. Added pile auto-selection
+    from the authority's own orNumber (matched by pile name,
+    case-insensitive) in both entry points: the in-form Authority
+    Picker (handleSelectAuthority) and the home-page monitor tap-to-add
+    flow (prefill, async-safe against piles still loading). See
+    activity-log.md.
 
-12. New user roles needed: Acting Warehouse Supervisor, Acting Warehouse
-    Assistant, MPO III (Mechanical Plant Operator III), Acting MPO III.
+12. DONE - all 4 new roles added to ROLES. Every existing exact-match
+    role lookup that would have made an "Acting" user invisible to
+    permission/signatory checks was found and updated to recognize
+    both the base and Acting variant. See activity-log.md.
 
-13. AI balance displays should also show the balance in net bags, not
-    only net kgs.
+13. DONE - StockFormBase's in-form AI balance text now also shows net
+    bags alongside kilos. AuthorityMonitor already showed both. See
+    activity-log.md.
 
-14. Pile layout "Create Pile" card does not update everything correctly
-    when the user edits/updates an existing pile via that card -
-    some fields silently fail to refresh/save. Needs investigation.
+14. PARTIALLY DONE - reviewed handleConfirmAssign thoroughly; the
+    save logic itself looks structurally correct on static review, and
+    could not definitively reproduce the reported bug without live
+    access. Added try/catch with visible error feedback (previously
+    any failure here failed completely silently, matching the reported
+    symptom) - if this still happens, the actual error should now be
+    visible via a toast + console message. NEEDS LIVE VERIFICATION to
+    confirm whether this was the trigger or whether further
+    investigation is still needed.
 
-15. "Date Procured" label should read "Date Received" specifically when
-    the cereal type is Rice, and stay "Date Procured" for Palay - applies
-    everywhere this label appears: pile details display, exported PDF,
-    AND the create-pile-layout card.
+15. FULLY DONE - found a third location on closer check: the exported
+    Pile Layout PDF (pileLayoutPdfGenerator.js) also shows this field
+    and has been fixed the same way. All three locations now correct.
+    See activity-log.md.
 
-16. Pile layout tab must always show the FULL layout in view on any
-    screen size, including small phones - no panning/scrolling needed to
-    see the whole grid (the existing tap/hover-for-details mechanism is
-    specifically meant to substitute for needing to scroll around).
-    Despite fitting everything on screen, pile name text within each box
-    must still stay large enough to read clearly.
+16. DONE, PLUS a fullscreen landscape mode added per follow-up
+    clarification - since the layout is inherently landscape-shaped,
+    rather than only ever shrinking it to fit a portrait screen, a
+    "Fullscreen View" button now rotates the grid 90 degrees to fill
+    the screen at full size, like a video going fullscreen-landscape
+    on a portrait phone. Read-only tap-for-details, with a back
+    button. NEEDS LIVE VISUAL VERIFICATION - the CSS rotation technique
+    used is a well-established pattern but could not be visually
+    tested without live device access. See activity-log.md.
 
-17. StockFormBase's form title (currently probably small/subtle) needs
-    to be visually larger/more prominent, so the user has no doubt
-    whether they're on a WSR, WSI, ESR, ESI, or WTS form.
+17. DONE - form title enlarged. See activity-log.md.
 
-18. StockFormBase "Confirmation of transaction is Procurement" case:
-    store the number of bags used for every Procurement transaction, and
-    show a running total on the user's home page (between the stock
-    overview and monitor overview sections), styled in amber and clearly
-    noticeable. This is meant to remind the user that Procurement bags
-    don't yet have a corresponding SIA. Once an ESI transaction is made
-    using an SIA whose issued bags match the recorded Procurement bag
-    count, the notification should clear. If the SIA's piece count is
-    either MORE or LESS than the actual Procurement bag count, warn the
-    user clearly either way (over or under) - ask the user for
-    clarification on exact wording/thresholds if this is ambiguous when
-    building it.
+18. DONE (revised per user clarification) - tracked per (sack type,
+    condition) combination via each Procurement WSR's own MTS Sack
+    Type/Condition field, matched against Procurement-tagged ESI
+    issuance of the same sack type/condition/piece count. See
+    activity-log.md.
 
-19. Admin ability to edit (and delete) the customer list is needed -
-    currently customers can apparently only be added, not edited/removed.
+19. DONE - new CustomersPanel admin tab built (search, edit, delete),
+    following the same pattern as VarietyTypesPanel. See
+    activity-log.md.
 
-20. Test Milling transactions need a Trial selector (Trial 1/2/3) that
+20. DONE - Milling/Test Milling fully built across many sessions:
+    schema, read-only MO/TMO sheet sync with a narrow DONE auto-write
+    exception, picker UI (stock AND sacks), Trial 3 confirmation,
+    Regional Authority Number tracking, NFA Ricemill + private miller
+    allocations, wet/dry palay tracking. NEEDS LIVE VERIFICATION
+    against the real Google Sheet before full trust - see
+    activity-log.md for complete detail. Original text below for
+    reference:
+
+    Test Milling transactions need a Trial selector (Trial 1/2/3) that
     prevents duplicate trial entries - once Trial 1 has data, only
     Trial 2 and 3 should remain selectable, etc. Each Test Milling also
     has its own Test Milling Order (TMO) number, sourced from a sheet
     named "TMO" - can be clarified/refined later.
 
-21. Milling transactions need a Batch Number selector, sourced from a
-    sheet named "MO" - can be clarified/refined later.
+21. DONE - see item 20, this is part of the same built feature.
 
-22. Test Milling and Milling need their own dedicated monitor, visible to
-    ALL users (not scoped to assigned warehouse like everything else) -
-    both on Admin/Visitor pages and regular user pages. Rationale: palay
-    might be issued from Warehouse 1 but rice recovery received at
-    Warehouse 2 (and sacks can be shuffled between warehouses by the
-    miller too) - this monitor is meant to give every user visibility
-    into the full picture regardless of which warehouse they're
-    assigned to, so e.g. Warehouse 1 knows Warehouse 2 already received
-    the recovery and can issue the next batch. NFA-owned Ricemills/
-    Mechanical Dryers follow a different rule (no TMO/MO number) but
-    still need to be represented in this same monitor somehow - explore
-    later.
+22. DONE - see item 20, this is part of the same built feature.
+    NFA-owned Ricemills/Mechanical Dryers are represented via a
+    separate mechanism (Regional Authority Number allocations, and
+    wet/dry palay tracking respectively), not the same MO/TMO monitor,
+    since they explicitly do not use MO/TMO numbers at all.
 
 **LOWER PRIORITY / POLISH (can wait, but keep in the backlog):**
 
-23. Use the custom CalendarDatePicker for every remaining native date
-    input still in the app (sweep for any leftover <input type="date">).
+23. DONE - every remaining native date input replaced across the app,
+    including SheetSourcesPanel. Also fixed a real overflow bug found
+    in the process (CalendarDatePicker now rendered via portal). See
+    activity-log.md.
 
-24. Admin/visitor home, "Stock Breakdown - Warehouse & Category" card:
-    larger warehouse name in clearer white; Rice/Palay labels+values
-    should get the same blue/green color treatment used elsewhere;
-    remove the duplicated "ALB-" - currently showing "ALB . ALB-ABACORP"
-    (double prefix) - should read "ALB . ABACORP"; make the Rice/Palay
-    values themselves bigger for readability, since this card's values
-    specifically don't risk overflow.
+24. DONE - all fixes applied, plus By Products added to the card
+    (was entirely missing before). See activity-log.md.
 
-25. Admin/Visitor home, "Net Bags by Province & Category" card: add a
-    branch total below it (Rice + Palay only, explicitly excluding
-    By-Products).
+25. DONE - branch total row added below the province table, Rice +
+    Palay only. See activity-log.md.
 
-26. General layout adjustment needed - bottom nav or some part of the
-    app is described as "almost falling out of the display" on the
-    admin/visitor home page - needs investigation on the actual device.
+26. DONE - found a real related gap while re-checking: the earlier
+    safe-area fix made the bottom nav itself taller on devices with
+    curved corners/home indicators, but every page's own bottom padding
+    (pb-24) never accounted for that extra height, so the last bit of
+    content could still get obscured on exactly those devices. Fixed
+    across all 7 pages using this padding pattern. See activity-log.md.
 
-27. By-Products needs its own consistent color treatment across the app:
-    hex #F2B949, same treatment as the Rice (blue) / Palay (green)
-    colors.
+27. DONE - full sweep completed. Found and fixed real gaps in 8 files
+    where By Products silently fell back to Rice's blue instead of its
+    own color, including the pile layout grid boxes themselves
+    (AuthorityMonitor, CompletedAuthorityModal, AuthorityPickerModal,
+    AdminMonitoring, AuthoritiesInfoPanel, AdminHomeStocks,
+    HomeStocks, Piles.jsx). See activity-log.md.
 
-28. Icons/pages sizing sweep - continue checking for any remaining
-    small touch targets not yet caught by the earlier mobile sizing
+28. DONE - broader sweep completed. Found and fixed one genuine
+    small standalone button (Piles.jsx popup close, 24px), and bumped
+    the shared removeButtonClass (used across multiple forms' remove-
+    row buttons) for a modest improvement. Investigated several other
+    candidates and confirmed they were false positives (already
+    adequately sized via flex-stretch or wrapped in larger effective
+    tap targets) rather than making unnecessary changes. See
+    activity-log.md.
     sweep.
 
 Given the sheer size of this list, work through it roughly in the

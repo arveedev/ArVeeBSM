@@ -16,6 +16,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { todayLocalISO } from '../../../utils/calculations.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import {
   inputClass,
   labelClass,
@@ -32,6 +33,8 @@ const emptyForm = {
   webAppUrl: '',
   aiSheetName: 'AI',
   siaSheetName: 'SIA',
+  moSheetName: 'MO',
+  tmoSheetName: 'TMO',
   receiptsSheetName: 'DATA_ENTRY',
   issuesSheetName: 'Issues Backup',
   sacksReceiptsSheetName: 'Sacks Receipts Backup',
@@ -93,6 +96,8 @@ function SheetSourcesPanel() {
       webAppUrl: form.webAppUrl.trim(),
       aiSheetName: form.aiSheetName.trim() || 'AI',
       siaSheetName: form.siaSheetName.trim() || 'SIA',
+      moSheetName: form.moSheetName.trim() || 'MO',
+      tmoSheetName: form.tmoSheetName.trim() || 'TMO',
       receiptsSheetName: form.receiptsSheetName.trim() || 'DATA_ENTRY',
       issuesSheetName: form.issuesSheetName.trim() || 'Issues Backup',
       sacksReceiptsSheetName: form.sacksReceiptsSheetName.trim() || 'Sacks Receipts Backup',
@@ -114,6 +119,8 @@ function SheetSourcesPanel() {
       webAppUrl: source.webAppUrl,
       aiSheetName: source.aiSheetName,
       siaSheetName: source.siaSheetName,
+      moSheetName: source.moSheetName ?? 'MO',
+      tmoSheetName: source.tmoSheetName ?? 'TMO',
       receiptsSheetName: source.receiptsSheetName,
       issuesSheetName: source.issuesSheetName,
       sacksReceiptsSheetName: source.sacksReceiptsSheetName,
@@ -159,13 +166,7 @@ function SheetSourcesPanel() {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={labelClass}>Date From</label>
-            <input
-              type="date"
-              value={form.dateFrom}
-              onChange={(e) => updateField('dateFrom', e.target.value)}
-              onClick={(e) => e.currentTarget.showPicker?.()}
-              className={`${inputClass} cursor-pointer`}
-            />
+            <CalendarDatePicker value={form.dateFrom} onChange={(v) => updateField('dateFrom', v)} />
             <p className="mt-1 text-xs text-neutral-500">
               Data before this date is ignored - use this to skip old
               tests/experiments in the sheet.
@@ -173,13 +174,7 @@ function SheetSourcesPanel() {
           </div>
           <div>
             <label className={labelClass}>Date To (optional)</label>
-            <input
-              type="date"
-              value={form.dateTo}
-              onChange={(e) => updateField('dateTo', e.target.value)}
-              onClick={(e) => e.currentTarget.showPicker?.()}
-              className={`${inputClass} cursor-pointer`}
-            />
+            <CalendarDatePicker value={form.dateTo} onChange={(v) => updateField('dateTo', v)} required={false} />
             <p className="mt-1 text-xs text-neutral-500">
               Leave blank for your current, ongoing sheet - only set this
               when archiving a past year after adding its replacement.
@@ -210,6 +205,17 @@ function SheetSourcesPanel() {
           <div>
             <label className={labelClass}>SIA Sheet Name</label>
             <input type="text" value={form.siaSheetName} onChange={(e) => updateField('siaSheetName', e.target.value)} className={inputClass} placeholder="SIA" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className={labelClass}>MO Sheet Name</label>
+            <input type="text" value={form.moSheetName} onChange={(e) => updateField('moSheetName', e.target.value)} className={inputClass} placeholder="MO" />
+          </div>
+          <div>
+            <label className={labelClass}>TMO Sheet Name</label>
+            <input type="text" value={form.tmoSheetName} onChange={(e) => updateField('tmoSheetName', e.target.value)} className={inputClass} placeholder="TMO" />
           </div>
         </div>
 

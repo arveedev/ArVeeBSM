@@ -26,7 +26,11 @@ export const editIconClass = `${iconButtonClass} text-neutral-400 hover:text-app
 export const deleteIconClass = `${iconButtonClass} text-brand-crimson hover:drop-shadow-[0_0_6px_rgba(239,68,68,0.7)]`
 
 // Title Case role labels — also used directly as the stored `role` value.
-export const ROLES = ['Admin', 'Warehouse Supervisor', 'Warehouse Assistant']
+export const ROLES = [
+  'Admin', 'Warehouse Supervisor', 'Acting Warehouse Supervisor',
+  'Warehouse Assistant', 'Acting Warehouse Assistant',
+  'MPO III', 'Acting MPO III',
+]
 
 // Every sack type has exactly these three conditions. Fixed, not
 // admin-configurable as a list — only the per-sack weight values are.

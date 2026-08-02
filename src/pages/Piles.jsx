@@ -27,10 +27,12 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db } from '../db/dexie.js'
-import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO } from '../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge } from '../utils/calculations.js'
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
+import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
+import FullScreenPileLayout from '../components/FullScreenPileLayout.jsx'
 import { computeHistoricalPileState } from '../utils/pileLedger.js'
-import { inputClass, labelClass, primaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
+import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
@@ -44,6 +46,7 @@ const LONG_PRESS_MS = 500
 
 const PALAY_COLOR = '#ADEBB3'
 const RICE_COLOR = '#B8E3E9'
+const BYPRODUCT_COLOR = '#FBEBCC'
 
 const boxesOverlap = (a, b) => {
   const aRowEnd = a.rowStart + a.rowSpan - 1
@@ -107,6 +110,7 @@ function Piles() {
   // period that just completed than for the current month, which has
   // barely started. The arrows below let the user override this either way.
   const [isExporting, setIsExporting] = useState(false)
+  const [showFullScreen, setShowFullScreen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
 
   // drawing: null (idle) | { start: {row,col}, current: {row,col} }
@@ -182,11 +186,28 @@ function Piles() {
 
   useEffect(() => {
     const CONTAINER_PADDING = 8 // matches p-2 (0.5rem) on containerRef
+    const BOTTOM_NAV_HEIGHT = 64
+    const BOTTOM_SAFETY_MARGIN = 16 // breathing room below the grid before the nav
     const measure = () => {
       if (!containerRef.current) return
       const naturalW = visibleCols * BASE_CELL_PX
-      const available = containerRef.current.offsetWidth - CONTAINER_PADDING * 2
-      setScale(Math.min(1, available / naturalW))
+      const naturalH = visibleRows * BASE_CELL_PX
+      const availableW = containerRef.current.offsetWidth - CONTAINER_PADDING * 2
+
+      // Available height must be measured against the actual viewport,
+      // not the container's own offsetHeight - that's circular here,
+      // since the container's height is itself DERIVED from the scale
+      // being calculated (it grows/shrinks to fit its scaled child),
+      // not an independent, fixed space to measure against.
+      const containerTop = containerRef.current.getBoundingClientRect().top
+      const availableH = window.innerHeight - containerTop - BOTTOM_NAV_HEIGHT - BOTTOM_SAFETY_MARGIN - CONTAINER_PADDING * 2
+
+      const widthScale = availableW / naturalW
+      const heightScale = availableH / naturalH
+      // Whichever dimension is more restrictive wins - the grid must
+      // fit within BOTH width and height at once, not just whichever
+      // was checked.
+      setScale(Math.min(1, widthScale, heightScale))
     }
     measure()
     window.addEventListener('resize', measure)
@@ -334,14 +355,22 @@ function Piles() {
       label: label.trim() || null,
     }
 
-    if (editingBoxId) {
-      await db.pileLayoutBoxes.update(editingBoxId, payload)
-      toast.success('Pile updated')
-    } else {
-      await db.pileLayoutBoxes.add({ id: crypto.randomUUID(), ...payload })
-      toast.success('Pile added')
+    try {
+      if (editingBoxId) {
+        await db.pileLayoutBoxes.update(editingBoxId, payload)
+        toast.success('Pile updated')
+      } else {
+        await db.pileLayoutBoxes.add({ id: crypto.randomUUID(), ...payload })
+        toast.success('Pile added')
+      }
+      cancelDrawing()
+    } catch (err) {
+      // Previously any failure here (e.g. a write error) failed
+      // completely silently - matching the reported symptom of
+      // "some fields silently fail to save." Now surfaced visibly.
+      console.error('Failed to save pile layout box:', err)
+      toast.error('Failed to save - see console for details')
     }
-    cancelDrawing()
   }
 
   const handleDeleteConfirmed = async () => {
@@ -356,6 +385,24 @@ function Piles() {
   }
   const handleLongPressEnd = () => {
     clearTimeout(longPressTimer.current)
+  }
+
+  const handleExportPileBinCard = async (pile) => {
+    const province = currentWarehouse?.provinceId ? await db.provinces.get(currentWarehouse.provinceId) : null
+    const branch = province?.branchId ? await db.branches.get(province.branchId) : null
+    const variety = varietyMap.get(pile.varietyId)
+
+    const allPileTransactions = await db.transactions.where('pileId').equals(pile.pileId).toArray()
+    const wtsTransfers = await db.transactions
+      .where('type').equals('WTS')
+      .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
+      .toArray()
+
+    const doc = generatePileBinCard({
+      warehouse: currentWarehouse, branch, pile, variety,
+      transactions: [...allPileTransactions, ...wtsTransfers],
+    })
+    doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
   }
 
   const handleExport = async () => {
@@ -375,12 +422,12 @@ function Piles() {
       const reportConfig = await db.reportConfig.get('global')
 
       const supervisors = await db.users
-        .where('role').equals('Warehouse Supervisor')
+        .where('role').anyOf(['Warehouse Supervisor', 'Acting Warehouse Supervisor'])
         .and((u) => (u.assignedWarehouses ?? []).includes(currentWarehouseId))
         .toArray()
       const supervisor = supervisors[0] ?? null
       const supervisorSignatory = supervisor ? await db.signatories.get(supervisor.uid) : null
-      const certifiedCorrectPosition = supervisorSignatory?.capacity === 'Acting Warehouse Supervisor'
+      const certifiedCorrectPosition = supervisor?.role === 'Acting Warehouse Supervisor' || supervisorSignatory?.capacity === 'Acting Warehouse Supervisor'
         ? 'Acting Warehouse Supervisor'
         : 'Warehouse Supervisor'
 
@@ -433,7 +480,7 @@ function Piles() {
   const moveValid = moveRegion ? regionValid(moveRegion, moving.boxId) : false
 
   return (
-    <div className="min-h-screen px-4 pb-24 pt-6">
+    <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       <div ref={warehouseSectionRef}>
         {sortedWarehouses.length > 1 ? (
           <div className="mt-3">
@@ -547,7 +594,13 @@ function Piles() {
               const pile = box.pileId ? pileMap.get(box.pileId) : null
               const variety = pile ? varietyMap.get(pile.varietyId) : null
               const isVacant = !pile
-              const fillColor = isVacant ? undefined : (variety?.category === 'Palay' ? PALAY_COLOR : RICE_COLOR)
+              const fillColor = isVacant
+                ? undefined
+                : variety?.category === 'Palay'
+                  ? PALAY_COLOR
+                  : variety?.category === 'By Products'
+                    ? BYPRODUCT_COLOR
+                    : RICE_COLOR
               const isHovered = hoveredBoxId === box.id
 
               return (
@@ -696,7 +749,7 @@ function Piles() {
             pile.condition && ['Condition', pile.condition],
             pile.moistureContent && ['MC', pile.moistureContent],
             pile.purity && ['Purity', pile.purity],
-            pile.dateProcured && ['Procured', pile.dateProcured],
+            pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
           ].filter(Boolean)
 
           const popupWidth = 220
@@ -778,7 +831,7 @@ function Piles() {
             pile.condition && ['Condition', pile.condition],
             pile.moistureContent && ['MC', pile.moistureContent],
             pile.purity && ['Purity', pile.purity],
-            pile.dateProcured && ['Procured', pile.dateProcured],
+            pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
           ].filter(Boolean)
 
           const popupWidth = 220
@@ -824,9 +877,9 @@ function Piles() {
                   type="button"
                   onClick={() => setEditingBoxId(null)}
                   aria-label="Close"
-                  className="shrink-0 rounded-lg p-1 text-neutral-500 transition-colors hover:text-app-text"
+                  className="shrink-0 rounded-lg p-2 text-neutral-500 transition-colors hover:text-app-text"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
               {isVacant ? (
@@ -866,6 +919,15 @@ function Piles() {
                   </button>
                 )}
               </div>
+              {!isVacant && (
+                <button
+                  type="button"
+                  onClick={() => handleExportPileBinCard(pile)}
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                >
+                  Export BIN Card
+                </button>
+              )}
             </div>,
             document.body
           )
@@ -926,8 +988,13 @@ function Piles() {
         </div>
       )}
 
+      <button type="button" onClick={() => setShowFullScreen(true)}
+        className={`mt-4 w-full ${secondaryButtonClass}`}>
+        Fullscreen View
+      </button>
+
       <button type="button" onClick={handleExport} disabled={isExporting}
-        className={`mt-4 w-full ${primaryButtonClass}`}>
+        className={`mt-2 w-full ${primaryButtonClass}`}>
         {isExporting ? 'Exporting…' : 'Export Pile Layout PDF'}
       </button>
       </div>
@@ -940,6 +1007,18 @@ function Piles() {
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(null)}
       />
+
+      {showFullScreen && (
+        <FullScreenPileLayout
+          boxes={boxes}
+          pileMap={pileMap}
+          varietyMap={varietyMap}
+          gridCols={usedCols}
+          gridRows={usedRows}
+          weightUnit={weightUnit}
+          onClose={() => setShowFullScreen(false)}
+        />
+      )}
     </div>
   )
 }

@@ -20,12 +20,11 @@
 //     yet to pick up normally on the next login, without needing any
 //     separate checkpoint/resume logic.
 //  4. WTS is intentionally excluded (no Sheet backup exists for it).
-//  5. Admin/Visitor users are skipped entirely - they aren't scoped to
-//     specific warehouses, and preloading potentially every warehouse
-//     in the branch would be far too expensive. The existing on-demand
-//     Sheet lookup (fetchTransactionBySerial, already built) remains
-//     the safety net for them if they navigate into unpreloaded
-//     territory.
+//  5. Admin and Visitor both have access to every warehouse (they
+//     share the same all-warehouse AdminHome view), so both preload
+//     ALL warehouses, not just an assigned subset - per explicit
+//     request, since they need and have access to everything. A
+//     regular user stays scoped to just their own assignedWarehouses.
 //
 // Batching: per type, ALL of a user's warehouses needing a full pull
 // are fetched in ONE request (fetchTransactionsBulk already accepts a
@@ -53,8 +52,18 @@ const SERIAL_COLUMN_BY_TYPE = { WSR: 'WSR #', WSI: 'WSI #', ESR: 'ESR#', ESI: 'E
  * type's batch, e.g. for a UI progress indicator.
  */
 export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
-  if (!user || user.role === 'Admin' || user.role === 'Visitor') return
-  const warehouseIds = user.assignedWarehouses ?? []
+  if (!user) return
+
+  // Admin and Visitor both have access to every warehouse (they share
+  // the same all-warehouse AdminHome view - see App.jsx), so both
+  // preload everything rather than being skipped. A regular user stays
+  // scoped to just their own assignedWarehouses - preloading every
+  // warehouse in the branch for every regular user would be far more
+  // than they'd ever need and needlessly expensive.
+  const isBroadAccessRole = user.role === 'Admin' || user.role === 'Visitor'
+  const warehouseIds = isBroadAccessRole
+    ? (await db.warehouses.toArray()).map((w) => w.warehouseId)
+    : (user.assignedWarehouses ?? [])
   if (warehouseIds.length === 0) return
 
   const warehouses = await db.warehouses.bulkGet(warehouseIds)
@@ -147,7 +156,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
         if (existingSerials?.has(String(serialNo))) continue // app-created record already exists - never overwrite it
 
         const varietyByName = type === 'WSR' || type === 'WSI'
-          ? new Map((await db.varietyTypes.toArray()).map((v) => [v.name.trim().toLowerCase(), v.varietyId]))
+          ? new Map((await db.varietyTypes.toArray()).map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
           : undefined
 
         const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName })

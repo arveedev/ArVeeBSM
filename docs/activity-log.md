@@ -5276,3 +5276,1571 @@ below.
   share its exact contents - this is necessary to pin down what's
   actually throwing, since static code review alone could not
   conclusively identify it.
+
+## Dexie Cloud sync 422 errors - excluded serialCounters/preloadState from sync
+
+- User reported new console errors after the critical login fix:
+  repeated "POST https://z15dzktxq.dexie.cloud/sync 422 (Unprocessable
+  Content)". Strong hypothesis: the recent serialCounters schema change
+  (deleted and recreated with a new key structure across v24/v25) is
+  something Dexie Cloud's server-side schema tracking doesn't handle
+  cleanly, causing it to reject sync payloads involving that table.
+- Fixed by adding unsyncedTables: ['serialCounters', 'preloadState'] to
+  the Dexie Cloud configuration - both tables are already explicitly
+  documented as per-device performance caches (never meant to be
+  shared across devices in the first place), so excluding them from
+  sync entirely is architecturally correct regardless of whether this
+  fully resolves the 422 - there was never a reason for either to sync
+  across devices.
+- HONEST CAVEAT: could not directly confirm against Dexie Cloud's
+  server-side behavior without live access - this is a well-justified,
+  low-risk fix based on the timing correlation and correct table
+  semantics, not a confirmed root-cause diagnosis. If 422 errors
+  persist after this, further investigation would be needed.
+- Re-verified all 60 .jsx files with the real parser.
+
+## WSR floor/EOF - accepted as a known, deferred issue per user's own decision
+
+- Floor/EOF now confirmed working correctly on WSI, ESR, ESI after the
+  error-handling fix. WSR specifically still does not block correctly
+  - user's own working theory is that WSR's Sheet ("DATA_ENTRY")
+  contains substantially more pre-app historical data than the other
+  types, and something about that scale is the differentiator. User has
+  explicitly decided to leave this as-is for now and move on to other
+  priorities - logged here so it isn't lost, and can be revisited later
+  with the diagnostic logging already in place (fetchSerialFloorFromSheet
+  console.error output) if picked back up.
+
+## Correction: By Products variety-mixing (not a pile-count limit) + related pile-dropdown category filter gap
+
+- User corrected my earlier misunderstanding: there is no "one By
+  Products pile per warehouse" rule. Fully reverted that limit
+  (useLiveQuery check, error messages, disabled button condition, all
+  removed from NewPileDialog.jsx).
+- Implemented the actual rule: a By Products pile is NOT locked to a
+  single variety for its lifetime, unlike Rice/Palay. StockFormBase's
+  variety field now stays editable (not a read-only display of the
+  pile's original variety) whenever the selected pile's cerealType is
+  'By Products'. handlePileChange/handlePileCreated no longer
+  auto-lock varietyId to the pile's original variety for By Products -
+  left blank instead, so the user explicitly picks per transaction.
+- Found and fixed a related gap surfaced while working on this: the
+  pile dropdown itself (sortedPiles) was not filtered by the active
+  Rice/Palay/By Products tab at all - every pile from every category
+  showed regardless of which tab was active. Fixed.
+
+## Critical-tier fixes (handoff.md items 1, 4, 6, 8) - #3 and #9 still open
+
+**#1 - MTS Sack Code/Condition sometimes blank on navigating back:**
+Found a real, previously-unhandled gap in the existing fallback logic
+(which re-adds the current selection when the category filter would
+otherwise exclude it): if the underlying sack type record was deleted/
+renamed, or its weight configuration no longer includes the saved
+condition, the fallback silently failed to reconstruct anything and
+the dropdown went blank with zero indication why - even though (per
+the original report) the underlying saved value is correct. Made this
+fully robust: now always reconstructs a displayable option from the
+raw stored values in this case too, clearly labeled "(no longer
+configured)" rather than just vanishing. Both downstream usages of the
+resulting weight (MTS tare calculation, suggested gross kilos) already
+handled a null/missing weight safely. NOTE: this addresses a
+confirmed real gap, not necessarily the only trigger - the handoff
+itself flagged needing live reproduction, which wasn't possible here.
+
+**#4 - Pending AI list incorrectly restricted by variety:** Removed the
+variety filter entirely from AuthorityPickerModal (was only ever
+applied to type='AI'), per explicit correction - shows ALL pending AIs
+for the warehouse now. Removed the now-unused filterVarietyId prop and
+the "Showing only X variety" display text, which would have become
+misleading. Added the other half of the fix: handleSelectAuthority
+now resets the pile selection if the newly-picked AI's variety differs
+from whatever pile was already selected, since the AI's variety must
+drive the form, not the reverse.
+
+**#6 - Hard-limit error clarity:** Both StockFormBase's pile-stock-limit
+error and SackFormBase's warehouse-sack-stock-limit error now
+explicitly state which limit is binding ("a pile limit, not the AI
+balance" / "not an SIA balance limit") rather than a bare number with
+no indication of which of the two possible constraints (authority
+allocation vs physical stock) it refers to.
+
+**#8 - AI/authority "Complete" status overage tolerance:** Added a 0.01
+tolerance - a tiny overage now counts as Complete rather than the
+separate Over-Issued state, while a more substantial overage still
+correctly shows Over-Issued. FLAGGED FOR USER CONFIRMATION: the
+original wording ("exceeds... by 0.01 or more... should still be
+Complete") is genuinely ambiguous - taken completely literally it
+would mean Over-Issued becomes unreachable for any overage, which
+seems unlikely to be the actual intent given the "(small overage)"
+parenthetical. Implemented the interpretation that seems most
+consistent with that parenthetical (a small, fixed tolerance), but
+this should be confirmed or corrected before relying on it.
+
+**Corrections to handoff.md itself:**
+- #11 clarified by user: the pile name/number for Milling/Test Milling
+  transactions is CORRECTLY located in the Sheet's OR# column - this
+  is where the app should read it FROM, not a misplaced field that
+  needs moving. Still not yet implemented (the app doesn't yet have
+  Milling/Test Milling transaction handling built at all).
+- #15 expanded by user: "Date Received" applies to BOTH Rice AND By
+  Products (not just Rice) - only Palay keeps "Date Procured". Not yet
+  implemented.
+
+## STILL OPEN in the critical tier:
+- #2: DONE (preload architecture, prior session)
+- #3: Duplicate Authority numbers (Sheet-side edits creating a second
+  row instead of updating) - NOT YET ADDRESSED
+- #5: DONE (Rice/Palay/By Products tabs, prior session)
+- #7: Investigated - already fully implemented (SIA already auto-fills
+  ESI's linkedDocNo, date, customerName, transactionType, AND sack
+  lines) - no changes needed, likely already fixed in an earlier
+  session not reflected in the handoff notes.
+- #9: Age not synced to Google Sheets at all - NOT YET ADDRESSED
+  (needs a new Sheet column, Apps Script update, and one-time backfill)
+
+All changes in this entry verified compiling (full 60-file parse sweep
++ check-imports.cjs), NOT yet packaged or delivered per explicit
+instruction - user wants all critical-tier fixes finished first before
+testing/packaging as one batch.
+
+## CORRECTION to #7 (SIA auto-fill) - my earlier "already done" claim was wrong
+
+- User reported the SIA auto-fill was still broken despite my earlier
+  claim of "already done, no changes needed." Re-investigated properly
+  this time and found the actual bug: SackFormBase.jsx called
+  setLinkedAuthorityDate in two places (handleSelectAuthority, and the
+  prefill consumer effect) but linkedAuthorityDate was NEVER declared
+  with useState anywhere in the file. This throws a ReferenceError,
+  which crashes handleSelectAuthority immediately after
+  setLinkedDocNo(authority.siaNumber) - meaning setCustomerName,
+  transactionTypeId matching, and setSackLines all never ran. This
+  exactly matches what was originally reported: the SIA number appears
+  in the box, nothing else fills in. My earlier review only confirmed
+  the code CALLED the setter, not that the setter's state actually
+  existed - a real process failure on my part, not caught until now.
+- Fixed: declared the missing linkedAuthorityDate state, added it to
+  the reset-to-blank flow for consistency.
+- Also fixed a second, related gap while investigating: the home-page
+  Authority Monitor's tap-to-open flow (handleOpen ->
+  window.openTransactionForm, a SEPARATE path from the in-form Browse
+  button) never included authorityDate in the SIA prefill payload at
+  all (the AI branch already did), and even where it might have been
+  present, SackFormBase's prefill consumer effect never read it. Both
+  fixed - AuthorityMonitor now passes authorityDate for SIA, and the
+  prefill consumer now sets it.
+
+## New: cereal-type tab now auto-selected when an authority is chosen
+
+- Per explicit request: selecting an AI authority (either via the
+  in-form "Browse" button, or by tapping a pending AI from the home
+  page's Authority Monitor) now automatically switches StockFormBase
+  to the correct Rice/Palay/By Products tab, derived from the
+  authority's own variety - fixed in both handleSelectAuthority AND
+  the prefill-consumer effect (the two separate entry points), so
+  behavior is consistent regardless of which path the user takes.
+  Without this, the prefilled variety could be invisible in the
+  dropdown if the form happened to be sitting on a different tab.
+
+All changes in this entry verified compiling (full 60-file parse
+sweep + check-imports.cjs). NOT yet packaged - continuing through
+remaining critical/high-priority items first per explicit instruction.
+
+## Critical-tier items #3 and #9
+
+**#3 - Duplicate Authority numbers:** Found the exact gap - upsertAuthority
+(for AI) used `.first()` to find an existing matching record, meaning if
+a Sheet edit ever created a second row with the same AI number, only
+ONE of the two would ever get updated on subsequent syncs, leaving the
+other as a permanent, never-cleaned-up duplicate. upsertSiaAuthority
+already had proper cleanup logic for exactly this scenario; upsertAuthority
+now matches it - finds every record sharing the AI number, prefers
+whichever one has actual issued progress as the canonical record (since
+that's the one genuinely in use, not an accidental duplicate that was
+never touched), updates it, and deletes the rest via bulkDelete.
+
+**#9 - Age not synced to Sheets:** Root cause confirmed - only a
+Months-unit age was ever converted and sent (via ageInMonths); a
+Days-unit age was silently dropped entirely, since the Sheet had no
+column to represent which unit a bare number was in. Fixed the client
+side: buildBackupRow now sends both the raw age value (AGE) and an
+explicit new 'Age Unit' field on every WSR/WSI sync, for both the
+initial push and updates. Confirmed the Apps Script's row-writing logic
+is already fully generic (matches whatever column headers exist in the
+sheet against the fields present in the row payload) - NO script
+changes or redeployment needed for this specific fix. Also fixed the
+reverse mapping (mapSheetRowToTransaction, used by preload and on-demand
+Sheet lookups) to read the new 'Age Unit' column when present, falling
+back to assuming Months only for genuinely old rows that predate this
+fix (matching the old behavior for that historical data specifically).
+ACTION REQUIRED FROM USER: add an "Age Unit" column header to the
+relevant Sheet(s) (wherever the AGE column currently lives) for this to
+actually take effect - the code change alone does nothing until that
+column exists to receive the value.
+NOT YET DONE: the one-time backfill of already-recorded historical age
+data into existing Sheet rows (sub-item c) - this fix only covers new
+and future syncs going forward, not retroactively fixing historical
+rows already in the Sheet with missing/ambiguous age data.
+
+All changes in this entry verified compiling (full 60-file parse sweep
++ check-imports.cjs). Still not packaged - critical tier is now fully
+addressed (items 1-9, with #1 and #8 flagged for live/interpretation
+confirmation, #9c explicitly deferred). Next: High Priority tier
+(items 10-22).
+
+## High Priority tier - items 13, 15, 19 done
+
+**#13 - AI balance should also show net bags:** Investigated both display
+locations. AuthorityMonitor's list view already showed both kilos and
+bags correctly - no change needed there. StockFormBase's in-form "AI
+balance remaining" text only showed kilos - added net bags alongside it
+(falls back to a rounded kilos/50 estimate if the authority doesn't
+track bags directly).
+
+**#15 - "Date Received" label (Rice + By Products):** Found and fixed
+both locations where this label actually exists - Piles.jsx's pile
+detail tooltip (both mobile and desktop variants) and Settings.jsx's
+edit-pile form label. Both now show "Date Received" for Rice/By
+Products, "Date Procured" only for Palay. Confirmed the PDF export does
+not currently include this field anywhere - there is nothing to
+relabel there; adding it would be a separate feature, not part of this
+fix.
+
+**#19 - Admin edit/delete customer list:** Built a new CustomersPanel
+admin tab (search, edit, delete), following the exact same
+pattern/conventions as the existing VarietyTypesPanel - checks for a
+name collision before saving an edit (so a rename can't silently merge
+two different customers together), and deleting removes the directory
+entry only (past transactions are unaffected, just future autocomplete/
+auto-fill won't recognize that name anymore). Wired into
+AdminDashboard's tab list.
+
+All changes in this entry verified compiling (full 61-file parse sweep
++ check-imports.cjs, one new file: CustomersPanel.jsx). NOT yet
+packaged.
+
+## STILL OPEN in the High Priority tier:
+- #10: OR# field for Sales transactions - not yet addressed
+- #12: New user roles (Acting WS, Acting WA, MPO III, Acting MPO III) -
+  not yet addressed
+- #14: Pile layout "Create Pile" card update bug - not yet addressed,
+  needs investigation
+- #16: Pile layout full view without scrolling on small screens - not
+  yet addressed
+- #18: Procurement bags running-total notification - not yet addressed,
+  has an explicitly-flagged ambiguity (exact wording/thresholds) that
+  needs user clarification when built
+- #20-22: Test Milling / Milling transaction types, Trial selector,
+  Batch Number selector, dedicated cross-warehouse monitor - NOT
+  started. These are substantial new features (new transaction type,
+  new data model, new UI, new monitor page), not simple fixes -
+  recommend treating as their own dedicated work, not squeezed in
+  alongside smaller items.
+
+## Correction to #15 + Pile Layout PDF formatting improvements
+
+- User caught a real gap in my earlier #15 investigation: the exported
+  Pile Layout PDF is generated by a SEPARATE file
+  (src/utils/pileLayoutPdfGenerator.js) I hadn't checked - my earlier
+  search only covered pdfGenerator.js (transaction reports), missing
+  this entirely. Found and fixed the same "Procured" -> dynamic
+  "Received"/"Procured" label there too, now correctly matching the
+  other two locations (Piles.jsx tooltip, Settings.jsx edit form). All
+  three locations for this label are now confirmed correct.
+- Reviewed the full pile layout PDF generator - this already had
+  quite sophisticated anti-overflow/anti-overlap logic from a prior
+  session (dynamic box growth, per-field text wrapping with exact line-
+  count-aware height reservation, and a shrink-to-fit mechanism with a
+  legibility floor, plus an escape hatch that lifts the height cap
+  rather than ever truncating content in the rare case even the font
+  floor isn't enough room). Per explicit request for "larger text,
+  especially the pile name," increased the baseline font sizes
+  (pile name/header: 8pt -> 10pt, detail fields: 6pt -> 7pt, line
+  height: 2.6mm -> 3.0mm) - the existing shrink-to-fit safety mechanism
+  is completely unchanged, so the no-overflow/no-overlap guarantee is
+  fully preserved; boxes with room simply render larger than before,
+  and only shrink from this new, larger starting point when genuinely
+  necessary. Also raised the minimum shrink floors slightly (detail:
+  5pt -> 5.5pt, header: 6pt -> 6.5pt, line height: 2.2mm -> 2.4mm) for
+  better worst-case readability, without touching the "lift the cap"
+  escape hatch that guarantees content is never silently dropped.
+- Also fixed a related color-consistency gap found while in this file:
+  the fill-color logic only ever distinguished Palay (green) from
+  "everything else" (blue), meaning By Products piles were being
+  incorrectly colored the same as Rice. Added a proper third branch
+  using a light tint of the established brand-byproduct color
+  (#F2B949), consistent with the color convention already used
+  elsewhere (tabs, Stock Breakdown card).
+- Verified compiling (full 61-file parse sweep + check-imports.cjs).
+  NOT yet packaged.
+
+## Pile Layout PDF - width-adaptive text, tighter spacing, lighter fill colors
+
+User feedback after the previous round: text/values sometimes too far
+apart, pile colors needed to be visibly lighter than the true hex
+codes provided, and box width (not just height) needs to drive text
+sizing.
+
+- **Found a real gap**: the pile name (header) text had NO width-based
+  adaptation at all - only detail VALUES wrapped to fit the box's
+  width; the header font size only ever shrank in response to height
+  constraints. A narrow/slim box with a long pile name could overflow
+  past the box's edges horizontally with nothing to catch it. Fixed:
+  measures the actual rendered width of the pile name and shrinks
+  headerFontSize (down to the same 6.5pt legibility floor already used
+  for the height-based shrink) until it genuinely fits within the
+  box's width.
+- **Fixed the "too far apart" spacing**: traced this to the gap
+  multiplier between the pile name and its first detail line (1.5x
+  lineHeight), which combined with the earlier lineHeight increase
+  (2.6mm -> 3.0mm, from making text larger per the prior request) to
+  compound into a visibly larger gap than intended. Reduced to 1.2x,
+  and updated the matching reserved-height calculation (used to decide
+  how tall a box needs to grow) to the same 1.2x so boxes aren't
+  reserving more space than they actually use either.
+- **Lightened all three fill colors consistently**, per explicit
+  clarification that the hex codes given are the TRUE/saturated
+  category colors, and the pile box itself needs a visibly lighter
+  tint for readability, not the raw color. Recomputed all three by
+  blending each category's actual brand color (Rice = blue-400
+  #60A5FA, Palay = brand-neon #00FFA3, By Products = brand-byproduct
+  #F2B949) with the same ratio of white, so all three are now
+  consistently and comparably light rather than some being pre-existing
+  hand-picked pastels and others being newly-added tints at a
+  different lightness level.
+- The existing overflow/overlap prevention (dynamic box growth,
+  per-field height reservation, the shrink-to-fit mechanism, and the
+  "lift the cap rather than truncate" escape hatch) is completely
+  unchanged by any of this - these fixes are purely about text sizing/
+  spacing/color, not the underlying no-overlap guarantee.
+- Verified compiling (full 61-file parse sweep + check-imports.cjs).
+  NOT yet packaged.
+
+## High Priority tier - items 10, 14
+
+**#10 - OR# for Sales transactions:** Added SALES_TYPE_NAME constant and
+isSales derivation (matching the existing PROCUREMENT_TYPE_NAME
+pattern). Added orNumber state, wired into resetToBlankEntry,
+loadTransactionIntoForm, and the payload builder (saved only when
+isSales is true). Added the optional UI field, shown conditionally
+right before the Procurement-specific block. Also shown in reports -
+appended to the customer name cell (e.g. "John Doe (OR# 12345)")
+rather than adding a new table column, since the report's column
+layout is dense and fixed-width, likely matching an official paper
+form - a lower-risk way to surface this without restructuring that.
+
+**#14 - Pile layout "Create Pile" card update bug:** Reviewed
+handleConfirmAssign (the actual save handler for this card - it
+updates db.pileLayoutBoxes' region/pileId/label fields) thoroughly.
+The logic looks structurally correct on static review - couldn't
+identify a definitive bug or reproduce the reported "some fields
+silently fail to save" behavior without live access. Added try/catch
+with visible error feedback (toast + console.error) around the save
+operation, since previously any failure here (e.g. a Dexie write
+error) would have failed completely silently - which matches the
+reported symptom precisely, even without confirming this is the exact
+trigger. NEEDS LIVE VERIFICATION - if the bug persists, check the
+console for the new error message and share it.
+
+All changes in this entry verified compiling (full 61-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## STILL OPEN:
+- #12: New user roles (Acting WS, Acting WA, MPO III, Acting MPO III)
+- #16: Pile layout full view without scrolling on small screens
+- #18: Procurement bags running-total notification (has a flagged
+  ambiguity needing clarification when built)
+- #20-22: Test Milling / Milling (recommend as dedicated work, not
+  squeezed alongside smaller items)
+
+## BIN Card finalized, Authority Monitor "view transactions" option, mobile safe-area fix
+
+**BIN Card - confirmed working, final polish round:**
+- Page X/Y moved to lower right (was lower left)
+- Corner margin increased to 10mm (from 6mm) for real printer safe-area
+  clearance - typical non-printable zones are 4-5mm, this leaves
+  comfortable margin beyond that on all four corners
+- Column renamed "TYPE" -> "TRANSACTION", now shows the actual
+  transaction type name (t.transactionTypeName - e.g. "Procurement",
+  "Sales", "Regular") instead of the raw document type code (WSR/WSI),
+  matching how every other report in this app already labels this
+- Column widths recomputed to sum to exactly the table's full usable
+  width (273mm on landscape A4 with 12mm margins), with tableWidth
+  explicitly set to match - the table now fills the complete page
+  width instead of leaving unused space on the right
+- User confirmed the layout as final. NOT YET WIRED INTO THE UI - still
+  only exists as a callable generator function.
+
+**Authority Monitor - "view transactions" option added:**
+- When tapping an AI/SIA that already has some issuance against it
+  (partial or otherwise), a choice now appears: "Add New Transaction"
+  (the existing behavior) or "View Transactions" (opens
+  AuthorityReconciliationPanel - the same component already used by
+  AdminMonitoring's reconciliation view, showing every document issued
+  against this authority with totals). If nothing has been issued yet,
+  tapping goes straight to the form as before, since there's nothing
+  to view.
+
+**Mobile safe-area fix (bottom UI cut off on devices with curved
+corners/home indicators):**
+- Found the root cause: viewport-fit=cover was missing from the
+  viewport meta tag entirely - without it, env(safe-area-inset-*)
+  always returns 0 on iOS regardless of any CSS written, meaning any
+  safe-area padding added would have silently done nothing. Added this
+  first, since it's the prerequisite for any of the following fixes to
+  actually take effect.
+- Added safe-area-aware bottom padding to BottomNav.jsx (both render
+  branches - Visitor's 2-item nav and the regular 5-item nav) and all
+  three transaction forms' fixed Save/Cancel button bars
+  (StockFormBase, SackFormBase, WTSForm) - the forms' existing pb-6
+  (24px) comfortable padding is preserved and the safe-area inset is
+  added on top of it via calc(), rather than replacing it.
+
+All changes in this entry verified compiling (full 61-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## STILL OPEN / NOT YET BUILT:
+- BIN Card export button not wired into any UI (pile layout popup or
+  pile list - the pile list location itself hasn't been located yet)
+- Close-pile mechanism (field, confirmation flow) - not built
+- Separate Beginning Balances panel (piles + sacks) - not started
+- Sacks' beginning-balance equivalent bug - not yet even located
+
+## BIN Card wired into both UI locations, close-pile mechanism built
+
+- Added closePile/reopenPile to pileLedger.js - closePile zeroes out
+  whatever balance remains (regardless of sign) and marks the pile
+  with today's date via closedDate, no reason/note required per
+  explicit request. reopenPile clears closedDate and restores the real
+  live totals from the full ledger.
+- Wired "Export BIN Card" + "Close Pile"/"Re-open Pile" into BOTH
+  requested UI locations:
+  - Settings.jsx's pile list: added a third "more options" menu button
+    (existing rows already had Edit/Delete icons) - opens a small
+    dropdown with both actions. Closed piles now show a "CLOSED" badge
+    next to their name in this list.
+  - Piles.jsx's pile detail popup (the same one with Move/Delete):
+    added an "Export BIN Card" button below the existing action row,
+    shown only when the box actually has a pile assigned (not vacant).
+    Close/re-open was not added here specifically - that action lives
+    in the Settings.jsx pile list, since the layout popup is more about
+    spatial positioning than pile lifecycle management.
+- Both locations correctly gather warehouse/branch context, all of the
+  pile's own transactions (by pileId) PLUS any WTS transfers in/out
+  (which reference issuedPileId/receivedPileId instead of pileId, and
+  would otherwise be missing from the ledger).
+
+## Authority Monitor - "view existing transactions" option
+
+- When tapping an AI/SIA with any existing issuance (partial or
+  otherwise), a choice now appears: "Add New Transaction" (existing
+  behavior) or "View Transactions" - opens AuthorityReconciliationPanel,
+  the same component AdminMonitoring already uses to show every
+  document issued against an authority with running totals. Nothing
+  issued yet skips the choice entirely and goes straight to the form,
+  since there'd be nothing to view.
+
+## Mobile safe-area fix (bottom UI cut off on curved-corner devices)
+
+- Root cause: viewport-fit=cover was missing from the viewport meta
+  tag - without it, env(safe-area-inset-*) always returns 0 on iOS
+  regardless of any CSS, meaning safe-area padding would have silently
+  done nothing. Fixed this first.
+- Added safe-area-aware bottom padding to BottomNav.jsx (both the
+  Visitor 2-item and regular 5-item nav) and all three transaction
+  forms' fixed Save/Cancel bars - existing comfortable padding
+  preserved, safe-area inset added on top via calc().
+
+All changes in this entry verified compiling (full 61-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## STILL OPEN / NOT YET BUILT:
+- Separate Beginning Balances panel (piles + sacks), decoupled from
+  both the live Piles page and the Settings.jsx pile metadata form -
+  not started
+- Sacks' equivalent of the beginning-balance-overwrites-live-total bug
+  - not yet even located/investigated
+
+## Sacks beginning balance - "as of" date added, plus a genuine gap found and fixed
+
+Investigated whether sacks have the same live-total-overwrite bug that
+piles had. FINDING: sacks were ALREADY correctly architected -
+db.sackInventory.pieces is a pure seed value, and every live-total
+computation (SackFormBase's getAvailablePieces, HomeSacks.jsx,
+AdminHomeSacks.jsx) already re-derives the current total fresh by
+combining the seed with all ESR/ESI transactions, rather than storing
+and overwriting a "current" field directly. So sacks did NOT need the
+same architectural fix piles did.
+
+What WAS missing (per explicit request) was the "as of" date itself:
+- Added asOfDate field to db.sackInventory, wired into
+  Settings.jsx's beginning balance form (SackBalanceSection) with a
+  new CalendarDatePicker field, persisted on both create and update.
+
+While adding this, found a genuine gap that needed fixing in all THREE
+live-computation locations: none of them date-gated transactions
+against the seed's own date, meaning (once seeds start carrying real
+dates) a transaction dated BEFORE the seed's as-of date would get
+double-counted on top of a seed value that already includes it.
+Fixed in:
+- SackFormBase.jsx (getAvailablePieces, the hard-cap check for ESI)
+- HomeSacks.jsx (the live per-warehouse display)
+- AdminHomeSacks.jsx (the live cross-warehouse admin display)
+- Reports.jsx (the report-period beginning-balance calculation) - this
+  one needed a slightly different treatment, since it computes "balance
+  as of the report period's start" rather than "balance right now" -
+  also date-gates the SEED itself (skipped entirely if its own as-of
+  date is after the report period even started, not just the
+  transactions), matching how the pile's computeHistoricalPileState
+  already handles this same distinction.
+
+A seed with no asOfDate at all (existing legacy records predating this
+feature) continues to count every transaction unconditionally,
+preserving exact prior behavior for old data - only newly-dated seeds
+get the gating applied.
+
+Verified with a 5-case test covering the exclusion of pre-seed-date
+transactions, correct inclusion of post-seed-date and same-date
+transactions, and legacy no-date records behaving exactly as before.
+
+All changes in this entry verified compiling (full 61-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## Honest note on "separate beginning balances panel"
+
+I did NOT build a fully separate, dedicated panel distinct from
+Settings.jsx's existing pile/sack sections - I fixed the existing
+sections in place (piles: no longer touches live totals, now edits the
+seed transaction and recalculates; sacks: were already correctly
+architected, just added the missing date). This matches what I said
+I'd lean toward in the prior turn, but was never explicitly confirmed
+by the user - flagging this clearly rather than assuming it's settled.
+If a genuinely separate panel is still wanted, that's still open work.
+
+## Genuinely separate Beginning Balances panel built (piles + sacks)
+
+Per explicit confirmation, built a fully separate admin panel rather
+than keeping balance-editing embedded in the existing pile/sack
+sections.
+
+**New file: BeginningBalancesPanel.jsx** - new AdminDashboard tab,
+warehouse-scoped (selector shown when the user has access to more
+than one), with Piles/Sacks sub-tabs:
+- Piles sub-tab: lists every pile in the selected warehouse (name,
+  variety, live current stock shown read-only for reference), with an
+  edit action that loads the SEED transaction's own bags/kilos/age/
+  date - never the live totals - and on save updates only the seed,
+  then calls recalculatePileCurrentState to correctly re-derive the
+  live total from the complete ledger. Exact same non-destructive
+  pattern as before, just now living in its own dedicated place
+  instead of double-duty inside the Create/Edit Pile card.
+- Sacks sub-tab: the sack beginning-balance editor (sack type,
+  condition, pieces, as-of date), functionally the same as before but
+  relocated here as its own dedicated space rather than being one
+  section among several general warehouse settings.
+
+**Settings.jsx simplified accordingly:**
+- SackBalanceSection removed ENTIRELY (240 lines) - fully superseded by
+  the new panel's Sacks sub-tab. Two editable places for the same data
+  would have been confusing and a returning source of the exact kind
+  of ambiguity this whole effort was meant to eliminate.
+- PileBalanceSection's "Create/Edit Pile" card: beginning-balance
+  fields (Bags, Net Kilos, Age, Unit, As of) are now shown ONLY when
+  creating a brand-new pile (which still needs a starting point,
+  unavoidably) - completely hidden when editing an existing pile.
+  handleUpdate is now pure metadata editing (name, variety, purity,
+  dates, condition, moisture) - it no longer touches the seed
+  transaction, initialAgeValue, or dateOfReceipt at all. There is now
+  exactly one place a pile's beginning balance can be corrected: the
+  new panel.
+- Removed now-unused imports (normalizeAgeToDays, SACK_CONDITIONS)
+  left behind by this simplification.
+
+All changes in this entry verified compiling (full 62-file parse
+sweep + check-imports.cjs, one new file: BeginningBalancesPanel.jsx).
+NOT yet packaged.
+
+## Current state of all requested BIN Card / Beginning Balances work:
+- BIN Card: DONE, wired into 2 UI locations, user-confirmed layout
+- Close/reopen pile: DONE, wired into Settings.jsx pile list
+- Authority Monitor view-transactions option: DONE
+- Mobile safe-area fix: DONE
+- Sacks as-of date + double-counting fix: DONE
+- Separate Beginning Balances panel (piles + sacks): DONE THIS TURN
+
+## Items 12 and 25 - new user roles, branch total on province card
+
+**#12 - New user roles:** Added all 4 requested roles (Acting Warehouse
+Supervisor, Acting Warehouse Assistant, MPO III, Acting MPO III) to
+ROLES. Found and updated every existing place that did an EXACT match
+against 'Warehouse Supervisor' specifically (SignatoriesPanel's
+eligible-signatory list, customerDirectory's supervisor lookup for
+name-matching, Piles.jsx's PDF export signatory lookup) to also
+recognize 'Acting Warehouse Supervisor' as equivalent for these
+purposes - without this, a user assigned the new Acting role would
+have become invisible to permission/lookup logic that only ever
+checked the base role string. Also fixed the PDF export's position
+label to correctly reflect the user's own role directly when it's
+already the Acting variant, not just the separate signatory-capacity
+field it previously relied on exclusively. No equivalent exact-match
+checks existed for 'Warehouse Assistant' anywhere else in the
+codebase, so no further updates were needed there. MPO III / Acting
+MPO III are new, distinct roles with no existing permission logic tied
+to them - added as selectable options only.
+
+**#25 - Branch total on Net Bags by Province & Category card:** Added
+a total row below the province table, summing Rice + Palay only across
+every province shown, explicitly excluding By Products per the
+request.
+
+All changes in this entry verified compiling (full 62-file parse
+sweep + check-imports.cjs). NOT yet packaged - continuing through
+remaining open items before packaging, per explicit instruction.
+
+## STILL OPEN:
+- #16: Pile layout full view without scrolling on small screens
+- #18: Procurement bags running-total notification (ambiguity flagged,
+  needs clarification before building)
+- #20-22: Test Milling / Milling (major new feature, not started)
+- #26: General layout issue - may already be resolved by the safe-area
+  fix from earlier, but never explicitly confirmed against it
+- #28: Icon/touch-target sizing sweep - ongoing, not exhaustive
+
+## Item 16 - Pile layout full-view bug found and fixed
+
+Found the actual root cause: the layout's auto-scale calculation only
+ever measured available WIDTH (containerRef.offsetWidth), never height
+at all - meaning a grid taller than the available vertical space would
+get cut off by the container's overflow-hidden rather than fitting or
+scrolling. The container's own offsetHeight couldn't be used to detect
+this, since that height is itself DERIVED from the scale being
+calculated (circular - it grows/shrinks to match its scaled child, not
+an independent space to measure against).
+
+Fixed by measuring the container's actual position via
+getBoundingClientRect().top and computing real available height as
+(viewport height - container's top position - bottom nav height - a
+small safety margin), then taking whichever of width-scale or
+height-scale is more restrictive - so the grid now always fits within
+BOTH dimensions simultaneously, not just whichever one happened to be
+checked before.
+
+Verified with a 4-case test confirming: width still correctly wins
+when it's the binding constraint (unchanged prior behavior), height
+now correctly wins when IT'S the binding constraint (the actual bug
+case - previously this would have returned scale 1.0, ignoring that
+the content was far too tall), a grid that already fits both
+dimensions is never scaled up past its natural size, and the more
+restrictive of the two scales correctly wins when both are tight
+simultaneously.
+
+All changes in this entry verified compiling (full 62-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## STILL OPEN:
+- #18: Procurement bags running-total notification (ambiguity flagged,
+  needs clarification before building)
+- #20-22: Test Milling / Milling (major new feature, not started)
+- #26: General layout issue - may already be resolved by the safe-area
+  fix, never explicitly confirmed
+- #28: Icon/touch-target sizing sweep - ongoing, not exhaustive
+
+## Items 18, 26, 28
+
+**#18 - Procurement bags notification, BEST-EFFORT INTERPRETATION,
+NEEDS CONFIRMATION:** No field links a specific Procurement WSR to a
+specific SIA/ESI, so an exact 1:1 match per the original wording isn't
+possible with the current data model. Built as a warehouse-level
+aggregate instead: total bags across all Procurement-type WSR
+transactions minus total bags issued across all SIA-backed ESI
+transactions (siaNumber != null), for the current warehouse. Shows an
+amber notification between the stock overview and Authority Monitor
+sections when the result is nonzero - worded one way when Procurement
+bags are still outstanding, worded differently when SIA-backed
+issuance actually exceeds recorded Procurement (the "over" case).
+Clears entirely at exactly zero. New file:
+ProcurementBagsNotification.jsx. Verified with a 7-case test covering
+the exact-match-clears, partial-coverage, and over-issuance cases.
+PLEASE CONFIRM this aggregate approach is what was actually wanted,
+since the original spec described something closer to per-entry
+matching that the data model doesn't currently support.
+
+**#26 - Bottom UI layout issue:** Found a real, related gap while
+re-investigating: the earlier safe-area fix made BottomNav itself
+taller on devices with curved corners/home indicators (by design, to
+avoid the nav's own content being obscured) - but every page's own
+bottom padding (pb-24, meant to keep content clear of the nav) never
+accounted for that EXTRA height, so on exactly those devices, the very
+last bit of page content could still end up partially behind the
+now-taller nav. Fixed consistently across all 7 pages using this
+padding pattern (AdminDashboard, AdminHome, AdminMonitoring, Home,
+Piles, Reports, Settings) - pb-24 became
+pb-[calc(6rem+env(safe-area-inset-bottom))], adding the safe-area
+inset on top of the existing padding rather than replacing it.
+
+**#28 - Icon/touch-target sizing sweep:** Swept for remaining small
+touch targets. Found and fixed a consistent pattern: 3 modal close
+buttons (EditPileAgeDialog, NewPileDialog, AuthorityPickerModal) used
+h-8 w-8 (32px), below the commonly recommended 44px minimum touch
+target size - upgraded to h-9 w-9 (36px) with a slightly larger icon
+(16px -> 18px) to match, consistent with the size already used for
+close buttons elsewhere in this app (e.g. StockFormBase). Broader
+sweep across every icon in the app was not exhaustive given time - many
+icons found during the search are inside larger labeled buttons where
+the icon size itself isn't the actual tap target, so those were left
+as-is.
+
+All changes in this entry verified compiling (full 63-file parse
+sweep + check-imports.cjs, one new file:
+ProcurementBagsNotification.jsx). NOT yet packaged.
+
+## STILL OPEN:
+- #20-22: Test Milling / Milling (major new feature, not started -
+  recommend as dedicated work)
+- #28: broader icon sizing sweep not exhaustive
+
+## #18 rebuilt per clarification, #16 gained a fullscreen landscape mode
+
+**#18 - Procurement bags notification, REBUILT per user clarification:**
+The prior aggregate interpretation was replaced entirely. Correct
+understanding: a Procurement WSR's bags represent physical sacks
+handed to farmers (of a specific type/condition, recorded on the
+transaction's own MTS Sack Type/Condition field) that need SIA
+coverage - tracked per (sackTypeId, condition) combination, not as one
+global number, since different Procurement receipts can use different
+sack types/conditions. The counter for a given combination clears only
+when a Procurement-tagged ESI (not just any SIA-backed ESI) issues the
+same sack type, condition, and piece count. Rebuilt
+ProcurementBagsNotification.jsx with this exact logic - groups
+Procurement WSR bags by (mtsSackTypeId, mtsCondition), subtracts
+Procurement-tagged ESI sackLines pieces for matching combinations,
+shows a notification line per combination with a nonzero result
+(worded differently for outstanding vs. over-issuance). Verified with
+a 5-case test reproducing the exact clarification scenario (103 bags
+of a specific sack type/condition, matching ESI clearing it to zero,
+a second unrelated combination staying independently tracked, and the
+over-issuance case).
+
+**#16 - Fullscreen landscape pile layout view, per follow-up
+clarification:** The original fix (making the scale calculation
+correctly account for height, not just width) is unchanged and still
+correct - but per the follow-up, shrinking an inherently landscape
+layout down to fit a portrait screen was never going to be fully
+satisfying regardless of how well the math worked, since the content
+itself becomes small and hard to read. Built a new
+FullScreenPileLayout.jsx component: a "Fullscreen View" button rotates
+the grid 90 degrees via CSS transform to fill the entire screen at its
+natural landscape size - the same technique used by video players
+going fullscreen-landscape on a portrait phone, requiring no physical
+device rotation. Read-only (tap a box to see its details in a popup -
+name, variety, current stock), with a back button in the upper-left of
+the rotated view. Editing/moving/assigning stays exclusively in the
+normal view - this mode is specifically for clearly viewing the whole
+layout at once.
+HONEST CAVEAT: the CSS rotation technique used (rotate(90deg)
+translateY(-100%) with swapped width/height) is a well-established,
+commonly-used pattern for this exact "force landscape on portrait"
+effect, but could not be visually verified without live device access
+- NEEDS LIVE VERIFICATION on an actual phone before being considered
+fully confirmed working.
+
+All changes in this entry verified compiling (full 64-file parse
+sweep + check-imports.cjs, one new file: FullScreenPileLayout.jsx).
+NOT yet packaged.
+
+## STILL OPEN:
+- #20-22: Test Milling / Milling (major new feature, not started -
+  recommend as dedicated work)
+- #28: broader icon sizing sweep not exhaustive
+
+## Milling / Test Milling feature - foundation built, substantial work remains
+
+Started building this genuinely new feature after a clarification
+round with the user establishing the core structure: Milling is
+multiple WSI/WSR transactions (any count of each) all sharing an MO
+number, with a per-miller Batch Number sub-identifier under that MO;
+Test Milling works the same way but under a TMO number, with
+fulfillment judged by 3 completed trials (per type - WSI and WSR each
+independently need all 3) rather than a recovery-percentage
+comparison. Both need a cross-warehouse monitor, since the issue and
+receive sides of a batch/trial can happen at different warehouses.
+
+**Schema (v26):**
+- New millingOrders table (orderId, type, number, status) - will hold
+  reference data synced from "MO"/"TMO" named Sheets, mirroring the
+  existing authorities pattern, NOT YET actually synced (see below).
+- transactions gains 4 new indexed fields: moNumber, tmoNumber,
+  batchNumber, trialNumber.
+- CAUGHT A REAL MISTAKE BEFORE IT SHIPPED: the first draft of this
+  migration redefined transactions' full index list but omitted
+  several pre-existing indexes (aiNumber, siaNumber, isInitialBalance,
+  the compound [type+warehouseId+serialNo] index) - Dexie's .stores()
+  REPLACES a table's entire index list, not appends to it, so this
+  would have silently broken every feature relying on those indexes,
+  similar in kind (though caught before deployment this time) to the
+  earlier critical login-breaking primary-key mistake. Fixed by
+  including every existing index alongside the 4 new ones. The primary
+  key itself (id) is unchanged, so this is the safe kind of schema
+  change - no delete-then-recreate needed, unlike that earlier
+  incident.
+
+**StockFormBase.jsx - basic Milling/Test Milling field support:**
+- Added MILLING_TYPE_NAME/TEST_MILLING_TYPE_NAME constants and
+  isMilling/isTestMilling derived flags, matching the established
+  isProcurement/isSales pattern.
+- Added moNumber/batchNumber/tmoNumber/trialNumber state, wired into
+  resetToBlankEntry, loadTransactionIntoForm, and the save payload.
+- Added the UI fields: MO Number + Batch Number for Milling; TMO
+  Number + a Trial dropdown for Test Milling.
+- Trial duplicate-prevention: queries every Active transaction sharing
+  the same tmoNumber AND the same document type (WSI or WSR - tracked
+  independently, since fulfillment requires each side to separately
+  complete all 3 trials) ACROSS ALL WAREHOUSES (not just the current
+  one, since the TMO is warehouse-agnostic per the clarification), and
+  disables already-taken trial numbers in the dropdown. Correctly
+  excludes the currently-loaded transaction's own trial number from
+  counting against itself when editing.
+
+Verified with a 9-case test: 4 covering the trial duplicate-prevention
+logic (including the WSI/WSR independence and the currently-editing-
+entry exclusion), 5 confirming the schema fix actually preserved every
+pre-existing index and left the primary key alone.
+
+All changes in this entry verified compiling (full 64-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## HONEST STATUS - this feature is NOT complete, substantial work remains:
+- NOT DONE: MO/TMO sheet sync (millingOrders table exists but nothing
+  populates it yet - no Apps Script action, no client sync function)
+- NOT DONE: any validation preventing save without a valid/required MO
+  or TMO number
+- NOT DONE: the actual MO recovery-percentage fulfillment comparison
+  for Milling (needs the synced millingOrders data to compare against)
+- NOT DONE: the cross-warehouse Milling/Test Milling monitor page
+  entirely - this was the majority of the original ask (#22) and has
+  not been started
+- NOT DONE: "Milling"/"Test Milling" as actual transactionTypes
+  records - these need to be added via the existing
+  TransactionTypesPanel by the user (or seeded), the form logic
+  recognizes the NAME but doesn't create the type itself
+- NOT DONE: NFA-owned Ricemills/Mechanical Dryers exception handling
+  (explicitly deferred by the user themselves as "explore later")
+
+## Warehouse Facility Type field - foundation for dryer/ricemill distinction
+
+Built the one fully self-contained piece from the latest, much larger
+Milling/Test Milling clarification round that didn't depend on
+knowing the MO/TMO/AI/SIA sheet column structures.
+
+- Schema: added facilityType to warehouses ('Warehouse' | 'Mechanical
+  Dryer' | 'Ricemill'), added directly into the still-undelivered v26
+  batch (safe to extend rather than bump to v27, since v26 has not
+  been packaged/deployed yet). Backfills every existing warehouse with
+  facilityType: 'Warehouse' explicitly via an upgrade callback -
+  without this, existing records would have undefined instead, which
+  would silently fail to match any future query filtering for the
+  default type.
+- WarehousesPanel.jsx: added the Facility Type selector, wired into
+  resetForm/handleSave/handleEdit, and a badge shown in the warehouse
+  list for any non-standard type (dryer/ricemill), so admins can
+  distinguish them from regular warehouses at a glance.
+
+All changes in this entry verified compiling (full 64-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## MASSIVE new scope from the latest clarification - MOSTLY NOT YET BUILT
+
+The user's latest message substantially expanded this feature well
+beyond the original #20-22 scope. Confirmed understanding (see the
+conversation for full detail): MO/TMO sheets are read-only reference
+data the app must never write to; a picker UI is needed during
+Milling/Test Milling transaction entry showing available MO/TMO
+numbers with batch/trial breakdown, excluding fulfilled ones; Test
+Milling fulfillment has no percentage requirement (any recovered
+amount counts), but declaring a TMO fulfilled requires an explicit
+confirmation prompt when Trial 3 is recorded; the monitor must cover
+sacks (ESR/ESI) as well as stock (WSR/WSI); a new "Regional Authority
+Number" (sourced from a column on the AI/SIA sheet, distinct from the
+app's own authority numbers) tags milling operations and is filterable
+in the monitor; NFA-owned Ricemills use only this Regional Authority
+Number with an admin-set net kg allocation (no MO/TMO); NFA-owned
+Mechanical Dryers need wet/dry palay tracking via variety naming
+convention (W=wet, D=dry, palay only) with a red, time-elapsed
+notification if wet palay hasn't been sent to a dryer yet.
+
+ASKED THE USER for the exact MO sheet columns, TMO sheet columns, and
+the AI/SIA sheet's Regional Authority Number column name - genuinely
+cannot build the sheet-reading pieces without this, since guessing
+wrong on column names would mean the sync silently doesn't work at
+all, not just an imperfection. Everything else in the new scope
+(picker UI, fulfillment logic, ESR/ESI extension, wet/dry detection,
+red notification, ricemill allocation) can be designed and built
+without needing sheet access, and remains entirely unbuilt beyond this
+turn's warehouse facility type foundation.
+
+## MO/TMO sheet reading + Regional Authority Number - foundation built
+
+Built the actual sheet-reading pieces now that the exact column
+structure was confirmed.
+
+**Apps Script (docs/apps-script-full-replacement.js):**
+- New fetchMillingOrders action (read-only) - reads the MO/TMO sheet
+  by RAW COLUMN POSITION (not header name, since the columns were
+  described by letter): A=prefix, C=letter, D=sequence (combined as
+  "A-C-D" to reconstruct the full number, e.g. "MO No. ALB-2026-D-027"
+  from the exact example given), E=ricemill name, G=batch as "X of Y"
+  (MO only - parsed into current/total via regex), L=recovery percent.
+  Never writes anything back to the sheet.
+- fetchAuthorities action extended to also read Column J (index 9,
+  raw position) as "Regional Authority Number" and attach it to every
+  row alongside the existing header-based fields - a separate
+  reference number from the app's own AI/SIA numbers.
+
+**Client (googleSheetsBridge.js):**
+- fetchMillingOrderRows + syncMillingOrdersFromSheets - upserts MO/TMO
+  reference data into millingOrders, keyed by (type::number) so
+  re-syncing updates rather than duplicates.
+- Both AI and SIA upserts now carry regionalAuthorityNumber through
+  from the sheet.
+
+**Schema:** authorities gains regionalAuthorityNumber (indexed, added
+into the still-undelivered v26 batch, every pre-existing index
+preserved).
+
+**Admin UI (SheetSourcesPanel.jsx):** added MO/TMO Sheet Name config
+fields, following the same pattern as the existing AI/SIA fields.
+
+Verified with a 13-case test: 5 confirming the MO/TMO number
+reconstruction and batch "X of Y" parsing (including the exact
+example from the clarification and edge cases like extra whitespace
+and unparseable values), 8 confirming every pre-existing authorities
+index survived the schema change alongside the new
+regionalAuthorityNumber field.
+
+All changes in this entry verified compiling/parsing (full 64-file
+.jsx sweep + check-imports.cjs + Apps Script syntax check). NOT yet
+packaged.
+
+## STILL NOT BUILT - this remains a large feature with significant
+## pieces outstanding:
+- syncMillingOrdersFromSheets is written but not yet WIRED to any
+  trigger (login sync, manual sync button, etc.)
+- No UI yet displays millingOrders data at all - no picker, no monitor
+- Test Milling fulfillment logic (any-amount recovery, Trial 3
+  confirmation prompt) - not built
+- ESR/ESI (SackFormBase.jsx) still doesn't have Milling/Test Milling
+  field support - only WSR/WSI (StockFormBase.jsx) does so far
+- NFA Ricemill admin-set allocation - not built
+- Wet/dry palay variety detection + red elapsed-time notification -
+  not built
+- The actual cross-warehouse monitor page - still not started, this
+  remains the core of the original ask
+
+## MO/TMO sync wired live, picker UI built, two real bugs caught and fixed
+
+- Wired syncMillingOrdersFromSheets into startAuthoritySyncWorker -
+  runs on the same interval/trigger as the existing authorities sync,
+  same sheet source config, no separate trigger needed.
+
+- Built the actual MO/TMO picker UI in StockFormBase.jsx, replacing
+  the earlier plain text inputs entirely:
+  - Milling: MO Number is now a dropdown of available MO numbers (an
+    MO stays selectable as long as at least one of its batches is
+    still unfulfilled). Selecting one reveals a second dropdown of
+    that MO's ricemill/batch rows, with already-fulfilled batches
+    shown disabled. Batch Number itself is now auto-filled from the
+    selected row rather than freely typed, since it comes from the
+    read-only reference sheet, not something the user should be able
+    to type arbitrarily.
+  - Test Milling: TMO Number is a dropdown showing ricemill name
+    alongside each number, excluding fulfilled TMOs. Trial dropdown
+    unchanged from before (already had duplicate-prevention).
+  - Added a millingOrderOptions computation: for Milling, fulfillment
+    = received net kg >= issued net kg x the sheet's recovery percent;
+    for Test Milling, fulfillment = all 3 trials have SOME amount
+    recovered (any amount > 0, no percentage) AND an explicit
+    trial3Confirmed flag is true - never inferred just from having 3
+    trial records, matching the explicit "must ask the user" requirement.
+
+TWO REAL BUGS CAUGHT AND FIXED DURING THIS WORK, BEFORE EITHER SHIPPED:
+1. syncMillingOrdersFromSheets originally keyed each millingOrders
+   record by type+number alone. Since one MO legitimately spans
+   MULTIPLE sheet rows (one per ricemill/batch under that same MO
+   number, per the user's own clarification that batch is "per
+   miller"), this would have silently overwritten earlier rows sharing
+   the same MO number during sync, keeping only the last one. Fixed by
+   keying on type+number+ricemillName+batch instead, which together
+   uniquely identify each row.
+2. The fulfillment computation for Milling was matching transactions
+   by MO number alone, meaning a DIFFERENT ricemill's batch under the
+   same MO would have incorrectly counted toward this batch's
+   fulfillment. Fixed to also match by batchNumber.
+
+A minor JSX structural mistake (a stray leftover closing tag from the
+old text-input version) was also caught by the parse-verification step
+immediately after the picker rewrite and fixed before proceeding -
+exactly the kind of thing the mandatory verify-after-every-edit
+practice exists to catch early.
+
+All changes in this entry verified compiling (full 64-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## STILL NOT BUILT:
+- millingOrders needs a trial3Confirmed field/mechanism - referenced
+  in the fulfillment logic but the actual confirmation PROMPT (asking
+  the user "has Trial 3 been completed?" when recording it) has not
+  been built yet - right now nothing ever sets this flag to true
+- ESR/ESI (SackFormBase.jsx) still doesn't have any of this - only
+  WSR/WSI does so far, but the user was explicit that sacks need the
+  same tracking
+- NFA Ricemill admin-set allocation - not built
+- Wet/dry palay variety detection + red elapsed-time notification -
+  not built
+- The actual cross-warehouse monitor page - still not started
+
+## Corrections per user clarification: MO/TMO is one row, AI/SIA columns, DONE mechanism
+
+**Reverted the previous turn's incorrect "fix":** confirmed by the
+user that an MO/TMO number is ALWAYS exactly one row - it never spans
+multiple rows (contrary to what the prior turn assumed). Reverted
+orderId back to simple type+number keying, reverted the fulfillment
+computation's batch-matching filter back to number-only matching, and
+simplified the MO picker UI from a two-level (MO number -> ricemill/
+batch) picker down to a single MO dropdown with batch shown read-only
+(auto-filled from the selected row, since it's now directly on that
+one row rather than needing a second lookup).
+
+**Added AI Number (Column H) / SIA Number (Column I) parsing** to the
+MO/TMO sheet reading - same columns confirmed for both sheets - stored
+on each millingOrders record.
+
+**Answered the "how to hide historical rows" question** with a
+recommendation: a manually-maintained STATUS column (Column M) the
+admin types "DONE" into for any row they want hidden - the app reads
+and respects this (skips DONE rows entirely during sync), but per the
+confirmed read-only requirement, never writes to it. Also added
+cleanup to the sync itself: any previously-synced millingOrders record
+that no longer appears in the fresh sheet data (marked DONE, or
+removed from the sheet) now gets deleted locally too - actual
+transaction records are unaffected by this, since they store the MO/
+TMO number directly rather than referencing this table.
+
+Confirmed Column L for recovery % (matches what was already
+implemented, per the user's own re-confirmation).
+
+All changes in this entry verified compiling (full 64-file parse
+sweep + check-imports.cjs, Apps Script syntax verified). NOT yet
+packaged.
+
+## STILL NOT BUILT:
+- Trial 3 confirmation prompt mechanism
+- ESR/ESI Milling/Test Milling support (only WSR/WSI has it)
+- NFA Ricemill admin-set allocation
+- Wet/dry palay detection + red notification
+- THE MONITOR PAGE ITSELF - per this turn's new requirements, needs:
+  a completed/pending toggle matching the existing AuthorityMonitor/
+  CompletedAuthorityModal pattern, a pending list showing every open
+  MO/TMO, and a tap-to-expand detail view per MO/TMO showing miller
+  name, batch/trial number, issuance and receipt dates, bags and net
+  kilos for both stock AND sacks, and recovery % expressed as an
+  equivalent net bags figure - not started
+
+## Trial 3 confirmation prompt built
+
+Built the mechanism that was explicitly required and previously
+missing - without it, a TMO could never actually become fulfilled
+regardless of how many trials were recorded, since the fulfillment
+logic checks for an explicit confirmation flag that nothing was
+setting.
+
+- Split handleSave into performSave (the actual save logic, unchanged)
+  and a new entry point that intercepts specifically a WSR (receipt)
+  transaction where isTestMilling, trialNumber is '3', and net kilos
+  recovered is greater than 0 - shows a confirmation dialog ("Has
+  Trial 3 been completed?") before proceeding.
+- Both dialog choices ("Not Yet" / "Yes, Complete") still save the
+  transaction - it's a real recorded event either way, per the
+  requirement that declining still leaves it "marked as unfulfilled"
+  rather than blocking the save entirely. Only "Yes" additionally sets
+  trial3Confirmed: true on the matching millingOrders record, which is
+  the flag the fulfillment computation actually checks - never
+  inferred just from 3 trial records existing.
+
+Verified with a 5-case test confirming the trigger only fires for the
+exact combination required (WSR side specifically, Test Milling
+specifically, Trial 3 specifically, nonzero recovery specifically) -
+Trial 1/2, the issue side, Milling (not Test Milling), and zero-
+recovery all correctly do NOT trigger it.
+
+All changes in this entry verified compiling (full 64-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## STILL NOT BUILT:
+- ESR/ESI Milling/Test Milling support (only WSR/WSI has it, including
+  this new Trial 3 confirmation - sacks need the same treatment)
+- NFA Ricemill admin-set allocation
+- Wet/dry palay detection + red notification
+- The monitor page itself - still the core piece remaining
+
+## Auto-marking MO/TMO DONE on fulfillment - a deliberate change to the read-only rule
+
+Per explicit new instruction, the app now writes exactly ONE thing to
+the MO/TMO sheets: the literal string "DONE" to the STATUS column
+(Column M, confirmed for both MO and TMO for consistency) - nothing
+else is ever touched. This is a deliberate, narrow exception to the
+earlier "app never writes to these sheets" rule, made explicit here
+since it reverses a previously stated constraint.
+
+**Apps Script:**
+- Added 'MO' and 'TMO' to WRITE_ALLOWLIST - the existing safety gate
+  that rejects any write request to a sheet not explicitly listed,
+  checked before anything touches the spreadsheet, regardless of what
+  the calling app claims.
+- New markMillingOrderDone POST action - finds the target row by
+  reconstructing its A+C+D number the same way fetchMillingOrders
+  does (no dedicated ID column exists to match against directly), then
+  writes 'DONE' to column 13 (M) of that row only.
+
+**Client (googleSheetsBridge.js):** markMillingOrderDone - the client-
+side call, the only write function among all the MO/TMO-related code
+(everything else is read-only).
+
+**StockFormBase.jsx - trigger wiring:**
+- TMO: right after trial3Confirmed is set true, queries fresh
+  transaction data (not the reactive list, which may not yet reflect
+  the just-saved transaction) to check if all 3 trials now have some
+  recovery - if so, writes DONE.
+- MO: after any Milling WSR save, checks if received net kg now meets
+  or exceeds issued net kg x the sheet's recovery percent - if so,
+  writes DONE.
+
+Verified with a 4-case test confirming the row-finding logic correctly
+distinguishes between similar-but-distinct MO numbers (same year
+prefix, different letter/sequence) and correctly returns "not found"
+rather than a false match.
+
+All changes in this entry verified compiling/parsing (full 64-file
+.jsx sweep + check-imports.cjs + Apps Script syntax check). NOT yet
+packaged.
+
+## STILL NOT BUILT:
+- ESR/ESI Milling/Test Milling support - the DONE-marking trigger
+  logic just built only covers WSR/WSI (stock); sacks need the
+  equivalent treatment
+- NFA Ricemill admin-set allocation
+- Wet/dry palay detection + red notification
+- The monitor page itself - still the core piece remaining
+
+## ESR/ESI (sacks) now has full Milling/Test Milling parity with WSR/WSI
+
+Extended SackFormBase.jsx with the complete same feature set already
+built for stock, per the explicit requirement that sacks need the
+same tracking, not just stock:
+
+- isMilling/isTestMilling derived flags, moNumber/batchNumber/
+  tmoNumber/trialNumber state, wired into load/reset/payload.
+- takenTrialNumbers and millingOrderOptions queries - fulfillment
+  logic identical in shape to the stock side, but matched against
+  sackLines piece totals instead of net kilos (issued/received pieces
+  compared against the MO's recovery percent for Milling; any-amount
+  recovery per trial plus the explicit confirmation flag for Test
+  Milling).
+- The same MO/Batch and TMO/Trial picker UI, excluding fulfilled
+  entries.
+- The same Trial 3 confirmation dialog (intercepts an ESR receipt for
+  Test Milling Trial 3 with nonzero pieces recovered).
+- The same DONE-marking triggers in performSave - MO fulfillment
+  checked after a Milling ESR save, TMO fulfillment checked right
+  after trial3Confirmed is set, both querying fresh transaction data
+  rather than the reactive list.
+
+Sacks and stock now have full parity for this feature - the same
+picker, the same confirmation flow, the same auto-marking behavior,
+just operating on pieces instead of kilos.
+
+All changes in this entry verified compiling (full 64-file parse
+sweep + check-imports.cjs). NOT yet packaged.
+
+## STILL NOT BUILT:
+- NFA Ricemill admin-set allocation
+- Wet/dry palay detection + red notification
+- The monitor page itself - still the core piece remaining, now that
+  both stock and sacks correctly feed data into it
+
+## Milling/Test Milling Monitor built - the core remaining piece
+
+Built the monitor page requested from the very start of this feature,
+now that both stock and sacks correctly feed into the same data.
+
+**New file: millingOrderStatus.js** - extracted the fulfillment
+computation (previously duplicated separately in StockFormBase.jsx
+and SackFormBase.jsx for their pickers) into one shared function,
+computeMillingOrderStatuses. Combines stock (WSR/WSI) and sack
+(ESR/ESI) transactions together per MO/TMO - for Milling, both the
+kilos side AND the pieces side must independently meet the recovery
+percent threshold for the order to count as fulfilled (an order
+involving both stock and sacks isn't "done" just because one side
+cleared). Returns full per-order detail (all issue/receipt
+transactions, totals, fulfilled flag) for the monitor's detail view to
+consume directly.
+
+**New file: MillingMonitor.jsx** - mirrors the existing
+AuthorityMonitor pattern:
+- MO/TMO tab toggle, a "Show Completed" toggle (pending by default),
+  filterable by Regional Authority Number (looked up via the order's
+  own aiNumber/siaNumber against db.authorities, since the number
+  itself isn't stored directly on the milling order).
+- Tap any entry to open a detail view showing: miller name, batch (X
+  of Y) or trials recovered (X of 3), fulfillment status, issued vs
+  received totals for BOTH sacks and stock, recovery % expressed as an
+  equivalent net bags figure (using the same 50kg-per-bag conversion
+  already used elsewhere in this app), and a full chronological
+  transaction history with date, type (issued/received, stock/sacks,
+  trial number where applicable), amount, and serial number.
+
+**Wired into both Home.jsx and AdminHome.jsx** - only rendered when
+db.millingOrders actually has data, so it doesn't clutter the home
+page for warehouses/users with no milling activity configured.
+
+Verified with a 7-case test on the combined stock+sack fulfillment
+logic specifically - confirming stock-only and sacks-only orders work
+correctly on their own, and that an order involving BOTH sides
+requires BOTH to independently clear their threshold, not just one.
+
+All changes in this entry verified compiling (full 65-file parse
+sweep + check-imports.cjs, two new files: millingOrderStatus.js,
+MillingMonitor.jsx). NOT yet packaged.
+
+## STILL NOT BUILT:
+- NFA Ricemill admin-set allocation
+- Wet/dry palay detection + red notification
+- Warehouse Type-aware routing/behavior for Mechanical Dryer/Ricemill
+  facility types (the field exists, but nothing in the app actually
+  behaves differently for these facility types yet)
+
+## Wet/dry palay drying notification built
+
+**Wet/dry detection (calculations.js):** getPalayMoistureState - per
+the exact example given (PD1-A = dry, PW1-A = wet), the distinguishing
+letter sits immediately after the first character of the variety
+code. Only meaningful for Palay cereal type. Verified with a 5-case
+test including both exact examples from the clarification, a
+non-Palay cereal type correctly returning null, case-insensitivity,
+and an unmatched code correctly returning null rather than guessing.
+
+**recordedByName tracking (StockFormBase.jsx):** transactions now
+capture who recorded them (user.name, falling back to nickname) -
+needed to show "received by [user]" in the notification, but a
+generally useful field beyond just this feature. Only added to the
+stock side (StockFormBase.jsx) for now, since that's where wet palay
+receipts actually happen.
+
+**New file: WetPalayNotification.jsx** (exports as PalayDryingStatus,
+combining two mutually-exclusive views by facility type):
+- Regular warehouses: RED notification when wet palay has been
+  received but not yet issued out in matching quantity. Uses FIFO
+  matching (oldest receipts consumed first by subsequent issuances) so
+  the elapsed-time figure reflects the longest-WAITING batch
+  specifically - the one most at risk - not just the most recent
+  receipt. Shows total outstanding bags, who received the oldest
+  still-outstanding batch, and elapsed time in days/hours.
+- Mechanical Dryer warehouses: a separate, informational (not
+  red/urgent, since receiving wet palay is the dryer's normal job) blue
+  status card showing wet palay received vs dry palay issued out
+  totals - answers "when have they received wet palay and issued dry
+  palay" without treating it as a problem.
+
+Wired into Home.jsx alongside the Procurement notification.
+
+Verified with two test suites: 5 cases on the wet/dry detection logic,
+4 cases on the FIFO consumption logic (including partial consumption
+of the oldest batch, full consumption cascading into the next-oldest,
+and a fully-cleared receipt correctly producing no notification at
+all).
+
+All changes in this entry verified compiling (full 66-file parse
+sweep + check-imports.cjs, one new file: WetPalayNotification.jsx).
+NOT yet packaged.
+
+## STILL NOT BUILT:
+- NFA Ricemill admin-set allocation (total net kg authorized by
+  regional office) - not built
+- The "issued to dryer" side of the wet palay tracking assumes a
+  standard WSI transaction from the regular warehouse - it does not
+  yet specifically verify or require that the WSI's destination is
+  actually a Mechanical Dryer facility (any WSI issuing out wet palay
+  currently counts as "sent for drying" for this notification's
+  purposes) - worth confirming whether this matters
+
+## NFA Ricemill allocations built - completes the full Milling feature scope
+
+Per confirmed "different rule" for this facility type: no MO/TMO
+tracking, just the Regional Authority Number (from the AI/SIA sheet)
+as the sole reference, with the admin manually setting how much net kg
+the regional office authorized.
+
+**Schema:** new ricemillAllocations table (keyed by
+regionalAuthorityNumber directly, storing totalNetKgs), added into the
+still-undelivered v26 batch.
+
+**New file: RicemillAllocationsPanel.jsx** - new AdminDashboard tab.
+Admin enters a Regional Authority Number and the total net kg
+authorized. The list shows each allocation alongside ACTUAL usage,
+computed by: finding every WSR/WSI transaction recorded at a
+Ricemill-type warehouse, tracing each one's AI/SIA reference back to
+its authority record's regionalAuthorityNumber, and summing net kg per
+number - remaining (or over, shown distinctly in red) is shown
+alongside the raw totals.
+
+Verified with a 6-case test: confirming the AI-linked and SIA-linked
+paths both correctly attribute usage, a transaction with no AI/SIA
+link at all is correctly excluded rather than silently misattributed,
+and the remaining/over-allocation math is correct in both directions.
+
+All changes in this entry verified compiling (full 67-file parse
+sweep + check-imports.cjs, one new file:
+RicemillAllocationsPanel.jsx). NOT yet packaged.
+
+## FULL MILLING/TEST MILLING/DRYING/RICEMILL FEATURE SET STATUS:
+
+Everything from the original #20-22 backlog items plus the full scope
+gathered across this extended clarification conversation is now
+built: schema, MO/TMO read-only sheet sync with the DONE auto-write
+exception, the picker UI (stock AND sacks), Trial 3 confirmation, the
+cross-warehouse monitor with Regional Authority Number filtering,
+wet/dry palay tracking with FIFO-based red notifications, dryer-side
+status, and now Ricemill allocations. This has been an extremely large
+feature built incrementally over many turns - STRONGLY RECOMMEND a
+thorough live walkthrough of the actual Google Sheets integration
+(MO/TMO column reading, the DONE write-back) before relying on this in
+production, since several pieces (the Apps Script write action
+especially) could not be tested against the real, live spreadsheet
+from this environment.
+
+## Private miller allocations + final QA pass before packaging
+
+**Private Miller Allocations** - per clarification: a Regional
+Authority Number shared across multiple private millers under regular
+MO/TMO tracking divides UNEQUALLY between them (unlike NFA-owned
+Ricemills, where one Regional Authority Number maps to exactly one
+ricemill). Added:
+- Schema: privateMillerAllocations table, compound key
+  [regionalAuthorityNumber+ricemillName], added into the still-
+  undelivered v26 batch.
+- RicemillAllocationsPanel.jsx extended with a second section,
+  PrivateMillerAllocationsPanel - admin sets each miller's own share
+  under a shared regional number. Usage is traced through
+  millingOrders (which already carries ricemillName per MO/TMO row)
+  cross-referenced against each order's linked AI/SIA's
+  regionalAuthorityNumber. Both sections now export together as
+  MillerAllocationsPanel; AdminDashboard's tab label updated to
+  "Miller Allocations" to reflect the combined scope.
+
+## FINAL QA PASS - full results, before packaging as explicitly requested:
+
+1. Full project compilation: ALL 67 .jsx files parse cleanly, all
+   relative imports across 84 files resolve correctly.
+2. Schema version integrity: versions 1-26 confirmed sequential, no
+   duplicates. Cross-checked v26 against the last version that
+   previously touched each of its three modified tables
+   (transactions, warehouses, authorities) - confirmed every single
+   pre-existing index survived into v26 alongside the new fields. This
+   was the exact category of mistake caught mid-session once already
+   (the near-miss where several existing indexes would have been
+   silently dropped) - re-verified clean this time.
+3. Regression test suite: re-ran all 11 test suites written across
+   this entire session together - 68 individual test cases, all still
+   passing after every subsequent change.
+4. Apps Script: final syntax check clean; WRITE_ALLOWLIST confirmed to
+   contain exactly the 6 sheets the app is allowed to write to (4
+   backup logs + MO + TMO for the DONE marker only).
+5. Debug statement sweep: confirmed zero stray console.log/debugger
+   statements in any file created this session (a handful of
+   pre-existing, clearly-labeled [DEXIE-CLOUD-DIAGNOSTIC] logs exist
+   elsewhere in the codebase, unrelated to this session's work, left
+   untouched).
+6. Unused import sweep across the most heavily-edited files this
+   session: found and removed one genuinely unused import
+   (todayLocalISO in Piles.jsx).
+7. Confirmed all three new Home-page notification/status components
+   (Procurement, Wet Palay, Dryer Status) correctly guard against a
+   missing/undefined currentWarehouseId, since admin/visitor contexts
+   don't always have one selected.
+
+All changes in this entry verified compiling (final full-project
+sweep + check-imports.cjs). Ready for packaging pending user
+confirmation.
+
+## #27 and #28 completed, plus a real gap found: millers weren't reaching the customer directory
+
+**#27 - By Products color, full sweep completed:** Found and fixed
+genuine gaps in 8 files where the color logic only ever checked
+Rice/Palay and silently fell back to a default (usually Rice's blue)
+for By Products instead of its own brand-byproduct color:
+AuthorityMonitor.jsx, CompletedAuthorityModal.jsx,
+AuthorityPickerModal.jsx, AdminMonitoring.jsx, AuthoritiesInfoPanel.jsx,
+AdminHomeStocks.jsx (5 inconsistent lines within the same file - one
+already had it right, four didn't), HomeStocks.jsx (2 spots), and
+Piles.jsx's actual grid box fill color - meaning By Products piles
+were silently rendering as Rice-blue on the pile layout grid itself,
+the most visible place this could have mattered. Added a
+BYPRODUCT_COLOR constant matching the tint already used in the PDF
+generator for consistency.
+
+**#28 - touch target sweep, completed:** Found one genuine small
+standalone button (Piles.jsx's box-detail popup close button, 24px
+total) and fixed it to match the established convention. Bumped the
+shared removeButtonClass (used for "remove member"/"remove line"
+buttons across StockFormBase and SackFormBase) from py-1 to py-1.5 for
+a modest, layout-safe improvement given it's used in tight repeating
+row lists. Investigated several other candidates flagged by the sweep
+and confirmed them as false positives rather than making unnecessary
+changes - checkboxes wrapped in larger clickable labels, avatar badges
+inside larger button rows, and a signatory-remove button that
+stretches to match its input row's height via flex default (~40-44px
+effective, despite no explicit padding) all left untouched since they
+were already fine.
+
+## Real gap found and fixed: millers weren't reaching the customer
+## directory at all
+
+While confirming CustomersPanel.jsx's edit/delete (confirmed fully
+working - both wired correctly, #19 genuinely done), found that the
+MO/TMO picker never actually populated Customer Name with the selected
+order's ricemill name. Since rememberCustomer() only saves whatever is
+in that field, millers were NOT flowing into the customer directory at
+all despite the picker already knowing the ricemill name - the user
+would have had to redundantly type it manually into a separate field
+for a miller to ever show up in CustomersPanel. Fixed in all 4
+locations (MO and TMO selection, in both StockFormBase.jsx and
+SackFormBase.jsx) - selecting an MO/TMO now auto-fills Customer Name
+with that order's ricemillName, so millers now correctly and
+automatically appear in the same admin customer list as regular
+customers.
+
+All changes in this entry verified compiling (full 67-file parse
+sweep + check-imports.cjs) and re-verified against the complete
+regression suite (all 68 test cases across 11 suites still passing).
+
+## Architectural correction: AI/SIA-first flow for Milling/Test Milling
+
+Per explicit correction: the actual operational flow for any issuance
+always starts with the AI or SIA, not with an independently-picked
+MO/TMO. The standalone MO/TMO dropdown-first design built earlier was
+backwards for the issue side.
+
+**Corrected flow, issue side only (WSI/ESI):** selecting/entering an
+AI (stock) or SIA (sacks) - via the SAME existing mechanism already
+used for every other transaction type (linkedDocNo, AuthorityPickerModal)
+- now triggers a lookup: does a millingOrders row exist whose own
+aiNumber/siaNumber matches the selected authority? If so, MO/TMO
+number, batch, and the miller's name (into Customer Name, which also
+makes them correctly flow into the customer directory) are all
+auto-derived from that match - the MO/TMO Number field becomes
+read-only display in this case, not a selectable dropdown, since it's
+no longer an independent choice.
+
+**Receipt side unchanged (WSR/ESR):** these have no AI/SIA link
+mechanism of their own (WSR never had one; linkedDocDeductsFromAi is
+explicitly `type !== 'WSR'`), so the MO/TMO picker dropdown built
+earlier remains exactly as-is for receipts - the user still selects
+which MO/TMO this receipt is fulfilling.
+
+Implemented in both StockFormBase.jsx (AI-based, hooks into the
+existing linkedAuthority query) and SackFormBase.jsx (SIA-based,
+hooks into linkedSiaAuthority) - added linkedMillingOrder reactive
+lookups and useEffect auto-fill in both, and made the MO/TMO Number
+UI conditionally switch between read-only (issue side) and the
+existing picker (receipt side) based on transaction type.
+
+Verified with a 7-case test confirming the derivation trigger fires
+only for the correct combination (issue side + authority selected +
+Milling or Test Milling type) and correctly stays inactive for every
+other case (receipt side even with an authority present, no authority
+selected yet, or an irrelevant transaction type) - for both the
+AI-based (stock) and SIA-based (sacks) versions.
+
+All changes in this entry verified compiling (full 67-file parse
+sweep + check-imports.cjs) and the complete regression suite re-run
+one final time - all 75 test cases across 12 suites passing.
+
+## Real bug caught in self-review: stale derived MO/TMO values never cleared
+
+While mentally walking through the new AI/SIA-first flow before
+packaging, found that the auto-fill effect only ever SET moNumber/
+tmoNumber/batchNumber/customerName when a match was found - it never
+cleared them when the AI/SIA changed to something with no match, or
+was cleared entirely. Scenario: user selects AI-001 (matches MO-123,
+correctly derives it), then realizes it's the wrong AI and changes to
+AI-002 (no matching MO, or matches a different MO-456) - the stale
+MO-123 would stay stuck in the form rather than clearing or updating.
+
+Fixed in both StockFormBase.jsx and SackFormBase.jsx: the effect now
+explicitly clears the derived fields when linkedMillingOrder resolves
+to null (on the derived/issue side specifically - the receipt side's
+independently-picked values are never touched by this logic at all,
+confirmed by an early return). Note this was a UI-state correctness
+fix, not a data-integrity emergency - the payload builder already
+gated moNumber/tmoNumber on isMilling/isTestMilling, so a stale value
+could never actually have been SAVED to a transaction under the wrong
+type; but it could have shown a misleading, no-longer-accurate number
+on screen while the user was still filling out the form.
+
+Verified with a 4-case test confirming: a real match still derives
+correctly, a changed-to-no-match AI correctly clears rather than
+sticking, the receipt side is never touched by this logic at all, and
+switching away from Milling/Test Milling entirely is correctly
+skipped.
+
+Full project re-verified (67-file parse sweep + check-imports.cjs) and
+the complete regression suite re-run one final time - 79 test cases
+across 13 suites, all passing.
+
+## Item 11 resolved: pile auto-selection from AI/SIA's OR# column for Milling/Test Milling
+
+Traced the original context (this note predated most of this session
+and lacked full detail on its own) - confirmed the actual ask: for
+Milling/Test Milling authorities specifically, the Sheet's OR# column
+intentionally holds a pile name ("Pile 1", "Pile 2B") rather than an
+actual OR number, and the app should read this to auto-select the
+correct pile when that authority is used.
+
+Found that orNumber was ALREADY being synced from the AI/SIA sheet
+(used elsewhere for the Sales-type OR# field, item 10) - the missing
+piece was that nothing ever read it back for pile selection. Fixed in
+both entry points where an authority gets selected:
+
+- StockFormBase.jsx's handleSelectAuthority (the in-form Authority
+  Picker) - when the selected authority's transactionTypeName is
+  Milling or Test Milling and it has an orNumber, looks up the pile by
+  name (case-insensitive, whitespace-tolerant) among the already-
+  loaded piles and auto-selects it.
+- AuthorityMonitor.jsx's handleOpen (home-page monitor tap-to-add) -
+  now passes orNumber through in the prefill object, which it
+  previously never did. StockFormBase.jsx gained a new, separate
+  async-safe effect (mirroring the existing prefill.pileId pattern
+  exactly - ref-tracked, retries once piles finishes loading) that
+  performs the same name-based lookup for this entry point.
+
+An explicit pileId in the prefill (when one exists) always takes
+priority over this derivation, and the logic only ever activates for
+Milling/Test Milling authorities specifically - for every other
+transaction type, orNumber continues to mean the Sales OR# field
+exactly as before, untouched.
+
+Verified with a 9-case test: the name-matching logic itself (exact
+match, alphanumeric pile names, case-insensitivity, whitespace
+tolerance, no-match correctly returning nothing), plus the trigger
+conditions (correctly fires for Milling/Test Milling with no existing
+pileId, correctly stays inactive when an explicit pileId already
+exists, when the transaction type is anything else, or when there's no
+orNumber at all).
+
+All changes in this entry verified compiling (full 67-file parse sweep
++ check-imports.cjs) and the complete regression suite re-run - 88
+test cases across 14 suites, all passing.
+
+## STATUS: All 28 original backlog items are now DONE (with the
+## live-verification caveats already documented per-item above). The
+## Milling/Test Milling/Drying/Ricemill feature is code-complete.
+## Ready for packaging, pending the live Sheet/deployment verification
+## already flagged.

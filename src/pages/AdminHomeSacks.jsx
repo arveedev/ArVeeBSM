@@ -32,12 +32,16 @@ function AdminHomeSacks({ onWarehouseSelect }) {
     pieces[warehouseId][sackTypeId] ??= {}
     pieces[warehouseId][sackTypeId][condition] = (pieces[warehouseId][sackTypeId][condition] ?? 0) + delta
   }
+  const sackAsOfDateByKey = {}
   for (const rec of sackInventory) {
     addPieces(rec.warehouseId, rec.sackTypeId, rec.condition, rec.pieces ?? 0)
+    sackAsOfDateByKey[`${rec.warehouseId}::${rec.sackTypeId}::${rec.condition}`] = rec.asOfDate ?? null
   }
   for (const t of sackTx) {
     const sign = t.type === 'ESR' ? 1 : -1
     for (const line of t.sackLines ?? []) {
+      const cutoff = sackAsOfDateByKey[`${t.warehouseId}::${line.sackTypeId}::${line.condition}`]
+      if (cutoff && t.date < cutoff) continue
       addPieces(t.warehouseId, line.sackTypeId, line.condition, (line.pieces ?? 0) * sign)
     }
   }

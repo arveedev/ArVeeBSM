@@ -25,6 +25,7 @@ import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, f
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import CompletedAuthorityModal from './CompletedAuthorityModal.jsx'
+import AuthorityReconciliationPanel from './AuthorityReconciliationPanel.jsx'
 
 const TOP_TABS = ['AI', 'SIA']
 
@@ -33,6 +34,8 @@ function AuthorityMonitor() {
   const { weightUnit } = useSettings() ?? {}
   const [topTab, setTopTab] = useState('AI')
   const [showCompleted, setShowCompleted] = useState(false)
+  const [choiceAuthority, setChoiceAuthority] = useState(null)
+  const [viewingAuthority, setViewingAuthority] = useState(null)
 
   const accessibleIds = (accessibleWarehouses ?? []).map((w) => w.warehouseId)
   const accessibleIdsKey = accessibleIds.join(',')
@@ -61,6 +64,7 @@ function AuthorityMonitor() {
     const category = a.type === 'AI' ? varietyMap.get(a.varietyId)?.category : sackTypeMap.get(a.sackLines?.[0]?.sackTypeId)?.category
     if (category === 'Rice') return 'text-blue-400'
     if (category === 'Palay') return 'text-brand-neon'
+    if (category === 'By Products') return 'text-brand-byproduct'
     return 'text-app-text'
   }
 
@@ -97,6 +101,7 @@ function AuthorityMonitor() {
         customerName: authority.customerName,
         varietyId: authority.varietyId,
         transactionTypeName: authority.transactionTypeName,
+        orNumber: authority.orNumber ?? null,
         numberOfBags: bagsRemaining != null && bagsRemaining > 0 ? bagsRemaining : null,
         netKilos: kilosRemaining != null && kilosRemaining > 0 ? kilosRemaining : null,
         autoComputeNet: false,
@@ -112,6 +117,7 @@ function AuthorityMonitor() {
 
       window.openTransactionForm('ESI', {
         linkedDocNo: authority.siaNumber,
+        authorityDate: authority.date ?? null,
         customerName: authority.customerName,
         transactionTypeName: authority.transactionTypeName,
         sackLines: remainingLines,
@@ -216,7 +222,14 @@ function AuthorityMonitor() {
 
               <button
                 type="button"
-                onClick={() => handleOpen(a)}
+                onClick={() => {
+                  const hasPartialIssuance = (totalIssuedBags ?? 0) > 0 || (a.totalIssuedKilos ?? 0) > 0
+                  if (hasPartialIssuance) {
+                    setChoiceAuthority(a)
+                  } else {
+                    handleOpen(a)
+                  }
+                }}
                 className="flex flex-1 items-center justify-between gap-3 py-2 pr-3 text-left active:scale-[0.99]"
               >
                 <div className="min-w-0">
@@ -274,6 +287,50 @@ function AuthorityMonitor() {
           sackTypeMap={sackTypeMap}
           warehouseMap={warehouseMap}
           onClose={() => setShowCompleted(false)}
+        />
+      )}
+
+      {choiceAuthority && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4"
+          onClick={() => setChoiceAuthority(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="px-2 py-1 text-center text-sm font-medium text-app-text">
+              {choiceAuthority.type} · {choiceAuthority.type === 'AI' ? choiceAuthority.aiNumber : choiceAuthority.siaNumber}
+            </p>
+            <button
+              type="button"
+              onClick={() => { handleOpen(choiceAuthority); setChoiceAuthority(null) }}
+              className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-sm font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+            >
+              Add New Transaction
+            </button>
+            <button
+              type="button"
+              onClick={() => { setViewingAuthority(choiceAuthority); setChoiceAuthority(null) }}
+              className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-sm font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+            >
+              View Transactions
+            </button>
+            <button
+              type="button"
+              onClick={() => setChoiceAuthority(null)}
+              className="mt-2 w-full rounded-xl px-4 py-3 text-center text-sm font-medium text-neutral-500"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {viewingAuthority && (
+        <AuthorityReconciliationPanel
+          authority={viewingAuthority}
+          onClose={() => setViewingAuthority(null)}
         />
       )}
     </div>

@@ -370,7 +370,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     totBags += t.numberOfBags ?? 0
     totGross += t.grossKilos ?? 0
     totNet += t.netKilos ?? 0
-    return [
+    const row = [
       fmtDate(t.date),
       t.transactionTypeName ?? '',
       t.serialNo ?? '',
@@ -382,49 +382,72 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
       fmtKilos(t.grossKilos),
       fmtKilos(t.netKilos),
     ]
+    if (isIssues) row.splice(5, 0, t.orNumber ?? '')
+    return row
   })
 
-  body.push([
+  const totalRow = [
     '', '', '', '',
     { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
     '',
     { content: fmtBags(totBags), styles: { fontStyle: 'bold', halign: 'right' } },
     { content: fmtKilos(totGross), styles: { fontStyle: 'bold', halign: 'right' } },
     { content: fmtKilos(totNet), styles: { fontStyle: 'bold', halign: 'right' } },
-  ])
+  ]
+  if (isIssues) totalRow.splice(5, 0, '')
+  body.push(totalRow)
 
   const linkedColHeader = isIssues ? 'AI #' : 'WSI/PR/BL'
   const serialHeader = isIssues ? 'WSI/WTS' : 'WSR/WTS'
+
+  const head = [
+    'DATE',
+    { content: 'NATURE OF TRANS\nACTIVITY', styles: { halign: 'center' } },
+    serialHeader,
+    linkedColHeader,
+    { content: 'FROM WHOM ' + (isIssues ? 'ISSUED' : 'RECEIVED') + '\nNAME', styles: { halign: 'center' } },
+    'VARIETY\nCODE',
+    'MC\n%',
+    'BAGS',
+    'GROSS\nKILOS',
+    'NET\nKILOS',
+  ]
+  if (isIssues) head.splice(5, 0, 'OR #')
+
+  const columnStyles = isIssues
+    ? {
+        0: { cellWidth: 15 },   // DATE
+        1: { cellWidth: 22 },   // NATURE OF TRANS ACTIVITY
+        2: { cellWidth: 18 },   // WSI/WTS
+        3: { cellWidth: 16 },   // AI #
+        4: { cellWidth: 30 },   // FROM WHOM ISSUED NAME
+        5: { cellWidth: 16 },   // OR #
+        6: { cellWidth: 13 },   // VARIETY CODE
+        7: { cellWidth: 9, halign: 'right' },  // MC%
+        8: { halign: 'right' }, // BAGS
+        9: { halign: 'right' }, // GROSS KILOS
+        10: { halign: 'right' }, // NET KILOS
+      }
+    : {
+        0: { cellWidth: 15 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 18 },
+        3: { cellWidth: 16 },
+        4: { cellWidth: 38 },
+        5: { cellWidth: 13 },
+        6: { cellWidth: 9, halign: 'right' },
+        7: { halign: 'right' },
+        8: { halign: 'right' },
+        9: { halign: 'right' },
+      }
 
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
     ...tableStyles,
-    head: [[
-      'DATE',
-      { content: 'NATURE OF TRANS\nACTIVITY', styles: { halign: 'center' } },
-      serialHeader,
-      linkedColHeader,
-      { content: 'FROM WHOM ' + (isIssues ? 'ISSUED' : 'RECEIVED') + '\nNAME', styles: { halign: 'center' } },
-      'VARIETY\nCODE',
-      'MC\n%',
-      'BAGS',
-      'GROSS\nKILOS',
-      'NET\nKILOS',
-    ]],
+    head: [head],
     body,
-    columnStyles: {
-      0: { cellWidth: 15 },
-      1: { cellWidth: 22 },
-      2: { cellWidth: 18 },
-      3: { cellWidth: 16 },
-      4: { cellWidth: 38 },
-      5: { cellWidth: 13 },
-      6: { cellWidth: 9, halign: 'right' },
-      7: { halign: 'right' },
-      8: { halign: 'right' },
-      9: { halign: 'right' },
-    },
+    columnStyles,
   })
 
   addSignatories(doc, sigCtx, doc.lastAutoTable.finalY)
@@ -579,7 +602,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
   y = addRegionProvinceCodeWhse(doc, header, y)
 
   const serialHeader = isIssues ? 'ESI/WTS#' : 'ESR/WTS#'
-  const linkedHeader = isIssues ? 'SIA #' : ''
+  const linkedHeader = isIssues ? 'SIA #' : 'ESI #'
   const nameHeader = isIssues ? 'ISSUED TO\nNAME' : 'RECEIVED FROM\nNAME'
 
   const body = []
@@ -601,7 +624,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
         i === 0 ? fmtDate(t.date) : '',
         i === 0 ? (t.transactionTypeName ?? '') : '',
         i === 0 ? (t.serialNo ?? '') : '',
-        i === 0 ? (isIssues ? (t.siaNumber ?? t.linkedDocNo ?? '') : '') : '',
+        i === 0 ? (isIssues ? (t.siaNumber ?? t.linkedDocNo ?? '') : (t.linkedDocNo ?? '')) : '',
         i === 0 ? (t.status === 'Cancelled' ? 'CANCELLED' : (t.customerName ?? '')) : '',
         sackTypeMap.get(l?.sackTypeId)?.code ?? (i === 0 ? sackCodes : ''),
         sackTypeMap.get(l?.sackTypeId) ? (l?.condition === 'BN' ? 'BN' : l?.condition === 'SH' ? 'SH' : l?.condition ?? '') : '',

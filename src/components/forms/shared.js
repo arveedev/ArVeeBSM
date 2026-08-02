@@ -18,7 +18,7 @@ export const smallButtonClass =
   'rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-95'
 
 export const removeButtonClass =
-  'rounded-lg border border-neutral-800 px-2 py-1 text-neutral-400 transition-all hover:border-brand-crimson/50 hover:text-brand-crimson active:scale-90'
+  'rounded-lg border border-neutral-800 px-2 py-1.5 text-neutral-400 transition-all hover:border-brand-crimson/50 hover:text-brand-crimson active:scale-90'
 
 // Stock condition flags — GQ (Good Quality), TRD (Trace Damage), INF
 // (Infested), PD (Part Damaged), TD (Totally Damaged).

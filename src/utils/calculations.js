@@ -173,9 +173,15 @@ export const calculateAuthorityStatus = (totalAllocation, totalIssued) => {
     (Number(totalAllocation) - Number(totalIssued ?? 0)).toFixed(2)
   )
 
+  // A tiny overage (within 0.01) is treated as Complete rather than
+  // Over-Issued - this tolerates small rounding differences rather
+  // than leaving an authority that's functionally fully issued stuck
+  // looking like an outstanding problem state. A more substantial
+  // overage still correctly shows as Over-Issued.
+  const OVERAGE_TOLERANCE = 0.01
   let status = 'Pending'
-  if (balanceRemaining === 0) status = 'Complete'
-  else if (balanceRemaining < 0) status = 'Over-Issued'
+  if (balanceRemaining >= -OVERAGE_TOLERANCE && balanceRemaining <= 0) status = 'Complete'
+  else if (balanceRemaining < -OVERAGE_TOLERANCE) status = 'Over-Issued'
 
   return { balanceRemaining, status }
 }
@@ -234,6 +240,21 @@ export const authorityExtraDetails = (a) => {
 
 // ── Number formatting utilities ───────────────────────────────────────────────
 // Consistent comma-separated formatting used throughout the app: forms,
+/**
+ * Wet/dry palay detection - per explicit example, "PD1-A" is dry
+ * palay and "PW1-A" is wet palay: the distinguishing letter (W or D)
+ * sits immediately after the first character of the variety code.
+ * Only meaningful for Palay cereal type - Rice and By Products don't
+ * have a wet/dry distinction.
+ */
+export const getPalayMoistureState = (varietyCode, cerealType) => {
+  if (cerealType !== 'Palay' || !varietyCode) return null
+  const marker = varietyCode.trim()[1]?.toUpperCase()
+  if (marker === 'W') return 'wet'
+  if (marker === 'D') return 'dry'
+  return null
+}
+
 // Home, Admin Home, Reports, and exported PDFs.
 
 /** Formats a whole-number bag/piece count with comma separators. 7581 → "7,581" */

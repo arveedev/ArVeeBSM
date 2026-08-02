@@ -119,6 +119,30 @@ const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== 
  * lastSyncedAt for a delta request when available (first sync for a
  * source fetches everything).
  */
+// Reads the MO or TMO sheet, read-only - the app never writes to
+// these sheets, only reads the control numbers and their details.
+const fetchMillingOrderRows = async (source, type) => {
+  const sheetName = type === 'MO' ? source.moSheetName : source.tmoSheetName
+  if (!sheetName) return []
+
+  const url = new URL(source.webAppUrl)
+  url.searchParams.set('action', 'fetchMillingOrders')
+  url.searchParams.set('sheet', sheetName)
+  url.searchParams.set('type', type)
+
+  const response = await fetch(url.toString())
+  if (!response.ok) {
+    throw new Error(`Sheet request failed (${response.status})`)
+  }
+
+  const payload = await response.json()
+  if (payload.status !== 'SUCCESS' || !Array.isArray(payload.orders)) {
+    throw new Error('Unexpected response shape from Apps Script')
+  }
+
+  return payload.orders
+}
+
 const fetchAuthorityRows = async (source, type) => {
   const sheetName = type === 'AI' ? source.aiSheetName : source.siaSheetName
 
@@ -152,7 +176,23 @@ const fetchAuthorityRows = async (source, type) => {
  * sack lines, not a single value).
  */
 const upsertAuthority = async (incoming) => {
-  const existing = await db.authorities.where('aiNumber').equals(incoming.aiNumber).and((a) => a.type === 'AI').first()
+  // Every record sharing this AI number - previously only the first
+  // matching record was ever updated, silently leaving any OTHER
+  // matching records (e.g. from a Sheet edit that created a second row
+  // instead of updating the first) as permanent stale duplicates. Now
+  // matches upsertSiaAuthority's approach: pick one canonical record,
+  // update it, and clean up the rest.
+  const allMatching = await db.authorities.where('aiNumber').equals(incoming.aiNumber).and((a) => a.type === 'AI').toArray()
+  // Prefer whichever record has actual issued progress as canonical -
+  // that's the one genuinely in use, not an accidental duplicate that
+  // was never touched.
+  const existing = allMatching.find((a) => (a.totalIssuedBags ?? 0) > 0 || (a.totalIssuedKilos ?? 0) > 0 || a.manuallyCompleted)
+    ?? allMatching[0]
+
+  const staleDuplicateIds = allMatching.filter((a) => a.authId !== existing?.authId).map((a) => a.authId)
+  if (staleDuplicateIds.length > 0) {
+    await db.authorities.bulkDelete(staleDuplicateIds)
+  }
 
   if (existing) {
     await db.authorities.update(existing.authId, {
@@ -257,6 +297,88 @@ let syncInProgress = false
  * result is a genuine way to end up with duplicate SIA records, since
  * both would conclude "no canonical record exists yet" independently.
  */
+// Writes "DONE" to the STATUS column for exactly one MO/TMO row - the
+// only write the app ever makes to these sheets, and only this one
+// column. Triggered when an MO's recovery is fully met, or when a
+// TMO's Trial 3 is confirmed complete.
+export const markMillingOrderDone = async (type, number) => {
+  const sources = await getAllSheetSources()
+  if (sources.length === 0) return { ok: false, reason: 'not_configured' }
+  const source = sources[0]
+  const sheetName = type === 'MO' ? source.moSheetName : source.tmoSheetName
+  if (!sheetName) return { ok: false, reason: 'not_configured' }
+
+  try {
+    const response = await fetch(source.webAppUrl, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'markMillingOrderDone', sheet: sheetName, number }),
+    })
+    const payload = await response.json()
+    return { ok: payload.status === 'SUCCESS', message: payload.message }
+  } catch (err) {
+    return { ok: false, reason: 'request_failed', message: err.message }
+  }
+}
+
+export const syncMillingOrdersFromSheets = async () => {
+  if (syncInProgress) return { ok: false, reason: 'already_syncing' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  const sources = await getAllSheetSources()
+  if (sources.length === 0) return { ok: false, reason: 'not_configured' }
+
+  syncInProgress = true
+  try {
+    let count = 0
+    const seenOrderIds = new Set()
+
+    for (const source of sources) {
+      const [moOrders, tmoOrders] = await Promise.all([
+        fetchMillingOrderRows(source, 'MO'),
+        fetchMillingOrderRows(source, 'TMO'),
+      ])
+
+      for (const order of [...moOrders, ...tmoOrders]) {
+        // Keyed by (type + number) - re-syncing updates the existing
+        // record (e.g. a changed recovery %) rather than duplicating it.
+        // Confirmed: an MO/TMO number is always exactly one row - it
+        // never spans multiple rows. type+number is sufficient as the
+        // key.
+        const orderId = `${order.type}::${order.number}`
+        seenOrderIds.add(orderId)
+        await db.millingOrders.put({
+          orderId,
+          type: order.type,
+          number: order.number,
+          ricemillName: order.ricemillName || null,
+          recoveryPercent: order.recoveryPercent,
+          batchCurrent: order.batchCurrent ?? null,
+          batchTotal: order.batchTotal ?? null,
+          aiNumber: order.aiNumber ?? null,
+          siaNumber: order.siaNumber ?? null,
+          status: 'Active',
+        })
+        count += 1
+      }
+    }
+
+    // Remove any previously-synced record no longer present in the
+    // fresh data - either marked DONE by the admin, or removed from
+    // the sheet entirely. Actual transaction records are unaffected -
+    // they store the MO/TMO number directly, not a reference to this
+    // table, so historical data stays intact regardless.
+    const allExisting = await db.millingOrders.toArray()
+    const staleIds = allExisting.filter((o) => !seenOrderIds.has(o.orderId)).map((o) => o.orderId)
+    if (staleIds.length > 0) {
+      await db.millingOrders.bulkDelete(staleIds)
+    }
+
+    return { ok: true, count }
+  } finally {
+    syncInProgress = false
+  }
+}
+
 export const syncAuthoritiesFromSheets = async () => {
   if (syncInProgress) return { ok: false, reason: 'already_syncing' }
   if (!isOnline()) return { ok: false, reason: 'offline' }
@@ -312,6 +434,7 @@ export const syncAuthoritiesFromSheets = async () => {
           customerName: String(row['NAME OF CUSTOMER'] ?? '').trim(),
           varietyId: varietyByCode.get(String(row['VARIETY CODE'] ?? '').trim()) ?? null,
           transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
+          regionalAuthorityNumber: row['Regional Authority Number'] ?? null,
           totalAllocationBags: toNumberOrNull(row['BAG']),
           totalAllocationKilos: toNumberOrNull(row['NET KG']),
           remarks: row['REMARKS'] ?? null,
@@ -374,6 +497,7 @@ export const syncAuthoritiesFromSheets = async () => {
           assignedWarehouse: warehouseByAlias.get(normalizeWarehouseAlias(row['ISSUED FROM'])) ?? null,
           customerName: String(row['CUSTOMER'] ?? '').trim(),
           transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
+          regionalAuthorityNumber: row['Regional Authority Number'] ?? null,
           remarks: row['REMARKS'] ?? null,
         })
       }
@@ -454,7 +578,13 @@ export const stripWarehouseCodePrefix = (name) =>
 const buildBackupRow = (transaction, context) => {
   const { warehouseCode, provinceCode, varietyName, transactionTypeName } = context
   const warehouseName = stripWarehouseCodePrefix(context.warehouseName)
-  const ageInMonths = transaction.ageUnit === 'Months' ? transaction.ageValue : null
+  // Previously only a Months-unit age was ever sent (converted into
+  // AGE), meaning a Days-unit age was silently dropped entirely - the
+  // Sheet had no way to represent which unit a bare number was in.
+  // Now sends the raw value plus an explicit unit, so nothing is lost
+  // regardless of which unit was used.
+  const ageValue = transaction.ageValue ?? null
+  const ageUnit = transaction.ageUnit ?? null
 
   if (transaction.type === 'WSR') {
     return {
@@ -472,7 +602,8 @@ const buildBackupRow = (transaction, context) => {
       'WSR #': transaction.serialNo,
       'WSI #': transaction.linkedDocNo ?? null,
       'Batch No': transaction.batchNo ?? null,
-      AGE: ageInMonths,
+      AGE: ageValue,
+      'Age Unit': ageUnit,
     }
   }
 
@@ -491,7 +622,8 @@ const buildBackupRow = (transaction, context) => {
       'WH Code': warehouseCode ?? null,
       'AI #': transaction.aiNumber ?? null,
       'WSI #': transaction.serialNo,
-      AGE: ageInMonths,
+      AGE: ageValue,
+      'Age Unit': ageUnit,
     }
   }
 
@@ -823,9 +955,10 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
 
   const isCancelled = String(row['Customer Name'] ?? '').trim().toUpperCase() === 'CANCELLED'
   const varietyName = row['Variety'] ?? null
-  const matchedVarietyId = varietyName
+  const matchedVariety = varietyName
     ? varietyByName?.get(String(varietyName).trim().toLowerCase()) ?? null
     : null
+  const matchedVarietyId = matchedVariety?.varietyId ?? null
 
   const base = {
     id: crypto.randomUUID(),
@@ -847,6 +980,14 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
       aiNumber: type === 'WSI' ? (row['AI #'] ?? null) : null,
       varietyId: matchedVarietyId,
       varietyNameRaw: matchedVarietyId ? null : varietyName, // preserved for display only if we couldn't match it
+      // Without this, a record imported via preload or an on-demand
+      // Sheet lookup would have no cerealCategory at all -
+      // findTransactionBySerial's category filter (Rice vs Palay vs By
+      // Products tabs) could then never match it, making the record
+      // effectively invisible to that tab even though it genuinely
+      // exists - the form would show "Save" (new entry) instead of
+      // "Update/Cancel", despite the data being right there locally.
+      cerealCategory: matchedVariety?.category ?? null,
       numberOfBags: row['Bags'] ?? null,
       netKilos: row['Net Kilos'] ?? null,
       grossKilos: null, // not stored in the Sheet - MTS/gross split is unrecoverable
@@ -857,7 +998,7 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
       moistureContent: null,
       condition: null,
       ageValue: row['AGE'] ?? null,
-      ageUnit: row['AGE'] != null ? 'Months' : 'Days',
+      ageUnit: row['Age Unit'] || (row['AGE'] != null ? 'Months' : 'Days'),
       initialAgeValue: row['AGE'] ?? null,
     }
   }

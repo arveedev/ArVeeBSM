@@ -79,8 +79,10 @@ export const reverseTransactionFromPile = async (transaction) => {
  */
 export const createPileWithBeginningBalance = async ({
   warehouseId, pileName, category, varietyId, bags, kilos, age, ageUnit, condition, purity, dateProcured, moistureContent,
+  asOfDate,
 }) => {
   const ageDays = age ? normalizeAgeToDays(Number(age), ageUnit) : 0
+  const receiptDate = asOfDate || todayLocalISO()
 
   const pile = {
     pileId: crypto.randomUUID(),
@@ -91,7 +93,7 @@ export const createPileWithBeginningBalance = async ({
     currentBags: bags || 0,
     currentKilos: kilos || 0,
     initialAgeValue: ageDays,
-    dateOfReceipt: todayLocalISO(),
+    dateOfReceipt: receiptDate,
     purity: purity?.trim() || null,
     dateProcured: dateProcured?.trim() || null,
     moistureContent: moistureContent?.trim() || null,
@@ -192,4 +194,51 @@ export const computeHistoricalPileState = async (pileId, cutoffDate) => {
   }
 
   return { bags, kilos }
+}
+
+/**
+ * Recomputes a pile's live currentBags/currentKilos from its COMPLETE
+ * transaction history (seed + every transaction since) and writes the
+ * result to the pile record. This is the correct way to reflect an
+ * edited beginning balance in the pile's live totals - never overwrite
+ * currentBags/currentKilos directly with a raw form value, since that
+ * discards every transaction that has happened since the beginning
+ * balance was first recorded. Call this after updating the seed
+ * (isInitialBalance) transaction, not instead of updating it.
+ */
+export const recalculatePileCurrentState = async (pileId) => {
+  const farFuture = '9999-12-31'
+  const { bags, kilos } = await computeHistoricalPileState(pileId, farFuture)
+  await db.piles.update(pileId, { currentBags: bags, currentKilos: kilos })
+  return { bags, kilos }
+}
+
+/**
+ * Closes a pile - a long-running pile's ledger can otherwise grow
+ * indefinitely, so this marks it as done (depleted, or closed for any
+ * other reason) with today's date, and zeroes out whatever balance
+ * remains at that point regardless of its sign or size. No reason or
+ * note is required - just the ability to close it. The BIN Card
+ * generator reads pile.closedDate to render this as the ledger's final
+ * entry, showing exactly what was zeroed out.
+ */
+export const closePile = async (pileId) => {
+  const { bags, kilos } = await recalculatePileCurrentState(pileId)
+  await db.piles.update(pileId, {
+    closedDate: todayLocalISO(),
+    currentBags: 0,
+    currentKilos: 0,
+  })
+  return { previousBags: bags, previousKilos: kilos }
+}
+
+/**
+ * Re-opens a previously closed pile - clears closedDate and restores
+ * the live totals from the full ledger (which will now correctly
+ * reflect the real balance again, since the closing zero-out is no
+ * longer in effect).
+ */
+export const reopenPile = async (pileId) => {
+  await db.piles.update(pileId, { closedDate: null })
+  return recalculatePileCurrentState(pileId)
 }

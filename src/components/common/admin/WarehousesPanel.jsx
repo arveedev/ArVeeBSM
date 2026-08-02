@@ -20,12 +20,15 @@ import {
   byAlpha,
 } from './shared.js'
 
+const FACILITY_TYPES = ['Warehouse', 'Mechanical Dryer', 'Ricemill']
+
 function WarehousesPanel() {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [provinceId, setProvinceId] = useState('')
   const [aliases, setAliases] = useState('')
+  const [facilityType, setFacilityType] = useState('Warehouse')
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
 
@@ -49,6 +52,7 @@ function WarehousesPanel() {
     setAddress('')
     setProvinceId('')
     setAliases('')
+    setFacilityType('Warehouse')
     setEditingId(null)
   }
 
@@ -99,6 +103,7 @@ function WarehousesPanel() {
         name: normalizedName,
         address: address.trim() || null,
         provinceId,
+        facilityType,
       })
       toast.success('Warehouse updated')
     } else {
@@ -109,6 +114,7 @@ function WarehousesPanel() {
         name: normalizedName,
         address: address.trim() || null,
         provinceId,
+        facilityType,
       })
       toast.success('Warehouse saved')
     }
@@ -135,6 +141,7 @@ function WarehousesPanel() {
     setAddress(warehouse.address ?? '')
     setProvinceId(warehouse.provinceId)
     setAliases((aliasesByWarehouse.get(warehouse.warehouseId) ?? []).join(', '))
+    setFacilityType(warehouse.facilityType ?? 'Warehouse')
   }
 
   const confirmDelete = async () => {
@@ -198,6 +205,19 @@ function WarehousesPanel() {
         </div>
 
         <div>
+          <label className={labelClass}>Facility Type</label>
+          <select
+            value={facilityType}
+            onChange={(e) => setFacilityType(e.target.value)}
+            className={inputClass}
+          >
+            {FACILITY_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label className={labelClass}>Address</label>
           <input
             type="text"
@@ -243,6 +263,11 @@ function WarehousesPanel() {
               <div>
                 <p className="font-medium text-app-text">
                   {w.code} · {w.name}
+                  {w.facilityType && w.facilityType !== 'Warehouse' && (
+                    <span className="ml-1.5 rounded-full bg-brand-amber/15 px-2 py-0.5 text-[10px] font-semibold text-brand-amber">
+                      {w.facilityType}
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-neutral-400">
                   {provinceMap.get(w.provinceId)?.code ?? '—'}

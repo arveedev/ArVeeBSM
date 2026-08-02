@@ -654,8 +654,64 @@ db.version(25).stores({
   serialCounters: '[warehouseId+type+cerealCategory], warehouseId, type',
 })
 
+// v26 - Milling / Test Milling support.
+//
+// millingOrders: synced from a Sheet named "MO" (Milling) or "TMO"
+// (Test Milling) - mirrors the existing authorities pattern (synced
+// reference data the app looks up against, doesn't itself create).
+// Each row is one control number with its expected recovery
+// percentage - an MO can be split into multiple batches (one per
+// participating miller), while a TMO's fulfillment is tracked by
+// trial count (always 3) instead of a recovery-percentage comparison.
+//
+// transactions gains four new indexed fields, all optional and only
+// ever populated when transactionTypeId is 'Milling' or 'Test
+// Milling': moNumber, tmoNumber, batchNumber (Milling's per-miller
+// sub-identifier under an MO), trialNumber (Test Milling's 1/2/3).
+// Indexed so the upcoming cross-warehouse monitor can query "every
+// transaction under this MO/TMO" efficiently regardless of which
+// warehouse recorded it.
+db.version(26).stores({
+  millingOrders: 'orderId, type, number, status',
+  transactions:
+    'id, type, serialNo, status, date, pileId, warehouseId, isSynced, aiNumber, siaNumber, isInitialBalance, [type+warehouseId+serialNo], moNumber, tmoNumber, batchNumber, trialNumber',
+  // facilityType distinguishes a regular Warehouse from an NFA-owned
+  // Mechanical Dryer or Ricemill - these follow different rules
+  // entirely (dryers/ricemills aren't part of normal stock movement,
+  // they're milling/drying process stops). Indexed so the upcoming
+  // monitor can query "every dryer" / "every ricemill" directly.
+  warehouses: 'warehouseId, code, name, provinceId, facilityType',
+  authorities: 'authId, type, aiNumber, siaNumber, assignedWarehouse, status, manuallyCompleted, regionalAuthorityNumber',
+  // NFA-owned Ricemills follow a different rule entirely - no MO/TMO,
+  // just the Regional Authority Number (from the AI/SIA sheet) as the
+  // sole reference, with the admin manually setting how many net kg
+  // the regional office authorized for it.
+  ricemillAllocations: 'regionalAuthorityNumber',
+  // Private millers (regular MO/TMO-tracked, not NFA-owned) share a
+  // Regional Authority Number across several millers, but NOT equally
+  // - each (regionalAuthorityNumber, ricemillName) pair needs its own
+  // settable share, distinct from NFA-owned Ricemills where one
+  // Regional Authority Number maps to exactly one ricemill.
+  privateMillerAllocations: '[regionalAuthorityNumber+ricemillName], regionalAuthorityNumber',
+}).upgrade(async (tx) => {
+  await tx.table('warehouses').toCollection().modify((w) => {
+    if (!w.facilityType) w.facilityType = 'Warehouse'
+  })
+})
+
 db.cloud.configure({
   databaseUrl: 'https://z15dzktxq.dexie.cloud',
+  // serialCounters and preloadState are explicitly per-device
+  // performance caches (see their own definitions above) - neither is
+  // meant to be shared across devices, so excluding them from sync
+  // entirely is correct regardless. This is also the likely fix for
+  // "POST .../sync 422 (Unprocessable Content)" errors that appeared
+  // after serialCounters' schema changed (deleted and recreated with a
+  // new key structure in v24/v25) - Dexie Cloud's server-side schema
+  // tracking may not handle that kind of structural change cleanly,
+  // and excluding the table from sync sidesteps the problem entirely
+  // rather than needing the cloud side to reconcile it.
+  unsyncedTables: ['serialCounters', 'preloadState'],
   // requireAuth MUST be false for an offline-first app. When true,
   // Dexie Cloud refuses to run ANY operation - including purely local
   // reads/writes that have nothing to do with syncing - until it has a

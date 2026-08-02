@@ -11,8 +11,9 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
 import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
+import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 
-const CATEGORIES = ['Rice', 'Palay']
+const CATEGORIES = ['Rice', 'Palay', 'By Products']
 
 function AdminHomeStocks({ onWarehouseSelect }) {
   const { autoAgeMonitoring, weightUnit } = useSettings() ?? {}
@@ -80,6 +81,21 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             </tbody>
           </table>
         )}
+        {sortedProvinces.length > 0 && (() => {
+          // Branch total: Rice + Palay only, explicitly excluding By
+          // Products - the same pattern already used for cerealType
+          // filtering, just summed across every province at once
+          // rather than one province at a time.
+          const branchTotal = enrichedPiles
+            .filter((p) => p.cerealType === 'Rice' || p.cerealType === 'Palay')
+            .reduce((s, p) => s + p.netBags, 0)
+          return (
+            <div className="mt-2 flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Branch Total (Rice + Palay)</span>
+              <span className="text-sm font-bold text-brand-neon">{fmt(branchTotal)}</span>
+            </div>
+          )
+        })()}
       </Section>
 
       <Section title="Stock Breakdown — Warehouse & Category">
@@ -94,10 +110,10 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                   <button
                     type="button"
                     onClick={() => onWarehouseSelect?.(warehouse)}
-                    className="flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs font-semibold uppercase text-neutral-400 transition-all hover:border-brand-neon/50 hover:bg-brand-neon/10 hover:text-brand-neon active:scale-95"
+                    className="flex items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-sm font-bold text-app-text transition-all hover:border-brand-neon/50 hover:bg-brand-neon/10 hover:text-brand-neon active:scale-95"
                   >
-                    {province?.code} · {warehouse.name}
-                    <ChevronRight size={12} />
+                    {province?.code} · {stripWarehouseCodePrefix(warehouse.name)}
+                    <ChevronRight size={14} />
                   </button>
                   <table className="mt-1 w-full text-sm">
                     <thead>
@@ -111,10 +127,11 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                         const sum = wPiles.filter((p) => p.cerealType === cat)
                           .reduce((s, p) => s + p.netBags, 0)
                         if (sum === 0) return null
+                        const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
                         return (
                           <tr key={cat} className="border-b border-neutral-800/50">
-                            <Td>{cat}</Td>
-                            <Td right>{fmt(sum)}</Td>
+                            <Td><span className={`font-semibold ${colorClass}`}>{cat}</span></Td>
+                            <Td right><span className={`text-base font-bold ${colorClass}`}>{fmt(sum)}</span></Td>
                           </tr>
                         )
                       })}
@@ -150,7 +167,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                     if (!hasData) return null
                     return (
                       <div key={cat} className="mt-3">
-                        <p className={`mb-1 text-sm font-bold uppercase ${cat === 'Rice' ? 'text-blue-400' : 'text-brand-neon'}`}>
+                        <p className={`mb-1 text-sm font-bold uppercase ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>
                           {cat}
                         </p>
                         <div className="overflow-x-auto">
@@ -188,7 +205,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                     </Td>
                                     {bucketTotals.map((val, i) => <Td key={i} right>{fmt(val)}</Td>)}
                                     <Td right>
-                                      <span className={`font-semibold ${cat === 'Rice' ? 'text-blue-400' : 'text-brand-neon'}`}>
+                                      <span className={`font-semibold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>
                                         {fmt(total)}
                                       </span>
                                     </Td>
@@ -211,11 +228,11 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                     <Td><span className="font-bold text-app-text">Total</span></Td>
                                     {columnTotals.map((val, i) => (
                                       <Td key={i} right>
-                                        <span className={`font-bold ${cat === 'Rice' ? 'text-blue-400' : 'text-brand-neon'}`}>{fmt(val)}</span>
+                                        <span className={`font-bold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>{fmt(val)}</span>
                                       </Td>
                                     ))}
                                     <Td right>
-                                      <span className={`font-bold ${cat === 'Rice' ? 'text-blue-400' : 'text-brand-neon'}`}>
+                                      <span className={`font-bold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>
                                         {fmt(grandTotal)}
                                       </span>
                                     </Td>

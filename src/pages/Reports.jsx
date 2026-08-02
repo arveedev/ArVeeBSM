@@ -214,17 +214,23 @@ function Reports() {
       for (const t of priorReceipts) addToBeginningBal(t, 1)
       for (const t of priorIssues) addToBeginningBal(t, -1)
 
-      // Compute beginning balances for sacks. sackInventory has no date -
-      // it represents state before any transaction existed, so it is
-      // always included, unconditionally, then prior dated ESR/ESI
-      // transactions are added on top.
+      // Compute beginning balances for sacks. Each sackInventory seed
+      // now carries its own as-of date - only include a seed if its
+      // date is on/before this report period's start (otherwise it
+      // genuinely didn't exist yet as of this period), and only count
+      // prior ESR/ESI transactions dated on/after that same seed date
+      // (anything earlier is pre-seed history already baked into the
+      // seed value itself, which would otherwise be double-counted).
       const sackBeginningBals = new Map()
+      const sackAsOfDateByKey = new Map()
       const sackInventorySeed = await db.sackInventory
         .where('warehouseId').equals(currentWarehouseId)
         .toArray()
       for (const rec of sackInventorySeed) {
+        if (rec.asOfDate && rec.asOfDate > stmtFrom) continue
         const key = `${rec.sackTypeId}::${rec.condition}`
         sackBeginningBals.set(key, (sackBeginningBals.get(key) ?? 0) + (rec.pieces ?? 0))
+        sackAsOfDateByKey.set(key, rec.asOfDate ?? null)
       }
       const priorSack = await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
@@ -235,6 +241,8 @@ function Reports() {
           const sType = sackTypeMap.get(l.sackTypeId)
           if (!sType) continue
           const key = `${l.sackTypeId}::${l.condition}`
+          const cutoff = sackAsOfDateByKey.get(key)
+          if (cutoff && t.date < cutoff) continue
           const sign = t.type === 'ESI' ? -1 : 1
           sackBeginningBals.set(key, (sackBeginningBals.get(key) ?? 0) + (l.pieces ?? 0) * sign)
         }
@@ -275,7 +283,7 @@ function Reports() {
   const sackGroups = groupSack(currentSackList)
 
   return (
-    <div className="min-h-screen px-4 pb-24 pt-6">
+    <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       <div ref={warehouseSectionRef}>
         {sortedWarehouses.length > 1 ? (
           <div className="mt-4">

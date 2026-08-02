@@ -36,10 +36,16 @@ function HomeSacks({ warehouseId } = {}) {
     sackPieces[sackTypeId] ??= {}
     sackPieces[sackTypeId][condition] = (sackPieces[sackTypeId][condition] ?? 0) + delta
   }
-  for (const rec of sackInventory) addSackPieces(rec.sackTypeId, rec.condition, rec.pieces ?? 0)
+  const sackAsOfDateByKey = {}
+  for (const rec of sackInventory) {
+    addSackPieces(rec.sackTypeId, rec.condition, rec.pieces ?? 0)
+    sackAsOfDateByKey[`${rec.sackTypeId}::${rec.condition}`] = rec.asOfDate ?? null
+  }
   for (const t of sackTx) {
     const sign = t.type === 'ESR' ? 1 : -1
     for (const line of t.sackLines ?? []) {
+      const cutoff = sackAsOfDateByKey[`${line.sackTypeId}::${line.condition}`]
+      if (cutoff && t.date < cutoff) continue
       addSackPieces(line.sackTypeId, line.condition, (line.pieces ?? 0) * sign)
     }
   }

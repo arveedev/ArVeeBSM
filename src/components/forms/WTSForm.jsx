@@ -29,6 +29,7 @@ import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
+import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
 import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter } from '../../utils/serialNumber.js'
 import {
@@ -623,9 +624,7 @@ function WTSForm({ onClose, prefill }) {
         <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
         <div>
           <label className={labelClass}>Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-            onClick={(e) => e.currentTarget.showPicker?.()}
-            className={`${inputClass} cursor-pointer`} />
+          <CalendarDatePicker value={date} onChange={setDate} />
         </div>
 
         <div>
@@ -684,7 +683,7 @@ function WTSForm({ onClose, prefill }) {
         </label>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-6">
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         {isEditMode ? (
           <div className="flex gap-3">
             <button type="button" onClick={handleUpdate} disabled={isSaving}

@@ -4,10 +4,15 @@
 // page (alongside the layout editor) - it no longer lives on Home.
 
 import { useEffect, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import AuthorityMonitor from '../components/common/AuthorityMonitor.jsx'
+import MillingMonitor from '../components/common/MillingMonitor.jsx'
+import ProcurementBagsNotification from '../components/common/ProcurementBagsNotification.jsx'
+import PalayDryingStatus from '../components/common/WetPalayNotification.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 import HomeStocks from './HomeStocks.jsx'
 import HomeSacks from './HomeSacks.jsx'
@@ -19,6 +24,7 @@ function Home() {
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
   const { setPageHeader } = usePageHeader() ?? {}
+  const hasMillingOrders = (useLiveQuery(() => db.millingOrders.count(), []) ?? 0) > 0
 
   const [inventoryTab, setInventoryTab] = useState('stocks')
   const warehouseSectionRef = useRef(null)
@@ -30,7 +36,7 @@ function Home() {
   }, [user?.nickname])
 
   return (
-    <div className="min-h-screen px-4 pb-24 pt-6">
+    <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       <div ref={warehouseSectionRef}>
         {sortedWarehouses.length > 1 ? (
           <div className="mt-4">
@@ -85,7 +91,12 @@ function Home() {
 
       {inventoryTab === 'stocks' ? <HomeStocks /> : <HomeSacks />}
 
+      <ProcurementBagsNotification />
+      <PalayDryingStatus />
+
       <AuthorityMonitor />
+
+      {hasMillingOrders && <MillingMonitor />}
     </div>
   )
 }

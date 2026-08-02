@@ -9,6 +9,7 @@
 // place: an explicit tap on a specific day cell.
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -128,7 +129,7 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
         <Calendar size={16} className="shrink-0 text-neutral-500" />
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
           <div
             className="max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl"
@@ -187,7 +188,8 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
             })}
           </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

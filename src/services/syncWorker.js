@@ -9,7 +9,7 @@
 // isSynced flag to true once the Sheet confirms the write.
 
 import { db } from '../db/dexie.js'
-import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, syncAuthoritiesFromSheets } from './googleSheetsBridge.js'
+import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
 
 let isSyncing = false
 
@@ -219,6 +219,7 @@ export const startAuthoritySyncWorker = () => {
   const runSync = async () => {
     if (cancelled) return
     await syncAuthoritiesFromSheets()
+    await syncMillingOrdersFromSheets()
   }
 
   runSync()

@@ -38,7 +38,7 @@ function CertifiedCorrectSection() {
   const warehouseMap = new Map((warehouses ?? []).map((w) => [w.warehouseId, w]))
 
   const supervisors = [...(users ?? [])]
-    .filter((u) => u.role === 'Warehouse Supervisor')
+    .filter((u) => u.role === 'Warehouse Supervisor' || u.role === 'Acting Warehouse Supervisor')
     .sort((a, b) => byAlpha(a.name, b.name))
 
   return (

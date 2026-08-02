@@ -23,9 +23,17 @@ import { inputClass, labelClass, primaryButtonClass, CONDITION_FLAGS } from './s
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const AGE_UNITS = ['Days', 'Months']
 
-function NewPileDialog({ warehouseId, varieties, onCreated, onClose }) {
+// By Products, unlike Rice/Palay, does not lock a pile to a single
+// variety for its lifetime - a By Products pile can hold any mix of
+// its cereal type's varieties (the variety picked here is just the
+// pile's initial/seed variety for its optional beginning balance).
+// See StockFormBase.jsx's variety field for where this is actually
+// enforced during transactions - unlike Rice/Palay, a By Products
+// pile keeps the variety selector editable rather than locking it to
+// a read-only display of whatever variety the pile started with.
+function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onClose }) {
   const [pileName, setPileName] = useState('')
-  const [category, setCategory] = useState('Rice')
+  const [category, setCategory] = useState(lockedCategory ?? 'Rice')
   const [varietyId, setVarietyId] = useState('')
   const [beginBags, setBeginBags] = useState('')
   const [beginKilos, setBeginKilos] = useState('')
@@ -83,9 +91,9 @@ function NewPileDialog({ warehouseId, varieties, onCreated, onClose }) {
             onClick={onClose}
             disabled={isSaving}
             aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-950 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90 disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-950 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90 disabled:opacity-50"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
@@ -103,20 +111,26 @@ function NewPileDialog({ warehouseId, varieties, onCreated, onClose }) {
 
           <div>
             <label className={labelClass}>Category</label>
-            <select
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value)
-                setVarietyId('')
-              }}
-              className={inputClass}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            {lockedCategory ? (
+              <p className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-base font-semibold text-app-text">
+                {lockedCategory}
+              </p>
+            ) : (
+              <select
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value)
+                  setVarietyId('')
+                }}
+                className={inputClass}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>

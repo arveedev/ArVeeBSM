@@ -87,7 +87,7 @@ export const searchWarehouseSupervisors = async (query) => {
 
   const [, , nameFragment] = match
 
-  const users = await db.users.where('role').equals('Warehouse Supervisor').toArray()
+  const users = await db.users.where('role').anyOf(['Warehouse Supervisor', 'Acting Warehouse Supervisor']).toArray()
   const warehouses = await db.warehouses.toArray()
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
 

@@ -13,6 +13,9 @@ import WarehousesPanel from '../components/common/admin/WarehousesPanel.jsx'
 import UsersPanel from '../components/common/admin/UsersPanel.jsx'
 import VarietyTypesPanel from '../components/common/admin/VarietyTypesPanel.jsx'
 import SackTypesPanel from '../components/common/admin/SackTypesPanel.jsx'
+import CustomersPanel from '../components/common/admin/CustomersPanel.jsx'
+import BeginningBalancesPanel from '../components/common/admin/BeginningBalancesPanel.jsx'
+import RicemillAllocationsPanel from '../components/common/admin/RicemillAllocationsPanel.jsx'
 import AuthoritiesInfoPanel from '../components/common/admin/AuthoritiesInfoPanel.jsx'
 import SignatoriesPanel from '../components/common/admin/SignatoriesPanel.jsx'
 import VisitorAccessPanel from '../components/common/admin/VisitorAccessPanel.jsx'
@@ -27,6 +30,9 @@ const TABS = [
   { id: 'users', label: 'Users', Panel: UsersPanel },
   { id: 'varieties', label: 'Varieties', Panel: VarietyTypesPanel },
   { id: 'sacks', label: 'Sack Types', Panel: SackTypesPanel },
+  { id: 'customers', label: 'Customers', Panel: CustomersPanel },
+  { id: 'balances', label: 'Beginning Balances', Panel: BeginningBalancesPanel },
+  { id: 'ricemillAllocations', label: 'Miller Allocations', Panel: RicemillAllocationsPanel },
   { id: 'txtypes', label: 'Transaction Types', Panel: TransactionTypesPanel },
   { id: 'authorities', label: 'AI / SIA', Panel: AuthoritiesInfoPanel },
   { id: 'signatories', label: 'Signatories', Panel: SignatoriesPanel },
@@ -49,7 +55,7 @@ function AdminDashboard() {
   }, [])
 
   return (
-    <div className="min-h-screen px-4 pb-24 pt-6">
+    <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       <div className="flex gap-2 overflow-x-auto pb-2">
         {TABS.map((tab) => (
           <button

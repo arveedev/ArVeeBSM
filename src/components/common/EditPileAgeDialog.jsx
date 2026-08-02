@@ -102,9 +102,9 @@ function EditPileAgeDialog({ pile, currentAge, onClose }) {
             onClick={onClose}
             disabled={isSaving}
             aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-950 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90 disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-950 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90 disabled:opacity-50"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 

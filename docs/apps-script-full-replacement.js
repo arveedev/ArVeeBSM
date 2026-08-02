@@ -55,6 +55,8 @@ const WRITE_ALLOWLIST = [
   'Issues Backup',           // WSI backup
   'Sacks Receipts Backup',   // ESR backup
   'Sacks Issues Backup',     // ESI backup
+  'MO',                      // Milling Order - STATUS column only, see markMillingOrderDone
+  'TMO',                     // Test Milling Order - STATUS column only, see markMillingOrderDone
 ];
 
 const LAST_MODIFIED_COLUMN_INDEX = 13; // column N, zero-based (N is the 14th column)
@@ -203,6 +205,63 @@ function doGet(e) {
       return jsonResponse({ status: 'SUCCESS', row });
     }
 
+    if (action === 'fetchMillingOrders') {
+      const sheetName = e.parameter.sheet;
+      const orderType = e.parameter.type; // 'MO' or 'TMO'
+
+      if (!sheetName || !orderType) {
+        return jsonResponse({ status: 'ERROR', message: 'Missing sheet/type parameter' });
+      }
+
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        return jsonResponse({ status: 'ERROR', message: `Sheet "${sheetName}" not found` });
+      }
+
+      // Read by raw column POSITION, not header name - column A = index
+      // 0, C = index 2, D = index 3, E = index 4, G = index 6, L = index
+      // 11. Skip row 1 (header row).
+      const values = sheet.getDataRange().getValues();
+      const dataRows = values.slice(1);
+
+      const orders = dataRows
+        .filter((row) => row[0]) // skip fully blank rows
+        .map((row) => {
+          const prefix = String(row[0]).trim(); // Column A - e.g. "MO No. ALB-2026"
+          const letter = String(row[2] ?? '').trim(); // Column C - e.g. "D"
+          const sequence = String(row[3] ?? '').trim(); // Column D - e.g. "027"
+          const number = [prefix, letter, sequence].filter(Boolean).join('-');
+          const ricemillName = String(row[4] ?? '').trim(); // Column E
+          const recoveryPercent = row[11] !== '' && row[11] != null ? Number(row[11]) : null; // Column L
+          const aiNumber = String(row[7] ?? '').trim() || null; // Column H
+          const siaNumber = String(row[8] ?? '').trim() || null; // Column I
+          // Column M - manually typed "DONE" by the admin to hide a
+          // historical row from the app entirely. The app only ever
+          // READS this column - it is never written back to.
+          const sheetStatus = String(row[12] ?? '').trim().toUpperCase();
+          if (sheetStatus === 'DONE') return null;
+
+          const result = { number, ricemillName, recoveryPercent, aiNumber, siaNumber, type: orderType };
+
+          if (orderType === 'MO') {
+            // Column G - "1 of 15" format: current batch / total batches
+            // FOR THIS RICEMILL specifically (one MO can involve several
+            // ricemills, each with their own independent batch count).
+            const batchRaw = String(row[6] ?? '').trim();
+            const batchMatch = batchRaw.match(/(\d+)\s*of\s*(\d+)/i);
+            result.batchCurrent = batchMatch ? Number(batchMatch[1]) : null;
+            result.batchTotal = batchMatch ? Number(batchMatch[2]) : null;
+            result.batchRaw = batchRaw || null;
+          }
+
+          return result;
+        })
+        .filter((o) => o && o.number); // must have a constructible number, and not be marked DONE
+
+      return jsonResponse({ status: 'SUCCESS', orders });
+    }
+
     if (action === 'fetchSerialFloor') {
       const sheetName = e.parameter.sheet;
       const matchColumn = e.parameter.matchColumn;
@@ -282,6 +341,20 @@ function doGet(e) {
     }
 
     let rows = sheetToObjects(sheet);
+
+    // Regional Authority Number - Column J (index 9), read by raw
+    // position rather than header name, since only the column's
+    // position was confirmed, not its header wording. A separate
+    // reference number from the app's own AI/SIA numbers - used to tag
+    // milling operations with a common cross-warehouse reference.
+    const rawValues = sheet.getDataRange().getValues();
+    const dataRows = rawValues.slice(1);
+    rows.forEach((row, i) => {
+      const regionalAuthNum = dataRows[i] ? dataRows[i][9] : null;
+      row['Regional Authority Number'] = regionalAuthNum != null && regionalAuthNum !== ''
+        ? String(regionalAuthNum).trim()
+        : null;
+    });
 
     const modifiedSince = e.parameter.modifiedSince;
     if (modifiedSince) {
@@ -380,6 +453,40 @@ function doPost(e) {
         return jsonResponse({ status: 'SUCCESS' });
       }
       sheet.deleteRow(rowIndex);
+      return jsonResponse({ status: 'SUCCESS' });
+    }
+
+    if (body.action === 'markMillingOrderDone') {
+      // The ONLY write action for MO/TMO sheets, and it only ever
+      // touches the STATUS column (M, column 13 / index 12) of exactly
+      // one row - never any other cell or column. Finds the row by
+      // reconstructing the A+C+D number the same way fetchMillingOrders
+      // does, since there's no dedicated ID column to match against
+      // directly.
+      const targetNumber = body.number;
+      if (!targetNumber) {
+        return jsonResponse({ status: 'ERROR', message: 'Missing number parameter' });
+      }
+
+      const values = sheet.getDataRange().getValues();
+      let foundRow = -1;
+      for (let i = 1; i < values.length; i++) {
+        const row = values[i];
+        const prefix = String(row[0] ?? '').trim();
+        const letter = String(row[2] ?? '').trim();
+        const sequence = String(row[3] ?? '').trim();
+        const number = [prefix, letter, sequence].filter(Boolean).join('-');
+        if (number === targetNumber) {
+          foundRow = i + 1; // 1-based sheet row
+          break;
+        }
+      }
+
+      if (foundRow === -1) {
+        return jsonResponse({ status: 'ERROR', message: `No row found matching "${targetNumber}"` });
+      }
+
+      sheet.getRange(foundRow, 13).setValue('DONE'); // Column M
       return jsonResponse({ status: 'SUCCESS' });
     }
 

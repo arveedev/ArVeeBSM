@@ -13,7 +13,7 @@ import { db } from '../../db/dexie.js'
 import { isAuthorityComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 
-function AuthorityPickerModal({ type, warehouseId, filterVarietyId, onSelect, onClose }) {
+function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
   const { weightUnit } = useSettings() ?? {}
 
   const authorities = useLiveQuery(async () => {
@@ -28,7 +28,6 @@ function AuthorityPickerModal({ type, warehouseId, filterVarietyId, onSelect, on
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
-  const filterVariety = filterVarietyId ? varietyMap.get(filterVarietyId) : null
 
   // Palay is green, Rice is blue - matches the same convention used
   // elsewhere in the AI/SIA monitor.
@@ -36,16 +35,12 @@ function AuthorityPickerModal({ type, warehouseId, filterVarietyId, onSelect, on
     const category = type === 'AI' ? varietyMap.get(a.varietyId)?.category : sackTypeMap.get(a.sackLines?.[0]?.sackTypeId)?.category
     if (category === 'Rice') return 'text-blue-400'
     if (category === 'Palay') return 'text-brand-neon'
+    if (category === 'By Products') return 'text-brand-byproduct'
     return 'text-app-text'
   }
 
   const pending = authorities
     .filter((a) => !isAuthorityComplete(a))
-    // Only AI has a variety of its own - when a pile/variety is already
-    // selected in the form, only show authorities for that SAME variety,
-    // so the user can never accidentally issue against an AI meant for a
-    // different variety than the pile they're actually working with.
-    .filter((a) => (type === 'AI' && filterVarietyId ? a.varietyId === filterVarietyId : true))
     .sort((a, b) => {
       const aRef = type === 'AI' ? a.aiNumber : a.siaNumber
       const bRef = type === 'AI' ? b.aiNumber : b.siaNumber
@@ -61,26 +56,21 @@ function AuthorityPickerModal({ type, warehouseId, filterVarietyId, onSelect, on
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-app-text">Select Pending {type}</h2>
-            {filterVariety && (
-              <p className="mt-0.5 text-xs text-brand-neon">
-                Showing only {filterVariety.name} ({filterVariety.category}) authorities
-              </p>
-            )}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-950 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-950 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
         <div className="mt-3 flex-1 overflow-y-auto">
           {pending.length === 0 ? (
             <p className="py-6 text-center text-xs text-neutral-500">
-              No pending {type} records for this warehouse{filterVariety ? ` and ${filterVariety.name}` : ''}.
+              No pending {type} records for this warehouse.
             </p>
           ) : (
             <ul className="space-y-2">

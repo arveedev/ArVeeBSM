@@ -115,7 +115,7 @@ export const generatePileLayoutReport = ({
           box.pile.condition && ['Cond', box.pile.condition],
           box.pile.moistureContent && ['MC', box.pile.moistureContent],
           box.pile.purity && ['Purity', box.pile.purity],
-          box.pile.dateProcured && ['Procured', box.pile.dateProcured],
+          box.pile.dateProcured && [box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured],
         ].filter(Boolean)
 
     // Fixed, comfortable, always-readable font sizes - only shrunk (down
@@ -124,9 +124,9 @@ export const generatePileLayoutReport = ({
     // available before the next box begins. Every box with enough room
     // keeps the full comfortable size. Tighter base spacing than before -
     // the previous 3.4mm looked needlessly loose for dense field lists.
-    let headerFontSize = 8
-    let detailFontSize = 6
-    let lineHeight = 2.6
+    let headerFontSize = 10
+    let detailFontSize = 7
+    let lineHeight = 3.0
     const padding = 2
 
     const rawWInset = rawW - boxGap
@@ -147,7 +147,7 @@ export const generatePileLayoutReport = ({
         return { label: labelText, valueLines: doc.splitTextToSize(String(value), valueWidth) }
       })
       const totalLines = wrapped.reduce((sum, f) => sum + f.valueLines.length, 0)
-      const slots = 1.5 + Math.max(totalLines, isVacant ? 1 : 0)
+      const slots = 1.2 + Math.max(totalLines, isVacant ? 1 : 0)
       return { wrapped, requiredHeight: lineHeight * slots + padding * 2, slots }
     }
 
@@ -162,19 +162,34 @@ export const generatePileLayoutReport = ({
     const allowedH = maxAllowedHeight(box)
 
     // If the content needs more room than is structurally available
-    // before the next box begins, shrink (down to a 5pt/2.2mm floor)
+    // before the next box begins, shrink (down to a legible floor)
     // just enough to fit within that available space - this is the
     // fallback that guarantees no export ever overlaps another box,
     // regardless of how the layout was originally drawn.
     if (requiredHeight > allowedH && allowedH > padding * 2) {
       const targetSlots = totalSlots
-      const shrunkLineHeight = Math.max(2.2, (allowedH - padding * 2) / targetSlots)
+      const shrunkLineHeight = Math.max(2.4, (allowedH - padding * 2) / targetSlots)
       if (shrunkLineHeight < lineHeight) {
         lineHeight = shrunkLineHeight
-        detailFontSize = Math.max(5, lineHeight * 1.7)
-        headerFontSize = Math.max(6, detailFontSize * 1.3)
+        detailFontSize = Math.max(5.5, lineHeight * 1.7)
+        headerFontSize = Math.max(6.5, detailFontSize * 1.3)
         ;({ wrapped: wrappedFields, requiredHeight, slots: totalSlots } = computeWrappedFields())
       }
+    }
+
+    // Width-adaptive shrinking for the pile name specifically - a
+    // narrow/slim box previously had no check at all here, only value
+    // fields wrapped to fit the box's width. Shrinks headerFontSize
+    // (down to the same legibility floor as above) until the name
+    // actually fits within the box, rather than letting it overflow
+    // past the box's edges.
+    const pileNameText = box.pile?.pileName ?? box.label ?? ''
+    const availableHeaderWidth = rawWInset - padding * 2
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(headerFontSize)
+    while (headerFontSize > 6.5 && doc.getTextWidth(pileNameText) > availableHeaderWidth) {
+      headerFontSize -= 0.5
+      doc.setFontSize(headerFontSize)
     }
 
     // The box GROWS to fit its content rather than cutting text off -
@@ -199,8 +214,10 @@ export const generatePileLayoutReport = ({
     const fillColor = isVacant
       ? [255, 255, 255]
       : box.variety?.category === 'Palay'
-        ? [173, 235, 179]   // #ADEBB3
-        : [184, 227, 233]   // #B8E3E9
+        ? [184, 255, 229]   // light tint of brand-neon (#00FFA3)
+        : box.variety?.category === 'By Products'
+          ? [251, 235, 204]  // light tint of brand-byproduct (#F2B949)
+          : [211, 230, 254]  // light tint of Rice blue (#60A5FA)
 
     doc.setFillColor(...fillColor)
     doc.rect(x, boxY, w, h, 'F')
@@ -219,7 +236,7 @@ export const generatePileLayoutReport = ({
     doc.setFontSize(headerFontSize)
     doc.setTextColor(...BLACK)
     doc.text(box.pile?.pileName ?? box.label ?? '', centerX, ty, { align: 'center' })
-    ty += lineHeight * 1.5
+    ty += lineHeight * 1.2
 
     doc.setFontSize(detailFontSize)
 

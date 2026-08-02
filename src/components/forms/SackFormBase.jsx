@@ -37,7 +37,7 @@ import {
   recalculateSerialCounter,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
-import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
@@ -45,6 +45,7 @@ import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO } from '
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
+import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import {
   inputClass,
@@ -68,11 +69,17 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [serialNo, setSerialNo] = useState('')
   const [date, setDate] = useState(todayLocalISO())
   const [linkedDocNo, setLinkedDocNo] = useState('')
+  const [linkedAuthorityDate, setLinkedAuthorityDate] = useState(null)
   const [showAuthorityPicker, setShowAuthorityPicker] = useState(false)
   const [customerName, setCustomerName] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
   const [transactionTypeId, setTransactionTypeId] = useState('')
   const [sackLines, setSackLines] = useState([emptySackLine()])
+  const [moNumber, setMoNumber] = useState('')
+  const [batchNumber, setBatchNumber] = useState('')
+  const [tmoNumber, setTmoNumber] = useState('')
+  const [trialNumber, setTrialNumber] = useState('')
+  const [pendingTrial3Confirm, setPendingTrial3Confirm] = useState(false)
   const [unresolvedSiaHint, setUnresolvedSiaHint] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
@@ -128,6 +135,56 @@ const SackFormBase = forwardRef(function SackFormBase(
   }))
 
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
+
+  // Which trial numbers (1/2/3) already exist for this TMO, across
+  // EVERY warehouse, tracked independently per document type (ESI vs
+  // ESR each need their own complete set of 3) - same approach as the
+  // stock side.
+  const takenTrialNumbers = useLiveQuery(async () => {
+    if (!isTestMilling || !tmoNumber.trim()) return []
+    const existing = await db.transactions
+      .where('tmoNumber').equals(tmoNumber.trim())
+      .and((t) => t.status === 'Active' && t.type === type && (!loadedTransaction || t.id !== loadedTransaction.id))
+      .toArray()
+    return [...new Set(existing.map((t) => t.trialNumber).filter(Boolean))]
+  }, [isTestMilling, tmoNumber, type, loadedTransaction]) ?? []
+
+  // Available MO/TMO numbers from the synced reference data, with
+  // fulfillment computed - same logic as the stock side, just matched
+  // against sack pieces (summed across sackLines) instead of net kilos.
+  const millingOrderOptions = useLiveQuery(async () => {
+    if (!isMilling && !isTestMilling) return []
+    const orderType = isMilling ? 'MO' : 'TMO'
+    const orders = await db.millingOrders.where('type').equals(orderType).toArray()
+    const numberField = isMilling ? 'moNumber' : 'tmoNumber'
+
+    const allRelevantTx = await db.transactions
+      .where(numberField).anyOf(orders.map((o) => o.number))
+      .and((t) => t.status === 'Active')
+      .toArray()
+
+    const sumPieces = (t) => (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
+
+    return orders.map((order) => {
+      const forThisOrder = allRelevantTx.filter((t) => t[numberField] === order.number)
+
+      if (isMilling) {
+        const issuedPieces = forThisOrder.filter((t) => t.type === 'ESI').reduce((s, t) => s + sumPieces(t), 0)
+        const receivedPieces = forThisOrder.filter((t) => t.type === 'ESR').reduce((s, t) => s + sumPieces(t), 0)
+        const expectedPieces = order.recoveryPercent != null ? issuedPieces * (order.recoveryPercent / 100) : null
+        const fulfilled = expectedPieces != null && expectedPieces > 0 && receivedPieces >= expectedPieces
+        return { ...order, issuedPieces, receivedPieces, expectedPieces, fulfilled }
+      }
+
+      const recoveredTrials = new Set(
+        forThisOrder.filter((t) => t.type === 'ESR' && sumPieces(t) > 0).map((t) => t.trialNumber)
+      )
+      const allThreeRecovered = ['1', '2', '3'].every((n) => recoveredTrials.has(n))
+      const fulfilled = allThreeRecovered && order.trial3Confirmed === true
+      return { ...order, recoveredTrials: [...recoveredTrials], fulfilled }
+    })
+  }, [isMilling, isTestMilling]) ?? []
+
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
 
   // Available pieces per sackTypeId+condition for this warehouse - the
@@ -153,11 +210,21 @@ const SackFormBase = forwardRef(function SackFormBase(
     const key = `${sackTypeId}::${condition}`
     availablePieces[key] = (availablePieces[key] ?? 0) + delta
   }
-  for (const rec of sackInventory) addAvailable(rec.sackTypeId, rec.condition, rec.pieces ?? 0)
+  const asOfDateByKey = {}
+  for (const rec of sackInventory) {
+    addAvailable(rec.sackTypeId, rec.condition, rec.pieces ?? 0)
+    asOfDateByKey[`${rec.sackTypeId}::${rec.condition}`] = rec.asOfDate ?? null
+  }
   for (const t of allSackTx) {
     if (loadedTransaction && t.id === loadedTransaction.id) continue
     const sign = t.type === 'ESR' ? 1 : -1
     for (const line of t.sackLines ?? []) {
+      const key = `${line.sackTypeId}::${line.condition}`
+      const cutoff = asOfDateByKey[key]
+      // A transaction dated before the beginning balance's own as-of
+      // date is pre-seed history, already accounted for in the seed
+      // value itself - counting it again here would double-count it.
+      if (cutoff && t.date < cutoff) continue
       addAvailable(line.sackTypeId, line.condition, (line.pieces ?? 0) * sign)
     }
   }
@@ -173,6 +240,40 @@ const SackFormBase = forwardRef(function SackFormBase(
     return db.authorities.where('siaNumber').equals(linkedDocNo.trim()).and((a) => a.type === 'SIA').first()
   }, [type, linkedDocNo])
 
+  // Per the correct operational flow: it always starts with the SIA,
+  // especially for issuance. When the selected SIA is for a Milling or
+  // Test Milling operation, the MO/TMO number, batch, and miller name
+  // are DERIVED from that SIA - not picked independently. Only applies
+  // to the issue side (ESI); the receipt side (ESR) has no SIA of its
+  // own to key off, so it keeps its own MO/TMO picker.
+  const linkedMillingOrder = useLiveQuery(async () => {
+    if (type === 'ESR' || !linkedSiaAuthority?.siaNumber) return null
+    if (!isMilling && !isTestMilling) return null
+    return db.millingOrders
+      .where('type').equals(isMilling ? 'MO' : 'TMO')
+      .and((o) => o.siaNumber === linkedSiaAuthority.siaNumber)
+      .first()
+  }, [type, linkedSiaAuthority?.siaNumber, isMilling, isTestMilling])
+
+  useEffect(() => {
+    if (type === 'ESR' || (!isMilling && !isTestMilling)) return
+    if (linkedMillingOrder) {
+      if (isMilling) {
+        setMoNumber(linkedMillingOrder.number)
+        setBatchNumber(linkedMillingOrder.batchCurrent != null ? String(linkedMillingOrder.batchCurrent) : '')
+      } else if (isTestMilling) {
+        setTmoNumber(linkedMillingOrder.number)
+      }
+      if (linkedMillingOrder.ricemillName) setCustomerName(linkedMillingOrder.ricemillName)
+    } else {
+      // The SIA changed (or was cleared) and no longer matches any
+      // MO/TMO - clear whatever was previously derived rather than
+      // leaving a stale, now-mismatched number sitting in the form.
+      if (isMilling) { setMoNumber(''); setBatchNumber('') }
+      else if (isTestMilling) setTmoNumber('')
+    }
+  }, [linkedMillingOrder, isMilling, isTestMilling, type])
+
   const getSiaRemainingPieces = (sackTypeId, condition) => {
     const line = linkedSiaAuthority?.sackLines?.find((l) => l.sackTypeId === sackTypeId && l.condition === condition)
     if (!line || line.totalAllocationBags == null) return null
@@ -182,6 +283,9 @@ const SackFormBase = forwardRef(function SackFormBase(
   const sortedSackTypes = [...(sackTypes ?? [])].sort((a, b) => byAlpha(a.code, b.code))
   const sackTypeMap = new Map((sackTypes ?? []).map((s) => [s.sackTypeId, s]))
   const sortedTransactionTypes = [...(transactionTypes ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  const selectedTransactionType = (transactionTypes ?? []).find((t) => t.transactionTypeId === transactionTypeId)
+  const isMilling = selectedTransactionType?.name === 'Milling'
+  const isTestMilling = selectedTransactionType?.name === 'Test Milling'
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
   useEffect(() => {
@@ -239,6 +343,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (!prefill) return
     if (prefill.customerName) setCustomerName(prefill.customerName)
     if (prefill.linkedDocNo) setLinkedDocNo(prefill.linkedDocNo)
+    if (prefill.authorityDate) setLinkedAuthorityDate(prefill.authorityDate)
     if (prefill.serialNo) {
       setSerialNo(prefill.serialNo)
       setTimeout(() => checkAndLoadSerial(prefill.serialNo), 150)
@@ -347,6 +452,10 @@ const SackFormBase = forwardRef(function SackFormBase(
     setCustomerName(tx.customerName ?? '')
     setCustomerAddress(tx.customerAddress ?? '')
     setTransactionTypeId(tx.transactionTypeId ?? '')
+    setMoNumber(tx.moNumber ?? '')
+    setBatchNumber(tx.batchNumber ?? '')
+    setTmoNumber(tx.tmoNumber ?? '')
+    setTrialNumber(tx.trialNumber ?? '')
     setSackLines(
       tx.sackLines?.length
         ? tx.sackLines.map((l) => ({
@@ -364,8 +473,13 @@ const SackFormBase = forwardRef(function SackFormBase(
     setSerialNo(nextSerial)
     setDate(todayLocalISO())
     setLinkedDocNo('')
+    setLinkedAuthorityDate(null)
     setCustomerName('')
     setCustomerAddress('')
+    setMoNumber('')
+    setBatchNumber('')
+    setTmoNumber('')
+    setTrialNumber('')
     setSackLines([emptySackLine()])
   }
 
@@ -486,6 +600,10 @@ const SackFormBase = forwardRef(function SackFormBase(
     linkedDocNo: linkedDocNo.trim() || null,
     siaNumber: type === 'ESI' ? linkedDocNo.trim() || null : null,
     aiNumber: null,
+    moNumber: isMilling ? moNumber.trim() || null : null,
+    batchNumber: isMilling ? batchNumber.trim() || null : null,
+    tmoNumber: isTestMilling ? tmoNumber.trim() || null : null,
+    trialNumber: isTestMilling ? trialNumber || null : null,
     isSynced: false,
     ...overrides,
   })
@@ -512,7 +630,7 @@ const SackFormBase = forwardRef(function SackFormBase(
         const available = getAvailablePieces(line.sackTypeId, line.condition)
         if (requested > available) {
           const code = sackTypeMap.get(line.sackTypeId)?.code ?? line.sackTypeId
-          toast.error(`Cannot issue ${fmtBags(requested)} ${code} (${line.condition}) - only ${fmtBags(available)} available`)
+          toast.error(`Cannot issue ${fmtBags(requested)} ${code} (${line.condition}) - this warehouse only physically has ${fmtBags(available)} in stock (not an SIA balance limit)`)
           return false
         }
       }
@@ -544,10 +662,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     await db.authorities.update(authority.authId, { sackLines: updatedLines })
   }
 
-  const handleSave = async () => {
-    const ok = await validateForm()
-    if (!ok) return
-
+  const performSave = async (trial3Confirmed) => {
     setIsSaving(true)
 
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
@@ -563,12 +678,59 @@ const SackFormBase = forwardRef(function SackFormBase(
       await adjustSiaBalance(linkedDocNo.trim(), buildLineDeltas(sackLines, 1))
     }
 
+    if (trial3Confirmed) {
+      await db.millingOrders.where('orderId').equals(`TMO::${tmoNumber.trim()}`).modify({ trial3Confirmed: true })
+
+      const trialTx = await db.transactions
+        .where('tmoNumber').equals(tmoNumber.trim())
+        .and((t) => t.type === 'ESR' && t.status === 'Active')
+        .toArray()
+      const recoveredTrials = new Set(
+        trialTx.filter((t) => (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0) > 0).map((t) => t.trialNumber)
+      )
+      if (['1', '2', '3'].every((n) => recoveredTrials.has(n))) {
+        await markMillingOrderDone('TMO', tmoNumber.trim())
+      }
+    }
+
+    if (type === 'ESR' && isMilling && moNumber.trim()) {
+      const order = await db.millingOrders.where('orderId').equals(`MO::${moNumber.trim()}`).first()
+      if (order?.recoveryPercent != null) {
+        const moTx = await db.transactions
+          .where('moNumber').equals(moNumber.trim())
+          .and((t) => t.status === 'Active')
+          .toArray()
+        const sumPieces = (t) => (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
+        const issuedPieces = moTx.filter((t) => t.type === 'ESI').reduce((s, t) => s + sumPieces(t), 0)
+        const receivedPieces = moTx.filter((t) => t.type === 'ESR').reduce((s, t) => s + sumPieces(t), 0)
+        const expectedPieces = issuedPieces * (order.recoveryPercent / 100)
+        if (expectedPieces > 0 && receivedPieces >= expectedPieces) {
+          await markMillingOrderDone('MO', moNumber.trim())
+        }
+      }
+    }
+
     toast.success(`${type} saved — ${serialNo.trim()}`)
 
     const next = stepSerial(serialNo.trim(), 1)
     resetToBlankEntry(next)
     setIsSaving(false)
     scrollToCustomerName()
+  }
+
+  const handleSave = async () => {
+    const ok = await validateForm()
+    if (!ok) return
+
+    if (type === 'ESR' && isTestMilling && trialNumber === '3') {
+      const totalPieces = sackLines.reduce((s, l) => s + (parseFormattedNumber(l.pieces) || 0), 0)
+      if (totalPieces > 0) {
+        setPendingTrial3Confirm(true)
+        return
+      }
+    }
+
+    await performSave(false)
   }
 
   const handleUpdate = async () => {
@@ -774,13 +936,7 @@ const SackFormBase = forwardRef(function SackFormBase(
           <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              onClick={(e) => e.currentTarget.showPicker?.()}
-              className={`${inputClass} cursor-pointer`}
-            />
+            <CalendarDatePicker value={date} onChange={setDate} />
           </div>
 
           <div>
@@ -839,6 +995,113 @@ const SackFormBase = forwardRef(function SackFormBase(
               ))}
             </select>
           </div>
+
+          {isMilling && (() => {
+            const availableMoOrders = millingOrderOptions.filter((o) => !o.fulfilled || o.number === moNumber)
+            const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
+            const isDerived = type !== 'ESR'
+
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>MO Number</label>
+                  {isDerived ? (
+                    <input
+                      type="text"
+                      value={moNumber}
+                      readOnly
+                      disabled
+                      className={`${inputClass} bg-neutral-800 text-neutral-400`}
+                      placeholder="Select an SIA above first"
+                    />
+                  ) : (
+                    <select
+                      value={moNumber}
+                      onChange={(e) => {
+                        const nextNumber = e.target.value
+                        setMoNumber(nextNumber)
+                        const order = millingOrderOptions.find((o) => o.number === nextNumber)
+                        setBatchNumber(order?.batchCurrent != null ? String(order.batchCurrent) : '')
+                        if (order?.ricemillName) setCustomerName(order.ricemillName)
+                      }}
+                      className={`${inputClass} ${!moNumber.trim() ? '!border-brand-amber' : ''}`}
+                    >
+                      <option value="">Select…</option>
+                      {availableMoOrders.map((o) => (
+                        <option key={o.number} value={o.number}>{o.number} - {o.ricemillName}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Batch</label>
+                  <input
+                    type="text"
+                    value={selectedOrder ? `${selectedOrder.batchCurrent} of ${selectedOrder.batchTotal}` : ''}
+                    readOnly
+                    disabled
+                    className={`${inputClass} bg-neutral-800 text-neutral-400`}
+                    placeholder="Auto-filled from MO"
+                  />
+                </div>
+              </div>
+            )
+          })()}
+
+          {isTestMilling && (() => {
+            const availableTmoNumbers = millingOrderOptions.filter((o) => !o.fulfilled || o.number === tmoNumber)
+            const isDerived = type !== 'ESR'
+
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>TMO Number</label>
+                  {isDerived ? (
+                    <input
+                      type="text"
+                      value={tmoNumber}
+                      readOnly
+                      disabled
+                      className={`${inputClass} bg-neutral-800 text-neutral-400`}
+                      placeholder="Select an SIA above first"
+                    />
+                  ) : (
+                    <select
+                      value={tmoNumber}
+                      onChange={(e) => {
+                        const nextNumber = e.target.value
+                        setTmoNumber(nextNumber)
+                        setTrialNumber('')
+                        const order = millingOrderOptions.find((o) => o.number === nextNumber)
+                        if (order?.ricemillName) setCustomerName(order.ricemillName)
+                      }}
+                      className={`${inputClass} ${!tmoNumber.trim() ? '!border-brand-amber' : ''}`}
+                    >
+                      <option value="">Select…</option>
+                      {availableTmoNumbers.map((o) => (
+                        <option key={o.number} value={o.number}>{o.number} - {o.ricemillName}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Trial</label>
+                  <select
+                    value={trialNumber}
+                    onChange={(e) => setTrialNumber(e.target.value)}
+                    className={`${inputClass} ${!trialNumber ? '!border-brand-amber' : ''}`}
+                  >
+                    <option value="">Select…</option>
+                    {['1', '2', '3'].map((n) => (
+                      <option key={n} value={n} disabled={takenTrialNumbers.includes(n) && n !== trialNumber}>
+                        Trial {n}{takenTrialNumbers.includes(n) && n !== trialNumber ? ' (used)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )
+          })()}
 
           {unresolvedSiaHint && (
             <div className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
@@ -946,7 +1209,34 @@ const SackFormBase = forwardRef(function SackFormBase(
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-6">
+      {pendingTrial3Confirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+            <p className="text-base font-semibold text-app-text">Has Trial 3 been completed?</p>
+            <p className="mt-1 text-sm text-neutral-400">
+              This TMO can only be marked fulfilled once Trial 3 is confirmed complete. If not, this receipt still saves, but the TMO stays unfulfilled.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setPendingTrial3Confirm(false); performSave(false) }}
+                className="flex-1 rounded-xl border border-neutral-700 py-2.5 text-sm font-medium text-neutral-300"
+              >
+                Not Yet
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPendingTrial3Confirm(false); performSave(true) }}
+                className="flex-1 rounded-xl bg-brand-neon py-2.5 text-sm font-semibold text-brand-contrast"
+              >
+                Yes, Complete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         {isEditMode ? (
           <div className="flex gap-3">
             <button
