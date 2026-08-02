@@ -341,6 +341,17 @@ export const AGE_BUCKETS = {
     { label: '6.1-12 months', test: (d) => d > 180 && d <= 365 },
     { label: '>12 months', test: (d) => d > 365 },
   ],
+  // Previously missing entirely - CATEGORIES already included 'By
+  // Products' from an earlier session, but this table never got a
+  // matching entry, causing a crash (AGE_BUCKETS['By Products'] was
+  // undefined) once real By Products pile data existed to trigger
+  // this render path. Using the same brackets as Rice as a reasonable
+  // default - adjust if different age thresholds are wanted
+  // specifically for By Products.
+  'By Products': [
+    { label: '0-3 months', test: (d) => d <= 90 },
+    { label: '>3 months', test: (d) => d > 90 },
+  ],
 }
 
 // Formats an ISO date string (YYYY-MM-DD) as MMDDYY for use in exported

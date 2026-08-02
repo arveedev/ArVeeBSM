@@ -158,7 +158,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                     {province.code} — {province.name}
                   </p>
                   {CATEGORIES.map((cat) => {
-                    const buckets = AGE_BUCKETS[cat]
+                    const buckets = AGE_BUCKETS[cat] ?? AGE_BUCKETS.Rice
                     const hasData = provinceWarehouses.some((w) =>
                       enrichedPiles.some(
                         (p) => p.warehouseId === w.warehouseId && p.cerealType === cat

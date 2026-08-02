@@ -6906,3 +6906,65 @@ three wrapped components. If it happens in a DIFFERENT component not
 wrapped, or the boundary itself doesn't catch it (error boundaries
 don't catch errors in event handlers, async code, or the boundary's
 own render), the next console log will be essential for a real fix.
+
+## CRASH ROOT CAUSE FOUND AND FIXED WITH CERTAINTY (not a guess this time)
+
+The previous response's error boundary didn't help because the crash
+happens in AdminHomeStocks.jsx's OWN render, not inside one of the
+three components that got wrapped - error boundaries only catch
+errors in their children, and AdminHomeStocks wasn't one of them.
+
+Used source-map-js (already available in node_modules) to actually
+translate the reported minified stack trace coordinates back to
+source, rather than guessing. Both the user's deployed build and a
+fresh local build landed on the exact same line number (435) in the
+output bundle - strong enough alignment to translate with confidence.
+Traced to AdminHomeStocks.jsx's "Stock Age Grouping" section:
+`const buckets = AGE_BUCKETS[cat]` followed immediately by
+`buckets.map(...)`.
+
+ROOT CAUSE: CATEGORIES already included 'By Products' (from an
+earlier session, unrelated to this one), but AGE_BUCKETS (in
+calculations.js) was NEVER given a matching 'By Products' entry - only
+Rice and Palay existed. This has been a LATENT bug for a while - it
+only crashes once an admin's actual data includes a By Products pile,
+triggering the render path that indexes AGE_BUCKETS by that category
+and gets undefined back. HomeStocks.jsx (the non-admin version)
+already had a defensive `?? AGE_BUCKETS.Rice` fallback for exactly
+this scenario; AdminHomeStocks.jsx never did.
+
+Fixed both the actual gap (added a 'By Products' entry to
+AGE_BUCKETS, using Rice's bracket structure as a reasonable default -
+flagged for the user to adjust if different age thresholds are wanted
+specifically for By Products) and added the same defensive fallback
+AdminHomeStocks.jsx was missing, so this exact category of bug
+(a category present in one list but missing from another) can't
+recur even if a future category gets added incompletely again.
+
+## 422 sync errors - PARTIALLY addressed, honestly flagged as likely incomplete
+
+The earlier unsyncedTables fix (excluding the 3 new tables) is
+confirmed still in place and did not fully resolve this - the error
+persisted in the user's latest report. Reconsidered: transactions,
+warehouses, and authorities all gained NEW FIELDS this session
+(moNumber/tmoNumber/batchNumber/trialNumber, facilityType,
+regionalAuthorityNumber) - these tables are NOT excluded from sync
+(correctly - they need to sync), but Dexie Cloud's server-side schema
+may be validating field-level structure too, not just recognizing
+table names. This can't be fixed from application code alone if so -
+it would need either a Dexie Cloud CLI schema push or dashboard-side
+configuration, neither of which is accessible from this environment.
+
+Also re-confirmed via handoff.md that production Dexie Cloud
+deployment (Vercel env vars scoped to Production, domain whitelisting)
+was ALREADY flagged as not-yet-done BEFORE this session started - if
+the user is testing against a real deployed environment rather than
+local dev, this pre-existing gap could also be contributing to or
+entirely explaining the 422s independently of the schema question
+above. Not something resolved this entry - flagged clearly rather than
+claimed fixed.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 88 test cases
+across 14 suites, all passing.
