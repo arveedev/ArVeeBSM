@@ -7237,3 +7237,53 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 88 test cases
 across 14 suites, all passing.
+
+## AdminHomeStocks card redesigned: separate Rice/Palay totals, By Products removed, units made explicit
+
+Per explicit request:
+- Removed the row-level Total column (Rice + Palay + By Products
+  summed together didn't make operational sense as a single number).
+- Removed By Products from this card entirely - only Rice and Palay
+  shown, per province.
+- Replaced the single combined "Branch Total (Rice + Palay)" with two
+  genuinely separate totals - Branch Total Rice and Branch Total
+  Palay, tracked and displayed independently.
+- Made the unit explicit directly in each column/total header (e.g.
+  "Rice (bags)" or "Rice (MT)"), not just relying on the section
+  title - confirmed the underlying value is always net BAGS (a 50kg
+  bag count), converted to metric tons for display only when the
+  user's weight unit setting is 'mt', per the existing fmt() helper.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 88 test cases
+across 14 suites, all passing.
+
+## Investigated "no amber message, no Milling monitor at all" - identified the most likely explanation, needs user confirmation
+
+Re-confirmed with certainty: the entire Milling/Test Milling UI
+section in the transaction forms - including the new diagnostic
+message - is gated behind isMilling, which is only ever true once the
+user has actually SELECTED "Milling" as the Nature of Transaction on
+the form. This requires "Milling" and "Test Milling" to exist as
+actual records in db.transactionTypes - something the app has never
+auto-created, and was flagged as an explicit dependency from the very
+first turn this feature was built ("Milling"/"Test Milling" as actual
+transactionTypes records need to be added via the existing
+TransactionTypesPanel by the user"). If these were never actually
+added via Admin > Transaction Types, the user could never select
+"Milling" in the first place, meaning the ENTIRE section - the picker,
+the diagnostic, everything - would never render at all, regardless of
+how correct the underlying code is. This is the single simplest
+explanation that accounts for "no amber message for anything" exactly
+as reported, and needs direct confirmation from the user before
+investigating anything further on the code side.
+
+Separately, "no Milling Operations monitor on Home, even for admin/
+visitor" continues to be most consistent with db.millingOrders being
+empty - i.e. the Apps Script redeploy gap flagged multiple times
+already. These are two DIFFERENT possible root causes for two
+DIFFERENT symptoms, not necessarily the same issue - both need direct
+verification from the user's actual environment before further code
+changes, since nothing further can be diagnosed from static code
+review alone at this point.

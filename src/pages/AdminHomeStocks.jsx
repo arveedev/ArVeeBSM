@@ -50,8 +50,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             <thead>
               <tr className="border-b border-neutral-800">
                 <Th>Province</Th>
-                {CATEGORIES.map((c) => <Th key={c} right>{c}</Th>)}
-                <Th right>Total</Th>
+                <Th right>Rice ({weightUnit === 'mt' ? 'MT' : 'bags'})</Th>
+                <Th right>Palay ({weightUnit === 'mt' ? 'MT' : 'bags'})</Th>
               </tr>
             </thead>
             <tbody>
@@ -62,19 +62,16 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                     .map((w) => w.warehouseId)
                 )
                 const pp = enrichedPiles.filter((p) => wIds.has(p.warehouseId))
-                const catTotals = Object.fromEntries(
-                  CATEGORIES.map((c) => [c, pp.filter((p) => p.cerealType === c)
-                    .reduce((s, p) => s + p.netBags, 0)])
-                )
-                const total = Object.values(catTotals).reduce((a, b) => a + b, 0)
+                const riceTotal = pp.filter((p) => p.cerealType === 'Rice').reduce((s, p) => s + p.netBags, 0)
+                const palayTotal = pp.filter((p) => p.cerealType === 'Palay').reduce((s, p) => s + p.netBags, 0)
                 return (
                   <tr key={province.provinceId} className="border-b border-neutral-800/50">
                     <Td>
                       <span className="font-medium text-app-text">{province.code}</span>
                       <span className="ml-1 text-xs text-neutral-500">{province.name}</span>
                     </Td>
-                    {CATEGORIES.map((c) => <Td key={c} right>{fmt(catTotals[c])}</Td>)}
-                    <Td right><span className="font-semibold text-brand-neon">{fmt(total)}</span></Td>
+                    <Td right>{fmt(riceTotal)}</Td>
+                    <Td right>{fmt(palayTotal)}</Td>
                   </tr>
                 )
               })}
@@ -82,17 +79,25 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           </table>
         )}
         {sortedProvinces.length > 0 && (() => {
-          // Branch total: Rice + Palay only, explicitly excluding By
-          // Products - the same pattern already used for cerealType
-          // filtering, just summed across every province at once
-          // rather than one province at a time.
-          const branchTotal = enrichedPiles
-            .filter((p) => p.cerealType === 'Rice' || p.cerealType === 'Palay')
-            .reduce((s, p) => s + p.netBags, 0)
+          // Two genuinely separate totals - Rice and Palay tracked
+          // independently, not combined into one meaningless
+          // cross-category sum.
+          const riceBranchTotal = enrichedPiles.filter((p) => p.cerealType === 'Rice').reduce((s, p) => s + p.netBags, 0)
+          const palayBranchTotal = enrichedPiles.filter((p) => p.cerealType === 'Palay').reduce((s, p) => s + p.netBags, 0)
           return (
-            <div className="mt-2 flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Branch Total (Rice + Palay)</span>
-              <span className="text-sm font-bold text-brand-neon">{fmt(branchTotal)}</span>
+            <div className="mt-2 space-y-1.5">
+              <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Branch Total — Rice ({weightUnit === 'mt' ? 'MT' : 'bags'})
+                </span>
+                <span className="text-sm font-bold text-brand-neon">{fmt(riceBranchTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Branch Total — Palay ({weightUnit === 'mt' ? 'MT' : 'bags'})
+                </span>
+                <span className="text-sm font-bold text-brand-neon">{fmt(palayBranchTotal)}</span>
+              </div>
             </div>
           )
         })()}
