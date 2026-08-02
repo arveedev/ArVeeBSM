@@ -1702,6 +1702,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
                       {availableMoOrders.map((o) => (
                         <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
                       ))}
+                      {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
+                        // The loaded MO no longer exists in the synced
+                        // cache (most commonly: already marked DONE and
+                        // cleaned up) - without this fallback option,
+                        // the select has nothing to match moNumber
+                        // against and silently displays blank.
+                        <option value={moNumber}>{stripMoTmoPrefix(moNumber)} (historical)</option>
+                      )}
                     </select>
                   )}
                 </div>
@@ -1772,6 +1780,9 @@ function StockFormBase({ type, title, onClose, prefill }) {
                       {availableTmoNumbers.map((o) => (
                         <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
                       ))}
+                      {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
+                        <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>
+                      )}
                     </select>
                   )}
                 </div>

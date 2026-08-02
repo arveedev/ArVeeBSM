@@ -7482,3 +7482,51 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 106 test cases
 across 16 suites, all passing.
+
+## MO/TMO not showing correctly on edit for the RECEIPT side (WSR/ESR) - found and fixed
+
+User reported the MO/TMO number still doesn't load right. Reconsidered
+beyond the earlier loadedTransaction fix: for the RECEIPT side
+(WSR/ESR), the MO/TMO Number field is a <select> dropdown, not a
+read-only display - and a <select>'s value can only display correctly
+if a matching <option> actually exists. The dropdown's option list
+comes from millingOrderOptions, sourced from the local sync cache
+(db.millingOrders) - a completed MO/TMO gets fully removed from that
+cache once marked DONE. So editing an older, already-completed
+Milling receipt transaction meant: the underlying moNumber/tmoNumber
+state WAS correctly loaded (per the earlier fix), but the dropdown had
+no matching option to display it against, and silently showed blank
+regardless.
+
+Fixed by synthesizing a fallback "(historical)" option whenever the
+loaded moNumber/tmoNumber has no match among the currently-synced
+options - display-only, doesn't add anything to millingOrderOptions
+itself. Applied to all 4 dropdowns (MO and TMO, in both
+StockFormBase.jsx and SackFormBase.jsx).
+
+While fixing this, also found SackFormBase.jsx's dropdowns and
+read-only inputs had never actually received the stripMoTmoPrefix
+treatment from an earlier fix - only StockFormBase.jsx had it. Fixed
+all 4 locations there too (2 read-only inputs, 2 dropdown option
+lists).
+
+## Apps Script row-4 fix - re-verified correct, likely a redeploy timing issue
+
+Re-audited the entire Apps Script file for every place that reads
+sheet data with a row offset (searched for slice(1)/slice(3) and
+manual loop start indices). Confirmed fetchMillingOrders and
+markMillingOrderDone both correctly use the row-4 offset (slice(3) /
+loop starting at index 3) with no remaining reference to the unsliced
+array anywhere in either function. Given the code is confirmed
+correct on review, if the header row is still appearing, the most
+likely explanation is the redeploy from this exact fix (added in the
+immediately preceding turn) hasn't actually been picked up yet -
+flagged this directly to the user rather than guessing at a further
+code change with no evidence of an actual remaining bug.
+
+Verified with a 3-case test for the fallback-option logic.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 109 test cases
+across 17 suites, all passing.

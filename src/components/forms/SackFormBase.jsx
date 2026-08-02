@@ -1041,7 +1041,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                   {isDerived ? (
                     <input
                       type="text"
-                      value={moNumber}
+                      value={stripMoTmoPrefix(moNumber)}
                       readOnly
                       disabled
                       className={`${inputClass} bg-neutral-800 text-neutral-400`}
@@ -1061,8 +1061,11 @@ const SackFormBase = forwardRef(function SackFormBase(
                     >
                       <option value="">Select…</option>
                       {availableMoOrders.map((o) => (
-                        <option key={o.number} value={o.number}>{o.number} - {o.ricemillName}</option>
+                        <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
                       ))}
+                      {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
+                        <option value={moNumber}>{stripMoTmoPrefix(moNumber)} (historical)</option>
+                      )}
                     </select>
                   )}
                 </div>
@@ -1111,7 +1114,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                   {isDerived ? (
                     <input
                       type="text"
-                      value={tmoNumber}
+                      value={stripMoTmoPrefix(tmoNumber)}
                       readOnly
                       disabled
                       className={`${inputClass} bg-neutral-800 text-neutral-400`}
@@ -1131,8 +1134,11 @@ const SackFormBase = forwardRef(function SackFormBase(
                     >
                       <option value="">Select…</option>
                       {availableTmoNumbers.map((o) => (
-                        <option key={o.number} value={o.number}>{o.number} - {o.ricemillName}</option>
+                        <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
                       ))}
+                      {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
+                        <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>
+                      )}
                     </select>
                   )}
                 </div>
