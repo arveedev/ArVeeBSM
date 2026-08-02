@@ -659,17 +659,18 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   useEffect(() => {
     if (prefill?.pileId) return // an explicit pileId already takes priority
+    const prefillOrNumber = prefill?.orNumber != null ? String(prefill.orNumber).trim() : ''
     if (
-      !prefill?.orNumber?.trim()
+      !prefillOrNumber
       || (prefill?.transactionTypeName !== 'Milling' && prefill?.transactionTypeName !== 'Test Milling')
     ) return
-    if (appliedPileFromOrNumberRef.current === prefill.orNumber) return
+    if (appliedPileFromOrNumberRef.current === prefillOrNumber) return
     const matchedPile = (piles ?? []).find(
-      (p) => p.pileName.trim().toLowerCase() === prefill.orNumber.trim().toLowerCase()
+      (p) => p.pileName.trim().toLowerCase() === prefillOrNumber.toLowerCase()
     )
     if (!matchedPile) return // piles still loading - retries once it arrives
     setPileId(matchedPile.pileId)
-    appliedPileFromOrNumberRef.current = prefill.orNumber
+    appliedPileFromOrNumberRef.current = prefillOrNumber
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill?.orNumber, prefill?.transactionTypeName, prefill?.pileId, piles])
 
@@ -837,12 +838,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // "Pile 2B") rather than an actual OR number - this is where the
     // app should READ that pile assignment from and auto-select it,
     // not a misplaced field to relocate.
+    const authorityOrNumber = authority.orNumber != null ? String(authority.orNumber).trim() : ''
     if (
       (authority.transactionTypeName === 'Milling' || authority.transactionTypeName === 'Test Milling')
-      && authority.orNumber?.trim()
+      && authorityOrNumber
     ) {
       const matchedPile = (piles ?? []).find(
-        (p) => p.pileName.trim().toLowerCase() === authority.orNumber.trim().toLowerCase()
+        (p) => p.pileName.trim().toLowerCase() === authorityOrNumber.toLowerCase()
       )
       if (matchedPile) setPileId(matchedPile.pileId)
     }

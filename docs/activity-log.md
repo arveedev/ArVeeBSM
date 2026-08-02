@@ -7160,3 +7160,45 @@ the user meant - needs clarification before building anything, since
 AdminMonitoring.jsx doesn't currently have transaction-creation
 capability at all and would need more than a small fix if that's what
 was meant.
+
+## CRITICAL: By Products authority crash - number-vs-string type mismatch from Google Sheets
+
+Same source-map technique. Traced "me.trim is not a function" to
+StockFormBase.jsx's orNumber-to-pile lookup logic (item #11's fix).
+
+ROOT CAUSE: Google Sheets/Apps Script returns a cell's value typed
+according to its content - a purely numeric OR# (e.g. "12345") comes
+back as a JavaScript number, not a string, when read via
+sheet.getDataRange().getValues(). .trim() only exists on strings, so
+any authority whose OR# happened to be purely numeric crashed
+immediately when its orNumber field was used for the Milling/Test
+Milling pile lookup. This apparently correlated with By Products
+authorities in the user's actual sheet, though the underlying cause
+is really about the OR# value's content, not the cereal category
+itself.
+
+Fixed at both the consumption side and the source, for defense in
+depth:
+- StockFormBase.jsx: normalized to String(...).trim() with a null
+  guard in both places orNumber gets used for pile lookup (the
+  prefill-based async effect, and handleSelectAuthority's synchronous
+  version).
+- googleSheetsBridge.js: normalized orNumber to a string at the sync
+  source too (String(row['OR No.']).trim() || null), so this same bug
+  class can't recur at any future consumption point, not just the
+  ones fixed today.
+
+Audited every other similarly Sheet-sourced field for the same risk:
+regionalAuthorityNumber (already correctly wrapped in String() at the
+Apps Script level when originally built) and every field in the
+MO/TMO fetchMillingOrders action (also already correctly wrapped) were
+both already safe - this bug was isolated specifically to orNumber in
+the AI/SIA fetchAuthorities action, which was missed at the time it
+was built since it relied on sheetToObjects' generic header-based
+parsing rather than the same explicit String() wrapping used
+elsewhere.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 88 test cases
+across 14 suites, all passing.

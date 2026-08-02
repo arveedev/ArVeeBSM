@@ -438,7 +438,7 @@ export const syncAuthoritiesFromSheets = async () => {
           totalAllocationBags: toNumberOrNull(row['BAG']),
           totalAllocationKilos: toNumberOrNull(row['NET KG']),
           remarks: row['REMARKS'] ?? null,
-          orNumber: row['OR No.'] ?? null,
+          orNumber: row['OR No.'] != null ? String(row['OR No.']).trim() || null : null,
           ageGroup: row['Note3'] ?? null, // sheet column repurposed for age group, AI only
           note1: row['Note1'] ?? null,
           note2: row['Note2'] ?? null,
