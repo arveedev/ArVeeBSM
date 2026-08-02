@@ -41,7 +41,7 @@ import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFro
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion } from '../../services/syncWorker.js'
-import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO } from '../../utils/calculations.js'
+import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName } from '../../utils/calculations.js'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
@@ -145,8 +145,8 @@ const SackFormBase = forwardRef(function SackFormBase(
   // sits even earlier in the file.)
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
   const selectedTransactionType = (transactionTypes ?? []).find((t) => t.transactionTypeId === transactionTypeId)
-  const isMilling = selectedTransactionType?.name === 'Milling'
-  const isTestMilling = selectedTransactionType?.name === 'Test Milling'
+  const isMilling = isMillingTypeName(selectedTransactionType?.name)
+  const isTestMilling = isTestMillingTypeName(selectedTransactionType?.name)
 
   // Which trial numbers (1/2/3) already exist for this TMO, across
   // EVERY warehouse, tracked independently per document type (ESI vs

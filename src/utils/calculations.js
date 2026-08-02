@@ -255,6 +255,27 @@ export const getPalayMoistureState = (varietyCode, cerealType) => {
   return null
 }
 
+/**
+ * Matches a transaction type name against every recognized Milling
+ * variant, case-insensitively - "MILLING", "Milling", "REMILLING" all
+ * count. Confirmed: Remilling works exactly the same as Milling, just
+ * a different name for the same operation.
+ */
+export const isMillingTypeName = (name) => {
+  if (!name) return false
+  const normalized = name.trim().toUpperCase()
+  return normalized === 'MILLING' || normalized === 'REMILLING'
+}
+
+/**
+ * Same as isMillingTypeName, for Test Milling / Test Re-Milling.
+ */
+export const isTestMillingTypeName = (name) => {
+  if (!name) return false
+  const normalized = name.trim().toUpperCase()
+  return normalized === 'TEST MILLING' || normalized === 'TEST RE-MILLING'
+}
+
 // Home, Admin Home, Reports, and exported PDFs.
 
 /** Formats a whole-number bag/piece count with comma separators. 7581 → "7,581" */

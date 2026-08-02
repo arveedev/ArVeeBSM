@@ -61,8 +61,18 @@ function PilesBeginningBalances({ warehouseId }) {
     setEditingPileId(pile.pileId)
     setBags(liveFormatNumber(String(seed?.numberOfBags ?? 0)))
     setKilos(liveFormatNumber(String(seed?.netKilos ?? 0), 3))
-    setAge(liveFormatNumber(String(pile.initialAgeValue ?? 0)))
-    setAgeUnit('Days')
+    // The app only stores the normalized days value, not which unit it
+    // was originally entered in - previously this always hardcoded
+    // 'Days' regardless, meaning a pile entered in Months would show
+    // back as a large Days number every time it was re-edited. This
+    // heuristic guesses Months when the value divides evenly by 30
+    // (the exact conversion ratio used elsewhere), which is by far the
+    // most likely case for anything actually entered in Months.
+    const storedDays = pile.initialAgeValue ?? 0
+    setAgeUnit(storedDays > 0 && storedDays % 30 === 0 ? 'Months' : 'Days')
+    setAge(liveFormatNumber(String(
+      storedDays > 0 && storedDays % 30 === 0 ? storedDays / 30 : storedDays
+    )))
     setAsOfDate(seed?.date ?? pile.dateOfReceipt ?? todayLocalISO())
   }
 

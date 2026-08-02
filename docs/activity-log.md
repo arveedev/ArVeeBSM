@@ -7287,3 +7287,75 @@ DIFFERENT symptoms, not necessarily the same issue - both need direct
 verification from the user's actual environment before further code
 changes, since nothing further can be diagnosed from static code
 review alone at this point.
+
+## THE ACTUAL ROOT CAUSE of the whole Milling feature not working, found and fixed
+
+User confirmed: the transaction type is literally "MILLING" (all
+caps), plus "TEST MILLING", "REMILLING", and "TEST RE-MILLING", none
+of which the code recognized. Every isMilling/isTestMilling check
+across this whole feature did an exact-case comparison against
+'Milling'/'Test Milling' specifically - meaning NOTHING in this
+entire feature (the picker, the diagnostic message, the monitor
+visibility trigger) could have ever worked for this user's actual
+data, regardless of how correct the rest of the logic was. This
+explains "no amber message for anything" completely and precisely -
+isMilling was never once true, so the entire section (diagnostic
+included) never rendered at all.
+
+Built shared, case-insensitive matchers (isMillingTypeName,
+isTestMillingTypeName in calculations.js) recognizing MILLING/
+REMILLING and TEST MILLING/TEST RE-MILLING - confirmed by the user
+that Remilling and Test Re-Milling work identically to Milling/Test
+Milling, just different names for the same operation. Replaced every
+exact-case comparison across StockFormBase.jsx and SackFormBase.jsx
+(the transaction-type derivation, the prefill-path check, and
+handleSelectAuthority's check) with these shared matchers. Removed
+the now-unused, misleadingly-exact-case MILLING_TYPE_NAME/
+TEST_MILLING_TYPE_NAME constants.
+
+## AdminHomeStocks card - Net Bags label clarity, Rice/Palay color convention
+
+Per explicit request: changed "bags" to "Net Bags" throughout (both
+column headers and branch totals) - "bags" alone was still ambiguous.
+Applied the established Rice=blue/Palay=green color convention to
+this card's values, which had never been applied here before (both
+were showing in the same green regardless of category) - table cells
+and branch totals both now correctly color-coded per category.
+
+## Beginning Balances - age unit reset bug found and fixed, "As of" date picker not conclusively diagnosed
+
+Found a real, confirmed bug: handleEdit in
+BeginningBalancesPanel.jsx's Piles section hardcoded setAgeUnit('Days')
+unconditionally every time a pile's edit form loaded - meaning a pile
+originally entered in Months would always show back as a large Days
+number on every subsequent edit, matching the reported "it just
+always goes to days" exactly. The app only stores the normalized days
+value, not which unit was originally used, so there's no way to know
+for certain - fixed with a heuristic: if the stored value divides
+evenly by 30, default the edit form to Months (converting the display
+value accordingly); otherwise default to Days. This is the most likely
+correct guess for anything genuinely entered in Months, without
+requiring a new field to explicitly track the original unit.
+
+The "As of" date picker issue could NOT be conclusively diagnosed
+through static code review - the wiring (state, CalendarDatePicker
+component usage, save logic all correctly using asOfDate) all looks
+structurally correct, and CalendarDatePicker itself already uses a
+portal specifically to avoid the exact class of rendering bug (CSS
+transform ancestors) that caused a similar issue elsewhere in this app
+previously. Flagged as needing more specific detail from the user
+(does tapping it do nothing at all, does a calendar appear but not
+respond to taps, etc.) before further changes can be made with
+confidence, rather than guessing again.
+
+Verified with a 13-case test: 8 confirming the Milling type name
+matcher (including the exact "MILLING" all-caps case, REMILLING,
+whitespace tolerance, and correctly non-matching unrelated names), 5
+confirming the age-unit heuristic (including the 0-days edge case,
+where the heuristic correctly does NOT default to Months despite 0
+being technically divisible by 30).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 101 test cases
+across 15 suites, all passing.

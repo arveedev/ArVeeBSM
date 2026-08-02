@@ -58,6 +58,8 @@ import {
   fmtWeight,
   fmtBags,
   todayLocalISO,
+  isMillingTypeName,
+  isTestMillingTypeName,
 } from '../../utils/calculations.js'
 import {
   suggestNextSerial,
@@ -94,8 +96,6 @@ const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 const GENDERS = ['Male', 'Female']
 const PROCUREMENT_TYPE_NAME = 'Procurement'
 const SALES_TYPE_NAME = 'Sales'
-const MILLING_TYPE_NAME = 'Milling'
-const TEST_MILLING_TYPE_NAME = 'Test Milling'
 const NEW_PILE_OPTION = '__new_pile__'
 
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
@@ -237,8 +237,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const selectedTransactionType = (transactionTypes ?? []).find(
     (t) => t.transactionTypeId === transactionTypeId
   )
-  const isMilling = selectedTransactionType?.name === MILLING_TYPE_NAME
-  const isTestMilling = selectedTransactionType?.name === TEST_MILLING_TYPE_NAME
+  const isMilling = isMillingTypeName(selectedTransactionType?.name)
+  const isTestMilling = isTestMillingTypeName(selectedTransactionType?.name)
 
   const linkedMillingOrder = useLiveQuery(async () => {
     if (type === 'WSR' || !linkedAuthority?.aiNumber) return null
@@ -662,7 +662,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     const prefillOrNumber = prefill?.orNumber != null ? String(prefill.orNumber).trim() : ''
     if (
       !prefillOrNumber
-      || (prefill?.transactionTypeName !== 'Milling' && prefill?.transactionTypeName !== 'Test Milling')
+      || (!isMillingTypeName(prefill?.transactionTypeName) && !isTestMillingTypeName(prefill?.transactionTypeName))
     ) return
     if (appliedPileFromOrNumberRef.current === prefillOrNumber) return
     const matchedPile = (piles ?? []).find(
@@ -840,7 +840,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // not a misplaced field to relocate.
     const authorityOrNumber = authority.orNumber != null ? String(authority.orNumber).trim() : ''
     if (
-      (authority.transactionTypeName === 'Milling' || authority.transactionTypeName === 'Test Milling')
+      (isMillingTypeName(authority.transactionTypeName) || isTestMillingTypeName(authority.transactionTypeName))
       && authorityOrNumber
     ) {
       const matchedPile = (piles ?? []).find(

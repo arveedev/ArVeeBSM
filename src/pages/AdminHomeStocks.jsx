@@ -50,8 +50,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             <thead>
               <tr className="border-b border-neutral-800">
                 <Th>Province</Th>
-                <Th right>Rice ({weightUnit === 'mt' ? 'MT' : 'bags'})</Th>
-                <Th right>Palay ({weightUnit === 'mt' ? 'MT' : 'bags'})</Th>
+                <Th right>Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})</Th>
+                <Th right>Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})</Th>
               </tr>
             </thead>
             <tbody>
@@ -70,8 +70,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       <span className="font-medium text-app-text">{province.code}</span>
                       <span className="ml-1 text-xs text-neutral-500">{province.name}</span>
                     </Td>
-                    <Td right>{fmt(riceTotal)}</Td>
-                    <Td right>{fmt(palayTotal)}</Td>
+                    <Td right><span className="text-blue-400">{fmt(riceTotal)}</span></Td>
+                    <Td right><span className="text-brand-neon">{fmt(palayTotal)}</span></Td>
                   </tr>
                 )
               })}
@@ -88,13 +88,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Branch Total — Rice ({weightUnit === 'mt' ? 'MT' : 'bags'})
+                  Branch Total — Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
-                <span className="text-sm font-bold text-brand-neon">{fmt(riceBranchTotal)}</span>
+                <span className="text-sm font-bold text-blue-400">{fmt(riceBranchTotal)}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Branch Total — Palay ({weightUnit === 'mt' ? 'MT' : 'bags'})
+                  Branch Total — Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
                 <span className="text-sm font-bold text-brand-neon">{fmt(palayBranchTotal)}</span>
               </div>
