@@ -8248,3 +8248,33 @@ is inherently async and not itself an Observable.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
+
+## jwt audience invalid persisting on ALL devices - added an automatic, one-time forced re-authentication
+
+User's on-screen diagnostic revealed the exact same "jwt audience
+invalid" error on all three devices (PC and both phones), despite the
+server-side log two entries ago confirming a token was genuinely
+issued with the CORRECT audience for the new database. This strongly
+points to Dexie Cloud's own internal auth state - separate from the
+app's regular IndexedDB tables - still holding onto something stale
+from before the database switch, in storage that a manual "clear site
+data" apparently didn't fully reach or resolve.
+
+Added an automatic, one-time db.cloud.logout() followed by a fresh
+db.cloud.login() on app startup, gated by a localStorage flag so it
+only runs once per device. logout() only discards Dexie Cloud's own
+internal auth state - confirmed via Dexie's own API docs this does not
+touch any actual app data (transactions, piles, users, anything) -
+making this a safe, low-risk fix to try rather than requiring another
+destructive full site-data clear.
+
+HONEST CAVEAT: could not find explicit documentation confirming this
+resolves the specific "stale cached token surviving a database URL
+change" scenario - this is a reasonable, low-risk fix attempt based on
+what logout() is documented to do, not a confirmed root-cause fix.
+Removed a speculative {force: true} parameter from the initial attempt
+after confirming Dexie's own docs don't document any such option.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).
