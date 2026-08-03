@@ -56,7 +56,23 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
         grant_type: 'client_credentials',
-        scopes: ['ACCESS_DB'],
+        // IMPERSONATE is REQUIRED to supply the claims property below -
+        // per Dexie Cloud's own documentation: "A client must be given
+        // the IMPERSONATE scope in order to supply claims property to
+        // this endpoint." This was previously missing entirely, which
+        // very likely meant claims.sub (the fixed shared identity every
+        // device is supposed to authenticate as) was being silently
+        // ignored - each device may have been getting its own separate,
+        // unlinked identity instead of genuinely sharing one, which
+        // would fully explain data only ever appearing on the device
+        // that created it. NOTE: this also requires the Dexie Cloud
+        // client_id/client_secret itself to have been GRANTED the
+        // IMPERSONATE scope at the account level (the default client
+        // has every scope; a custom client created via
+        // `npx dexie-cloud authorize` needs it explicitly included) -
+        // adding it to this request alone is not sufficient if the
+        // client itself was never granted it.
+        scopes: ['ACCESS_DB', 'IMPERSONATE'],
         public_key: publicKey,
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
@@ -77,6 +93,17 @@ export default async function handler(req, res) {
     }
 
     const tokenBody = await tokenResponse.json()
+    // Decode (not verify - just base64, no signing key needed here)
+    // the returned access token's actual sub claim, so this can be
+    // directly confirmed rather than assumed: every device's token
+    // should show the exact same value (SERVICE_ACCOUNT_SUB) if the
+    // shared-identity fix above is actually working.
+    try {
+      const payload = JSON.parse(Buffer.from(tokenBody.accessToken.split('.')[1], 'base64').toString('utf8'))
+      console.log('[dexie-cloud-tokens] Issued token sub claim:', payload.sub, '(expected:', SERVICE_ACCOUNT_SUB, ')')
+    } catch (decodeErr) {
+      console.log('[dexie-cloud-tokens] Could not decode token for logging:', decodeErr.message)
+    }
     console.log('[dexie-cloud-tokens] Success - returning token to client.')
     res.setHeader('Cache-Control', 'no-store')
     res.status(200).json(tokenBody)

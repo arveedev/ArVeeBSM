@@ -7983,3 +7983,62 @@ across 20 suites, all passing.
 - Authority selector on Completed list - not started
 - Date picker - re-verified extensively, no additional bug found;
   awaiting user confirmation on deployment freshness
+
+## CRITICAL: cross-device sync investigation - real finding made, honestly uncertain of full resolution
+
+User provided the clearest evidence yet of a severe, ongoing problem:
+transactions created on one device do not appear on other devices at
+all (only push to the backup sheet succeeds), meaning users could
+unknowingly re-create the same transaction on a different device,
+risking real duplicate data in both Dexie and the Sheet. User
+correctly distinguished this from Authorities/Milling Orders, which
+DO appear consistent across devices - but only because every device
+independently re-fetches the same external Google Sheet, not because
+of genuine Dexie Cloud peer sync. Transactions rely on actual Dexie
+Cloud sync between devices, which this evidence suggests is not
+working.
+
+Investigated the full authentication setup from scratch. Found a
+genuine discrepancy: Dexie Cloud's REST API documentation states "A
+client must be given the IMPERSONATE scope in order to supply claims
+property to this endpoint" - the token request supplies a claims.sub
+(the fixed identity every device is meant to share) but only requests
+scopes: ['ACCESS_DB'], never IMPERSONATE. Added IMPERSONATE to the
+request.
+
+HONEST CAVEAT: Dexie's own official db.cloud.configure() documentation
+example, and a real community service-account example, both use this
+exact same pattern (ACCESS_DB only + claims.sub) without IMPERSONATE
+and are presented as working - directly contradicting the REST API
+docs' stated requirement. Could not resolve this contradiction with
+certainty from documentation alone. The scope addition is being kept
+as a low-risk, plausible improvement, NOT presented as a confirmed
+fix.
+
+What WILL give a definitive, verifiable answer: added prominent
+decoded-token logging server-side (api/dexie-cloud-tokens.js - decodes
+the issued access token's actual sub claim) and made the existing
+client-side currentUser diagnostic far more prominent (a single,
+clearly-marked userId log line). Comparing this exact value across
+two different devices will directly confirm or rule out the shared-
+identity hypothesis - if they differ, that IS the root cause,
+confirmed rather than guessed at for the first time in this
+investigation.
+
+## STILL NOT DONE this entry, deferred given the message's massive combined scope:
+- WSR/ESR batch/trial selector redesign (select batch/trial instead
+  of MO/TMO directly, excluding completed ones per miller/AI match)
+- By Products variety/MC exemption on pile creation - investigated but
+  could not confirm the correct implementation without risking a wrong
+  guess given ambiguity in how the pile form's category/variety
+  selection is actually structured
+- Milling Operations detail modal redesign (recovery %, larger red
+  close button, sticky header, remove redundant miller name, document-
+  type-prefixed transaction numbers in white/larger text, grouped
+  transaction history by issue/receipt/by-products with per-group
+  totals)
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 133 test cases
+across 20 suites, all passing.

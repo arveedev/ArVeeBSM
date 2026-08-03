@@ -772,6 +772,14 @@ db.cloud.syncState.subscribe((state) => {
 })
 db.cloud.currentUser.subscribe((user) => {
   console.log('[DEXIE-CLOUD-DIAGNOSTIC] currentUser:', JSON.stringify(user))
+  // THE SINGLE MOST DIRECT CHECK for whether every device is sharing
+  // one identity (required for transactions to sync between devices
+  // at all) or each device has somehow ended up with its own separate
+  // one: compare this exact userId value across two different
+  // devices, side by side. If they differ, that IS the root cause of
+  // transactions only ever appearing on the device that created them
+  // - confirmed directly, without needing any server-side log access.
+  console.log('[DEXIE-CLOUD-DIAGNOSTIC] *** userId on THIS device:', user?.userId, '***')
 })
 
 // syncState.error above has repeatedly shown up as an empty {} object
