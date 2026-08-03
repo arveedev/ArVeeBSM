@@ -330,7 +330,16 @@ export const syncMillingOrdersFromSheets = async () => {
   syncInProgress = true
   try {
     let count = 0
-    const seenOrderIds = new Set()
+
+    // Clear entirely before repopulating, rather than diffing and
+    // removing only what's no longer seen - a full clear guarantees
+    // the table exactly matches what was just fetched, with no
+    // possibility of stale data surviving due to any mismatch in a
+    // comparison step. Actual transaction records are unaffected -
+    // they store the MO/TMO number directly, not a reference to this
+    // table, so historical data stays intact regardless of this
+    // table being fully rebuilt on every sync.
+    await db.millingOrders.clear()
 
     for (const source of sources) {
       const [moOrders, tmoOrders] = await Promise.all([
@@ -339,13 +348,9 @@ export const syncMillingOrdersFromSheets = async () => {
       ])
 
       for (const order of [...moOrders, ...tmoOrders]) {
-        // Keyed by (type + number) - re-syncing updates the existing
-        // record (e.g. a changed recovery %) rather than duplicating it.
-        // Confirmed: an MO/TMO number is always exactly one row - it
-        // never spans multiple rows. type+number is sufficient as the
-        // key.
+        // Keyed by (type + number) - confirmed an MO/TMO number is
+        // always exactly one row, so type+number is a sufficient key.
         const orderId = `${order.type}::${order.number}`
-        seenOrderIds.add(orderId)
         await db.millingOrders.put({
           orderId,
           type: order.type,
@@ -362,27 +367,14 @@ export const syncMillingOrdersFromSheets = async () => {
       }
     }
 
-    // Remove any previously-synced record no longer present in the
-    // fresh data - either marked DONE by the admin, or removed from
-    // the sheet entirely. Actual transaction records are unaffected -
-    // they store the MO/TMO number directly, not a reference to this
-    // table, so historical data stays intact regardless.
-    const allExisting = await db.millingOrders.toArray()
-    const staleIds = allExisting.filter((o) => !seenOrderIds.has(o.orderId)).map((o) => o.orderId)
-    if (staleIds.length > 0) {
-      await db.millingOrders.bulkDelete(staleIds)
-    }
-
     // Diagnostic - lets the user (or anyone reading the console)
     // directly confirm whether the Apps Script is still returning
     // header-row garbage as if it were real data. If a malformed-
     // looking "number" (e.g. containing header text) shows up here,
     // the fix has not actually been redeployed - this is a client
     // syncing exactly what the server sent, not a caching bug.
-    console.log(`[syncMillingOrdersFromSheets] synced ${count} record(s):`, [...seenOrderIds])
-    if (staleIds.length > 0) {
-      console.log(`[syncMillingOrdersFromSheets] removed ${staleIds.length} stale record(s):`, staleIds)
-    }
+    const syncedNumbers = await db.millingOrders.toCollection().primaryKeys()
+    console.log(`[syncMillingOrdersFromSheets] synced ${count} record(s):`, syncedNumbers)
 
     return { ok: true, count }
   } catch (error) {
@@ -624,6 +616,15 @@ const buildBackupRow = (transaction, context) => {
       'Batch No': transaction.batchNo ?? null,
       AGE: ageValue,
       'Age Unit': ageUnit,
+      'MO Number': transaction.moNumber ?? null,
+      'TMO Number': transaction.tmoNumber ?? null,
+      'Batch Number': transaction.batchNumber ?? null,
+      'Trial Number': transaction.trialNumber ?? null,
+      RSBSA: transaction.farmerRsbsa ?? null,
+      Gender: transaction.farmerGender ?? null,
+      'Farmer Organization Members': transaction.farmerCoops?.length
+        ? transaction.farmerCoops.map((m) => `${m.name} (${m.rsbsa || 'no RSBSA'}, ${m.gender || 'no gender'})`).join('; ')
+        : null,
     }
   }
 
@@ -644,6 +645,15 @@ const buildBackupRow = (transaction, context) => {
       'WSI #': transaction.serialNo,
       AGE: ageValue,
       'Age Unit': ageUnit,
+      'MO Number': transaction.moNumber ?? null,
+      'TMO Number': transaction.tmoNumber ?? null,
+      'Batch Number': transaction.batchNumber ?? null,
+      'Trial Number': transaction.trialNumber ?? null,
+      RSBSA: transaction.farmerRsbsa ?? null,
+      Gender: transaction.farmerGender ?? null,
+      'Farmer Organization Members': transaction.farmerCoops?.length
+        ? transaction.farmerCoops.map((m) => `${m.name} (${m.rsbsa || 'no RSBSA'}, ${m.gender || 'no gender'})`).join('; ')
+        : null,
     }
   }
 
@@ -661,6 +671,10 @@ const buildBackupRow = (transaction, context) => {
     Pieces: totalPieces,
     [transaction.type === 'ESR' ? 'ESI #' : 'SIA #']: transaction.linkedDocNo ?? null,
     [transaction.type === 'ESR' ? 'ESR#' : 'ESI#']: transaction.serialNo,
+    'MO Number': transaction.moNumber ?? null,
+    'TMO Number': transaction.tmoNumber ?? null,
+    'Batch Number': transaction.batchNumber ?? null,
+    'Trial Number': transaction.trialNumber ?? null,
   }
 }
 

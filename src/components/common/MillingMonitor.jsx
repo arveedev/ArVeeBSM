@@ -102,7 +102,7 @@ function MillingOrderDetail({ order, onClose }) {
             return (
               <li key={t.id} className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className={`font-semibold ${isIssue ? 'text-brand-crimson' : 'text-brand-neon'}`}>
+                  <span className={`font-semibold ${isIssue ? 'text-brand-neon' : 'text-brand-amber'}`}>
                     {isIssue ? 'Issued' : 'Received'} {isSack ? '(Sacks)' : '(Stock)'}
                     {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
                   </span>
@@ -247,16 +247,37 @@ function MillingMonitor() {
             No {showCompleted ? 'completed' : 'pending'} {topTab} operations.
           </p>
         )}
-        {filtered.map((o) => (
+        {filtered.map((o) => {
+          // Progress from issuance to expected receipt, based on
+          // recovery % - takes the max of stock (kilos) and sack
+          // (pieces) progress since either or both can apply to the
+          // same MO/TMO simultaneously. 0% until anything has been
+          // issued at all.
+          const expectedKilos = o.recoveryPercent != null ? o.issuedKilos * (o.recoveryPercent / 100) : null
+          const expectedPieces = o.recoveryPercent != null ? o.issuedPieces * (o.recoveryPercent / 100) : null
+          const kilosProgress = expectedKilos ? Math.min(100, (o.receivedKilos / expectedKilos) * 100) : null
+          const piecesProgress = expectedPieces ? Math.min(100, (o.receivedPieces / expectedPieces) * 100) : null
+          const progress = Math.max(kilosProgress ?? 0, piecesProgress ?? 0)
+          const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
+
+          return (
           <li key={o.orderId}>
             <button
               type="button"
               onClick={() => setSelectedOrder(o)}
               className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99]"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-app-text">{o.number}</p>
                 <p className="truncate text-xs text-neutral-500">{o.ricemillName}</p>
+                {hasIssuance && (
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+                    <div
+                      className={`h-full rounded-full transition-all ${o.fulfilled ? 'bg-brand-neon' : 'bg-brand-amber'}`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {!o.fulfilled && (o.issuedKilos > 0 || o.issuedPieces > 0) && (
@@ -266,7 +287,8 @@ function MillingMonitor() {
               </div>
             </button>
           </li>
-        ))}
+          )
+        })}
       </ul>
 
       {selectedOrder && <MillingOrderDetail order={selectedOrder} onClose={() => setSelectedOrder(null)} />}

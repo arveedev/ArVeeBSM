@@ -2126,16 +2126,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
           </div>
           </div>
 
-          <label className="flex items-center justify-center gap-2 py-1 text-base font-semibold text-brand-crimson">
-            <input
-              type="checkbox"
-              checked={isCancelled}
-              onChange={(e) => setPendingVoidAction(e.target.checked ? 'void' : 'unvoid')}
-              className="h-7 w-7 shrink-0 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
-            />
-            Cancelled
-          </label>
-
           {isProcurement && (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
               <div className="flex items-center justify-between gap-3">
@@ -2216,6 +2206,17 @@ function StockFormBase({ type, title, onClose, prefill }) {
               )}
             </div>
           )}
+
+          <label className="flex items-center justify-center gap-2 py-1 text-base font-semibold text-brand-crimson">
+            <input
+              type="checkbox"
+              checked={isCancelled}
+              onChange={(e) => setPendingVoidAction(e.target.checked ? 'void' : 'unvoid')}
+              className="h-7 w-7 shrink-0 rounded border-neutral-700 bg-neutral-950 text-brand-crimson accent-brand-crimson"
+            />
+            Cancelled
+          </label>
+
         </div>
       </div>
 

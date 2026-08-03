@@ -7707,3 +7707,58 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 115 test cases
 across 18 suites, all passing.
+
+## Farmer Organization moved above Cancelled, transaction history colors swapped, progress bars added
+
+Per explicit requests:
+- Moved the entire Farmer Organization block (toggle, member
+  management, RSBSA fields) to appear above the Cancelled checkbox
+  instead of below it.
+- Transaction history colors in MillingMonitor swapped - Issues now
+  green (text-brand-neon), Receipts now orange (text-brand-amber),
+  reversed from the previous red/green.
+- Added a progress bar to each Milling Operation row, computed from
+  received amount relative to expected (issued x recovery%), taking
+  the max of stock (kilos) and sack (pieces) progress since either or
+  both can apply to the same order. Amber while in progress, green
+  once fulfilled.
+
+## CRITICAL: found and fixed a broken sync function that would have thrown on every single run
+
+While investigating the persistent stale-data report, found
+syncMillingOrdersFromSheets was in a broken, half-migrated state -
+referencing seenOrderIds and staleIds variables that no longer existed
+after an earlier switch to a clear()-then-repopulate approach. This
+would have thrown a ReferenceError on every single sync attempt,
+caught only by the try/catch (logging the error, returning
+{ok: false}) - meaning MO/TMO sync had been silently failing outright,
+which fully explains why stale data could never have been cleaned up
+by ANY mechanism, diff-based or otherwise. Fixed the diagnostic
+logging to match the actual current clear()-based approach. Given the
+full-clear strategy already in place, this should now definitively
+resolve the stale-data issue once it can actually run successfully.
+
+## Backup sheets - added MO/TMO/Batch/Trial numbers and Procurement's RSBSA/Gender/Farmer Organization data
+
+Confirmed Age Unit was already being sent for WSR/WSI (from an earlier
+session) - the genuinely missing fields were MO Number, TMO Number,
+Batch Number, and Trial Number (added to all 4 transaction types:
+WSR, WSI, ESR, ESI, since Milling/Test Milling can apply to both stock
+and sacks), plus RSBSA, Gender, and Farmer Organization member details
+(added to WSR/WSI only - confirmed SackFormBase.jsx has no Procurement-
+specific fields at all, so Procurement is stock-only and this data
+doesn't apply to ESR/ESI). Farmer Organization members are formatted
+as a single readable string ("Name (RSBSA, Gender); Name2 (...)") for
+the backup sheet's flat-row format, rather than needing multiple
+columns per possible member. WTS was not touched - confirmed it has
+no Milling-related logic at all in its own form, so these fields
+don't apply there.
+
+Verified with a 6-case test covering the Farmer Organization
+formatting logic and confirming all 4 new fields are present on the
+backup row shape.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 121 test cases
+across 19 suites, all passing.
