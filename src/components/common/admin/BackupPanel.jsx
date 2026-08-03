@@ -11,8 +11,9 @@ import { primaryButtonClass } from './shared.js'
 // Every table currently defined in the local schema (see db/dexie.js).
 const ALL_TABLES = [
   'authorities', 'branches', 'customers', 'googleSheetsConfig',
-  'pendingSheetDeletions', 'pileLayoutBoxes', 'piles', 'provinces',
-  'reportConfig', 'sackInventory', 'sackTypes', 'serialCounters', 'settings',
+  'millingOrders', 'pendingSheetDeletions', 'pileLayoutBoxes', 'piles', 'provinces',
+  'privateMillerAllocations', 'reportConfig', 'ricemillAllocations',
+  'sackInventory', 'sackTypes', 'serialCounterCache', 'settings',
   'sheetSources', 'signatories', 'transactionTypes', 'transactions',
   'users', 'varietyTypes', 'warehouseAliases', 'warehouses',
 ]

@@ -8060,3 +8060,62 @@ rather than requiring remote debugging tools.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
+
+## CRITICAL: found the actual, confirmed root cause of ALL cross-device sync failure - not a guess, the exact server error message
+
+User's shared console log finally captured the real error, not just a
+bare 422 status:
+
+"HTTP 422 from https://z15dzktxq.dexie.cloud/sync: Illegal to change
+primary key. The key in question was in table serialCounters and is
+currently '[warehouseId+type]' but the import data wants to set it to
+'[warehouseId+type+cerealCategory]'"
+
+This is fully definitive, not speculation. serialCounters' primary key
+was changed (deleted in schema v24, recreated with a different key
+structure in v25, to support category-scoped serial counting). Dexie
+Cloud considers changing an already-registered table's primary key
+illegal, and was rejecting the ENTIRE sync request over this single
+mismatch, every single time, on every device - which is exactly why
+NOTHING ever actually reached other devices via Dexie Cloud sync
+(transactions included), despite transactions itself never having a
+schema problem of its own.
+
+Critically: this was NOT fixed by the earlier unsyncedTables exclusion
+of serialCounters, because unsyncedTables only excludes a table's DATA
+from being synced - Dexie Cloud still validates every table's SCHEMA
+on every single sync handshake regardless of whether its data is
+excluded. This explains why the 422 persisted across so many attempted
+fixes that were all correctly targeting DATA-level sync exclusions,
+none of which could have touched this SCHEMA-level validation problem.
+
+Also confirmed via the shared logs: the identity-sharing mechanism
+(IMPERSONATE scope, investigated last entry) IS working correctly -
+both PC and Android showed the identical userId
+"bsm-app-service@system.local" - that was never the problem, and this
+now closes that open question with certainty rather than leaving it
+unresolved.
+
+FIX: added schema v27, renaming serialCounters to serialCounterCache
+entirely (delete the old table, create the new one, migrate existing
+data across in the upgrade callback) - Dexie Cloud will see this as a
+genuinely new table it has never encountered before, not a changed
+existing one, so there is nothing left to conflict with. Updated
+every code reference (src/utils/serialNumber.js, unsyncedTables, and
+BackupPanel.jsx's table list) to the new name. Confirmed the two
+remaining references to the old name in dexie.js are both legitimate,
+correct historical version-upgrade callbacks that must never be
+changed (Dexie migrations are historical snapshots).
+
+While already in BackupPanel.jsx for the rename, also added
+millingOrders/ricemillAllocations/privateMillerAllocations to its
+table list - a separate, unrelated completeness gap noticed
+incidentally (these tables were added this session and had never been
+included in the backup/export feature's table list at all).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 133 test cases
+across 20 suites, all passing.
+
+## This should resolve the cross-device sync issue - genuinely high confidence this time, backed by the exact error message rather than inference

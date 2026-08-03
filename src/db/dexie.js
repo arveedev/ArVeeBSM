@@ -654,6 +654,30 @@ db.version(25).stores({
   serialCounters: '[warehouseId+type+cerealCategory], warehouseId, type',
 })
 
+// v27 - THE ACTUAL ROOT CAUSE of the long-standing 422 sync errors
+// that were blocking ALL cross-device sync (not just this table).
+// Even though serialCounters was already in unsyncedTables (excluded
+// from DATA sync), Dexie Cloud still validates every table's SCHEMA
+// on every sync request regardless of that exclusion - and this
+// table's primary key was changed (deleted in v24, recreated with a
+// different key in v25) somewhere in this history. Dexie Cloud
+// considers changing an already-registered table's primary key
+// illegal and was rejecting the entire sync request over it every
+// single time - which is why transactions (and everything else)
+// never actually reached other devices, despite transactions itself
+// never having a schema problem of its own. Renaming to a genuinely
+// new table name (serialCounterCache) sidesteps this permanently -
+// Dexie Cloud will see a brand new table it has never encountered
+// before, not a "changed" existing one, so there is nothing left to
+// conflict with.
+db.version(27).stores({
+  serialCounters: null,
+  serialCounterCache: '[warehouseId+type+cerealCategory], warehouseId, type',
+}).upgrade(async (tx) => {
+  const old = await tx.table('serialCounters').toArray()
+  if (old.length > 0) await tx.table('serialCounterCache').bulkAdd(old)
+})
+
 // v26 - Milling / Test Milling support.
 //
 // millingOrders: synced from a Sheet named "MO" (Milling) or "TMO"
@@ -720,7 +744,7 @@ db.cloud.configure({
   // correct regardless. ricemillAllocations/privateMillerAllocations
   // will NOT sync across devices until properly registered with the
   // Dexie Cloud schema - each device keeps its own local copy for now.
-  unsyncedTables: ['serialCounters', 'preloadState', 'millingOrders', 'ricemillAllocations', 'privateMillerAllocations'],
+  unsyncedTables: ['serialCounterCache', 'preloadState', 'millingOrders', 'ricemillAllocations', 'privateMillerAllocations'],
   // requireAuth MUST be false for an offline-first app. When true,
   // Dexie Cloud refuses to run ANY operation - including purely local
   // reads/writes that have nothing to do with syncing - until it has a

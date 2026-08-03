@@ -94,10 +94,10 @@ export const recordSerialUsed = async (type, warehouseId, serialNo, cerealCatego
   if (!parsed || !warehouseId) return
 
   const key = counterKey(warehouseId, type, cerealCategory)
-  const existing = await db.serialCounters.get(key)
+  const existing = await db.serialCounterCache.get(key)
   if (existing && existing.number >= parsed.number) return
 
-  await db.serialCounters.put({
+  await db.serialCounterCache.put({
     warehouseId,
     type,
     cerealCategory: cerealCategory ?? 'ALL',
@@ -139,11 +139,11 @@ export const recalculateSerialCounter = async (type, warehouseId, cerealCategory
 
   const key = counterKey(warehouseId, type, cerealCategory)
   if (!best) {
-    await db.serialCounters.delete(key)
+    await db.serialCounterCache.delete(key)
     return
   }
 
-  await db.serialCounters.put({
+  await db.serialCounterCache.put({
     warehouseId,
     type,
     cerealCategory: cerealCategory ?? 'ALL',
@@ -174,7 +174,7 @@ export const recalculateSerialCounter = async (type, warehouseId, cerealCategory
 export const suggestNextSerial = async (type, warehouseId, fallback = '1', cerealCategory = null) => {
   if (!warehouseId) return fallback
 
-  const tracked = await db.serialCounters.get(counterKey(warehouseId, type, cerealCategory))
+  const tracked = await db.serialCounterCache.get(counterKey(warehouseId, type, cerealCategory))
 
   const existing = await db.transactions
     .where('type')
