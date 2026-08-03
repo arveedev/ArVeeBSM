@@ -403,6 +403,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
       console.log('[PILE-DERIVATION-DIAGNOSTIC] matched pile:', matchedPile.pileName, '- applying it')
       setPileId(matchedPile.pileId)
       applyPileDefaults(matchedPile.pileId)
+      // applyPileDefaults only ever sets age/moisture content, never
+      // variety - this was the actual reason variety stayed blank
+      // even when the pile itself matched correctly. Sourced from the
+      // authority's own varietyId, matching exactly what
+      // handleSelectAuthority already does for the working new-
+      // transaction flow, for consistency between both paths.
+      if (linkedAuthority.varietyId) setVarietyId(linkedAuthority.varietyId)
     } else {
       console.log(
         '[PILE-DERIVATION-DIAGNOSTIC] NO MATCH - authorityOrNumber:', JSON.stringify(authorityOrNumber),
