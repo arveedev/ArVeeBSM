@@ -723,6 +723,19 @@ db.version(26).stores({
   })
 })
 
+// Directly confirms whether this exact browser session is actually
+// running the schema version that includes the serialCounters ->
+// serialCounterCache rename, rather than assuming it based on the
+// deployed commit alone - a stale cached bundle (service worker, or a
+// Vercel deployment still propagating) would still show the exact
+// same 422 error afterward even though the source code has genuinely
+// been fixed, since the OLD code would still be what's actually
+// running in the browser.
+console.log('[DEXIE-CLOUD-DIAGNOSTIC] *** Local schema version:', db.verno, '(expected 27 or higher) ***')
+db.table('serialCounterCache').count()
+  .then((n) => console.log('[DEXIE-CLOUD-DIAGNOSTIC] *** serialCounterCache table exists locally, count:', n, '***'))
+  .catch((e) => console.log('[DEXIE-CLOUD-DIAGNOSTIC] *** serialCounterCache does NOT exist locally yet - still running pre-fix schema:', e.message, '***'))
+
 db.cloud.configure({
   databaseUrl: 'https://z15dzktxq.dexie.cloud',
   // serialCounters and preloadState are explicitly per-device

@@ -8119,3 +8119,29 @@ succeeds) and the complete regression suite re-run - 133 test cases
 across 20 suites, all passing.
 
 ## This should resolve the cross-device sync issue - genuinely high confidence this time, backed by the exact error message rather than inference
+
+## Same 422 error persisting after the fix was deployed - added a direct verification diagnostic rather than assuming the fix failed
+
+User reported the identical error message, still explicitly naming
+"serialCounters" (the old table name) with the same key mismatch,
+even after confirming the fix was committed and pushed successfully.
+
+This is actually a meaningful signal: if the rename fix had genuinely
+taken effect in the running browser, the error (if any) would
+reference serialCounterCache, not serialCounters by name - Dexie
+Cloud's error message reflects whatever the CLIENT actually requested
+in that specific sync call, not some deeper server memory. This
+strongly suggests the browser may still be running a stale bundle
+(Vercel deployment still propagating, or a cached service worker
+serving the pre-fix JS), not that the fix itself is ineffective.
+
+Added a direct, verifiable diagnostic rather than continuing to guess:
+logs the actual declared schema version (db.verno) and directly
+checks whether the serialCounterCache table exists locally at all -
+this will show definitively whether the code actually running in the
+browser includes the fix, rather than inferring it from the deployed
+commit hash alone.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).
