@@ -268,7 +268,15 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // match (the MO/TMO gets removed from the local cache once marked
     // DONE) - so the "no match, clear it" branch below was silently
     // wiping out the correct, already-saved value on every edit.
-    if (loadedTransaction) return
+    // Only protects an ALREADY-WORKING historical value from being
+    // clobbered (e.g. after its MO got marked DONE and removed from
+    // the sync cache) - a transaction that was saved with a genuinely
+    // blank moNumber/tmoNumber (predating this matching feature, or
+    // one that was never successfully matched at save time) should
+    // still get backfilled with a fresh match on edit, so older
+    // transactions can be brought up to date with the latest MO/TMO
+    // sheet data rather than staying permanently blank forever.
+    if (loadedTransaction && (isMilling ? loadedTransaction.moNumber : loadedTransaction.tmoNumber)) return
     if (type === 'WSR' || (!isMilling && !isTestMilling)) return
     if (linkedMillingOrder) {
       if (isMilling) {

@@ -343,9 +343,13 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
         </select>
       )}
 
-      <div className="mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
-        <button type="button" onClick={() => setTab('piles')} className={`flex-1 rounded-lg py-2 text-sm font-medium ${tab === 'piles' ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}>Piles</button>
-        <button type="button" onClick={() => setTab('sacks')} className={`flex-1 rounded-lg py-2 text-sm font-medium ${tab === 'sacks' ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
+      <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
+        <div
+          className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+          style={{ transform: tab === 'piles' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+        />
+        <button type="button" onClick={() => setTab('piles')} className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${tab === 'piles' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Piles</button>
+        <button type="button" onClick={() => setTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${tab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
       </div>
 
       <div className="mt-3">

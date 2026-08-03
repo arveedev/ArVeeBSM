@@ -364,11 +364,15 @@ function Reports() {
         )}
 
         {/* Main Stocks / Sacks tabs */}
-        <div className="mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+        <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+          <div
+            className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+            style={{ transform: mainTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+          />
           {['stocks', 'sacks'].map((tab) => (
             <button key={tab} type="button" onClick={() => setMainTab(tab)}
-              className={`flex-1 rounded-lg py-1.5 text-sm font-medium capitalize transition-all active:scale-95 ${
-                mainTab === tab ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+              className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm font-medium capitalize transition-all active:scale-95 ${
+                mainTab === tab ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
               }`}>
               {tab}
             </button>

@@ -213,13 +213,17 @@ function MillingMonitor() {
         </div>
       </div>
 
-      <div className="mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
+      <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
+        <div
+          className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+          style={{ transform: topTab === 'MO' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+        />
         {['MO', 'TMO'].map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTopTab(t)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium ${topTab === t ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}
+            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${topTab === t ? 'text-brand-contrast' : 'text-neutral-400'}`}
           >
             {t === 'MO' ? 'Milling' : 'Test Milling'}
           </button>

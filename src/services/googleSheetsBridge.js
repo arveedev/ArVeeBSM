@@ -373,6 +373,17 @@ export const syncMillingOrdersFromSheets = async () => {
       await db.millingOrders.bulkDelete(staleIds)
     }
 
+    // Diagnostic - lets the user (or anyone reading the console)
+    // directly confirm whether the Apps Script is still returning
+    // header-row garbage as if it were real data. If a malformed-
+    // looking "number" (e.g. containing header text) shows up here,
+    // the fix has not actually been redeployed - this is a client
+    // syncing exactly what the server sent, not a caching bug.
+    console.log(`[syncMillingOrdersFromSheets] synced ${count} record(s):`, [...seenOrderIds])
+    if (staleIds.length > 0) {
+      console.log(`[syncMillingOrdersFromSheets] removed ${staleIds.length} stale record(s):`, staleIds)
+    }
+
     return { ok: true, count }
   } catch (error) {
     // Previously uncaught - any failure here (network error, malformed

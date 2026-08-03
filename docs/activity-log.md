@@ -7619,3 +7619,52 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 109 test cases
 across 17 suites, all passing.
+
+## Sliding pill animation added to all remaining tab toggles
+
+Swept the whole codebase for tab-button-group patterns and found 4
+that never had the sliding pill animation (only the highlight color
+change): BeginningBalancesPanel.jsx (Piles/Sacks), MillingMonitor.jsx
+(MO/TMO), Reports.jsx (Stocks/Sacks), Settings.jsx (Create Pile/
+Beginning Balances, added this session). Fixed all 4 with the same
+pattern already established elsewhere (AuthorityMonitor.jsx, Piles.jsx,
+etc.) - a relative-positioned wrapper with an absolutely-positioned
+sliding background div, and z-10 on the button text so it stays above
+the sliding pill.
+
+## Edit-mode Milling derivation refined: backfills a blank value, still protects a working one
+
+Per explicit clarification: editing an OLD transaction (predating this
+matching feature, or one that was never successfully matched at save
+time) should still get a fresh MO/TMO match applied on edit - the
+earlier fix's blanket "never run during edit" gate was too broad. Now
+only skips derivation if the ORIGINAL saved transaction already has a
+moNumber/tmoNumber (protecting a working historical value from being
+clobbered by a missing/stale match) - a genuinely blank value still
+gets backfilled with the current sheet data. Applied to both
+StockFormBase.jsx and SackFormBase.jsx.
+
+## Stale rows-1-3 data still appearing after sync - added diagnostic logging, root cause not independently confirmed
+
+Re-reviewed the stale-cleanup logic itself (bulkDelete of any local
+record no longer present in a fresh sync) and found no bug in it. The
+most likely explanation, given the logic is correct: if the Apps
+Script row-4 fix has not actually been redeployed, the SAME bad
+rows-1-3 data gets re-fetched and re-seen on every single sync - the
+cleanup logic only removes what's no longer seen, so data that keeps
+getting freshly (mis-)supplied by an un-updated Apps Script would
+never be considered stale, regardless of how many times sync runs.
+
+Added explicit console logging of every synced order's identity and
+any stale-cleanup removals to syncMillingOrdersFromSheets, so this can
+be directly confirmed rather than guessed at - if a malformed "number"
+(containing header text) shows up in this log after a fresh sync, that
+directly confirms the Apps Script itself is still the source, not a
+client-side caching issue. NOT independently confirmed fixed this
+entry - flagged honestly, pending the user checking this log after a
+confirmed redeploy.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 109 test cases
+across 17 suites, all passing.

@@ -648,18 +648,25 @@ function Settings() {
 
       {currentWarehouseId && (
         <div className="mt-6">
-          <div className="flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+          <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+            <div
+              className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+              style={{
+                width: `calc(${100 / 2}% - 0.25rem)`,
+                transform: `translateX(calc(${(pileSection === 'create' ? 0 : 1) * 100}% + ${(pileSection === 'create' ? 0 : 1) * 0.5}rem))`,
+              }}
+            />
             <button
               type="button"
               onClick={() => setPileSection('create')}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'create' ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'create' ? 'text-brand-contrast' : 'text-neutral-400'}`}
             >
               Create Pile
             </button>
             <button
               type="button"
               onClick={() => setPileSection('balances')}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'balances' ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'balances' ? 'text-brand-contrast' : 'text-neutral-400'}`}
             >
               Beginning Balances
             </button>

@@ -270,10 +270,11 @@ const SackFormBase = forwardRef(function SackFormBase(
   }, [type, linkedSiaAuthority?.siaNumber, isMilling, isTestMilling])
 
   useEffect(() => {
-    // Only applies to the create-new flow - see StockFormBase.jsx's
-    // identical fix for the full explanation of why this must never
-    // run while editing an existing transaction.
-    if (loadedTransaction) return
+    // Only protects an ALREADY-WORKING historical value - see
+    // StockFormBase.jsx's identical fix for the full explanation. A
+    // transaction saved with a genuinely blank moNumber/tmoNumber
+    // should still get backfilled with a fresh match on edit.
+    if (loadedTransaction && (isMilling ? loadedTransaction.moNumber : loadedTransaction.tmoNumber)) return
     if (type === 'ESR' || (!isMilling && !isTestMilling)) return
     if (linkedMillingOrder) {
       if (isMilling) {
