@@ -8463,3 +8463,29 @@ something else entirely.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
+
+## Root cause confirmed via diagnostic log - pile matching genuinely worked, variety was simply never set
+
+The diagnostic added last entry paid off directly: the log showed
+"matched pile: PILE 3A - applying it" - confirming the pile derivation
+logic itself was working correctly all along, including from the
+Reports page load path. The actual gap: applyPileDefaults (called on
+match) only ever sets age and moisture content from the pile - it
+never set variety at all, on either code path. This was the real
+reason variety stayed blank even when the pile itself matched
+correctly.
+
+Fixed by explicitly setting variety from the linked authority's own
+varietyId when a pile match is found - the same source
+handleSelectAuthority already uses for the working new-transaction
+flow, kept consistent between both paths rather than introducing a
+different source (e.g. the pile's own varietyId, which may not even
+be the same field).
+
+Verified with a 3-case test covering the fix and its edge cases
+(missing authority varietyId, no pile match at all).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 145 test cases
+across 22 suites, all passing.
