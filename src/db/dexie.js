@@ -737,7 +737,7 @@ db.table('serialCounterCache').count()
   .catch((e) => console.log('[DEXIE-CLOUD-DIAGNOSTIC] *** serialCounterCache does NOT exist locally yet - still running pre-fix schema:', e.message, '***'))
 
 db.cloud.configure({
-  databaseUrl: 'https://z15dzktxq.dexie.cloud',
+  databaseUrl: 'https://zv432njdm.dexie.cloud',
   // serialCounters and preloadState are explicitly per-device
   // performance caches (see their own definitions above) - neither is
   // meant to be shared across devices, so excluding them from sync
