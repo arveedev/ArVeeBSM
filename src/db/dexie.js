@@ -8,6 +8,20 @@ import { hashPin } from '../utils/pinHash.js'
 export const db = new Dexie('BSMDatabase', { addons: [dexieCloud] })
 
 window.db = db;
+window.forceImportData = async function(jsonData) {
+  await db.transaction('rw', db.tables, async () => {
+    for (const table of db.tables) {
+      await table.clear();
+    }
+    for (const [tableName, data] of Object.entries(jsonData)) {
+      const table = db.tables.find(t => t.name === tableName);
+      if (table) {
+        await table.bulkPut(data);
+      }
+    }
+  });
+};
+
 db.cloud.configure({dbUrl: 'https://zv432njdm.dexie.cloud'})
 
 db.version(1).stores({
