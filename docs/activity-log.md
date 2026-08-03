@@ -7530,3 +7530,59 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 109 test cases
 across 17 suites, all passing.
+
+## Manual MO/TMO sync trigger added - was genuinely missing entirely
+
+User asked for a way to force a fresh re-sync of MO/TMO data (to clear
+out stale rows-1-3 data from before the row-4 offset fix was
+deployed) and confirmed the app should stay aware of Sheet
+add/update/delete changes going forward.
+
+Investigated: the existing automatic background sync
+(startAuthoritySyncWorker) already runs every 5 minutes, on
+reconnect, and on initial load - this already provides ongoing
+awareness of Sheet changes (the existing stale-cleanup logic in
+syncMillingOrdersFromSheets already removes any local record no
+longer present in a fresh sync, which naturally handles adds,
+updates, AND deletes on every cycle). What was genuinely missing: any
+manual, on-demand way to trigger this immediately rather than waiting
+up to 5 minutes.
+
+Fixed by:
+- Extending the existing "Sync Now" button (Admin > AI/SIA
+  Allocations panel) to also trigger syncMillingOrdersFromSheets
+  alongside syncAuthoritiesFromSheets, previously only doing the
+  latter.
+- Adding a dedicated, always-visible manual sync button directly in
+  MillingMonitor.jsx's own header - the user is looking at this
+  screen specifically when stale data is the problem, so the trigger
+  belongs right there too, not only in the separate Authorities admin
+  panel.
+
+## WSI/ESI MO/TMO matching - not independently fixed this entry, most likely explained by the same stale data
+
+User reports WSR/ESR (the dropdown-selection side, now fixed) works,
+but WSI/ESI (the auto-derived, AI/SIA-matched side) still doesn't
+find the right MO/TMO. Re-reviewed the linkedMillingOrder matching
+query itself very carefully and found no further bug in the logic -
+it correctly compares aiNumber/siaNumber as normalized strings on both
+sides. The most likely explanation, given this wasn't independently
+reproducible through code review: the still-present stale rows-1-3
+data (fake entries synced before the row-4 fix was deployed) could be
+colliding with or corrupting real MO/TMO records via the orderId
+upsert key (type::number) if a fake header-derived "number" happens
+to coincide with a real one, though this couldn't be confirmed without
+the user's actual sheet contents.
+
+NOT independently confirmed fixed - flagged honestly. The expectation
+is that using the new Sync Now button (after confirming the Apps
+Script redeploy) to force a clean re-sync, which will trigger the
+existing stale-cleanup logic to remove the bad rows-1-3 entries
+entirely, will most likely resolve this too, but this needs the
+user's confirmation after testing rather than being claimed as fixed
+outright.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 109 test cases
+across 17 suites, all passing.

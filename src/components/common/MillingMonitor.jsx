@@ -6,11 +6,13 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, ChevronRight, X } from 'lucide-react'
+import { AlertTriangle, ChevronRight, X, RefreshCw } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
 import { fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
+import { syncMillingOrdersFromSheets } from '../../services/googleSheetsBridge.js'
 
 const fmtDate = (s) => {
   if (!s) return '—'
@@ -149,9 +151,25 @@ function MillingMonitor() {
   const [showCompleted, setShowCompleted] = useState(false)
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   const orders = useLiveQuery(() => computeMillingOrderStatuses(topTab), [topTab]) ?? []
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
+
+  const handleSyncNow = async () => {
+    setIsSyncing(true)
+    const result = await syncMillingOrdersFromSheets()
+    setIsSyncing(false)
+    if (result.ok) {
+      toast.success(`Synced ${result.count} MO/TMO record(s)`)
+    } else if (result.reason === 'already_syncing') {
+      toast.error('A sync is already in progress — try again in a moment')
+    } else if (result.reason === 'offline') {
+      toast.error('No connection — try again once online')
+    } else {
+      toast.error('Sync failed — check the console for details')
+    }
+  }
 
   // Regional Authority Number comes from the AI/SIA the order links to
   // (via the order's own aiNumber/siaNumber), not stored on the order
@@ -173,15 +191,26 @@ function MillingMonitor() {
 
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-app-text">Milling Operations</h2>
-        <button
-          type="button"
-          onClick={() => setShowCompleted((v) => !v)}
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${showCompleted ? 'bg-brand-neon text-brand-contrast' : 'border border-neutral-700 text-neutral-400'}`}
-        >
-          {showCompleted ? 'Showing Completed' : 'Show Completed'}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={handleSyncNow}
+            disabled={isSyncing}
+            aria-label="Sync MO/TMO Now"
+            className="flex items-center gap-1 rounded-full border border-neutral-700 px-2.5 py-1 text-xs text-neutral-400 transition-all active:scale-90 disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCompleted((v) => !v)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${showCompleted ? 'bg-brand-neon text-brand-contrast' : 'border border-neutral-700 text-neutral-400'}`}
+          >
+            {showCompleted ? 'Showing Completed' : 'Show Completed'}
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">

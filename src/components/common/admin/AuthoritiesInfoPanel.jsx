@@ -18,7 +18,7 @@ import { RefreshCw } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { listItemClass } from './shared.js'
 import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails } from '../../../utils/calculations.js'
-import { syncAuthoritiesFromSheets } from '../../../services/googleSheetsBridge.js'
+import { syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from '../../../services/googleSheetsBridge.js'
 
 function AuthoritiesInfoPanel() {
   const [isSyncing, setIsSyncing] = useState(false)
@@ -84,17 +84,24 @@ function AuthoritiesInfoPanel() {
     }
 
     setIsSyncing(true)
-    const result = await syncAuthoritiesFromSheets()
+    const [authResult, millingResult] = await Promise.all([
+      syncAuthoritiesFromSheets(),
+      syncMillingOrdersFromSheets(),
+    ])
     setIsSyncing(false)
 
-    if (result.ok) {
-      toast.success(`Synced ${result.aiCount} AI and ${result.siaCount} SIA record(s)`)
-    } else if (result.reason === 'offline') {
+    if (authResult.ok) {
+      const millingNote = millingResult.ok ? `, ${millingResult.count} MO/TMO` : ''
+      toast.success(`Synced ${authResult.aiCount} AI and ${authResult.siaCount} SIA record(s)${millingNote}`)
+    } else if (authResult.reason === 'offline') {
       toast.error('No connection — try again once online')
-    } else if (result.reason === 'already_syncing') {
+    } else if (authResult.reason === 'already_syncing') {
       toast.error('A sync is already in progress — try again in a moment')
     } else {
       toast.error('Sync failed — check the Sheet Sources tab')
+    }
+    if (!millingResult.ok && millingResult.reason !== 'already_syncing') {
+      toast.error('MO/TMO sync failed — check the console for details')
     }
   }
 
