@@ -8337,3 +8337,70 @@ destructive or state-changing code introduced.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
+
+## Major milestone: all devices can log in, sync cycle confirmed fully clean
+
+User successfully restored the database from Android to the cloud -
+all three devices (PC, iPhone, Android) can now log in. The shared
+console log shows a completely clean sync cycle: pushing -> pulling ->
+in-sync/connected, with zero errors - the core Dexie Cloud sync
+infrastructure is now genuinely confirmed working end to end for the
+first time in this entire investigation.
+
+New, separate issue reported: pile/variety no longer auto-fill when
+opening an existing Milling transaction from the Reports page stock
+statement (previously worked). Investigated loadTransactionIntoForm -
+confirmed it directly sets pileId/varietyId from the transaction
+record's own stored values, unchanged code-wise. This strongly
+suggests a DATA issue rather than a code regression: if the local
+piles/varietyTypes tables haven't fully repopulated yet after the
+recent database switch, the transaction's stored pileId/varietyId
+would still be correct, but the dropdown would have no matching option
+to display, appearing blank.
+
+Added two more purely read-only diagnostics (local piles count, local
+varieties count) to the same Settings panel, to directly confirm or
+rule this out without any further guessing or risk.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).
+
+## Pile auto-fill on edit - found and fixed the exact same staleness bug already fixed for MO/TMO
+
+Confirmed user's data was fully intact (piles/varieties present) -
+the actual issue was a genuine code gap, not data. The AI sheet's
+OR# column (holding the assigned pile name for Milling/Test Milling
+authorities) was only ever matched to a pile when selecting an
+authority for a brand NEW transaction, via handleSelectAuthority.
+Editing an existing, already-saved transaction never re-derived this
+at all - the pile stayed frozen at whatever was originally saved and
+never picked up a later change to the AI sheet's pile assignment,
+exactly the same staleness class of bug already fixed for MO/TMO
+numbers a few entries ago.
+
+Added a new derivation effect mirroring the MO/TMO one's structure and
+reasoning exactly: reuses the already-existing linkedAuthority query
+(previously only used for showing the AI's remaining balance),
+matches its orNumber column against the piles list case-insensitively,
+and applies a fresh match whenever found - including during edit -
+consistent with the same "a fresh sheet match always wins, even over
+an already-saved value" principle established for MO/TMO. Only
+applies to WSI (issue side) - confirmed WSR has no AI of its own to
+key off, and sacks (ESI/ESR) have no piles at all so this doesn't
+apply there.
+
+Verified the new effect is safe from the earlier TDZ bug class (which
+affected useLiveQuery callbacks specifically, since those run
+synchronously during render) - this is a plain useEffect, which always
+defers until after the full render commits, by which point
+applyPileDefaults (declared later in the component) will already be
+assigned regardless of textual ordering.
+
+Verified with a 9-case test covering the pile-matching logic and the
+effect's gating conditions.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 142 test cases
+across 21 suites, all passing.

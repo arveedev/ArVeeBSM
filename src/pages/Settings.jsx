@@ -581,6 +581,8 @@ function Settings() {
   const cloudUser = useObservable(db.cloud.currentUser)
   const cloudSyncState = useObservable(db.cloud.syncState)
   const localUsersCount = useLiveQuery(() => db.users.count(), [])
+  const localPilesCount = useLiveQuery(() => db.piles.count(), [])
+  const localVarietiesCount = useLiveQuery(() => db.varietyTypes.count(), [])
   const [syncErrorDetail, setSyncErrorDetail] = useState(lastSyncErrorDetail.value)
   useEffect(() => {
     const interval = setInterval(() => setSyncErrorDetail(lastSyncErrorDetail.value), 1000)
@@ -652,6 +654,18 @@ function Settings() {
             <p className="text-[10px] uppercase text-neutral-600">Local Users Count (read-only, no risk to check)</p>
             <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
               {localUsersCount ?? '(loading)'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-neutral-600">Local Piles Count</p>
+            <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              {localPilesCount ?? '(loading)'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-neutral-600">Local Varieties Count</p>
+            <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              {localVarietiesCount ?? '(loading)'}
             </p>
           </div>
           <div>
