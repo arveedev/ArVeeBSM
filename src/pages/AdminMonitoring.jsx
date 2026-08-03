@@ -23,8 +23,9 @@ import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../utils/calculations.js'
 import AuthorityReconciliationPanel from '../components/common/AuthorityReconciliationPanel.jsx'
 import CompletedAuthorityModal from '../components/common/CompletedAuthorityModal.jsx'
+import MillingMonitor from '../components/common/MillingMonitor.jsx'
 
-const TABS = ['AI', 'SIA']
+const TABS = ['AI', 'SIA', 'MILLING']
 
 function AdminMonitoring() {
   const { weightUnit } = useSettings() ?? {}
@@ -78,8 +79,11 @@ function AdminMonitoring() {
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
         <div
-          className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-          style={{ transform: activeTab === TABS[0] ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+          className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+          style={{
+            width: `calc(${100 / TABS.length}% - ${(TABS.length - 1) / TABS.length * 0.5}rem)`,
+            transform: `translateX(calc(${TABS.indexOf(activeTab) * 100}% + ${TABS.indexOf(activeTab) * 0.5}rem))`,
+          }}
         />
         {TABS.map((tab) => (
           <button
@@ -97,6 +101,12 @@ function AdminMonitoring() {
         ))}
       </div>
 
+      {activeTab === 'MILLING' ? (
+        <div className="mt-4">
+          <MillingMonitor />
+        </div>
+      ) : (
+        <>
       <div className="sticky top-16 z-30 -mx-4 mt-3 flex items-center gap-2 bg-neutral-950 px-4 py-2">
         <div className="relative flex-1">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
@@ -202,6 +212,8 @@ function AdminMonitoring() {
           )
         })}
       </ul>
+        </>
+      )}
 
       {selectedAuthority && (
         <AuthorityReconciliationPanel

@@ -5,7 +5,7 @@
 // correction here can never be confused with (or accidentally
 // overwrite) live, transaction-accumulated stock.
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
@@ -35,6 +35,7 @@ function PilesBeginningBalances({ warehouseId }) {
   const [ageUnit, setAgeUnit] = useState('Days')
   const [asOfDate, setAsOfDate] = useState(todayLocalISO())
   const [isSaving, setIsSaving] = useState(false)
+  const formRef = useRef(null)
 
   const piles = useLiveQuery(
     () => (warehouseId ? db.piles.where('warehouseId').equals(warehouseId).toArray() : []),
@@ -74,6 +75,11 @@ function PilesBeginningBalances({ warehouseId }) {
       storedDays > 0 && storedDays % 30 === 0 ? storedDays / 30 : storedDays
     )))
     setAsOfDate(seed?.date ?? pile.dateOfReceipt ?? todayLocalISO())
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
   }
 
   const handleSave = async () => {
@@ -118,7 +124,7 @@ function PilesBeginningBalances({ warehouseId }) {
   return (
     <div>
       {editingPileId && (
-        <div className="mb-3 space-y-2 rounded-xl border border-brand-amber/40 bg-brand-amber/5 p-3">
+        <div ref={formRef} className="mb-3 space-y-2 rounded-xl border border-brand-amber/40 bg-brand-amber/5 p-3">
           <p className="text-xs font-semibold text-brand-amber">
             Editing beginning balance: {piles.find((p) => p.pileId === editingPileId)?.pileName}
           </p>
@@ -194,6 +200,7 @@ function SacksBeginningBalances({ warehouseId }) {
   const [asOfDate, setAsOfDate] = useState(todayLocalISO())
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const formRef = useRef(null)
 
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const entries = useLiveQuery(
@@ -220,6 +227,11 @@ function SacksBeginningBalances({ warehouseId }) {
     setCondition(entry.condition)
     setPieces(liveFormatNumber(String(entry.pieces)))
     setAsOfDate(entry.asOfDate ?? todayLocalISO())
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
   }
 
   const handleSave = async () => {
@@ -244,7 +256,7 @@ function SacksBeginningBalances({ warehouseId }) {
 
   return (
     <div>
-      <div className="mb-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+      <div ref={formRef} className="mb-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={labelClass}>Sack Type</label>

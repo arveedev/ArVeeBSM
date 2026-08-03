@@ -577,6 +577,7 @@ function Settings() {
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } = useWarehouse() ?? {}
   const { setPageHeader } = usePageHeader() ?? {}
   const warehouseSectionRef = useRef(null)
+  const [pileSection, setPileSection] = useState('create')
   useEffect(() => {
     setPageHeader?.({ title: 'Settings', subtitle: '' })
   }, [])
@@ -644,8 +645,32 @@ function Settings() {
       </div>
 
       {currentWarehouseId && <ClassifierSection warehouseId={currentWarehouseId} />}
-      {currentWarehouseId && <PileBalanceSection warehouseId={currentWarehouseId} />}
-      {currentWarehouseId && <BeginningBalancesPanel warehouseId={currentWarehouseId} />}
+
+      {currentWarehouseId && (
+        <div className="mt-6">
+          <div className="flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+            <button
+              type="button"
+              onClick={() => setPileSection('create')}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'create' ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}
+            >
+              Create Pile
+            </button>
+            <button
+              type="button"
+              onClick={() => setPileSection('balances')}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'balances' ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}
+            >
+              Beginning Balances
+            </button>
+          </div>
+          <div className="mt-3">
+            {pileSection === 'create'
+              ? <PileBalanceSection warehouseId={currentWarehouseId} />
+              : <BeginningBalancesPanel warehouseId={currentWarehouseId} />}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

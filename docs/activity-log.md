@@ -7586,3 +7586,36 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 109 test cases
 across 17 suites, all passing.
+
+## Milling Operations added to the admin/visitor Monitor page - was explicitly deferred, never built
+
+User caught a real, confirmed gap: AdminMonitoring.jsx (the separate
+bottom-nav "Monitor" tab used by admin/visitor) had a comment
+explicitly stating Milling monitoring was "planned as a later
+addition (explicitly deferred - not built here)" - this was never
+followed up on. Added a third "MILLING" tab alongside the existing
+AI/SIA tabs, rendering MillingMonitor directly when selected instead
+of the authorities search/list UI. Had to generalize the sliding-pill
+tab-highlight animation, which was hardcoded for exactly 2 tabs at
+50% width each - now computed from tab count and index so it works
+correctly for any number of tabs.
+
+## Settings page reorganized - Create Pile and Beginning Balances now separate tabs
+
+Per explicit feedback that having both sections stacked vertically on
+the same page was confusing. Added a tab toggle (matching the visual
+pattern already used elsewhere, e.g. Sack/Stock toggles) so only one
+section shows at a time.
+
+Also added the same "focus on the frame" scroll behavior that Create
+Pile's edit flow already had (PileBalanceSection's formRef +
+scrollIntoView, using the double-requestAnimationFrame pattern to
+ensure the DOM has actually updated before scrolling) to Beginning
+Balances' edit flow too - previously tapping edit on a pile or sack
+entry there didn't scroll the form into view at all, which is
+especially noticeable on a long list on a small screen.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 109 test cases
+across 17 suites, all passing.
