@@ -9,11 +9,12 @@ export const db = new Dexie('BSMDatabase', { addons: [dexieCloud] })
 
 window.db = db;
 window.forceImportData = async function(jsonData) {
+  const tablesToImport = jsonData.tables || jsonData;
   await db.transaction('rw', db.tables, async () => {
     for (const table of db.tables) {
       await table.clear();
     }
-    for (const [tableName, data] of Object.entries(jsonData)) {
+    for (const [tableName, data] of Object.entries(tablesToImport)) {
       const table = db.tables.find(t => t.name === tableName);
       if (table) {
         await table.bulkPut(data);
