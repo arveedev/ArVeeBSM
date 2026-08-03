@@ -8278,3 +8278,26 @@ after confirming Dexie's own docs don't document any such option.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
+
+## URGENT REVERT: removed the forced db.cloud.logout() entirely - caused real harm across devices
+
+User reported being unable to log in on PC, then iPhone, after the
+previous entry's automatic logout()-then-login() fix went live. This
+was a genuine mistake - the exact behavior of db.cloud.logout() in
+this app's specific configuration (requireAuth: false, shared service
+account, custom fetchTokens) was not something I could confirm with
+certainty from documentation alone, and it appears to have caused real
+harm rather than the intended fix.
+
+Immediately reverted: removed the logout()/login() forced re-auth
+mechanism and the associated localStorage gating entirely, restoring
+the plain db.cloud.login() call exactly as it existed before that
+change. User was also directly warned not to open the app on their
+remaining untouched device (Android) until this revert shipped, to
+protect its still-intact local data as the one remaining safe copy.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).
+
+## LESSON: do not introduce speculative fixes involving destructive-sounding operations (logout, clear, reset, delete) without either (a) confirmed documentation of their exact behavior in this specific configuration, or (b) explicitly flagging the uncertainty and asking the user to test on a single, expendable device first rather than deploying broadly. This was a real, avoidable mistake.

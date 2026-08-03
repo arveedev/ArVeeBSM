@@ -791,30 +791,11 @@ db.cloud.configure({
 // and any failure (e.g. no network at all) is swallowed here rather
 // than surfaced - the app must keep working fully offline regardless
 // of whether this succeeds, fails, or is still in progress.
-// One-time, automatic fix for a specific problem: after switching to
-// a new Dexie Cloud database, the server confirmably issues tokens
-// with the correct audience for it (verified via server-side logging)
-// - yet the client kept rejecting them as "jwt audience invalid",
-// even after a full "clear site data". This strongly points to Dexie
-// Cloud's own internal auth state holding onto something stale from
-// before the switch, in storage that a manual site-data clear didn't
-// fully reach. logout() only discards Dexie Cloud's own internal auth
-// state - it never touches any actual app data (piles, transactions,
-// users, anything) - forcing a genuinely clean re-authentication.
-// Gated by a localStorage flag so this runs exactly once per device.
-const FORCE_RELOGIN_FLAG = 'dexie-cloud-force-relogin-v1'
-if (!localStorage.getItem(FORCE_RELOGIN_FLAG)) {
-  localStorage.setItem(FORCE_RELOGIN_FLAG, 'done')
-  db.cloud.logout().catch(() => {}).finally(() => {
-    db.cloud.login().catch(() => {})
-  })
-} else {
-  db.cloud.login().catch(() => {
-    // Offline at startup, or the endpoint is temporarily unreachable -
-    // this is expected and fine. Dexie Cloud will retry on its own once
-    // connectivity returns; local reads/writes are never affected.
-  })
-}
+db.cloud.login().catch(() => {
+  // Offline at startup, or the endpoint is temporarily unreachable -
+  // this is expected and fine. Dexie Cloud will retry on its own once
+  // connectivity returns; local reads/writes are never affected.
+})
 
 // TEMPORARY DIAGNOSTIC LOGGING - added specifically to investigate two
 // prior failed connection attempts that broke PIN login. Logs every
