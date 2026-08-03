@@ -7904,3 +7904,82 @@ across 19 suites, all passing.
 ## STILL NOT DONE, explicitly deferred given scope already covered this session:
 - Authority selector on Completed list (both user and admin/visitor
   pages) - not started, carried over from the previous request.
+
+## CRITICAL: found the actual root cause of the repeated "Age/Age Unit missing" complaint
+
+The app code was already sending Age/Age Unit correctly. The real bug:
+ensureBackupSheetColumns (the new one-click column-setup function)
+never included AGE or Age Unit in its own column list at all - only
+the Milling/Procurement fields. If the user's sheet never had these
+columns to begin with, the data was being silently dropped by the
+Apps Script's write logic regardless of how correct the app's own
+code was. Added both to DATA_ENTRY and Issues Backup's column lists
+(stock-only - sacks never have age).
+
+Also found and fixed a genuine 3rd-case bug: age has THREE possible
+units (Days, Months, or the combined "Months + Days" split), not two.
+For the combined case, the stored ageValue is actually the TOTAL
+normalized days, not a real months/days pair - sending it as a bare
+number under a "Months + Days" label was misleading. Now derives and
+sends the actual split (e.g. "2 months, 5 days") for this specific
+case. All numeric age values rounded to at most 3 decimals.
+
+## CRITICAL: Milling Operations button flickering/disappearing - found and fixed with certainty
+
+Traced to a direct side effect of the earlier clear-then-repopulate
+sync fix: fetching and writing were interleaved (fetch a sheet,
+immediately put() each row one at a time), meaning the table was
+genuinely empty for a real window during every single sync - and
+since hasMillingOrders reactively watches this count via useLiveQuery,
+the button would flicker away and reappear on every sync cycle (every
+5 minutes, on reconnect, on manual sync), making the app look broken
+even when it wasn't. Rewrote to fetch everything into memory first,
+then apply the clear+repopulate as a single atomic Dexie transaction -
+reactive observers now only ever see the state before or after a
+sync, never a genuinely empty intermediate state.
+
+## MillingMonitor: last-activity format corrected, progress bar redesigned
+
+Per explicit requests: last-activity summary now shows warehouse NAME
+(prefix stripped, reusing the same utility already used for backup
+sheets) instead of the warehouse code, includes variety alongside pile
+number rather than only one or the other, and says "net bags" instead
+of just "bags".
+
+Progress bar completely redesigned per detailed spec: issuance now
+contributes 0-50% on its own (proportional to issued vs. the AI/SIA's
+own allocation total, so a fully-issued-but-not-yet-received order
+correctly shows 50%, not 0%) - receipt then adds another 0-50% on top,
+proportional to received vs. expected recovery (issued x recovery%,
+computed per net kgs, matching the exact 30,000kg x 63% = 18,900kg
+example given). All progress values rounded to at most 3 decimals.
+Required adding the linked AI/SIA's totalAllocationKilos to
+computeMillingOrderStatuses itself, since this wasn't previously
+available per-order.
+
+Verified with a 12-case test covering the progress bar's issuance
+half, receipt half (including the exact worked example given), the
+combined total, and the age-unit split fix.
+
+## Cross-device inconsistency - concrete evidence acknowledged, root cause still not independently confirmed
+
+User provided a specific, reproducible scenario (PC showed 1 update,
+mobile showed 3, for the same transaction/MO) - this is strong,
+concrete evidence the underlying Dexie Cloud sync issue is real and
+ongoing. Not resolved this entry - continues to point at the same
+still-unconfirmed server-side Dexie Cloud schema/sync question flagged
+several entries ago. The fetch-interceptor diagnostic logging added
+earlier remains the best path to a definitive answer, pending the user
+sharing what it captures.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 133 test cases
+across 20 suites, all passing.
+
+## STILL NOT DONE, explicitly carried over:
+- Source warehouse still not confirmed showing (most likely blocked
+  on the same pending Apps Script redeploy, not independently verified)
+- Authority selector on Completed list - not started
+- Date picker - re-verified extensively, no additional bug found;
+  awaiting user confirmation on deployment freshness

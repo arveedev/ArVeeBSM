@@ -583,6 +583,19 @@ function findSerialRange(sheet, matchColumn, warehouseColumn, warehouseValue) {
  * always appended after the last existing column, so nothing shifts.
  *
  * What each column will contain, once the app starts writing to it:
+ *   AGE          - the pile's age at the time of this transaction, as
+ *                  a plain number (e.g. "2") - EXCEPT when Age Unit is
+ *                  "Months + Days" (see below), in which case this
+ *                  column instead contains a readable string like
+ *                  "2 months, 5 days" rather than a bare number, since
+ *                  a single number can't represent a combined value.
+ *                  Only present on stock transactions (WSR/WSI) -
+ *                  sacks never have an age. Numeric values are rounded
+ *                  to at most 3 decimal places.
+ *   Age Unit     - "Days", "Months", or "Months + Days" - whichever
+ *                  unit was actually used for this specific
+ *                  transaction. Always check this column before
+ *                  interpreting the AGE column's number.
  *   MO Number    - the full Milling Order reference the app derived
  *                  for this transaction (e.g. "MO No. ALB-2026-D-027")
  *   TMO Number   - same, for Test Milling Order
@@ -604,8 +617,8 @@ function ensureBackupSheetColumns() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
   const sheetsAndColumns = [
-    { name: 'DATA_ENTRY', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members'] },
-    { name: 'Issues Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members'] },
+    { name: 'DATA_ENTRY', columns: ['AGE', 'Age Unit', 'MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members'] },
+    { name: 'Issues Backup', columns: ['AGE', 'Age Unit', 'MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members'] },
     { name: 'Sacks Receipts Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number'] },
     { name: 'Sacks Issues Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number'] },
   ];

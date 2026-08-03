@@ -12,7 +12,7 @@ import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
 import { fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
-import { syncMillingOrdersFromSheets } from '../../services/googleSheetsBridge.js'
+import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix } from '../../services/googleSheetsBridge.js'
 
 const fmtDate = (s) => {
   if (!s) return '—'
@@ -32,7 +32,6 @@ function MillingOrderDetail({ order, onClose }) {
     return null
   }, [order.aiNumber, order.siaNumber])
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w.name]))
-  const warehouseCodeMap = new Map(warehouses.map((w) => [w.warehouseId, w.code]))
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v.name]))
   const pileMap = new Map(piles.map((p) => [p.pileId, p.pileName]))
 
@@ -44,14 +43,14 @@ function MillingOrderDetail({ order, onClose }) {
     if (!lastTx) return null
     const isIssue = lastTx.type === 'WSI' || lastTx.type === 'ESI'
     const isSack = lastTx.type === 'ESI' || lastTx.type === 'ESR'
-    const whCode = warehouseCodeMap.get(lastTx.warehouseId) ?? '—'
-    const pileOrVariety = lastTx.pileId
-      ? (pileMap.get(lastTx.pileId) ?? '—')
-      : (varietyMap.get(lastTx.varietyId) ?? '—')
+    const whName = stripWarehouseCodePrefix(warehouseMap.get(lastTx.warehouseId)) || '—'
+    const variety = varietyMap.get(lastTx.varietyId) ?? '—'
+    const pileName = lastTx.pileId ? pileMap.get(lastTx.pileId) : null
+    const varietyAndPile = pileName ? `${variety} (Pile ${pileName})` : variety
     const amount = isSack
       ? `${fmtBags((lastTx.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} pcs`
-      : `${fmtBags(lastTx.numberOfBags)} bags`
-    return `${whCode} ${isIssue ? 'issued' : 'received'} ${pileOrVariety} ${amount} on ${fmtDate(lastTx.date)}`
+      : `${fmtBags(lastTx.numberOfBags)} net bags`
+    return `${whName} ${isIssue ? 'issued' : 'received'} ${varietyAndPile} ${amount} on ${fmtDate(lastTx.date)}`
   })()
 
   // Recovery percent expressed as an equivalent net bags figure, per
@@ -314,24 +313,39 @@ function MillingMonitor() {
           </p>
         )}
         {filtered.map((o) => {
-          // Progress from issuance to expected receipt, based on
-          // recovery % - takes the max of stock (kilos) and sack
-          // (pieces) progress since either or both can apply to the
-          // same MO/TMO simultaneously. 0% until anything has been
-          // issued at all.
+          // Progress is issuance (0-50%) plus receipt (0-50%), not a
+          // single received-vs-expected ratio - so a fully-issued but
+          // not-yet-received order still shows real, visible progress
+          // (50%) rather than nothing until receipts start.
+          const roundTo3 = (n) => Math.round(n * 1000) / 1000
+
+          // Issuance half: proportional to how much of the AI/SIA's
+          // own allocation has actually been issued so far. Falls
+          // back to a simple "any issuance = full credit for this
+          // half" when the allocation total isn't available (e.g. AI/
+          // SIA data hasn't synced), so partial data still shows
+          // something rather than nothing.
+          const issuanceRatio = o.authorityAllocationKilos
+            ? Math.min(1, o.issuedKilos / o.authorityAllocationKilos)
+            : (o.issuedKilos > 0 || o.issuedPieces > 0) ? 1 : 0
+          const issuanceProgress = roundTo3(issuanceRatio * 50)
+
+          // Receipt half: proportional to received vs. expected
+          // recovery (issued x recovery%, per net kgs - e.g. 30,000kg
+          // issued at 63% recovery expects 18,900kg back). Sacks use
+          // pieces instead of kilos the same way. Falls back to
+          // received-vs-issued directly when no recovery % is set.
           const expectedKilos = o.recoveryPercent != null ? o.issuedKilos * (o.recoveryPercent / 100) : null
           const expectedPieces = o.recoveryPercent != null ? o.issuedPieces * (o.recoveryPercent / 100) : null
-          const kilosProgress = expectedKilos
-            ? Math.min(100, (o.receivedKilos / expectedKilos) * 100)
-            // No recovery % available (blank on the sheet) - fall back
-            // to received-vs-issued directly, so a real transaction
-            // history still shows SOME progress rather than a
-            // permanently empty bar regardless of actual activity.
-            : o.issuedKilos > 0 ? Math.min(100, (o.receivedKilos / o.issuedKilos) * 100) : null
-          const piecesProgress = expectedPieces
-            ? Math.min(100, (o.receivedPieces / expectedPieces) * 100)
-            : o.issuedPieces > 0 ? Math.min(100, (o.receivedPieces / o.issuedPieces) * 100) : null
-          const progress = Math.max(kilosProgress ?? 0, piecesProgress ?? 0)
+          const kilosReceiptRatio = expectedKilos
+            ? Math.min(1, o.receivedKilos / expectedKilos)
+            : o.issuedKilos > 0 ? Math.min(1, o.receivedKilos / o.issuedKilos) : 0
+          const piecesReceiptRatio = expectedPieces
+            ? Math.min(1, o.receivedPieces / expectedPieces)
+            : o.issuedPieces > 0 ? Math.min(1, o.receivedPieces / o.issuedPieces) : 0
+          const receiptProgress = roundTo3(Math.max(kilosReceiptRatio, piecesReceiptRatio) * 50)
+
+          const progress = roundTo3(issuanceProgress + receiptProgress)
           const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
 
           return (

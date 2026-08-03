@@ -37,6 +37,23 @@ export const computeMillingOrderStatuses = async (orderType) => {
     .and((t) => t.status === 'Active')
     .toArray()
 
+  // The linked AI/SIA's own allocation total - the natural "100%
+  // issuance" reference point for the progress bar. Fetched once per
+  // order rather than per row, since aiNumber/siaNumber is fixed per
+  // order.
+  const authorityByOrder = new Map(
+    await Promise.all(
+      orders.map(async (o) => {
+        const auth = o.aiNumber
+          ? await db.authorities.where('aiNumber').equals(o.aiNumber).first()
+          : o.siaNumber
+            ? await db.authorities.where('siaNumber').equals(o.siaNumber).first()
+            : null
+        return [o.orderId, auth?.totalAllocationKilos ?? null]
+      })
+    )
+  )
+
   return orders.map((order) => {
     const forThisOrder = allTx.filter((t) => t[numberField] === order.number)
     const issueTx = forThisOrder.filter((t) => t.type === 'WSI' || t.type === 'ESI')
@@ -77,6 +94,7 @@ export const computeMillingOrderStatuses = async (orderType) => {
       receivedPieces,
       recoveredTrials,
       fulfilled,
+      authorityAllocationKilos: authorityByOrder.get(order.orderId) ?? null,
     }
   })
 }

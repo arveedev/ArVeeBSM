@@ -329,44 +329,48 @@ export const syncMillingOrdersFromSheets = async () => {
 
   syncInProgress = true
   try {
-    let count = 0
-
-    // Clear entirely before repopulating, rather than diffing and
-    // removing only what's no longer seen - a full clear guarantees
-    // the table exactly matches what was just fetched, with no
-    // possibility of stale data surviving due to any mismatch in a
-    // comparison step. Actual transaction records are unaffected -
-    // they store the MO/TMO number directly, not a reference to this
-    // table, so historical data stays intact regardless of this
-    // table being fully rebuilt on every sync.
-    await db.millingOrders.clear()
-
+    // Fetch everything into memory FIRST, before touching the
+    // database at all - this is what makes the atomic swap below
+    // possible. Previously fetching and writing were interleaved
+    // (fetch a sheet, immediately put() each row), meaning the table
+    // was genuinely empty for a real window during every sync after
+    // the initial clear() - and since hasMillingOrders watches this
+    // count reactively, the Milling Operations button would flicker
+    // away and reappear on every single sync cycle, confusing users
+    // into thinking the app itself was broken.
+    const allOrders = []
     for (const source of sources) {
       const [moOrders, tmoOrders] = await Promise.all([
         fetchMillingOrderRows(source, 'MO'),
         fetchMillingOrderRows(source, 'TMO'),
       ])
-
-      for (const order of [...moOrders, ...tmoOrders]) {
-        // Keyed by (type + number) - confirmed an MO/TMO number is
-        // always exactly one row, so type+number is a sufficient key.
-        const orderId = `${order.type}::${order.number}`
-        await db.millingOrders.put({
-          orderId,
-          type: order.type,
-          number: order.number,
-          ricemillName: order.ricemillName || null,
-          recoveryPercent: order.recoveryPercent,
-          batchCurrent: order.batchCurrent ?? null,
-          batchTotal: order.batchTotal ?? null,
-          aiNumber: order.aiNumber ?? null,
-          siaNumber: order.siaNumber ?? null,
-          receivingWarehouse: order.receivingWarehouse ?? null,
-          status: 'Active',
-        })
-        count += 1
-      }
+      allOrders.push(...moOrders, ...tmoOrders)
     }
+
+    const records = allOrders.map((order) => ({
+      // Keyed by (type + number) - confirmed an MO/TMO number is
+      // always exactly one row, so type+number is a sufficient key.
+      orderId: `${order.type}::${order.number}`,
+      type: order.type,
+      number: order.number,
+      ricemillName: order.ricemillName || null,
+      recoveryPercent: order.recoveryPercent,
+      batchCurrent: order.batchCurrent ?? null,
+      batchTotal: order.batchTotal ?? null,
+      aiNumber: order.aiNumber ?? null,
+      siaNumber: order.siaNumber ?? null,
+      receivingWarehouse: order.receivingWarehouse ?? null,
+      status: 'Active',
+    }))
+
+    // Clear and repopulate as a single atomic transaction - Dexie
+    // guarantees any reactive observer (useLiveQuery) only ever sees
+    // the state immediately before this transaction or the complete
+    // state immediately after it, never an intermediate empty table.
+    await db.transaction('rw', db.millingOrders, async () => {
+      await db.millingOrders.clear()
+      if (records.length > 0) await db.millingOrders.bulkPut(records)
+    })
 
     // Diagnostic - lets the user (or anyone reading the console)
     // directly confirm whether the Apps Script is still returning
@@ -374,10 +378,9 @@ export const syncMillingOrdersFromSheets = async () => {
     // looking "number" (e.g. containing header text) shows up here,
     // the fix has not actually been redeployed - this is a client
     // syncing exactly what the server sent, not a caching bug.
-    const syncedNumbers = await db.millingOrders.toCollection().primaryKeys()
-    console.log(`[syncMillingOrdersFromSheets] synced ${count} record(s):`, syncedNumbers)
+    console.log(`[syncMillingOrdersFromSheets] synced ${records.length} record(s):`, records.map((r) => r.orderId))
 
-    return { ok: true, count }
+    return { ok: true, count: records.length }
   } catch (error) {
     // Previously uncaught - any failure here (network error, malformed
     // Apps Script response, etc.) became a silent unhandled promise
@@ -592,13 +595,26 @@ export const stripWarehouseCodePrefix = (name) =>
 const buildBackupRow = (transaction, context) => {
   const { warehouseCode, provinceCode, varietyName, transactionTypeName } = context
   const warehouseName = stripWarehouseCodePrefix(context.warehouseName)
-  // Previously only a Months-unit age was ever sent (converted into
-  // AGE), meaning a Days-unit age was silently dropped entirely - the
-  // Sheet had no way to represent which unit a bare number was in.
-  // Now sends the raw value plus an explicit unit, so nothing is lost
-  // regardless of which unit was used.
-  const ageValue = transaction.ageValue ?? null
-  const ageUnit = transaction.ageUnit ?? null
+  // Three possible age units: 'Days', 'Months', or the combined
+  // 'Months + Days' split - previously only the first two were
+  // correctly represented. For 'Months + Days', the stored ageValue
+  // is actually the TOTAL normalized days (not a months/days pair),
+  // so sending it as a bare number under a "Months + Days" label was
+  // misleading - it looked like a raw count in a unit it wasn't
+  // actually in. Now derives the real months/days split from
+  // initialAgeValue (the same derivation already used when reloading
+  // this exact case for editing) and formats it as a clear string.
+  const roundTo3 = (n) => (n == null ? null : Math.round(n * 1000) / 1000)
+  let ageValue, ageUnit
+  if (transaction.ageUnit === 'Months + Days' && transaction.initialAgeValue != null) {
+    const months = Math.floor(transaction.initialAgeValue / 30)
+    const days = transaction.initialAgeValue % 30
+    ageValue = `${months} months, ${days} days`
+    ageUnit = 'Months + Days'
+  } else {
+    ageValue = roundTo3(transaction.ageValue ?? null)
+    ageUnit = transaction.ageUnit ?? null
+  }
 
   if (transaction.type === 'WSR') {
     return {
