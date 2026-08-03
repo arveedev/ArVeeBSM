@@ -39,6 +39,14 @@ export default async function handler(req, res) {
   }
 
   console.log('[dexie-cloud-tokens] Env check - DB_URL set:', Boolean(DB_URL), 'CLIENT_ID set:', Boolean(CLIENT_ID), 'CLIENT_SECRET set:', Boolean(CLIENT_SECRET))
+  // DB_URL is not a secret - logging its actual value (not just
+  // whether it's set) directly settles whether this specific
+  // serverless function invocation is using the new database's URL
+  // or still the old one, via Vercel's own function logs. Also logs
+  // just the first 8 characters of CLIENT_ID (enough to distinguish
+  // old vs new without exposing the full value in logs).
+  console.log('[dexie-cloud-tokens] *** Actual DB_URL:', DB_URL, '***')
+  console.log('[dexie-cloud-tokens] *** CLIENT_ID starts with:', CLIENT_ID?.slice(0, 8), '***')
 
   if (!DB_URL || !CLIENT_ID || !CLIENT_SECRET) {
     res.status(500).json({ error: 'Server is missing DEXIE_CLOUD_DB_URL / DEXIE_CLOUD_CLIENT_ID / DEXIE_CLOUD_CLIENT_SECRET environment variables' })
