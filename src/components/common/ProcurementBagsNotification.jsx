@@ -21,9 +21,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
-import { fmtBags } from '../../utils/calculations.js'
-
-const PROCUREMENT_TYPE_NAME = 'Procurement'
+import { fmtBags, isProcurementTypeName } from '../../utils/calculations.js'
 
 function ProcurementBagsNotification() {
   const { currentWarehouseId } = useWarehouse() ?? {}
@@ -32,7 +30,7 @@ function ProcurementBagsNotification() {
     if (!currentWarehouseId) return []
 
     const transactionTypes = await db.transactionTypes.toArray()
-    const procurementTypeId = transactionTypes.find((t) => t.name === PROCUREMENT_TYPE_NAME)?.transactionTypeId
+    const procurementTypeId = transactionTypes.find((t) => isProcurementTypeName(t.name))?.transactionTypeId
     if (!procurementTypeId) return []
 
     const sackTypes = await db.sackTypes.toArray()

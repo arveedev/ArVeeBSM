@@ -276,6 +276,17 @@ export const isTestMillingTypeName = (name) => {
   return normalized === 'TEST MILLING' || normalized === 'TEST RE-MILLING'
 }
 
+/**
+ * Same reasoning and pattern as isMillingTypeName/isTestMillingTypeName
+ * above - transaction type names in the actual data are all-caps
+ * (e.g. "PROCUREMENT"), which never matched a hardcoded exact-case
+ * 'Procurement' comparison, silently hiding the RSBSA/Farmer
+ * Organization fields entirely.
+ */
+export const isProcurementTypeName = (name) => (name ?? '').trim().toUpperCase() === 'PROCUREMENT'
+
+export const isSalesTypeName = (name) => (name ?? '').trim().toUpperCase() === 'SALES'
+
 // Home, Admin Home, Reports, and exported PDFs.
 
 /** Formats a whole-number bag/piece count with comma separators. 7581 → "7,581" */

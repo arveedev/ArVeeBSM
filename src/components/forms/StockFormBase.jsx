@@ -61,6 +61,8 @@ import {
   isMillingTypeName,
   isTestMillingTypeName,
   isAuthorityComplete,
+  isProcurementTypeName,
+  isSalesTypeName,
 } from '../../utils/calculations.js'
 import {
   suggestNextSerial,
@@ -95,8 +97,6 @@ import {
 
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 const GENDERS = ['Male', 'Female']
-const PROCUREMENT_TYPE_NAME = 'Procurement'
-const SALES_TYPE_NAME = 'Sales'
 
 // Display-only: strips a leading "MO No." / "TMO No." prefix (any
 // casing/spacing) for readability, since the full stored value can be
@@ -401,8 +401,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const selectedPile = (piles ?? []).find((p) => p.pileId === pileId)
   const selectedVariety = sortedVarieties.find((v) => v.varietyId === varietyId)
-  const isProcurement = selectedTransactionType?.name === PROCUREMENT_TYPE_NAME
-  const isSales = selectedTransactionType?.name === SALES_TYPE_NAME
+  const isProcurement = isProcurementTypeName(selectedTransactionType?.name)
+  const isSales = isSalesTypeName(selectedTransactionType?.name)
 
   useEffect(() => {
     if (!isProcurement && farmerOrgEnabled) {

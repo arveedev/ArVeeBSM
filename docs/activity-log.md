@@ -7668,3 +7668,42 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 109 test cases
 across 17 suites, all passing.
+
+## Procurement RSBSA/Farmer Organization fields missing - found the same case-sensitivity bug class as Milling
+
+User reported the RSBSA number and Farmer Organization fields (member
+management, condition of being under a cooperative) had gone missing
+from Procurement transactions. Investigated: the JSX for both blocks
+is structurally intact (verified line by line, not corrupted by any
+recent editing). The actual cause: the exact same bug class just found
+for Milling - isProcurement was defined as an exact-case comparison
+against the literal string 'Procurement', but confirmed transaction
+type names in the real data are all-caps (e.g. "MILLING"), so
+"PROCUREMENT" never matched, silently hiding the entire RSBSA/Farmer
+Organization section regardless of how correct the rest of the code
+was.
+
+Added isProcurementTypeName/isSalesTypeName to calculations.js,
+matching the existing isMillingTypeName/isTestMillingTypeName pattern
+exactly. Replaced the exact-case comparisons in StockFormBase.jsx and
+removed the now-unused PROCUREMENT_TYPE_NAME/SALES_TYPE_NAME
+constants.
+
+While fixing this, also found ProcurementBagsNotification.jsx had the
+identical bug in its own separate PROCUREMENT_TYPE_NAME constant, used
+to find the Procurement transaction type ID for the sacks-notification
+feature entirely - this would have silently never worked for the same
+reason. Fixed using the same shared matcher.
+
+Swept the entire codebase afterward for any other transaction-type-
+name string comparisons using this exact pattern - confirmed none
+remain (Milling/Test Milling/Remilling/Test Re-Milling, Procurement,
+and Sales were the only ones, all now using shared, case-insensitive
+matchers).
+
+Verified with a 6-case test covering both matchers.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 115 test cases
+across 18 suites, all passing.
