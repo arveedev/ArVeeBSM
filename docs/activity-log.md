@@ -8437,3 +8437,29 @@ succeeds) and the complete regression suite re-run - 142 test cases
 across 21 suites, all passing.
 
 ## LESSON: dependency arrays in useEffect/useLiveQuery are evaluated synchronously during render, same as any other hook call argument - only the CALLBACK BODY of useEffect is deferred. Any new hook must have every dependency array variable checked against declaration order, not just callback body references. This is the second time this exact class of mistake has happened in this session; treat it as a mandatory checklist item for any new hook going forward, not just something to reason through case by case.
+
+## Pile still not auto-filling specifically from Reports (works fine from Authority Monitor) - added targeted diagnostic rather than guessing further
+
+User confirmed the derivation works correctly via the Authority
+Monitor / new-transaction flow (handleSelectAuthority), but not when
+opening an existing transaction from Reports - suspected either a
+data-formatting difference (e.g. a "Pile: " prefix on the sheet value)
+or a race condition. Confirmed the matching logic itself is byte-for-
+byte identical between both code paths (same trim/lowercase
+comparison), ruling out a logic difference between the two flows.
+Confirmed Reports.jsx passes the transaction's actual type directly
+when opening the form, ruling out a type-mismatch race at least at
+that specific point.
+
+Given the cost of guessing wrong on this exact file very recently,
+added targeted diagnostic logging directly to this effect instead of
+further speculation - logs the outcome at every branch point
+(linkedAuthority not yet resolved, orNumber blank, no pile match found
+with the full list of available pile names for comparison, or a
+successful match). This will show definitively on next test whether
+this is a sheet-data-formatting issue, a timing/race issue, or
+something else entirely.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).
