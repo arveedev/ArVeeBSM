@@ -8042,3 +8042,21 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 133 test cases
 across 20 suites, all passing.
+
+## Added an on-screen sync identity diagnostic - no console/devtools access needed at all
+
+User asked how to get console logs on Android and iOS to compare
+against PC - genuinely painful on iOS specifically without a Mac.
+Given the actual need was just comparing one value across devices,
+added a small diagnostic panel directly in Settings.jsx showing
+db.cloud.currentUser's userId live, reactively, via useObservable
+(dexie-react-hooks) - selectable text so it can be copied and shared
+exactly rather than risking a transcription error reading it off two
+screens. This makes the userId comparison (the single most direct way
+to confirm or rule out the shared-identity hypothesis from the
+previous entry) accessible from literally any device with zero setup,
+rather than requiring remote debugging tools.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).

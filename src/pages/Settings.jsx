@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2, ShieldCheck, MoreVertical } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -578,6 +578,7 @@ function Settings() {
   const { setPageHeader } = usePageHeader() ?? {}
   const warehouseSectionRef = useRef(null)
   const [pileSection, setPileSection] = useState('create')
+  const cloudUser = useObservable(db.cloud.currentUser)
   useEffect(() => {
     setPageHeader?.({ title: 'Settings', subtitle: '' })
   }, [])
@@ -632,6 +633,17 @@ function Settings() {
         )}
       </div>
       <StickyWarehouseIndicator targetRef={warehouseSectionRef} warehouse={currentWarehouse} />
+
+      <div className="mt-4 rounded-xl border border-brand-amber/40 bg-brand-amber/10 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-amber">Sync Identity (Diagnostic)</p>
+        <p className="mt-1 text-xs text-neutral-400">
+          Open this same screen on a different device and compare the value below - if they
+          differ, that's why data isn't syncing between devices. Tap and hold to copy.
+        </p>
+        <p className="mt-2 select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+          {cloudUser?.userId ?? '(not yet connected)'}
+        </p>
+      </div>
 
       <div className="mt-6 space-y-3">
         <h2 className="text-sm font-semibold text-app-text">Preferences</h2>
