@@ -26,9 +26,33 @@ function MillingOrderDetail({ order, onClose }) {
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const piles = useLiveQuery(() => db.piles.toArray(), []) ?? []
+  const linkedAuthority = useLiveQuery(async () => {
+    if (order.aiNumber) return db.authorities.where('aiNumber').equals(order.aiNumber).first()
+    if (order.siaNumber) return db.authorities.where('siaNumber').equals(order.siaNumber).first()
+    return null
+  }, [order.aiNumber, order.siaNumber])
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w.name]))
+  const warehouseCodeMap = new Map(warehouses.map((w) => [w.warehouseId, w.code]))
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v.name]))
   const pileMap = new Map(piles.map((p) => [p.pileId, p.pileName]))
+
+  // Last transaction summary, replacing the previously always-static
+  // "Pending" text with something actually informative - e.g. "BSI
+  // issued PD1-A 300 bags on 06 Jul 2026".
+  const lastTx = [...allTx].sort((a, b) => (a.date > b.date ? -1 : 1))[0]
+  const lastTxSummary = (() => {
+    if (!lastTx) return null
+    const isIssue = lastTx.type === 'WSI' || lastTx.type === 'ESI'
+    const isSack = lastTx.type === 'ESI' || lastTx.type === 'ESR'
+    const whCode = warehouseCodeMap.get(lastTx.warehouseId) ?? '—'
+    const pileOrVariety = lastTx.pileId
+      ? (pileMap.get(lastTx.pileId) ?? '—')
+      : (varietyMap.get(lastTx.varietyId) ?? '—')
+    const amount = isSack
+      ? `${fmtBags((lastTx.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} pcs`
+      : `${fmtBags(lastTx.numberOfBags)} bags`
+    return `${whCode} ${isIssue ? 'issued' : 'received'} ${pileOrVariety} ${amount} on ${fmtDate(lastTx.date)}`
+  })()
 
   // Recovery percent expressed as an equivalent net bags figure, per
   // explicit request - a 50kg bag is the standard conversion used
@@ -36,6 +60,17 @@ function MillingOrderDetail({ order, onClose }) {
   const expectedBagsEquivalent = order.type === 'MO' && order.recoveryPercent != null
     ? Math.round((order.issuedKilos * (order.recoveryPercent / 100)) / 50)
     : null
+
+  // By Products from this same milling run - same MO/TMO number, but
+  // tagged with cerealCategory 'By Products' rather than the main
+  // Rice/Palay product. Only relevant for receipts (WSR/ESR), since By
+  // Products are a milling OUTPUT, not something issued to be milled.
+  const byProductsBags = allTx
+    .filter((t) => t.cerealCategory === 'By Products' && (t.type === 'WSR' || t.type === 'ESR'))
+    .reduce((sum, t) => {
+      if (t.type === 'WSR') return sum + (t.numberOfBags ?? 0)
+      return sum + (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
+    }, 0)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={onClose}>
@@ -63,12 +98,43 @@ function MillingOrderDetail({ order, onClose }) {
             </p>
           </div>
           <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-            <p className="text-xs text-neutral-500">Status</p>
+            <p className="text-xs text-neutral-500">Fulfilled?</p>
             <p className={`font-semibold ${order.fulfilled ? 'text-brand-neon' : 'text-brand-amber'}`}>
-              {order.fulfilled ? 'Fulfilled' : 'Pending'}
+              {order.fulfilled ? 'Yes' : 'Not yet'}
             </p>
           </div>
         </div>
+
+        {byProductsBags > 0 && (
+          <div className="mt-2 rounded-lg border border-brand-byproduct/40 bg-brand-byproduct/10 p-2">
+            <p className="text-xs text-neutral-500">By Products (Total)</p>
+            <p className="font-semibold text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
+          </div>
+        )}
+
+        {lastTxSummary && (
+          <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+            <p className="text-xs text-neutral-500">Last Activity</p>
+            <p className="text-sm font-medium text-app-text">{lastTxSummary}</p>
+          </div>
+        )}
+
+        {(linkedAuthority?.sourceWarehouse || order.receivingWarehouse) && (
+          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            {linkedAuthority?.sourceWarehouse && (
+              <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                <p className="text-xs text-neutral-500">Source Warehouse</p>
+                <p className="font-semibold text-app-text">{linkedAuthority.sourceWarehouse}</p>
+              </div>
+            )}
+            {order.receivingWarehouse && (
+              <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                <p className="text-xs text-neutral-500">Receiving Warehouse</p>
+                <p className="font-semibold text-app-text">{order.receivingWarehouse}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
@@ -255,8 +321,16 @@ function MillingMonitor() {
           // issued at all.
           const expectedKilos = o.recoveryPercent != null ? o.issuedKilos * (o.recoveryPercent / 100) : null
           const expectedPieces = o.recoveryPercent != null ? o.issuedPieces * (o.recoveryPercent / 100) : null
-          const kilosProgress = expectedKilos ? Math.min(100, (o.receivedKilos / expectedKilos) * 100) : null
-          const piecesProgress = expectedPieces ? Math.min(100, (o.receivedPieces / expectedPieces) * 100) : null
+          const kilosProgress = expectedKilos
+            ? Math.min(100, (o.receivedKilos / expectedKilos) * 100)
+            // No recovery % available (blank on the sheet) - fall back
+            // to received-vs-issued directly, so a real transaction
+            // history still shows SOME progress rather than a
+            // permanently empty bar regardless of actual activity.
+            : o.issuedKilos > 0 ? Math.min(100, (o.receivedKilos / o.issuedKilos) * 100) : null
+          const piecesProgress = expectedPieces
+            ? Math.min(100, (o.receivedPieces / expectedPieces) * 100)
+            : o.issuedPieces > 0 ? Math.min(100, (o.receivedPieces / o.issuedPieces) * 100) : null
           const progress = Math.max(kilosProgress ?? 0, piecesProgress ?? 0)
           const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
 
@@ -269,7 +343,11 @@ function MillingMonitor() {
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-app-text">{o.number}</p>
-                <p className="truncate text-xs text-neutral-500">{o.ricemillName}</p>
+                <p className="truncate text-xs text-neutral-500">
+                  {o.ricemillName}
+                  {o.type === 'MO' && o.batchCurrent != null && ` · Batch ${o.batchCurrent} of ${o.batchTotal}`}
+                  {o.type === 'TMO' && ` · Trial ${(o.recoveredTrials ?? []).length} of 3`}
+                </p>
                 {hasIssuance && (
                   <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
                     <div

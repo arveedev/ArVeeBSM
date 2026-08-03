@@ -773,3 +773,27 @@ db.cloud.syncState.subscribe((state) => {
 db.cloud.currentUser.subscribe((user) => {
   console.log('[DEXIE-CLOUD-DIAGNOSTIC] currentUser:', JSON.stringify(user))
 })
+
+// syncState.error above has repeatedly shown up as an empty {} object
+// with no actual detail - the real explanation for why Dexie Cloud's
+// server rejected a sync request (which table, which field, what
+// validation failed) lives in the raw HTTP response body itself,
+// which nothing was capturing. This intercepts fetch() calls
+// specifically to the Dexie Cloud sync endpoint and logs the full
+// response body whenever the status isn't OK, so the actual server-
+// side rejection reason becomes visible instead of an empty object.
+const originalFetch = window.fetch
+window.fetch = async (...args) => {
+  const response = await originalFetch(...args)
+  const url = typeof args[0] === 'string' ? args[0] : args[0]?.url
+  if (url && url.includes('dexie.cloud') && !response.ok) {
+    response
+      .clone()
+      .text()
+      .then((body) => {
+        console.error(`[DEXIE-CLOUD-DIAGNOSTIC] HTTP ${response.status} from ${url}:`, body)
+      })
+      .catch(() => {}) // body already consumed elsewhere - nothing more to log
+  }
+  return response
+}

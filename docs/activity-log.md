@@ -7762,3 +7762,89 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 121 test cases
 across 19 suites, all passing.
+
+## CRITICAL: date picker z-index bug found and fixed with certainty
+
+Traced the exact root cause: the transaction form itself renders at
+z-50 (its own full-screen container), but CalendarDatePicker's popup
+used z-40 - meaning inside the transaction forms specifically, the
+calendar rendered BEHIND the form's own opaque background, invisible
+and untappable, even though the earlier outside-click fix was
+genuinely correct for other, lower-stacking-context usages like
+Beginning Balances (where z-40 was already the highest z-index in that
+context). Two separate bugs in the same component, only one of which
+was fixed previously. Bumped the popup to z-[110] - higher than every
+other z-index used anywhere in the app (the previous highest was
+z-[100]) - so this can never be hidden behind any current or future
+modal regardless of context.
+
+## Progress bar showing 0% despite real transaction activity - found and fixed
+
+The entire progress calculation depended on recoveryPercent being
+non-null - if that column is blank on the sheet for any given row
+(plausible for many), expected values were null, and progress silently
+defaulted to 0% regardless of how much had actually been issued and
+received. Added a fallback: when no recovery % is available, progress
+is now computed directly from received-vs-issued instead, so a real
+transaction history always shows something meaningful rather than a
+permanently empty bar.
+
+## CRITICAL: caught and fixed a serious editing mistake before it could ship
+
+While adding the new ensureBackupSheetColumns maintenance function to
+the Apps Script file, an earlier edit's old_str accidentally matched
+into the MIDDLE of the existing findSerialRange function rather than
+appending cleanly after it - silently deleting that function's actual
+logic body and closing brace. This was caught immediately by actually
+running a parse check on the Apps Script file (a full JS brace-balance
+check, not just visual review) before considering the edit done -
+confirming why this parse-verify-before-done discipline matters even
+for files edited only via string replacement, not just JSX. Restored
+findSerialRange's complete body exactly as it was.
+
+## New: ensureBackupSheetColumns Apps Script maintenance function
+
+Per explicit request to remove manual column-entry error entirely:
+added a standalone function (not part of the web app's HTTP interface
+at all - run directly from the Apps Script editor's function dropdown
+and Run button) that adds every missing column this session's features
+need to each backup sheet (DATA_ENTRY, Issues Backup, Sacks Receipts
+Backup, Sacks Issues Backup) - checked by exact header text, safe to
+run multiple times, never touches or reorders any existing column or
+data. Documented exactly what each column will contain directly in the
+function's own comment block, so this serves as the authoritative
+column reference going forward.
+
+## Apps Script: added Source Warehouse (AI sheet Column D) and Receiving Warehouse (MO/TMO sheet Column K)
+
+Neither was being read at all previously. Added using the same raw-
+column-position pattern already established for Regional Authority
+Number, since the exact header text on these columns wasn't confirmed
+- position-based reading is more robust regardless. Wired through to
+the client-side authorities/millingOrders sync and surfaced on
+MillingMonitor's detail view.
+
+## MillingMonitor: batch/trial shown in list itself, last-transaction summary replacing static "Pending", By Products total added
+
+Per explicit requests: the list row now shows batch (MO) or trial
+count (TMO) directly, not just on the detail view. The always-static
+"Pending"/"Fulfilled" status text is now paired with an actual
+last-activity summary (e.g. "BSI issued PD1-A 300 bags on 06 Jul
+2026"), computed from the most recent transaction associated with each
+order. Added a By Products total (summed from any WSR/ESR tagged
+cerealCategory 'By Products' sharing the same MO/TMO number) to the
+detail view, shown only when nonzero.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds, PLUS an explicit brace-balance check on the Apps Script file
+itself, which caught a real mistake before it shipped) and the
+complete regression suite re-run - 121 test cases across 19 suites,
+all passing.
+
+## STILL NOT DONE this entry, deferred given scope already covered:
+- Authority selector on the Completed list of authorities (both user
+  and admin/visitor pages) - not started.
+- Cross-device sync root cause still unconfirmed - the new Dexie Cloud
+  fetch-interceptor diagnostic logging (added last entry) is in this
+  package, but hasn't been tested against a real failure yet.

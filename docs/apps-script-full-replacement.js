@@ -237,13 +237,14 @@ function doGet(e) {
           const recoveryPercent = row[11] !== '' && row[11] != null ? Number(row[11]) : null; // Column L
           const aiNumber = String(row[7] ?? '').trim() || null; // Column H
           const siaNumber = String(row[8] ?? '').trim() || null; // Column I
+          const receivingWarehouse = String(row[10] ?? '').trim() || null; // Column K
           // Column M - manually typed "DONE" by the admin to hide a
           // historical row from the app entirely. The app only ever
           // READS this column - it is never written back to.
           const sheetStatus = String(row[12] ?? '').trim().toUpperCase();
           if (sheetStatus === 'DONE') return null;
 
-          const result = { number, ricemillName, recoveryPercent, aiNumber, siaNumber, type: orderType };
+          const result = { number, ricemillName, recoveryPercent, aiNumber, siaNumber, receivingWarehouse, type: orderType };
 
           if (orderType === 'MO') {
             // Column G - "1 of 15" format: current batch / total batches
@@ -354,6 +355,12 @@ function doGet(e) {
       const regionalAuthNum = dataRows[i] ? dataRows[i][9] : null;
       row['Regional Authority Number'] = regionalAuthNum != null && regionalAuthNum !== ''
         ? String(regionalAuthNum).trim()
+        : null;
+      // Source Warehouse - Column D (index 3), same raw-position
+      // reasoning as Regional Authority Number above.
+      const sourceWarehouse = dataRows[i] ? dataRows[i][3] : null;
+      row['Source Warehouse'] = sourceWarehouse != null && sourceWarehouse !== ''
+        ? String(sourceWarehouse).trim()
         : null;
     });
 
@@ -561,4 +568,81 @@ function findSerialRange(sheet, matchColumn, warehouseColumn, warehouseValue) {
     if (max === null || num > max) max = num;
   }
   return { min, max };
+}
+
+/**
+ * ONE-TIME MAINTENANCE FUNCTION - run this directly from the Apps
+ * Script editor (select "ensureBackupSheetColumns" from the function
+ * dropdown at the top, then click Run) to automatically add every
+ * column the app needs for its Milling/Procurement fields, to every
+ * backup sheet that's missing them.
+ *
+ * Safe to run multiple times - only ADDS columns that don't already
+ * exist (checked by exact header text match); never touches, reorders,
+ * or removes any existing column or any existing data. New columns are
+ * always appended after the last existing column, so nothing shifts.
+ *
+ * What each column will contain, once the app starts writing to it:
+ *   MO Number    - the full Milling Order reference the app derived
+ *                  for this transaction (e.g. "MO No. ALB-2026-D-027")
+ *   TMO Number   - same, for Test Milling Order
+ *   Batch Number - which batch (of however many) this transaction's
+ *                  MO covers, as a plain number
+ *   Trial Number - which trial (1, 2, or 3) this transaction's TMO
+ *                  covers, as a plain number
+ *   RSBSA        - the RSBSA registration ID of the farmer named on a
+ *                  Procurement transaction (blank if not Procurement,
+ *                  or if the field was left blank)
+ *   Gender       - the farmer's gender, same conditions as RSBSA
+ *   Farmer Organization Members - if the Procurement was from a
+ *                  cooperative rather than an individual farmer, every
+ *                  member's name, RSBSA, and gender, formatted as one
+ *                  readable line per transaction (e.g. "Juan Dela Cruz
+ *                  (12-34-56, Male); Maria Santos (no RSBSA, Female)")
+ */
+function ensureBackupSheetColumns() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  const sheetsAndColumns = [
+    { name: 'DATA_ENTRY', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members'] },
+    { name: 'Issues Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members'] },
+    { name: 'Sacks Receipts Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number'] },
+    { name: 'Sacks Issues Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number'] },
+  ];
+
+  const results = [];
+
+  sheetsAndColumns.forEach(({ name, columns }) => {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet) {
+      results.push(`SKIPPED "${name}" - sheet not found`);
+      return;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    const existingHeaders = lastCol > 0
+      ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map((h) => String(h).trim())
+      : [];
+
+    const missing = columns.filter((c) => !existingHeaders.includes(c));
+    if (missing.length === 0) {
+      results.push(`"${name}" already has every needed column - nothing to add`);
+      return;
+    }
+
+    // Append each missing column one at a time, always after the
+    // current last column, so existing columns are never disturbed.
+    missing.forEach((header) => {
+      const nextCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, nextCol).setValue(header);
+    });
+    results.push(`"${name}" - added: ${missing.join(', ')}`);
+  });
+
+  // Logged to the Apps Script editor's own execution log (View >
+  // Logs, or Ctrl+Enter after running) - this is a one-time manual
+  // run, not something the app calls, so there's no need for a JSON
+  // response here.
+  Logger.log(results.join('\n'));
+  return results;
 }

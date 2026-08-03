@@ -361,6 +361,7 @@ export const syncMillingOrdersFromSheets = async () => {
           batchTotal: order.batchTotal ?? null,
           aiNumber: order.aiNumber ?? null,
           siaNumber: order.siaNumber ?? null,
+          receivingWarehouse: order.receivingWarehouse ?? null,
           status: 'Active',
         })
         count += 1
@@ -447,6 +448,7 @@ export const syncAuthoritiesFromSheets = async () => {
           varietyId: varietyByCode.get(String(row['VARIETY CODE'] ?? '').trim()) ?? null,
           transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
           regionalAuthorityNumber: row['Regional Authority Number'] ?? null,
+          sourceWarehouse: row['Source Warehouse'] ?? null,
           totalAllocationBags: toNumberOrNull(row['BAG']),
           totalAllocationKilos: toNumberOrNull(row['NET KG']),
           remarks: row['REMARKS'] ?? null,
