@@ -8404,3 +8404,36 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 142 test cases
 across 21 suites, all passing.
+
+## URGENT FIX: my own last edit crashed the entry form entirely - confirmed my mistake, not data or old bugs resurfacing
+
+User reported the entry form not loading at all, with a "Cannot
+access before initialization" ReferenceError on the WSI form
+specifically - correctly suspected this was new, not a resurfaced old
+bug, since no data changed on their end.
+
+Confirmed directly: this was a genuine mistake in my previous entry's
+pile-derivation effect. My reasoning that "useEffect callback bodies
+are deferred past render, so referencing a later-declared variable is
+safe" was correct - but I failed to apply that same scrutiny to the
+DEPENDENCY ARRAY itself, which is a plain array literal evaluated
+IMMEDIATELY, synchronously, during render, not deferred at all. The
+new effect's dependency array referenced `piles`, which is declared
+about 90 lines later in the component - the exact same TDZ crash class
+as the original isMilling/isTestMilling bug from much earlier in this
+session, just missed again through an incomplete check.
+
+Fixed by relocating the entire effect to immediately after piles'
+own declaration, rather than leaving it in its original position.
+Cross-checked every other effect touched or added this session
+(the linkedMillingOrder effect, the MO/TMO derivation effect, and the
+newly-relocated pile effect) to confirm each one's dependency array
+variables are genuinely declared earlier in the file - all confirmed
+safe.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 142 test cases
+across 21 suites, all passing.
+
+## LESSON: dependency arrays in useEffect/useLiveQuery are evaluated synchronously during render, same as any other hook call argument - only the CALLBACK BODY of useEffect is deferred. Any new hook must have every dependency array variable checked against declaration order, not just callback body references. This is the second time this exact class of mistake has happened in this session; treat it as a mandatory checklist item for any new hook going forward, not just something to reason through case by case.

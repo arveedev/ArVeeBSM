@@ -287,27 +287,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
   }, [linkedMillingOrder, isMilling, isTestMilling, type, loadedTransaction])
 
-  // Pile derivation from the AI sheet's OR# column, mirroring the
-  // MO/TMO derivation effect above exactly. Previously this matching
-  // only ever ran when selecting an authority for a brand NEW
-  // transaction (handleSelectAuthority) - editing an existing,
-  // already-saved transaction never re-derived it, so the pile stayed
-  // frozen at whatever was originally saved and never picked up a
-  // later change to the AI sheet's pile assignment - the exact same
-  // staleness problem already fixed for MO/TMO numbers.
-  useEffect(() => {
-    if (type === 'WSR' || (!isMilling && !isTestMilling)) return
-    if (!linkedAuthority) return
-    const authorityOrNumber = linkedAuthority.orNumber != null ? String(linkedAuthority.orNumber).trim() : ''
-    if (!authorityOrNumber) return
-    const matchedPile = (piles ?? []).find(
-      (p) => p.pileName.trim().toLowerCase() === authorityOrNumber.toLowerCase()
-    )
-    if (matchedPile) {
-      setPileId(matchedPile.pileId)
-      applyPileDefaults(matchedPile.pileId)
-    }
-  }, [linkedAuthority, isMilling, isTestMilling, type, piles])
 
   const authorityRemainingKilos = linkedAuthority?.totalAllocationKilos != null
     ? Math.max(0, linkedAuthority.totalAllocationKilos - (linkedAuthority.totalIssuedKilos ?? 0))
@@ -398,6 +377,27 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (!currentWarehouse) return []
     return db.piles.where('warehouseId').equals(currentWarehouse.warehouseId).toArray()
   }, [currentWarehouse?.warehouseId])
+  // Pile derivation from the AI sheet's OR# column, mirroring the
+  // MO/TMO derivation effect above exactly. Previously this matching
+  // only ever ran when selecting an authority for a brand NEW
+  // transaction (handleSelectAuthority) - editing an existing,
+  // already-saved transaction never re-derived it, so the pile stayed
+  // frozen at whatever was originally saved and never picked up a
+  // later change to the AI sheet's pile assignment - the exact same
+  // staleness problem already fixed for MO/TMO numbers.
+  useEffect(() => {
+    if (type === 'WSR' || (!isMilling && !isTestMilling)) return
+    if (!linkedAuthority) return
+    const authorityOrNumber = linkedAuthority.orNumber != null ? String(linkedAuthority.orNumber).trim() : ''
+    if (!authorityOrNumber) return
+    const matchedPile = (piles ?? []).find(
+      (p) => p.pileName.trim().toLowerCase() === authorityOrNumber.toLowerCase()
+    )
+    if (matchedPile) {
+      setPileId(matchedPile.pileId)
+      applyPileDefaults(matchedPile.pileId)
+    }
+  }, [linkedAuthority, isMilling, isTestMilling, type, piles])
 
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), [])
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
