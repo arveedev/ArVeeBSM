@@ -387,15 +387,27 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // staleness problem already fixed for MO/TMO numbers.
   useEffect(() => {
     if (type === 'WSR' || (!isMilling && !isTestMilling)) return
-    if (!linkedAuthority) return
+    if (!linkedAuthority) {
+      console.log('[PILE-DERIVATION-DIAGNOSTIC] no linkedAuthority yet - linkedDocNo:', linkedDocNo, 'linkedDocDeductsFromAi:', linkedDocDeductsFromAi)
+      return
+    }
     const authorityOrNumber = linkedAuthority.orNumber != null ? String(linkedAuthority.orNumber).trim() : ''
-    if (!authorityOrNumber) return
+    if (!authorityOrNumber) {
+      console.log('[PILE-DERIVATION-DIAGNOSTIC] linkedAuthority found but orNumber is blank:', JSON.stringify(linkedAuthority))
+      return
+    }
     const matchedPile = (piles ?? []).find(
       (p) => p.pileName.trim().toLowerCase() === authorityOrNumber.toLowerCase()
     )
     if (matchedPile) {
+      console.log('[PILE-DERIVATION-DIAGNOSTIC] matched pile:', matchedPile.pileName, '- applying it')
       setPileId(matchedPile.pileId)
       applyPileDefaults(matchedPile.pileId)
+    } else {
+      console.log(
+        '[PILE-DERIVATION-DIAGNOSTIC] NO MATCH - authorityOrNumber:', JSON.stringify(authorityOrNumber),
+        'available pile names:', (piles ?? []).map((p) => p.pileName)
+      )
     }
   }, [linkedAuthority, isMilling, isTestMilling, type, piles])
 
