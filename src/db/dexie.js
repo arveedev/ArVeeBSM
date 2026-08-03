@@ -8,6 +8,7 @@ import { hashPin } from '../utils/pinHash.js'
 export const db = new Dexie('BSMDatabase', { addons: [dexieCloud] })
 
 window.db = db;
+db.cloud.configure({dbUrl: 'https://zv432njdm.dexie.cloud'})
 
 db.version(1).stores({
   users: 'uid, accessCode, role, assignedWarehouse',
