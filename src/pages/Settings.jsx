@@ -580,6 +580,7 @@ function Settings() {
   const [pileSection, setPileSection] = useState('create')
   const cloudUser = useObservable(db.cloud.currentUser)
   const cloudSyncState = useObservable(db.cloud.syncState)
+  const localUsersCount = useLiveQuery(() => db.users.count(), [])
   const [syncErrorDetail, setSyncErrorDetail] = useState(lastSyncErrorDetail.value)
   useEffect(() => {
     const interval = setInterval(() => setSyncErrorDetail(lastSyncErrorDetail.value), 1000)
@@ -647,6 +648,12 @@ function Settings() {
           differ, that's why data isn't syncing between devices. Tap and hold any value to copy.
         </p>
         <div className="mt-2 space-y-1.5">
+          <div>
+            <p className="text-[10px] uppercase text-neutral-600">Local Users Count (read-only, no risk to check)</p>
+            <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              {localUsersCount ?? '(loading)'}
+            </p>
+          </div>
           <div>
             <p className="text-[10px] uppercase text-neutral-600">Database URL (should be the SAME on every device)</p>
             <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">

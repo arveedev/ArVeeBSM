@@ -8301,3 +8301,39 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
 
 ## LESSON: do not introduce speculative fixes involving destructive-sounding operations (logout, clear, reset, delete) without either (a) confirmed documentation of their exact behavior in this specific configuration, or (b) explicitly flagging the uncertainty and asking the user to test on a single, expendable device first rather than deploying broadly. This was a real, avoidable mistake.
+
+## Major reassuring discovery: found the actual, documented explanation for why data appeared to disappear - NOT the logout() mistake at all
+
+Found direct confirmation in Dexie Cloud's own documentation:
+"By default Dexie Cloud will append part of the given databaseURL to
+your IndexedDB database name... if the databaseUrl is changed to
+another remote database, it will NOT try to connect the same local
+database to match the new remote one."
+
+This means changing databaseUrl (the fix for the earlier serialCounters
+schema issue) automatically causes Dexie Cloud to create and use a
+BRAND NEW, separate local IndexedDB database on every device - it
+never touches, merges with, or deletes the old one. This very likely
+means the user's original local data was never actually at risk from
+the earlier logout() mistake at all - it's very likely sitting
+completely intact in the old, separate local database
+(BSMDatabase-z15dzktxq or similar), simply not the one currently
+active now that databaseUrl points elsewhere.
+
+Also received a more specific error from Android (untouched by the
+logout() mistake, so cleaner diagnostic data): "Refresh token
+verification failed: jwt audience invalid" - specifically the REFRESH
+token, not the access token this time. Given the access token
+generation path is server-confirmed correct, this points at something
+specific to how the refresh token is being validated, though the exact
+mechanism is still unclear and requires more direct data before acting
+further, especially given the earlier mistake.
+
+Added ONE further read-only diagnostic (local users count) to the same
+Settings panel to gather concrete data on what's actually in each
+device's currently-active local database, without any risk - no
+destructive or state-changing code introduced.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).
