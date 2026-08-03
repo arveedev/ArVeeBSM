@@ -270,13 +270,10 @@ const SackFormBase = forwardRef(function SackFormBase(
   }, [type, linkedSiaAuthority?.siaNumber, isMilling, isTestMilling])
 
   useEffect(() => {
-    // Only protects an ALREADY-WORKING historical value - see
-    // StockFormBase.jsx's identical fix for the full explanation. A
-    // transaction saved with a genuinely blank moNumber/tmoNumber
-    // should still get backfilled with a fresh match on edit.
-    if (loadedTransaction && (isMilling ? loadedTransaction.moNumber : loadedTransaction.tmoNumber)) return
     if (type === 'ESR' || (!isMilling && !isTestMilling)) return
     if (linkedMillingOrder) {
+      // A fresh match found - always applies, even during edit. See
+      // StockFormBase.jsx's identical fix for the full explanation.
       if (isMilling) {
         setMoNumber(linkedMillingOrder.number)
         setBatchNumber(linkedMillingOrder.batchCurrent != null ? String(linkedMillingOrder.batchCurrent) : '')
@@ -285,6 +282,9 @@ const SackFormBase = forwardRef(function SackFormBase(
       }
       if (linkedMillingOrder.ricemillName) setCustomerName(linkedMillingOrder.ricemillName)
     } else {
+      // No fresh match - protects an existing historical value from
+      // being wiped out, but only when one already exists.
+      if (loadedTransaction && (isMilling ? loadedTransaction.moNumber : loadedTransaction.tmoNumber)) return
       // The SIA changed (or was cleared) and no longer matches any
       // MO/TMO - clear whatever was previously derived rather than
       // leaving a stale, now-mismatched number sitting in the form.

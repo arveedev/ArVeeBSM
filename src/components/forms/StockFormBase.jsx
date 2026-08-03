@@ -259,26 +259,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
   }, [type, linkedAuthority?.aiNumber, isMilling, isTestMilling])
 
   useEffect(() => {
-    // Only applies to the create-new flow - editing an existing
-    // transaction must never let this clobber the historical moNumber/
-    // tmoNumber that loadTransactionIntoForm already correctly loaded.
-    // This was a real bug: editing an already-completed Milling
-    // transaction (very common, since edits usually happen after the
-    // fact) meant linkedMillingOrder often no longer resolved a fresh
-    // match (the MO/TMO gets removed from the local cache once marked
-    // DONE) - so the "no match, clear it" branch below was silently
-    // wiping out the correct, already-saved value on every edit.
-    // Only protects an ALREADY-WORKING historical value from being
-    // clobbered (e.g. after its MO got marked DONE and removed from
-    // the sync cache) - a transaction that was saved with a genuinely
-    // blank moNumber/tmoNumber (predating this matching feature, or
-    // one that was never successfully matched at save time) should
-    // still get backfilled with a fresh match on edit, so older
-    // transactions can be brought up to date with the latest MO/TMO
-    // sheet data rather than staying permanently blank forever.
-    if (loadedTransaction && (isMilling ? loadedTransaction.moNumber : loadedTransaction.tmoNumber)) return
     if (type === 'WSR' || (!isMilling && !isTestMilling)) return
     if (linkedMillingOrder) {
+      // A fresh match was found - always apply it, even when editing
+      // a transaction that already had a value. The sheet may have
+      // changed since this transaction was originally saved (e.g. an
+      // MO renamed from -F- to -G-), and editing should bring the
+      // transaction's MO/TMO data up to date with whatever the sheet
+      // currently says, not keep displaying a stale original value.
       if (isMilling) {
         setMoNumber(linkedMillingOrder.number)
         setBatchNumber(linkedMillingOrder.batchCurrent != null ? String(linkedMillingOrder.batchCurrent) : '')
@@ -287,9 +275,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
       }
       if (linkedMillingOrder.ricemillName) setCustomerName(linkedMillingOrder.ricemillName)
     } else {
-      // The AI changed (or was cleared) and no longer matches any MO/
-      // TMO - clear whatever was previously derived rather than
-      // leaving a stale, now-mismatched number sitting in the form.
+      // No fresh match found. If editing a transaction that already
+      // had a working value, leave it alone rather than wiping it out
+      // - this most commonly means the MO/TMO was marked DONE and
+      // removed from the active sync cache, not that the historical
+      // value itself was ever wrong. Only clear when creating new (or
+      // when the existing value was already blank).
+      if (loadedTransaction && (isMilling ? loadedTransaction.moNumber : loadedTransaction.tmoNumber)) return
       if (isMilling) { setMoNumber(''); setBatchNumber('') }
       else if (isTestMilling) setTmoNumber('')
     }

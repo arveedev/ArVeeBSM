@@ -7848,3 +7848,59 @@ all passing.
 - Cross-device sync root cause still unconfirmed - the new Dexie Cloud
   fetch-interceptor diagnostic logging (added last entry) is in this
   package, but hasn't been tested against a real failure yet.
+
+## Real design flaw found: edit-mode MO/TMO derivation didn't re-sync with sheet changes
+
+User's exact scenario: an MO's identifier changed on the sheet (e.g.
+ALB-2026-F-133 to ALB-2026-G-133) after a transaction using it had
+already been saved - editing that transaction kept showing the STALE
+original value instead of picking up the sheet's current data.
+
+Root cause: the earlier "protect an already-working value" gate
+blocked the ENTIRE derivation effect from running whenever editing a
+transaction that already had a moNumber/tmoNumber - including the
+"fresh match found, should update" path, not just the "no match,
+would incorrectly clear" path it was actually meant to guard against.
+
+Corrected the logic: a fresh match found on the sheet now ALWAYS
+applies, even when editing a transaction that already had a value -
+the sheet may have changed since the transaction was originally
+saved, and editing should reflect current sheet data, not preserve a
+stale snapshot forever. The protective gate now only applies to the
+genuinely different case it was meant for: no match found at all
+(most commonly because the MO/TMO was marked DONE and removed from
+the sync cache) - in that specific case only, an existing historical
+value is left alone rather than being wiped to blank. Applied to both
+StockFormBase.jsx and SackFormBase.jsx.
+
+## Date picker - extensively re-verified, no additional code bug found
+
+Re-read the entire CalendarDatePicker component from scratch (not
+just the areas touched by earlier fixes), confirmed all 3 transaction
+forms (Stock, Sacks, WTS) use this exact same, single component, and
+confirmed all 3 forms cap out at z-50 - well below the z-[110] fix
+already applied. Could not find any further bug through this review.
+Flagged honestly to the user rather than guessing at another
+speculative fix with no supporting evidence - the most likely
+remaining explanation is a deployment lag (testing against a build
+that predates the z-index fix), which needs the user's direct
+confirmation to rule in or out.
+
+## Apps Script redeploy instructions moved to a dedicated, unmissable file
+
+Per repeated, justified frustration (explicitly the "10th time" this
+was flagged inconsistently) - created APPS_SCRIPT_DEPLOY.md at the
+project root specifically to stop this from being buried in prose
+ever again. Going forward, any package that changes
+docs/apps-script-full-replacement.js will explicitly say so at the
+very top of the response, matching this file's own instruction to
+check for that exact statement.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 121 test cases
+across 19 suites, all passing.
+
+## STILL NOT DONE, explicitly deferred given scope already covered this session:
+- Authority selector on Completed list (both user and admin/visitor
+  pages) - not started, carried over from the previous request.
