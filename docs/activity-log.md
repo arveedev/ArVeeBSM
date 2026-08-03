@@ -8204,3 +8204,25 @@ receives.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
+
+## Extended the on-screen diagnostic panel - no console needed on any device, including mobile
+
+User correctly pushed back: no console access on either mobile
+platform (iOS or Android), and being able to log in on a device with
+existing local data says nothing about whether that device has
+actually connected to and pushed data up to the new Dexie Cloud
+database yet - the offline-first PIN login only ever checks local
+IndexedDB directly.
+
+Extended the existing Settings.jsx diagnostic panel (built two entries
+ago) to also show, directly on screen with no console needed at all:
+the actual configured database URL (to directly confirm whether a
+device is still running old code pointed at the old database, or has
+received the update), the local schema version, and the live sync
+phase/status. This makes it possible to fully diagnose any device,
+including both mobile platforms, using nothing but the Settings page
+itself.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).

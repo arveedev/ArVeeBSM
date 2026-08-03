@@ -579,6 +579,7 @@ function Settings() {
   const warehouseSectionRef = useRef(null)
   const [pileSection, setPileSection] = useState('create')
   const cloudUser = useObservable(db.cloud.currentUser)
+  const cloudSyncState = useObservable(db.cloud.syncState)
   useEffect(() => {
     setPageHeader?.({ title: 'Settings', subtitle: '' })
   }, [])
@@ -637,12 +638,35 @@ function Settings() {
       <div className="mt-4 rounded-xl border border-brand-amber/40 bg-brand-amber/10 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-amber">Sync Identity (Diagnostic)</p>
         <p className="mt-1 text-xs text-neutral-400">
-          Open this same screen on a different device and compare the value below - if they
-          differ, that's why data isn't syncing between devices. Tap and hold to copy.
+          Open this same screen on a different device and compare the values below - if they
+          differ, that's why data isn't syncing between devices. Tap and hold any value to copy.
         </p>
-        <p className="mt-2 select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
-          {cloudUser?.userId ?? '(not yet connected)'}
-        </p>
+        <div className="mt-2 space-y-1.5">
+          <div>
+            <p className="text-[10px] uppercase text-neutral-600">Database URL (should be the SAME on every device)</p>
+            <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              {db.cloud.options?.databaseUrl ?? '(not configured)'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-neutral-600">Local Schema Version (should be 27 or higher)</p>
+            <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              {db.verno}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-neutral-600">Sync Status</p>
+            <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              {cloudSyncState ? `${cloudSyncState.phase} / ${cloudSyncState.status}` : '(not yet available)'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-neutral-600">userId</p>
+            <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              {cloudUser?.userId ?? '(not yet connected)'}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 space-y-3">
