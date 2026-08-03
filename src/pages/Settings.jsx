@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
-import { db } from '../db/dexie.js'
+import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { fmtBags, fmtWeight, todayLocalISO, liveFormatNumber, parseFormattedNumber } from '../utils/calculations.js'
 import { createPileWithBeginningBalance, recalculatePileCurrentState, closePile, reopenPile } from '../utils/pileLedger.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
@@ -580,6 +580,11 @@ function Settings() {
   const [pileSection, setPileSection] = useState('create')
   const cloudUser = useObservable(db.cloud.currentUser)
   const cloudSyncState = useObservable(db.cloud.syncState)
+  const [syncErrorDetail, setSyncErrorDetail] = useState(lastSyncErrorDetail.value)
+  useEffect(() => {
+    const interval = setInterval(() => setSyncErrorDetail(lastSyncErrorDetail.value), 1000)
+    return () => clearInterval(interval)
+  }, [])
   useEffect(() => {
     setPageHeader?.({ title: 'Settings', subtitle: '' })
   }, [])
@@ -660,6 +665,14 @@ function Settings() {
               {cloudSyncState ? `${cloudSyncState.phase} / ${cloudSyncState.status}` : '(not yet available)'}
             </p>
           </div>
+          {syncErrorDetail && (
+            <div>
+              <p className="text-[10px] uppercase text-neutral-600">Last Captured Sync Error (the actual reason, not just "error")</p>
+              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-brand-crimson">
+                {syncErrorDetail}
+              </p>
+            </div>
+          )}
           <div>
             <p className="text-[10px] uppercase text-neutral-600">userId</p>
             <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">

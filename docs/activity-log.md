@@ -8226,3 +8226,25 @@ itself.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
+
+## All 3 devices now showing error/error - added the actual error text to the on-screen panel
+
+User confirmed both mobile devices show the correct new database URL
+and schema version 27, but sync status shows the generic "error /
+error" on all three devices now (PC included) - a significant finding
+that shifts this from a device-specific/stale-code issue to something
+affecting every device against the new database universally. Notably,
+a PC log just one message prior had reached a genuinely successful
+"in-sync / connected" state, so this appears to be a new regression
+from that point, not a continuation of the original problem.
+
+The generic phase/status alone gives zero diagnostic value - added
+display of the actual captured error text (from the existing fetch-
+interceptor diagnostic, previously only visible via console.error) to
+the same on-screen panel, via a simple exported plain-object store
+polled every second in Settings.jsx, since the interceptor's capture
+is inherently async and not itself an Observable.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).

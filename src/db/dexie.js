@@ -827,6 +827,11 @@ db.cloud.currentUser.subscribe((user) => {
 // specifically to the Dexie Cloud sync endpoint and logs the full
 // response body whenever the status isn't OK, so the actual server-
 // side rejection reason becomes visible instead of an empty object.
+// Exported so Settings.jsx can display the actual last sync error
+// text directly on screen - console.error alone is useless on mobile
+// devices where there's no practical way to access devtools at all.
+export const lastSyncErrorDetail = { value: null }
+
 const originalFetch = window.fetch
 window.fetch = async (...args) => {
   const response = await originalFetch(...args)
@@ -837,6 +842,7 @@ window.fetch = async (...args) => {
       .text()
       .then((body) => {
         console.error(`[DEXIE-CLOUD-DIAGNOSTIC] HTTP ${response.status} from ${url}:`, body)
+        lastSyncErrorDetail.value = `HTTP ${response.status}: ${body}`
       })
       .catch(() => {}) // body already consumed elsewhere - nothing more to log
   }
