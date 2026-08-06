@@ -898,7 +898,21 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // edit, switching the footer to Update/Delete.
   const loadTransactionIntoForm = (tx) => {
     setLoadedTransaction(tx)
-    if (isCategoryScoped && tx.cerealCategory) setCerealCategory(tx.cerealCategory)
+    if (isCategoryScoped) {
+      if (tx.cerealCategory) {
+        setCerealCategory(tx.cerealCategory)
+      } else if (tx.varietyId) {
+        // Fallback: tx.cerealCategory itself may not have been
+        // reliably populated on every historical record - derive it
+        // from the variety's own category instead, which is a more
+        // reliable, long-standing field. Without this, the tab could
+        // stay on whatever it was previously showing, making the
+        // correct pile/variety invisible in their dropdowns even
+        // though loadTransactionIntoForm set the right IDs.
+        const matchedVariety = (varieties ?? []).find((v) => v.varietyId === tx.varietyId)
+        if (matchedVariety?.category) setCerealCategory(matchedVariety.category)
+      }
+    }
     setIsCancelled(tx.status === 'Cancelled')
     setDate(tx.date ?? blankFormState.date)
     setLinkedDocNo(tx.linkedDocNo ?? tx.aiNumber ?? '')
