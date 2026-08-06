@@ -8747,3 +8747,47 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 156 test cases
 across 25 suites, all passing.
+
+## CRITICAL: found the actual, confirmed root cause via user's real sheet data - mapSheetRowToTransaction never read MO/TMO/Batch/Trial columns at all
+
+User provided direct, concrete evidence: the exact raw sheet row for
+the transaction in question, showing "TMO No. ALB - 2026-G-053" and
+trial "1" genuinely present in the data - alongside a screenshot
+confirming the app showed blank TMO/Trial fields and the wrong cereal
+tab for that same transaction, immediately after my previous fix.
+
+Traced the exact code path: when a transaction exists on the Sheet but
+isn't yet in local Dexie (the on-demand single-serial lookup, and
+separately the bulk preload path - both share this exact same
+function), mapSheetRowToTransaction reconstructs a transaction object
+from the raw sheet row. This function was written before the Milling/
+Test Milling MO/TMO/Batch/Trial fields ever existed, and was never
+updated afterward - it simply never reads those columns from the row
+at all, regardless of whether the data is genuinely present in the
+sheet. This fully explains the exact symptom: the data exists on the
+sheet (confirmed directly), but the app never had a code path that
+would read it into the reconstructed transaction object in the first
+place.
+
+Confirmed via the Apps Script side that no redeploy is needed for this
+specific fix - fetchTransactionBySerial already builds its response
+row generically from whatever columns exist on the sheet, keyed by
+header name, so "MO Number"/"TMO Number"/etc. are already present in
+what the server returns; this was purely a client-side mapping gap.
+
+Fixed by adding the four fields to mapSheetRowToTransaction's WSR/WSI
+branch, reading the same column names already established for the
+backup-row-building logic and ensureBackupSheetColumns. Confirmed via
+grep that both callers (the on-demand serial lookup in
+StockFormBase.jsx and the bulk preload in transactionPreload.js) share
+this exact same function, so a single fix covers both paths.
+
+Verified with a 4-case test using the user's own real sheet data
+directly.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 160 test cases
+across 26 suites, all passing.
+
+## This should resolve the TMO/trial/cereal-tab-not-showing issue for any transaction reached via the Sheet fallback path - genuinely high confidence given the user's own real data was used to confirm both the bug and the fix

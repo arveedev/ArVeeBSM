@@ -1052,6 +1052,17 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
       ageValue: row['AGE'] ?? null,
       ageUnit: row['Age Unit'] || (row['AGE'] != null ? 'Months' : 'Days'),
       initialAgeValue: row['AGE'] ?? null,
+      // Previously never mapped at all - this function predates the
+      // Milling/Test Milling fields entirely, so a transaction found
+      // via this Sheet fallback (not yet synced to local Dexie) would
+      // silently reconstruct with none of this data, even though it
+      // genuinely exists in the Sheet row - exactly matching a
+      // completed TMO issuance showing blank TMO/trial fields despite
+      // the actual data being right there.
+      moNumber: row['MO Number'] || null,
+      tmoNumber: row['TMO Number'] || null,
+      batchNumber: row['Batch Number'] || null,
+      trialNumber: row['Trial Number'] || null,
     }
   }
 
