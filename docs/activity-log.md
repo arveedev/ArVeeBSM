@@ -8547,3 +8547,28 @@ across 22 suites, all passing.
 - "Shows Save instead of Update/Delete" bug on some series - not
   investigated
 - MO (not just TMO) not-showing-when-done - not checked
+
+## Sync diagnostic panel now gated by role - full detail for admins, simple status for everyone else
+
+Per explicit request: regular users now only see a simple "Sync
+Status" line (Connected / Not connected - contact your admin / Checking...),
+while admins continue to see the full technical diagnostic panel with
+every field (database URL, schema version, error detail, userId,
+counts). Gated using the same user?.role === 'Admin' pattern already
+established elsewhere in this file.
+
+## 4 of 5 test devices now connecting successfully - noted, awaiting fresh diagnostic data for the one that still isn't
+
+User tested logging one account into 5 devices - 4 connected
+successfully, 1 still showing the token sync problem despite several
+attempts at clearing browser data (with transient "invalid input"
+errors along the way before eventually connecting). Given the user's
+correct concern about this scaling to a real multi-user deployment (20
+of 100 users failing would be a serious problem), this remains an open
+priority - but no fresh diagnostic data was provided for the
+specific device that's still failing, so no further action was taken
+this entry without real data to work from.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).
