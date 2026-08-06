@@ -1287,6 +1287,19 @@ function StockFormBase({ type, title, onClose, prefill }) {
   }
 
   const handleSave = async () => {
+    // Locks IMMEDIATELY on the first tap, before validateForm even
+    // runs - not after, inside performSave. Previously the button
+    // stayed enabled through the entire async validateForm() call,
+    // so a second rapid tap (a real, common mobile UI pattern) could
+    // independently pass validation and reach performSave in
+    // parallel with the first tap, creating two identical local
+    // records with the same serial before either had a chance to
+    // disable anything - a genuine, confirmed cause of duplicate
+    // rows, including ones that appeared even while fully offline
+    // (a purely local, client-side race, no network involved at all).
+    if (isSaving) return
+    setIsSaving(true)
+
     if (overBags && !overKilos) {
       // Bags-over is a soft warning the user already saw inline — allow
       // it through, since some transaction types legitimately exceed the
@@ -1294,13 +1307,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
 
     const ok = await validateForm()
-    if (!ok) return
+    if (!ok) { setIsSaving(false); return }
 
     // A Test Milling receipt for Trial 3 specifically needs an explicit
     // confirmation before it can ever count toward TMO fulfillment -
     // per the requirement that this is asked, not inferred.
     if (type === 'WSR' && isTestMilling && trialNumber === '3' && netKilos > 0) {
       setPendingTrial3Confirm(true)
+      setIsSaving(false)
       return
     }
 
@@ -1308,10 +1322,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
   }
 
   const handleUpdate = async () => {
-    const ok = await validateForm({ excludeId: loadedTransaction.id })
-    if (!ok) return
-
+    // Same race-window fix as handleSave - lock immediately, before
+    // validateForm runs, not after.
+    if (isSaving) return
     setIsSaving(true)
+
+    const ok = await validateForm({ excludeId: loadedTransaction.id })
+    if (!ok) { setIsSaving(false); return }
 
     // Reverse the OLD effect, then apply the NEW one — pile totals and
     // authority balances must reflect only the corrected values.

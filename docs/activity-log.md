@@ -8616,3 +8616,57 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 149 test cases
 across 23 suites, all passing.
+
+## CRITICAL: found and fixed the actual root cause of the duplicate-save bug - a genuine client-side race window, not a sync-layer issue at all
+
+User provided 4 concrete, detailed scenarios. Scenario 3 was the key
+piece of evidence: a duplicate appeared while the device was
+intentionally offline, before any network sync could possibly be
+involved - proving this was a purely local, client-side bug, not
+something in the Sheet-push or cross-tab layer at all.
+
+Traced handleSave and handleUpdate in detail: isSaving (the flag the
+Save/Update button's disabled state depends on) was only ever set
+INSIDE performSave, which is called AFTER an async validateForm()
+call completes - meaning the button remained fully clickable through
+the entire validation step. A second rapid tap (a genuinely common
+mobile UI pattern, especially on a slower connection or older device)
+could trigger a second handleSave() call that independently passes
+validation and reaches performSave in parallel with the first -
+creating two separate, identical local database records with the same
+serial number before either call had disabled anything at all.
+
+This single mechanism directly explains:
+- Scenario 2 (single device, single intended tap, 2 rows appeared)
+- Scenario 3 (duplicate even while offline, then 2 more rows once
+  reconnected - 2 local records x 1 legitimate push each = 4 total)
+- Scenario 4 (Trial 1's data appearing 3 times - if the user tapped
+  Save more than once while still on Trial 1's form state before it
+  reset, multiple performSave calls could have fired with that same
+  data still in the form)
+
+Fixed by moving the isSaving lock to the very start of both handleSave
+and handleUpdate - before validateForm runs, not after - with an
+explicit early-return guard if already saving, and explicit resets on
+every early-exit path (validation failure, the Trial 3 confirmation
+interrupt) so the button never gets stuck disabled.
+
+Scenario 1 (encoding historical transactions that already existed on
+the Sheet) is a different problem - a pre-save existence check against
+the Sheet itself, not a race condition - flagged as still needing
+separate work given the scope of this session.
+
+Verified with a 3-case test documenting both the fix and the old
+buggy behavior for contrast.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 152 test cases
+across 24 suites, all passing.
+
+## STILL NOT DONE, explicitly deferred:
+- Scenario 1: pre-save check against the Sheet itself for historical/
+  backfill entries where local Dexie may not yet have that data cached
+- The broader near-real-time incremental sync algorithm requested
+- MO/TMO-not-showing-when-done bug - still needs real reproduction data
+- "Save instead of Update/Delete" bug - not yet investigated
