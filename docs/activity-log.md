@@ -8714,3 +8714,36 @@ across 24 suites, all passing.
   sync) - not started, remains a significant undertaking
 - NFA-owned Ricemill/Mechanical Dryer facility handling - explicitly
   deferred by the user themselves to a later date
+
+## Cereal tab not auto-switching from Reports on EITHER side - found the real gap and fixed it uniformly
+
+User correctly pointed out my previous pile-derivation fix only ever
+applied to WSI (issuance) - it explicitly skips WSR (receipt)
+entirely, so the receipt side never got any category-switching fix at
+all, exactly matching the report that both sides were broken.
+
+The actual, correct fix location is different: loadTransactionIntoForm
+itself (which handles loading ANY existing transaction from Reports,
+for both WSR and WSI uniformly) already had category-switching logic,
+but it only worked when tx.cerealCategory was already set on the
+record - if that specific field wasn't reliably populated on a given
+historical transaction (plausible, similar to the MO/TMO backfill
+situation found earlier), the tab would silently stay wherever it
+already was, making an otherwise-correctly-loaded pile/variety
+invisible in their tab-filtered dropdowns.
+
+Added a fallback: when tx.cerealCategory itself isn't set, derive it
+from the transaction's own variety instead (a more reliable, longer-
+standing field) via a lookup already using the same pattern
+established elsewhere in this file. Confirmed sacks (SackFormBase.jsx)
+have no cereal tab concept at all, so no equivalent fix was needed
+there - this was purely a StockFormBase.jsx gap, but one that
+correctly affects both WSR and WSI uniformly since
+loadTransactionIntoForm itself is not type-specific.
+
+Verified with a 4-case test covering the fallback logic.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 156 test cases
+across 25 suites, all passing.
