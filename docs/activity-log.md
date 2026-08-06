@@ -8572,3 +8572,47 @@ this entry without real data to work from.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds).
+
+## Investigated the Test Milling trial duplicate-write bug - found and fixed a real, concrete cross-tab race condition
+
+Traced the save flow (resetToBlankEntry, performSave) and the sync
+queue (processSyncQueue) in detail. Confirmed resetToBlankEntry
+correctly clears trialNumber (along with every other field) after
+each save, ruling out a simple "forgot to change the dropdown"
+explanation on its own. Confirmed the sync queue's logic for marking a
+record synced immediately after a successful push is correct within a
+single execution.
+
+Found a real, concrete explanation instead: the sync queue's
+"already syncing" guard (isSyncing) was only ever an in-memory
+variable, scoped to a single browser tab. If the app is open in more
+than one tab at once (the user directly described this exact scenario
+- one tab on the app, another open to watch the Google Sheet) - each
+tab has its own independent isSyncing flag with no visibility into the
+other tab's state. Both tabs could read the same pending transaction
+as unsynced and push it to the Sheet separately, each succeeding,
+before either had the chance to mark it done locally - a genuine,
+concrete mechanism for a duplicate row to appear.
+
+Fixed using the Web Locks API (navigator.locks.request), a standard
+browser API specifically designed for cross-tab coordination - not a
+risky Dexie-Cloud-specific method given the earlier mistake this
+session. Uses ifAvailable so a losing tab skips cleanly rather than
+waiting, since the winning tab's sync will cover the same pending
+records anyway. Falls back to the previous in-memory flag (same-tab
+protection only) if Web Locks isn't available in a given browser.
+
+HONEST CAVEAT: this addresses a genuine, concrete duplicate-row
+mechanism, but may not fully explain the specific "all 3 trials showed
+identical data" symptom described - that would require 3 correctly-
+distinct local records to somehow end up looking the same, which this
+fix does not directly address. Flagged this distinction clearly rather
+than claiming full resolution of both symptoms described.
+
+Verified with a 4-case test covering both the Web Locks path and the
+fallback path.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 149 test cases
+across 23 suites, all passing.
