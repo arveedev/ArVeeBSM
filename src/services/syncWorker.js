@@ -21,15 +21,39 @@ let isSyncing = false
  * records were synced / failed, so the UI can surface results via toast.
  */
 export const processSyncQueue = async () => {
+  // Cross-tab lock: if the app is open in more than one tab (a common,
+  // easy-to-miss scenario - e.g. one tab running the app, another open
+  // to watch the Google Sheet directly), each tab previously had its
+  // own independent isSyncing flag with no way to see the other tab's
+  // state. Two tabs could each read the same pending transaction as
+  // unsynced and push it to the Sheet separately, both succeeding,
+  // before either had a chance to mark it done - producing a genuine
+  // duplicate row. The Web Locks API coordinates this correctly across
+  // every tab/window of the same origin, not just within one JS
+  // context. Falls back to the plain in-memory flag (same-tab
+  // protection only) if this API isn't available in a given browser.
+  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+    return navigator.locks.request('bsm-sync-queue-lock', { ifAvailable: true }, (lock) => {
+      if (!lock) return { synced: 0, failed: 0, skipped: true }
+      return runSyncQueue()
+    })
+  }
   if (isSyncing) {
     return { synced: 0, failed: 0, skipped: true }
   }
+  isSyncing = true
+  try {
+    return await runSyncQueue()
+  } finally {
+    isSyncing = false
+  }
+}
 
+const runSyncQueue = async () => {
   if (!navigator.onLine) {
     return { synced: 0, failed: 0, offline: true }
   }
 
-  isSyncing = true
   let synced = 0
   let failed = 0
 
