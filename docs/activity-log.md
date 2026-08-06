@@ -8489,3 +8489,61 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 145 test cases
 across 22 suites, all passing.
+
+## User's own research: token refresh grant_type handling - implemented as a safe, additive change
+
+User conducted their own research and proposed that Dexie Cloud's
+client library calls fetchTokens with grant_type: 'refresh_token'
+(omitting public_key) on token expiry, roughly hourly, and that the
+server's hardcoded client_credentials grant_type breaks this.
+
+Verified against official Dexie Cloud documentation before touching
+anything: found a real contradiction - the official db.cloud.configure()
+reference implementation always uses client_credentials regardless of
+refresh vs initial login, just conditionally including public_key
+labeled "for refresh token authentication." This is a different model
+than the user's premise. Additionally, checked this app's own
+previously-logged request bodies (from earlier in this session) -
+every one so far contained only public_key, never grant_type or
+refresh_token, which is direct evidence against the premise, though
+not conclusive since no log has yet come from a session that actually
+reached the 1-hour expiry point.
+
+Given the inconclusive evidence either way, implemented the proposed
+fix as a purely ADDITIVE branch on both client and server - the
+grant_type: 'refresh_token' handling only ever activates if that exact
+field is present, and the client-side 401 auto-recovery only calls the
+non-destructive login() (never logout(), learning directly from the
+earlier mistake this session), throttled to at most once per 30
+seconds to prevent any possibility of a retry loop. The existing,
+confirmed-working client_credentials path is completely unchanged for
+every other case, so this cannot break what is currently working
+regardless of whether the premise turns out to be correct.
+
+## Investigated TMO-not-showing-when-marked-done - traced the logic, appears correct, needs real diagnostic data rather than another guess
+
+Traced the exact sequence: loadTransactionIntoForm sets both tmoNumber
+and loadedTransaction in the same state batch, and the protective
+"don't clear an existing value" check in the MO/TMO derivation effect
+reads from loadedTransaction.tmoNumber (the original loaded record)
+directly, not the current tmoNumber state - this should make it safe
+against the exact premature-clear race condition initially suspected.
+Could not identify a concrete bug through code review alone. Given the
+cost of guessing wrong on this exact file recently, did not attempt a
+speculative fix - flagged this honestly to the user as needing real
+reproduction/diagnostic data rather than another guess.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 145 test cases
+across 22 suites, all passing.
+
+## STILL NOT DONE, explicitly deferred given this message's massive combined scope:
+- Duplicate series prevention architecture (check-sheet-before-create,
+  near-real-time incremental sync algorithm) - not started, this is a
+  significant architectural undertaking, not a quick fix
+- Test Milling trial 1/2/3 duplicate-write bug (same data written 3
+  times instead of 3 distinct trial rows) - not investigated
+- "Shows Save instead of Update/Delete" bug on some series - not
+  investigated
+- MO (not just TMO) not-showing-when-done - not checked

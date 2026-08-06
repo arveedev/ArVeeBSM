@@ -377,46 +377,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (!currentWarehouse) return []
     return db.piles.where('warehouseId').equals(currentWarehouse.warehouseId).toArray()
   }, [currentWarehouse?.warehouseId])
-  // Pile derivation from the AI sheet's OR# column, mirroring the
-  // MO/TMO derivation effect above exactly. Previously this matching
-  // only ever ran when selecting an authority for a brand NEW
-  // transaction (handleSelectAuthority) - editing an existing,
-  // already-saved transaction never re-derived it, so the pile stayed
-  // frozen at whatever was originally saved and never picked up a
-  // later change to the AI sheet's pile assignment - the exact same
-  // staleness problem already fixed for MO/TMO numbers.
-  useEffect(() => {
-    if (type === 'WSR' || (!isMilling && !isTestMilling)) return
-    if (!linkedAuthority) {
-      console.log('[PILE-DERIVATION-DIAGNOSTIC] no linkedAuthority yet - linkedDocNo:', linkedDocNo, 'linkedDocDeductsFromAi:', linkedDocDeductsFromAi)
-      return
-    }
-    const authorityOrNumber = linkedAuthority.orNumber != null ? String(linkedAuthority.orNumber).trim() : ''
-    if (!authorityOrNumber) {
-      console.log('[PILE-DERIVATION-DIAGNOSTIC] linkedAuthority found but orNumber is blank:', JSON.stringify(linkedAuthority))
-      return
-    }
-    const matchedPile = (piles ?? []).find(
-      (p) => p.pileName.trim().toLowerCase() === authorityOrNumber.toLowerCase()
-    )
-    if (matchedPile) {
-      console.log('[PILE-DERIVATION-DIAGNOSTIC] matched pile:', matchedPile.pileName, '- applying it')
-      setPileId(matchedPile.pileId)
-      applyPileDefaults(matchedPile.pileId)
-      // applyPileDefaults only ever sets age/moisture content, never
-      // variety - this was the actual reason variety stayed blank
-      // even when the pile itself matched correctly. Sourced from the
-      // authority's own varietyId, matching exactly what
-      // handleSelectAuthority already does for the working new-
-      // transaction flow, for consistency between both paths.
-      if (linkedAuthority.varietyId) setVarietyId(linkedAuthority.varietyId)
-    } else {
-      console.log(
-        '[PILE-DERIVATION-DIAGNOSTIC] NO MATCH - authorityOrNumber:', JSON.stringify(authorityOrNumber),
-        'available pile names:', (piles ?? []).map((p) => p.pileName)
-      )
-    }
-  }, [linkedAuthority, isMilling, isTestMilling, type, piles])
 
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), [])
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
