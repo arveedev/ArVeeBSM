@@ -1039,36 +1039,25 @@ const SackFormBase = forwardRef(function SackFormBase(
                 <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>MO Number</label>
-                  {isDerived ? (
-                    <input
-                      type="text"
-                      value={stripMoTmoPrefix(moNumber)}
-                      readOnly
-                      disabled
-                      className={`${inputClass} bg-neutral-800 text-neutral-400`}
-                      placeholder="Select an SIA above first"
-                    />
-                  ) : (
-                    <select
-                      value={moNumber}
-                      onChange={(e) => {
-                        const nextNumber = e.target.value
-                        setMoNumber(nextNumber)
-                        const order = millingOrderOptions.find((o) => o.number === nextNumber)
-                        setBatchNumber(order?.batchCurrent != null ? String(order.batchCurrent) : '')
-                        if (order?.ricemillName) setCustomerName(order.ricemillName)
-                      }}
-                      className={`${inputClass} ${!moNumber.trim() ? '!border-brand-amber' : ''}`}
-                    >
-                      <option value="">Select…</option>
-                      {availableMoOrders.map((o) => (
-                        <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
-                      ))}
-                      {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
-                        <option value={moNumber}>{stripMoTmoPrefix(moNumber)} (historical)</option>
-                      )}
-                    </select>
-                  )}
+                  <select
+                    value={moNumber}
+                    onChange={(e) => {
+                      const nextNumber = e.target.value
+                      setMoNumber(nextNumber)
+                      const order = millingOrderOptions.find((o) => o.number === nextNumber)
+                      setBatchNumber(order?.batchCurrent != null ? String(order.batchCurrent) : '')
+                      if (order?.ricemillName) setCustomerName(order.ricemillName)
+                    }}
+                    className={`${inputClass} ${!moNumber.trim() ? '!border-brand-amber' : ''}`}
+                  >
+                    <option value="">Select…</option>
+                    {availableMoOrders.map((o) => (
+                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
+                    ))}
+                    {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
+                      <option value={moNumber}>{stripMoTmoPrefix(moNumber)} (historical)</option>
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label className={labelClass}>Batch</label>
@@ -1112,36 +1101,25 @@ const SackFormBase = forwardRef(function SackFormBase(
                 <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>TMO Number</label>
-                  {isDerived ? (
-                    <input
-                      type="text"
-                      value={stripMoTmoPrefix(tmoNumber)}
-                      readOnly
-                      disabled
-                      className={`${inputClass} bg-neutral-800 text-neutral-400`}
-                      placeholder="Select an SIA above first"
-                    />
-                  ) : (
-                    <select
-                      value={tmoNumber}
-                      onChange={(e) => {
-                        const nextNumber = e.target.value
-                        setTmoNumber(nextNumber)
-                        setTrialNumber('')
-                        const order = millingOrderOptions.find((o) => o.number === nextNumber)
-                        if (order?.ricemillName) setCustomerName(order.ricemillName)
-                      }}
-                      className={`${inputClass} ${!tmoNumber.trim() ? '!border-brand-amber' : ''}`}
-                    >
-                      <option value="">Select…</option>
-                      {availableTmoNumbers.map((o) => (
-                        <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
-                      ))}
-                      {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
-                        <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>
-                      )}
-                    </select>
-                  )}
+                  <select
+                    value={tmoNumber}
+                    onChange={(e) => {
+                      const nextNumber = e.target.value
+                      setTmoNumber(nextNumber)
+                      setTrialNumber('')
+                      const order = millingOrderOptions.find((o) => o.number === nextNumber)
+                      if (order?.ricemillName) setCustomerName(order.ricemillName)
+                    }}
+                    className={`${inputClass} ${!tmoNumber.trim() ? '!border-brand-amber' : ''}`}
+                  >
+                    <option value="">Select…</option>
+                    {availableTmoNumbers.map((o) => (
+                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
+                    ))}
+                    {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
+                      <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label className={labelClass}>Trial</label>
