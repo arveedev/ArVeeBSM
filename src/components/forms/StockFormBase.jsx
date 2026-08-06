@@ -1690,46 +1690,30 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>MO Number</label>
-                  {isDerived ? (
-                    <input
-                      type="text"
-                      value={stripMoTmoPrefix(moNumber)}
-                      readOnly
-                      disabled
-                      className={`${inputClass} bg-neutral-800 text-neutral-400`}
-                      placeholder="Select an AI above first"
-                    />
-                  ) : (
-                    <select
-                      value={moNumber}
-                      onChange={(e) => {
-                        const nextNumber = e.target.value
-                        setMoNumber(nextNumber)
-                        const order = millingOrderOptions.find((o) => o.number === nextNumber)
-                        setBatchNumber(order?.batchCurrent != null ? String(order.batchCurrent) : '')
-                        // Auto-fills the miller's name into Customer Name -
-                        // this is what actually makes the miller flow into
-                        // the customer directory (via rememberCustomer),
-                        // so they show up in the same admin customer list
-                        // rather than needing separate manual entry.
-                        if (order?.ricemillName) setCustomerName(order.ricemillName)
-                      }}
-                      className={`${inputClass} ${!moNumber.trim() ? '!border-brand-amber' : ''}`}
-                    >
-                      <option value="">Select…</option>
-                      {availableMoOrders.map((o) => (
-                        <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
-                      ))}
-                      {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
-                        // The loaded MO no longer exists in the synced
-                        // cache (most commonly: already marked DONE and
-                        // cleaned up) - without this fallback option,
-                        // the select has nothing to match moNumber
-                        // against and silently displays blank.
-                        <option value={moNumber}>{stripMoTmoPrefix(moNumber)} (historical)</option>
-                      )}
-                    </select>
-                  )}
+                  <select
+                    value={moNumber}
+                    onChange={(e) => {
+                      const nextNumber = e.target.value
+                      setMoNumber(nextNumber)
+                      const order = millingOrderOptions.find((o) => o.number === nextNumber)
+                      setBatchNumber(order?.batchCurrent != null ? String(order.batchCurrent) : '')
+                      if (order?.ricemillName) setCustomerName(order.ricemillName)
+                    }}
+                    className={`${inputClass} ${!moNumber.trim() ? '!border-brand-amber' : ''}`}
+                  >
+                    <option value="">Select…</option>
+                    {availableMoOrders.map((o) => (
+                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
+                    ))}
+                    {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
+                      // Same "historical" fallback as the WSR side - the
+                      // loaded MO no longer exists in the synced cache
+                      // (most commonly: already marked DONE and cleaned
+                      // up), but the select still needs something to
+                      // match moNumber against, or it silently shows blank.
+                      <option value={moNumber}>{stripMoTmoPrefix(moNumber)} (historical)</option>
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label className={labelClass}>Batch</label>
@@ -1773,36 +1757,25 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>TMO Number</label>
-                  {isDerived ? (
-                    <input
-                      type="text"
-                      value={stripMoTmoPrefix(tmoNumber)}
-                      readOnly
-                      disabled
-                      className={`${inputClass} bg-neutral-800 text-neutral-400`}
-                      placeholder="Select an AI above first"
-                    />
-                  ) : (
-                    <select
-                      value={tmoNumber}
-                      onChange={(e) => {
-                        const nextNumber = e.target.value
-                        setTmoNumber(nextNumber)
-                        setTrialNumber('')
-                        const order = millingOrderOptions.find((o) => o.number === nextNumber)
-                        if (order?.ricemillName) setCustomerName(order.ricemillName)
-                      }}
-                      className={`${inputClass} ${!tmoNumber.trim() ? '!border-brand-amber' : ''}`}
-                    >
-                      <option value="">Select…</option>
-                      {availableTmoNumbers.map((o) => (
-                        <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
-                      ))}
-                      {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
-                        <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>
-                      )}
-                    </select>
-                  )}
+                  <select
+                    value={tmoNumber}
+                    onChange={(e) => {
+                      const nextNumber = e.target.value
+                      setTmoNumber(nextNumber)
+                      setTrialNumber('')
+                      const order = millingOrderOptions.find((o) => o.number === nextNumber)
+                      if (order?.ricemillName) setCustomerName(order.ricemillName)
+                    }}
+                    className={`${inputClass} ${!tmoNumber.trim() ? '!border-brand-amber' : ''}`}
+                  >
+                    <option value="">Select…</option>
+                    {availableTmoNumbers.map((o) => (
+                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
+                    ))}
+                    {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
+                      <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label className={labelClass}>Trial</label>

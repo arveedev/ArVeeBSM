@@ -580,6 +580,25 @@ function Settings() {
   const [pileSection, setPileSection] = useState('create')
   const cloudUser = useObservable(db.cloud.currentUser)
   const cloudSyncState = useObservable(db.cloud.syncState)
+  // Green: genuinely connected and in-sync. Red: disconnected or
+  // erroring outright. Amber: anything transient/in-progress in
+  // between (connecting, pushing, pulling) or not yet known.
+  const syncStatusColor = (() => {
+    if (!cloudSyncState) return 'amber'
+    if (cloudSyncState.phase === 'in-sync' && cloudSyncState.status === 'connected') return 'green'
+    if (cloudSyncState.phase === 'error' || cloudSyncState.status === 'disconnected' || cloudSyncState.status === 'error') return 'red'
+    return 'amber'
+  })()
+  const syncBorderClass = {
+    green: 'border-brand-neon/40',
+    red: 'border-brand-crimson/40',
+    amber: 'border-brand-amber/40',
+  }[syncStatusColor]
+  const syncBgClass = {
+    green: 'bg-brand-neon/10',
+    red: 'bg-brand-crimson/10',
+    amber: 'bg-brand-amber/10',
+  }[syncStatusColor]
   const localUsersCount = useLiveQuery(() => db.users.count(), [])
   const localPilesCount = useLiveQuery(() => db.piles.count(), [])
   const localVarietiesCount = useLiveQuery(() => db.varietyTypes.count(), [])
@@ -644,7 +663,7 @@ function Settings() {
       <StickyWarehouseIndicator targetRef={warehouseSectionRef} warehouse={currentWarehouse} />
 
       {user?.role === 'Admin' ? (
-        <div className="mt-4 rounded-xl border border-brand-amber/40 bg-brand-amber/10 p-3">
+        <div className={`mt-4 rounded-xl border ${syncBorderClass} ${syncBgClass} p-3`}>
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-amber">Sync Identity (Diagnostic)</p>
           <p className="mt-1 text-xs text-neutral-400">
             Open this same screen on a different device and compare the values below - if they
@@ -704,7 +723,7 @@ function Settings() {
           </div>
         </div>
       ) : (
-        <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+        <div className={`mt-4 rounded-xl border ${syncBorderClass} ${syncBgClass} p-3`}>
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Sync Status</p>
           <p className="mt-1 text-sm font-medium text-app-text">
             {cloudSyncState?.phase === 'in-sync' && cloudSyncState?.status === 'connected'

@@ -8670,3 +8670,47 @@ across 24 suites, all passing.
 - The broader near-real-time incremental sync algorithm requested
 - MO/TMO-not-showing-when-done bug - still needs real reproduction data
 - "Save instead of Update/Delete" bug - not yet investigated
+
+## MO/TMO fields on the issuance side were permanently locked - fixed to match the already-working receipt side
+
+User's scenario made the actual bug obvious: viewing a completed
+(DONE) TMO's issuance from Reports showed a friendly "this is
+expected, not an error" message with no way to correct anything -
+but the user needs to be able to fix a genuine mistake (wrong TMO
+selected originally), which the app made structurally impossible.
+
+Found the real cause: the MO/TMO Number field was ALWAYS rendered as
+a permanently readOnly/disabled plain text input on the issuance side
+(WSI/ESI) - by design, purely auto-derived with zero way to manually
+override, ever. The receipt side (WSR/ESR) already had a proper
+editable dropdown with a "historical" fallback option for exactly
+this situation (a DONE order no longer in the active sync cache).
+This was a genuine asymmetry, not intentional design - fixed by
+bringing WSI/ESI to parity with the already-correct WSR/ESR pattern
+in both StockFormBase.jsx and SackFormBase.jsx (4 total field blocks:
+MO and TMO, each in both files). Auto-derivation still fills the
+field automatically the same as before when a fresh match exists -
+this only adds the ability to manually select/correct when that's not
+possible.
+
+## Sync status panel now colored by actual connection state
+
+Per explicit request: both the admin's detailed panel and the regular
+user's simple status line now show green when genuinely connected and
+in-sync, red when disconnected or erroring, amber for anything
+transient/in-progress in between (connecting, pushing, pulling) or not
+yet known.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 152 test cases
+across 24 suites, all passing.
+
+## STILL NOT DONE, explicitly deferred given this message's scope:
+- Duplicate Milling Operations showing on the Home page - not
+  investigated this entry
+- The sheet-based duplicate-series-prevention architecture (checking
+  existing series before allowing a save, near-real-time incremental
+  sync) - not started, remains a significant undertaking
+- NFA-owned Ricemill/Mechanical Dryer facility handling - explicitly
+  deferred by the user themselves to a later date
