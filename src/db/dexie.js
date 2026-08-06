@@ -832,6 +832,7 @@ db.cloud.currentUser.subscribe((user) => {
 // devices where there's no practical way to access devtools at all.
 export const lastSyncErrorDetail = { value: null }
 
+let lastAuto401RecoveryAttempt = 0
 const originalFetch = window.fetch
 window.fetch = async (...args) => {
   const response = await originalFetch(...args)
@@ -843,6 +844,19 @@ window.fetch = async (...args) => {
       .then((body) => {
         console.error(`[DEXIE-CLOUD-DIAGNOSTIC] HTTP ${response.status} from ${url}:`, body)
         lastSyncErrorDetail.value = `HTTP ${response.status}: ${body}`
+        // Auto-recovery for a 401 specifically - unlike logout(), a
+        // plain login() call does not discard or reset anything; it
+        // simply re-uses the existing session's keypair to request a
+        // fresh token. Throttled to at most once every 30 seconds so
+        // this can never become a retry loop if a 401 keeps recurring
+        // for some other, unrelated reason.
+        if (response.status === 401 && Date.now() - lastAuto401RecoveryAttempt > 30000) {
+          lastAuto401RecoveryAttempt = Date.now()
+          console.warn('[DEXIE-CLOUD-DIAGNOSTIC] 401 detected - attempting automatic re-login.')
+          db.cloud.login().catch((err) => {
+            console.error('[DEXIE-CLOUD-DIAGNOSTIC] Auto re-login attempt failed:', err)
+          })
+        }
       })
       .catch(() => {}) // body already consumed elsewhere - nothing more to log
   }

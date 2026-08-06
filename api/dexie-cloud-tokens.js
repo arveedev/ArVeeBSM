@@ -56,39 +56,60 @@ export default async function handler(req, res) {
   try {
     const body = await readJsonBody(req)
     console.log('[dexie-cloud-tokens] Parsed request body:', JSON.stringify(body))
+
+    // Per Dexie Cloud's token refresh mechanism, fetchTokens may be
+    // called with { grant_type: 'refresh_token', refresh_token: '...' }
+    // instead of a public_key, once a device's access token has
+    // expired (roughly hourly) rather than on true initial login. This
+    // branch is purely additive - it only ever changes behavior when
+    // grant_type is actually 'refresh_token', which has not yet been
+    // directly observed in this app's own logs, but cannot be ruled
+    // out without a long-running session actually reaching that point.
+    // The existing, confirmed-working client_credentials path below is
+    // completely unchanged for every other case.
+    const isRefreshTokenRequest = body?.grant_type === 'refresh_token'
     const publicKey = body?.public_key
 
-    console.log('[dexie-cloud-tokens] Calling Dexie Cloud token endpoint...')
+    const tokenPayload = isRefreshTokenRequest
+      ? {
+          grant_type: 'refresh_token',
+          refresh_token: body.refresh_token,
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+        }
+      : {
+          grant_type: 'client_credentials',
+          // IMPERSONATE is REQUIRED to supply the claims property below -
+          // per Dexie Cloud's own documentation: "A client must be given
+          // the IMPERSONATE scope in order to supply claims property to
+          // this endpoint." This was previously missing entirely, which
+          // very likely meant claims.sub (the fixed shared identity every
+          // device is supposed to authenticate as) was being silently
+          // ignored - each device may have been getting its own separate,
+          // unlinked identity instead of genuinely sharing one, which
+          // would fully explain data only ever appearing on the device
+          // that created it. NOTE: this also requires the Dexie Cloud
+          // client_id/client_secret itself to have been GRANTED the
+          // IMPERSONATE scope at the account level (the default client
+          // has every scope; a custom client created via
+          // `npx dexie-cloud authorize` needs it explicitly included) -
+          // adding it to this request alone is not sufficient if the
+          // client itself was never granted it.
+          scopes: ['ACCESS_DB', 'IMPERSONATE'],
+          public_key: publicKey,
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+          claims: {
+            sub: SERVICE_ACCOUNT_SUB,
+            name: 'BSM App',
+          },
+        }
+
+    console.log(`[dexie-cloud-tokens] Calling Dexie Cloud token endpoint (grant_type: ${tokenPayload.grant_type})...`)
     const tokenResponse = await fetch(`${DB_URL}/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'client_credentials',
-        // IMPERSONATE is REQUIRED to supply the claims property below -
-        // per Dexie Cloud's own documentation: "A client must be given
-        // the IMPERSONATE scope in order to supply claims property to
-        // this endpoint." This was previously missing entirely, which
-        // very likely meant claims.sub (the fixed shared identity every
-        // device is supposed to authenticate as) was being silently
-        // ignored - each device may have been getting its own separate,
-        // unlinked identity instead of genuinely sharing one, which
-        // would fully explain data only ever appearing on the device
-        // that created it. NOTE: this also requires the Dexie Cloud
-        // client_id/client_secret itself to have been GRANTED the
-        // IMPERSONATE scope at the account level (the default client
-        // has every scope; a custom client created via
-        // `npx dexie-cloud authorize` needs it explicitly included) -
-        // adding it to this request alone is not sufficient if the
-        // client itself was never granted it.
-        scopes: ['ACCESS_DB', 'IMPERSONATE'],
-        public_key: publicKey,
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        claims: {
-          sub: SERVICE_ACCOUNT_SUB,
-          name: 'BSM App',
-        },
-      }),
+      body: JSON.stringify(tokenPayload),
     })
 
     console.log('[dexie-cloud-tokens] Dexie Cloud responded with status:', tokenResponse.status)
