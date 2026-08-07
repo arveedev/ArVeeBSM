@@ -8837,3 +8837,45 @@ across 27 suites, all passing.
   duplicate-series-prevention architecture the user described as the
   first, most foundational priority - not started this entry, remains
   a significant system design undertaking
+
+## URGENT FIX: my own previous fix introduced a real performance regression - restored instant tap-to-data
+
+User correctly identified this as a genuine regression, not a
+pre-existing issue: the Sheet backfill I added in the previous entry
+was AWAITED directly in the critical path, before the local data ever
+displayed - meaning every tap on a record needing backfill now waited
+on a full network round-trip before showing anything at all, breaking
+what was previously instant.
+
+Fixed by restructuring both StockFormBase.jsx and SackFormBase.jsx:
+loadTransactionIntoForm now runs immediately, synchronously, exactly
+as it always did - restoring the instant display. The Sheet backfill
+now runs as a genuine background task (a .then() chain, never awaited
+before the function returns), only re-displaying the record afterward
+if it actually found something to backfill AND the user hasn't since
+navigated to a different serial. Most taps won't even touch the
+network at all, since the backfill only triggers when specific fields
+are actually missing.
+
+## Cereal tab selection simplified to rely on variety as the sole authoritative source
+
+Per explicit instruction: the tab was previously deciding based on a
+separately-stored cerealCategory field first, falling back to variety
+only when that field was blank - meaning a record with a stale or
+simply wrong stored category would show the wrong tab even when its
+variety was completely correct. Flipped this priority: the variety-
+derived category is now always used when a variety exists at all;
+tx.cerealCategory is only consulted as a last resort for the rare
+record with no variety whatsoever. This is a direct, simple rule
+matching the user's own description: rice variety selects the Rice
+tab, palay selects Palay, by-products selects By Products - full stop,
+no other field involved in the decision.
+
+Verified with a 5-case test covering the priority fix and documenting
+the performance fix's core contract (display before network, not
+after).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 170 test cases
+across 28 suites, all passing.
