@@ -381,6 +381,28 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), [])
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
 
+  // Reactive cereal tab selection, driven by the loaded transaction's
+  // variety. loadTransactionIntoForm ALSO tries to set this, but that
+  // is a one-time, non-reactive function call - if varieties (loaded
+  // asynchronously) has not resolved yet at that exact moment (very
+  // plausible right after the page/form first mounts, since
+  // useLiveQuery needs at least one render cycle to populate), that
+  // attempt fails silently with no way to retry. This effect instead
+  // re-evaluates every time loadedTransaction or varieties changes, so
+  // it self-corrects the instant varieties actually becomes available,
+  // regardless of how the timing worked out on that particular load.
+  useEffect(() => {
+    if (!isCategoryScoped || !loadedTransaction) return
+    const matchedVariety = loadedTransaction.varietyId
+      ? (varieties ?? []).find((v) => v.varietyId === loadedTransaction.varietyId)
+      : null
+    if (matchedVariety?.category) {
+      setCerealCategory(matchedVariety.category)
+    } else if (loadedTransaction.cerealCategory) {
+      setCerealCategory(loadedTransaction.cerealCategory)
+    }
+  }, [loadedTransaction, varieties, isCategoryScoped])
+
   const sortedVarieties = [...(varieties ?? [])]
     .filter((v) => !isCategoryScoped || v.category === activeCategory)
     .sort((a, b) => byAlpha(a.name, b.name))
@@ -898,21 +920,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // edit, switching the footer to Update/Delete.
   const loadTransactionIntoForm = (tx) => {
     setLoadedTransaction(tx)
-    if (isCategoryScoped) {
-      // The cereal tab is driven by the variety, not a separately-
-      // stored category field on the transaction - that field can be
-      // stale or simply wrong on some records, while the variety
-      // itself is the authoritative source of what category a
-      // transaction actually belongs to. tx.cerealCategory is only
-      // used as a last-resort fallback for the rare record that
-      // somehow has no variety at all.
-      const matchedVariety = tx.varietyId ? (varieties ?? []).find((v) => v.varietyId === tx.varietyId) : null
-      if (matchedVariety?.category) {
-        setCerealCategory(matchedVariety.category)
-      } else if (tx.cerealCategory) {
-        setCerealCategory(tx.cerealCategory)
-      }
-    }
+    // Cereal tab selection is now handled by the dedicated reactive
+    // effect declared right after varieties - it re-evaluates
+    // automatically whenever loadedTransaction or varieties changes,
+    // which a one-time call here could not do if varieties had not
+    // yet resolved at this exact moment.
     setIsCancelled(tx.status === 'Cancelled')
     setDate(tx.date ?? blankFormState.date)
     setLinkedDocNo(tx.linkedDocNo ?? tx.aiNumber ?? '')

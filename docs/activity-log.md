@@ -8879,3 +8879,47 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 170 test cases
 across 28 suites, all passing.
+
+## Finally found the real reason Authority Monitor worked but Reports didn't - a timing bug, not a logic bug
+
+User's exact, sharp question - "why does it work there but not here" -
+was the right thing to focus on directly, rather than continuing to
+guess at the tab-selection logic itself, which had already been
+checked and re-checked. Traced the actual difference between the two
+paths precisely.
+
+Root cause: loadTransactionIntoForm (called when opening an existing
+transaction from Reports) is a plain, one-time function call - not
+reactive. If varieties (loaded asynchronously via useLiveQuery) had
+not yet resolved at the exact moment this ran, the variety lookup
+inside it would silently find nothing, and since this only ever runs
+once per tap, it never gets a second chance once varieties actually
+does load moments later. This is fundamentally different from
+Authority Monitor, which is normally reached only after the user has
+already been active in the app for a while - by that point varieties
+has long since resolved, so the same one-time-call approach happened
+to always work there, purely by timing coincidence, not because the
+underlying logic was actually different or more correct.
+
+Fixed by replacing the one-time attempt with a genuinely reactive
+useEffect, watching [loadedTransaction, varieties, isCategoryScoped] -
+this re-evaluates automatically every time varieties changes, so even
+if the first attempt's timing was wrong, it self-corrects the instant
+the data actually becomes available, regardless of how fast or slow a
+particular page load happened to be. Removed the now-redundant one-
+time logic from loadTransactionIntoForm itself, since this effect
+fully supersedes it.
+
+Verified with a 3-case test directly modeling the exact asymmetry
+described: an evaluation before varieties has loaded (correctly
+resolves nothing, matching the observed bug), a second evaluation
+once varieties arrives (correctly self-corrects), and the Authority-
+Monitor-equivalent scenario where varieties was already loaded from
+the start (correctly resolves immediately either way).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 173 test cases
+across 29 suites, all passing.
+
+## This should be the genuine, complete fix - the reactive effect is structurally immune to the timing issue regardless of how fast the page loads, unlike every previous attempt at this same problem
