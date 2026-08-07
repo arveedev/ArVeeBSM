@@ -899,18 +899,18 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const loadTransactionIntoForm = (tx) => {
     setLoadedTransaction(tx)
     if (isCategoryScoped) {
-      if (tx.cerealCategory) {
+      // The cereal tab is driven by the variety, not a separately-
+      // stored category field on the transaction - that field can be
+      // stale or simply wrong on some records, while the variety
+      // itself is the authoritative source of what category a
+      // transaction actually belongs to. tx.cerealCategory is only
+      // used as a last-resort fallback for the rare record that
+      // somehow has no variety at all.
+      const matchedVariety = tx.varietyId ? (varieties ?? []).find((v) => v.varietyId === tx.varietyId) : null
+      if (matchedVariety?.category) {
+        setCerealCategory(matchedVariety.category)
+      } else if (tx.cerealCategory) {
         setCerealCategory(tx.cerealCategory)
-      } else if (tx.varietyId) {
-        // Fallback: tx.cerealCategory itself may not have been
-        // reliably populated on every historical record - derive it
-        // from the variety's own category instead, which is a more
-        // reliable, long-standing field. Without this, the tab could
-        // stay on whatever it was previously showing, making the
-        // correct pile/variety invisible in their dropdowns even
-        // though loadTransactionIntoForm set the right IDs.
-        const matchedVariety = (varieties ?? []).find((v) => v.varietyId === tx.varietyId)
-        if (matchedVariety?.category) setCerealCategory(matchedVariety.category)
       }
     }
     setIsCancelled(tx.status === 'Cancelled')
@@ -992,24 +992,22 @@ function StockFormBase({ type, title, onClose, prefill }) {
       const existing = await findTransactionBySerial(type, currentWarehouseId, serial, skipCategoryFilter ? null : activeCategory)
       if (latestRequestedSerial.current !== serial) return false // superseded by a newer request - discard this stale result
       if (existing) {
-        // Backfill from the Sheet if this Milling/Test Milling record
-        // is missing MO/TMO/Batch/Trial locally - a transaction found
-        // here was already local, so it never went through the Sheet-
-        // fallback mapping at all. If it was originally saved with
-        // these fields genuinely blank (e.g. historical data encoded
-        // quickly, bypassing the normal AI/SIA-first flow), and its
-        // MO/TMO is now marked DONE, there is no way to re-derive this
-        // through normal matching anymore - but the Sheet itself may
-        // still have the correct data sitting right there. Only fills
-        // in what's actually missing; never overwrites anything
-        // already present locally.
+        loadTransactionIntoForm(existing)
+
+        // Sheet backfill runs as a genuine background task - never
+        // awaited before returning, so the instant local-data display
+        // above is never delayed by a network round-trip. Only
+        // relevant if this record is missing MO/TMO/Batch/Trial or
+        // variety/cerealCategory (see StockFormBase.jsx's original
+        // fix for the full reasoning) - most records won't need this
+        // at all, so most taps never touch the network here regardless.
         const missingMillingFields = (existing.aiNumber || existing.linkedDocNo)
           && !existing.moNumber && !existing.tmoNumber
         const missingVarietyFields = !existing.varietyId || !existing.cerealCategory
         if ((missingMillingFields || missingVarietyFields) && navigator.onLine) {
-          const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
-          if (latestRequestedSerial.current !== serial) return false // superseded - discard
-          if (sheetResult.ok && sheetResult.row) {
+          fetchTransactionBySerial(type, currentWarehouse?.name, serial).then(async (sheetResult) => {
+            if (latestRequestedSerial.current !== serial) return // user has since moved on - discard
+            if (!sheetResult.ok || !sheetResult.row) return
             const patch = {}
             if (sheetResult.row['MO Number']) patch.moNumber = sheetResult.row['MO Number']
             if (sheetResult.row['TMO Number']) patch.tmoNumber = sheetResult.row['TMO Number']
@@ -1024,13 +1022,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 if (!existing.cerealCategory) patch.cerealCategory = matchedVariety.category
               }
             }
-            if (Object.keys(patch).length > 0) {
-              await db.transactions.update(existing.id, patch)
-              Object.assign(existing, patch)
-            }
-          }
+            if (Object.keys(patch).length === 0) return
+            await db.transactions.update(existing.id, patch)
+            if (latestRequestedSerial.current !== serial) return // moved on while this was saving - discard
+            // Re-load with the patch applied, so the now-complete data
+            // appears without the user needing to tap away and back.
+            loadTransactionIntoForm({ ...existing, ...patch })
+          }).catch(() => {}) // best-effort - local data is already showing regardless
         }
-        loadTransactionIntoForm(existing)
         return true
       }
 
