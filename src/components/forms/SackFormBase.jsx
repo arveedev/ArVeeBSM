@@ -25,7 +25,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Plus, X, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { db } from '../../db/dexie.js'
 import {
@@ -535,13 +535,13 @@ const SackFormBase = forwardRef(function SackFormBase(
         return true
       }
 
-      // Not found locally - always verify against the Sheet directly
-      // when online before treating this serial as available, rather
-      // than trusting a "preload is complete" flag. See
-      // StockFormBase.jsx's identical fix for the full reasoning.
-      const sheetResult = navigator.onLine
-        ? await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
-        : { ok: true, row: null }
+      // Not found locally - trusts preload-completeness for speed,
+      // consistent with StockFormBase.jsx's identical revert. Becomes
+      // largely moot once serial-typing navigation is removed.
+      const preloaded = await isPreloadComplete(currentWarehouseId, type)
+      const sheetResult = preloaded
+        ? { ok: true, row: null }
+        : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
       if (latestRequestedSerial.current !== serial) return false
       if (sheetResult.ok && sheetResult.row) {
         const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId })
@@ -563,46 +563,11 @@ const SackFormBase = forwardRef(function SackFormBase(
     }
   }
 
-  const handleSerialChange = async (value) => {
-    setSerialNo(value)
-    const loaded = await checkAndLoadSerial(value)
-    if (!loaded && value.trim() && latestRequestedSerial.current === value) resetToBlankEntry(value)
-  }
-
-  const handleSerialBlur = () => {
-    if (isAdmin || loadedTransaction || floorSerialNumber == null) return
-    const typedNumber = parseInt(serialNo.trim().replace(/\D/g, ''), 10)
-    if (Number.isNaN(typedNumber)) return
-    if (typedNumber < floorSerialNumber) setShowFloorWarning(true)
-  }
-
   const handleFloorWarningAcknowledge = async () => {
     setShowFloorWarning(false)
     const latest = await suggestNextSerial(type, currentWarehouseId)
     setSerialNo(latest)
     await checkAndLoadSerial(latest)
-  }
-
-  const handleStepBack = async () => {
-    const prevSerial = stepSerial(serialNo.trim(), -1)
-    const prevNumber = parseInt(prevSerial.replace(/\D/g, ''), 10)
-    if (!isAdmin && floorSerialNumber != null && !Number.isNaN(prevNumber) && prevNumber < floorSerialNumber) {
-      toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
-      return
-    }
-    setSerialNo(prevSerial)
-    setNavFlash('back')
-    setTimeout(() => setNavFlash(null), 750)
-    await checkAndLoadSerial(prevSerial)
-  }
-
-  const handleStepForward = async () => {
-    const nextSerial = stepSerial(serialNo.trim(), 1)
-    setSerialNo(nextSerial)
-    setNavFlash('forward')
-    setTimeout(() => setNavFlash(null), 750)
-    const loaded = await checkAndLoadSerial(nextSerial)
-    if (!loaded && latestRequestedSerial.current === nextSerial) resetToBlankEntry(nextSerial)
   }
 
   const buildCancelledPayload = (overrides = {}) => ({
@@ -940,30 +905,14 @@ const SackFormBase = forwardRef(function SackFormBase(
           <div ref={serialFieldRef}>
             <label className={labelClass}>Serial No.</label>
             <div className="mt-1 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleStepBack}
-                aria-label="Previous serial"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
-              >
-                <ChevronLeft size={18} />
-              </button>
               <input
                 type="text"
                 value={serialNo}
-                onChange={(e) => handleSerialChange(e.target.value)}
-                onBlur={handleSerialBlur}
-                className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`}
+                readOnly
+                disabled
+                className={`mt-0 w-full rounded-xl border bg-neutral-800 px-3 py-2 text-center font-mono text-neutral-400 outline-none ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
                 placeholder="0000000"
               />
-              <button
-                type="button"
-                onClick={handleStepForward}
-                aria-label="Next serial"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
-              >
-                <ChevronRight size={18} />
-              </button>
             </div>
             <p className="mt-1 text-xs text-neutral-500">
               {isLookingUp ? (

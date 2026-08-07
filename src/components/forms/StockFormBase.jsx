@@ -41,7 +41,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Plus, X, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
@@ -1045,20 +1045,19 @@ function StockFormBase({ type, title, onClose, prefill }) {
         return true
       }
 
-      // Not found locally - always verify against the Sheet directly
-      // when online before ever treating this serial as available,
-      // rather than trusting a "preload is complete" flag to skip this
-      // check. Confirmed via direct report that this flag can be true
-      // while real gaps still exist in local data (e.g. a warehouse-
-      // name mismatch silently skipping rows during preload) - which
-      // meant a serial that genuinely already exists on the Sheet
-      // could be shown as available, risking exactly the duplicate
-      // series this app exists to prevent. Only skips this check when
-      // genuinely offline, where checking the Sheet is impossible
-      // rather than merely an optimization choice.
-      const sheetResult = navigator.onLine
-        ? await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
-        : { ok: true, row: null }
+      // Not found locally - that alone doesn't mean it never existed,
+      // UNLESS this (warehouse, type) has already been fully preloaded,
+      // in which case local data is already comprehensive and "not
+      // found" is a definitive answer - skip the slow Sheet lookup
+      // entirely in that case. This concern becomes largely moot once
+      // serial-typing navigation is removed from the create form (see
+      // that change) - editing only happens via Reports from then on,
+      // which already has the transaction in hand locally, with no
+      // lookup of this kind ever needed for that path.
+      const preloaded = await isPreloadComplete(currentWarehouseId, type)
+      const sheetResult = preloaded
+        ? { ok: true, row: null }
+        : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
       if (latestRequestedSerial.current !== serial) return false // superseded - discard
       if (sheetResult.ok && sheetResult.row) {
         const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
@@ -1088,53 +1087,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
   }
 
-  const handleSerialChange = async (value) => {
-    setSerialNo(value)
-    const loaded = await checkAndLoadSerial(value)
-    if (!loaded && value.trim() && latestRequestedSerial.current === value) resetToBlankEntry(value)
-  }
-
-  // Checked on blur (not on every keystroke, which would interrupt
-  // typing) - if nothing was found for this serial anywhere (not
-  // loaded, meaning checkAndLoadSerial's local+Sheet lookups both came
-  // up empty) and it's below the known floor, a regular user gets a
-  // clear warning instead of silently being allowed to create a
-  // duplicate/out-of-sequence entry. Admins bypass this, since they
-  // may be intentionally backfilling genuinely undocumented history.
-  const handleSerialBlur = () => {
-    if (isAdmin || loadedTransaction || floorSerialNumber == null) return
-    const typedNumber = parseInt(serialNo.trim().replace(/\D/g, ''), 10)
-    if (Number.isNaN(typedNumber)) return
-    if (typedNumber < floorSerialNumber) setShowFloorWarning(true)
-  }
-
-  const handleStepBack = async () => {
-    const prevSerial = stepSerial(serialNo.trim(), -1)
-    const prevNumber = parseInt(prevSerial.replace(/\D/g, ''), 10)
-    if (!isAdmin && floorSerialNumber != null && !Number.isNaN(prevNumber) && prevNumber < floorSerialNumber) {
-      toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
-      return
-    }
-    setSerialNo(prevSerial)
-    setNavFlash('back')
-    setTimeout(() => setNavFlash(null), 750)
-    await checkAndLoadSerial(prevSerial)
-  }
-
   const handleFloorWarningAcknowledge = async () => {
     setShowFloorWarning(false)
     const latest = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
     setSerialNo(latest)
     await checkAndLoadSerial(latest)
-  }
-
-  const handleStepForward = async () => {
-    const nextSerial = stepSerial(serialNo.trim(), 1)
-    setSerialNo(nextSerial)
-    setNavFlash('forward')
-    setTimeout(() => setNavFlash(null), 750)
-    const loaded = await checkAndLoadSerial(nextSerial)
-    if (!loaded && latestRequestedSerial.current === nextSerial) resetToBlankEntry(nextSerial)
   }
 
   const initialAgeDays = ageUnit === 'Months + Days'
@@ -1622,30 +1579,14 @@ function StockFormBase({ type, title, onClose, prefill }) {
           <div ref={serialFieldRef}>
             <label className={labelClass}>Serial No.</label>
             <div className="mt-1 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleStepBack}
-                aria-label="Previous serial"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
-              >
-                <ChevronLeft size={18} />
-              </button>
               <input
                 type="text"
                 value={serialNo}
-                onChange={(e) => handleSerialChange(e.target.value)}
-                onBlur={handleSerialBlur}
-                className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`}
+                readOnly
+                disabled
+                className={`mt-0 w-full rounded-xl border bg-neutral-800 px-3 py-2 text-center font-mono text-neutral-400 outline-none ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
                 placeholder="0000000"
               />
-              <button
-                type="button"
-                onClick={handleStepForward}
-                aria-label="Next serial"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
-              >
-                <ChevronRight size={18} />
-              </button>
             </div>
             <p className="mt-1 text-xs text-neutral-500">
               {isLookingUp ? (
