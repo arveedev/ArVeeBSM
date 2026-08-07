@@ -535,13 +535,13 @@ const SackFormBase = forwardRef(function SackFormBase(
         return true
       }
 
-      // Not found locally - check the Sheet before treating this serial
-      // as genuinely blank, UNLESS this (warehouse, type) is already
-      // fully preloaded, in which case local data is comprehensive.
-      const preloaded = await isPreloadComplete(currentWarehouseId, type)
-      const sheetResult = preloaded
-        ? { ok: true, row: null }
-        : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+      // Not found locally - always verify against the Sheet directly
+      // when online before treating this serial as available, rather
+      // than trusting a "preload is complete" flag. See
+      // StockFormBase.jsx's identical fix for the full reasoning.
+      const sheetResult = navigator.onLine
+        ? await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+        : { ok: true, row: null }
       if (latestRequestedSerial.current !== serial) return false
       if (sheetResult.ok && sheetResult.row) {
         const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId })
@@ -651,6 +651,13 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (await isSerialTaken(type, currentWarehouseId, serialNo.trim(), excludeId)) {
       toast.error(`Serial ${serialNo.trim()} is already used for a ${type} document at this warehouse`)
       return false
+    }
+    if (!excludeId && navigator.onLine) {
+      const sheetCheck = await fetchTransactionBySerial(type, currentWarehouse?.name, serialNo.trim())
+      if (sheetCheck.ok && sheetCheck.row) {
+        toast.error(`Serial ${serialNo.trim()} already exists on the Sheet - refresh and try a different number`)
+        return false
+      }
     }
     if (isCancelled) return true
     if (!customerName.trim()) { toast.error('Name is required'); return false }

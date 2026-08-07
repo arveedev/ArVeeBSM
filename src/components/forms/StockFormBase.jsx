@@ -1045,15 +1045,20 @@ function StockFormBase({ type, title, onClose, prefill }) {
         return true
       }
 
-      // Not found locally - that alone doesn't mean it never existed,
-      // UNLESS this (warehouse, type) has already been fully preloaded,
-      // in which case local data is already comprehensive and "not
-      // found" is a definitive answer - skip the slow Sheet lookup
-      // entirely in that case.
-      const preloaded = await isPreloadComplete(currentWarehouseId, type)
-      const sheetResult = preloaded
-        ? { ok: true, row: null }
-        : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+      // Not found locally - always verify against the Sheet directly
+      // when online before ever treating this serial as available,
+      // rather than trusting a "preload is complete" flag to skip this
+      // check. Confirmed via direct report that this flag can be true
+      // while real gaps still exist in local data (e.g. a warehouse-
+      // name mismatch silently skipping rows during preload) - which
+      // meant a serial that genuinely already exists on the Sheet
+      // could be shown as available, risking exactly the duplicate
+      // series this app exists to prevent. Only skips this check when
+      // genuinely offline, where checking the Sheet is impossible
+      // rather than merely an optimization choice.
+      const sheetResult = navigator.onLine
+        ? await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+        : { ok: true, row: null }
       if (latestRequestedSerial.current !== serial) return false // superseded - discard
       if (sheetResult.ok && sheetResult.row) {
         const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
@@ -1226,6 +1231,19 @@ function StockFormBase({ type, title, onClose, prefill }) {
     if (await isSerialTaken(type, currentWarehouseId, serialNo.trim(), excludeId, activeCategory)) {
       toast.error(`Serial ${serialNo.trim()} is already used for a ${type} document at this warehouse`)
       return false
+    }
+    // Final Sheet-side check, only when creating new (not editing an
+    // existing record's own serial) and only when online - a serial
+    // could theoretically become taken by another device between when
+    // it was first typed and this exact moment of saving. The local
+    // check above remains the only safety net when offline, since
+    // saving must still work without a network connection.
+    if (!excludeId && navigator.onLine) {
+      const sheetCheck = await fetchTransactionBySerial(type, currentWarehouse?.name, serialNo.trim())
+      if (sheetCheck.ok && sheetCheck.row) {
+        toast.error(`Serial ${serialNo.trim()} already exists on the Sheet - refresh and try a different number`)
+        return false
+      }
     }
     if (isCancelled) return true
     if (!customerName.trim()) {
