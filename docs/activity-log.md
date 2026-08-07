@@ -8950,3 +8950,39 @@ All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the complete regression suite re-run - 179 test cases
 across 30 suites, all passing.
+
+## CRITICAL: found and fixed why DONE MO/TMOs were unavailable during edit - a server-side exclusion, not a client filter
+
+User correctly identified this could not just be a client-side issue -
+DONE orders should be fully available for editing/verification, not
+just blocked during creation. Traced to the actual root cause: the
+Apps Script's fetchMillingOrders action permanently excluded any row
+marked DONE from its response entirely - `if (sheetStatus === 'DONE')
+return null`. This meant once an MO/TMO was marked DONE, the app could
+never see it again through this sync path at all, for any purpose,
+regardless of any client-side logic - the data simply never arrived.
+
+Fixed at the source: the Apps Script now includes every order
+regardless of status, with an explicit sheetStatus field so the client
+can decide what to show based on context. Renamed to sheetStatus
+(rather than status) to avoid colliding with an existing, unrelated
+status:'Active' field already used client-side for local record
+liveness.
+
+Updated the dropdown filtering in both StockFormBase.jsx and
+SackFormBase.jsx (both MO and TMO, for stock and sacks) per explicit
+request: DONE/fulfilled orders are only excluded when creating a
+brand new transaction - editing an existing one now shows every order
+for that miller regardless of completion status, so the user can see
+and verify exactly which MO/TMO was actually used, or correct it if
+needed.
+
+Verified with a 3-case test covering create-mode exclusion, edit-mode
+full visibility, and the edge case of a DONE order already selected
+while creating new (never silently hidden).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds, PLUS an explicit brace-balance check on the Apps Script file
+itself, given the earlier mistake in this exact file) and the complete
+regression suite re-run - 182 test cases across 31 suites, all passing.

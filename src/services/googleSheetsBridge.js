@@ -360,6 +360,7 @@ export const syncMillingOrdersFromSheets = async () => {
       aiNumber: order.aiNumber ?? null,
       siaNumber: order.siaNumber ?? null,
       receivingWarehouse: order.receivingWarehouse ?? null,
+      sheetStatus: order.sheetStatus ?? null,
       status: 'Active',
     }))
 

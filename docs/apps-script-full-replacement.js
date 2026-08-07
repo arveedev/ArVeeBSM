@@ -238,13 +238,20 @@ function doGet(e) {
           const aiNumber = String(row[7] ?? '').trim() || null; // Column H
           const siaNumber = String(row[8] ?? '').trim() || null; // Column I
           const receivingWarehouse = String(row[10] ?? '').trim() || null; // Column K
-          // Column M - manually typed "DONE" by the admin to hide a
-          // historical row from the app entirely. The app only ever
-          // READS this column - it is never written back to.
+          // Column M - manually typed "DONE" by the admin. Previously
+          // this caused the row to be excluded entirely from every
+          // response, meaning once an MO/TMO was marked DONE, the app
+          // could never see it again through this sync path at all -
+          // not even for editing/verifying an already-existing
+          // transaction that used it. Now included with an explicit
+          // status flag instead, so the client can decide what to show
+          // depending on context (hide DONE ones when creating a new
+          // transaction, but show everything - including DONE - when
+          // editing an existing one, so a user can see and verify
+          // exactly which MO/TMO was actually selected).
           const sheetStatus = String(row[12] ?? '').trim().toUpperCase();
-          if (sheetStatus === 'DONE') return null;
 
-          const result = { number, ricemillName, recoveryPercent, aiNumber, siaNumber, receivingWarehouse, type: orderType };
+          const result = { number, ricemillName, recoveryPercent, aiNumber, siaNumber, receivingWarehouse, type: orderType, sheetStatus: sheetStatus || null };
 
           if (orderType === 'MO') {
             // Column G - "1 of 15" format: current batch / total batches

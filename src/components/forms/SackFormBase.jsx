@@ -1036,7 +1036,7 @@ const SackFormBase = forwardRef(function SackFormBase(
           {isMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableMoOrders = millingOrderOptions
-              .filter((o) => !o.fulfilled || o.number === moNumber)
+              .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === moNumber)
               .filter((o) => !trimmedCustomerName || o.number === moNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'ESR'
@@ -1104,7 +1104,7 @@ const SackFormBase = forwardRef(function SackFormBase(
           {isTestMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableTmoNumbers = millingOrderOptions
-              .filter((o) => !o.fulfilled || o.number === tmoNumber)
+              .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
               .filter((o) => !trimmedCustomerName || o.number === tmoNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
             const isDerived = type !== 'ESR'
             const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !tmoNumber

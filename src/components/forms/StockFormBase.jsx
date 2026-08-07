@@ -1720,7 +1720,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
           {isMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableMoOrders = millingOrderOptions
-              .filter((o) => !o.fulfilled || o.number === moNumber)
+              // DONE/fulfilled orders are only hidden when creating a
+              // brand new transaction - editing an existing one shows
+              // everything for this miller regardless of completion
+              // status, so the user can see and verify exactly which
+              // MO was actually used, or correct it if needed.
+              .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === moNumber)
               // Only this miller's own orders - a selection for one
               // miller should never show every other miller's MOs.
               // Always includes the currently-selected order even if
@@ -1807,7 +1812,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
           {isTestMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableTmoNumbers = millingOrderOptions
-              .filter((o) => !o.fulfilled || o.number === tmoNumber)
+              .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
               .filter((o) => !trimmedCustomerName || o.number === tmoNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
             const isDerived = type !== 'WSR'
             const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !tmoNumber
