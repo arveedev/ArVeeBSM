@@ -8923,3 +8923,30 @@ succeeds) and the complete regression suite re-run - 173 test cases
 across 29 suites, all passing.
 
 ## This should be the genuine, complete fix - the reactive effect is structurally immune to the timing issue regardless of how fast the page loads, unlike every previous attempt at this same problem
+
+## MO/TMO dropdown: filtered by miller, relabeled per explicit spec
+
+Applied to both StockFormBase.jsx and SackFormBase.jsx, both MO and
+TMO selects, for create and edit alike (same underlying option-
+building code path handles both):
+
+- Options now filter to only the currently-entered Customer Name's
+  own miller - selecting an MO/TMO for one miller no longer shows
+  every other miller's orders. Case-insensitive match. If Customer
+  Name is still blank, no filtering happens yet (nothing to filter
+  against). A currently-selected order is always included regardless
+  of whether its miller name matches, so an existing selection is
+  never silently hidden by this filter.
+- MO option labels now show batch number instead of repeating the
+  miller name (redundant now that the list is filtered to one miller
+  anyway, and batch is the actually useful distinguishing detail).
+- TMO option labels now show only the TMO number itself - no miller
+  name, no other detail, per explicit spec.
+
+Verified with a 6-case test covering the filtering logic (including
+the never-hide-the-current-selection edge case) and both label formats.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 179 test cases
+across 30 suites, all passing.

@@ -1718,7 +1718,15 @@ function StockFormBase({ type, title, onClose, prefill }) {
           )}
 
           {isMilling && (() => {
-            const availableMoOrders = millingOrderOptions.filter((o) => !o.fulfilled || o.number === moNumber)
+            const trimmedCustomerName = customerName.trim().toLowerCase()
+            const availableMoOrders = millingOrderOptions
+              .filter((o) => !o.fulfilled || o.number === moNumber)
+              // Only this miller's own orders - a selection for one
+              // miller should never show every other miller's MOs.
+              // Always includes the currently-selected order even if
+              // the name no longer matches exactly, so an existing
+              // selection is never silently hidden.
+              .filter((o) => !trimmedCustomerName || o.number === moNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'WSR'
             const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !moNumber
@@ -1766,7 +1774,9 @@ function StockFormBase({ type, title, onClose, prefill }) {
                   >
                     <option value="">Select…</option>
                     {availableMoOrders.map((o) => (
-                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
+                      <option key={o.number} value={o.number}>
+                        {stripMoTmoPrefix(o.number)}{o.batchCurrent != null ? ` - Batch ${o.batchCurrent}` : ''}
+                      </option>
                     ))}
                     {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
                       // Same "historical" fallback as the WSR side - the
@@ -1795,7 +1805,10 @@ function StockFormBase({ type, title, onClose, prefill }) {
           })()}
 
           {isTestMilling && (() => {
-            const availableTmoNumbers = millingOrderOptions.filter((o) => !o.fulfilled || o.number === tmoNumber)
+            const trimmedCustomerName = customerName.trim().toLowerCase()
+            const availableTmoNumbers = millingOrderOptions
+              .filter((o) => !o.fulfilled || o.number === tmoNumber)
+              .filter((o) => !trimmedCustomerName || o.number === tmoNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
             const isDerived = type !== 'WSR'
             const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !tmoNumber
             const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedAuthority)
@@ -1833,7 +1846,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
                   >
                     <option value="">Select…</option>
                     {availableTmoNumbers.map((o) => (
-                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
+                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)}</option>
                     ))}
                     {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
                       <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>

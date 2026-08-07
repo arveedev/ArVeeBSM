@@ -1034,7 +1034,10 @@ const SackFormBase = forwardRef(function SackFormBase(
           </div>
 
           {isMilling && (() => {
-            const availableMoOrders = millingOrderOptions.filter((o) => !o.fulfilled || o.number === moNumber)
+            const trimmedCustomerName = customerName.trim().toLowerCase()
+            const availableMoOrders = millingOrderOptions
+              .filter((o) => !o.fulfilled || o.number === moNumber)
+              .filter((o) => !trimmedCustomerName || o.number === moNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'ESR'
             const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !moNumber
@@ -1073,7 +1076,9 @@ const SackFormBase = forwardRef(function SackFormBase(
                   >
                     <option value="">Select…</option>
                     {availableMoOrders.map((o) => (
-                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
+                      <option key={o.number} value={o.number}>
+                        {stripMoTmoPrefix(o.number)}{o.batchCurrent != null ? ` - Batch ${o.batchCurrent}` : ''}
+                      </option>
                     ))}
                     {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
                       <option value={moNumber}>{stripMoTmoPrefix(moNumber)} (historical)</option>
@@ -1097,7 +1102,10 @@ const SackFormBase = forwardRef(function SackFormBase(
           })()}
 
           {isTestMilling && (() => {
-            const availableTmoNumbers = millingOrderOptions.filter((o) => !o.fulfilled || o.number === tmoNumber)
+            const trimmedCustomerName = customerName.trim().toLowerCase()
+            const availableTmoNumbers = millingOrderOptions
+              .filter((o) => !o.fulfilled || o.number === tmoNumber)
+              .filter((o) => !trimmedCustomerName || o.number === tmoNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
             const isDerived = type !== 'ESR'
             const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !tmoNumber
             const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedSiaAuthority)
@@ -1135,7 +1143,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                   >
                     <option value="">Select…</option>
                     {availableTmoNumbers.map((o) => (
-                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)} - {o.ricemillName}</option>
+                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)}</option>
                     ))}
                     {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
                       <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>
