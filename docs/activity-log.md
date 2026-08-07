@@ -9089,3 +9089,106 @@ sheet, an Apps Script action to fetch only rows changed since a given
 timestamp, and client-side logic to apply those incremental updates to
 local Dexie on a schedule) is the next, most foundational piece of
 work this project actually needs.
+
+## Real incremental sync infrastructure: server-side foundation laid (first step of the requested architecture)
+
+User confirmed backup sheets have no "Last Modified" column at all yet
+and asked for the same one-click column-setup pattern already
+established (ensureBackupSheetColumns) to add it. This is the first,
+foundational piece of the genuine preload-everything-then-incremental-
+sync architecture requested several entries ago.
+
+Discovered the server already has partial infrastructure for this:
+fetchTransactionsBulk already accepted a modifiedSince parameter,
+though it filtered using the same fixed column POSITION
+(LAST_MODIFIED_COLUMN_INDEX) already relied on by fetchAuthorities.
+Deliberately did NOT reuse that same position-based lookup for backup
+sheets - that authorities sheet's column at that fixed position may
+have different header text than literally "Last Modified", and
+changing it risks breaking already-working functionality there for no
+benefit. Backup sheets have no such column at all yet, so gave them
+their own, safer NAME-based lookup instead (searching for the exact
+header text "Last Modified"), matching how every other newer column
+(MO Number, TMO Number, etc.) is already found. fetchAuthorities
+itself was not touched at all.
+
+Added actual stamping: appendTransaction and updateTransaction now
+write the server's own current time (never client-supplied, avoiding
+any cross-device clock-skew inconsistency) into the "Last Modified"
+column whenever a row is written - without this, the column would
+exist but never reflect real changes, making modifiedSince filtering
+meaningless.
+
+Extended ensureBackupSheetColumns (the existing, already-known-to-the-
+user one-click function) to also add "Last Modified" to all four
+backup sheets, alongside the columns it already adds - same safe,
+idempotent, run-anytime pattern already established. Updated its own
+documentation comment to describe the new column's purpose.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds, PLUS an explicit brace-balance check on the Apps Script file
+itself after every single edit, given the earlier mistake in this
+exact file).
+
+## STILL NOT DONE - the client-side half of this architecture:
+- transactionPreload.js does not yet use modifiedSince at all - still
+  does a one-time full fetch, not an incremental one
+- No local "last synced at" timestamp is being tracked per sheet yet
+- No scheduled/periodic incremental sync loop exists yet for
+  transaction data (unlike authorities, which already has this)
+- This entry only lays the server-side foundation (the column exists,
+  is stamped, and can be filtered on) - the client does not yet take
+  advantage of any of it
+
+## Added the onEdit trigger for manual Sheet edits - the missing piece for genuinely two-way freshness tracking
+
+User correctly identified the gap: the app's own writes were already
+stamping Last Modified, but a human directly editing a cell in the
+Google Sheet itself was not - meaning the app would never know about
+manual changes made outside the app, defeating the purpose of
+incremental sync.
+
+Added onEdit(e) as a Google Apps Script "simple trigger" - recognized
+and run automatically by Google Sheets on every manual edit made
+directly in the Sheets UI, with no separate trigger setup required
+beyond saving the script (unlike "installable triggers", which need
+manual authorization steps). Confirmed via Apps Script's own documented
+behavior that simple triggers do NOT fire for the app's own
+programmatic writes via appendTransaction/updateTransaction - only for
+genuine human edits - so there is no risk of this conflicting with or
+double-stamping alongside the server-side stamping those actions
+already do.
+
+Deliberately generic rather than hardcoded to specific sheet names:
+works on whichever sheet was actually edited, checking only whether
+that sheet happens to have a "Last Modified" column by header name.
+This means it already covers every backup sheet once
+ensureBackupSheetColumns has been run, and will also automatically
+cover the AI/SIA sheets the moment they gain this same column, with no
+further code changes needed - directly addressing the user's request
+for this to work "the same on the authorities side" without requiring
+a second, separate implementation.
+
+Handles multi-cell paste/drag edits (stamps every row actually
+touched, not just a single cell), skips header-row edits, and skips
+the narrow case of a single-cell manual edit directly to the Last
+Modified column itself (respecting a deliberate manual override rather
+than immediately clobbering it).
+
+Verified with a 5-case test covering the trigger's core decision logic.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds, PLUS an explicit brace-balance check and full function-list
+confirmation on the Apps Script file itself after this edit).
+
+## STILL NOT DONE - the client-side half remains unbuilt:
+- transactionPreload.js still does not use modifiedSince at all
+- No local "last synced at" timestamp tracked per sheet yet
+- No periodic (~30 second, per user's stated preference) incremental
+  sync loop exists yet for transaction data
+- This entry completes the SERVER-side half of the architecture
+  (columns exist, are stamped by both the app and manual edits, and
+  can be filtered on) - next entry needs to build the client side that
+  actually takes advantage of all of this

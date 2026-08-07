@@ -41,7 +41,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, X, AlertTriangle } from 'lucide-react'
+import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
@@ -185,6 +185,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // when the current serial already has Active data for this (type,
   // warehouse) — the form becomes a review/edit of that document.
   const [loadedTransaction, setLoadedTransaction] = useState(null)
+  // Tracks specifically whether this form was opened by tapping a
+  // transaction on Reports (via prefill.serialNo) - serial navigation
+  // is locked ONLY in that specific context, per explicit
+  // clarification. The normal create-new flow (FAB / TransactionModal)
+  // must keep its typing/stepping navigation exactly as it always was.
+  const [openedFromReports, setOpenedFromReports] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(false)
 
   const [isSaving, setIsSaving] = useState(false)
@@ -642,6 +648,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // transaction lookup so Update/Delete appears automatically.
     if (prefill.serialNo) {
       setSerialNo(prefill.serialNo)
+      setOpenedFromReports(true)
       setTimeout(() => checkAndLoadSerial(prefill.serialNo, true), 150)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -961,6 +968,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const resetToBlankEntry = (nextSerial) => {
     setLoadedTransaction(null)
+    setOpenedFromReports(false)
     setIsCancelled(false)
     setSerialNo(nextSerial)
     setDate(blankFormState.date)
@@ -1087,11 +1095,53 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
   }
 
+  const handleSerialChange = async (value) => {
+    setSerialNo(value)
+    const loaded = await checkAndLoadSerial(value)
+    if (!loaded && value.trim() && latestRequestedSerial.current === value) resetToBlankEntry(value)
+  }
+
+  // Checked on blur (not on every keystroke, which would interrupt
+  // typing) - if nothing was found for this serial anywhere (not
+  // loaded, meaning checkAndLoadSerial's local+Sheet lookups both came
+  // up empty) and it's below the known floor, a regular user gets a
+  // clear warning instead of silently being allowed to create a
+  // duplicate/out-of-sequence entry. Admins bypass this, since they
+  // may be intentionally backfilling genuinely undocumented history.
+  const handleSerialBlur = () => {
+    if (isAdmin || loadedTransaction || floorSerialNumber == null) return
+    const typedNumber = parseInt(serialNo.trim().replace(/\D/g, ''), 10)
+    if (Number.isNaN(typedNumber)) return
+    if (typedNumber < floorSerialNumber) setShowFloorWarning(true)
+  }
+
+  const handleStepBack = async () => {
+    const prevSerial = stepSerial(serialNo.trim(), -1)
+    const prevNumber = parseInt(prevSerial.replace(/\D/g, ''), 10)
+    if (!isAdmin && floorSerialNumber != null && !Number.isNaN(prevNumber) && prevNumber < floorSerialNumber) {
+      toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
+      return
+    }
+    setSerialNo(prevSerial)
+    setNavFlash('back')
+    setTimeout(() => setNavFlash(null), 750)
+    await checkAndLoadSerial(prevSerial)
+  }
+
   const handleFloorWarningAcknowledge = async () => {
     setShowFloorWarning(false)
     const latest = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
     setSerialNo(latest)
     await checkAndLoadSerial(latest)
+  }
+
+  const handleStepForward = async () => {
+    const nextSerial = stepSerial(serialNo.trim(), 1)
+    setSerialNo(nextSerial)
+    setNavFlash('forward')
+    setTimeout(() => setNavFlash(null), 750)
+    const loaded = await checkAndLoadSerial(nextSerial)
+    if (!loaded && latestRequestedSerial.current === nextSerial) resetToBlankEntry(nextSerial)
   }
 
   const initialAgeDays = ageUnit === 'Months + Days'
@@ -1579,14 +1629,43 @@ function StockFormBase({ type, title, onClose, prefill }) {
           <div ref={serialFieldRef}>
             <label className={labelClass}>Serial No.</label>
             <div className="mt-1 flex items-center gap-2">
-              <input
-                type="text"
-                value={serialNo}
-                readOnly
-                disabled
-                className={`mt-0 w-full rounded-xl border bg-neutral-800 px-3 py-2 text-center font-mono text-neutral-400 outline-none ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
-                placeholder="0000000"
-              />
+              {openedFromReports ? (
+                <input
+                  type="text"
+                  value={serialNo}
+                  readOnly
+                  disabled
+                  className={`mt-0 w-full rounded-xl border bg-neutral-800 px-3 py-2 text-center font-mono text-neutral-400 outline-none ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
+                  placeholder="0000000"
+                />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleStepBack}
+                    aria-label="Previous serial"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <input
+                    type="text"
+                    value={serialNo}
+                    onChange={(e) => handleSerialChange(e.target.value)}
+                    onBlur={handleSerialBlur}
+                    className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`}
+                    placeholder="0000000"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleStepForward}
+                    aria-label="Next serial"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </>
+              )}
             </div>
             <p className="mt-1 text-xs text-neutral-500">
               {isLookingUp ? (
