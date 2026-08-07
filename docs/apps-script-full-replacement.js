@@ -322,13 +322,27 @@ function doGet(e) {
 
       if (modifiedSince) {
         const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-        const lastModHeader = headers[LAST_MODIFIED_COLUMN_INDEX];
-        const cutoff = new Date(modifiedSince);
-        rows = rows.filter((row) => {
-          const stamped = row[lastModHeader];
-          if (!stamped) return true; // never stamped - include rather than risk dropping it
-          return new Date(stamped) >= cutoff;
-        });
+        // Deliberately name-based ("Last Modified" by exact header
+        // text), NOT the same LAST_MODIFIED_COLUMN_INDEX used by
+        // fetchAuthorities - that sheet's column at that fixed
+        // position may have entirely different header text, and this
+        // action's backup sheets have no such column at all yet, so
+        // there is no existing position-based behavior to preserve
+        // or risk breaking here.
+        const hasLastModifiedColumn = headers.includes('Last Modified');
+        if (hasLastModifiedColumn) {
+          const cutoff = new Date(modifiedSince);
+          rows = rows.filter((row) => {
+            const stamped = row['Last Modified'];
+            if (!stamped) return true; // never stamped - include rather than risk dropping it
+            return new Date(stamped) >= cutoff;
+          });
+        }
+        // No "Last Modified" column on this sheet at all - modifiedSince
+        // is silently ignored and every row is returned, rather than
+        // erroring out. This keeps the endpoint usable immediately after
+        // ensureBackupSheetColumns/ensureLastModifiedColumn adds the
+        // column but before every row has been touched/stamped yet.
       }
 
       return jsonResponse({ status: 'SUCCESS', rows });
@@ -434,6 +448,12 @@ function doPost(e) {
     if (body.action === 'appendTransaction') {
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
       const newRow = headers.map((header) => (header in body.row ? body.row[header] : ''));
+      // Stamped with the server's own current time, not anything the
+      // client sent - keeps this consistent regardless of any given
+      // device's clock being off, which matters for a timestamp other
+      // devices will later filter on.
+      const lastModIndex = headers.indexOf('Last Modified');
+      if (lastModIndex !== -1) newRow[lastModIndex] = new Date().toISOString();
       const newRowIndex = sheet.getLastRow() + 1;
       preformatSerialColumnAsText(sheet, headers, body.serialColumn, newRowIndex);
       sheet.appendRow(newRow);
@@ -444,6 +464,8 @@ function doPost(e) {
       const rowIndex = findRowIndexByMatch(sheet, body.matchColumn, body.matchValue);
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
       const updatedRow = headers.map((header) => (header in body.row ? body.row[header] : ''));
+      const lastModIndex = headers.indexOf('Last Modified');
+      if (lastModIndex !== -1) updatedRow[lastModIndex] = new Date().toISOString();
 
       if (rowIndex === -1) {
         // No matching row - most commonly because it was deleted by
@@ -619,15 +641,20 @@ function findSerialRange(sheet, matchColumn, warehouseColumn, warehouseValue) {
  *                  member's name, RSBSA, and gender, formatted as one
  *                  readable line per transaction (e.g. "Juan Dela Cruz
  *                  (12-34-56, Male); Maria Santos (no RSBSA, Female)")
+ *   Last Modified  - automatically stamped by the app itself with the
+ *                  exact time a row was last written (appended or
+ *                  updated) - never edit this by hand. Used to sync
+ *                  only what has actually changed since a given time,
+ *                  instead of re-downloading every row on every sync.
  */
 function ensureBackupSheetColumns() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
   const sheetsAndColumns = [
-    { name: 'DATA_ENTRY', columns: ['AGE', 'Age Unit', 'MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members'] },
-    { name: 'Issues Backup', columns: ['AGE', 'Age Unit', 'MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members'] },
-    { name: 'Sacks Receipts Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number'] },
-    { name: 'Sacks Issues Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number'] },
+    { name: 'DATA_ENTRY', columns: ['AGE', 'Age Unit', 'MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members', 'Last Modified'] },
+    { name: 'Issues Backup', columns: ['AGE', 'Age Unit', 'MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members', 'Last Modified'] },
+    { name: 'Sacks Receipts Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'Last Modified'] },
+    { name: 'Sacks Issues Backup', columns: ['MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'Last Modified'] },
   ];
 
   const results = [];
@@ -665,4 +692,44 @@ function ensureBackupSheetColumns() {
   // response here.
   Logger.log(results.join('\n'));
   return results;
+}
+
+/**
+ * Simple trigger - Google Sheets recognizes and runs this
+ * automatically on every manual edit made directly in the Sheets UI,
+ * with no separate trigger setup required beyond saving this script.
+ * (Simple triggers do NOT fire for the app's own programmatic writes
+ * via appendTransaction/updateTransaction - only for a human actually
+ * typing or pasting into a cell - so there is no risk of this
+ * conflicting with the server-side stamping those actions already do.)
+ *
+ * Deliberately generic: works on whichever sheet was actually edited,
+ * checking only whether that sheet happens to have a "Last Modified"
+ * column by header name - not a hardcoded list of specific sheet
+ * names. This means it already covers every backup sheet once
+ * ensureBackupSheetColumns has been run, and will also cover the AI/
+ * SIA sheets the moment they gain this same column, with no further
+ * changes needed here.
+ */
+function onEdit(e) {
+  if (!e || !e.range) return;
+  const sheet = e.range.getSheet();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const lastModCol = headers.indexOf('Last Modified') + 1; // 1-indexed for Range APIs
+  if (lastModCol === 0) return; // this sheet has no such column at all - nothing to stamp
+
+  // Skip entirely if the edit was made directly to the Last Modified
+  // column itself, or to the header row (row 1) - neither should
+  // trigger a stamp.
+  const editedCol = e.range.getColumn();
+  const editedColEnd = editedCol + e.range.getNumColumns() - 1;
+  if (e.range.getRow() === 1) return;
+  if (editedCol <= lastModCol && lastModCol <= editedColEnd && e.range.getNumColumns() === 1) return;
+
+  const now = new Date().toISOString();
+  const startRow = e.range.getRow();
+  const numRows = e.range.getNumRows();
+  for (let r = startRow; r < startRow + numRows; r++) {
+    sheet.getRange(r, lastModCol).setValue(now);
+  }
 }
