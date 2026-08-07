@@ -992,6 +992,44 @@ function StockFormBase({ type, title, onClose, prefill }) {
       const existing = await findTransactionBySerial(type, currentWarehouseId, serial, skipCategoryFilter ? null : activeCategory)
       if (latestRequestedSerial.current !== serial) return false // superseded by a newer request - discard this stale result
       if (existing) {
+        // Backfill from the Sheet if this Milling/Test Milling record
+        // is missing MO/TMO/Batch/Trial locally - a transaction found
+        // here was already local, so it never went through the Sheet-
+        // fallback mapping at all. If it was originally saved with
+        // these fields genuinely blank (e.g. historical data encoded
+        // quickly, bypassing the normal AI/SIA-first flow), and its
+        // MO/TMO is now marked DONE, there is no way to re-derive this
+        // through normal matching anymore - but the Sheet itself may
+        // still have the correct data sitting right there. Only fills
+        // in what's actually missing; never overwrites anything
+        // already present locally.
+        const missingMillingFields = (existing.aiNumber || existing.linkedDocNo)
+          && !existing.moNumber && !existing.tmoNumber
+        const missingVarietyFields = !existing.varietyId || !existing.cerealCategory
+        if ((missingMillingFields || missingVarietyFields) && navigator.onLine) {
+          const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+          if (latestRequestedSerial.current !== serial) return false // superseded - discard
+          if (sheetResult.ok && sheetResult.row) {
+            const patch = {}
+            if (sheetResult.row['MO Number']) patch.moNumber = sheetResult.row['MO Number']
+            if (sheetResult.row['TMO Number']) patch.tmoNumber = sheetResult.row['TMO Number']
+            if (sheetResult.row['Batch Number']) patch.batchNumber = sheetResult.row['Batch Number']
+            if (sheetResult.row['Trial Number']) patch.trialNumber = sheetResult.row['Trial Number']
+            if (missingVarietyFields && sheetResult.row['Variety']) {
+              const matchedVariety = sortedVarieties.find(
+                (v) => v.name.trim().toLowerCase() === String(sheetResult.row['Variety']).trim().toLowerCase()
+              )
+              if (matchedVariety) {
+                if (!existing.varietyId) patch.varietyId = matchedVariety.varietyId
+                if (!existing.cerealCategory) patch.cerealCategory = matchedVariety.category
+              }
+            }
+            if (Object.keys(patch).length > 0) {
+              await db.transactions.update(existing.id, patch)
+              Object.assign(existing, patch)
+            }
+          }
+        }
         loadTransactionIntoForm(existing)
         return true
       }
