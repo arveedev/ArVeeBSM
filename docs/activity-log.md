@@ -8791,3 +8791,49 @@ succeeds) and the complete regression suite re-run - 160 test cases
 across 26 suites, all passing.
 
 ## This should resolve the TMO/trial/cereal-tab-not-showing issue for any transaction reached via the Sheet fallback path - genuinely high confidence given the user's own real data was used to confirm both the bug and the fix
+
+## CRITICAL: found why the previous fix didn't take effect - fixed the actual, different code path
+
+User's screenshots showed the identical "expected, not an error" message on WSI
+#26529854 even after the previous fix was deployed, plus a NEW
+symptom: correct receipts showing the wrong cereal tab too. This
+revealed the previous fix targeted the wrong path: that fix only ever
+applied to transactions found via the Sheet fallback (not yet in local
+Dexie). This specific transaction was almost certainly ALREADY a local
+record (created directly through the app during the earlier Test
+Milling session), so it never touched that code path at all -
+loadTransactionIntoForm loads a local record and returns immediately,
+with no Sheet cross-check ever happening.
+
+Root cause: if a local record was originally saved with MO/TMO/Batch/
+Trial (or variety/cerealCategory) genuinely blank - plausible for
+historical data encoded quickly, or any save that happened before
+these fields were fully wired up - and the MO/TMO is later marked
+DONE, there is no way to recover that data through normal derivation
+anymore, even though the Sheet itself may still have the correct data
+sitting right there (confirmed directly via the user's own raw sheet
+export).
+
+Fixed with a targeted backfill in checkAndLoadSerial (both
+StockFormBase.jsx and SackFormBase.jsx): when a local record is found
+missing MO/TMO/Batch/Trial (stock forms also check variety/
+cerealCategory), cross-checks the Sheet for that exact serial and
+backfills ONLY the genuinely-missing fields - never overwrites
+anything already present locally - and persists the fix to the local
+record so this lookup does not need to repeat on every future edit.
+This directly explains and fixes the "Palay receipts showing as Rice"
+symptom too, using the same mechanism.
+
+Verified with a 5-case test using the user's own real data from this
+conversation.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 165 test cases
+across 27 suites, all passing.
+
+## STILL NOT DONE, explicitly deferred:
+- The broader "app should know everything the sheet contains" /
+  duplicate-series-prevention architecture the user described as the
+  first, most foundational priority - not started this entry, remains
+  a significant system design undertaking

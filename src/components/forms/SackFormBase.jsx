@@ -510,6 +510,29 @@ const SackFormBase = forwardRef(function SackFormBase(
       const existing = await findTransactionBySerial(type, currentWarehouseId, serial)
       if (latestRequestedSerial.current !== serial) return false
       if (existing) {
+        // Same backfill as StockFormBase.jsx's identical fix - a
+        // locally-existing record never goes through the Sheet-
+        // fallback mapping, so if it was originally saved with
+        // MO/TMO/Batch/Trial genuinely blank, there is no way to
+        // recover that once the MO/TMO is marked DONE, even though
+        // the Sheet itself may still have the correct data.
+        const missingMillingFields = (existing.aiNumber || existing.linkedDocNo)
+          && !existing.moNumber && !existing.tmoNumber
+        if (missingMillingFields && navigator.onLine) {
+          const sheetResult = await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
+          if (latestRequestedSerial.current !== serial) return false
+          if (sheetResult.ok && sheetResult.row) {
+            const patch = {}
+            if (sheetResult.row['MO Number']) patch.moNumber = sheetResult.row['MO Number']
+            if (sheetResult.row['TMO Number']) patch.tmoNumber = sheetResult.row['TMO Number']
+            if (sheetResult.row['Batch Number']) patch.batchNumber = sheetResult.row['Batch Number']
+            if (sheetResult.row['Trial Number']) patch.trialNumber = sheetResult.row['Trial Number']
+            if (Object.keys(patch).length > 0) {
+              await db.transactions.update(existing.id, patch)
+              Object.assign(existing, patch)
+            }
+          }
+        }
         loadTransactionIntoForm(existing)
         return true
       }
