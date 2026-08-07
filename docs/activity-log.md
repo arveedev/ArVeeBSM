@@ -8986,3 +8986,50 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds, PLUS an explicit brace-balance check on the Apps Script file
 itself, given the earlier mistake in this exact file) and the complete
 regression suite re-run - 182 test cases across 31 suites, all passing.
+
+## CRITICAL: removed the preload-completeness short-circuit that could show an already-existing serial as available
+
+User directly confirmed the exact failure mode: data exists on the
+Sheet that the app has not captured locally, yet the app shows that
+serial as available for a new transaction - precisely the scenario
+this entire session has been trying to prevent.
+
+Root cause: checkAndLoadSerial trusted an isPreloadComplete flag to
+skip checking the Sheet entirely once a (warehouse, type) combination
+was marked as fully preloaded - assuming local data was
+"comprehensive" at that point. Given confirmed real gaps in what
+preload actually captures (e.g. warehouse-name mismatches silently
+skipping rows, seen in earlier session logs), this flag cannot be
+trusted as an absolute guarantee, and using it to skip the one check
+that exists specifically to prevent duplicate series was a direct,
+serious risk.
+
+Removed this short-circuit entirely in both StockFormBase.jsx and
+SackFormBase.jsx: the Sheet is now always checked directly when
+online before ever treating an unfound-locally serial as genuinely
+available. Only skips this check when truly offline, where checking
+is impossible rather than an optimization choice - the existing local-
+only fallback remains the safety net in that specific case, consistent
+with the app's core offline-first requirement.
+
+Also added a second, independent safeguard: a final Sheet-side check
+inside validateForm itself, immediately before a NEW transaction can
+actually be saved (never applies to editing an existing record's own
+serial). This protects against the specific multi-device race the
+user raised earlier - a serial could theoretically become taken by
+another device in the time between when it was first typed and the
+exact moment of hitting Save.
+
+Verified with a 5-case test covering both fixes' gating logic.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite re-run - 187 test cases
+across 32 suites, all passing.
+
+## STILL NOT DONE, explicitly deferred:
+- WTSForm.jsx was not checked for the same preload-short-circuit
+  pattern - if it has the same isPreloadComplete usage, it may have
+  the same gap and was not addressed this entry
+- The broader near-real-time incremental sync algorithm (rather than
+  full preload) requested much earlier remains unaddressed
