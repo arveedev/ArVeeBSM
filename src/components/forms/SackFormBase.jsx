@@ -570,6 +570,7 @@ const SackFormBase = forwardRef(function SackFormBase(
 
   const handleSerialChange = async (value) => {
     setSerialNo(value)
+    resetToBlankEntry(value) // clear immediately - never leave stale data on screen while the lookup is in flight
     const loaded = await checkAndLoadSerial(value)
     if (!loaded && value.trim() && latestRequestedSerial.current === value) resetToBlankEntry(value)
   }
@@ -589,6 +590,7 @@ const SackFormBase = forwardRef(function SackFormBase(
       return
     }
     setSerialNo(prevSerial)
+    resetToBlankEntry(prevSerial) // clear immediately - same reasoning as handleSerialChange above
     setNavFlash('back')
     setTimeout(() => setNavFlash(null), 750)
     await checkAndLoadSerial(prevSerial)
@@ -604,6 +606,7 @@ const SackFormBase = forwardRef(function SackFormBase(
   const handleStepForward = async () => {
     const nextSerial = stepSerial(serialNo.trim(), 1)
     setSerialNo(nextSerial)
+    resetToBlankEntry(nextSerial) // clear immediately - same reasoning as handleSerialChange above
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
@@ -937,7 +940,7 @@ const SackFormBase = forwardRef(function SackFormBase(
             Reviewing existing {type} {loadedTransaction?.serialNo} — Update or Delete below.
           </AnimatedBanner>
 
-          <AnimatedBanner show={Boolean(loadedTransaction?.needsCompletion)} className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
+          <AnimatedBanner show={isAdmin && Boolean(loadedTransaction?.needsCompletion)} className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
             This record was pulled from historical Sheet data. The sack breakdown by type/condition was not tracked there
             {loadedTransaction?.totalPiecesRaw != null && <> — the Sheet's recorded total was <strong>{loadedTransaction.totalPiecesRaw} pieces</strong></>}, and needs to be entered below before further changes can be saved.
           </AnimatedBanner>
