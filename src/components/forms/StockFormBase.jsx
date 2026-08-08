@@ -1624,7 +1624,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
           </div>
         ) : null}
 
-        {isCategoryScoped && (
+        {isCategoryScoped && !openedFromReports && (
           <div className="mt-2 grid grid-cols-3 gap-2">
             {[
               { key: 'Rice', label: 'Rice', activeClasses: 'border-blue-400 bg-blue-400/10 text-blue-400' },

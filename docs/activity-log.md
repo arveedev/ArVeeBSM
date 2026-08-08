@@ -9862,3 +9862,34 @@ was not addressed in this entry, remains deferred.
 - By Products pile creation variety/moisture-content exemption
 - Regional authority totals (net bags issued, total bags, grouped by
   warehouse) shown when a regional authority filter is selected
+
+## Hid cereal tab buttons when a transaction is opened from Reports
+
+Per explicit request: the tab buttons are now hidden entirely (not
+just disabled) when a transaction is opened by tapping it on the
+Reports stock statement, using the existing openedFromReports flag -
+the same one that already locks serial navigation in this exact
+context. The current category still displays correctly via existing
+cerealCategory state; only the interactive switching is removed, and
+only in this specific context - the normal create/edit flow everywhere
+else is completely unaffected. Confirmed sacks have no cereal tab
+concept at all, so no equivalent change was needed there.
+
+Verified with a 4-case test covering the visibility logic across
+every relevant combination.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## FULL LIST OF STILL-OUTSTANDING TASKS:
+- "Marking rows as seen" during preload/read, not just on write
+- Scenario 1 duplicate risk: encoding historical transactions where
+  the app has not yet preloaded that specific data
+- WTSForm.jsx was never checked for the same preload-completeness/
+  duplicate-risk patterns fixed elsewhere
+- NFA-owned Ricemill/Mechanical Dryer handling - explicitly deferred
+  by the user to a later date
+- By Products pile creation variety/moisture-content exemption
+- Regional authority totals (net bags issued, total bags, grouped by
+  warehouse) shown when a regional authority filter is selected
