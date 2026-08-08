@@ -9491,3 +9491,59 @@ mechanism the way the duplication itself was traced. If either persists
 after this fix (which should dramatically reduce the working dataset
 size and prevent it from recurring), they need their own dedicated
 investigation rather than being assumed resolved by inference alone.
+
+## Fixed a confirmed UI bug: sync status showed "Not connected" while actually connected and healthy
+
+User's console logs directly showed status: "connected" throughout,
+while actively pushing/pulling - genuinely healthy, normal, expected
+behavior. But the Settings page's simplified status text required BOTH
+phase === 'in-sync' AND status === 'connected' to ever show
+"Connected" - any active phase (pushing, pulling), even with a
+perfectly healthy connection, fell through to the alarming "Not
+connected - contact your admin if this persists" message. Fixed to
+check connection health (status) independently from activity
+(phase) - now distinguishes "Connected" (idle, fully synced),
+"Syncing..." (actively working, still healthy), and the warning
+message (genuinely disconnected/errored), rather than conflating
+"currently doing something" with "broken."
+
+Confirmed the admin diagnostic panel's own sync status display was NOT
+affected by this same bug - it already shows the raw phase/status
+values directly, which was already accurate.
+
+Verified with a 5-case test directly modeling the user's own reported
+console output.
+
+## Investigated but NOT resolved this entry - documented honestly rather than guessed at further
+
+**The endless pushing/pulling sync loop**: confirmed db.transactions IS
+synced via Dexie Cloud (not in unsyncedTables). The previous entry's
+necessary cleanup deleted 23,144 duplicate records in one batch -
+this very plausibly generated an enormous backlog of delete operations
+that Dexie Cloud now needs to propagate across every device. This is
+the most likely explanation, and would be a genuinely temporary,
+self-resolving consequence of the cleanup rather than a new, ongoing
+bug - but this was not directly confirmed, only reasoned through from
+what's known about Dexie Cloud's sync model.
+
+**Preload appearing to fully re-run on every login**: confirmed
+AuthContext's logout() only clears in-memory user state and does not
+touch db.preloadState or any other local table - preloadState should
+persist correctly across login/logout cycles on the same device.
+confirmed preloadOneType's full-vs-incremental decision logic reads
+correctly on its own. Could not identify a specific, confirmed
+mechanism for why this isn't working as designed - the massive sync
+backlog above may be interfering with local database responsiveness in
+ways not directly traceable through code review alone.
+
+**The "already used" error persisting for a new serial (26458185)**:
+the previous entry's dedup fix and Map-key fix should prevent this
+going forward, but with multiple devices and an active sync backlog,
+a device that has not yet received a given deletion could still
+re-introduce a duplicate during this settling period.
+
+All three of the above share a plausible common root (the sync
+backlog), but this is reasoned inference, not confirmed fact. If any
+persist once the backlog has had time to settle, each needs its own
+dedicated, direct investigation rather than continuing to attribute
+new symptoms to the same explanation without verification.
