@@ -63,6 +63,28 @@ const SERIAL_COLUMN_BY_TYPE = { WSR: 'WSR #', WSI: 'WSI #', ESR: 'ESR#', ESI: 'E
 export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
   if (!user) return
 
+  // One-time reset - see PRELOAD_RESET_FLAG below for the full
+  // reasoning. Runs before anything else in this function so the
+  // subsequent full-vs-incremental decision below is made against a
+  // genuinely clean slate, not stale (and confirmed incorrect)
+  // completion state.
+  const PRELOAD_RESET_FLAG = 'preload-state-reset-v1'
+  if (!localStorage.getItem(PRELOAD_RESET_FLAG)) {
+    localStorage.setItem(PRELOAD_RESET_FLAG, 'done')
+    // Confirmed root cause: the Sheet-side warehouse name matching
+    // used exact string comparison against a name that includes a
+    // code prefix (e.g. "ALB-ABACORP A") while the Sheet's own
+    // Warehouse Name column does not have that prefix ("ABACORP A") -
+    // every row for an affected warehouse was silently excluded from
+    // every past fetch, yet the fetch itself still reported success,
+    // so preloadState was marked complete despite having imported
+    // nothing for that warehouse. Now fixed server-side, but every
+    // device that already has complete: true recorded needs this
+    // one-time reset to actually pick up what was missed - nothing
+    // would otherwise ever trigger a fresh full pull again.
+    await db.preloadState.clear()
+  }
+
   // Admin and Visitor both have access to every warehouse (they share
   // the same all-warehouse AdminHome view - see App.jsx), so both
   // preload everything rather than being skipped. A regular user stays

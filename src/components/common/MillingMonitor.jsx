@@ -384,7 +384,6 @@ function MillingMonitor() {
                 <p className="truncate text-xs text-neutral-500">
                   {o.ricemillName}
                   {o.type === 'MO' && o.batchCurrent != null && ` · Batch ${o.batchCurrent} of ${o.batchTotal}`}
-                  {o.type === 'TMO' && ` · Issued ${issuedTrialsCount} of 3 · Received ${receivedTrialsCount} of 3`}
                 </p>
                 {hasIssuance && (
                   <>

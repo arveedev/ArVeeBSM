@@ -9236,3 +9236,77 @@ succeeds) and using the test suite above.
   earlier "it's gone" report might describe this component (not
   AdminHome's duplicate, which is now resolved) - worth the user
   re-checking specifically
+
+## CRITICAL: found and fixed the actual root cause of the "typed series shows no data" bug - confirmed via direct evidence
+
+User provided side-by-side screenshots of the Sheet and the app showing
+the exact same warehouse (ALB-ABACORP A) with real data on the Sheet
+that the app treated as completely absent when the exact serial was
+typed. Traced directly to the Apps Script's fetchTransactionsBulk
+warehouse-name filter: the app's own warehouse names include a code
+prefix (e.g. "ALB-ABACORP A"), but the Sheet's own "Warehouse Name"
+column does not have that prefix ("ABACORP A") - confirmed exactly via
+an earlier session's own diagnostic log line ("expected names:
+ALB-ABACORP A" alongside "saw 0 row(s)"). The exact-string-match filter
+silently excluded every single row for this warehouse from every past
+fetch - yet the fetch itself still reported success, so preload was
+permanently marked complete despite having imported nothing for this
+warehouse. This is the direct, confirmed root cause of "an existing
+series shows as available" - the single most critical failure mode
+this entire session has been trying to eliminate.
+
+Fixed server-side: both sides of the comparison now strip a leading
+warehouse-code-style prefix before matching, so this works correctly
+regardless of which side does or doesn't have it.
+
+Also added a one-time, version-gated client-side reset of
+preloadState, since every existing device already has complete: true
+recorded for warehouses that were silently never actually captured -
+nothing would otherwise ever trigger a fresh full pull to catch what
+was missed, even with the server-side fix deployed. Confirmed this is
+safe: preloadState is purely a local sync-progress cache, never user
+data or auth state, so clearing it can only cause a one-time slower
+re-preload on next login, never any data loss.
+
+## Cross-tab duplicate AI/SIA creation - applied the same, already-proven Web Locks fix
+
+User reported a genuinely new AI record duplicated on the app side
+(not on the Sheet) - traced to syncAuthoritiesFromSheets and
+syncMillingOrdersFromSheets sharing only an in-memory syncInProgress
+flag, the exact same single-tab-only limitation already found and
+fixed for the transaction push queue earlier this session. Upgraded
+both functions to the same cross-tab-safe Web Locks pattern, keeping
+them sharing one lock consistent with how they already shared the
+in-memory flag. Caught and fixed a duplicate-try syntax mistake during
+this edit via the same parse-before-done discipline already
+established - confirmed via direct compilation check before
+considering either edit complete.
+
+## MillingMonitor: removed redundant TMO progress text
+
+Per explicit request: the "Issued X of 3 · Received X of 3" text next
+to the miller's name was redundant with the same information already
+shown as labels directly above the progress bar - removed the
+duplicate, keeping only the labels above the bar.
+
+Verified with a 6-case test covering the exact confirmed warehouse-
+prefix scenario and the cross-tab lock decision logic.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds, PLUS an explicit brace-balance and function-count check on
+the Apps Script file, which caught a real duplicate-try mistake before
+it could ship).
+
+## STILL NOT DONE, explicitly deferred given this message's scope:
+- Regional authority totals (net bags issued, total bags, grouped by
+  warehouse) shown below the filter when selected - not started
+- Regional authority filter scoping (pending list should only offer
+  regional authorities with pending items; completed list only ones
+  with completed items) - not started, currently shows all available
+  regional authority numbers regardless of list context
+- TMO showing as completed with issuance-only (no receipt) - traced
+  the fulfilled/markMillingOrderDone logic and could not find a clear
+  bug through code review alone; needs the actual sheetStatus value
+  for the specific TMO in question to diagnose further rather than
+  another guess

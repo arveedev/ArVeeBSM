@@ -321,13 +321,32 @@ export const markMillingOrderDone = async (type, number) => {
 }
 
 export const syncMillingOrdersFromSheets = async () => {
-  if (syncInProgress) return { ok: false, reason: 'already_syncing' }
   if (!isOnline()) return { ok: false, reason: 'offline' }
+  // Cross-tab lock - the previous syncInProgress flag only protected
+  // within a single tab's memory, the exact same limitation already
+  // found and fixed for the transaction push queue. Multiple tabs (or
+  // this worker overlapping with a manual "Sync Now" tap) could
+  // otherwise race to conclude "nothing exists yet" independently and
+  // both create a duplicate record.
+  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+    return navigator.locks.request('bsm-sheet-pull-lock', { ifAvailable: true }, (lock) => {
+      if (!lock) return { ok: false, reason: 'already_syncing' }
+      return runMillingOrdersSync()
+    })
+  }
+  if (syncInProgress) return { ok: false, reason: 'already_syncing' }
+  syncInProgress = true
+  try {
+    return await runMillingOrdersSync()
+  } finally {
+    syncInProgress = false
+  }
+}
 
+const runMillingOrdersSync = async () => {
   const sources = await getAllSheetSources()
   if (sources.length === 0) return { ok: false, reason: 'not_configured' }
 
-  syncInProgress = true
   try {
     // Fetch everything into memory FIRST, before touching the
     // database at all - this is what makes the atomic swap below
@@ -397,13 +416,26 @@ export const syncMillingOrdersFromSheets = async () => {
 }
 
 export const syncAuthoritiesFromSheets = async () => {
-  if (syncInProgress) return { ok: false, reason: 'already_syncing' }
   if (!isOnline()) return { ok: false, reason: 'offline' }
+  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+    return navigator.locks.request('bsm-sheet-pull-lock', { ifAvailable: true }, (lock) => {
+      if (!lock) return { ok: false, reason: 'already_syncing' }
+      return runAuthoritiesSync()
+    })
+  }
+  if (syncInProgress) return { ok: false, reason: 'already_syncing' }
+  syncInProgress = true
+  try {
+    return await runAuthoritiesSync()
+  } finally {
+    syncInProgress = false
+  }
+}
 
+const runAuthoritiesSync = async () => {
   const sources = await getAllSheetSources()
   if (sources.length === 0) return { ok: false, reason: 'not_configured' }
 
-  syncInProgress = true
   try {
     const [warehouses, aliases, varieties, sackTypes] = await Promise.all([
       db.warehouses.toArray(),
