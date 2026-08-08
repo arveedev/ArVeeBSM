@@ -2,24 +2,18 @@
 // Thin container: tab state only, delegates to AdminHomeStocks/AdminHomeSacks.
 
 import { useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import AdminHomeStocks from './AdminHomeStocks.jsx'
 import AdminHomeSacks from './AdminHomeSacks.jsx'
 import WarehouseDetailModal from './WarehouseDetailModal.jsx'
-import MillingMonitor from '../components/common/MillingMonitor.jsx'
-import SectionErrorBoundary from '../components/common/SectionErrorBoundary.jsx'
-import { Factory, ChevronDown, ChevronUp } from 'lucide-react'
+
 
 function AdminHome() {
   const { user } = useAuth()
   const { setPageHeader } = usePageHeader() ?? {}
-  const hasMillingOrders = (useLiveQuery(() => db.millingOrders.count(), []) ?? 0) > 0
   const [activeTab, setActiveTab] = useState('stocks')
   const [selectedWarehouse, setSelectedWarehouse] = useState(null)
-  const [showMillingMonitor, setShowMillingMonitor] = useState(false)
 
   useEffect(() => {
     setPageHeader?.({ title: 'Dashboard', subtitle: `Welcome back, ${user?.nickname ?? ''}.` })
@@ -49,33 +43,6 @@ function AdminHome() {
       {activeTab === 'stocks'
         ? <AdminHomeStocks onWarehouseSelect={setSelectedWarehouse} />
         : <AdminHomeSacks onWarehouseSelect={setSelectedWarehouse} />}
-
-      {hasMillingOrders && (
-        <div className="mt-4">
-          <SectionErrorBoundary label="Milling monitor">
-            <button
-              type="button"
-              onClick={() => setShowMillingMonitor((o) => !o)}
-              className="flex w-full items-center justify-between rounded-2xl border-2 border-brand-amber bg-neutral-900 px-4 py-3 text-left transition-all active:scale-[0.99]"
-            >
-              <span className="flex items-center gap-2">
-                <Factory size={20} className="text-brand-amber" />
-                <span className="text-sm font-bold text-app-text">Milling Operations</span>
-              </span>
-              {showMillingMonitor ? (
-                <ChevronUp size={20} className="text-neutral-500" />
-              ) : (
-                <ChevronDown size={20} className="text-neutral-500" />
-              )}
-            </button>
-            {showMillingMonitor && (
-              <div className="mt-3">
-                <MillingMonitor />
-              </div>
-            )}
-          </SectionErrorBoundary>
-        </div>
-      )}
 
       <WarehouseDetailModal warehouse={selectedWarehouse} onClose={() => setSelectedWarehouse(null)} />
     </div>

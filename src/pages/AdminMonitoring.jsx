@@ -34,6 +34,7 @@ function AdminMonitoring() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedAuthority, setSelectedAuthority] = useState(null)
   const [showCompleted, setShowCompleted] = useState(false)
+  const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
 
   useEffect(() => {
     setPageHeader?.({ title: 'Monitoring', subtitle: 'Cross-warehouse AI / SIA oversight.' })
@@ -61,6 +62,7 @@ function AdminMonitoring() {
   const query = searchQuery.trim().toLowerCase()
 
   const typeAuthorities = authorities.filter((a) => a.type === activeTab)
+  const availableRegionalAuthNumbers = [...new Set(typeAuthorities.map((a) => a.regionalAuthorityNumber).filter(Boolean))].sort()
   const filtered = typeAuthorities
     .filter((a) => !isAuthorityComplete(a))
     .filter((a) => {
@@ -68,6 +70,7 @@ function AdminMonitoring() {
       const ref = a.type === 'AI' ? a.aiNumber : a.siaNumber
       return (ref ?? '').toLowerCase().includes(query)
     })
+    .filter((a) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
     .sort((a, b) => {
       const aRef = a.type === 'AI' ? a.aiNumber : a.siaNumber
       const bRef = b.type === 'AI' ? b.aiNumber : b.siaNumber
@@ -126,6 +129,17 @@ function AdminMonitoring() {
           Completed
         </button>
       </div>
+
+      {availableRegionalAuthNumbers.length > 0 && (
+        <select
+          value={regionalAuthFilter}
+          onChange={(e) => setRegionalAuthFilter(e.target.value)}
+          className="mx-4 mt-2 w-[calc(100%-2rem)] rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
+        >
+          <option value="">All Regional Authority Numbers</option>
+          {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+      )}
 
       <ul className="mt-4 space-y-2">
         {filtered.length === 0 && (

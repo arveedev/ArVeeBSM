@@ -5,9 +5,18 @@
 // user actually starts working.
 //
 // Design (confirmed with the user before building):
-//  1. Never overwrites an app-created record. Preload only fills gaps
-//     - historical rows the app itself never created. Existing local
-//     transactions are the source of truth and are left untouched.
+//  1. Fills in genuinely missing historical rows, and updates an
+//     existing local record when the Sheet has a newer version of
+//     it - but ONLY when that local record is already isSynced: true
+//     (its own version has already reached the Sheet, so a fresh row
+//     represents a real edit made directly on the Sheet, not a
+//     conflict). A local record that is still pending its own push
+//     is left completely untouched either way, protecting against
+//     ever overwriting an in-progress, not-yet-synced local edit.
+//     (Originally this only ever added missing rows and silently
+//     ignored any existing one forever - revised per explicit
+//     requirement that a manual Sheet edit should propagate back into
+//     the app, not be permanently invisible to it.)
 //  2. Full pull only the FIRST time a (warehouseId, type) combination
 //     is preloaded (no preloadState record, or complete: false).
 //     Every login after that does a lightweight "anything new since
@@ -112,17 +121,18 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     }
   })
 
-  // Existing local serials for every one of these warehouses, fetched
+  // Existing local records for every one of these warehouses, fetched
   // once for the whole type rather than once per warehouse - avoids
-  // one database query per fetched row later.
+  // one database query per fetched row later. Keyed by serial, storing
+  // enough to decide add vs. update vs. protect for each row seen.
   const warehouseIds = warehouses.map((w) => w.warehouseId)
   const localTx = await db.transactions
     .where('type').equals(type)
     .and((tx) => warehouseIds.includes(tx.warehouseId))
     .toArray()
-  const existingSerialsByWarehouse = new Map(warehouseIds.map((id) => [id, new Set()]))
+  const existingByWarehouse = new Map(warehouseIds.map((id) => [id, new Map()]))
   for (const tx of localTx) {
-    existingSerialsByWarehouse.get(tx.warehouseId)?.add(tx.serialNo)
+    existingByWarehouse.get(tx.warehouseId)?.set(tx.serialNo, { id: tx.id, isSynced: tx.isSynced })
   }
 
   const highestImportedByWarehouse = new Map()
@@ -137,7 +147,9 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
 
     const totalRowsSeen = result.bySource.reduce((sum, s) => sum + (s.ok ? s.rows.length : 0), 0)
     let importedCount = 0
+    let updatedCount = 0
     let skippedNoWarehouseMatch = 0
+    let skippedUnsyncedConflict = 0
 
     for (const sourceResult of result.bySource) {
       if (!sourceResult.ok) continue
@@ -152,16 +164,36 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
           continue // row belongs to a warehouse outside this batch, OR the name didn't match anything we're looking for - skip
         }
 
-        const existingSerials = existingSerialsByWarehouse.get(rowWarehouseId)
-        if (existingSerials?.has(String(serialNo))) continue // app-created record already exists - never overwrite it
+        const existingRecords = existingByWarehouse.get(rowWarehouseId)
+        const existing = existingRecords?.get(String(serialNo))
 
         const varietyByName = type === 'WSR' || type === 'WSI'
           ? new Map((await db.varietyTypes.toArray()).map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
           : undefined
-
         const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName })
+
+        if (existing) {
+          // A record for this serial already exists locally. Only
+          // updates it if that local record is already isSynced:
+          // true - meaning its own version has already reached the
+          // Sheet, so this fresh row (which modifiedSince filtering
+          // already confirms genuinely changed) represents a real,
+          // separate edit made directly on the Sheet, not a conflict
+          // with any local, not-yet-pushed change. Preserves the
+          // original protection for the narrower case where a local
+          // edit is still pending - that case still defers entirely
+          // to the local version, unchanged from before.
+          if (existing.isSynced) {
+            await db.transactions.update(existing.id, imported)
+            updatedCount++
+          } else {
+            skippedUnsyncedConflict++
+          }
+          continue
+        }
+
         await db.transactions.add(imported)
-        existingSerials?.add(String(serialNo))
+        existingRecords?.set(String(serialNo), { id: imported.id, isSynced: true })
         importedCount++
 
         const num = parseInt(String(serialNo).replace(/\D/g, ''), 10)
@@ -174,7 +206,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
       }
     }
 
-    console.log(`preloadOneType(${type}): saw ${totalRowsSeen} row(s) from the Sheet, imported ${importedCount}, skipped ${skippedNoWarehouseMatch} for no warehouse-name match (expected names: ${group.map((w) => w.name).join(', ')})`)
+    console.log(`preloadOneType(${type}): saw ${totalRowsSeen} row(s) from the Sheet, imported ${importedCount}, updated ${updatedCount}, skipped ${skippedNoWarehouseMatch} for no warehouse-name match, skipped ${skippedUnsyncedConflict} for an unsynced local conflict (expected names: ${group.map((w) => w.name).join(', ')})`)
 
     // Only mark this batch's warehouses complete after their fetch
     // genuinely succeeded - a network failure above already returned

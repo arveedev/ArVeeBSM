@@ -23,6 +23,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   const currentYear = new Date().getFullYear()
   const [month, setMonth] = useState('All')
   const [year, setYear] = useState(String(currentYear))
+  const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
   const [reconciling, setReconciling] = useState(null)
 
   // Palay is green, Rice is blue - matches the same convention used in
@@ -67,6 +68,8 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   )].sort((a, b) => b.localeCompare(a))
   if (!availableYears.includes(String(currentYear))) availableYears.unshift(String(currentYear))
 
+  const availableRegionalAuthNumbers = [...new Set(authorities.map((a) => a.regionalAuthorityNumber).filter(Boolean))].sort()
+
   const filtered = authorities
     .map((a) => ({ a, completedDate: lastDateFor(type === 'AI' ? a.aiNumber : a.siaNumber) }))
     .filter(({ completedDate }) => {
@@ -81,6 +84,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
       if (month !== 'All' && MONTHS.indexOf(month) + 1 !== Number(m)) return false
       return true
     })
+    .filter(({ a }) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
     .sort((x, y) => (y.completedDate ?? '').localeCompare(x.completedDate ?? ''))
 
   return (
@@ -120,6 +124,17 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
             {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
+
+        {availableRegionalAuthNumbers.length > 0 && (
+          <select
+            value={regionalAuthFilter}
+            onChange={(e) => setRegionalAuthFilter(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text"
+          >
+            <option value="">All Regional Authority Numbers</option>
+            {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">

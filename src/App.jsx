@@ -21,7 +21,7 @@ import WTSForm from './components/forms/WTSForm.jsx'
 import ESIForm from './components/forms/ESIForm.jsx'
 import ESRForm from './components/forms/ESRForm.jsx'
 import { useAuth } from './context/AuthContext.jsx'
-import { startSyncWorker, startAuthoritySyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
+import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 
 const FORM_COMPONENTS = {
   WSR: WSRForm,
@@ -105,6 +105,16 @@ function App() {
   useEffect(() => {
     if (!user) return
     return startAuthoritySyncWorker()
+  }, [user])
+
+  // Transaction data (WSR/WSI/ESR/ESI) - same shape as above, but on a
+  // much shorter 30-second interval, since keeping this current is
+  // what the duplicate-series check depends on. Previously only ran
+  // once at login via AuthContext's own call, with nothing repeating
+  // it afterward.
+  useEffect(() => {
+    if (!user) return
+    return startTransactionSyncWorker(user)
   }, [user])
 
   return (

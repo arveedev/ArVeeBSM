@@ -22,7 +22,12 @@ const fmtDate = (s) => {
 
 function MillingOrderDetail({ order, onClose }) {
   const { weightUnit } = useSettings() ?? {}
-  const allTx = [...order.issueTx, ...order.receiptTx].sort((a, b) => (a.date < b.date ? -1 : 1))
+  const allTx = [...order.issueTx, ...order.receiptTx].sort((a, b) => {
+    const numA = parseInt(String(a.serialNo).replace(/\D/g, ''), 10)
+    const numB = parseInt(String(b.serialNo).replace(/\D/g, ''), 10)
+    if (Number.isNaN(numA) || Number.isNaN(numB)) return String(a.serialNo).localeCompare(String(b.serialNo))
+    return numA - numB
+  })
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const piles = useLiveQuery(() => db.piles.toArray(), []) ?? []
@@ -46,7 +51,7 @@ function MillingOrderDetail({ order, onClose }) {
     const whName = stripWarehouseCodePrefix(warehouseMap.get(lastTx.warehouseId)) || '—'
     const variety = varietyMap.get(lastTx.varietyId) ?? '—'
     const pileName = lastTx.pileId ? pileMap.get(lastTx.pileId) : null
-    const varietyAndPile = pileName ? `${variety} (Pile ${pileName})` : variety
+    const varietyAndPile = pileName ? `${variety} (${pileName})` : variety
     const amount = isSack
       ? `${fmtBags((lastTx.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} pcs`
       : `${fmtBags(lastTx.numberOfBags)} net bags`
@@ -74,58 +79,30 @@ function MillingOrderDetail({ order, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-900 p-4"
+        className="flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl border border-neutral-800 bg-neutral-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-base font-bold text-app-text">{order.number}</p>
-            <p className="text-sm text-neutral-400">{order.ricemillName}</p>
+        {/* Fixed section - never scrolls, only Transaction History below does */}
+        <div className="shrink-0 p-4 pb-0">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-base font-bold text-app-text">{order.number}</p>
+              <p className="text-sm text-neutral-400">{order.ricemillName}</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-full p-2 text-brand-crimson transition-transform active:scale-90">
+              <X size={26} strokeWidth={2.5} />
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 text-neutral-400 hover:text-app-text">
-            <X size={20} />
-          </button>
-        </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-          <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-            <p className="text-xs text-neutral-500">{order.type === 'MO' ? 'Batch' : 'Trials Recovered'}</p>
-            <p className="font-semibold text-app-text">
-              {order.type === 'MO'
-                ? `${order.batchCurrent} of ${order.batchTotal}`
-                : `${(order.recoveredTrials ?? []).length} of 3`}
-            </p>
-          </div>
-          <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-            <p className="text-xs text-neutral-500">Fulfilled?</p>
-            <p className={`font-semibold ${order.fulfilled ? 'text-brand-neon' : 'text-brand-amber'}`}>
-              {order.fulfilled ? 'Yes' : 'Not yet'}
-            </p>
-          </div>
-        </div>
-
-        {byProductsBags > 0 && (
-          <div className="mt-2 rounded-lg border border-brand-byproduct/40 bg-brand-byproduct/10 p-2">
-            <p className="text-xs text-neutral-500">By Products (Total)</p>
-            <p className="font-semibold text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
-          </div>
-        )}
-
-        {lastTxSummary && (
-          <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-            <p className="text-xs text-neutral-500">Last Activity</p>
-            <p className="text-sm font-medium text-app-text">{lastTxSummary}</p>
-          </div>
-        )}
-
-        {(linkedAuthority?.sourceWarehouse || order.receivingWarehouse) && (
-          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-            {linkedAuthority?.sourceWarehouse && (
-              <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-                <p className="text-xs text-neutral-500">Source Warehouse</p>
-                <p className="font-semibold text-app-text">{linkedAuthority.sourceWarehouse}</p>
-              </div>
-            )}
+          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+              <p className="text-xs text-neutral-500">{order.type === 'MO' ? 'Batch' : 'Trials Recovered'}</p>
+              <p className="font-semibold text-app-text">
+                {order.type === 'MO'
+                  ? `${order.batchCurrent} of ${order.batchTotal}`
+                  : `${(order.recoveredTrials ?? []).length} of 3`}
+              </p>
+            </div>
             {order.receivingWarehouse && (
               <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
                 <p className="text-xs text-neutral-500">Receiving Warehouse</p>
@@ -133,79 +110,104 @@ function MillingOrderDetail({ order, onClose }) {
               </div>
             )}
           </div>
-        )}
 
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-          <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-            <p className="text-xs text-neutral-500">Issued</p>
-            <p className="font-semibold text-app-text">{fmtBags(order.issuedPieces)} sacks</p>
-            <p className="font-semibold text-app-text">{fmtWeight(order.issuedKilos, weightUnit, 'Net')}</p>
+          {byProductsBags > 0 && (
+            <div className="mt-2 rounded-lg border border-brand-byproduct/40 bg-brand-byproduct/10 p-2">
+              <p className="text-xs text-neutral-500">By Products (Total)</p>
+              <p className="font-semibold text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
+            </div>
+          )}
+
+          {linkedAuthority?.sourceWarehouse && (
+            <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
+              <p className="text-xs text-neutral-500">Source Warehouse</p>
+              <p className="font-semibold text-app-text">{linkedAuthority.sourceWarehouse}</p>
+            </div>
+          )}
+
+          {lastTxSummary && (
+            <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+              <p className="text-xs text-neutral-500">Last Activity</p>
+              <p className="text-sm font-medium text-app-text">{lastTxSummary}</p>
+            </div>
+          )}
+
+          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+              <p className="text-xs text-neutral-500">Issued</p>
+              <p className="font-semibold text-app-text">{fmtBags(order.issuedPieces)} sacks</p>
+              <p className="font-semibold text-app-text">{fmtWeight(order.issuedKilos, weightUnit, 'Net')}</p>
+            </div>
+            <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+              <p className="text-xs text-neutral-500">Received</p>
+              <p className="font-semibold text-app-text">{fmtBags(order.receivedPieces)} sacks</p>
+              <p className="font-semibold text-app-text">{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
+            </div>
           </div>
-          <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-            <p className="text-xs text-neutral-500">Received</p>
-            <p className="font-semibold text-app-text">{fmtBags(order.receivedPieces)} sacks</p>
-            <p className="font-semibold text-app-text">{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
-          </div>
+
+          {expectedBagsEquivalent != null && (
+            <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
+              <p className="text-xs text-neutral-500">Expected Recovery ({order.recoveryPercent}%)</p>
+              <p className="font-semibold text-app-text">≈ {fmtBags(expectedBagsEquivalent)} bags</p>
+            </div>
+          )}
+
+          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-neutral-500">Transaction History</p>
         </div>
 
-        {expectedBagsEquivalent != null && (
-          <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
-            <p className="text-xs text-neutral-500">Expected Recovery ({order.recoveryPercent}%)</p>
-            <p className="font-semibold text-app-text">≈ {fmtBags(expectedBagsEquivalent)} bags</p>
-          </div>
-        )}
-
-        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-neutral-500">Transaction History</p>
-        <ul className="mt-1.5 space-y-2">
-          {allTx.length === 0 && <p className="py-2 text-center text-xs text-neutral-500">No transactions recorded yet.</p>}
-          {allTx.map((t) => {
-            const isIssue = t.type === 'WSI' || t.type === 'ESI'
-            const isSack = t.type === 'ESI' || t.type === 'ESR'
-            const bagsOrPieces = isSack
-              ? (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
-              : t.numberOfBags
-            return (
-              <li key={t.id} className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className={`font-semibold ${isIssue ? 'text-brand-neon' : 'text-brand-amber'}`}>
-                    {isIssue ? 'Issued' : 'Received'} {isSack ? '(Sacks)' : '(Stock)'}
-                    {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
-                  </span>
-                  <span className="text-neutral-500">{fmtDate(t.date)}</span>
-                </div>
-                <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-neutral-400">
-                  <div>
-                    <p className="text-[10px] uppercase text-neutral-600">Miller</p>
-                    <p className="text-app-text">{t.customerName ?? order.ricemillName ?? '—'}</p>
+        {/* Only this section scrolls */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-1.5">
+          <ul className="space-y-2">
+            {allTx.length === 0 && <p className="py-2 text-center text-xs text-neutral-500">No transactions recorded yet.</p>}
+            {allTx.map((t) => {
+              const isIssue = t.type === 'WSI' || t.type === 'ESI'
+              const isSack = t.type === 'ESI' || t.type === 'ESR'
+              const bagsOrPieces = isSack
+                ? (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
+                : t.numberOfBags
+              return (
+                <li key={t.id} className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className={`font-semibold ${isIssue ? 'text-brand-neon' : 'text-brand-amber'}`}>
+                      {isIssue ? 'Issued' : 'Received'} {isSack ? '(Sacks)' : '(Stock)'}
+                      {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
+                    </span>
+                    <span className="text-neutral-500">{fmtDate(t.date)}</span>
                   </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-neutral-600">Warehouse</p>
-                    <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-neutral-600">Variety</p>
-                    <p className="text-app-text">{varietyMap.get(t.varietyId) ?? '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-neutral-600">Pile</p>
-                    <p className="text-app-text">{t.pileId ? (pileMap.get(t.pileId) ?? '—') : '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-neutral-600">{isSack ? 'Pieces' : 'Bags'}</p>
-                    <p className="text-app-text">{fmtBags(bagsOrPieces)}</p>
-                  </div>
-                  {!isSack && (
+                  <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-neutral-400">
                     <div>
-                      <p className="text-[10px] uppercase text-neutral-600">Net Kgs</p>
-                      <p className="text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
+                      <p className="text-[10px] uppercase text-neutral-600">Miller</p>
+                      <p className="text-app-text">{t.customerName ?? order.ricemillName ?? '—'}</p>
                     </div>
-                  )}
-                </div>
-                <p className="mt-1.5 text-[10px] text-neutral-600">{t.serialNo}</p>
-              </li>
-            )
-          })}
-        </ul>
+                    <div>
+                      <p className="text-[10px] uppercase text-neutral-600">Warehouse</p>
+                      <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-neutral-600">Variety</p>
+                      <p className="text-app-text">{varietyMap.get(t.varietyId) ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-neutral-600">Pile</p>
+                      <p className="text-app-text">{t.pileId ? (pileMap.get(t.pileId) ?? '—') : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-neutral-600">{isSack ? 'Pieces' : 'Bags'}</p>
+                      <p className="text-app-text">{fmtBags(bagsOrPieces)}</p>
+                    </div>
+                    {!isSack && (
+                      <div>
+                        <p className="text-[10px] uppercase text-neutral-600">Net Kgs</p>
+                        <p className="text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-sm font-semibold text-app-text">{t.type} # {t.serialNo}</p>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       </div>
     </div>
   )
@@ -247,7 +249,14 @@ function MillingMonitor() {
   )
 
   const filtered = orders.filter((o) => {
-    if (o.fulfilled !== showCompleted) return false
+    // Sheet-marked DONE is unconditionally completed, regardless of
+    // what the kg/piece-based fulfilled calculation separately says -
+    // previously only fulfilled was checked here, so an order marked
+    // DONE directly on the sheet but not also satisfying that math
+    // (e.g. missing/mismatched recovery %) would incorrectly keep
+    // showing in the pending list forever.
+    const isCompleted = o.sheetStatus === 'DONE' || o.fulfilled
+    if (isCompleted !== showCompleted) return false
     if (regionalAuthFilter.trim() && regionalAuthByOrder.get(o.orderId) !== regionalAuthFilter.trim()) return false
     return true
   })
@@ -319,34 +328,49 @@ function MillingMonitor() {
           // (50%) rather than nothing until receipts start.
           const roundTo3 = (n) => Math.round(n * 1000) / 1000
 
-          // Issuance half: proportional to how much of the AI/SIA's
-          // own allocation has actually been issued so far. Falls
-          // back to a simple "any issuance = full credit for this
-          // half" when the allocation total isn't available (e.g. AI/
-          // SIA data hasn't synced), so partial data still shows
-          // something rather than nothing.
-          const issuanceRatio = o.authorityAllocationKilos
-            ? Math.min(1, o.issuedKilos / o.authorityAllocationKilos)
-            : (o.issuedKilos > 0 || o.issuedPieces > 0) ? 1 : 0
-          const issuanceProgress = roundTo3(issuanceRatio * 50)
+          // TMO tracks TRIAL COUNT on both halves, not kg/pieces - a
+          // fully-issued-but-unreceived TMO should show exactly half
+          // full ("Trial 3 of 3" issued, "Trial 0 of 3" received) as
+          // a clear visual glimpse without opening the detail. MO is
+          // completely unaffected, keeping the kg-based calculation
+          // below exactly as it was.
+          const issuedTrialsCount = o.type === 'TMO'
+            ? new Set((o.issueTx ?? []).map((t) => t.trialNumber).filter(Boolean)).size
+            : null
+          const receivedTrialsCount = o.type === 'TMO' ? (o.recoveredTrials ?? []).length : null
+
+          const issuanceProgress = o.type === 'TMO'
+            ? roundTo3(Math.min(1, issuedTrialsCount / 3) * 50)
+            : roundTo3(
+                (o.authorityAllocationKilos
+                  ? Math.min(1, o.issuedKilos / o.authorityAllocationKilos)
+                  : (o.issuedKilos > 0 || o.issuedPieces > 0) ? 1 : 0
+                ) * 50
+              )
 
           // Receipt half: proportional to received vs. expected
           // recovery (issued x recovery%, per net kgs - e.g. 30,000kg
           // issued at 63% recovery expects 18,900kg back). Sacks use
           // pieces instead of kilos the same way. Falls back to
           // received-vs-issued directly when no recovery % is set.
-          const expectedKilos = o.recoveryPercent != null ? o.issuedKilos * (o.recoveryPercent / 100) : null
-          const expectedPieces = o.recoveryPercent != null ? o.issuedPieces * (o.recoveryPercent / 100) : null
-          const kilosReceiptRatio = expectedKilos
-            ? Math.min(1, o.receivedKilos / expectedKilos)
-            : o.issuedKilos > 0 ? Math.min(1, o.receivedKilos / o.issuedKilos) : 0
-          const piecesReceiptRatio = expectedPieces
-            ? Math.min(1, o.receivedPieces / expectedPieces)
-            : o.issuedPieces > 0 ? Math.min(1, o.receivedPieces / o.issuedPieces) : 0
-          const receiptProgress = roundTo3(Math.max(kilosReceiptRatio, piecesReceiptRatio) * 50)
+          let receiptProgress
+          if (o.type === 'TMO') {
+            receiptProgress = roundTo3(Math.min(1, receivedTrialsCount / 3) * 50)
+          } else {
+            const expectedKilos = o.recoveryPercent != null ? o.issuedKilos * (o.recoveryPercent / 100) : null
+            const expectedPieces = o.recoveryPercent != null ? o.issuedPieces * (o.recoveryPercent / 100) : null
+            const kilosReceiptRatio = expectedKilos
+              ? Math.min(1, o.receivedKilos / expectedKilos)
+              : o.issuedKilos > 0 ? Math.min(1, o.receivedKilos / o.issuedKilos) : 0
+            const piecesReceiptRatio = expectedPieces
+              ? Math.min(1, o.receivedPieces / expectedPieces)
+              : o.issuedPieces > 0 ? Math.min(1, o.receivedPieces / o.issuedPieces) : 0
+            receiptProgress = roundTo3(Math.max(kilosReceiptRatio, piecesReceiptRatio) * 50)
+          }
 
           const progress = roundTo3(issuanceProgress + receiptProgress)
           const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
+          const isCompleted = o.sheetStatus === 'DONE' || o.fulfilled
 
           return (
           <li key={o.orderId}>
@@ -360,19 +384,27 @@ function MillingMonitor() {
                 <p className="truncate text-xs text-neutral-500">
                   {o.ricemillName}
                   {o.type === 'MO' && o.batchCurrent != null && ` · Batch ${o.batchCurrent} of ${o.batchTotal}`}
-                  {o.type === 'TMO' && ` · Trial ${(o.recoveredTrials ?? []).length} of 3`}
+                  {o.type === 'TMO' && ` · Issued ${issuedTrialsCount} of 3 · Received ${receivedTrialsCount} of 3`}
                 </p>
                 {hasIssuance && (
-                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
-                    <div
-                      className={`h-full rounded-full transition-all ${o.fulfilled ? 'bg-brand-neon' : 'bg-brand-amber'}`}
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
+                  <>
+                    {o.type === 'TMO' && (
+                      <div className="mt-1.5 flex justify-between text-[10px] text-neutral-500">
+                        <span>Trial {issuedTrialsCount} of 3 issued</span>
+                        <span>Trial {receivedTrialsCount} of 3 received</span>
+                      </div>
+                    )}
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+                      <div
+                        className={`h-full rounded-full transition-all ${isCompleted ? 'bg-brand-neon' : 'bg-brand-amber'}`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {!o.fulfilled && (o.issuedKilos > 0 || o.issuedPieces > 0) && (
+                {!isCompleted && (o.issuedKilos > 0 || o.issuedPieces > 0) && (
                   <AlertTriangle size={14} className="text-brand-amber" />
                 )}
                 <ChevronRight size={18} className="text-neutral-600" />
