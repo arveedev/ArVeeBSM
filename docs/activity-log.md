@@ -9192,3 +9192,47 @@ confirmation on the Apps Script file itself after this edit).
   (columns exist, are stamped by both the app and manual edits, and
   can be filtered on) - next entry needs to build the client side that
   actually takes advantage of all of this
+
+## Removed duplicate Milling Operations section from AdminHome.jsx
+
+User clarified this was never a data bug - the admin/visitor Home page
+had its own collapsible Milling Operations section, entirely redundant
+since AdminMonitoring.jsx already has a dedicated MILLING tab showing
+this exact same component. Removed the section from AdminHome.jsx
+specifically (button, state, imports, the now-unused hasMillingOrders
+query, and useLiveQuery/db imports that had no other remaining use in
+this file). Confirmed Home.jsx (the regular user's own page) was never
+touched and still has its own version completely intact, per explicit
+clarification that this only applies to the admin/visitor side.
+
+## Completed the regional authority filter on the AI/SIA Completed modal - found it was only ever half-built
+
+Investigating the "this filter used to exist but is gone" report found
+something specific: CompletedAuthorityModal.jsx already had a
+regionalAuthFilter state variable declared, but it was never actually
+used anywhere - no filtering logic applied it, and no dropdown ever
+rendered it. This fully explains the user's perception: the feature
+was started in an earlier session but never finished, so from the
+user's side it simply never worked at all. Completed it: added the
+available-values computation, applied the filter to the existing list,
+and added the dropdown UI positioned directly below the month/year
+selectors, per explicit request. Mirrors the same, already-fully-
+working pattern from MillingMonitor.jsx and the pending AI/SIA list
+(completed earlier this session).
+
+Verified with a 7-case test covering the DONE-completion fix, the
+TMO trial-based progress calculation (including the exact worked
+example given - 3 issued/0 received trials showing exactly 50%), and
+the ascending-serial sort.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and using the test suite above.
+
+## STILL NOT DONE:
+- Milling Operations list's own regional authority filter - confirmed
+  the code exists and works, but was not directly tested against real
+  data to confirm it's genuinely showing/hiding correctly, since the
+  earlier "it's gone" report might describe this component (not
+  AdminHome's duplicate, which is now resolved) - worth the user
+  re-checking specifically

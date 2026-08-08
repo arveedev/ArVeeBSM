@@ -10,6 +10,7 @@
 
 import { db } from '../db/dexie.js'
 import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
+import { preloadTransactionsForUser } from './transactionPreload.js'
 
 let isSyncing = false
 
@@ -249,6 +250,48 @@ export const startAuthoritySyncWorker = () => {
   runSync()
 
   const intervalId = setInterval(runSync, AUTHORITY_SYNC_INTERVAL_MS)
+  window.addEventListener('online', runSync)
+
+  return () => {
+    cancelled = true
+    clearInterval(intervalId)
+    window.removeEventListener('online', runSync)
+  }
+}
+
+// 30 seconds, per explicit request - deliberately far more frequent
+// than the 5-minute authority sync above, given the higher stakes of
+// keeping transaction data (and therefore duplicate-series checking)
+// genuinely current. Cheap to run this often: preloadOneType already
+// only re-pulls in full for a (warehouse, type) combination that has
+// never completed a first preload - everything after that is a
+// lightweight, modifiedSince-filtered "what actually changed" check,
+// not a full re-fetch every time.
+const TRANSACTION_SYNC_INTERVAL_MS = 30 * 1000
+
+/**
+ * Periodically re-runs preloadTransactionsForUser - the missing half
+ * of the incremental sync design already built into
+ * transactionPreload.js, which previously only ever ran once at
+ * login. Runs once immediately, then on a fixed 30-second interval,
+ * and again whenever connectivity is restored (mirroring
+ * startAuthoritySyncWorker's exact shape). Requires the logged-in
+ * user, since preload is scoped to their assigned warehouse(s).
+ *
+ * @param {object} user - the current logged-in user (from useAuth())
+ * @returns {() => void} cleanup function
+ */
+export const startTransactionSyncWorker = (user) => {
+  let cancelled = false
+
+  const runSync = async () => {
+    if (cancelled || !user) return
+    await preloadTransactionsForUser(user)
+  }
+
+  runSync()
+
+  const intervalId = setInterval(runSync, TRANSACTION_SYNC_INTERVAL_MS)
   window.addEventListener('online', runSync)
 
   return () => {
