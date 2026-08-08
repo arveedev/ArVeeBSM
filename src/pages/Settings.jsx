@@ -726,11 +726,13 @@ function Settings() {
         <div className={`mt-4 rounded-xl border ${syncBorderClass} ${syncBgClass} p-3`}>
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Sync Status</p>
           <p className="mt-1 text-sm font-medium text-app-text">
-            {cloudSyncState?.phase === 'in-sync' && cloudSyncState?.status === 'connected'
-              ? 'Connected'
-              : cloudSyncState
+            {!cloudSyncState
+              ? 'Checking...'
+              : cloudSyncState.status !== 'connected'
                 ? 'Not connected - contact your admin if this persists'
-                : 'Checking...'}
+                : cloudSyncState.phase === 'in-sync'
+                  ? 'Connected'
+                  : 'Syncing...'}
           </p>
         </div>
       )}
