@@ -999,6 +999,8 @@ const SackFormBase = forwardRef(function SackFormBase(
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-neon border-t-transparent" />
                   Looking up serial…
                 </span>
+              ) : !loadedTransaction && serialNo.trim() ? (
+                <span className="text-brand-amber">This series does not exist yet — ready to create a new entry.</span>
               ) : (
                 'Type a serial directly to jump to it — existing data loads automatically.'
               )}

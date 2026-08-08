@@ -299,7 +299,28 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
           if (existing.isSynced) {
             const changed = FIELDS_TO_COMPARE.some((field) => existing[field] !== imported[field])
             if (changed) {
-              await db.transactions.update(existing.id, imported)
+              // CRITICAL: merge, never blanket-replace. Several fields
+              // (pileId, mtsSackTypeId, mtsCondition, condition,
+              // grossKilos) are permanently null in every
+              // mapSheetRowToTransaction result, since the Sheet has
+              // no columns for them at all - it's not that they
+              // "became" null, the Sheet simply never tracked them.
+              // A blanket update() here would silently destroy real,
+              // locally-completed data the moment this sync ran,
+              // replacing it with null - the confirmed, direct cause
+              // of data loss reported after this exact code first
+              // shipped. Only ever applies a field from imported when
+              // it actually has a real value, or when the local field
+              // was already empty - a genuine local value can never
+              // be overwritten by a field the Sheet never had.
+              const patch = {}
+              for (const field of FIELDS_TO_COMPARE) {
+                const incomingValue = imported[field]
+                const hasIncomingValue = incomingValue != null && incomingValue !== ''
+                const hasExistingValue = existing[field] != null && existing[field] !== ''
+                if (hasIncomingValue || !hasExistingValue) patch[field] = incomingValue
+              }
+              await db.transactions.update(existing.id, patch)
               updatedCount++
             } else {
               skippedUnchanged++
