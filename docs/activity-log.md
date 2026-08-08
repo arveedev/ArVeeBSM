@@ -9310,3 +9310,65 @@ it could ship).
   bug through code review alone; needs the actual sheetStatus value
   for the specific TMO in question to diagnose further rather than
   another guess
+
+## URGENT: found and fixed the actual root cause behind the persistent "no data" bug AND the new crash - a type mismatch, not a lookup logic problem
+
+User's evidence was decisive: the warehouse-prefix fix from the previous
+entry DID work (console log confirmed 55+17, 1+3, 4+0 rows genuinely
+imported/updated) - yet typing those exact serials still showed
+nothing, and a new crash appeared on Reports ("(r.serialNo ??
+"").replace is not a function"). Both symptoms traced to the exact
+same root cause: mapSheetRowToTransaction was never coercing serialNo
+(and linkedDocNo/aiNumber/moNumber/tmoNumber/batchNumber/trialNumber)
+to a string - Google Sheets returns a purely-numeric cell as a JS
+number, not a string. This meant:
+  - Every .replace() call across the app (which expects a string)
+    threw exactly the reported crash whenever it touched one of these
+    newly-imported, number-typed records.
+  - Every local lookup silently failed, because Dexie's equals() is
+    type-sensitive - a stored number 11767418 can never match the
+    string "11767418" the user actually types into the serial field.
+    This is the complete, direct explanation for "series shows as
+    open/no data" persisting even after the warehouse fix genuinely
+    worked and imported the row.
+
+Also found and fixed the exact same gap on the ESR/ESI branch of this
+same function, which was STILL missing the MO/TMO/Batch/Trial fields
+entirely - my earlier fix for this exact issue only ever covered the
+WSR/WSI branch.
+
+Fixed in two layers:
+  1. Root cause: mapSheetRowToTransaction now coerces every one of
+     these fields to a string via String(...), for both branches -
+     preventing any new bad data going forward.
+  2. Defensive: every .replace() call site across the app (Reports.jsx,
+     AuthorityReconciliationPanel.jsx, pileBinCardGenerator.js,
+     pdfGenerator.js x2) now wraps in String(...) first, so none of
+     them can ever crash again regardless of what is or isn't already
+     stored locally.
+
+Also added a fast, local-only, one-time migration
+(transaction-field-type-fix-v1) that walks every existing local
+transaction record and corrects the type of any of these fields that
+are still a number from before this fix - critical because real data
+was already imported with this bug active (confirmed via the user's
+own sync log), and a full re-preload would be unnecessarily slow when
+this is a purely local, in-place type correction. Logs how many
+records it actually touched for visibility.
+
+Per explicit clarification, the app already pushes warehouse names
+WITHOUT the prefix by design (the prefix-stripping fix from the
+previous entry remains correct and necessary specifically because the
+Sheet's own data doesn't have it, while the app's local warehouse
+records do, for display purposes).
+
+Verified with a 10-case test directly modeling the exact reported
+scenario end to end - a purely-numeric cell, the crash it would have
+caused, the local-fix flagging decision, and the before/after matching
+behavior.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## This should be the complete, genuine fix for both the crash and the "no data" issue that has been the central focus of this entire session - both traced to one confirmed, concrete cause rather than a guess

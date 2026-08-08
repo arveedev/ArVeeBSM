@@ -33,7 +33,7 @@ import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndica
 
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
 const bySerial = (a, b) => {
-  const n = (x) => parseInt((x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
+  const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
   return n(a) - n(b)
 }
 

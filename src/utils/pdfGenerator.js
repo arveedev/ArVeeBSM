@@ -361,7 +361,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   y += 3
 
   const sorted = [...transactions].sort((a, b) => {
-    const n = (x) => parseInt((x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
+    const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
     return n(a) - n(b)
   })
 
@@ -609,7 +609,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
   let grandTotal = 0
 
   const sorted = [...transactions].sort((a, b) => {
-    const n = (x) => parseInt((x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
+    const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
     return n(a) - n(b)
   })
 
