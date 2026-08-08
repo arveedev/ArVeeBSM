@@ -502,6 +502,45 @@ function doPost(e) {
       return jsonResponse({ status: 'SUCCESS' });
     }
 
+    if (body.action === 'markLastModified') {
+      // Batch-stamps rows the app has only ever read/preloaded, never
+      // written to - marking them "seen" so future modifiedSince
+      // checks can finally exclude them, rather than including them
+      // forever since they never had a timestamp to compare against.
+      // Only stamps a row whose Last Modified cell is currently
+      // blank, so this can never overwrite a timestamp from an actual
+      // edit or app write - those are always more meaningful than a
+      // mere "seen" mark. Reads and writes the entire column in one
+      // pass each, not one cell at a time, given this can be called
+      // with thousands of values from a single preload batch.
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const matchColIndex = headers.indexOf(body.matchColumn);
+      const lastModColIndex = headers.indexOf('Last Modified');
+      if (matchColIndex === -1 || lastModColIndex === -1 || sheet.getLastRow() < 2) {
+        return jsonResponse({ status: 'SUCCESS', stamped: 0 }); // nothing to do on this sheet
+      }
+
+      const numRows = sheet.getLastRow() - 1;
+      const matchValues = sheet.getRange(2, matchColIndex + 1, numRows, 1).getValues();
+      const lastModRange = sheet.getRange(2, lastModColIndex + 1, numRows, 1);
+      const lastModValues = lastModRange.getValues();
+      const wanted = new Set((body.values || []).map(String));
+      const now = new Date().toISOString();
+      let stamped = 0;
+
+      for (let i = 0; i < numRows; i++) {
+        const rowValue = String(matchValues[i][0]);
+        const alreadyStamped = lastModValues[i][0];
+        if (wanted.has(rowValue) && !alreadyStamped) {
+          lastModValues[i][0] = now;
+          stamped++;
+        }
+      }
+
+      if (stamped > 0) lastModRange.setValues(lastModValues);
+      return jsonResponse({ status: 'SUCCESS', stamped });
+    }
+
     if (body.action === 'markMillingOrderDone') {
       // The ONLY write action for MO/TMO sheets, and it only ever
       // touches the STATUS column (M, column 13 / index 12) of exactly

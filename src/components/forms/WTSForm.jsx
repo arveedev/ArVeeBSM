@@ -30,7 +30,7 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
-import { queueTransactionDeletion } from '../../services/syncWorker.js'
+import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter } from '../../utils/serialNumber.js'
 import {
   liveFormatNumber,
@@ -164,6 +164,12 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
 }
 
 function WTSForm({ onClose, prefill }) {
+  // Same reasoning as StockFormBase.jsx's identical fix.
+  useEffect(() => {
+    pauseTransactionSync()
+    return () => resumeTransactionSync()
+  }, [])
+
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
 
@@ -175,6 +181,10 @@ function WTSForm({ onClose, prefill }) {
   const [issuedSide, setIssuedSide] = useState(emptySide())
   const [receivedSide, setReceivedSide] = useState(emptySide())
   const [loadedTransaction, setLoadedTransaction] = useState(null)
+  // Same as StockFormBase.jsx - locks serial/warehouse only when
+  // opened from Reports, since WTS transactions are tappable there
+  // too (confirmed in Reports.jsx's stock statement query).
+  const [openedFromReports, setOpenedFromReports] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
@@ -260,6 +270,7 @@ function WTSForm({ onClose, prefill }) {
   useEffect(() => {
     if (!prefill?.serialNo) return
     setSerialNo(prefill.serialNo)
+    setOpenedFromReports(true)
     const t = setTimeout(() => checkAndLoadSerial(prefill.serialNo), 150)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -294,6 +305,7 @@ function WTSForm({ onClose, prefill }) {
 
   const resetForm = (nextSerial) => {
     setLoadedTransaction(null)
+    setOpenedFromReports(false)
     setIsCancelled(false)
     setSerialNo(nextSerial)
     setDate(todayLocalISO())
@@ -578,7 +590,7 @@ function WTSForm({ onClose, prefill }) {
             <X size={18} />
           </button>
         </div>
-        {sortedWarehouses.length > 1 ? (
+        {sortedWarehouses.length > 1 && !openedFromReports ? (
           <div className="mt-2">
             <label className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
             <select value={currentWarehouseId ?? ''} onChange={(e) => { setCurrentWarehouseId(e.target.value); setLoadedTransaction(null) }}
@@ -608,16 +620,28 @@ function WTSForm({ onClose, prefill }) {
         <div ref={serialFieldRef}>
           <label className={labelClass}>WTS No.</label>
           <div className="mt-1 flex items-center gap-2">
-            <button type="button" onClick={handleStepBack} aria-label="Previous WTS"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 active:scale-90">
-              <ChevronLeft size={18} />
-            </button>
-            <input type="text" value={serialNo} onChange={(e) => handleSerialChange(e.target.value)}
-              className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`} />
-            <button type="button" onClick={handleStepForward} aria-label="Next WTS"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 active:scale-90">
-              <ChevronRight size={18} />
-            </button>
+            {openedFromReports ? (
+              <input
+                type="text"
+                value={serialNo}
+                readOnly
+                disabled
+                className={`mt-0 w-full rounded-xl border bg-neutral-800 px-3 py-2 text-center font-mono text-neutral-400 outline-none ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'}`}
+              />
+            ) : (
+              <>
+                <button type="button" onClick={handleStepBack} aria-label="Previous WTS"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 active:scale-90">
+                  <ChevronLeft size={18} />
+                </button>
+                <input type="text" value={serialNo} onChange={(e) => handleSerialChange(e.target.value)}
+                  className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`} />
+                <button type="button" onClick={handleStepForward} aria-label="Next WTS"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 active:scale-90">
+                  <ChevronRight size={18} />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
