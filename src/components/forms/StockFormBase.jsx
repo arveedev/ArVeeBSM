@@ -77,7 +77,7 @@ import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFro
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
-import { queueTransactionDeletion } from '../../services/syncWorker.js'
+import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import SerialNumberField from './SerialNumberField.jsx'
 import ValidatedField from './ValidatedField.jsx'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
@@ -134,6 +134,17 @@ const blankFormState = {
 }
 
 function StockFormBase({ type, title, onClose, prefill }) {
+  // Pause the periodic background transaction sync for as long as
+  // this form is open - it competes for the same local database
+  // connection as every lookup this form does, which is the confirmed
+  // reason even an already-loaded, purely local record could feel
+  // slow to redisplay. Resumes automatically on unmount regardless of
+  // how the form closes.
+  useEffect(() => {
+    pauseTransactionSync()
+    return () => resumeTransactionSync()
+  }, [])
+
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
   const { weightUnit, autoAgeMonitoring } = useSettings() ?? {}
@@ -1069,9 +1080,11 @@ function StockFormBase({ type, title, onClose, prefill }) {
       if (latestRequestedSerial.current !== serial) return false // superseded - discard
       if (sheetResult.ok && sheetResult.row) {
         const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
+        const transactionTypesByName = new Map((transactionTypes ?? []).map((t) => [t.name.trim().toLowerCase(), t.transactionTypeId]))
         const imported = mapSheetRowToTransaction(type, sheetResult.row, {
           warehouseId: currentWarehouseId,
           varietyByName,
+          transactionTypesByName,
         })
         await db.transactions.add(imported)
         await recordSerialUsed(type, currentWarehouseId, serial, activeCategory)
@@ -1532,7 +1545,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const handleCategoryTabChange = (nextCategory) => {
     if (nextCategory === cerealCategory) return
     setCerealCategory(nextCategory)
-    setLoadedTransaction(null)
+    // Full clear, not just the 4 fields this used to reset - every
+    // other field (customer name, weights, MO/TMO, MC, etc.) was
+    // previously left untouched when switching tabs, which is exactly
+    // the reported "data doesn't clear" bug. Preserves the current
+    // serial text, since switching category is about which series
+    // this number belongs to, not necessarily wanting a different one.
+    resetToBlankEntry(serialNo)
     setPileId('')
     setVarietyId('')
     setSackSelection('')

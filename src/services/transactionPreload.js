@@ -248,6 +248,14 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     let skippedNoWarehouseMatch = 0
     let skippedUnsyncedConflict = 0
 
+    // Queried once for this entire batch, not once per row - the
+    // previous per-row query was a real, avoidable performance cost
+    // at the scale of a large Sheet.
+    const varietyByName = type === 'WSR' || type === 'WSI'
+      ? new Map((await db.varietyTypes.toArray()).map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
+      : undefined
+    const transactionTypesByName = new Map((await db.transactionTypes.toArray()).map((t) => [t.name.trim().toLowerCase(), t.transactionTypeId]))
+
     for (const sourceResult of result.bySource) {
       if (!sourceResult.ok) continue
       for (const row of sourceResult.rows) {
@@ -264,10 +272,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
         const existingRecords = existingByWarehouse.get(rowWarehouseId)
         const existing = existingRecords?.get(String(serialNo))
 
-        const varietyByName = type === 'WSR' || type === 'WSI'
-          ? new Map((await db.varietyTypes.toArray()).map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
-          : undefined
-        const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName })
+        const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName, transactionTypesByName })
 
         if (existing) {
           // A record for this serial already exists locally. Only

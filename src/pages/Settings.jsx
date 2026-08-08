@@ -582,11 +582,14 @@ function Settings() {
   const cloudSyncState = useObservable(db.cloud.syncState)
   // Green: genuinely connected and in-sync. Red: disconnected or
   // erroring outright. Amber: anything transient/in-progress in
-  // between (connecting, pushing, pulling) or not yet known.
+  // Green: status is genuinely connected, regardless of phase -
+  // pushing/pulling is normal, healthy, active work, not a problem to
+  // alarm a field user over. Red: disconnected or erroring outright.
+  // Amber: state not yet established at all.
   const syncStatusColor = (() => {
     if (!cloudSyncState) return 'amber'
-    if (cloudSyncState.phase === 'in-sync' && cloudSyncState.status === 'connected') return 'green'
     if (cloudSyncState.phase === 'error' || cloudSyncState.status === 'disconnected' || cloudSyncState.status === 'error') return 'red'
+    if (cloudSyncState.status === 'connected') return 'green'
     return 'amber'
   })()
   const syncBorderClass = {

@@ -1028,7 +1028,7 @@ export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => 
  * as a plain parameter rather than a fresh query here, since the form
  * calling this already has that data in memory.
  */
-export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName }) => {
+export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName, transactionTypesByName }) => {
   const rawDate = row['Date']
   // Sheet dates come back as full ISO timestamps (e.g.
   // "2026-06-15T00:00:00.000Z") - take just the date part, in the
@@ -1045,6 +1045,16 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
     : null
   const matchedVarietyId = matchedVariety?.varietyId ?? null
 
+  // Genuinely confirmed missing entirely before this fix - the Sheet's
+  // "Transaction" column (MILLING, TRANSFER, TEST MILLING, etc.) was
+  // never being read at all, despite always being present on the
+  // Sheet, which is the full and direct explanation for why this
+  // field always showed blank when loading a Sheet-imported record.
+  const rawTransactionTypeName = row['Transaction'] != null ? String(row['Transaction']).trim() : null
+  const matchedTransactionTypeId = rawTransactionTypeName
+    ? transactionTypesByName?.get(rawTransactionTypeName.toLowerCase()) ?? null
+    : null
+
   const base = {
     id: crypto.randomUUID(),
     type,
@@ -1055,6 +1065,7 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
     isSynced: true, // it already exists in the Sheet - no need to push it back
     fromSheetImport: true,
     needsCompletion: !isCancelled, // Cancelled records have nothing left to complete
+    transactionTypeId: matchedTransactionTypeId,
   }
 
   if (type === 'WSR' || type === 'WSI') {
