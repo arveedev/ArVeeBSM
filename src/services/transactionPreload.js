@@ -53,6 +53,14 @@ import { recordSerialUsed } from '../utils/serialNumber.js'
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
 const SERIAL_COLUMN_BY_TYPE = { WSR: 'WSR #', WSI: 'WSI #', ESR: 'ESR#', ESI: 'ESI#' }
 
+const FIELDS_TO_COMPARE = [
+  'type', 'warehouseId', 'date', 'status', 'customerName', 'needsCompletion', 'transactionTypeId',
+  'serialNo', 'linkedDocNo', 'aiNumber', 'varietyId', 'cerealCategory', 'numberOfBags', 'netKilos',
+  'grossKilos', 'autoComputeNet', 'pileId', 'mtsSackTypeId', 'mtsCondition', 'moistureContent',
+  'condition', 'ageValue', 'ageUnit', 'initialAgeValue', 'moNumber', 'tmoNumber', 'batchNumber',
+  'trialNumber', 'totalPiecesRaw',
+]
+
 /**
  * Preloads transaction history for every warehouse the given user is
  * assigned to. Safe to call on every login - already-complete
@@ -229,7 +237,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     .toArray()
   const existingByWarehouse = new Map(warehouseIds.map((id) => [id, new Map()]))
   for (const tx of localTx) {
-    existingByWarehouse.get(tx.warehouseId)?.set(String(tx.serialNo), { id: tx.id, isSynced: tx.isSynced })
+    existingByWarehouse.get(tx.warehouseId)?.set(String(tx.serialNo), tx)
   }
 
   const highestImportedByWarehouse = new Map()
@@ -247,6 +255,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     let updatedCount = 0
     let skippedNoWarehouseMatch = 0
     let skippedUnsyncedConflict = 0
+    let skippedUnchanged = 0
 
     // Queried once for this entire batch, not once per row - the
     // previous per-row query was a real, avoidable performance cost
@@ -275,19 +284,26 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
         const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName, transactionTypesByName })
 
         if (existing) {
-          // A record for this serial already exists locally. Only
-          // updates it if that local record is already isSynced:
-          // true - meaning its own version has already reached the
-          // Sheet, so this fresh row (which modifiedSince filtering
-          // already confirms genuinely changed) represents a real,
-          // separate edit made directly on the Sheet, not a conflict
-          // with any local, not-yet-pushed change. Preserves the
-          // original protection for the narrower case where a local
-          // edit is still pending - that case still defers entirely
-          // to the local version, unchanged from before.
+          // Only writes if that local record is already isSynced:
+          // true (protecting a genuinely pending local edit, exactly
+          // as before) AND the incoming data is actually different
+          // from what's already stored. This second check is the
+          // critical piece: the server can never fully guarantee
+          // modifiedSince excludes every unchanged row (an un-stamped
+          // historical row has no timestamp to filter on, so it's
+          // always included rather than risk dropping a real change) -
+          // without this, every one of those rows would be rewritten
+          // every single cycle forever, which is the confirmed,
+          // direct cause of the endless sync loop and the resulting
+          // slowdown this was meant to prevent in the first place.
           if (existing.isSynced) {
-            await db.transactions.update(existing.id, imported)
-            updatedCount++
+            const changed = FIELDS_TO_COMPARE.some((field) => existing[field] !== imported[field])
+            if (changed) {
+              await db.transactions.update(existing.id, imported)
+              updatedCount++
+            } else {
+              skippedUnchanged++
+            }
           } else {
             skippedUnsyncedConflict++
           }
@@ -308,7 +324,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
       }
     }
 
-    console.log(`preloadOneType(${type}): saw ${totalRowsSeen} row(s) from the Sheet, imported ${importedCount}, updated ${updatedCount}, skipped ${skippedNoWarehouseMatch} for no warehouse-name match, skipped ${skippedUnsyncedConflict} for an unsynced local conflict (expected names: ${group.map((w) => w.name).join(', ')})`)
+    console.log(`preloadOneType(${type}): saw ${totalRowsSeen} row(s) from the Sheet, imported ${importedCount}, updated ${updatedCount}, skipped ${skippedUnchanged} unchanged, skipped ${skippedNoWarehouseMatch} for no warehouse-name match, skipped ${skippedUnsyncedConflict} for an unsynced local conflict (expected names: ${group.map((w) => w.name).join(', ')})`)
 
     // Only mark this batch's warehouses complete after their fetch
     // genuinely succeeded - a network failure above already returned

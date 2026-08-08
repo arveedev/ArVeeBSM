@@ -9589,3 +9589,62 @@ whether it resolves on its own with time.
 All changes in this entry verified compiling (full 68-file parse
 sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above.
+
+## CRITICAL: found and fixed the definitive, confirmed root cause of the endless push/pull loop - a real infinite rewrite loop, not a settling backlog
+
+User's extended testing (nearly 3 hours, 6:44pm to 9:37pm, sync never
+settling) proved this was never a temporary backlog draining, as
+previously hypothesized - it was a genuine, ongoing, self-perpetuating
+bug. The console log made this unambiguous: "imported 0, updated 2018"
+out of 2098 rows, on every single 30-second cycle, indefinitely.
+
+Confirmed root cause: the server's modifiedSince filtering cannot
+reliably exclude a row that has never had "Last Modified" stamped -
+since it has no timestamp to compare against a cutoff, the only safe
+choice was to always include it rather than risk silently dropping a
+genuine change. Since most of the ~2000+ historical rows on the Sheet
+have never been written to by the app since this column was added,
+this meant those rows were returned on every single fetch, forever.
+The client then treated every one of those returned rows as
+unconditionally "needs updating" and rewrote it locally every cycle -
+even though the underlying data had not actually changed at all.
+Rewriting a record, even with identical data, marks it as changed for
+Dexie Cloud's own sync purposes, which is the direct, confirmed
+mechanism behind the endless push/pull loop, the "sometimes says
+disconnected" instability, and the severe ongoing slowdown - all
+downstream of the same repeated, needless database churn happening
+every 30 seconds.
+
+Fixed by making the client the final, definitive judge of whether a
+write is actually necessary: before updating an existing record, the
+incoming mapped data is now compared field-by-field against what's
+already stored, and a write only happens when something genuinely
+differs. Deliberately excludes pure metadata (id, which is freshly
+generated on every mapping call and would always differ; isSynced and
+fromSheetImport, which are bookkeeping, not transaction content) from
+this comparison, so those alone can never trigger a false rewrite.
+
+Also very likely the direct explanation for two other reports from
+this session: the "update created a new row instead of updating"
+symptom (plausible under this much sustained, concurrent database
+churn, a save's own row-matching could transiently miss and fall back
+to appending), and the intermittent "disconnected" status seen during
+active pushing/pulling.
+
+Verified with a 3-case test covering the exact confirmed bug scenario
+(identical data returning every cycle, now correctly skipped), the
+metadata-exclusion working correctly, and confirming a genuine data
+change is still correctly detected and applied - this fix does not
+silently ignore real edits made directly on the Sheet.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## HONEST CAVEAT:
+Given this bug has been running for an extended period generating
+continuous sync activity, there may still be an existing backlog of
+already-queued push operations that needs to finish draining even
+after this fix is deployed - this should now be a finite, one-time
+tail rather than an ongoing, self-perpetuating problem, but it may not
+be instantaneous the moment this deploys.
