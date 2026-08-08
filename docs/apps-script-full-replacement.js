@@ -316,8 +316,17 @@ function doGet(e) {
       let rows = sheetToObjects(sheet);
 
       if (warehouseColumn && warehouseValues.length > 0) {
-        const wanted = new Set(warehouseValues);
-        rows = rows.filter((row) => wanted.has(String(row[warehouseColumn] ?? '').trim()));
+        // Strips a leading warehouse-code-style prefix (e.g. "ALB-")
+        // before comparing - confirmed via direct evidence that the
+        // app's own warehouse names include this prefix while the
+        // Sheet's own Warehouse Name column does not, which meant this
+        // filter was silently excluding every row for a warehouse
+        // whenever the two didn't match exactly, with the fetch itself
+        // still reporting success - the actual root cause of preload
+        // being marked complete while having imported nothing.
+        const stripPrefix = (s) => String(s ?? '').trim().replace(/^[A-Z]{2,5}-/, '');
+        const wanted = new Set(warehouseValues.map(stripPrefix));
+        rows = rows.filter((row) => wanted.has(stripPrefix(row[warehouseColumn])));
       }
 
       if (modifiedSince) {
