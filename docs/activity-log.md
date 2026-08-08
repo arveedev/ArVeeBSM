@@ -9785,3 +9785,80 @@ succeeds) and the dedicated test suite above.
 - Regional authority totals (net bags issued, total bags, grouped by
   warehouse) shown when a regional authority filter is selected - not
   started
+
+## Fixed the actual cereal tab bug (my own re-lookup fix was wrong) and a confirmed, genuine performance bottleneck
+
+User's exact reproduction (Rice #11766922, switch to Palay, tab snaps
+back to Rice showing the old data) revealed the previous entry's
+"re-lookup" fix was itself the bug: it re-searched the SAME serial
+number against the new category, which found that number through the
+Sheet-fallback path (which ignores category filtering entirely),
+loaded its Rice data, and the reactive cereal-tab-selection effect
+then correctly (per its own logic) snapped the tab back to match what
+had just loaded. Removed this re-lookup entirely - it was never the
+right approach in the first place, since Rice and Palay have
+completely separate serial numbering; the same number means nothing
+in the other category.
+
+Found an existing, already-correct mechanism that makes the re-lookup
+unnecessary: a useEffect elsewhere in this file already watches
+activeCategory and automatically suggests the next free serial the
+moment loadedTransaction is null - exactly what resetToBlankEntry
+already sets. Switching tabs now simply clears everything and lets
+this existing effect take over on its own, which is the actually
+correct behavior: ready for a brand new entry in the new category.
+
+## Found and fixed a genuine, confirmed performance bottleneck: suggestNextSerial
+
+Directly investigated the still-reported tab-switching slowness rather
+than assuming it was resolved. Found suggestNextSerial - called on
+every cereal tab switch via the effect above - was doing a fully
+unindexed scan: fetching every transaction of a given type across
+EVERY warehouse, then filtering down to just one warehouse in
+JavaScript. For an admin with all warehouses preloaded, this meant
+scanning potentially thousands of irrelevant records on every single
+tab switch. Rewrote to use the already-existing
+[type+warehouseId+serialNo] compound index, narrowing to just this
+warehouse's records before any further work - the query now does the
+same job working with a dramatically smaller set of records to begin
+with.
+
+Verified with a 4-case test confirming the optimized query produces
+identical results to the old approach (proving this is purely a
+performance change, not a behavior change) and the corrected tab-
+switch flow.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## Clarification requested by the user: what "marking rows as seen" means
+
+The user asked what was meant by this deferred task. In plain terms:
+right now, the app only stamps a Sheet row's "Last Modified" column
+when the app itself writes to that row. A row that has always existed
+purely as historical data - one the app has only ever read, never
+written to - never gets this stamp at all. This means every time the
+app checks "what's changed since I last looked," that row has no
+timestamp to compare against, so it can never be confidently excluded
+- the server has to keep including it in every check, "just in case."
+The requested feature is: when the app reads/preloads such a row for
+the first time, it should also stamp it then, even though it isn't
+writing new data - marking it as "the app has now seen this," so
+future checks can finally skip it like any other unchanged row. This
+was not addressed in this entry, remains deferred.
+
+## FULL LIST OF STILL-OUTSTANDING TASKS:
+
+### Not yet resolved
+- "Marking rows as seen" during preload/read, not just on write - not
+  started, would need a new Apps Script action
+- Scenario 1 duplicate risk: encoding historical transactions where
+  the app has not yet preloaded that specific data
+- WTSForm.jsx was never checked for the same preload-completeness/
+  duplicate-risk patterns fixed elsewhere
+- NFA-owned Ricemill/Mechanical Dryer handling - explicitly deferred
+  by the user to a later date
+- By Products pile creation variety/moisture-content exemption
+- Regional authority totals (net bags issued, total bags, grouped by
+  warehouse) shown when a regional authority filter is selected

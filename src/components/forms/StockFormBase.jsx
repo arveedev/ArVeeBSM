@@ -1558,16 +1558,17 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setCerealCategory(nextCategory)
     // Full clear (every field, not just a handful) - previously left
     // most fields untouched when switching tabs, which is exactly the
-    // reported "data doesn't clear" bug. Preserves the current serial
-    // text, since switching category is about which series this
-    // number belongs to, not necessarily wanting a different one.
-    resetToBlankEntry(serialNo)
-    // Re-check the same serial against the new category once React
-    // has actually applied the category change above - without this,
-    // the form stayed blank even when real data existed for this
-    // serial in the new category, since nothing ever re-triggered a
-    // lookup after a tab switch on its own.
-    if (serialNo.trim()) setTimeout(() => checkAndLoadSerial(serialNo), 0)
+    // reported "data doesn't clear" bug.
+    resetToBlankEntry('')
+    // Deliberately does NOT re-check the old serial number against
+    // the new category - Rice and Palay have entirely separate
+    // series, so the same number means nothing in the other category.
+    // An existing effect elsewhere in this file already watches
+    // activeCategory and automatically suggests the next free serial
+    // for whichever category is now active, the moment
+    // loadedTransaction is null (which resetToBlankEntry just set) -
+    // that is what correctly gets the form ready for a brand new
+    // entry in the new category, with no lookup needed here at all.
   }
 
   const isEditMode = Boolean(loadedTransaction)

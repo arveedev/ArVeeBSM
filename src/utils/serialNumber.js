@@ -45,6 +45,7 @@
 // specifically (compound keys need a concrete value), for types that
 // aren't category-scoped.
 
+import Dexie from 'dexie'
 import { db } from '../db/dexie.js'
 
 const SERIAL_PATTERN = /^(.*?)(\d+)$/
@@ -176,10 +177,16 @@ export const suggestNextSerial = async (type, warehouseId, fallback = '1', cerea
 
   const tracked = await db.serialCounterCache.get(counterKey(warehouseId, type, cerealCategory))
 
+  // Uses the existing [type+warehouseId+serialNo] compound index to
+  // narrow to just this warehouse's records before any further work -
+  // the previous version scanned every transaction of this type
+  // across every warehouse in JavaScript, which is genuinely slow at
+  // scale (especially for an admin with all warehouses preloaded),
+  // and this function runs on every cereal tab switch.
   const existing = await db.transactions
-    .where('type')
-    .equals(type)
-    .and((tx) => tx.warehouseId === warehouseId && (cerealCategory == null || tx.cerealCategory === cerealCategory))
+    .where('[type+warehouseId+serialNo]')
+    .between([type, warehouseId, Dexie.minKey], [type, warehouseId, Dexie.maxKey])
+    .and((tx) => cerealCategory == null || tx.cerealCategory === cerealCategory)
     .toArray()
 
   let best = tracked ? { prefix: tracked.prefix, number: tracked.number, digits: tracked.digits } : null
