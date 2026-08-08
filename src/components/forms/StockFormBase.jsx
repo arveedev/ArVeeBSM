@@ -984,13 +984,24 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setSerialNo(nextSerial)
     setDate(blankFormState.date)
     setLinkedDocNo('')
+    setLinkedAuthorityDate(null)
     setCustomerName('')
     setCustomerAddress('')
     setFarmerRsbsa('')
     setFarmerGender('')
+    setTransactionTypeId('')
+    setPileId('')
+    setVarietyId('')
+    setSackSelection('')
     setNumberOfBags('')
     setGrossKilos('')
+    setAutoComputeNet(true)
     setManualNetKilos('')
+    setAgeValue('')
+    setMonthsValue('0')
+    setDaysValue('0')
+    setAgeUnit('Days')
+    setCondition('GQ')
     setMoistureContent('')
     setFarmerOrgEnabled(false)
     setMembers([emptyMember()])
@@ -1545,16 +1556,18 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const handleCategoryTabChange = (nextCategory) => {
     if (nextCategory === cerealCategory) return
     setCerealCategory(nextCategory)
-    // Full clear, not just the 4 fields this used to reset - every
-    // other field (customer name, weights, MO/TMO, MC, etc.) was
-    // previously left untouched when switching tabs, which is exactly
-    // the reported "data doesn't clear" bug. Preserves the current
-    // serial text, since switching category is about which series
-    // this number belongs to, not necessarily wanting a different one.
+    // Full clear (every field, not just a handful) - previously left
+    // most fields untouched when switching tabs, which is exactly the
+    // reported "data doesn't clear" bug. Preserves the current serial
+    // text, since switching category is about which series this
+    // number belongs to, not necessarily wanting a different one.
     resetToBlankEntry(serialNo)
-    setPileId('')
-    setVarietyId('')
-    setSackSelection('')
+    // Re-check the same serial against the new category once React
+    // has actually applied the category change above - without this,
+    // the form stayed blank even when real data existed for this
+    // serial in the new category, since nothing ever re-triggered a
+    // lookup after a tab switch on its own.
+    if (serialNo.trim()) setTimeout(() => checkAndLoadSerial(serialNo), 0)
   }
 
   const isEditMode = Boolean(loadedTransaction)
@@ -1695,8 +1708,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-neon border-t-transparent" />
                   Looking up serial…
                 </span>
-              ) : !loadedTransaction && serialNo.trim() ? (
-                <span className="text-brand-amber">This series does not exist yet — ready to create a new entry.</span>
               ) : (
                 'Type a serial directly to jump to it — existing data loads automatically.'
               )}
