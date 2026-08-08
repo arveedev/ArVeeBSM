@@ -1289,3 +1289,45 @@ export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSinc
 
   return { ok: true, bySource }
 }
+
+/**
+ * Stamps a batch of rows as "seen" on the Sheet, following a preload
+ * or incremental sync fetch - these are rows the app has only ever
+ * read, never written to, so they would otherwise never get a "Last
+ * Modified" timestamp at all, meaning every future modifiedSince
+ * check would have to keep including them indefinitely rather than
+ * ever being able to exclude them as genuinely unchanged.
+ *
+ * Best-effort by design: a failure here only means slightly less
+ * efficient future syncs (an un-stamped row simply keeps being
+ * included, exactly as it already was before this existed) - never a
+ * data-integrity issue, so this never throws and never blocks
+ * whatever preload flow called it.
+ */
+export const markRowsSeen = async (type, sourceId, serialNumbers) => {
+  if (!serialNumbers || serialNumbers.length === 0) return
+  const sheetNameKey = SHEET_NAME_KEY_BY_TYPE[type]
+  const matchColumn = SERIAL_COLUMN_BY_TYPE[type]
+  if (!sheetNameKey || !matchColumn) return
+
+  try {
+    const sources = await getAllSheetSources()
+    const source = sources.find((s) => s.id === sourceId)
+    const sheetName = source?.[sheetNameKey]
+    if (!source || !sheetName) return
+
+    await fetch(source.webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'markLastModified',
+        sheet: sheetName,
+        matchColumn,
+        values: serialNumbers,
+      }),
+    })
+  } catch (err) {
+    // Best-effort - see function comment. Logged for visibility only.
+    console.error(`markRowsSeen: failed for ${type} on source ${sourceId}:`, err)
+  }
+}

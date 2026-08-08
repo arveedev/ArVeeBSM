@@ -141,6 +141,49 @@ function AdminMonitoring() {
         </select>
       )}
 
+      {regionalAuthFilter.trim() && (() => {
+        // Every authority under this regional authority, regardless of
+        // pending/completed status - gives the full picture for this
+        // regional authority overall, not just whatever happens to be
+        // showing in the pending list above.
+        const regionalTotals = typeAuthorities.filter((a) => a.regionalAuthorityNumber === regionalAuthFilter.trim())
+        const totalBags = regionalTotals.reduce((s, a) => s + (a.totalIssuedBags ?? 0), 0)
+        const totalKilos = regionalTotals.reduce((s, a) => s + (a.totalIssuedKilos ?? 0), 0)
+        const byWarehouse = new Map()
+        for (const a of regionalTotals) {
+          const key = a.assignedWarehouse ?? 'Unassigned'
+          const current = byWarehouse.get(key) ?? { bags: 0, kilos: 0 }
+          current.bags += a.totalIssuedBags ?? 0
+          current.kilos += a.totalIssuedKilos ?? 0
+          byWarehouse.set(key, current)
+        }
+
+        return (
+          <div className="mx-4 mt-2 rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">
+              {regionalAuthFilter.trim()} — Total Issued
+            </p>
+            <p className="mt-1 text-lg font-bold text-app-text">
+              {fmtBags(totalBags)} bags
+              <span className="ml-2 text-sm font-normal text-neutral-400">{fmtWeight(totalKilos, weightUnit)}</span>
+            </p>
+            <div className="mt-2 space-y-1 border-t border-neutral-800 pt-2">
+              {[...byWarehouse.entries()].map(([warehouseId, totals]) => {
+                const warehouse = warehouseMap.get(warehouseId)
+                return (
+                  <div key={warehouseId} className="flex items-center justify-between text-xs">
+                    <span className="text-neutral-400">{warehouse ? `${warehouse.code} — ${warehouse.name}` : warehouseId}</span>
+                    <span className="font-semibold text-app-text">
+                      {fmtBags(totals.bags)} bags · {fmtWeight(totals.kilos, weightUnit)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       <ul className="mt-4 space-y-2">
         {filtered.length === 0 && (
           <p className="mt-4 text-center text-xs text-neutral-500">

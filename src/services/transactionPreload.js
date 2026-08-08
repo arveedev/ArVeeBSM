@@ -47,7 +47,7 @@
 // count. This was the primary cause of a very slow first preload.
 
 import { db } from '../db/dexie.js'
-import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix } from './googleSheetsBridge.js'
+import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix, markRowsSeen } from './googleSheetsBridge.js'
 import { recordSerialUsed } from '../utils/serialNumber.js'
 
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
@@ -267,6 +267,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
 
     for (const sourceResult of result.bySource) {
       if (!sourceResult.ok) continue
+      const seenSerialsForThisSource = []
       for (const row of sourceResult.rows) {
         const serialNo = row[SERIAL_COLUMN_BY_TYPE[type]]
         if (!serialNo) continue
@@ -277,6 +278,8 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
           skippedNoWarehouseMatch++
           continue // row belongs to a warehouse outside this batch, OR the name didn't match anything we're looking for - skip
         }
+
+        seenSerialsForThisSource.push(String(serialNo))
 
         const existingRecords = existingByWarehouse.get(rowWarehouseId)
         const existing = existingRecords?.get(String(serialNo))
@@ -343,6 +346,12 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
           }
         }
       }
+
+      // Fire-and-forget - never awaited, so this purely-optimizational
+      // "mark as seen" call can never delay or block the actual
+      // preload flow it's attached to. markRowsSeen is itself
+      // best-effort and never throws.
+      markRowsSeen(type, sourceResult.sourceId, seenSerialsForThisSource)
     }
 
     console.log(`preloadOneType(${type}): saw ${totalRowsSeen} row(s) from the Sheet, imported ${importedCount}, updated ${updatedCount}, skipped ${skippedUnchanged} unchanged, skipped ${skippedNoWarehouseMatch} for no warehouse-name match, skipped ${skippedUnsyncedConflict} for an unsynced local conflict (expected names: ${group.map((w) => w.name).join(', ')})`)

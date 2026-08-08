@@ -908,7 +908,7 @@ const SackFormBase = forwardRef(function SackFormBase(
           </button>
         </div>
 
-        {sortedWarehouses.length > 1 ? (
+        {sortedWarehouses.length > 1 && !openedFromReports ? (
           <div className="mt-2">
             <label className="text-xs font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
             <select

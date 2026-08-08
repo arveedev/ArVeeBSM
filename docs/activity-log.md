@@ -9893,3 +9893,172 @@ succeeds) and the dedicated test suite above.
 - By Products pile creation variety/moisture-content exemption
 - Regional authority totals (net bags issued, total bags, grouped by
   warehouse) shown when a regional authority filter is selected
+
+## Disabled warehouse switching when opened from Reports
+
+Same reasoning and same flag as the cereal tab fix - the warehouse
+selector now falls back to the existing read-only display (already
+used for the single-warehouse case) whenever a transaction is opened
+from Reports, instead of the editable dropdown. Applied to both
+StockFormBase.jsx and SackFormBase.jsx, both of which had this exact
+same editable-selector pattern. Normal create/edit flow everywhere
+else is unaffected.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds).
+
+## Starting next outstanding task: auditing WTSForm.jsx for the same preload-completeness/duplicate-risk gaps
+
+## Completed the WTSForm.jsx audit - found and fixed real gaps, corrected an initial wrong assumption along the way
+
+Investigated whether WTSForm.jsx had the same preload-completeness/
+duplicate-risk gap already fixed in the other two forms. Found this
+assumption was actually wrong: WTS is deliberately excluded from the
+Sheet-backup/preload system entirely, since a single WTS splits into
+two paired rows (receipts side and issues side) rather than one row
+that can be fetched by serial - this is documented, intentional
+design, not an oversight, and no fix was needed there.
+
+What genuinely was missing, confirmed directly:
+1. The pause/resume background sync fix (StockFormBase.jsx/
+   SackFormBase.jsx both already had this) - added here too.
+2. The openedFromReports lock entirely absent - confirmed WTS
+   transactions ARE tappable from the Reports stock statement (Reports.jsx's
+   own query explicitly includes WTS alongside WSR/WSI), so the same
+   serial-navigation and warehouse-selector locks apply here for the
+   same reasons. Added the flag, wired it to the existing prefill
+   entry point, and applied the same conditional lock pattern already
+   used in the other two forms to both the serial field and the
+   warehouse selector.
+
+Also checked this form's own reset function (resetForm) against every
+useState in the file - confirmed it was already complete, unlike the
+other two forms' original gap, so no fix was needed there.
+
+Verified with a 5-case test covering the lock logic for both the
+serial field and warehouse selector.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## FULL LIST OF STILL-OUTSTANDING TASKS:
+- "Marking rows as seen" during preload/read, not just on write
+- Scenario 1 duplicate risk: encoding historical transactions where
+  the app has not yet preloaded that specific data
+- NFA-owned Ricemill/Mechanical Dryer handling - explicitly deferred
+  by the user to a later date
+- By Products pile creation variety/moisture-content exemption
+- Regional authority totals (net bags issued, total bags, grouped by
+  warehouse) shown when a regional authority filter is selected
+
+## Added regional authority totals, grouped by warehouse
+
+Per the original request: when a regional authority is selected in the
+filter, a summary now appears directly below it showing total bags and
+total kilos issued, broken down by warehouse. Uses the already-synced
+totalIssuedBags/totalIssuedKilos fields on each authority record - no
+need to recompute from raw transactions, since the Sheet already
+tracks and syncs these totals directly. Sums across every authority
+under that regional authority regardless of pending/completed status,
+giving the full overall picture rather than just whatever's currently
+in the pending list. Applied consistently to both the pending list
+(AdminMonitoring.jsx) and the completed list (CompletedAuthorityModal.jsx).
+
+Verified with a 5-case test covering the aggregation and warehouse-
+grouping logic, including confirming a different regional authority's
+data is correctly excluded.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## FULL LIST OF STILL-OUTSTANDING TASKS:
+- "Marking rows as seen" during preload/read, not just on write
+- Scenario 1 duplicate risk: encoding historical transactions where
+  the app has not yet preloaded that specific data
+- NFA-owned Ricemill/Mechanical Dryer handling - explicitly deferred
+  by the user to a later date
+- By Products pile creation variety/moisture-content exemption
+
+## Resolved the By Products pile creation variety/MC exemption task
+
+Investigated both halves of this deferred task directly:
+
+- **Variety exemption**: confirmed already implemented in an earlier
+  session - a By Products pile is not locked to a single variety for
+  its lifetime, unlike Rice/Palay, with the variety field switching to
+  an editable selector rather than a locked display specifically for
+  this category. No further work needed here.
+
+- **MC (moisture content) exemption**: confirmed genuinely missing -
+  moisture content was unconditionally required for every transaction
+  regardless of category, including By Products, where it is not a
+  meaningful metric the way it is for Rice/Palay grain. Fixed both the
+  validation (no longer blocks saving a By Products transaction over a
+  blank MC) and the UI indicator (the amber "required" warning border
+  no longer shows for this field on By Products, and the placeholder
+  text now reads "Optional" instead of an example value). The
+  exemption does not forbid entering a value if the user has one -
+  only removes the requirement.
+
+Verified with a 5-case test covering both the exemption itself and
+confirming Rice/Palay are completely unaffected.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## FULL LIST OF STILL-OUTSTANDING TASKS:
+- "Marking rows as seen" during preload/read, not just on write
+- Scenario 1 duplicate risk: encoding historical transactions where
+  the app has not yet preloaded that specific data
+- NFA-owned Ricemill/Mechanical Dryer handling - explicitly deferred
+  by the user to a later date
+
+## Implemented "marking rows as seen" during preload
+
+Built the feature explained in the previous entry: rows the app has
+only ever read/preloaded, never written to, now get their "Last
+Modified" column stamped too - marking them as seen so future
+modifiedSince checks can finally exclude them, instead of having to
+include them in every single check indefinitely since they never had
+a timestamp to compare against.
+
+Server side (Apps Script): new markLastModified action, batch-stamps
+every row matching a list of serial numbers in one pass - reads and
+writes the entire "Last Modified" column once each, not one cell at a
+time, since this can be called with potentially thousands of values
+from a single preload batch. Only stamps a row whose column is
+currently blank, so this can never overwrite a timestamp from an
+actual edit or app write - those are always more meaningful than a
+mere "seen" mark, and this is what keeps the feature safe alongside
+the onEdit trigger and the app's own write-time stamping already in
+place.
+
+Client side: new markRowsSeen function in googleSheetsBridge.js,
+wired into preloadOneType so every row genuinely matched to a
+warehouse in the current batch (excluding rows that belonged to a
+different warehouse not currently being processed) gets included.
+Called fire-and-forget - never awaited - so this purely-optimizational
+addition can never delay or block the actual preload flow it's
+attached to, and is best-effort by design (a failure here only means
+slightly less efficient future syncs, never a data-integrity issue).
+
+Verified with a 6-case test covering the server-side stamping
+decision (including the critical "never overwrite an existing stamp"
+protection) and the client-side batch-collection logic.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds, PLUS an explicit brace-balance and action-count check on the
+Apps Script file) and the dedicated test suite above. Additionally
+re-ran the complete regression suite from this entire session -
+93 test cases across 17 suites, all passing.
+
+## FULL LIST OF STILL-OUTSTANDING TASKS:
+- Scenario 1 duplicate risk: encoding historical transactions where
+  the app has not yet preloaded that specific data
+- NFA-owned Ricemill/Mechanical Dryer handling - explicitly deferred
+  by the user to a later date

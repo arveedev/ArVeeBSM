@@ -1296,7 +1296,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
       toast.error('Select a Condition')
       return false
     }
-    if (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent))) {
+    if (activeCategory !== 'By Products' && (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent)))) {
       toast.error('Moisture Content (MC %) is required')
       return false
     }
@@ -1594,7 +1594,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
           </button>
         </div>
 
-        {sortedWarehouses.length > 1 ? (
+        {sortedWarehouses.length > 1 && !openedFromReports ? (
           <div className="mt-2">
             <label className="text-xs font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
             <select
@@ -2047,8 +2047,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 inputMode="decimal"
                 value={moistureContent}
                 onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
-                className={`${inputClass} ${moistureContent === '' ? '!border-brand-amber' : ''}`}
-                placeholder="13.90"
+                className={`${inputClass} ${moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
               />
             </div>
 
