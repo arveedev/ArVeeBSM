@@ -9547,3 +9547,45 @@ backlog), but this is reasoned inference, not confirmed fact. If any
 persist once the backlog has had time to settle, each needs its own
 dedicated, direct investigation rather than continuing to attribute
 new symptoms to the same explanation without verification.
+
+## Fixed the cereal tab data-clearing bug and the blank transaction type bug - both confirmed, concrete gaps
+
+**Cereal tab switching not clearing data**: found the exact bug -
+handleCategoryTabChange only ever reset 4 fields (loadedTransaction,
+pileId, varietyId, sackSelection). Every other field - customer name,
+weights, MO/TMO, moisture content, everything - was left completely
+untouched when switching tabs. Fixed by reusing the same full clear
+already used elsewhere (resetToBlankEntry), preserving only the
+current serial number text since switching category is about which
+series that number belongs to, not necessarily wanting a different
+number. Confirmed sacks have no cereal tab concept at all, so no
+equivalent fix was needed there.
+
+**Blank "Nature of Transaction" on historical Sheet data**: confirmed
+the Sheet's "Transaction" column (MILLING, TRANSFER, TEST MILLING,
+etc. - always present) was never being read into transactionTypeId at
+all, in any of the three places a Sheet row gets converted into a
+transaction. Fixed all three (StockFormBase.jsx's on-demand lookup,
+SackFormBase.jsx's on-demand lookup, and transactionPreload.js's bulk
+incremental sync), matching by name against db.transactionTypes.
+While in transactionPreload.js, also hoisted two database queries
+(varietyByName and the new transactionTypesByName) out of the per-row
+loop they were previously rebuilt inside on every single iteration -
+a genuine, meaningful performance improvement at the scale of a large
+Sheet, found directly relevant to this session's ongoing performance
+concerns.
+
+Verified with a 6-case test covering the transaction type mapping
+(including case-insensitivity and unrecognized-value safety) and
+confirming the scope of fields the tab-switch fix now actually clears.
+
+Combined with the previous entry's pause/resume-sync-during-form-use
+fix and the sync status display fix, this addresses every concrete,
+specific issue raised - the endless push/pull loop remains a reasoned
+hypothesis (the large one-time deletion backlog settling) rather than
+a confirmed, independently-fixed bug, and should be watched for
+whether it resolves on its own with time.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.

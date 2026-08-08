@@ -40,7 +40,7 @@ import { rememberCustomer } from '../../utils/customerDirectory.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { queueTransactionDeletion } from '../../services/syncWorker.js'
+import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName, isAuthorityComplete } from '../../utils/calculations.js'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
@@ -67,6 +67,12 @@ const SackFormBase = forwardRef(function SackFormBase(
   { type, title, linkedDocLabel, onClose, prefill },
   ref
 ) {
+  // Same reasoning as StockFormBase.jsx's identical fix.
+  useEffect(() => {
+    pauseTransactionSync()
+    return () => resumeTransactionSync()
+  }, [])
+
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
 
@@ -549,7 +555,8 @@ const SackFormBase = forwardRef(function SackFormBase(
         : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
       if (latestRequestedSerial.current !== serial) return false
       if (sheetResult.ok && sheetResult.row) {
-        const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId })
+        const transactionTypesByName = new Map((transactionTypes ?? []).map((t) => [t.name.trim().toLowerCase(), t.transactionTypeId]))
+        const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId, transactionTypesByName })
         await db.transactions.add(imported)
         await recordSerialUsed(type, currentWarehouseId, serial)
         if (latestRequestedSerial.current !== serial) return false

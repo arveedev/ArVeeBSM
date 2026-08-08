@@ -281,11 +281,24 @@ const TRANSACTION_SYNC_INTERVAL_MS = 30 * 1000
  * @param {object} user - the current logged-in user (from useAuth())
  * @returns {() => void} cleanup function
  */
+// A simple counter, not a boolean - if more than one thing needs to
+// pause background sync at once (unlikely today, but safer), they
+// won't clobber each other's intent to resume. Exported so form
+// components can pause this worker specifically while they're open -
+// the periodic background sync competes for the same IndexedDB
+// connection as the form's own local lookups, which is the confirmed,
+// direct explanation for why even a purely local, already-loaded
+// record could feel slow to redisplay while a sync cycle happens to
+// be mid-flight at the same moment.
+let transactionSyncPauseCount = 0
+export const pauseTransactionSync = () => { transactionSyncPauseCount++ }
+export const resumeTransactionSync = () => { transactionSyncPauseCount = Math.max(0, transactionSyncPauseCount - 1) }
+
 export const startTransactionSyncWorker = (user) => {
   let cancelled = false
 
   const runSync = async () => {
-    if (cancelled || !user) return
+    if (cancelled || !user || transactionSyncPauseCount > 0) return
     await preloadTransactionsForUser(user)
   }
 
