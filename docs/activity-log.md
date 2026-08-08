@@ -9648,3 +9648,69 @@ already-queued push operations that needs to finish draining even
 after this fix is deployed - this should now be a finite, one-time
 tail rather than an ongoing, self-perpetuating problem, but it may not
 be instantaneous the moment this deploys.
+
+## CRITICAL, URGENT: fixed active data loss caused by the previous entry's own fix
+
+User reported real, confirmed data loss: locally-completed fields
+(pile, MTS sack type, MTS condition, gross kilos, condition) for
+transactions they had just updated were gone after navigating away and
+back, with the Sheet itself confirmed to still have complete data -
+meaning the app's own local copy was being actively corrupted, not the
+source data.
+
+Root cause: the previous entry's change-detection fix, once it
+correctly determined a record needed updating, performed a blanket
+db.transactions.update(existing.id, imported) - overwriting every
+field in imported onto the local record. Several fields (pileId,
+mtsSackTypeId, mtsCondition, condition, grossKilos) are permanently
+null in every mapSheetRowToTransaction result, since the Sheet has no
+columns for them at all - not because the data changed, but because
+the Sheet simply never tracked them to begin with. This meant any
+locally-completed data for those specific fields was being silently
+destroyed and replaced with null the moment an incremental sync
+touched that record - a severe, active, ongoing data-loss bug
+introduced by the immediately preceding fix.
+
+Fixed by merging instead of blanket-replacing: the patch actually sent
+to db.transactions.update() now only ever includes a field when it
+either has a genuine, real value coming in from the Sheet, or when the
+local field was already empty to begin with. A field the user has
+actually filled in locally can now never be overwritten by a field the
+Sheet never had data for - Dexie's update() leaves any field simply
+omitted from the patch completely untouched, which is the mechanism
+this fix relies on. A field that genuinely changed on the Sheet (e.g.
+number of bags) is still correctly detected and applied - this is not
+a fix that silently ignores real edits, only one that stops a real
+edit's absence (permanent nulls for Sheet-untracked fields) from being
+mistaken for one.
+
+This is also the very likely, direct explanation for the separately
+reported "Reports page doesn't load all data" symptom from the same
+testing session - if the local record had already been corrupted by
+this bug before Reports was ever opened, Reports would have correctly
+displayed the already-damaged data, not caused new damage itself.
+
+## Added a "series does not exist" indicator, per explicit request
+
+Non-intrusive text near the serial field (not an interruptive toast,
+which would fire on the completely normal, common case of typing a
+genuinely new serial to start a fresh entry) - shown whenever a typed
+serial resolves to no existing data, clarifying this is expected and
+the form is ready for a new entry, rather than leaving the user to
+wonder if something went wrong.
+
+Verified with a 7-case test directly modeling the exact confirmed
+data-loss scenario end to end - pile/MTS/gross-kilos/condition
+correctly preserved when the Sheet has no data for them, while a
+field that genuinely did change is still correctly applied.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## STILL NOT DONE this entry, explicitly deferred given the urgency of shipping the data-loss fix:
+- Cereal tab switching is reported as still slower than the rest of
+  the app, not yet investigated
+- The request to have the app stamp "Last Modified" on the Sheet for
+  rows it preloads (not just rows it writes) - this would require a
+  new Apps Script action and is a meaningful addition, not started
