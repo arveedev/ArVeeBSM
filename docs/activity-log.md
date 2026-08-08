@@ -9714,3 +9714,74 @@ succeeds) and the dedicated test suite above.
 - The request to have the app stamp "Last Modified" on the Sheet for
   rows it preloads (not just rows it writes) - this would require a
   new Apps Script action and is a meaningful addition, not started
+
+## Fixed the actual, complete cereal tab bug - resetToBlankEntry was missing many fields, and the tab switch never re-triggered a lookup at all
+
+User's detailed reproduction (navigate to a loaded series, switch tabs,
+switch back - serial text remains but form is blank, closing and
+reopening the form still doesn't recover it) revealed two separate,
+compounding gaps in the previous fix:
+
+1. resetToBlankEntry (the function the tab switch relies on) was
+   itself still missing many fields entirely - transactionTypeId (the
+   specifically reported "transaction dropdown does not clear"),
+   pileId, varietyId, sackSelection, autoComputeNet, every age-related
+   field, and condition. Expanded to cover every actual data field
+   this form has, cross-checked directly against every useState
+   declaration in the file rather than guessing.
+
+2. The deeper gap: switching tabs cleared the form but never actually
+   re-checked the current serial number against the new category at
+   all - nothing ever re-triggered a lookup after a tab switch, so
+   even if real data existed for that serial in the new category, nothing
+   would ever load it; the form would just stay blank. Fixed by
+   scheduling a deferred re-lookup (setTimeout(0), matching the
+   existing pattern already used elsewhere in this file) after the
+   category state change, giving React one tick to actually apply the
+   new category before the lookup reads it - checkAndLoadSerial reads
+   activeCategory, which is derived from cerealCategory state that had
+   not yet updated in the same synchronous call.
+
+Applied the same transactionTypeId fix to SackFormBase.jsx's own
+resetToBlankEntry, which had the identical gap for serial navigation
+there (sacks have no cereal tab concept, so no equivalent re-lookup
+fix was needed).
+
+Removed the "series does not exist yet" indicator text entirely, per
+explicit request - not wanted.
+
+Verified with a 5-case test confirming the expanded field list
+directly (including the specifically reported transactionTypeId gap)
+and the tab-switch re-lookup scheduling logic.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## FULL LIST OF STILL-OUTSTANDING TASKS, per explicit request to always include this:
+
+### Reported this session, not yet resolved
+- Cereal tab switching is still reported as slower than the rest of
+  the app - the data-correctness bug is fixed, but the speed
+  complaint itself has not been separately investigated or confirmed
+  resolved
+- The request to have the app stamp "Last Modified" on the Sheet for
+  rows it only reads/preloads (not just rows it writes) - not started,
+  would require a new Apps Script action
+
+### From earlier sessions, still open
+- Scenario 1 duplicate risk: encoding historical transactions where
+  the app has not yet preloaded that specific data
+- WTSForm.jsx was never checked for the same preload-completeness/
+  duplicate-risk patterns fixed elsewhere
+- NFA-owned Ricemill/Mechanical Dryer handling - explicitly deferred
+  by the user to a later date
+- By Products pile creation variety/moisture-content exemption -
+  looked at once, not built
+- Milling Operations detail modal further redesign items beyond what
+  has already shipped (recovery % display, etc. - most of the modal
+  has been redone, but this should be re-confirmed against the
+  original full request)
+- Regional authority totals (net bags issued, total bags, grouped by
+  warehouse) shown when a regional authority filter is selected - not
+  started
