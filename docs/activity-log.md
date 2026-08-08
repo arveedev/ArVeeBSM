@@ -9372,3 +9372,67 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above.
 
 ## This should be the complete, genuine fix for both the crash and the "no data" issue that has been the central focus of this entire session - both traced to one confirmed, concrete cause rather than a guess
+
+## URGENT: fixed a real performance regression and a likely duplicate-record bug from the previous entry's migration
+
+User reported three severe symptoms after the previous fix: a false
+"already used" error when updating an existing, already-loaded
+transaction; a return of serious slowness when navigating or typing a
+serial; and data the app itself created no longer being found at all.
+
+Root cause of the false "already used" error: isSerialTaken's
+excludeId can only ever exclude ONE specific record by its id. If
+duplicate local records exist for the same (type, warehouse, serial,
+category) - plausible given the chaotic sequence of imports and fixes
+around this exact data in the last several entries - the OTHER
+duplicate would still match and incorrectly block the save. This isn't
+guaranteed to be the full explanation without seeing the actual local
+data, but it is a concrete, real gap regardless.
+
+Root cause of the returned slowness: the previous entry's one-time
+migration used a sequential loop of individually-awaited
+db.transactions.update() calls - genuinely slow against a dataset in
+the thousands, and this was the actual, confirmed cause of the
+original "looking up serial" slowness the entire session has been
+trying to eliminate in the first place. Rewrote to use bulkPut/
+bulkDelete - a single batched operation each, not one round-trip per
+record.
+
+Combined both fixes into one migration (transaction-field-type-and-
+dedup-fix-v2, bumped intentionally so it runs fresh regardless of
+whether the previous version completed or partially failed): fixes
+field types AND removes duplicate records sharing the same key,
+keeping whichever duplicate has the most actual data filled in. Also
+made this migration only mark itself complete AFTER genuinely
+succeeding, wrapped in try/catch - a partial failure now safely
+retries on the next load instead of silently, permanently giving up
+partway through, which the previous version's flag-set-before-running
+pattern did not protect against.
+
+Re-confirmed checkAndLoadSerial itself still correctly uses the fast,
+preload-trust short-circuit (not reverted back to the slow always-
+check-the-Sheet path) - the returned slowness was very likely this
+migration's own one-time cost on the very next load, not a regression
+in the lookup path itself.
+
+Verified with a 6-case test specifically covering the dedup logic's
+correctness, including the critical case that a genuinely unique
+record (different warehouse, same serial number) must never be
+incorrectly merged or deleted.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## HONEST ASSESSMENT, given how much has compounded in this exact area over the last several entries:
+I have fixed the concrete, confirmed issues I could identify through
+careful code review - the false already-used error's most likely
+cause, the actual performance bug, and safety around partial failure.
+I cannot fully guarantee every reported symptom (especially "even
+app-created data shows nothing") is completely resolved without the
+user actually testing this live, given how many overlapping changes
+have touched this exact code path recently. If problems persist after
+this, the most useful next step would be the user sharing the actual
+console log output from a fresh load (the migration now logs exactly
+how many records it fixed and deduplicated) rather than another guess
+on my part.
