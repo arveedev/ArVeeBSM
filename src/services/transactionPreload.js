@@ -229,7 +229,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     .toArray()
   const existingByWarehouse = new Map(warehouseIds.map((id) => [id, new Map()]))
   for (const tx of localTx) {
-    existingByWarehouse.get(tx.warehouseId)?.set(tx.serialNo, { id: tx.id, isSynced: tx.isSynced })
+    existingByWarehouse.get(tx.warehouseId)?.set(String(tx.serialNo), { id: tx.id, isSynced: tx.isSynced })
   }
 
   const highestImportedByWarehouse = new Map()

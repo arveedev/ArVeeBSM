@@ -9436,3 +9436,58 @@ this, the most useful next step would be the user sharing the actual
 console log output from a fresh load (the migration now logs exactly
 how many records it fixed and deduplicated) rather than another guess
 on my part.
+
+## CRITICAL: found the definitive root cause of the massive data duplication (25346 total, 23144 removed)
+
+User's console output confirmed the scale directly: 23144 of 25346
+local records were duplicates - roughly 11x over the true count
+(matching the sheet's real ~2200 rows almost exactly once
+deduplicated). This fully explains every downstream slowness symptom
+reported (cereal tab switching, serial lookup, form clearing, update
+delays) - all were genuine consequences of the app trying to work with
+a dataset over ten times its real size, not separate bugs each.
+
+Traced to the definitive mechanism: the incremental sync's existing-
+record map was keyed using tx.serialNo directly, in whatever type it
+actually was (a number, for any record still affected by the type
+bug fixed two entries ago) - while every lookup against that same map
+coerced to String() first. JavaScript Map keys are strictly type-
+sensitive (a number 1 and the string '1' are different keys entirely),
+so this lookup would silently fail for any such record, every single
+sync cycle - concluding "this doesn't exist yet" and creating a brand
+new duplicate every 30 seconds, indefinitely, for as long as this ran.
+Fixed by coercing both sides consistently to String().
+
+## Three additional fixes from direct user reports
+
+1. The "pulled from historical Sheet data" completion banner was
+   showing to every user - now gated to admin-only, per explicit
+   request, in both StockFormBase.jsx and SackFormBase.jsx.
+
+2. Input fields were retaining stale data from a previous lookup while
+   a new one was in flight. Per explicit request, the form now clears
+   immediately the moment a serial changes (via typing OR step
+   navigation), before the lookup even starts - loadTransactionIntoForm
+   repopulates it moments later only if data is actually found, so the
+   user always sees a clean slate to wait against rather than
+   confusing leftover data from whatever was there before.
+
+Verified with a 4-case test directly modeling the exact Map-key
+mechanism responsible for the duplication, including a simulated
+"10 sync cycles against the same row" scenario showing 10 incorrect
+duplicates before the fix versus 1 correct record after.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## HONEST ASSESSMENT - what I could not directly verify this entry:
+The "first update doesn't reach the Sheet, second one does" report and
+the "15 minutes, still loading" notification were very likely both
+downstream consequences of the same massive data bloat (25000+ records
+being processed instead of ~2200) rather than separate, distinct bugs
+- but I have not directly traced either one to a specific confirmed
+mechanism the way the duplication itself was traced. If either persists
+after this fix (which should dramatically reduce the working dataset
+size and prevent it from recurring), they need their own dedicated
+investigation rather than being assumed resolved by inference alone.
