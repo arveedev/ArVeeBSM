@@ -95,24 +95,69 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
   // reported crash (.replace() does not exist on a number). This does
   // NOT require a slow full re-preload - it is a fast, local-only
   // pass over what already exists, fixing the type in place.
-  const FIELD_TYPE_FIX_FLAG = 'transaction-field-type-fix-v1'
+  //
+  // Combined with a dedup pass in the same migration: the chaotic
+  // sequence of fixes this session (Sheet-fallback import,
+  // incremental sync import, and the field-type issue itself all
+  // touching the same records around the same time) plausibly created
+  // duplicate local records sharing the same (type, warehouseId,
+  // serialNo, cerealCategory) - which directly explains a reported
+  // false "already used" error on update, since isSerialTaken's
+  // excludeId can only ever exclude the one specific record being
+  // edited, not every duplicate sharing its serial.
+  const FIELD_TYPE_FIX_FLAG = 'transaction-field-type-and-dedup-fix-v2'
   if (!localStorage.getItem(FIELD_TYPE_FIX_FLAG)) {
-    localStorage.setItem(FIELD_TYPE_FIX_FLAG, 'done')
+    try {
     const allLocalTx = await db.transactions.toArray()
     const STRING_FIELDS = ['serialNo', 'linkedDocNo', 'aiNumber', 'siaNumber', 'moNumber', 'tmoNumber', 'batchNumber', 'trialNumber']
-    const fixes = []
+
+    // Fix field types in memory first
+    let typeFixCount = 0
     for (const tx of allLocalTx) {
-      const patch = {}
       for (const field of STRING_FIELDS) {
         const value = tx[field]
-        if (value != null && typeof value !== 'string') patch[field] = String(value)
+        if (value != null && typeof value !== 'string') {
+          tx[field] = String(value)
+          typeFixCount++
+        }
       }
-      if (Object.keys(patch).length > 0) fixes.push({ id: tx.id, patch })
     }
-    for (const { id, patch } of fixes) {
-      await db.transactions.update(id, patch)
+
+    // Group by the same key used for duplicate-serial checking
+    // elsewhere in the app, then keep only the most complete record
+    // per group - "most complete" meaning the most non-empty fields,
+    // a reasonable proxy for "has actually been filled out" over a
+    // bare, partially-imported stub.
+    const groups = new Map()
+    for (const tx of allLocalTx) {
+      const key = `${tx.type}::${tx.warehouseId}::${tx.serialNo}::${tx.cerealCategory ?? ''}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(tx)
     }
-    console.log(`transaction-field-type-fix-v1: corrected ${fixes.length} of ${allLocalTx.length} local record(s)`)
+    const completeness = (tx) => Object.values(tx).filter((v) => v != null && v !== '').length
+    const toKeep = []
+    const toDeleteIds = []
+    for (const group of groups.values()) {
+      if (group.length === 1) {
+        toKeep.push(group[0])
+        continue
+      }
+      const sorted = [...group].sort((a, b) => completeness(b) - completeness(a))
+      toKeep.push(sorted[0])
+      for (const dupe of sorted.slice(1)) toDeleteIds.push(dupe.id)
+    }
+
+    // bulkPut/bulkDelete - a single batched operation each, not one
+    // await per record, which was the actual cause of the reported
+    // slowdown when this ran against a large local dataset.
+    await db.transactions.bulkPut(toKeep)
+    if (toDeleteIds.length > 0) await db.transactions.bulkDelete(toDeleteIds)
+
+    console.log(`transaction-field-type-and-dedup-fix-v2: corrected ${typeFixCount} field(s), removed ${toDeleteIds.length} duplicate record(s) out of ${allLocalTx.length} total`)
+    localStorage.setItem(FIELD_TYPE_FIX_FLAG, 'done')
+    } catch (error) {
+      console.error('transaction-field-type-and-dedup-fix-v2 failed, will retry next load:', error)
+    }
   }
 
   // Admin and Visitor both have access to every warehouse (they share
