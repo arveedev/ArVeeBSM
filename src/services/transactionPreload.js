@@ -85,6 +85,36 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
     await db.preloadState.clear()
   }
 
+  // Second, separate one-time fix: records already imported by the
+  // warehouse-matching bug above have their serialNo (and related
+  // fields) stored as a NUMBER rather than a string - Google Sheets
+  // returns a purely-numeric cell as a JS number, and the code that
+  // read it was not coercing this before the bug above was fixed.
+  // This is what caused both the "existing series shows no data" (a
+  // number can never match a string typed by the user) and the
+  // reported crash (.replace() does not exist on a number). This does
+  // NOT require a slow full re-preload - it is a fast, local-only
+  // pass over what already exists, fixing the type in place.
+  const FIELD_TYPE_FIX_FLAG = 'transaction-field-type-fix-v1'
+  if (!localStorage.getItem(FIELD_TYPE_FIX_FLAG)) {
+    localStorage.setItem(FIELD_TYPE_FIX_FLAG, 'done')
+    const allLocalTx = await db.transactions.toArray()
+    const STRING_FIELDS = ['serialNo', 'linkedDocNo', 'aiNumber', 'siaNumber', 'moNumber', 'tmoNumber', 'batchNumber', 'trialNumber']
+    const fixes = []
+    for (const tx of allLocalTx) {
+      const patch = {}
+      for (const field of STRING_FIELDS) {
+        const value = tx[field]
+        if (value != null && typeof value !== 'string') patch[field] = String(value)
+      }
+      if (Object.keys(patch).length > 0) fixes.push({ id: tx.id, patch })
+    }
+    for (const { id, patch } of fixes) {
+      await db.transactions.update(id, patch)
+    }
+    console.log(`transaction-field-type-fix-v1: corrected ${fixes.length} of ${allLocalTx.length} local record(s)`)
+  }
+
   // Admin and Visitor both have access to every warehouse (they share
   // the same all-warehouse AdminHome view - see App.jsx), so both
   // preload everything rather than being skipped. A regular user stays

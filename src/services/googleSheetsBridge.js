@@ -1060,9 +1060,17 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
   if (type === 'WSR' || type === 'WSI') {
     return {
       ...base,
-      serialNo: row[type === 'WSR' ? 'WSR #' : 'WSI #'],
-      linkedDocNo: type === 'WSR' ? (row['WSI #'] ?? null) : (row['AI #'] ?? null),
-      aiNumber: type === 'WSI' ? (row['AI #'] ?? null) : null,
+      // String(...) is essential here, not cosmetic: Google Sheets
+      // returns a purely-numeric cell as a JS number, not a string.
+      // Without this, some imported records ended up with serialNo as
+      // a number - which every .replace() call elsewhere in the app
+      // expects to be a string (throwing exactly a "replace is not a
+      // function" crash), and which can never match a string typed by
+      // the user in the serial field, since Dexie's equals() is
+      // type-sensitive (a number 123 does not equal the string "123").
+      serialNo: String(row[type === 'WSR' ? 'WSR #' : 'WSI #'] ?? ''),
+      linkedDocNo: type === 'WSR' ? (row['WSI #'] != null ? String(row['WSI #']) : null) : (row['AI #'] != null ? String(row['AI #']) : null),
+      aiNumber: type === 'WSI' ? (row['AI #'] != null ? String(row['AI #']) : null) : null,
       varietyId: matchedVarietyId,
       varietyNameRaw: matchedVarietyId ? null : varietyName, // preserved for display only if we couldn't match it
       // Without this, a record imported via preload or an on-demand
@@ -1094,18 +1102,24 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
       // the actual data being right there.
       moNumber: row['MO Number'] || null,
       tmoNumber: row['TMO Number'] || null,
-      batchNumber: row['Batch Number'] || null,
-      trialNumber: row['Trial Number'] || null,
+      batchNumber: row['Batch Number'] != null && row['Batch Number'] !== '' ? String(row['Batch Number']) : null,
+      trialNumber: row['Trial Number'] != null && row['Trial Number'] !== '' ? String(row['Trial Number']) : null,
     }
   }
 
   // ESR / ESI - sacks
   return {
     ...base,
-    serialNo: row[type === 'ESR' ? 'ESR#' : 'ESI#'],
-    linkedDocNo: row[type === 'ESR' ? 'ESI #' : 'SIA #'] ?? null,
+    serialNo: String(row[type === 'ESR' ? 'ESR#' : 'ESI#'] ?? ''),
+    linkedDocNo: row[type === 'ESR' ? 'ESI #' : 'SIA #'] != null ? String(row[type === 'ESR' ? 'ESI #' : 'SIA #']) : null,
     sackLines: [], // per-sack-type/condition breakdown isn't stored in the Sheet, only the Pieces total
     totalPiecesRaw: row['Pieces'] ?? null,
+    // Same gap already found and fixed for the WSR/WSI branch above -
+    // this branch was still missing these fields entirely.
+    moNumber: row['MO Number'] || null,
+    tmoNumber: row['TMO Number'] || null,
+    batchNumber: row['Batch Number'] != null && row['Batch Number'] !== '' ? String(row['Batch Number']) : null,
+    trialNumber: row['Trial Number'] != null && row['Trial Number'] !== '' ? String(row['Trial Number']) : null,
   }
 }
 

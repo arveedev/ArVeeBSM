@@ -10,7 +10,7 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight } from '../../utils/calculations.js'
 
 const bySerial = (a, b) => {
-  const n = (x) => parseInt((x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
+  const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
   return n(a) - n(b)
 }
 

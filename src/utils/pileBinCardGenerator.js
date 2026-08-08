@@ -46,7 +46,7 @@ const buildLedgerRows = (pile, transactions) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1
     if (a.isInitialBalance) return -1
     if (b.isInitialBalance) return 1
-    const n = (x) => parseInt((x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
+    const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
     return n(a) - n(b)
   })
 
