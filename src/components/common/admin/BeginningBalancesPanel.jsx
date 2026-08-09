@@ -326,7 +326,7 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-app-text">Beginning Balances</h2>
+      <h2 className="text-center text-base font-semibold text-app-text">Beginning Balances</h2>
       <p className="mt-1 text-xs text-neutral-500">
         Corrects a pile's or sack's starting figures directly - separate from creating new
         piles/sacks and from the live Piles/Home views, so a correction here never gets
@@ -343,7 +343,7 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
         </select>
       )}
 
-      <div className="animate-flow-down" key={tab}>
+      <div>
       <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
         <div
           className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -353,7 +353,7 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
         <button type="button" onClick={() => setTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${tab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
       </div>
 
-      <div className="mt-3">
+      <div className="mt-3 animate-flow-down" key={tab}>
         {tab === 'piles'
           ? <PilesBeginningBalances warehouseId={effectiveWarehouseId} />
           : <SacksBeginningBalances warehouseId={effectiveWarehouseId} />}

@@ -574,31 +574,6 @@ function Settings() {
         </Link>
       )}
 
-      <div ref={warehouseSectionRef}>
-        {sortedWarehouses.length > 1 ? (
-          <div className="mt-4">
-            <label className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Active Warehouse</label>
-            <select
-              value={currentWarehouseId ?? ''}
-              onChange={(e) => setCurrentWarehouseId(e.target.value)}
-              className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon"
-            >
-              {sortedWarehouses.map((w) => (
-                <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>
-              ))}
-            </select>
-          </div>
-        ) : currentWarehouse ? (
-          <div className="mt-4 rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Active Warehouse</p>
-            <p className="text-base font-bold text-app-text">{currentWarehouse.code} — {currentWarehouse.name}</p>
-          </div>
-        ) : (
-          <p className="mt-2 text-xs text-neutral-500">No warehouse assigned</p>
-        )}
-      </div>
-      <StickyWarehouseIndicator targetRef={warehouseSectionRef} warehouse={currentWarehouse} />
-
       {user?.role === 'Admin' ? (
         <div className={`mt-4 rounded-xl border ${syncBorderClass} ${syncBgClass} p-3`}>
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-amber">Sync Identity (Diagnostic)</p>
@@ -674,6 +649,32 @@ function Settings() {
         </div>
       )}
 
+      <div ref={warehouseSectionRef}>
+        {sortedWarehouses.length > 1 ? (
+          <div className="mt-4">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Active Warehouse</label>
+            <select
+              value={currentWarehouseId ?? ''}
+              onChange={(e) => setCurrentWarehouseId(e.target.value)}
+              className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon"
+            >
+              {sortedWarehouses.map((w) => (
+                <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : currentWarehouse ? (
+          <div className="mt-4 rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Active Warehouse</p>
+            <p className="text-base font-bold text-app-text">{currentWarehouse.code} — {currentWarehouse.name}</p>
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-neutral-500">No warehouse assigned</p>
+        )}
+      </div>
+      <StickyWarehouseIndicator targetRef={warehouseSectionRef} warehouse={currentWarehouse} />
+
+
       <div className="mt-6 space-y-3">
         <h2 className="text-sm font-semibold text-app-text">Preferences</h2>
 
@@ -688,7 +689,7 @@ function Settings() {
       {currentWarehouseId && <ClassifierSection warehouseId={currentWarehouseId} />}
 
       {currentWarehouseId && (
-        <div className="mt-6 animate-flow-down" key={pileSection}>
+        <div className="mt-6" key={currentWarehouseId}>
           <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
             <div
               className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -712,7 +713,7 @@ function Settings() {
               Beginning Balances
             </button>
           </div>
-          <div className="mt-3">
+          <div className="mt-3 animate-flow-down" key={pileSection}>
             {pileSection === 'create'
               ? <PileBalanceSection warehouseId={currentWarehouseId} />
               : <BeginningBalancesPanel warehouseId={currentWarehouseId} />}

@@ -173,7 +173,7 @@ function AuthorityMonitor() {
         <button
           type="button"
           onClick={() => setShowCompleted(true)}
-          className="text-xs font-medium text-brand-neon hover:underline"
+          className="shrink-0 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-medium text-brand-neon hover:border-brand-neon/50"
         >
           View Completed
         </button>

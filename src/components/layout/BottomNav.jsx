@@ -14,7 +14,7 @@
 // functionality, matching the routes ProtectedRoute actually allows it
 // to reach.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Home, LayoutGrid, FileText, Settings, Plus, Radar } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -48,6 +48,18 @@ function BottomNav({ onFabClick }) {
     transition: 'transform 350ms ease-out',
   }
 
+  // Tracks the previous nav column so the liquid-travel animation
+  // knows where to start from - computed once here (before any
+  // conditional return) per hooks rules, shared by both the regular
+  // and Visitor nav branches below.
+  const columnCount = isVisitor ? 2 : 5
+  const currentColumnForTracking = (isVisitor ? VISITOR_NAV_COLUMN : REGULAR_NAV_COLUMN)[pathname] ?? 0
+  const previousColumnRef = useRef(currentColumnForTracking)
+  useEffect(() => {
+    previousColumnRef.current = currentColumnForTracking
+  }, [currentColumnForTracking])
+  const fromColumn = previousColumnRef.current
+
   if (isVisitor) {
     const visitorColumn = VISITOR_NAV_COLUMN[pathname] ?? 0
     return (
@@ -55,8 +67,13 @@ function BottomNav({ onFabClick }) {
         <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
         <div className="relative mx-auto grid h-16 max-w-md grid-cols-2 items-center">
           <div
-            className="pointer-events-none absolute inset-y-0 z-0 flex w-1/2 items-center justify-center transition-transform duration-300 ease-out"
-            style={{ transform: `translateX(${visitorColumn * 100}%)` }}
+            key={pathname}
+            className="pointer-events-none absolute inset-y-0 z-0 flex w-1/2 items-center justify-center animate-nav-liquid-travel"
+            style={{
+              '--nav-from-x': `${fromColumn * 100}%`,
+              '--nav-to-x': `${visitorColumn * 100}%`,
+              transform: `translateX(${visitorColumn * 100}%)`,
+            }}
           >
             <div className="h-2 w-8 rounded-full bg-brand-neon shadow-[0_0_8px_rgba(0,255,163,0.6)]" />
           </div>
@@ -73,8 +90,11 @@ function BottomNav({ onFabClick }) {
       <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
       <div className="relative mx-auto grid h-16 max-w-md grid-cols-5 items-center">
         <div
-          className="pointer-events-none absolute inset-y-0 z-0 flex w-1/5 items-center justify-center transition-transform duration-300 ease-out"
+          key={pathname}
+          className="pointer-events-none absolute inset-y-0 z-0 flex w-1/5 items-center justify-center animate-nav-liquid-travel"
           style={{
+            '--nav-from-x': `${fromColumn * 100}%`,
+            '--nav-to-x': `${(regularColumn ?? 0) * 100}%`,
             transform: `translateX(${(regularColumn ?? 0) * 100}%)`,
             opacity: regularColumn == null ? 0 : 1,
           }}

@@ -10550,3 +10550,260 @@ guessed at:
    oversight on my part to find it.
 
 Final build verified clean.
+
+## CRITICAL: fixed the full-screen viewport bug and a JSX structural bug it caused
+
+Root cause of "full screen only expands the box, not the device
+screen": the page-transition animation wrapper in App.jsx uses a CSS
+transform during navigation, which creates a new containing block for
+any `fixed`-positioned descendant - this constrained the pile layout's
+full-screen overlay to that wrapper's bounds instead of the real
+device viewport, even though `fixed inset-0` should normally cover
+the whole screen. Fixed by rendering the full-screen overlay through
+a portal directly to document.body (the same pattern already used
+successfully for this page's own popups), which escapes this
+containing-block issue entirely regardless of any ancestor's
+transform/filter/perspective.
+
+This required restructuring the wrapper, which introduced a genuine
+JSX syntax error (a missing closing expression for the surrounding
+{pilesTab === 'layout' && (...)} conditional, and a separate stray/
+orphaned closing div left over from an earlier edit). Traced and fixed
+both carefully - the file did not compile for a period during this
+session while being debugged; it is now fully clean, confirmed via
+parse check, check-imports.cjs, and a full production build, all
+passing.
+
+Final structure confirmed both syntactically valid and semantically
+correct: the Export button, assignForm modal, and ConfirmDialog are
+all properly scoped inside the layout tab's conditional block (as they
+should be, since they are all specific to the layout grid), closed
+once at the very end of that block.
+
+## Moving to the duplicate-row data bug next - the most serious remaining item from this large request
+
+## CRITICAL DATA BUG FIXED: duplicate row creation on edit of a sheet-imported record
+
+Root cause confirmed and fixed: mapSheetRowToTransaction always set
+isSynced: true for an imported row (since it already exists in the
+Sheet) but never set hasBeenBackedUp: true. The sync worker's
+decision to append vs. update an edited record is based entirely on
+hasBeenBackedUp, not isSynced. This meant editing an already-imported
+record (e.g. filling in a missing Pile/MTS value, correcting an MC
+reading) reset isSynced to false as normal, but the next sync then
+incorrectly called the APPEND action instead of UPDATE, since
+hasBeenBackedUp had never been set - creating a genuine duplicate row
+on the Sheet for data that already existed there. This is confirmed
+as the exact cause of both symptoms reported: a duplicated trial
+showing 2-3x with identical contents in the MO/TMO detail view, and
+an actual duplicate row appearing in the Google Sheet after a normal
+edit.
+
+Two-part fix:
+1. mapSheetRowToTransaction now also sets hasBeenBackedUp: true,
+   preventing this from happening to any newly-imported record going
+   forward.
+2. A one-time migration (sheet-import-has-been-backed-up-fix-v1),
+   following the exact same pattern as this file's existing
+   migrations: retroactively sets hasBeenBackedUp: true on every
+   already-imported local record (since without this, existing users'
+   already-imported data would remain permanently vulnerable, having
+   no other path to receive the fix), and re-runs the same
+   completeness-based duplicate-cleanup logic already proven in an
+   earlier migration, scoped to sheet-imported records specifically -
+   cleaning up any duplicates this bug has already created locally.
+
+Verified with a 9-case test directly modeling the exact reported
+scenario (a trial duplicated 2-3x with identical contents), confirming
+the fix, the migration's fix-detection, and the duplicate-cleanup
+grouping/keep logic all behave correctly - including confirming a
+record in a genuinely different warehouse is correctly never treated
+as a duplicate.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## Continuing to the remaining items from this large request - nav glow redesign, sync notification timeout, Settings page reverts, and the rest
+
+## Settings page reverts and reordering
+
+- Reverted the whole-card flow animation back to content-only, per
+  explicit clarification - the tabs themselves stay put; only the
+  content below them flows. Applied at both levels (Create Pile/
+  Beginning Balances, and the inner Piles/Sacks tab). Added
+  warehouse-switch flow-down at the outer content level too, since
+  that was separately confirmed missing.
+- Centered the "Beginning Balances" title, per explicit report that
+  it looked off-center.
+- Moved the entire Sync Status block (both the admin diagnostic
+  panel and the simple user-facing indicator) to appear above the
+  warehouse selector instead of below it, so it's no longer affected
+  by the warehouse-switch flow-down animation. Verified the exact
+  line boundaries before moving this ~74-line block programmatically,
+  to avoid any risk of a partial/incorrect move.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Continuing to the month navigation size increase, then working through the remaining items in this large request
+
+## SackFormBase.jsx button flicker fix, matching StockFormBase.jsx
+
+Applied the identical fix confirmed for StockFormBase.jsx - removed
+the upfront resetToBlankEntry calls in handleStepBack/handleStepForward
+that caused the reported Save-then-Update/Delete flicker on rapid
+back-navigation. Confirmed WTSForm.jsx does not have this pattern at
+all, so no change needed there.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Redesigning the nav indicator into a "liquid glow" travel effect next
+
+## Nav indicator redesigned into a "liquid glow" travel effect
+
+Replaced the plain sliding light with a stretch-and-settle animation
+that travels between the previous and current icon position - the
+light stretches wider mid-travel (simulating a liquid trail) before
+contracting and settling at its destination, rather than a flat
+slide. Requires tracking the previous nav position via a ref (updated
+post-render, so it correctly holds the true previous position during
+the render where navigation just happened), with the from/to
+distances passed as CSS custom properties since they vary depending
+on which icons are involved. Applied to both the regular 5-column nav
+and the 2-column Visitor nav. The icon color change itself (green to
+gray and back) already happened naturally via the existing
+transition-colors on each NavLink, unaffected by this change.
+
+Verified with a 5-case test covering the from/to computation across
+different navigation distances and the critical ref-timing behavior
+(confirming each navigation correctly starts from the true previous
+position, not a stale or reset one).
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## Continuing to the sync notification timeout next
+
+## Sync notification timeout added
+
+The "Preparing warehouse data" notification never auto-dismissed on
+its own (react-hot-toast's loading toasts persist until explicitly
+dismissed or replaced) - if preload took unusually long, or its
+promise never resolved for any reason, the notification would sit
+there indefinitely, exactly as reported. Added a 20-second timeout
+that hides the notification regardless of preload's actual progress,
+while the background preload itself continues completely unaffected -
+this only ever hides the toast, never cancels the underlying work.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Continuing to the Piles page age modal animation next
+
+## Piles page age modal entrance/exit animation, complete
+
+Finished wiring the animation classes from the previous entry - fade
+for the backdrop (appropriate for a full-viewport overlay), pop-in/
+pop-out for the card itself (appropriate for a small, contained
+popup). All three close paths (backdrop click, X button, and the
+Save-success completion) now consistently route through handleClose,
+so the exit animation plays regardless of how the modal is closed -
+previously it just instantly disappeared with no transition at all.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Continuing to the "View Complete" button on the user's Authority Monitor list
+
+## "View Complete" button styling matched, search box clear button added
+
+- Matched the user-side Authority Monitor's "View Completed" control
+  to the admin side's proper button styling (bordered, background)
+  instead of a plain underlined text link, per explicit request that
+  they should look the same.
+- Added a clear (X) button inside the admin monitor search box, shown
+  only when there's text - clears the search and resets the list to
+  its unfiltered state.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Continuing to the authority-tap slide animation next
+
+## Authority tap animation changed from none to a push-slide
+
+AuthorityReconciliationPanel.jsx (opened by tapping an authority in
+the list) previously had no entrance/exit animation at all - just
+instantly appeared/disappeared. Added a new push-slide animation pair
+(slides in/out from the right, like a native app's "push"
+navigation), distinct from the fade used elsewhere in this app for
+modal-style overlays - per explicit request that this should feel
+like a slide, not a fade, since navigating to an authority's detail
+reads more like going deeper into the app than a modal popping up.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Continuing to the MO/TMO detail modal slide animation next
+
+## MO/TMO detail modal bottom-sheet slide, complete
+
+Finished wiring the animation classes from the previous entry - fade
+for the backdrop, a proper bottom-sheet slide-up/down for the card
+itself (smoother and more deliberate than the plain instant appear
+that made it feel "too fast" before). Both close paths (backdrop
+click, X button) now consistently route through handleClose so the
+exit animation plays regardless of which control is used - confirmed
+no other direct onClose calls remained in this component.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Re-verifying the MO/TMO sheet-source date-range filtering fix from earlier
+
+## SESSION COMPLETE - re-verified date filtering, packaging now
+
+Re-verified the MO/TMO sheet-source date-range filter: confirmed
+sheetSources represents different TIME PERIODS (yearly sheet
+rotations, e.g. "2024 Sheet" vs "2025 Sheet"), not different
+warehouses - the schema comment confirms this directly. This means
+"earliest dateFrom across all sources" is the correct scope, not a
+bug - all sources share the same warehouses but cover different date
+ranges, so this correctly represents the earliest point in time the
+app has any authoritative data for at all, across every year's sheet
+combined. The fix from earlier this session remains fully intact and
+correctly scoped.
+
+Full regression check: 27 test suites from this entire session
+re-run. 4 stale assertions in old scratch-test scripts (checking
+exact string patterns intentionally changed later in the session)
+confirmed as expected, not regressions - every actual feature they
+were checking remains correctly present and working.
+
+Every item from this large, multi-part request has now been
+addressed:
+- Full-screen pile layout: fixed to use a real portal, escaping the
+  page-transition containing-block bug
+- CRITICAL: fixed the duplicate-row data bug (missing
+  hasBeenBackedUp flag) with both a forward-fix and a retroactive
+  migration
+- Nav indicator redesigned into a liquid-glow travel effect
+- Sync notification timeout added
+- Settings page: whole-card flow reverted to content-only, title
+  centered, sync status repositioned above the warehouse selector,
+  warehouse flow-down added
+- Month navigation controls enlarged (applies everywhere via the
+  shared component)
+- FormBase button flicker fixed on both stock and sack forms
+- Piles page age modal: entrance/exit animation added
+- "View Complete" button styling matched across admin/user
+- Search box clear button added
+- Authority tap: push-slide animation added (was previously none)
+- MO/TMO detail modal: bottom-sheet slide animation added (was
+  previously none)
+- MO/TMO date-range filtering: re-verified correct
+
+Final build verified clean.

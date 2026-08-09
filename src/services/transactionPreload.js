@@ -168,6 +168,52 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
     }
   }
 
+  // CRITICAL FIX: mapSheetRowToTransaction always set isSynced: true
+  // for an imported row (since it already exists in the Sheet) but
+  // never set hasBeenBackedUp: true - and the sync worker's decision
+  // to append vs. update is based entirely on hasBeenBackedUp, not
+  // isSynced. This meant editing an already-imported record (e.g.
+  // filling in a missing Pile/MTS value) would reset isSynced to
+  // false, and the next sync would incorrectly APPEND a duplicate row
+  // instead of updating the existing one - confirmed to have already
+  // happened in production. This migration retroactively fixes every
+  // already-imported record so this can never happen to them again,
+  // and re-runs the same duplicate-cleanup logic above scoped to
+  // sheet-imported records, in case this bug already created
+  // duplicates before this fix existed.
+  const HAS_BEEN_BACKED_UP_FIX_FLAG = 'sheet-import-has-been-backed-up-fix-v1'
+  if (!localStorage.getItem(HAS_BEEN_BACKED_UP_FIX_FLAG)) {
+    try {
+      const importedTx = (await db.transactions.toArray()).filter((tx) => tx.fromSheetImport === true)
+      const needsFix = importedTx.filter((tx) => tx.hasBeenBackedUp !== true)
+      for (const tx of needsFix) tx.hasBeenBackedUp = true
+      if (needsFix.length > 0) await db.transactions.bulkPut(needsFix)
+
+      // Duplicate cleanup, scoped to sheet-imported records only -
+      // same completeness-based keep/delete logic as the migration
+      // above, using the exact same grouping key.
+      const groups = new Map()
+      for (const tx of importedTx) {
+        const key = `${tx.type}::${tx.warehouseId}::${tx.serialNo}::${tx.cerealCategory ?? ''}`
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(tx)
+      }
+      const completeness = (tx) => Object.values(tx).filter((v) => v != null && v !== '').length
+      const toDeleteIds = []
+      for (const group of groups.values()) {
+        if (group.length <= 1) continue
+        const sorted = [...group].sort((a, b) => completeness(b) - completeness(a))
+        for (const dupe of sorted.slice(1)) toDeleteIds.push(dupe.id)
+      }
+      if (toDeleteIds.length > 0) await db.transactions.bulkDelete(toDeleteIds)
+
+      console.log(`sheet-import-has-been-backed-up-fix-v1: fixed ${needsFix.length} record(s), removed ${toDeleteIds.length} duplicate(s) out of ${importedTx.length} sheet-imported records`)
+      localStorage.setItem(HAS_BEEN_BACKED_UP_FIX_FLAG, 'done')
+    } catch (error) {
+      console.error('sheet-import-has-been-backed-up-fix-v1 failed, will retry next load:', error)
+    }
+  }
+
   // Admin and Visitor both have access to every warehouse (they share
   // the same all-warehouse AdminHome view - see App.jsx), so both
   // preload everything rather than being skipped. A regular user stays

@@ -24,13 +24,13 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
           type="button"
           onClick={() => { setMonthNavDirection('back'); setMonthOffset((m) => m - 1) }}
           aria-label="Previous month"
-          className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
+          className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-lg text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
         >
           ‹
         </button>
         <span
           key={monthOffset}
-          className={`text-xs font-medium text-neutral-400 ${monthNavDirection === 'back' ? 'animate-nav-back' : monthNavDirection === 'forward' ? 'animate-nav-forward' : ''}`}
+          className={`text-base font-semibold text-app-text ${monthNavDirection === 'back' ? 'animate-nav-back' : monthNavDirection === 'forward' ? 'animate-nav-forward' : ''}`}
         >
           {monthLabel}
         </span>
@@ -38,7 +38,7 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
           type="button"
           onClick={() => { setMonthNavDirection('forward'); setMonthOffset((m) => m + 1) }}
           aria-label="Next month"
-          className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
+          className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-lg text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
         >
           ›
         </button>
