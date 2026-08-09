@@ -10999,3 +10999,52 @@ pinch-zoom feels smooth, whether panning has reasonable bounds (none
 implemented currently - the grid can be panned arbitrarily far
 off-screen), and whether tapping a pile still opens its detail view
 correctly while in full-screen mode.
+
+## Fixed three real bugs in the pan/zoom full-screen pile layout
+
+1. **Pan axis swap (confirmed root cause)**: raw touch coordinates
+   (clientX/clientY) are always reported in real screen space and are
+   NOT auto-adjusted for CSS transforms applied to the element
+   receiving them - unlike hit-testing (getBoundingClientRect), which
+   does account for transforms. Since the content is visually rotated
+   90 degrees in forced-landscape mode, applying raw screen-space
+   deltas directly to the rotated content's local pan offset produced
+   exactly the reported symptom: horizontal swipes moving the content
+   vertically and vice versa. Fixed by remapping screen-space deltas
+   onto the content's local axes before applying them (local X comes
+   from screen Y, local Y comes from negative screen X for this
+   specific 90-degree rotation).
+
+2. **Long-press hover popup interfering with panning**: found the
+   exact mechanism - a 500ms long-press timer starts on the same
+   touchstart event a pan gesture also begins from, and the two
+   conflict directly. Disabled specifically in full-screen mode, where
+   pan/zoom gestures are active; left untouched for normal view and
+   desktop mouse hover, neither of which were reported as problems.
+
+3. **Stale measurement on re-entry ("lots of space on the right"
+   again)**: deferred the initial measurement by one animation frame
+   specifically when entering full-screen, since a fresh, newly-
+   rotated DOM subtree is mounted via the portal on each entry and the
+   measurement was likely being taken before the browser fully settled
+   that layout (including the CSS rotation itself, and the isPortrait
+   state update from a separate effect, which needs its own render
+   pass to propagate before the measurement effect sees the current
+   value). This is a defensive, best-effort fix given the difficulty
+   of definitively diagnosing DOM/effect timing without live testing.
+
+Verified with a 6-case test directly modeling the exact reported pan
+symptom (confirming the fix produces axis-correct output) and the
+long-press disable logic.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+REMINDER: this feature remains verified through code-level checks only,
+not live device testing - continued hands-on verification is important,
+especially for fix #3 (the timing-based fix), which is inherently the
+hardest of the three to fully confirm without actually reproducing the
+original bug on a device.
