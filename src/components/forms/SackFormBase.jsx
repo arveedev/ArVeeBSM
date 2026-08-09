@@ -113,6 +113,7 @@ const SackFormBase = forwardRef(function SackFormBase(
   }, [])
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
+  const [warehouseChangeFlash, setWarehouseChangeFlash] = useState(false)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
   const [loadedTransaction, setLoadedTransaction] = useState(null)
@@ -917,6 +918,8 @@ const SackFormBase = forwardRef(function SackFormBase(
               onChange={(e) => {
                 setCurrentWarehouseId(e.target.value)
                 setLoadedTransaction(null)
+                setWarehouseChangeFlash(true)
+                setTimeout(() => setWarehouseChangeFlash(false), 750)
               }}
               className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon"
             >
@@ -945,10 +948,6 @@ const SackFormBase = forwardRef(function SackFormBase(
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
         <div className="space-y-3">
-          <AnimatedBanner show={isEditMode} className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
-            Reviewing existing {type} {loadedTransaction?.serialNo} — Update or Delete below.
-          </AnimatedBanner>
-
           <AnimatedBanner show={isAdmin && Boolean(loadedTransaction?.needsCompletion)} className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
             This record was pulled from historical Sheet data. The sack breakdown by type/condition was not tracked there
             {loadedTransaction?.totalPiecesRaw != null && <> — the Sheet's recorded total was <strong>{loadedTransaction.totalPiecesRaw} pieces</strong></>}, and needs to be entered below before further changes can be saved.
@@ -1004,13 +1003,13 @@ const SackFormBase = forwardRef(function SackFormBase(
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-neon border-t-transparent" />
                   Looking up serial…
                 </span>
-              ) : (
-                'Type a serial directly to jump to it — existing data loads automatically.'
-              )}
+              ) : isEditMode ? (
+                <span className="text-brand-amber">Reviewing {type} {loadedTransaction?.serialNo}</span>
+              ) : null}
             </p>
           </div>
 
-          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
+          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker value={date} onChange={setDate} />

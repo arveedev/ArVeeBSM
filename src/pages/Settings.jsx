@@ -688,7 +688,7 @@ function Settings() {
       {currentWarehouseId && <ClassifierSection warehouseId={currentWarehouseId} />}
 
       {currentWarehouseId && (
-        <div className="mt-6">
+        <div className="mt-6 animate-flow-down" key={pileSection}>
           <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
             <div
               className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -712,7 +712,7 @@ function Settings() {
               Beginning Balances
             </button>
           </div>
-          <div className="mt-3 animate-flow-down" key={pileSection}>
+          <div className="mt-3">
             {pileSection === 'create'
               ? <PileBalanceSection warehouseId={currentWarehouseId} />
               : <BeginningBalancesPanel warehouseId={currentWarehouseId} />}

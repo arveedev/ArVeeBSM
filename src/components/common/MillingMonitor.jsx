@@ -248,7 +248,22 @@ function MillingMonitor() {
     })
   )
 
+  const sheetSources = useLiveQuery(() => db.sheetSources.toArray(), []) ?? []
+  // Earliest dateFrom across every configured source - an order is
+  // only ever excluded if it HAS recorded activity and that activity
+  // is entirely before this cutoff. An order with no transactions at
+  // all yet (brand new) is never excluded on this basis, since it is
+  // current by definition, not historical data outside the configured
+  // range.
+  const earliestSourceDateFrom = sheetSources.length > 0
+    ? sheetSources.map((s) => s.dateFrom).filter(Boolean).sort()[0]
+    : null
+
   const filtered = orders.filter((o) => {
+    if (earliestSourceDateFrom) {
+      const allDates = [...(o.issueTx ?? []), ...(o.receiptTx ?? [])].map((t) => t.date).filter(Boolean)
+      if (allDates.length > 0 && allDates.every((d) => d < earliestSourceDateFrom)) return false
+    }
     // Sheet-marked DONE is unconditionally completed, regardless of
     // what the kg/piece-based fulfilled calculation separately says -
     // previously only fulfilled was checked here, so an order marked
@@ -264,7 +279,7 @@ function MillingMonitor() {
   const availableRegionalAuthNumbers = [...new Set([...regionalAuthByOrder.values()].filter(Boolean))].sort()
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+    <div className={`rounded-2xl border p-4 transition-all ${showCompleted ? 'border-brand-neon shadow-[0_0_16px_-4px_rgba(0,255,163,0.4)] bg-neutral-900' : 'border-neutral-800 bg-neutral-900'}`}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-app-text">Milling Operations</h2>
         <div className="flex shrink-0 items-center gap-2">
@@ -310,7 +325,7 @@ function MillingMonitor() {
           onChange={(e) => setRegionalAuthFilter(e.target.value)}
           className="mt-3 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-app-text"
         >
-          <option value="">Authority Numbers</option>
+          <option value="">All Authority Numbers</option>
           {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       )}

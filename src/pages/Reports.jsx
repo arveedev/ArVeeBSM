@@ -327,8 +327,10 @@ function Reports() {
             <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} onChange={setSummaryTo} />
           </div>
         </div>
-        <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} />
-        <DailySummaryCard dateFrom={summaryFrom} dateTo={summaryTo} />
+        <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} currentFrom={summaryFrom} currentTo={summaryTo} />
+        <div key={currentWarehouseId} className="animate-pop-in">
+          <DailySummaryCard dateFrom={summaryFrom} dateTo={summaryTo} />
+        </div>
       </div>
 
       {/* ── Stock Statement ─────────────────────────────────────────────── */}
@@ -356,7 +358,7 @@ function Reports() {
             <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} onChange={setStmtTo} />
           </div>
         </div>
-        <PeriodPresetPicker onSelectRange={(from, to) => { setStmtFrom(from); setStmtTo(to) }} />
+        <PeriodPresetPicker onSelectRange={(from, to) => { setStmtFrom(from); setStmtTo(to) }} currentFrom={stmtFrom} currentTo={stmtTo} />
         {needsDates && (
           <p className="mt-1 text-xs text-brand-amber">
             Both dates required to view transactions and export PDF.
@@ -396,7 +398,7 @@ function Reports() {
         </div>
 
         {/* Transaction list */}
-        <div className="mt-3 animate-flow-down" key={mainTab === 'stocks' ? stockSubTab : sackSubTab}>
+        <div className="mt-3 animate-flow-down" key={`${mainTab === 'stocks' ? stockSubTab : sackSubTab}-${stmtFrom}-${stmtTo}`}>
           {!stmtFrom || !stmtTo ? null : currentList.length === 0 ? (
             <p className="py-6 text-center text-xs text-neutral-600">
               No {mainTab === 'stocks' ? stockSubTab : sackSubTab} in this period.

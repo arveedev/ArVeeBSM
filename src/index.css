@@ -12,6 +12,21 @@ body {
   padding: 0;
 }
 
+/* Smooths the dark/light theme toggle across the whole app - the
+   light theme override touches dozens of individual utility classes
+   scattered throughout every page, not just body, so a universal
+   selector is the only practical way to transition all of them at
+   once. Deliberately limited to background-color/border-color/color
+   only - never transform or opacity, which are exclusively driven by
+   the various @keyframes animations elsewhere in this file and would
+   conflict if included here (though in practice a CSS animation on a
+   property always takes precedence over a transition on that same
+   property regardless, so this is a safety/clarity choice more than
+   a strict necessity). */
+* {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
 /* Fade-in used when the authenticated app content first mounts (right
    after login) - syncs with Login.jsx's own fade-out timing (500ms)
    so the transition reads as one smooth crossfade rather than the
@@ -208,6 +223,77 @@ body {
    expanding, a Reports tab's content appearing). */
 .animate-flow-down {
   animation: stagger-field-in 0.35s ease-out both;
+}
+
+/* Reverse of the flow-down entrance above - for sections that need a
+   matching exit animation instead of instantly disappearing the
+   moment they're collapsed/hidden. Paired with the useDelayedUnmount
+   hook (src/hooks/useDelayedUnmount.js), which keeps the element
+   mounted just long enough for this to finish playing. */
+@keyframes flow-up-exit {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-12px); }
+}
+.animate-flow-up-exit {
+  animation: flow-up-exit 0.25s ease-in both;
+}
+
+/* "Pop out" scale-in, for summary cards and similar headline elements
+   - distinct from the flow-down reveal above, since a scale+fade
+   entrance reads as punchier/more attention-grabbing than a vertical
+   slide, appropriate for a standout number rather than a list item. */
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.animate-pop-in {
+  animation: pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes pop-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.92); }
+}
+.animate-pop-out {
+  animation: pop-out 0.18s ease-in both;
+}
+
+/* Split-flap character flip, like an old airport departure board -
+   each character that actually changed rotates out on its own
+   vertical axis while the new one rotates in to replace it. Kept
+   deliberately fast (a single quick flip, not cycling through
+   intermediate values) so users are never left waiting on this to
+   finish before seeing the correct value. Text only, no background -
+   the parent element supplies its own styling; this only affects the
+   individual character spans. */
+@keyframes split-flap-char {
+  0% { transform: rotateX(0deg); opacity: 1; }
+  49% { transform: rotateX(-90deg); opacity: 0; }
+  50% { transform: rotateX(90deg); opacity: 0; }
+  100% { transform: rotateX(0deg); opacity: 1; }
+}
+.animate-split-flap-char {
+  display: inline-block;
+  animation: split-flap-char 0.28s ease-in-out both;
+}
+
+/* Plain fade, for full-screen overlays where a scale-based pop would
+   feel wrong - the entire viewport shrinking from its center reads as
+   jarring for something covering the whole screen, unlike a small,
+   contained popup. */
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+.animate-fade-out {
+  animation: fade-out 0.18s ease-in both;
 }
 
 /* Slide-down-fade-in / slide-up-fade-out for banners (e.g. "reviewing

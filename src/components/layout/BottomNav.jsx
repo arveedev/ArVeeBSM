@@ -55,9 +55,11 @@ function BottomNav({ onFabClick }) {
         <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
         <div className="relative mx-auto grid h-16 max-w-md grid-cols-2 items-center">
           <div
-            className="pointer-events-none absolute inset-y-2 z-0 w-1/2 rounded-2xl bg-brand-neon/15 shadow-[0_0_20px_rgba(0,255,163,0.35)] transition-transform duration-300 ease-out"
+            className="pointer-events-none absolute inset-y-0 z-0 flex w-1/2 items-center justify-center transition-transform duration-300 ease-out"
             style={{ transform: `translateX(${visitorColumn * 100}%)` }}
-          />
+          >
+            <div className="h-2 w-8 rounded-full bg-brand-neon shadow-[0_0_8px_rgba(0,255,163,0.6)]" />
+          </div>
           <NavItem to="/" label="Home" Icon={Home} />
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />
         </div>
@@ -71,12 +73,14 @@ function BottomNav({ onFabClick }) {
       <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
       <div className="relative mx-auto grid h-16 max-w-md grid-cols-5 items-center">
         <div
-          className="pointer-events-none absolute inset-y-2 z-0 w-1/5 rounded-2xl bg-brand-neon/15 shadow-[0_0_20px_rgba(0,255,163,0.35)] transition-transform duration-300 ease-out"
+          className="pointer-events-none absolute inset-y-0 z-0 flex w-1/5 items-center justify-center transition-transform duration-300 ease-out"
           style={{
             transform: `translateX(${(regularColumn ?? 0) * 100}%)`,
             opacity: regularColumn == null ? 0 : 1,
           }}
-        />
+        >
+          <div className="h-2 w-8 rounded-full bg-brand-neon shadow-[0_0_8px_rgba(0,255,163,0.6)]" />
+        </div>
         <NavItem to="/" label="Home" Icon={Home} />
         {isAdmin ? (
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />

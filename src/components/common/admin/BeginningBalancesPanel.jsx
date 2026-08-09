@@ -343,6 +343,7 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
         </select>
       )}
 
+      <div className="animate-flow-down" key={tab}>
       <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
         <div
           className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -356,6 +357,7 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
         {tab === 'piles'
           ? <PilesBeginningBalances warehouseId={effectiveWarehouseId} />
           : <SacksBeginningBalances warehouseId={effectiveWarehouseId} />}
+      </div>
       </div>
     </section>
   )

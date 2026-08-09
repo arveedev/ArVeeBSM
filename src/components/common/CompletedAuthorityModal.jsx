@@ -19,6 +19,15 @@ const MONTHS = [
 ]
 
 function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, warehouseMap, onClose }) {
+  // Delays the actual onClose call until the exit animation has time
+  // to play, per the standing rule that every entrance needs a
+  // matching exit rather than an instant, jarring unmount.
+  const [isClosing, setIsClosing] = useState(false)
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(onClose, 180)
+  }
+
   const { weightUnit } = useSettings() ?? {}
   const currentYear = new Date().getFullYear()
   const [month, setMonth] = useState('All')
@@ -88,7 +97,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
     .sort((x, y) => (y.completedDate ?? '').localeCompare(x.completedDate ?? ''))
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -99,7 +108,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
           >
@@ -131,7 +140,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
             onChange={(e) => setRegionalAuthFilter(e.target.value)}
             className="mt-2 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text"
           >
-            <option value="">Authority Numbers</option>
+            <option value="">All Authority Numbers</option>
             {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         )}

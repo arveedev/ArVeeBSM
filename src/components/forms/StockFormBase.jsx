@@ -86,6 +86,7 @@ import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
+import SplitFlapText from '../common/SplitFlapText.jsx'
 import {
   inputClass,
   labelClass,
@@ -211,6 +212,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
   const [tabChangeFlash, setTabChangeFlash] = useState(false)
+  const [warehouseChangeFlash, setWarehouseChangeFlash] = useState(false)
   const { user } = useAuth()
   const isAdmin = user?.role === 'Admin'
   const [floorSerialNumber, setFloorSerialNumber] = useState(null) // lowest known real serial number (local + Sheet combined) for this (type, warehouse)
@@ -1614,6 +1616,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 setVarietyId('')
                 setSackSelection('')
                 setLoadedTransaction(null)
+                setWarehouseChangeFlash(true)
+                setTimeout(() => setWarehouseChangeFlash(false), 750)
               }}
               className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon"
             >
@@ -1679,10 +1683,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
         <div className="space-y-3">
-          <AnimatedBanner show={isEditMode} className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
-            Reviewing existing {type} {loadedTransaction?.serialNo} — Update or Delete below.
-          </AnimatedBanner>
-
           <AnimatedBanner show={isAdmin && Boolean(loadedTransaction?.needsCompletion)} className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
             This record was pulled from historical Sheet data. Pile and MTS Sack were not tracked there and need to be filled in below before further changes can be saved.
           </AnimatedBanner>
@@ -1715,10 +1715,15 @@ function StockFormBase({ type, title, onClose, prefill }) {
                       value={serialNo}
                       onChange={(e) => handleSerialChange(e.target.value)}
                       onBlur={handleSerialBlur}
-                      className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash ? 'text-transparent' : 'text-app-text'}`}
+                      className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash || tabChangeFlash ? 'text-transparent' : 'text-app-text'}`}
                       placeholder="0000000"
                     />
                     <SerialCrossfadeOverlay value={serialNo} navFlash={navFlash} />
+                    {tabChangeFlash && !navFlash && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <SplitFlapText text={serialNo} className="font-mono text-app-text" />
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -1737,13 +1742,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-neon border-t-transparent" />
                   Looking up serial…
                 </span>
-              ) : (
-                'Type a serial directly to jump to it — existing data loads automatically.'
-              )}
+              ) : isEditMode ? (
+                <span className="text-brand-amber">Reviewing {type} {loadedTransaction?.serialNo}</span>
+              ) : null}
             </p>
           </div>
 
-          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash ? 'stagger-fields' : ''}`}>
+          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker value={date} onChange={setDate} />
