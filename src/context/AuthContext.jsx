@@ -23,6 +23,12 @@ const AuthContext = createContext(null)
 // since preload is a performance optimization, not a requirement.
 const runPreloadWithFeedback = async (user) => {
   const toastId = 'transaction-preload'
+  // Never lets the notification linger indefinitely, even if preload
+  // itself is taking unusually long or its promise never resolves for
+  // any reason - the background work continues completely unaffected
+  // either way, since this only ever hides the toast, never cancels
+  // anything.
+  const timeoutId = setTimeout(() => toast.dismiss(toastId), 20000)
   try {
     await preloadTransactionsForUser(user, {
       onProgress: ({ type, warehouseCount }) => {
@@ -33,6 +39,8 @@ const runPreloadWithFeedback = async (user) => {
   } catch (err) {
     console.error('Transaction preload failed:', err)
     toast.dismiss(toastId)
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 

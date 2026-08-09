@@ -3,6 +3,7 @@
 // Used by admins to reconcile a specific AI/SIA against the documents
 // issued against it.
 
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
@@ -15,6 +16,12 @@ const bySerial = (a, b) => {
 }
 
 function AuthorityReconciliationPanel({ authority, onClose }) {
+  const [isClosing, setIsClosing] = useState(false)
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(onClose, 250)
+  }
+
   const { weightUnit } = useSettings() ?? {}
   const isAi = authority.type === 'AI'
   const refNumber = isAi ? authority.aiNumber : authority.siaNumber
@@ -48,7 +55,7 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isClosing ? 'animate-push-slide-out' : 'animate-push-slide-in'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -61,7 +68,7 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
           >

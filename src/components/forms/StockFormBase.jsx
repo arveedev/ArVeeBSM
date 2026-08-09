@@ -1152,7 +1152,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
       return
     }
     setSerialNo(prevSerial)
-    resetToBlankEntry(prevSerial) // clear immediately - never leave stale data on screen while the lookup is in flight
     setNavFlash('back')
     setTimeout(() => setNavFlash(null), 750)
     await checkAndLoadSerial(prevSerial)
@@ -1168,7 +1167,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const handleStepForward = async () => {
     const nextSerial = stepSerial(serialNo.trim(), 1)
     setSerialNo(nextSerial)
-    resetToBlankEntry(nextSerial) // clear immediately - same reasoning as handleStepBack above
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)

@@ -600,7 +600,6 @@ const SackFormBase = forwardRef(function SackFormBase(
       return
     }
     setSerialNo(prevSerial)
-    resetToBlankEntry(prevSerial) // clear immediately - same reasoning as handleSerialChange above
     setNavFlash('back')
     setTimeout(() => setNavFlash(null), 750)
     await checkAndLoadSerial(prevSerial)
@@ -616,7 +615,6 @@ const SackFormBase = forwardRef(function SackFormBase(
   const handleStepForward = async () => {
     const nextSerial = stepSerial(serialNo.trim(), 1)
     setSerialNo(nextSerial)
-    resetToBlankEntry(nextSerial) // clear immediately - same reasoning as handleSerialChange above
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)

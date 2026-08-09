@@ -1063,6 +1063,10 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
     status: isCancelled ? 'Cancelled' : 'Active',
     customerName: isCancelled ? null : (row['Customer Name'] ?? null),
     isSynced: true, // it already exists in the Sheet - no need to push it back
+    hasBeenBackedUp: true, // critical: this row already exists in the Sheet -
+    // without this, editing it later would incorrectly append a duplicate
+    // row instead of updating the existing one, since the sync worker's
+    // append-vs-update decision is based on this flag alone, not isSynced
     fromSheetImport: true,
     needsCompletion: !isCancelled, // Cancelled records have nothing left to complete
     transactionTypeId: matchedTransactionTypeId,

@@ -26,6 +26,12 @@ import { inputClass, labelClass, primaryButtonClass } from '../forms/shared.js'
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 
 function EditPileAgeDialog({ pile, currentAge, onClose }) {
+  const [isClosing, setIsClosing] = useState(false)
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(onClose, 180)
+  }
+
   const initial = bestAgeUnit(currentAge)
   const [ageValue, setAgeValue] = useState(liveFormatNumber(String(initial.unit === 'Months + Days' ? currentAge : initial.value)))
   const [ageUnit, setAgeUnit] = useState(initial.unit)
@@ -83,23 +89,23 @@ function EditPileAgeDialog({ pile, currentAge, onClose }) {
     })
     toast.success(`${pile.pileName} age set to ${fmtAge(days)}`)
     setIsSaving(false)
-    onClose()
+    handleClose()
   }
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
+      className={`fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
+      onClick={handleClose}
     >
       <div
-        className="w-full max-w-xs rounded-2xl border border-neutral-800 bg-neutral-900 p-4"
+        className={`w-full max-w-xs rounded-2xl border border-neutral-800 bg-neutral-900 p-4 ${isClosing ? 'animate-pop-out' : 'animate-pop-in'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-app-text">Edit Age</h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isSaving}
             aria-label="Close"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-950 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90 disabled:opacity-50"

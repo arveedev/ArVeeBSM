@@ -21,6 +21,12 @@ const fmtDate = (s) => {
 }
 
 function MillingOrderDetail({ order, onClose }) {
+  const [isClosing, setIsClosing] = useState(false)
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(onClose, 300)
+  }
+
   const { weightUnit } = useSettings() ?? {}
   const allTx = [...order.issueTx, ...order.receiptTx].sort((a, b) => {
     const numA = parseInt(String(a.serialNo).replace(/\D/g, ''), 10)
@@ -77,9 +83,9 @@ function MillingOrderDetail({ order, onClose }) {
     }, 0)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={onClose}>
+    <div className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`} onClick={handleClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl border border-neutral-800 bg-neutral-900"
+        className={`flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl border border-neutral-800 bg-neutral-900 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Fixed section - never scrolls, only Transaction History below does */}
@@ -89,7 +95,7 @@ function MillingOrderDetail({ order, onClose }) {
               <p className="text-base font-bold text-app-text">{order.number}</p>
               <p className="text-sm text-neutral-400">{order.ricemillName}</p>
             </div>
-            <button type="button" onClick={onClose} className="rounded-full p-2 text-brand-crimson transition-transform active:scale-90">
+            <button type="button" onClick={handleClose} className="rounded-full p-2 text-brand-crimson transition-transform active:scale-90">
               <X size={26} strokeWidth={2.5} />
             </button>
           </div>

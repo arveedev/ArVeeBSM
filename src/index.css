@@ -277,6 +277,21 @@ body {
   animation: split-flap-char 0.28s ease-in-out both;
 }
 
+/* "Liquid glow" nav travel - the light stretches between the previous
+   and current position (via --nav-from-x/--nav-to-x custom
+   properties, set inline since the distance varies per navigation)
+   rather than just sliding, simulating a liquid trail flowing from
+   one icon to the next before settling and glowing at its
+   destination. */
+@keyframes nav-liquid-travel {
+  0% { transform: translateX(var(--nav-from-x)) scaleX(1); opacity: 0.5; }
+  45% { transform: translateX(calc((var(--nav-from-x) + var(--nav-to-x)) / 2)) scaleX(2.2); opacity: 0.9; }
+  100% { transform: translateX(var(--nav-to-x)) scaleX(1); opacity: 1; }
+}
+.animate-nav-liquid-travel {
+  animation: nav-liquid-travel 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
 /* Plain fade, for full-screen overlays where a scale-based pop would
    feel wrong - the entire viewport shrinking from its center reads as
    jarring for something covering the whole screen, unlike a small,
@@ -294,6 +309,44 @@ body {
 }
 .animate-fade-out {
   animation: fade-out 0.18s ease-in both;
+}
+
+/* Full-screen slide, like a native app's "push" navigation - for
+   detail panels that should feel like navigating deeper into the app
+   rather than a modal popping up (which is what the fade above is
+   for). Entrance slides in from the right; exit slides back out the
+   same way, mirroring how it arrived. */
+@keyframes push-slide-in {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(0); }
+}
+@keyframes push-slide-out {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+.animate-push-slide-in {
+  animation: push-slide-in 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.animate-push-slide-out {
+  animation: push-slide-out 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* Bottom-sheet slide - smoother and more deliberate than a plain
+   instant appear, which is what made the MO/TMO detail modal feel
+   "too fast" per explicit request. */
+@keyframes sheet-slide-up {
+  0% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+@keyframes sheet-slide-down {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+.animate-sheet-slide-up {
+  animation: sheet-slide-up 0.35s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.animate-sheet-slide-down {
+  animation: sheet-slide-down 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
 /* Slide-down-fade-in / slide-up-fade-out for banners (e.g. "reviewing

@@ -90,6 +90,24 @@ const effectiveRowSpan = (box, fieldCount) => {
   return Math.max(box.rowSpan, neededRows)
 }
 
+// Defined once at module level (not inside Piles' function body) so
+// it is never treated as a "new" component type on every render -
+// that would force React to remount its children constantly, losing
+// drawing/moving state. Portals to document.body when active,
+// guaranteeing the full-screen overlay covers the actual device
+// viewport regardless of any ancestor's transform/filter/perspective
+// (including transient ones from page-transition animations, which
+// would otherwise create a containing block that constrains a plain
+// `fixed` element to that ancestor's own bounds instead of the real
+// screen).
+function FullScreenOverlay({ isFullScreen, children }) {
+  if (!isFullScreen) return children
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 p-3">{children}</div>,
+    document.body
+  )
+}
+
 function Piles() {
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
@@ -599,7 +617,7 @@ function Piles() {
       {/* overflow-hidden so nothing ever renders outside this bordered
           display area - including the hover-detail popup below, which is
           explicitly clamped to these same bounds. */}
-      <div className={isFullScreen ? 'fixed inset-0 z-50 flex flex-col bg-neutral-950 p-3' : ''}>
+      <FullScreenOverlay isFullScreen={isFullScreen}>
         {isFullScreen && (
           <button
             type="button"
@@ -758,6 +776,7 @@ function Piles() {
           </div>
         </div>
         </div>
+        </FullScreenOverlay>
 
         {/* Hover/long-press detail popup - a sibling of the scaled grid
             (not a descendant), so it always renders at a real, readable
@@ -962,7 +981,6 @@ function Piles() {
             document.body
           )
         })()}
-      </div>
 
       <p className="mt-1 text-xs text-neutral-500">
         {isTouchDevice ? 'Tap a pile to see its details, move, or delete it.' : 'Hover a pile to preview it, or click for details, move, delete, or edit.'}
@@ -1022,8 +1040,6 @@ function Piles() {
         className={`mt-2 w-full ${primaryButtonClass}`}>
         {isExporting ? 'Exporting…' : 'Export Pile Layout PDF'}
       </button>
-      </div>
-      )}
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}
@@ -1032,6 +1048,8 @@ function Piles() {
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(null)}
       />
+      </div>
+      )}
     </div>
   )
 }
