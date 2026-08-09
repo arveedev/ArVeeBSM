@@ -48,17 +48,28 @@ function BottomNav({ onFabClick }) {
     transition: 'transform 350ms ease-out',
   }
 
-  // Tracks the previous nav column so the liquid-travel animation
-  // knows where to start from - computed once here (before any
-  // conditional return) per hooks rules, shared by both the regular
-  // and Visitor nav branches below.
-  const columnCount = isVisitor ? 2 : 5
+  // Tracks the previous nav column so the liquid-glow animation knows
+  // where to start from - computed once here (before any conditional
+  // return) per hooks rules, shared by both the regular and Visitor
+  // nav branches below.
   const currentColumnForTracking = (isVisitor ? VISITOR_NAV_COLUMN : REGULAR_NAV_COLUMN)[pathname] ?? 0
   const previousColumnRef = useRef(currentColumnForTracking)
-  useEffect(() => {
-    previousColumnRef.current = currentColumnForTracking
-  }, [currentColumnForTracking])
   const fromColumn = previousColumnRef.current
+
+  // The glow only exists during this brief window right after a
+  // navigation - at rest, nothing is rendered at all (no persistent
+  // bar/pill/dot), per explicit request. Only the icon's own color
+  // (handled separately by NavLink) indicates the active tab at rest.
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  useEffect(() => {
+    if (previousColumnRef.current === currentColumnForTracking) return // same position - no travel to show
+    setIsTransitioning(true)
+    const timer = setTimeout(() => {
+      setIsTransitioning(false)
+      previousColumnRef.current = currentColumnForTracking
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [currentColumnForTracking])
 
   if (isVisitor) {
     const visitorColumn = VISITOR_NAV_COLUMN[pathname] ?? 0
@@ -66,17 +77,19 @@ function BottomNav({ onFabClick }) {
       <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
         <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
         <div className="relative mx-auto grid h-16 max-w-md grid-cols-2 items-center">
-          <div
-            key={pathname}
-            className="pointer-events-none absolute inset-y-0 z-0 flex w-1/2 items-center justify-center animate-nav-liquid-travel"
-            style={{
-              '--nav-from-x': `${fromColumn * 100}%`,
-              '--nav-to-x': `${visitorColumn * 100}%`,
-              transform: `translateX(${visitorColumn * 100}%)`,
-            }}
-          >
-            <div className="h-2 w-8 rounded-full bg-brand-neon shadow-[0_0_8px_rgba(0,255,163,0.6)]" />
-          </div>
+          {isTransitioning && (
+            <div
+              key={pathname}
+              className="pointer-events-none absolute inset-y-0 z-0 flex w-1/2 items-center justify-center animate-nav-liquid-travel"
+              style={{
+                '--nav-from-x': `${fromColumn * 100}%`,
+                '--nav-to-x': `${visitorColumn * 100}%`,
+                transform: `translateX(${visitorColumn * 100}%)`,
+              }}
+            >
+              <div className="h-6 w-6 rounded-full bg-brand-neon/70 blur-md" />
+            </div>
+          )}
           <NavItem to="/" label="Home" Icon={Home} />
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />
         </div>
@@ -89,18 +102,19 @@ function BottomNav({ onFabClick }) {
     <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
       <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
       <div className="relative mx-auto grid h-16 max-w-md grid-cols-5 items-center">
-        <div
-          key={pathname}
-          className="pointer-events-none absolute inset-y-0 z-0 flex w-1/5 items-center justify-center animate-nav-liquid-travel"
-          style={{
-            '--nav-from-x': `${fromColumn * 100}%`,
-            '--nav-to-x': `${(regularColumn ?? 0) * 100}%`,
-            transform: `translateX(${(regularColumn ?? 0) * 100}%)`,
-            opacity: regularColumn == null ? 0 : 1,
-          }}
-        >
-          <div className="h-2 w-8 rounded-full bg-brand-neon shadow-[0_0_8px_rgba(0,255,163,0.6)]" />
-        </div>
+        {isTransitioning && (
+          <div
+            key={pathname}
+            className="pointer-events-none absolute inset-y-0 z-0 flex w-1/5 items-center justify-center animate-nav-liquid-travel"
+            style={{
+              '--nav-from-x': `${fromColumn * 100}%`,
+              '--nav-to-x': `${(regularColumn ?? 0) * 100}%`,
+              transform: `translateX(${(regularColumn ?? 0) * 100}%)`,
+            }}
+          >
+            <div className="h-6 w-6 rounded-full bg-brand-neon/70 blur-md" />
+          </div>
+        )}
         <NavItem to="/" label="Home" Icon={Home} />
         {isAdmin ? (
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />

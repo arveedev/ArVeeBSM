@@ -10807,3 +10807,134 @@ addressed:
 - MO/TMO date-range filtering: re-verified correct
 
 Final build verified clean.
+
+## Nav indicator redesigned again - genuinely no persistent element at rest now
+
+Per explicit clarification that the previous version was still ugly
+and should not exist as a persistent line/bar at all: the glow now
+only renders during the active transition window (a brief ~400ms
+period right after navigation), completely absent at rest - only the
+icon's own color change (already handled separately by NavLink)
+indicates the active tab when nothing is moving. Also softened the
+visual itself from a hard-edged pill to a blurred, soft radial glow,
+more fitting for the "liquid glow" description. Applied to both the
+regular and Visitor nav.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Continuing to the month navigation button width fix
+
+## Month nav buttons widened, "Branch Total" simplified
+
+- Increased horizontal padding on the month navigation buttons
+  significantly (px-4 to px-8), per explicit follow-up that the
+  earlier size increase only affected height and text, not the
+  buttons' actual width.
+- Simplified "Branch Total" to "Total" on the admin/visitor home
+  page's stocks summary, per explicit request to free up space for
+  the actual values - confirmed both occurrences (Rice and Palay) and
+  no other instances of this text anywhere else in the app.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Moving to the larger remaining items: Settings page flow-down/positioning, MO/TMO modal on user side, and the admin dashboard restructure
+
+## Settings page: full flow-down and scroll-to-top on tab switch
+
+- Wrapped Preferences, Classifier, and the pile card together under
+  one shared warehouse-keyed flow-down container, so all three
+  sections flow together on warehouse switch, per explicit follow-up
+  that this still wasn't happening after the earlier, narrower fix.
+- Added scroll-into-view behavior on the pile card, triggered whenever
+  the Create Pile/Beginning Balances tab switches - the card now
+  scrolls to the top of the viewport so it's what's actually visible,
+  rather than leaving Preferences in view from wherever the user had
+  scrolled to before switching. Skipped on the initial render (nothing
+  to scroll to yet, tab starts at its default).
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Investigating the MO/TMO modal positioning bug on the user side - likely another containing-block issue similar to the earlier full-screen pile layout bug
+
+## MO/TMO modal user-side positioning bug fixed via portal
+
+Confirmed the same root cause as the earlier full-screen pile layout
+bug: on the user side, this modal is nested inside Home.jsx's more
+deeply animated component tree (the warehouse flow-down container,
+the Milling Operations collapsible section's own animation), and a
+CSS transform somewhere in that ancestry was constraining the modal's
+fixed positioning to a small box instead of the real device viewport
+- exactly why it only appeared "inside the list" at the very bottom
+instead of covering the screen, and why the admin side (a shallower,
+less-animated tree) was unaffected. Fixed with the same solution:
+render through a portal straight to document.body, escaping any
+ancestor's transform/containing-block regardless of how deeply nested
+or animated the calling page's tree is. Safe for the admin side too,
+since a portal always renders to document.body regardless of caller
+context.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Moving to the full-screen pile layout landscape lock next
+
+## Full-screen pile layout landscape lock, best-effort with a safe fallback
+
+Added an attempt to lock orientation to landscape when entering
+full-screen mode, using the standard Fullscreen + Screen Orientation
+APIs - browser fullscreen is requested first, since most browsers
+that support orientation lock at all (mainly Android Chrome) require
+it. This is genuinely best-effort: not supported on iOS Safari at
+all, and can fail for many other reasons on other browsers too - all
+wrapped so failure can never block or break the app's own CSS-based
+full-screen mode, which already works regardless of whether these
+native APIs succeed.
+
+Added a safe fallback for when the lock doesn't actually take effect:
+tracks the real current orientation via a media query while in
+full-screen mode, showing a polite "rotate your device" prompt
+instead of attempting a CSS-rotation hack, which would have misaligned
+the existing touch coordinate handling used for drawing/moving piles
+in the grid - not worth the risk to the working interaction model.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds).
+
+## Only the admin dashboard restructure remains from this large request - a substantial, standalone undertaking
+
+## SESSION COMPLETE: Admin Dashboard restructured, packaging now
+
+Grouped the 15 flat tabs into 4 logical groups: Structure (Provinces,
+Branches, Warehouses, Users - preserving the original dependency-chain
+ordering), Inventory (Varieties, Sack Types, Beginning Balances),
+Operations (Customers, Miller Allocations, Transaction Types, AI/SIA),
+System (Signatories, Visitor Access, Sheet Sources, Backup). Two-level
+tab UI: group selector with a moving pill on top, sub-tabs for the
+active group below it, both with the flow-down reveal already used
+elsewhere in this app. Switching groups correctly resets to that
+group's first tab, rather than leaving a stale/invalid tab id
+selected from the previous group.
+
+Removed the navbar and bottom nav on this route specifically (in
+App.jsx, not this file) - replaced with a close button (X, linking
+back to /settings, where the dashboard is entered from) built directly
+into this page's own header, since none of what BottomNav's FAB
+triggers (transaction forms) is reachable from here anyway.
+
+Verified with a 20-case test confirming every one of the original 15
+tabs survived the regrouping (none lost or duplicated), the group
+switch correctly resets sub-tab selection, the close button targets
+the right route, and both animation levels are wired.
+
+Final regression check: every test suite from this entire session
+re-run - the same 4 pre-existing stale scratch-test assertions
+(confirmed earlier this session, checking exact string patterns since
+intentionally changed) remain the only non-passing results; every
+actual feature they check is confirmed correctly present and working.
+
+Full production build verified clean.
+
+THIS COMPLETES EVERY ITEM FROM THIS LARGE, MULTI-TURN REQUEST.

@@ -137,7 +137,7 @@ function App() {
 
   return (
     <div className={`min-h-screen bg-neutral-950 ${pathname !== '/login' ? 'animate-app-fade-in' : ''}`}>
-      {user && pathname !== '/login' && !activeFormType && <AppHeader />}
+      {user && pathname !== '/login' && pathname !== '/admin' && !activeFormType && <AppHeader />}
       <div key={pathname !== '/login' ? pathname : 'login'} className={pathname !== '/login' ? (pageDirection === 'back' ? 'animate-page-back' : 'animate-page-forward') : ''}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -192,7 +192,7 @@ function App() {
       </Routes>
       </div>
 
-      {user && pathname !== '/login' && (
+      {user && pathname !== '/login' && pathname !== '/admin' && (
         <>
           <BottomNav onFabClick={() => setTransactionModalOpen(true)} />
           {!isVisitor && (
