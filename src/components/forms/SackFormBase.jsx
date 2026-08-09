@@ -45,6 +45,7 @@ import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMilli
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
+import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import {
@@ -975,14 +976,17 @@ const SackFormBase = forwardRef(function SackFormBase(
                   >
                     <ChevronLeft size={18} />
                   </button>
-                  <input
-                    type="text"
-                    value={serialNo}
-                    onChange={(e) => handleSerialChange(e.target.value)}
-                    onBlur={handleSerialBlur}
-                    className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`}
-                    placeholder="0000000"
-                  />
+                  <div className="relative w-full">
+                    <input
+                      type="text"
+                      value={serialNo}
+                      onChange={(e) => handleSerialChange(e.target.value)}
+                      onBlur={handleSerialBlur}
+                      className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash ? 'text-transparent' : 'text-app-text'}`}
+                      placeholder="0000000"
+                    />
+                    <SerialCrossfadeOverlay value={serialNo} navFlash={navFlash} />
+                  </div>
                   <button
                     type="button"
                     onClick={handleStepForward}

@@ -310,12 +310,12 @@ function MillingMonitor() {
           onChange={(e) => setRegionalAuthFilter(e.target.value)}
           className="mt-3 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-app-text"
         >
-          <option value="">All Regional Authority Numbers</option>
+          <option value="">Authority Numbers</option>
           {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       )}
 
-      <ul className="mt-3 space-y-1.5">
+      <ul className="mt-3 space-y-1.5 animate-flow-down" key={`${topTab}-${showCompleted}`}>
         {filtered.length === 0 && (
           <p className="py-4 text-center text-xs text-neutral-500">
             No {showCompleted ? 'completed' : 'pending'} {topTab} operations.

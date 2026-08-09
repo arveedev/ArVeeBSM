@@ -10062,3 +10062,258 @@ re-ran the complete regression suite from this entire session -
   the app has not yet preloaded that specific data
 - NFA-owned Ricemill/Mechanical Dryer handling - explicitly deferred
   by the user to a later date
+
+## Two small, concrete fixes
+
+- Regional authority dropdown label simplified to "Authority Numbers"
+  in both AdminMonitoring.jsx (pending list) and
+  CompletedAuthorityModal.jsx (completed list) - confirmed the
+  completed list already had this filter from an earlier session, so
+  only the label text needed fixing, not the underlying feature.
+- Settings page's Create Pile tab no longer shows the pile list (with
+  edit/delete/export controls) - only the creation form remains there
+  now, per explicit request. Confirmed BeginningBalancesPanel.jsx (the
+  Beginning Balances tab) already has its own complete, separate pile
+  list where updating existing piles is meant to happen, so this
+  functionality is not lost, just relocated to where it belongs.
+
+Verified with a 3-case test confirming the list is gone from the
+Create Pile tab, the form itself remains, and the Beginning Balances
+tab's own list is untouched.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above.
+
+## Starting the requested animation system - beginning with page-switching, the explicitly prioritized first item
+
+## Page-transition animation system: directional slide, complete
+
+Finished wiring the directional page-slide logic into App.jsx. Tracks
+the previous page's position in the bottom nav (via the same column
+map BottomNav.jsx already uses for its glow indicator, exported and
+shared rather than duplicated) and computes direction on every route
+change: moving deeper into the app (e.g. Home to Piles) slides the new
+page in from the right; moving back toward Home slides it in from the
+left - exactly the two examples given. Falls back to a plain forward
+slide for any route outside the bottom nav entirely (e.g. /admin),
+since there is no meaningful column-based direction to compute there.
+
+Implementation reuses the exact same translateX+opacity animation
+pattern already proven and shipped for the serial-number navigation
+feedback, just scaled up for a full-page-sized element - new keyframes
+added, following the established pattern rather than introducing a
+new animation approach or any external library. The login route is
+deliberately excluded, since it already has its own separate,
+unrelated fade transition timed against Login.jsx's own fade-out.
+
+The animated wrapper is keyed by pathname, so React remounts it (and
+therefore re-triggers the CSS animation) on every navigation - this
+does not introduce any new remounting behavior beyond what React
+Router already does natively when swapping between different route
+components.
+
+Verified with a 6-case test directly modeling both named examples from
+the request, plus edge cases (routes outside the bottom nav, both
+entering and leaving).
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite for this entire session
+re-run - 102 test cases across 19 suites, all passing.
+
+## Bottom nav glow indicator, complete (from previous entry, now fully verified together with the page-slide work)
+
+A green glow now slides smoothly between nav icons as the active route
+changes, for both the regular 5-column nav and the 2-column Visitor
+nav, using the same grid-position-based sliding approach already
+established elsewhere in this app (e.g. Settings.jsx's own tab
+switcher).
+
+## Continuing to the next animation item: warehouse-switch "flow down" reveal on Home
+
+## Three more "flow down" animations, reusing the same proven pattern
+
+Added a new single-element animate-flow-down utility class (same
+underlying stagger-field-in keyframe already shipped and proven for
+the serial-navigation feature, just without the multi-child stagger
+delays) and applied it to:
+
+- Home.jsx: the warehouse selector's content (tabs + stock/sack list)
+  now flows down whenever the warehouse changes, keyed by
+  currentWarehouseId so it re-triggers on every switch.
+- Home.jsx: the Milling Operations expand, which previously just
+  appeared instantly with no transition at all.
+- Reports.jsx: the transaction list, keyed by the active Receipts/
+  Issues sub-tab, so switching between them re-triggers the reveal.
+
+Confirmed AdminHome.jsx has no warehouse selector at all (it is a
+cross-warehouse summary view, not a single-warehouse selector like
+regular Home.jsx) and had already had its own Milling Operations
+section removed entirely in an earlier session - so neither fix
+applies there, correctly.
+
+Verified with a 5-case test confirming the utility class exists,
+reuses the existing keyframe rather than introducing a new animation
+approach, and that all three application sites are correctly wired.
+
+All changes in this entry verified compiling (full 68-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite for this entire session
+re-run - 107 test cases across 20 suites, all passing.
+
+## HONEST STATUS on the animation request overall:
+
+Done so far: bottom nav glow indicator, directional page-slide
+transitions, and now these three flow-down reveals (warehouse switch,
+Milling Operations expand, Reports tab switch).
+
+Still not started: the form base cereal tab's sliding border/pill
+animation, the serial-number slide-out/slide-in navigation animation
+(box stays fixed, only the numbers move), the form-wide flow animation
+on cereal tab change, "flowing in" as tab content loads elsewhere in
+the app, and the full-screen landscape pile layout redesign. This is
+a substantial amount of remaining, distinct work - each of the
+remaining items needs its own careful implementation and testing
+pass, not a single combined effort.
+
+## Cereal tab sliding color indicator, and serial number crossfade-slide
+
+### Cereal tab sliding indicator
+Replaced the three independently-colored buttons with a single sliding
+indicator behind them, following the "moving pill" pattern already
+used elsewhere in this app but extended in a genuinely new way: the
+indicator's border/background color now transitions along with its
+position, since each cereal category has its own distinct color
+(blue for Rice, neon for Palay, amber for By Products) rather than one
+fixed color throughout like the existing pill patterns. The buttons
+themselves are now just labels sitting on top of the indicator.
+Confirmed the actual hex values from tailwind.config.js were needed
+directly (not CSS custom properties, which don't exist for these
+Tailwind-config colors at runtime) since inline styles can't reference
+Tailwind class names.
+
+### Serial number crossfade-slide
+Per explicit request that the input box itself must never move, only
+built a genuinely new, reusable component (SerialCrossfadeOverlay.jsx)
+rather than trying to force this effect onto a plain <input>, since a
+browser-native input can't show two different text values
+simultaneously mid-transition. The real input stays fully functional
+for typing at all times; the overlay only activates during step-
+navigation (driven by the existing navFlash state, unchanged), showing
+the outgoing number exit toward the direction of navigation while
+fading, and the incoming number enter from the opposite side while
+fading in - matching the exact effect described. The real input's own
+text is made transparent only during this same window, avoiding any
+double-text overlap between the two layers. Applied consistently to
+all three forms with this UI (StockFormBase.jsx, SackFormBase.jsx,
+WTSForm.jsx).
+
+Verified with a combined 13-case test (8 for the crossfade overlay
+logic, 5 for the tab indicator's positioning and color-distinctness).
+
+All changes in this entry verified compiling (full 69-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite for this entire session
+re-run - 120 test cases across 22 suites, all passing.
+
+## Continuing to the remaining animation items: form-wide flow on cereal tab change, tab-content flowing as data loads, and the full-screen landscape pile layout
+
+## Form-wide flow animation on cereal tab change, verified
+
+Finished and verified the tab-change flow trigger from the previous
+entry - added a dedicated tabChangeFlash flag (kept separate from
+navFlash, since that flag also carries direction info specific to
+serial stepping that doesn't apply here), set briefly on every tab
+change and cleared after the same 750ms window navFlash already uses,
+for visual consistency between the two independent triggers.
+
+Verified with a 5-case test covering both flags independently and
+together, plus the trigger-then-reset sequence.
+
+All changes in this entry verified compiling (full 69-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite for this entire session
+re-run - 125 test cases across 23 suites, all passing.
+
+## Now applying the flow reveal to every other moving-pill tab across the app, per the general request
+
+## Applied the flow-down reveal to every remaining moving-pill tab across the app
+
+Searched the entire codebase for every "sliding pill indicator" tab
+pattern (the same underlying translateX-based approach used
+throughout this app) to apply the flow-down reveal consistently, per
+the general request that tab content should flow rather than just
+appear, everywhere this pattern exists - not just the specific
+examples already done.
+
+Found and fixed:
+- AdminHome.jsx - admin/visitor's own Stocks/Sacks tab content
+- AuthorityMonitor.jsx - the AI/SIA pending list
+- MillingMonitor.jsx - the MO/TMO list (also simplified its own,
+  separate "All Regional Authority Numbers" label to "Authority
+  Numbers" for consistency, since this is the same kind of filter
+  already fixed elsewhere in the app but had been missed since it is
+  a genuinely different component)
+- Settings.jsx - the Create Pile / Beginning Balances tab content
+- AdminMonitoring.jsx - the AI/SIA pending list
+- Piles.jsx - the Pile List tab content (the Pile Layout tab is left
+  as-is, since it needs its own dedicated redesign for the upcoming
+  full-screen landscape work, not just a flow-down reveal)
+
+Each keyed by whatever combination of tab/filter state actually
+determines its content, so the animation correctly re-triggers on
+every relevant switch, not just the primary tab.
+
+Verified with a 7-case test confirming every application site is
+correctly wired.
+
+All changes in this entry verified compiling (full 69-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite for this entire session
+re-run - 132 test cases across 24 suites, all passing.
+
+## Only the full-screen landscape pile layout redesign remains from the full animation request
+
+## Full-screen pile layout - the final animation-request item, complete
+
+Implemented as an expand-in-place toggle on the existing Pile Layout
+tab, rather than building a separate, duplicated view - the exact same
+grid rendering, drawing/moving interactions, hover-detail popup, and
+colors already built now simply expand to fill the entire viewport
+when toggled, using the same underlying scale calculation (which
+already listens for resize and now also recalculates the moment full-
+screen mode itself toggles). This is what "sharing the same format,
+data, color and features" means most literally - there is only ever
+one implementation of this layout, not two that could diverge over
+time.
+
+Added a toggle button beside the "Layout" heading, and adjusted the
+existing space-reservation math (used both for the initial scale
+calculation and the hover-detail popup's positioning) so it correctly
+stops reserving room for the header and bottom nav while in full-
+screen mode, since both are visually covered by the overlay's own
+z-50 stacking (higher than BottomNav's z-40) - genuinely maximizing
+the available landscape space rather than leaving an unnecessary gap
+where hidden chrome used to be. Also locks body scroll while active,
+mirroring the identical pattern already used for form overlays
+elsewhere in this app.
+
+Verified with a 6-case test confirming the space-reservation logic and
+the wrapper's conditional styling.
+
+All changes in this entry verified compiling (full 69-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the complete regression suite for this entire session
+re-run - 138 test cases across 25 suites, all passing.
+
+## THE FULL ANIMATION REQUEST IS NOW COMPLETE:
+- Directional page-switching slide with bottom nav glow indicator
+- Warehouse-switch, Milling Operations, and Reports tab flow-down
+  reveals, plus every other moving-pill tab across the app found and
+  fixed consistently
+- Cereal tab sliding color indicator
+- Serial number crossfade-slide (box fixed, only the text moves)
+- Form-wide flow animation on cereal tab change
+- Full-screen landscape pile layout, sharing the exact same
+  implementation as the normal view rather than a separate one

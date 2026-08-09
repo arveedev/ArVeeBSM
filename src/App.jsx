@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { Toaster, toast } from 'react-hot-toast'
 import Login from './pages/Login.jsx'
@@ -11,7 +11,7 @@ import Settings from './pages/Settings.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import ProtectedRoute from './components/common/ProtectedRoute.jsx'
 import SectionErrorBoundary from './components/common/SectionErrorBoundary.jsx'
-import BottomNav from './components/layout/BottomNav.jsx'
+import BottomNav, { REGULAR_NAV_COLUMN } from './components/layout/BottomNav.jsx'
 import AppHeader from './components/layout/AppHeader.jsx'
 import { useSettings } from './context/SettingsContext.jsx'
 import TransactionModal from './components/common/TransactionModal.jsx'
@@ -37,6 +37,24 @@ function App() {
   const { pathname } = useLocation()
   const [isTransactionModalOpen, setTransactionModalOpen] = useState(false)
   const [activeFormType, setActiveFormType] = useState(null)
+  // Tracks the previous pathname's nav column, to compute page-slide
+  // direction on every route change - "forward" (deeper into the app,
+  // e.g. Home to Piles) enters from the right, "back" (returning
+  // toward Home) enters from the left. Falls back to "forward" for any
+  // route pair not part of the bottom nav (e.g. /admin), since there
+  // is no meaningful column-based direction to compute there.
+  const previousColumnRef = useRef(REGULAR_NAV_COLUMN[pathname] ?? 0)
+  const [pageDirection, setPageDirection] = useState('forward')
+  useEffect(() => {
+    const currentColumn = REGULAR_NAV_COLUMN[pathname]
+    const previousColumn = previousColumnRef.current
+    if (currentColumn != null && previousColumn != null) {
+      setPageDirection(currentColumn >= previousColumn ? 'forward' : 'back')
+    } else {
+      setPageDirection('forward')
+    }
+    previousColumnRef.current = currentColumn ?? previousColumn
+  }, [pathname])
   // The form itself covers the full screen (fixed inset-0), but without
   // this the page behind it is still technically scrollable even though
   // visually hidden - producing two scrollbars side by side on desktop
@@ -120,8 +138,9 @@ function App() {
   return (
     <div className={`min-h-screen bg-neutral-950 ${pathname !== '/login' ? 'animate-app-fade-in' : ''}`}>
       {user && pathname !== '/login' && !activeFormType && <AppHeader />}
-      <Routes>
-        <Route path="/login" element={<Login />} />
+      <div key={pathname !== '/login' ? pathname : 'login'} className={pathname !== '/login' ? (pageDirection === 'back' ? 'animate-page-back' : 'animate-page-forward') : ''}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
         <Route
           path="/"
           element={
@@ -171,6 +190,7 @@ function App() {
           }
         />
       </Routes>
+      </div>
 
       {user && pathname !== '/login' && (
         <>
