@@ -11048,3 +11048,35 @@ not live device testing - continued hands-on verification is important,
 especially for fix #3 (the timing-based fix), which is inherently the
 hardest of the three to fully confirm without actually reproducing the
 original bug on a device.
+
+## Pan bounds added, detail popup orientation fixed
+
+Per explicit follow-up: added bounds to panning, so the content can
+never be dragged into empty space beyond its own actual size - the
+maximum offset in each direction is exactly half of however much the
+current (possibly zoomed) content exceeds the container's own
+dimensions, since the transform origin is centered. Applied both
+during pan gestures and after pinch-zoom (zooming back out can leave
+a previously-valid offset now exceeding the new, smaller bounds - re-
+clamped immediately rather than left stale). Directly addresses the
+user's own diagnosis that unconstrained panning was implicated in the
+"extra space on re-entry" bug.
+
+Also fixed the tap/edit detail popup's orientation - its position was
+already correct (getBoundingClientRect, which the popup's positioning
+math is based on, does account for ancestor CSS transforms), but the
+popup's own content was still rendering upright/portrait, since it is
+portaled outside the rotated container entirely and doesn't inherit
+its transform. Now rotates to match whenever the forced-landscape
+rotation is active. Applied the same fix to the hover-detail popup
+for consistency, covering desktop mouse hover too.
+
+Verified with an 8-case test covering the pan-bounds clamping (in
+both directions, including the exact re-clamp-after-zoom-out
+scenario) and the popup rotation logic.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
