@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, X, Move, Pencil, Maximize2, Minimize2, ArrowLeft, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, X, Move, Pencil, Maximize2, Minimize2, ArrowLeft } from 'lucide-react'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
@@ -100,10 +100,24 @@ const effectiveRowSpan = (box, fieldCount) => {
 // would otherwise create a containing block that constrains a plain
 // `fixed` element to that ancestor's own bounds instead of the real
 // screen).
-function FullScreenOverlay({ isFullScreen, children }) {
+function FullScreenOverlay({ isFullScreen, isPortrait, children }) {
   if (!isFullScreen) return children
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 p-3">{children}</div>,
+    <div
+      className="fixed z-50 flex flex-col bg-neutral-950 p-3"
+      style={
+        isPortrait
+          ? {
+              top: 0, left: 0,
+              width: '100vh', height: '100vw',
+              transform: 'rotate(90deg) translateY(-100%)',
+              transformOrigin: 'top left',
+            }
+          : { top: 0, left: 0, right: 0, bottom: 0 }
+      }
+    >
+      {children}
+    </div>,
     document.body
   )
 }
@@ -124,38 +138,23 @@ function Piles() {
     document.body.style.overflow = isFullScreen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [isFullScreen])
-  useEffect(() => {
-    if (isFullScreen) {
-      // Browser fullscreen is required by most browsers that support
-      // orientation lock at all (mainly Android Chrome) - best-effort,
-      // since this isn't supported on iOS Safari and can fail for many
-      // other reasons, none of which should ever block the app's own
-      // CSS-based full-screen mode, which already works regardless.
-      document.documentElement.requestFullscreen?.().catch(() => {})
-      screen.orientation?.lock?.('landscape').catch(() => {})
-    } else {
-      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
-      screen.orientation?.unlock?.()
-    }
-  }, [isFullScreen])
 
-  // Tracks actual current orientation while in full-screen mode, so a
-  // polite prompt can be shown if the native lock above didn't
-  // actually take effect (mainly iOS Safari, which doesn't support
-  // it at all) - safer than a CSS-rotation hack, which would misalign
-  // the existing touch coordinate handling used for drawing/moving.
-  const [isPortraitWhileFullScreen, setIsPortraitWhileFullScreen] = useState(false)
+  // Tracks the physical device orientation while in full-screen mode -
+  // drives both the CSS rotation in FullScreenOverlay and the
+  // measure() calculation below, which needs to know when the visual
+  // width/height axes are swapped relative to window.innerWidth/Height.
+  const [isPortrait, setIsPortrait] = useState(
+    typeof window !== 'undefined' ? window.matchMedia('(orientation: portrait)').matches : true
+  )
   useEffect(() => {
-    if (!isFullScreen) {
-      setIsPortraitWhileFullScreen(false)
-      return
-    }
+    if (!isFullScreen) return
     const mq = window.matchMedia('(orientation: portrait)')
-    setIsPortraitWhileFullScreen(mq.matches)
-    const handler = (e) => setIsPortraitWhileFullScreen(e.matches)
+    setIsPortrait(mq.matches)
+    const handler = (e) => setIsPortrait(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [isFullScreen])
+
   const [periodFrom, setPeriodFrom] = useState('')
   const [periodTo, setPeriodTo] = useState('')
   const periodToPickerRef = useRef(null)
@@ -185,6 +184,20 @@ function Piles() {
   const longPressTimer = useRef(null)
   const containerRef = useRef(null)
   const [scale, setScale] = useState(1)
+  // Pan/zoom, full-screen mode only - the normal view always stays at
+  // the auto-fit "see everything" level below, with no manual zoom
+  // drift possible. zoomScale is a multiplier on top of the auto-fit
+  // scale; panX/panY are pixel offsets. Both reset on every full-
+  // screen toggle, so re-entering always starts fresh at the fit-all
+  // view, matching the explicit request that full-screen should start
+  // by showing everything, with zoom/pan available from there for detail.
+  const [zoomScale, setZoomScale] = useState(1)
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  useEffect(() => {
+    setZoomScale(1)
+    setPanOffset({ x: 0, y: 0 })
+  }, [isFullScreen])
+  const gestureRef = useRef(null) // tracks in-progress pan/pinch state between touch events
 
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
@@ -253,9 +266,15 @@ function Piles() {
       // not the container's own offsetHeight - that's circular here,
       // since the container's height is itself DERIVED from the scale
       // being calculated (it grows/shrinks to fit its scaled child),
-      // not an independent, fixed space to measure against.
+      // not an independent, fixed space to measure against. When the
+      // CSS forced-landscape rotation is active, the visual "height"
+      // after rotation is actually the physical screen's WIDTH
+      // dimension, not window.innerHeight - using the wrong one here
+      // would measure against the tall (pre-rotation) axis instead of
+      // the short one the grid is actually being fit into.
       const containerTop = containerRef.current.getBoundingClientRect().top
-      const availableH = window.innerHeight - containerTop - BOTTOM_NAV_HEIGHT - BOTTOM_SAFETY_MARGIN - CONTAINER_PADDING * 2
+      const viewportHeightForFit = (isFullScreen && isPortrait) ? window.innerWidth : window.innerHeight
+      const availableH = viewportHeightForFit - containerTop - BOTTOM_NAV_HEIGHT - BOTTOM_SAFETY_MARGIN - CONTAINER_PADDING * 2
 
       const widthScale = availableW / naturalW
       const heightScale = availableH / naturalH
@@ -267,7 +286,7 @@ function Piles() {
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
-  }, [visibleCols, visibleRows, isFullScreen])
+  }, [visibleCols, visibleRows, isFullScreen, isPortrait])
 
   const assignedPileIds = new Set(
     boxes.filter((b) => b.id !== editingBoxId && b.pileId).map((b) => b.pileId)
@@ -524,6 +543,53 @@ function Piles() {
   const naturalWidth = visibleCols * BASE_CELL_PX
   const naturalHeight = visibleRows * BASE_CELL_PX
 
+  const PAN_MOVE_THRESHOLD = 8 // px - below this, a touch is treated as a tap, not a pan
+  const MIN_ZOOM = 1
+  const MAX_ZOOM = 4
+
+  const touchDistance = (t0, t1) => Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
+
+  const handleGridTouchStart = (e) => {
+    if (!isFullScreen || drawing || moving) return // normal view and drawing/moving modes need precise, unmodified tap targeting
+    if (e.touches.length === 2) {
+      gestureRef.current = {
+        type: 'pinch',
+        startDistance: touchDistance(e.touches[0], e.touches[1]),
+        startZoom: zoomScale,
+        startPan: panOffset,
+      }
+    } else if (e.touches.length === 1) {
+      gestureRef.current = {
+        type: 'pan-candidate',
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startPan: panOffset,
+      }
+    }
+  }
+
+  const handleGridTouchMove = (e) => {
+    const gesture = gestureRef.current
+    if (!gesture) return
+
+    if (gesture.type === 'pinch' && e.touches.length === 2) {
+      e.preventDefault() // stop the browser's own native pinch-to-zoom-the-page from also firing
+      const ratio = touchDistance(e.touches[0], e.touches[1]) / gesture.startDistance
+      setZoomScale(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gesture.startZoom * ratio)))
+    } else if (gesture.type === 'pan-candidate' || gesture.type === 'panning') {
+      const dx = e.touches[0].clientX - gesture.startX
+      const dy = e.touches[0].clientY - gesture.startY
+      if (gesture.type === 'pan-candidate' && Math.hypot(dx, dy) < PAN_MOVE_THRESHOLD) return // still within tap tolerance - not a pan yet
+      gesture.type = 'panning'
+      e.preventDefault()
+      setPanOffset({ x: gesture.startPan.x + dx, y: gesture.startPan.y + dy })
+    }
+  }
+
+  const handleGridTouchEnd = () => {
+    gestureRef.current = null
+  }
+
   const previewRegion = drawing?.start && drawing?.current
     ? regionFromCorners(drawing.start, drawing.current)
     : null
@@ -649,7 +715,7 @@ function Piles() {
       {/* overflow-hidden so nothing ever renders outside this bordered
           display area - including the hover-detail popup below, which is
           explicitly clamped to these same bounds. */}
-      <FullScreenOverlay isFullScreen={isFullScreen}>
+      <FullScreenOverlay isFullScreen={isFullScreen} isPortrait={isPortrait}>
         {isFullScreen && (
           <button
             type="button"
@@ -659,14 +725,22 @@ function Piles() {
             <ArrowLeft size={16} /> Back
           </button>
         )}
-        {isPortraitWhileFullScreen && (
-          <div className="mb-2 flex items-center gap-2 rounded-xl border border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
-            <RotateCcw size={16} className="shrink-0" />
-            Rotate your device to landscape for the best view
-          </div>
-        )}
-        <div ref={containerRef} className={`relative mt-2 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1' : ''}`}>
-        <div style={{ width: naturalWidth * scale, height: naturalHeight * scale, overflow: 'hidden' }}>
+        <div
+          ref={containerRef}
+          className={`relative mt-2 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1' : ''}`}
+          onTouchStart={handleGridTouchStart}
+          onTouchMove={handleGridTouchMove}
+          onTouchEnd={handleGridTouchEnd}
+          onTouchCancel={handleGridTouchEnd}
+        >
+        <div
+          style={{
+            width: naturalWidth * scale, height: naturalHeight * scale,
+            overflow: isFullScreen ? 'visible' : 'hidden',
+            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
+            transformOrigin: 'center',
+          }}
+        >
           <div
             className="relative"
             style={{
