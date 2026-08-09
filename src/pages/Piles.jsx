@@ -283,6 +283,16 @@ function Piles() {
       // was checked.
       setScale(Math.min(1, widthScale, heightScale))
     }
+    // Entering full-screen mounts a fresh, newly-rotated DOM subtree
+    // via the portal - deferring by a frame ensures the browser has
+    // fully settled that layout (including the CSS rotation) before
+    // the first measurement, rather than risking a stale read taken
+    // mid-transition.
+    if (isFullScreen) {
+      const frame = requestAnimationFrame(measure)
+      window.addEventListener('resize', measure)
+      return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', measure) }
+    }
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
@@ -455,6 +465,7 @@ function Piles() {
   }
 
   const handleLongPressStart = (boxId) => {
+    if (isFullScreen) return // conflicts with pan gestures, which also start from touchstart on a box
     longPressTimer.current = setTimeout(() => setHoveredBoxId(boxId), LONG_PRESS_MS)
   }
   const handleLongPressEnd = () => {
@@ -577,12 +588,19 @@ function Piles() {
       const ratio = touchDistance(e.touches[0], e.touches[1]) / gesture.startDistance
       setZoomScale(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gesture.startZoom * ratio)))
     } else if (gesture.type === 'pan-candidate' || gesture.type === 'panning') {
-      const dx = e.touches[0].clientX - gesture.startX
-      const dy = e.touches[0].clientY - gesture.startY
-      if (gesture.type === 'pan-candidate' && Math.hypot(dx, dy) < PAN_MOVE_THRESHOLD) return // still within tap tolerance - not a pan yet
+      const screenDX = e.touches[0].clientX - gesture.startX
+      const screenDY = e.touches[0].clientY - gesture.startY
+      if (gesture.type === 'pan-candidate' && Math.hypot(screenDX, screenDY) < PAN_MOVE_THRESHOLD) return // still within tap tolerance - not a pan yet
       gesture.type = 'panning'
       e.preventDefault()
-      setPanOffset({ x: gesture.startPan.x + dx, y: gesture.startPan.y + dy })
+      // Raw touch coordinates are in real screen space and are NOT
+      // auto-adjusted for the CSS rotation applied when forced-
+      // landscape is active - the content's local axes are rotated
+      // 90 degrees relative to the screen, so a screen-space swipe
+      // has to be re-mapped onto the content's own local axes for the
+      // pan to move in the direction the user actually swiped.
+      const [localDX, localDY] = isPortrait ? [screenDY, -screenDX] : [screenDX, screenDY]
+      setPanOffset({ x: gesture.startPan.x + localDX, y: gesture.startPan.y + localDY })
     }
   }
 
