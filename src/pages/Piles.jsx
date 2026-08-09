@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, X, Move, Pencil, Maximize2, Minimize2, ArrowLeft } from 'lucide-react'
+import { Plus, Trash2, X, Move, Pencil, Maximize2, Minimize2, ArrowLeft, RotateCcw } from 'lucide-react'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
@@ -123,6 +123,38 @@ function Piles() {
   useEffect(() => {
     document.body.style.overflow = isFullScreen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
+  }, [isFullScreen])
+  useEffect(() => {
+    if (isFullScreen) {
+      // Browser fullscreen is required by most browsers that support
+      // orientation lock at all (mainly Android Chrome) - best-effort,
+      // since this isn't supported on iOS Safari and can fail for many
+      // other reasons, none of which should ever block the app's own
+      // CSS-based full-screen mode, which already works regardless.
+      document.documentElement.requestFullscreen?.().catch(() => {})
+      screen.orientation?.lock?.('landscape').catch(() => {})
+    } else {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+      screen.orientation?.unlock?.()
+    }
+  }, [isFullScreen])
+
+  // Tracks actual current orientation while in full-screen mode, so a
+  // polite prompt can be shown if the native lock above didn't
+  // actually take effect (mainly iOS Safari, which doesn't support
+  // it at all) - safer than a CSS-rotation hack, which would misalign
+  // the existing touch coordinate handling used for drawing/moving.
+  const [isPortraitWhileFullScreen, setIsPortraitWhileFullScreen] = useState(false)
+  useEffect(() => {
+    if (!isFullScreen) {
+      setIsPortraitWhileFullScreen(false)
+      return
+    }
+    const mq = window.matchMedia('(orientation: portrait)')
+    setIsPortraitWhileFullScreen(mq.matches)
+    const handler = (e) => setIsPortraitWhileFullScreen(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
   }, [isFullScreen])
   const [periodFrom, setPeriodFrom] = useState('')
   const [periodTo, setPeriodTo] = useState('')
@@ -626,6 +658,12 @@ function Piles() {
           >
             <ArrowLeft size={16} /> Back
           </button>
+        )}
+        {isPortraitWhileFullScreen && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
+            <RotateCcw size={16} className="shrink-0" />
+            Rotate your device to landscape for the best view
+          </div>
         )}
         <div ref={containerRef} className={`relative mt-2 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1' : ''}`}>
         <div style={{ width: naturalWidth * scale, height: naturalHeight * scale, overflow: 'hidden' }}>

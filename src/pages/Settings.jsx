@@ -511,7 +511,16 @@ function Settings() {
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } = useWarehouse() ?? {}
   const { setPageHeader } = usePageHeader() ?? {}
   const warehouseSectionRef = useRef(null)
+  const pileCardRef = useRef(null)
   const [pileSection, setPileSection] = useState('create')
+  const isFirstPileSectionRender = useRef(true)
+  useEffect(() => {
+    if (isFirstPileSectionRender.current) {
+      isFirstPileSectionRender.current = false
+      return
+    }
+    pileCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [pileSection])
   const cloudUser = useObservable(db.cloud.currentUser)
   const cloudSyncState = useObservable(db.cloud.syncState)
   // Green: genuinely connected and in-sync. Red: disconnected or
@@ -674,7 +683,7 @@ function Settings() {
       </div>
       <StickyWarehouseIndicator targetRef={warehouseSectionRef} warehouse={currentWarehouse} />
 
-
+      <div key={currentWarehouseId} className="animate-flow-down">
       <div className="mt-6 space-y-3">
         <h2 className="text-sm font-semibold text-app-text">Preferences</h2>
 
@@ -689,7 +698,7 @@ function Settings() {
       {currentWarehouseId && <ClassifierSection warehouseId={currentWarehouseId} />}
 
       {currentWarehouseId && (
-        <div className="mt-6" key={currentWarehouseId}>
+        <div className="mt-6" ref={pileCardRef}>
           <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
             <div
               className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -720,6 +729,7 @@ function Settings() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

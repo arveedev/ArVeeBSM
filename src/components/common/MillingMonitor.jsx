@@ -5,6 +5,7 @@
 // together, since a milling operation always involves both.
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle, ChevronRight, X, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -82,7 +83,7 @@ function MillingOrderDetail({ order, onClose }) {
       return sum + (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
     }, 0)
 
-  return (
+  return createPortal(
     <div className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`} onClick={handleClose}>
       <div
         className={`flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl border border-neutral-800 bg-neutral-900 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
@@ -215,7 +216,8 @@ function MillingOrderDetail({ order, onClose }) {
           </ul>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

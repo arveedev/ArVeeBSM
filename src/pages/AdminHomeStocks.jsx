@@ -88,13 +88,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Branch Total — Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
+                  Total — Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
                 <span className="text-sm font-bold text-blue-400">{fmt(riceBranchTotal)}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Branch Total — Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
+                  Total — Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
                 <span className="text-sm font-bold text-brand-neon">{fmt(palayBranchTotal)}</span>
               </div>
