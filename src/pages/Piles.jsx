@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, X, Move, Pencil, Maximize2, Minimize2 } from 'lucide-react'
+import { Plus, Trash2, X, Move, Pencil, Maximize2, Minimize2, ArrowLeft } from 'lucide-react'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
@@ -30,7 +30,7 @@ import { db } from '../db/dexie.js'
 import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge } from '../utils/calculations.js'
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
-import FullScreenPileLayout from '../components/FullScreenPileLayout.jsx'
+
 import { computeHistoricalPileState } from '../utils/pileLedger.js'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
@@ -115,7 +115,7 @@ function Piles() {
   // period that just completed than for the current month, which has
   // barely started. The arrows below let the user override this either way.
   const [isExporting, setIsExporting] = useState(false)
-  const [showFullScreen, setShowFullScreen] = useState(false)
+
   const [pendingDelete, setPendingDelete] = useState(null)
 
   // drawing: null (idle) | { start: {row,col}, current: {row,col} }
@@ -526,13 +526,13 @@ function Piles() {
       </div>
 
       {pilesTab === 'list' && (
-        <div key="list" className="animate-flow-down">
+        <div key={`list-${currentWarehouseId}`} className="animate-flow-down">
           <HomePiles />
         </div>
       )}
 
       {pilesTab === 'layout' && (
-      <div className={isFullScreen ? 'fixed inset-0 z-50 overflow-auto bg-neutral-950 p-4' : ''}>
+      <div key={`layout-${currentWarehouseId}`} className="animate-flow-down">
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div>
           <label className={labelClass}>Period From</label>
@@ -556,7 +556,7 @@ function Piles() {
           "current"), since a delayed report is often filed a few days
           into the next month but is actually for the period that just
           completed. */}
-      <PeriodPresetPicker onSelectRange={(from, to) => { setPeriodFrom(from); setPeriodTo(to) }} />
+      <PeriodPresetPicker onSelectRange={(from, to) => { setPeriodFrom(from); setPeriodTo(to) }} currentFrom={periodFrom} currentTo={periodTo} />
 
       <div className="mt-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -599,7 +599,17 @@ function Piles() {
       {/* overflow-hidden so nothing ever renders outside this bordered
           display area - including the hover-detail popup below, which is
           explicitly clamped to these same bounds. */}
-      <div ref={containerRef} className="relative mt-2 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2">
+      <div className={isFullScreen ? 'fixed inset-0 z-50 flex flex-col bg-neutral-950 p-3' : ''}>
+        {isFullScreen && (
+          <button
+            type="button"
+            onClick={() => setIsFullScreen(false)}
+            className="mb-2 flex w-fit items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-app-text active:scale-95"
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
+        )}
+        <div ref={containerRef} className={`relative mt-2 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1' : ''}`}>
         <div style={{ width: naturalWidth * scale, height: naturalHeight * scale, overflow: 'hidden' }}>
           <div
             className="relative"
@@ -747,6 +757,7 @@ function Piles() {
             )}
           </div>
         </div>
+        </div>
 
         {/* Hover/long-press detail popup - a sibling of the scaled grid
             (not a descendant), so it always renders at a real, readable
@@ -814,7 +825,7 @@ function Piles() {
 
           return createPortal(
             <div
-              className="pointer-events-none fixed z-40 rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
+              className="pointer-events-none fixed z-[60] rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
               style={{ ...positionStyle, width: popupWidth }}
             >
               <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>
@@ -886,7 +897,7 @@ function Piles() {
 
           return createPortal(
             <div
-              className="fixed z-40 rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
+              className="fixed z-[60] rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
               style={{ ...positionStyle, width: popupWidth }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -1007,11 +1018,6 @@ function Piles() {
         </div>
       )}
 
-      <button type="button" onClick={() => setShowFullScreen(true)}
-        className={`mt-4 w-full ${secondaryButtonClass}`}>
-        Fullscreen View
-      </button>
-
       <button type="button" onClick={handleExport} disabled={isExporting}
         className={`mt-2 w-full ${primaryButtonClass}`}>
         {isExporting ? 'Exporting…' : 'Export Pile Layout PDF'}
@@ -1026,18 +1032,6 @@ function Piles() {
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(null)}
       />
-
-      {showFullScreen && (
-        <FullScreenPileLayout
-          boxes={boxes}
-          pileMap={pileMap}
-          varietyMap={varietyMap}
-          gridCols={usedCols}
-          gridRows={usedRows}
-          weightUnit={weightUnit}
-          onClose={() => setShowFullScreen(false)}
-        />
-      )}
     </div>
   )
 }

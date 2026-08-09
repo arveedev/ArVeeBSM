@@ -136,7 +136,7 @@ function AdminMonitoring() {
           onChange={(e) => setRegionalAuthFilter(e.target.value)}
           className="mx-4 mt-2 w-[calc(100%-2rem)] rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
         >
-          <option value="">Authority Numbers</option>
+          <option value="">All Authority Numbers</option>
           {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       )}

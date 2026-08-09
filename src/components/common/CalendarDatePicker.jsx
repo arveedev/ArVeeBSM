@@ -11,6 +11,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -56,6 +57,7 @@ const buildMonthGrid = (year, month) => {
 
 const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true }, ref) {
   const [isOpen, setIsOpen] = useState(false)
+  const shouldRenderPopup = useDelayedUnmount(isOpen, 180)
   const containerRef = useRef(null)
   // The actual calendar popup renders via createPortal(document.body) -
   // it is NOT a DOM descendant of containerRef (which only wraps the
@@ -140,11 +142,11 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
         <Calendar size={16} className="shrink-0 text-neutral-500" />
       </button>
 
-      {isOpen && createPortal(
+      {shouldRenderPopup && createPortal(
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
           <div
             ref={popupRef}
-            className="max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl"
+            className={`max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl ${isOpen ? 'animate-pop-in' : 'animate-pop-out'}`}
             onClick={(e) => e.stopPropagation()}
           >
           <div className="flex items-center justify-between">

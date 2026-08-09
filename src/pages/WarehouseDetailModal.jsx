@@ -120,9 +120,11 @@ function WarehouseDetailModal({ warehouse, onClose }) {
           ))}
         </div>
 
-        {activeTab === 'stocks'
-          ? <HomeStocks warehouseId={displayedWarehouse.warehouseId} />
-          : <HomeSacks warehouseId={displayedWarehouse.warehouseId} />}
+        <div key={activeTab} className="animate-flow-down">
+          {activeTab === 'stocks'
+            ? <HomeStocks warehouseId={displayedWarehouse.warehouseId} />
+            : <HomeSacks warehouseId={displayedWarehouse.warehouseId} />}
+        </div>
       </div>
       </div>
     </>

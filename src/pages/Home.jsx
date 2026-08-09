@@ -8,6 +8,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
+import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import AuthorityMonitor from '../components/common/AuthorityMonitor.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
@@ -30,6 +31,19 @@ function Home() {
 
   const [inventoryTab, setInventoryTab] = useState('stocks')
   const [showMillingMonitor, setShowMillingMonitor] = useState(false)
+  const shouldRenderMillingMonitor = useDelayedUnmount(showMillingMonitor, 250)
+  // Tracks whether the current open/closed state was reached via an
+  // explicit user tap, versus just being carried over into a remount
+  // caused by the warehouse switching - only the former should play
+  // its own entrance/exit animation. Without this, switching
+  // warehouses while this was already open played two overlapping
+  // animations at once (the outer warehouse-switch flow-down AND this
+  // section's own toggle animation), which is what caused the
+  // reported stutter.
+  const millingToggledByUserRef = useRef(false)
+  useEffect(() => {
+    millingToggledByUserRef.current = false
+  }, [currentWarehouseId])
   const warehouseSectionRef = useRef(null)
 
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
@@ -94,39 +108,46 @@ function Home() {
         </div>
 
         {inventoryTab === 'stocks' ? <HomeStocks /> : <HomeSacks />}
-      </div>
 
-      <SectionErrorBoundary label="Procurement notification">
-        <ProcurementBagsNotification />
-      </SectionErrorBoundary>
-      <SectionErrorBoundary label="Palay drying status">
-        <PalayDryingStatus />
-      </SectionErrorBoundary>
-
-      {hasMillingOrders && (
-        <SectionErrorBoundary label="Milling monitor">
-          <button
-            type="button"
-            onClick={() => setShowMillingMonitor((o) => !o)}
-            className="flex w-full items-center justify-between rounded-2xl border-2 border-brand-amber bg-neutral-900 px-4 py-3 text-left transition-all active:scale-[0.99]"
-          >
-            <span className="flex items-center gap-2">
-              <Factory size={20} className="text-brand-amber" />
-              <span className="text-sm font-bold text-app-text">Milling Operations</span>
-            </span>
-            {showMillingMonitor ? (
-              <ChevronUp size={20} className="text-neutral-500" />
-            ) : (
-              <ChevronDown size={20} className="text-neutral-500" />
-            )}
-          </button>
-          {showMillingMonitor && (
-            <div className="mt-3 animate-flow-down">
-              <MillingMonitor />
-            </div>
-          )}
+        <SectionErrorBoundary label="Procurement notification">
+          <ProcurementBagsNotification />
         </SectionErrorBoundary>
-      )}
+        <SectionErrorBoundary label="Palay drying status">
+          <PalayDryingStatus />
+        </SectionErrorBoundary>
+
+        {hasMillingOrders && (
+          <SectionErrorBoundary label="Milling monitor">
+            <button
+              type="button"
+              onClick={() => {
+                millingToggledByUserRef.current = true
+                setShowMillingMonitor((o) => !o)
+              }}
+              className="flex w-full items-center justify-between rounded-2xl border-2 border-brand-amber bg-neutral-900 px-4 py-3 text-left transition-all active:scale-[0.99]"
+            >
+              <span className="flex items-center gap-2">
+                <Factory size={20} className="text-brand-amber" />
+                <span className="text-sm font-bold text-app-text">Milling Operations</span>
+              </span>
+              {showMillingMonitor ? (
+                <ChevronUp size={20} className="text-neutral-500" />
+              ) : (
+                <ChevronDown size={20} className="text-neutral-500" />
+              )}
+            </button>
+            {shouldRenderMillingMonitor && (
+              <div
+                className={`mt-3 ${
+                  millingToggledByUserRef.current ? (showMillingMonitor ? 'animate-flow-down' : 'animate-flow-up-exit') : ''
+                }`}
+              >
+                <MillingMonitor />
+              </div>
+            )}
+          </SectionErrorBoundary>
+        )}
+      </div>
 
       <AuthorityMonitor />
     </div>
