@@ -85,6 +85,7 @@ import NewPileDialog from './NewPileDialog.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
+import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import {
   inputClass,
   labelClass,
@@ -209,6 +210,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
+  const [tabChangeFlash, setTabChangeFlash] = useState(false)
   const { user } = useAuth()
   const isAdmin = user?.role === 'Admin'
   const [floorSerialNumber, setFloorSerialNumber] = useState(null) // lowest known real serial number (local + Sheet combined) for this (type, warehouse)
@@ -1556,6 +1558,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const handleCategoryTabChange = (nextCategory) => {
     if (nextCategory === cerealCategory) return
     setCerealCategory(nextCategory)
+    // Triggers the same form-wide "flow" reveal already used for
+    // serial-number step navigation, per explicit request that
+    // changing cereal tab should also create this effect on the form
+    // below - matches navFlash's own 750ms reset window for
+    // consistency between the two triggers.
+    setTabChangeFlash(true)
+    setTimeout(() => setTabChangeFlash(false), 750)
     // Full clear (every field, not just a handful) - previously left
     // most fields untouched when switching tabs, which is exactly the
     // reported "data doesn't clear" bug.
@@ -1624,26 +1633,42 @@ function StockFormBase({ type, title, onClose, prefill }) {
           </div>
         ) : null}
 
-        {isCategoryScoped && !openedFromReports && (
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {[
-              { key: 'Rice', label: 'Rice', activeClasses: 'border-blue-400 bg-blue-400/10 text-blue-400' },
-              { key: 'Palay', label: 'Palay', activeClasses: 'border-brand-neon bg-brand-neon/10 text-brand-neon' },
-              { key: 'By Products', label: 'By Products', activeClasses: 'border-brand-byproduct bg-brand-byproduct/10 text-brand-byproduct' },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => handleCategoryTabChange(tab.key)}
-                className={`rounded-lg border-2 py-2.5 text-sm font-bold transition-all active:scale-95 ${
-                  cerealCategory === tab.key ? tab.activeClasses : 'border-neutral-800 bg-neutral-900 text-neutral-500'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {isCategoryScoped && !openedFromReports && (() => {
+          const CEREAL_TABS = [
+            { key: 'Rice', label: 'Rice', borderColor: '#60a5fa', bgColor: 'rgba(96,165,250,0.1)', textColor: '#60a5fa' },
+            { key: 'Palay', label: 'Palay', borderColor: '#00FFA3', bgColor: 'rgba(0,255,163,0.1)', textColor: '#00FFA3' },
+            { key: 'By Products', label: 'By Products', borderColor: '#F2B949', bgColor: 'rgba(242,185,73,0.1)', textColor: '#F2B949' },
+          ]
+          const activeIndex = Math.max(0, CEREAL_TABS.findIndex((t) => t.key === cerealCategory))
+          const active = CEREAL_TABS[activeIndex]
+          return (
+            <div className="relative mt-2 grid grid-cols-3 gap-2">
+              {/* Single sliding indicator behind the labels - both its
+                  position AND its border/background color transition
+                  together as one continuous move, rather than three
+                  buttons independently toggling their own colors. */}
+              <div
+                className="pointer-events-none absolute inset-y-0 w-[calc((100%-1rem)/3)] rounded-lg border-2 transition-[transform,border-color,background-color] duration-300 ease-out"
+                style={{
+                  transform: `translateX(calc(${activeIndex * 100}% + ${activeIndex * 0.5}rem))`,
+                  borderColor: active.borderColor,
+                  backgroundColor: active.bgColor,
+                }}
+              />
+              {CEREAL_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => handleCategoryTabChange(tab.key)}
+                  className="relative z-10 rounded-lg border-2 border-transparent py-2.5 text-sm font-bold transition-colors active:scale-95"
+                  style={{ color: cerealCategory === tab.key ? tab.textColor : '#737373' }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )
+        })()}
 
         {!isSerialFieldVisible && serialNo && (
           <p className="mt-2 rounded-xl border-2 border-brand-neon bg-brand-neon/10 px-3 py-2.5 text-center font-mono text-lg font-bold text-brand-neon shadow-[0_0_16px_-4px_rgba(0,255,163,0.4)]">
@@ -1684,14 +1709,17 @@ function StockFormBase({ type, title, onClose, prefill }) {
                   >
                     <ChevronLeft size={18} />
                   </button>
-                  <input
-                    type="text"
-                    value={serialNo}
-                    onChange={(e) => handleSerialChange(e.target.value)}
-                    onBlur={handleSerialBlur}
-                    className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash === 'back' ? 'animate-nav-back' : navFlash === 'forward' ? 'animate-nav-forward' : ''}`}
-                    placeholder="0000000"
-                  />
+                  <div className="relative w-full">
+                    <input
+                      type="text"
+                      value={serialNo}
+                      onChange={(e) => handleSerialChange(e.target.value)}
+                      onBlur={handleSerialBlur}
+                      className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash ? 'text-transparent' : 'text-app-text'}`}
+                      placeholder="0000000"
+                    />
+                    <SerialCrossfadeOverlay value={serialNo} navFlash={navFlash} />
+                  </div>
                   <button
                     type="button"
                     onClick={handleStepForward}
@@ -1715,7 +1743,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
             </p>
           </div>
 
-          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
+          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker value={date} onChange={setDate} />

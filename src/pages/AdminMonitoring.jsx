@@ -136,7 +136,7 @@ function AdminMonitoring() {
           onChange={(e) => setRegionalAuthFilter(e.target.value)}
           className="mx-4 mt-2 w-[calc(100%-2rem)] rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
         >
-          <option value="">All Regional Authority Numbers</option>
+          <option value="">Authority Numbers</option>
           {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       )}
@@ -184,7 +184,7 @@ function AdminMonitoring() {
         )
       })()}
 
-      <ul className="mt-4 space-y-2">
+      <ul className="mt-4 space-y-2 animate-flow-down" key={`${activeTab}-${regionalAuthFilter}`}>
         {filtered.length === 0 && (
           <p className="mt-4 text-center text-xs text-neutral-500">
             No pending {activeTab} records {query ? 'match that search.' : 'yet.'}

@@ -179,7 +179,7 @@ function AuthorityMonitor() {
         </button>
       </div>
 
-      <ul className="mt-2 space-y-2">
+      <ul className="mt-2 space-y-2 animate-flow-down" key={topTab}>
         {filtered.length === 0 && (
           <p className="py-3 text-center text-xs text-neutral-500">
             No pending {topTab} records.

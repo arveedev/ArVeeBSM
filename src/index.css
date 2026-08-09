@@ -131,6 +131,55 @@ body {
   animation: nav-slide-from-right 0.45s ease-out;
 }
 
+/* Serial number crossfade-slide: the old value exits toward the
+   direction of navigation while fading out, the new value enters
+   from the opposite side while fading in - the input box itself
+   never moves, only the text content does. "forward" means the user
+   stepped forward, so the outgoing number exits left (as if scrolling
+   past it) and the incoming number enters from the right; "back" is
+   the mirror image. */
+@keyframes serial-exit-left {
+  0% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(-16px); opacity: 0; }
+}
+@keyframes serial-exit-right {
+  0% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(16px); opacity: 0; }
+}
+@keyframes serial-enter-from-right {
+  0% { transform: translateX(16px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes serial-enter-from-left {
+  0% { transform: translateX(-16px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.animate-serial-exit-left { animation: serial-exit-left 0.35s ease-in both; }
+.animate-serial-exit-right { animation: serial-exit-right 0.35s ease-in both; }
+.animate-serial-enter-right { animation: serial-enter-from-right 0.35s ease-out both; }
+.animate-serial-enter-left { animation: serial-enter-from-left 0.35s ease-out both; }
+
+/* Full-page directional transition, same translateX+opacity approach
+   as the serial-navigation animation above, scaled up for a page-sized
+   element (larger distance, slightly longer duration for a smoother,
+   more deliberate feel). "forward" = moving deeper into the app
+   (e.g. Home to Piles) enters from the right; "back" = returning
+   toward Home enters from the left. */
+@keyframes page-slide-from-right {
+  0% { transform: translateX(24px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes page-slide-from-left {
+  0% { transform: translateX(-24px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.animate-page-forward {
+  animation: page-slide-from-right 0.32s ease-out;
+}
+.animate-page-back {
+  animation: page-slide-from-left 0.32s ease-out;
+}
+
 /* Staggered "flow down" reveal for the field block below the serial
    number, triggered alongside the nav slide animation above - each
    field cascades in with a slight increasing delay rather than all
@@ -153,6 +202,13 @@ body {
 .stagger-fields > *:nth-child(8) { animation-delay: 245ms; }
 .stagger-fields > *:nth-child(9) { animation-delay: 280ms; }
 .stagger-fields > *:nth-child(n+10) { animation-delay: 315ms; }
+
+/* Same flow-down effect as above, for a single expanding element
+   rather than a list of staggered fields (e.g. Milling Operations
+   expanding, a Reports tab's content appearing). */
+.animate-flow-down {
+  animation: stagger-field-in 0.35s ease-out both;
+}
 
 /* Slide-down-fade-in / slide-up-fade-out for banners (e.g. "reviewing
    existing" / "needs completion") that appear and disappear as the

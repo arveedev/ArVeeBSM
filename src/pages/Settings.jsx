@@ -501,72 +501,6 @@ function PileBalanceSection({ warehouseId }) {
           <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
         )}
       </div>
-
-      {sortedPiles.length > 0 && (
-        <ul className="mt-2 space-y-1.5">
-          {sortedPiles.map((p) => (
-            <li key={p.pileId} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
-              <span className="truncate text-sm text-app-text">
-                {p.pileName} <span className="text-xs text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? ''}</span>
-                {p.closedDate && <span className="ml-1 rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-semibold text-neutral-400">CLOSED</span>}
-              </span>
-              <div className="text-right">
-                <p className="whitespace-nowrap text-sm font-semibold text-brand-neon">{fmtBags(p.currentBags)} bags</p>
-                <p className="whitespace-nowrap text-sm font-semibold text-brand-neon">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
-              </div>
-              <div className="relative flex items-center gap-1">
-                <button type="button" onClick={() => handleEdit(p)} aria-label="Edit" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-app-text active:scale-90">
-                  <Pencil size={20} />
-                </button>
-                <button type="button" onClick={() => confirmDelete(p)} aria-label="Delete" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-brand-crimson active:scale-90">
-                  <Trash2 size={20} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpenMenuPileId((current) => (current === p.pileId ? null : p.pileId))}
-                  aria-label="More options"
-                  className="rounded-lg p-2 text-neutral-400 transition-all hover:text-app-text active:scale-90"
-                >
-                  <MoreVertical size={20} />
-                </button>
-                {openMenuPileId === p.pileId && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setOpenMenuPileId(null)} />
-                    <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 shadow-xl">
-                      <button
-                        type="button"
-                        onClick={() => handleExportBinCard(p)}
-                        className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800"
-                      >
-                        Export BIN Card
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleClosePile(p)}
-                        className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800"
-                      >
-                        {p.closedDate ? 'Re-open Pile' : 'Close Pile'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <ConfirmDialog
-        open={Boolean(pendingDelete)}
-        title={`Delete pile "${pendingDelete?.pileName}"?`}
-        description={
-          pendingDelete?.hasHistory
-            ? 'This pile has real transactions beyond its beginning balance - deleting it will orphan those transactions in reports. This cannot be undone.'
-            : 'This cannot be undone.'
-        }
-        onConfirm={handleDeleteConfirmed}
-        onCancel={() => setPendingDelete(null)}
-      />
     </div>
   )
 }
@@ -778,7 +712,7 @@ function Settings() {
               Beginning Balances
             </button>
           </div>
-          <div className="mt-3">
+          <div className="mt-3 animate-flow-down" key={pileSection}>
             {pileSection === 'create'
               ? <PileBalanceSection warehouseId={currentWarehouseId} />
               : <BeginningBalancesPanel warehouseId={currentWarehouseId} />}

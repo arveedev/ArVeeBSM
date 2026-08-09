@@ -40,9 +40,11 @@ function AdminHome() {
         ))}
       </div>
 
-      {activeTab === 'stocks'
-        ? <AdminHomeStocks onWarehouseSelect={setSelectedWarehouse} />
-        : <AdminHomeSacks onWarehouseSelect={setSelectedWarehouse} />}
+      <div key={activeTab} className="animate-flow-down">
+        {activeTab === 'stocks'
+          ? <AdminHomeStocks onWarehouseSelect={setSelectedWarehouse} />
+          : <AdminHomeSacks onWarehouseSelect={setSelectedWarehouse} />}
+      </div>
 
       <WarehouseDetailModal warehouse={selectedWarehouse} onClose={() => setSelectedWarehouse(null)} />
     </div>

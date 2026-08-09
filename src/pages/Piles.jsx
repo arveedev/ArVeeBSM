@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, X, Move, Pencil } from 'lucide-react'
+import { Plus, Trash2, X, Move, Pencil, Maximize2, Minimize2 } from 'lucide-react'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
@@ -101,6 +101,11 @@ function Piles() {
   }, [])
 
   const [pilesTab, setPilesTab] = useState('list')
+  const [isFullScreen, setIsFullScreen] = useState(false)
+  useEffect(() => {
+    document.body.style.overflow = isFullScreen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [isFullScreen])
   const [periodFrom, setPeriodFrom] = useState('')
   const [periodTo, setPeriodTo] = useState('')
   const periodToPickerRef = useRef(null)
@@ -186,7 +191,7 @@ function Piles() {
 
   useEffect(() => {
     const CONTAINER_PADDING = 8 // matches p-2 (0.5rem) on containerRef
-    const BOTTOM_NAV_HEIGHT = 64
+    const BOTTOM_NAV_HEIGHT = isFullScreen ? 0 : 64
     const BOTTOM_SAFETY_MARGIN = 16 // breathing room below the grid before the nav
     const measure = () => {
       if (!containerRef.current) return
@@ -212,7 +217,7 @@ function Piles() {
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
-  }, [visibleCols, visibleRows])
+  }, [visibleCols, visibleRows, isFullScreen])
 
   const assignedPileIds = new Set(
     boxes.filter((b) => b.id !== editingBoxId && b.pileId).map((b) => b.pileId)
@@ -520,10 +525,14 @@ function Piles() {
         ))}
       </div>
 
-      {pilesTab === 'list' && <HomePiles />}
+      {pilesTab === 'list' && (
+        <div key="list" className="animate-flow-down">
+          <HomePiles />
+        </div>
+      )}
 
       {pilesTab === 'layout' && (
-      <div>
+      <div className={isFullScreen ? 'fixed inset-0 z-50 overflow-auto bg-neutral-950 p-4' : ''}>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div>
           <label className={labelClass}>Period From</label>
@@ -550,7 +559,17 @@ function Piles() {
       <PeriodPresetPicker onSelectRange={(from, to) => { setPeriodFrom(from); setPeriodTo(to) }} />
 
       <div className="mt-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-app-text">Layout</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-app-text">Layout</h2>
+          <button
+            type="button"
+            onClick={() => setIsFullScreen((v) => !v)}
+            aria-label={isFullScreen ? 'Exit full screen' : 'Full screen'}
+            className="rounded-lg p-1.5 text-neutral-400 transition-all hover:text-brand-neon active:scale-90"
+          >
+            {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        </div>
         {drawing ? (
           <div className="flex items-center gap-2">
             <span className="text-xs text-brand-amber">
@@ -776,8 +795,8 @@ function Piles() {
           // visually cover part of the true viewport regardless of
           // scroll position - accounted for here so the anchor-direction
           // decision reflects what's actually usable, not raw window size.
-          const HEADER_HEIGHT = 64
-          const BOTTOM_NAV_HEIGHT = 64
+          const HEADER_HEIGHT = isFullScreen ? 0 : 64
+          const BOTTOM_NAV_HEIGHT = isFullScreen ? 0 : 64
           const usableTop = HEADER_HEIGHT
           const usableBottom = window.innerHeight - BOTTOM_NAV_HEIGHT
 
@@ -848,8 +867,8 @@ function Piles() {
           const viewportRight = containerOrigin.x + screenRight
           const viewportBottom = containerOrigin.y + screenBottom
 
-          const HEADER_HEIGHT = 64
-          const BOTTOM_NAV_HEIGHT = 64
+          const HEADER_HEIGHT = isFullScreen ? 0 : 64
+          const BOTTOM_NAV_HEIGHT = isFullScreen ? 0 : 64
           const usableTop = HEADER_HEIGHT
           const usableBottom = window.innerHeight - BOTTOM_NAV_HEIGHT
 

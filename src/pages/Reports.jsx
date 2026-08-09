@@ -396,7 +396,7 @@ function Reports() {
         </div>
 
         {/* Transaction list */}
-        <div className="mt-3">
+        <div className="mt-3 animate-flow-down" key={mainTab === 'stocks' ? stockSubTab : sackSubTab}>
           {!stmtFrom || !stmtTo ? null : currentList.length === 0 ? (
             <p className="py-6 text-center text-xs text-neutral-600">
               No {mainTab === 'stocks' ? stockSubTab : sackSubTab} in this period.

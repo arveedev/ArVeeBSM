@@ -70,29 +70,31 @@ function Home() {
 
       <StickyWarehouseIndicator targetRef={warehouseSectionRef} warehouse={currentWarehouse} />
 
-      {/* Inventory: Stocks / Sacks tabs - a sliding pill indicator moves
-          behind whichever tab is active, rather than each tab's own
-          background just jumping to a new color instantly. */}
-      <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
-        <div
-          className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-          style={{ transform: inventoryTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
-        />
-        {['stocks', 'sacks'].map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setInventoryTab(tab)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium capitalize transition-colors active:scale-95 ${
-              inventoryTab === tab ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      <div key={currentWarehouseId} className="stagger-fields">
+        {/* Inventory: Stocks / Sacks tabs - a sliding pill indicator moves
+            behind whichever tab is active, rather than each tab's own
+            background just jumping to a new color instantly. */}
+        <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+          <div
+            className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+            style={{ transform: inventoryTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+          />
+          {['stocks', 'sacks'].map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setInventoryTab(tab)}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium capitalize transition-colors active:scale-95 ${
+                inventoryTab === tab ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
 
-      {inventoryTab === 'stocks' ? <HomeStocks /> : <HomeSacks />}
+        {inventoryTab === 'stocks' ? <HomeStocks /> : <HomeSacks />}
+      </div>
 
       <SectionErrorBoundary label="Procurement notification">
         <ProcurementBagsNotification />
@@ -119,7 +121,7 @@ function Home() {
             )}
           </button>
           {showMillingMonitor && (
-            <div className="mt-3">
+            <div className="mt-3 animate-flow-down">
               <MillingMonitor />
             </div>
           )}

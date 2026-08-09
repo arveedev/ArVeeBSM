@@ -131,7 +131,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
             onChange={(e) => setRegionalAuthFilter(e.target.value)}
             className="mt-2 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text"
           >
-            <option value="">All Regional Authority Numbers</option>
+            <option value="">Authority Numbers</option>
             {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         )}

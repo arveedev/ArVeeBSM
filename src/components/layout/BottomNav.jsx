@@ -15,15 +15,24 @@
 // to reach.
 
 import { useEffect, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { Home, LayoutGrid, FileText, Settings, Plus, Radar } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
+
+// Column index of each route within the 5-column regular nav grid
+// (index 2 is the FAB - never a nav target, so it's absent here) and
+// the 2-column Visitor nav - used to position the sliding glow
+// indicator. /piles and /monitoring share index 1 since a given user
+// only ever sees one or the other.
+export const REGULAR_NAV_COLUMN = { '/': 0, '/piles': 1, '/monitoring': 1, '/reports': 3, '/settings': 4 }
+const VISITOR_NAV_COLUMN = { '/': 0, '/monitoring': 1 }
 
 function BottomNav({ onFabClick }) {
   const { user } = useAuth() ?? {}
   const isAdmin = user?.role === 'Admin'
   const isVisitor = user?.role === 'Visitor'
   const [hasEntered, setHasEntered] = useState(false)
+  const { pathname } = useLocation()
 
   // Slides up from below on mount - needs a tick of delay
   // (requestAnimationFrame) so the browser actually paints the
@@ -40,10 +49,15 @@ function BottomNav({ onFabClick }) {
   }
 
   if (isVisitor) {
+    const visitorColumn = VISITOR_NAV_COLUMN[pathname] ?? 0
     return (
       <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
         <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
-        <div className="mx-auto grid h-16 max-w-md grid-cols-2 items-center">
+        <div className="relative mx-auto grid h-16 max-w-md grid-cols-2 items-center">
+          <div
+            className="pointer-events-none absolute inset-y-2 z-0 w-1/2 rounded-2xl bg-brand-neon/15 shadow-[0_0_20px_rgba(0,255,163,0.35)] transition-transform duration-300 ease-out"
+            style={{ transform: `translateX(${visitorColumn * 100}%)` }}
+          />
           <NavItem to="/" label="Home" Icon={Home} />
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />
         </div>
@@ -51,10 +65,18 @@ function BottomNav({ onFabClick }) {
     )
   }
 
+  const regularColumn = REGULAR_NAV_COLUMN[pathname]
   return (
     <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
       <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
-      <div className="mx-auto grid h-16 max-w-md grid-cols-5 items-center">
+      <div className="relative mx-auto grid h-16 max-w-md grid-cols-5 items-center">
+        <div
+          className="pointer-events-none absolute inset-y-2 z-0 w-1/5 rounded-2xl bg-brand-neon/15 shadow-[0_0_20px_rgba(0,255,163,0.35)] transition-transform duration-300 ease-out"
+          style={{
+            transform: `translateX(${(regularColumn ?? 0) * 100}%)`,
+            opacity: regularColumn == null ? 0 : 1,
+          }}
+        />
         <NavItem to="/" label="Home" Icon={Home} />
         {isAdmin ? (
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />
