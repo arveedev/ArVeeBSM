@@ -417,26 +417,26 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   const columnStyles = isIssues
     ? {
         0: { cellWidth: 15 },   // DATE
-        1: { cellWidth: 22 },   // NATURE OF TRANS ACTIVITY
+        1: { cellWidth: 28 },   // NATURE OF TRANS ACTIVITY
         2: { cellWidth: 18 },   // WSI/WTS
         3: { cellWidth: 16 },   // AI #
         4: { cellWidth: 30 },   // FROM WHOM ISSUED NAME
         5: { cellWidth: 16 },   // OR #
         6: { cellWidth: 13 },   // VARIETY CODE
         7: { cellWidth: 9, halign: 'right' },  // MC%
-        8: { halign: 'right' }, // BAGS
+        8: { cellWidth: 14, halign: 'right' }, // BAGS
         9: { halign: 'right' }, // GROSS KILOS
         10: { halign: 'right' }, // NET KILOS
       }
     : {
         0: { cellWidth: 15 },
-        1: { cellWidth: 22 },
+        1: { cellWidth: 28 },
         2: { cellWidth: 18 },
         3: { cellWidth: 16 },
         4: { cellWidth: 38 },
         5: { cellWidth: 13 },
         6: { cellWidth: 9, halign: 'right' },
-        7: { halign: 'right' },
+        7: { cellWidth: 14, halign: 'right' },
         8: { halign: 'right' },
         9: { halign: 'right' },
       }

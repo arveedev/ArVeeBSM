@@ -11526,3 +11526,25 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## Stock statement PDF: widened Nature of Transaction Activity column
+
+Per explicit request: the "Nature of Trans Activity" column on the
+Statement of Weekly Receipts, Issues and Balances was too narrow to
+fit longer transaction type names (e.g. "TEST REMILLING"). Widened
+from 22 to 28 units, and gave the Bags column an explicit, narrower
+width (14) to compensate - it previously had no explicit width at
+all (auto-sized by the table layout), taking up more room than a
+short number column actually needs. Applied consistently to both the
+issues and receipts branches of this table, which are structured
+slightly differently (issues has an extra OR # column, shifting
+Bags' index from 7 to 8).
+
+Verified with a 4-case test confirming both column widths in both
+branches.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds)
+and the dedicated test suite above. Full regression suite re-run -
+the same pre-existing stale scratch-test failures already confirmed
+multiple times this session, no new regressions.
