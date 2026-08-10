@@ -579,29 +579,6 @@ function Piles() {
     }
   }
 
-  // Keeps panning contained within the pile layout's own boundaries -
-  // per explicit report that unconstrained panning was implicated in
-  // the "extra space" bug on full-screen re-entry, and is poor
-  // behavior on its own regardless (the grid should never be
-  // pannable off into empty space). Since transform-origin is
-  // 'center', the content overflows symmetrically around the
-  // container's center at any zoom level >1 - the maximum allowed
-  // offset in each direction is half of however much the scaled
-  // content currently exceeds the container's own size.
-  const clampPanOffset = (offset, forZoomScale) => {
-    if (!containerRef.current) return offset
-    const containerW = containerRef.current.offsetWidth
-    const containerH = containerRef.current.offsetHeight
-    const contentW = naturalWidth * scale * forZoomScale
-    const contentH = naturalHeight * scale * forZoomScale
-    const maxX = Math.max(0, (contentW - containerW) / 2)
-    const maxY = Math.max(0, (contentH - containerH) / 2)
-    return {
-      x: Math.min(maxX, Math.max(-maxX, offset.x)),
-      y: Math.min(maxY, Math.max(-maxY, offset.y)),
-    }
-  }
-
   const handleGridTouchMove = (e) => {
     const gesture = gestureRef.current
     if (!gesture) return
@@ -609,9 +586,7 @@ function Piles() {
     if (gesture.type === 'pinch' && e.touches.length === 2) {
       e.preventDefault() // stop the browser's own native pinch-to-zoom-the-page from also firing
       const ratio = touchDistance(e.touches[0], e.touches[1]) / gesture.startDistance
-      const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gesture.startZoom * ratio))
-      setZoomScale(nextZoom)
-      setPanOffset((current) => clampPanOffset(current, nextZoom)) // zooming back out can leave a previously-valid offset now out of bounds
+      setZoomScale(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gesture.startZoom * ratio)))
     } else if (gesture.type === 'pan-candidate' || gesture.type === 'panning') {
       const screenDX = e.touches[0].clientX - gesture.startX
       const screenDY = e.touches[0].clientY - gesture.startY
@@ -625,7 +600,7 @@ function Piles() {
       // has to be re-mapped onto the content's own local axes for the
       // pan to move in the direction the user actually swiped.
       const [localDX, localDY] = isPortrait ? [screenDY, -screenDX] : [screenDX, screenDY]
-      setPanOffset(clampPanOffset({ x: gesture.startPan.x + localDX, y: gesture.startPan.y + localDY }, zoomScale))
+      setPanOffset({ x: gesture.startPan.x + localDX, y: gesture.startPan.y + localDY })
     }
   }
 
@@ -770,7 +745,7 @@ function Piles() {
         )}
         <div
           ref={containerRef}
-          className={`relative mt-2 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1' : ''}`}
+          className={`relative mt-2 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1 flex items-center justify-center' : ''}`}
           onTouchStart={handleGridTouchStart}
           onTouchMove={handleGridTouchMove}
           onTouchEnd={handleGridTouchEnd}

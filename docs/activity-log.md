@@ -11080,3 +11080,34 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## Reverted pan bounds (broke movement entirely), added centering instead
+
+Found the actual bug in the previous entry's bounds logic: the
+auto-fit scale already makes the pile layout content exactly fit the
+container at 1x zoom, meaning there is zero overflow to pan through
+until the user actually zooms in - the bounds calculation was
+correctly computing to zero at the default zoom level, which locked
+panning completely from the very start, before the user could even
+begin. Removed the clamping entirely, per explicit request, restoring
+unbounded panning.
+
+Addressed the actual underlying goal a different way instead: the
+container now centers its content (flex items-center justify-center)
+in full-screen mode, which previously had no explicit centering at
+all - content just sat at its natural top-left position. Combined
+with the pan/zoom reset already happening on every full-screen toggle
+(confirmed still intact), the pile boxes now correctly start centered
+every single time full-screen is entered, without needing to
+constrain panning at all.
+
+Verified with a 5-case test confirming the bounds logic is fully
+removed, panning is applied directly and unbounded again, the
+centering classes are present, and the reset-on-toggle effect remains
+intact.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
