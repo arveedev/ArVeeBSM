@@ -11548,3 +11548,42 @@ check-imports.cjs + a full production npm run build, which succeeds)
 and the dedicated test suite above. Full regression suite re-run -
 the same pre-existing stale scratch-test failures already confirmed
 multiple times this session, no new regressions.
+
+## Removed MC column for By Products on the exported stock statement
+
+Per explicit request: By Products has no moisture content concept, so
+the MC% column on the Statement of Weekly Receipts/Issues PDF is now
+omitted entirely for that cereal type - not just left blank, the
+column itself doesn't appear, and every other column shifts left to
+fill the freed space naturally.
+
+While implementing this, restructured how column widths are built for
+this table: previously two separate, fully-duplicated, hand-indexed
+objects (one for issues, one for receipts) each needed manual re-
+numbering whenever a column was added or removed - exactly the kind
+of place a conditional column (like MC being removed for By Products)
+would be error-prone to get right by hand across two branches with
+different starting offsets. Rebuilt as a single ordered array that
+matches the head/body columns position-for-position, then converted
+to the indexed object format autoTable expects - this makes the
+column set adjust itself correctly regardless of which columns are
+actually present.
+
+Confirmed this is the only place MC appears anywhere in the report
+generator - the summary and recap pages never had an MC column at
+all, so no changes were needed there.
+
+Verified with an 8-case test confirming the header, each row, and the
+total row all correctly omit MC only for By Products, and that a
+moisture value is never silently present in the row array even if
+one exists in the underlying data. Updated the earlier column-width
+test (whose exact string assertions were tied to the now-superseded
+hardcoded objects) to match the new array-based structure and verify
+the same underlying behavior, including all four combinations of
+issues/receipts x By-Products/non-By-Products.
+
+All changes in this entry verified compiling (full parse check +
+check-imports.cjs + a full production npm run build, which succeeds)
+and both dedicated test suites above. Full regression suite re-run -
+the same pre-existing stale scratch-test failures already confirmed
+multiple times this session, no new regressions.
