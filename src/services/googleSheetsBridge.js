@@ -1104,7 +1104,7 @@ export const mapSheetRowToTransaction = (type, row, { warehouseId, varietyByName
       mtsSackTypeId: null,
       mtsCondition: null,
       moistureContent: null,
-      condition: null,
+      condition: 'GQ',
       ageValue: row['AGE'] ?? null,
       ageUnit: row['Age Unit'] || (row['AGE'] != null ? 'Months' : 'Days'),
       initialAgeValue: row['AGE'] ?? null,
