@@ -223,6 +223,37 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
     }
   }
 
+  // CRITICAL FIX: every sheet-imported stock transaction (WSR/WSI/WTS)
+  // was unconditionally given condition: null, since the Sheet never
+  // tracked a condition column at all - this is the confirmed root
+  // cause of the reported "phantom null-condition rows" in reports:
+  // a pile's real historical transactions were split across two
+  // separate report rows (one grouped under its real condition, one
+  // under null), rather than being correctly combined into one.
+  // Retroactively defaults every existing stock transaction that has
+  // condition === null to 'GQ', matching the explicit policy that all
+  // transactions default to GQ - strictly scoped to null only, never
+  // touching a transaction that already has a real, different
+  // condition value (TRD/INF/PD/TD), and strictly scoped to stock
+  // types only (WSR/WSI/WTS) - sacks use a completely different
+  // condition enum (BN/SH/US) that this must never touch.
+  const STOCK_CONDITION_DEFAULT_FIX_FLAG = 'stock-condition-null-to-gq-fix-v1'
+  if (!localStorage.getItem(STOCK_CONDITION_DEFAULT_FIX_FLAG)) {
+    try {
+      const allLocalTxV3 = await db.transactions.toArray()
+      const needsConditionFix = allLocalTxV3.filter((tx) =>
+        ['WSR', 'WSI', 'WTS'].includes(tx.type) && tx.condition === null
+      )
+      for (const tx of needsConditionFix) tx.condition = 'GQ'
+      if (needsConditionFix.length > 0) await db.transactions.bulkPut(needsConditionFix)
+
+      console.log(`stock-condition-null-to-gq-fix-v1: defaulted ${needsConditionFix.length} stock transaction(s) with a missing condition to GQ, out of ${allLocalTxV3.length} total local transactions`)
+      localStorage.setItem(STOCK_CONDITION_DEFAULT_FIX_FLAG, 'done')
+    } catch (error) {
+      console.error('stock-condition-null-to-gq-fix-v1 failed, will retry next load:', error)
+    }
+  }
+
   // Admin and Visitor both have access to every warehouse (they share
   // the same all-warehouse AdminHome view - see App.jsx), so both
   // preload everything rather than being skipped. A regular user stays

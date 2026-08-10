@@ -189,14 +189,35 @@ function Reports() {
       // for that pile, so date-gating them the same as real transactions
       // means a pile created on or after stmtFrom silently loses its seed
       // (excluded from the statement AND excluded from the beginning
-      // balance - counted nowhere). Real transactions are still date-gated
-      // normally.
+      // balance - counted nowhere).
+      //
+      // Real, non-seed transactions are only counted if they're dated
+      // AFTER that specific pile's own beginning-balance date - per
+      // explicit request, once a pile has a beginning balance set as of
+      // a given date, everything before or on that date is already
+      // represented by the seed figure itself and must never be
+      // re-summed on top of it (which is what let old, condition-
+      // inconsistent Sheet-imported history keep leaking into current
+      // reports as duplicate-looking rows). A transaction whose pile
+      // can't be resolved (deleted pile, or no pileId at all) is
+      // conservatively still included, since there's no beginning-
+      // balance date to compare it against.
+      const pileDateOfReceiptById = new Map(
+        (await db.piles.where('warehouseId').equals(currentWarehouseId).toArray())
+          .map((p) => [p.pileId, p.dateOfReceipt])
+      )
       const stockBeginningBals = new Map()
-      const priorStockRaw = await db.transactions
+      const priorStockRaw = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
         .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active' &&
           (t.isInitialBalance || t.date < stmtFrom))
-        .toArray()
+        .toArray())
+        .filter((t) => {
+          if (t.isInitialBalance) return true // the seed itself always counts, regardless of date
+          const pileDate = pileDateOfReceiptById.get(t.pileId)
+          if (!pileDate) return true // no resolvable pile to compare against - conservatively include
+          return t.date > pileDate
+        })
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {
         const variety = varietyMap.get(t.varietyId)
@@ -242,7 +263,7 @@ function Reports() {
           if (!sType) continue
           const key = `${l.sackTypeId}::${l.condition}`
           const cutoff = sackAsOfDateByKey.get(key)
-          if (cutoff && t.date < cutoff) continue
+          if (cutoff && t.date <= cutoff) continue
           const sign = t.type === 'ESI' ? -1 : 1
           sackBeginningBals.set(key, (sackBeginningBals.get(key) ?? 0) + (l.pieces ?? 0) * sign)
         }

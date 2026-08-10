@@ -11355,3 +11355,125 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## CRITICAL DATA BUG SOLVED: the "phantom variety/null-condition" mystery in Stock Reports
+
+User reported a genuinely confusing symptom: the exported Stock Report
+showed variety+condition combinations (e.g. "PD1-A" with a blank
+condition) that didn't correspond to any current pile, appearing
+alongside a correctly-populated "PD1-A: GQ" row for the same variety -
+and setting every pile's condition to GQ had no effect on it at all.
+
+Traced this to its actual root cause by following exactly how the
+report computes its numbers: the "beginning balance" figures are NOT
+read from db.piles at all - they're computed by summing every
+historical WSR/WSI/WTS transaction dated before the report period,
+grouped strictly by variety+condition as a compound key. This
+explains both confirmed symptoms directly:
+1. Why changing a pile's condition did nothing - that only touches
+   the pile record (and, since an earlier fix this session, its one
+   seed transaction) - it can never retroactively change any of that
+   pile's OTHER historical transactions, which the report also sums.
+2. Why "PD1-A" appeared twice - some of its historical transactions
+   carry condition: 'GQ', others carry condition: null - genuinely
+   the same physical pile's stock, but split into two separate report
+   rows purely because of an inconsistency in how condition was
+   recorded across the transaction history.
+
+Found the exact source of the null values: mapSheetRowToTransaction
+(which builds a local transaction record from an imported Sheet row)
+unconditionally set condition: null for every imported stock row,
+since the Sheet itself never tracked a condition column at all - the
+same documented pattern as pile/MTS not being tracked there either.
+This means literally all sheet-imported historical/legacy stock data
+carries this gap, regardless of what the pile's real condition should
+be. Confirmed via a careful, separate check that a different,
+unrelated condition: null (on an AI authority allocation record, which
+has no condition concept at all) was correctly left untouched, and
+that this entire code path is exclusively inside the WSR/WSI branch of
+mapSheetRowToTransaction, never shared with the sack (ESI/ESR) import
+path, which uses a completely different condition enum (BN/SH/US).
+
+Two-part fix, directly matching the user's own explicitly stated
+policy that all transactions should default to GQ:
+1. mapSheetRowToTransaction now defaults condition to 'GQ' for future
+   imports, instead of null.
+2. A new, one-time migration (stock-condition-null-to-gq-fix-v1)
+   retroactively fixes every existing local stock transaction
+   (WSR/WSI/WTS) with condition === null, defaulting it to 'GQ' -
+   strictly scoped to null only, never overwriting a transaction that
+   already has a real, different condition value.
+
+Verified with a 10-case test that directly reproduces and confirms
+the fix for the exact reported scenario - modeling the report's own
+grouping logic to show the same variety splitting into two rows
+before the fix, and correctly merging into one (with the full,
+combined total) after it.
+
+NOT YET RESOLVED, flagged honestly rather than guessed at: the
+separate "PD" variety appearing with no matching current pile at all
+is NOT a condition issue - it's a different variety+data situation
+entirely, and without live access to the actual data I cannot
+confidently determine whether this represents legitimate historical
+data (e.g. a variety that was fully issued out and no longer has an
+active pile, which could be entirely correct report behavior) or a
+genuine data problem - attempting to "fix" this without understanding
+which one it is would risk deleting real historical data, which is
+not a risk worth taking on a guess.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, PLUS one new but equally
+expected stale failure in test_beginning_balance_missing_fields.mjs
+(checking an exact old string pattern intentionally changed in the
+previous entry, already correctly re-verified by the newer, more
+specific test_beginning_balance_persistence_and_actions.mjs) - no
+genuine regressions.
+
+## Implemented per explicit request: beginning-balance date now acts as a hard cutoff for the report
+
+Per direct request: once a pile has a beginning balance set as of a
+given date (e.g. June 30), the report should stop re-deriving its
+balance from historical transactions entirely - everything on or
+before that date is already fully represented by the beginning
+balance figure itself, and only genuinely new activity strictly after
+that date should ever be added on top of it.
+
+Restructured the stock beginning-balance computation in Reports.jsx:
+now looks up each candidate transaction's own pile and its
+dateOfReceipt, excluding the transaction from the "prior activity"
+sum unless it's dated strictly after that pile's own beginning-
+balance date. The seed (isInitialBalance) transaction itself is
+unaffected and always counts, as before. A transaction whose pile
+can't be resolved at all (e.g. a deleted pile) is conservatively
+still included, since there's no beginning-balance date left to
+compare it against.
+
+Also found and fixed a related, pre-existing inconsistency on the
+sacks side: sacks already had a similar mechanism (this exact pattern
+existed there first, evidently as a prior fix), but its comparison
+only excluded transactions strictly BEFORE the cutoff, incorrectly
+still including anything dated the SAME DAY as the beginning balance
+date. Fixed to match the explicit wording of this request ("during
+and before") on both sides consistently.
+
+This is expected to resolve the reported "PD1-A appearing twice" and
+similar phantom-row symptoms far more robustly than trying to clean
+up every historical transaction's condition value one at a time -
+once a pile's beginning balance date is set, none of its
+messier pre-app history (regardless of what condition value it
+carries, or any other inconsistency) can leak into current reports
+anymore at all.
+
+Verified with a 9-case test modeling the exact reported scenario on
+both the stock and sack sides - confirming same-day exclusion,
+before-date exclusion, after-date inclusion, the seed's own
+date-independence, and the safe fallback for an unresolvable pile.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
