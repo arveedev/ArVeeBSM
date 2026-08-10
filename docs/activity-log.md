@@ -11477,3 +11477,52 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## CRITICAL FOLLOW-UP FIX: found the actual reason "PD" from April still appeared
+
+User reported the previous fix wasn't fully working - a "PD" variety
+transaction from April was still appearing on a July report, despite
+being well before the June 30 beginning balance date. Traced this to
+the exact gap in the previous implementation: it matched each
+transaction to its OWN pile's individual dateOfReceipt, but fell back
+to including any transaction whose pileId couldn't be resolved to a
+current pile. Since "PD" doesn't correspond to any currently-existing
+pile at all (confirmed by the user from the start), it fell straight
+through that fallback and kept appearing regardless of age - the
+fallback was itself the bug.
+
+Per explicit clarification ("no transactions of any kind should be
+allowed on the reports only after the beginning balances") - rebuilt
+this as a single, blanket cutoff for the whole warehouse instead of
+per-pile matching: the latest dateOfReceipt across every currently-
+existing pile, with NO fallback that could let anything through
+unconditionally. A transaction is only ever included if it's dated
+strictly after this cutoff, full stop, regardless of whether its
+pileId can be resolved. The only remaining exception is when there
+are no piles at all yet to establish any cutoff from, in which case
+nothing gets blocked (a reasonable state before any beginning balance
+has ever been set).
+
+Found and fixed the identical gap on the sacks side too, while
+verifying it - the per-key (sackTypeId::condition) matching there had
+the same "falsy cutoff means include" bug for any sack line whose key
+had no matching current seed. Fixed with the same single-cutoff
+approach for consistency.
+
+Confirmed this remains purely a report-computation-time filter -
+never mutates or deletes any stored transaction data, exactly matching
+the explicit requirement that historical data must be preserved for
+data integrity even though it's excluded from what reports display.
+
+Verified with an 8-case test directly modeling the exact reported
+bug (an unresolvable-pile transaction from well before the cutoff)
+and confirming it's now excluded, alongside the cutoff computation
+logic itself (latest date among multiple piles, uniform-date case,
+and the no-piles-yet edge case). Removed the now-superseded test file
+from the previous, gap-containing implementation.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.

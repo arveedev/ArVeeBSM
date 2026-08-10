@@ -191,21 +191,29 @@ function Reports() {
       // (excluded from the statement AND excluded from the beginning
       // balance - counted nowhere).
       //
-      // Real, non-seed transactions are only counted if they're dated
-      // AFTER that specific pile's own beginning-balance date - per
-      // explicit request, once a pile has a beginning balance set as of
-      // a given date, everything before or on that date is already
-      // represented by the seed figure itself and must never be
-      // re-summed on top of it (which is what let old, condition-
-      // inconsistent Sheet-imported history keep leaking into current
-      // reports as duplicate-looking rows). A transaction whose pile
-      // can't be resolved (deleted pile, or no pileId at all) is
-      // conservatively still included, since there's no beginning-
-      // balance date to compare it against.
-      const pileDateOfReceiptById = new Map(
-        (await db.piles.where('warehouseId').equals(currentWarehouseId).toArray())
-          .map((p) => [p.pileId, p.dateOfReceipt])
-      )
+      // Every other, non-seed transaction is only counted if it's dated
+      // strictly AFTER this warehouse's beginning-balance cutoff - per
+      // explicit clarification, NO transaction of any kind should ever
+      // appear in a report unless it's dated after the beginning
+      // balance was established, with no exceptions. An earlier version
+      // of this fix tried to match each transaction to its own pile's
+      // individual dateOfReceipt, falling back to "include" for any
+      // transaction whose pile couldn't be resolved - that fallback was
+      // itself the bug: a transaction with no resolvable current pile
+      // (e.g. old, orphaned Sheet-imported history for a pile that no
+      // longer exists) fell through to being included regardless of how
+      // old it actually was, which is exactly why a "PD" transaction
+      // from April was still appearing on a July report despite being
+      // well before the June 30 beginning balance date. Fixed by using
+      // one single cutoff for the whole warehouse - the latest
+      // dateOfReceipt across every currently-existing pile, representing
+      // the point by which every pile's beginning balance was
+      // established - and excluding anything on/before it unconditionally,
+      // with no fallback that could let anything slip through.
+      const pileDatesForWarehouse = (await db.piles.where('warehouseId').equals(currentWarehouseId).toArray())
+        .map((p) => p.dateOfReceipt)
+        .filter(Boolean)
+      const beginningBalanceCutoff = pileDatesForWarehouse.length > 0 ? pileDatesForWarehouse.sort().at(-1) : null
       const stockBeginningBals = new Map()
       const priorStockRaw = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
@@ -214,9 +222,8 @@ function Reports() {
         .toArray())
         .filter((t) => {
           if (t.isInitialBalance) return true // the seed itself always counts, regardless of date
-          const pileDate = pileDateOfReceiptById.get(t.pileId)
-          if (!pileDate) return true // no resolvable pile to compare against - conservatively include
-          return t.date > pileDate
+          if (!beginningBalanceCutoff) return true // no piles at all yet to establish a cutoff from
+          return t.date > beginningBalanceCutoff
         })
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {
@@ -238,12 +245,16 @@ function Reports() {
       // Compute beginning balances for sacks. Each sackInventory seed
       // now carries its own as-of date - only include a seed if its
       // date is on/before this report period's start (otherwise it
-      // genuinely didn't exist yet as of this period), and only count
-      // prior ESR/ESI transactions dated on/after that same seed date
-      // (anything earlier is pre-seed history already baked into the
-      // seed value itself, which would otherwise be double-counted).
+      // genuinely didn't exist yet as of this period).
+      //
+      // Every other, non-seed sack transaction is only counted if it's
+      // dated strictly AFTER this warehouse's beginning-balance cutoff -
+      // same single-cutoff approach as stocks above, and for the same
+      // reason: the previous per-key matching (sackTypeId::condition)
+      // had the identical gap - a sack line whose key had no matching
+      // current seed fell through a falsy "cutoff &&" check and was
+      // included regardless of how old it actually was.
       const sackBeginningBals = new Map()
-      const sackAsOfDateByKey = new Map()
       const sackInventorySeed = await db.sackInventory
         .where('warehouseId').equals(currentWarehouseId)
         .toArray()
@@ -251,19 +262,19 @@ function Reports() {
         if (rec.asOfDate && rec.asOfDate > stmtFrom) continue
         const key = `${rec.sackTypeId}::${rec.condition}`
         sackBeginningBals.set(key, (sackBeginningBals.get(key) ?? 0) + (rec.pieces ?? 0))
-        sackAsOfDateByKey.set(key, rec.asOfDate ?? null)
       }
+      const sackAsOfDates = sackInventorySeed.map((rec) => rec.asOfDate).filter(Boolean)
+      const sackBeginningBalanceCutoff = sackAsOfDates.length > 0 ? sackAsOfDates.sort().at(-1) : null
       const priorSack = await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
-        .and((t) => ['ESR', 'ESI'].includes(t.type) && t.status === 'Active' && t.date < stmtFrom)
+        .and((t) => ['ESR', 'ESI'].includes(t.type) && t.status === 'Active' && t.date < stmtFrom &&
+          (!sackBeginningBalanceCutoff || t.date > sackBeginningBalanceCutoff))
         .toArray()
       for (const t of priorSack) {
         for (const l of (t.sackLines ?? [])) {
           const sType = sackTypeMap.get(l.sackTypeId)
           if (!sType) continue
           const key = `${l.sackTypeId}::${l.condition}`
-          const cutoff = sackAsOfDateByKey.get(key)
-          if (cutoff && t.date <= cutoff) continue
           const sign = t.type === 'ESI' ? -1 : 1
           sackBeginningBals.set(key, (sackBeginningBals.get(key) ?? 0) + (l.pieces ?? 0) * sign)
         }
