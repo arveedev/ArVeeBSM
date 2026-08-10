@@ -360,6 +360,8 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   doc.text(`TYPE OF CEREAL: LOCAL ${cerealType.toUpperCase()}`, margin, y)
   y += 3
 
+  const isByProducts = cerealType === 'By Products'
+
   const sorted = [...transactions].sort((a, b) => {
     const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
     return n(a) - n(b)
@@ -377,7 +379,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
       isIssues ? (t.aiNumber ?? '') : '',
       t.status === 'Cancelled' ? 'CANCELLED' : (t.customerName ?? ''),
       t.varietyName ?? '',
-      t.moistureContent != null ? Number(t.moistureContent).toFixed(1) : '-',
+      ...(isByProducts ? [] : [t.moistureContent != null ? Number(t.moistureContent).toFixed(1) : '-']),
       fmtBags(t.numberOfBags),
       fmtKilos(t.grossKilos),
       fmtKilos(t.netKilos),
@@ -389,7 +391,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   const totalRow = [
     '', '', '', '',
     { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
-    '',
+    ...(isByProducts ? [] : ['']),
     { content: fmtBags(totBags), styles: { fontStyle: 'bold', halign: 'right' } },
     { content: fmtKilos(totGross), styles: { fontStyle: 'bold', halign: 'right' } },
     { content: fmtKilos(totNet), styles: { fontStyle: 'bold', halign: 'right' } },
@@ -407,39 +409,34 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     linkedColHeader,
     { content: 'FROM WHOM ' + (isIssues ? 'ISSUED' : 'RECEIVED') + '\nNAME', styles: { halign: 'center' } },
     'VARIETY\nCODE',
-    'MC\n%',
+    ...(isByProducts ? [] : ['MC\n%']),
     'BAGS',
     'GROSS\nKILOS',
     'NET\nKILOS',
   ]
   if (isIssues) head.splice(5, 0, 'OR #')
 
-  const columnStyles = isIssues
-    ? {
-        0: { cellWidth: 15 },   // DATE
-        1: { cellWidth: 28 },   // NATURE OF TRANS ACTIVITY
-        2: { cellWidth: 18 },   // WSI/WTS
-        3: { cellWidth: 16 },   // AI #
-        4: { cellWidth: 30 },   // FROM WHOM ISSUED NAME
-        5: { cellWidth: 16 },   // OR #
-        6: { cellWidth: 13 },   // VARIETY CODE
-        7: { cellWidth: 9, halign: 'right' },  // MC%
-        8: { cellWidth: 14, halign: 'right' }, // BAGS
-        9: { halign: 'right' }, // GROSS KILOS
-        10: { halign: 'right' }, // NET KILOS
-      }
-    : {
-        0: { cellWidth: 15 },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 18 },
-        3: { cellWidth: 16 },
-        4: { cellWidth: 38 },
-        5: { cellWidth: 13 },
-        6: { cellWidth: 9, halign: 'right' },
-        7: { cellWidth: 14, halign: 'right' },
-        8: { halign: 'right' },
-        9: { halign: 'right' },
-      }
+  // Column widths are built as an ordered list matching the head/body
+  // arrays above position-for-position, then converted to the indexed
+  // object autoTable expects - this way the widths automatically shift
+  // correctly whichever columns are actually present, rather than
+  // needing every index hand-adjusted whenever a column is added,
+  // removed, or conditionally omitted (like MC is here for By Products).
+  const widthList = [
+    { cellWidth: 15 },   // DATE
+    { cellWidth: 28 },   // NATURE OF TRANS ACTIVITY
+    { cellWidth: 18 },   // serial
+    { cellWidth: 16 },   // linked doc
+    { cellWidth: isIssues ? 30 : 38 }, // FROM WHOM NAME
+    ...(isIssues ? [{ cellWidth: 16 }] : []), // OR #
+    { cellWidth: 13 },   // VARIETY CODE
+    ...(isByProducts ? [] : [{ cellWidth: 9, halign: 'right' }]), // MC%
+    { cellWidth: 14, halign: 'right' }, // BAGS
+    { halign: 'right' }, // GROSS KILOS
+    { halign: 'right' }, // NET KILOS
+  ]
+  const columnStyles = Object.fromEntries(widthList.map((style, i) => [i, style]))
+
 
   autoTable(doc, {
     startY: y,
