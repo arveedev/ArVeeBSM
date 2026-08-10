@@ -181,19 +181,28 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
   // and re-runs the same duplicate-cleanup logic above scoped to
   // sheet-imported records, in case this bug already created
   // duplicates before this fix existed.
-  const HAS_BEEN_BACKED_UP_FIX_FLAG = 'sheet-import-has-been-backed-up-fix-v1'
+  const HAS_BEEN_BACKED_UP_FIX_FLAG = 'sheet-import-has-been-backed-up-fix-v2'
   if (!localStorage.getItem(HAS_BEEN_BACKED_UP_FIX_FLAG)) {
     try {
-      const importedTx = (await db.transactions.toArray()).filter((tx) => tx.fromSheetImport === true)
+      const allLocalTxV2 = await db.transactions.toArray()
+      const importedTx = allLocalTxV2.filter((tx) => tx.fromSheetImport === true)
       const needsFix = importedTx.filter((tx) => tx.hasBeenBackedUp !== true)
       for (const tx of needsFix) tx.hasBeenBackedUp = true
       if (needsFix.length > 0) await db.transactions.bulkPut(needsFix)
 
-      // Duplicate cleanup, scoped to sheet-imported records only -
-      // same completeness-based keep/delete logic as the migration
-      // above, using the exact same grouping key.
+      // Duplicate cleanup - CRITICAL: scoped to ALL transactions, not
+      // just sheet-imported ones. The confirmed real-world scenario:
+      // a transaction created directly in the app (not sheet-
+      // imported) gets accidentally duplicated by a sheet-imported
+      // copy of itself (via the append-vs-update bug fixed earlier).
+      // Comparing only within the sheet-imported subset would never
+      // catch this - the original, locally-created half of the pair
+      // was never even in that comparison pool, so the migration saw
+      // a group of exactly one and concluded there was nothing to
+      // deduplicate, even though a genuine duplicate existed just
+      // outside its scope.
       const groups = new Map()
-      for (const tx of importedTx) {
+      for (const tx of allLocalTxV2) {
         const key = `${tx.type}::${tx.warehouseId}::${tx.serialNo}::${tx.cerealCategory ?? ''}`
         if (!groups.has(key)) groups.set(key, [])
         groups.get(key).push(tx)
@@ -207,10 +216,10 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
       }
       if (toDeleteIds.length > 0) await db.transactions.bulkDelete(toDeleteIds)
 
-      console.log(`sheet-import-has-been-backed-up-fix-v1: fixed ${needsFix.length} record(s), removed ${toDeleteIds.length} duplicate(s) out of ${importedTx.length} sheet-imported records`)
+      console.log(`sheet-import-has-been-backed-up-fix-v2: fixed ${needsFix.length} sheet-imported record(s), removed ${toDeleteIds.length} duplicate(s) out of ${allLocalTxV2.length} total local transactions`)
       localStorage.setItem(HAS_BEEN_BACKED_UP_FIX_FLAG, 'done')
     } catch (error) {
-      console.error('sheet-import-has-been-backed-up-fix-v1 failed, will retry next load:', error)
+      console.error('sheet-import-has-been-backed-up-fix-v2 failed, will retry next load:', error)
     }
   }
 
