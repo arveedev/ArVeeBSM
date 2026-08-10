@@ -11317,3 +11317,41 @@ understood. Still need to work out: how "MPO III's own accountability"
 (a holding state that isn't a pile) should be represented in the data
 model, and the MC-before/MC-after tracking + dryer-received
 notification design.
+
+## CRITICAL FIX: beginning balance condition/purity/MC were saved to the wrong record
+
+Confirmed exact cause of the reported "condition still shows null on
+the exported Stock Report" bug: the report generator reads condition
+(and, by the same logic, purity and moisture content) from the
+TRANSACTION record, never from the pile directly. The earlier fix
+only ever saved these fields to db.piles - never to the pile's own
+"seed" transaction (the isInitialBalance record the report actually
+reads from) - so the fields displayed correctly within the Beginning
+Balances form itself (since that reads from the pile), but were
+invisible everywhere else that matters, including the exported
+report. Fixed both the update-existing-seed path and the create-new-
+seed path to include these fields, and updated the edit-population
+logic to prefer the seed transaction's own values (the actual source
+of truth), falling back to the pile's values for any records that
+still only have the pile-level fields saved from before this fix.
+
+Also restored the delete, close/reopen, and BIN card export actions
+on the Beginning Balances pile list - these existed on the original
+Create Pile list before it was intentionally simplified to just the
+creation form earlier this session, but were never carried over to
+this list as they should have been, since this is now the only place
+piles are managed. Moved this logic (previously left in place as
+unused code in Settings.jsx) into BeginningBalancesPanel.jsx and
+adapted it to this component's own local data, including correctly
+fetching warehouse/branch fresh for BIN card export - since this
+panel's warehouseId can differ from the app-wide "current" warehouse
+when embedded elsewhere with an override.
+
+Verified with a 9-case test covering both the persistence fix and the
+restored actions.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.

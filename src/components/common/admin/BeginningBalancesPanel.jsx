@@ -8,7 +8,7 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, MoreVertical } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useWarehouse } from '../../../context/WarehouseContext.jsx'
 import { useSettings } from '../../../context/SettingsContext.jsx'
@@ -16,7 +16,8 @@ import {
   fmtBags, fmtWeight, liveFormatNumber, parseFormattedNumber,
   normalizeAgeToDays, todayLocalISO,
 } from '../../../utils/calculations.js'
-import { recalculatePileCurrentState } from '../../../utils/pileLedger.js'
+import { recalculatePileCurrentState, closePile, reopenPile } from '../../../utils/pileLedger.js'
+import { generatePileBinCard } from '../../../utils/pileBinCardGenerator.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import {
@@ -39,6 +40,8 @@ function PilesBeginningBalances({ warehouseId }) {
   const [purity, setPurity] = useState('')
   const [moistureContent, setMoistureContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [openMenuPileId, setOpenMenuPileId] = useState(null)
   const formRef = useRef(null)
 
   const piles = useLiveQuery(
@@ -82,9 +85,10 @@ function PilesBeginningBalances({ warehouseId }) {
       storedDays > 0 && storedDays % 30 === 0 ? storedDays / 30 : storedDays
     )))
     setAsOfDate(seed?.date ?? pile.dateOfReceipt ?? todayLocalISO())
-    setCondition(pile.condition ?? 'GQ')
-    setPurity(pile.purity ?? '')
-    setMoistureContent(pile.moistureContent != null ? liveFormatNumber(String(pile.moistureContent)) : '')
+    setCondition(seed?.condition ?? pile.condition ?? 'GQ')
+    setPurity(seed?.purity ?? pile.purity ?? '')
+    const seedMoisture = seed?.moistureContent ?? pile.moistureContent
+    setMoistureContent(seedMoisture != null ? liveFormatNumber(String(seedMoisture)) : '')
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -112,8 +116,14 @@ function PilesBeginningBalances({ warehouseId }) {
       .and((t) => t.isInitialBalance)
       .first()
 
+    const seedFields = {
+      condition,
+      purity: purity.trim() || null,
+      moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
+    }
+
     if (seed) {
-      await db.transactions.update(seed.id, { date: asOfDate, numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos })
+      await db.transactions.update(seed.id, { date: asOfDate, numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos, ...seedFields })
     } else if (newBags > 0 || newKilos > 0) {
       const pile = piles.find((p) => p.pileId === editingPileId)
       await db.transactions.add({
@@ -121,8 +131,9 @@ function PilesBeginningBalances({ warehouseId }) {
         status: 'Active', date: asOfDate, warehouseId,
         pileId: editingPileId, varietyId: pile?.varietyId ?? null,
         numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos,
-        moistureContent: null, customerName: 'Beginning Balance',
+        customerName: 'Beginning Balance',
         isInitialBalance: true, isSynced: false,
+        ...seedFields,
       })
     }
 
@@ -135,6 +146,57 @@ function PilesBeginningBalances({ warehouseId }) {
     toast.success('Beginning balance updated')
     resetForm()
     setIsSaving(false)
+  }
+
+  // Checks for real transactions beyond the pile's own seed, to warn
+  // before deleting rather than silently orphaning transaction history.
+  const confirmDelete = async (pile) => {
+    const others = await db.transactions
+      .where('pileId').equals(pile.pileId)
+      .and((t) => !t.isInitialBalance)
+      .count()
+    setPendingDelete({ ...pile, hasHistory: others > 0 })
+  }
+
+  const handleDeleteConfirmed = async () => {
+    const pile = pendingDelete
+    setPendingDelete(null)
+    const linked = await db.transactions.where('pileId').equals(pile.pileId).toArray()
+    for (const t of linked) await db.transactions.delete(t.id)
+    await db.piles.delete(pile.pileId)
+    toast.success(`Pile "${pile.pileName}" deleted`)
+    if (editingPileId === pile.pileId) resetForm()
+  }
+
+  const handleToggleClosePile = async (pile) => {
+    setOpenMenuPileId(null)
+    if (pile.closedDate) {
+      await reopenPile(pile.pileId)
+      toast.success(`Pile "${pile.pileName}" re-opened`)
+    } else {
+      await closePile(pile.pileId)
+      toast.success(`Pile "${pile.pileName}" closed`)
+    }
+  }
+
+  const handleExportBinCard = async (pile) => {
+    setOpenMenuPileId(null)
+    const warehouse = await db.warehouses.get(warehouseId)
+    const branch = warehouse?.branchId ? await db.branches.get(warehouse.branchId) : null
+    const variety = varietyMap.get(pile.varietyId)
+    const allPileTransactions = await db.transactions.where('pileId').equals(pile.pileId).toArray()
+    // WTS transfers reference issuedPileId/receivedPileId directly, not
+    // pileId - fetch those separately so a transfer in/out of this pile
+    // isn't missing from its ledger.
+    const wtsTransfers = await db.transactions
+      .where('type').equals('WTS')
+      .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
+      .toArray()
+    const doc = generatePileBinCard({
+      warehouse, branch, pile, variety,
+      transactions: [...allPileTransactions, ...wtsTransfers],
+    })
+    doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
   }
 
   return (
@@ -217,19 +279,58 @@ function PilesBeginningBalances({ warehouseId }) {
       <ul className="space-y-1.5">
         {sortedPiles.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
         {sortedPiles.map((p) => (
-          <li key={p.pileId} className={listItemClass}>
+          <li key={p.pileId} className={`${listItemClass} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-app-text">
                 {p.pileName} <span className="text-xs text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? ''}</span>
+                {p.closedDate && <span className="ml-1 rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-semibold text-neutral-400">CLOSED</span>}
               </p>
               <p className="text-xs text-neutral-500">{fmtBags(p.currentBags)} bags · {fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')} (live)</p>
             </div>
-            <button type="button" onClick={() => handleEdit(p)} aria-label="Edit beginning balance" className={editIconClass}>
-              <Pencil size={20} />
-            </button>
+            <div className="relative flex items-center gap-1">
+              <button type="button" onClick={() => handleEdit(p)} aria-label="Edit beginning balance" className={editIconClass}>
+                <Pencil size={20} />
+              </button>
+              <button type="button" onClick={() => confirmDelete(p)} aria-label="Delete" className={deleteIconClass}>
+                <Trash2 size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpenMenuPileId((current) => (current === p.pileId ? null : p.pileId))}
+                aria-label="More options"
+                className="rounded-lg p-2 text-neutral-400 transition-all hover:text-app-text active:scale-90"
+              >
+                <MoreVertical size={20} />
+              </button>
+              {openMenuPileId === p.pileId && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setOpenMenuPileId(null)} />
+                  <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 shadow-xl">
+                    <button type="button" onClick={() => handleExportBinCard(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                      Export BIN Card
+                    </button>
+                    <button type="button" onClick={() => handleToggleClosePile(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                      {p.closedDate ? 'Re-open Pile' : 'Close Pile'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </li>
         ))}
       </ul>
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={`Delete pile "${pendingDelete?.pileName}"?`}
+        description={
+          pendingDelete?.hasHistory
+            ? 'This pile has real transactions beyond its beginning balance - deleting it will orphan those transactions in reports. This cannot be undone.'
+            : 'This cannot be undone.'
+        }
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   )
 }
