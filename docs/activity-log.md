@@ -11111,3 +11111,46 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## CRITICAL DATA BUG FOUND AND FIXED: local duplicates were never actually resolved by the earlier migration
+
+User confirmed the Google Sheet itself has no duplicate rows, which
+narrowed this down correctly: the duplicates the MO/TMO detail modal
+was displaying (2-3x the same trial data, inflating totals) exist
+only locally. Traced the exact cause: the earlier deduplication
+migration (sheet-import-has-been-backed-up-fix-v1) only ever compared
+sheet-imported records against OTHER sheet-imported records. This
+misses the exact scenario that actually happened: a transaction
+originally created directly in the app (never sheet-imported) got
+duplicated by a sheet-imported copy of itself, via the append-vs-
+update bug fixed earlier this session. Since only the duplicate half
+of that pair was ever inside the migration's comparison scope, it saw
+a group of exactly one record for that key and concluded there was
+nothing to fix - even though a genuine duplicate existed just outside
+what it was looking at.
+
+Fixed by expanding the scope to ALL local transactions, matching the
+scope the original, earlier deduplication migration in this same file
+already correctly used - bringing this later migration in line with
+it. Confirmed this key (type + warehouseId + serialNo + cerealCategory)
+is safe to use broadly: this combination is designed by the app's own
+serial numbering system to be a unique identifier, so any two records
+sharing it are always the same logical transaction, never a
+coincidental collision between genuinely different ones (like
+different trials, which have their own distinct serial numbers).
+
+Bumped the migration flag to v2 to force a fresh run for every user,
+since the v1 flag may already be set on affected devices without
+having actually resolved this specific case.
+
+Verified with a 4-case test that directly reproduces the exact
+real-world scenario: confirming the narrow scope sees nothing to fix
+(reproducing the bug), the expanded scope correctly catches it (the
+fix), the more complete record is correctly kept over the sparser
+duplicate, and genuinely different trials are never mistakenly merged.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
