@@ -23,6 +23,7 @@ import {
   inputClass, labelClass, primaryButtonClass, secondaryButtonClass,
   listItemClass, editIconClass, deleteIconClass, byAlpha, SACK_CONDITIONS,
 } from './shared.js'
+import { CONDITION_FLAGS } from '../../forms/shared.js'
 
 const AGE_UNITS = ['Days', 'Months']
 
@@ -34,6 +35,9 @@ function PilesBeginningBalances({ warehouseId }) {
   const [age, setAge] = useState('')
   const [ageUnit, setAgeUnit] = useState('Days')
   const [asOfDate, setAsOfDate] = useState(todayLocalISO())
+  const [condition, setCondition] = useState('GQ')
+  const [purity, setPurity] = useState('')
+  const [moistureContent, setMoistureContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const formRef = useRef(null)
 
@@ -52,6 +56,9 @@ function PilesBeginningBalances({ warehouseId }) {
     setAge('')
     setAgeUnit('Days')
     setAsOfDate(todayLocalISO())
+    setCondition('GQ')
+    setPurity('')
+    setMoistureContent('')
   }
 
   const handleEdit = async (pile) => {
@@ -75,6 +82,9 @@ function PilesBeginningBalances({ warehouseId }) {
       storedDays > 0 && storedDays % 30 === 0 ? storedDays / 30 : storedDays
     )))
     setAsOfDate(seed?.date ?? pile.dateOfReceipt ?? todayLocalISO())
+    setCondition(pile.condition ?? 'GQ')
+    setPurity(pile.purity ?? '')
+    setMoistureContent(pile.moistureContent != null ? liveFormatNumber(String(pile.moistureContent)) : '')
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -89,7 +99,13 @@ function PilesBeginningBalances({ warehouseId }) {
     const newKilos = kilos === '' ? 0 : parseFormattedNumber(kilos)
     const newAgeDays = age === '' ? 0 : normalizeAgeToDays(parseFormattedNumber(age), ageUnit)
 
-    await db.piles.update(editingPileId, { initialAgeValue: newAgeDays, dateOfReceipt: asOfDate })
+    await db.piles.update(editingPileId, {
+      initialAgeValue: newAgeDays,
+      dateOfReceipt: asOfDate,
+      condition,
+      purity: purity.trim() || null,
+      moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
+    })
 
     const seed = await db.transactions
       .where('pileId').equals(editingPileId)
@@ -165,6 +181,31 @@ function PilesBeginningBalances({ warehouseId }) {
           <div>
             <label className={labelClass}>As of</label>
             <CalendarDatePicker value={asOfDate} onChange={setAsOfDate} />
+          </div>
+          <div>
+            <label className={labelClass}>Condition</label>
+            <div className="mt-1 grid grid-cols-5 gap-1">
+              {CONDITION_FLAGS.map((flag) => (
+                <button key={flag} type="button" onClick={() => setCondition(flag)}
+                  className={`rounded-lg border py-1.5 text-xs font-medium transition-all active:scale-95 ${
+                    condition === flag ? 'border-brand-neon bg-brand-neon/10 text-brand-neon' : 'border-neutral-800 bg-neutral-950 text-neutral-400'
+                  }`}>
+                  {flag}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={labelClass}>Purity (optional)</label>
+              <input type="text" value={purity} onChange={(e) => setPurity(e.target.value)}
+                className={inputClass} placeholder="94%" />
+            </div>
+            <div>
+              <label className={labelClass}>MC (optional)</label>
+              <input type="text" value={moistureContent} onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
+                className={inputClass} placeholder="11.1" />
+            </div>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={handleSave} disabled={isSaving} className={`flex-1 ${primaryButtonClass}`}>Save</button>

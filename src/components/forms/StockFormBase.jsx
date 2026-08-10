@@ -172,6 +172,16 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [farmerGender, setFarmerGender] = useState('')
   const [transactionTypeId, setTransactionTypeId] = useState('')
   const [pileId, setPileId] = useState('')
+  // Multi-pile issuance - lets a single WSI draw from more than one
+  // pile of the same variety when one pile alone doesn't have enough
+  // stock to cover the required bags/kilos. Each extra allocation
+  // becomes its own separate transaction on save (sharing the same
+  // base serial with a letter suffix, same AI/customer/date), rather
+  // than changing the core schema (one pileId per transaction) that
+  // reports, the pile ledger, and Sheet sync all already depend on.
+  // Defaults to a single entry so normal, single-pile saves (still
+  // the vast majority of all transactions) are completely unaffected.
+  const [extraPileAllocations, setExtraPileAllocations] = useState([])
   const [varietyId, setVarietyId] = useState('')
   const [sackSelection, setSackSelection] = useState('')
   const [numberOfBags, setNumberOfBags] = useState('')
@@ -820,7 +830,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
       && (Boolean(selectedPile) || Boolean(varietyId))
       && (Boolean(numberOfBags) || Boolean(grossKilos))
       && Boolean(sackSelection)
-      && moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))
+      && (activeCategory === 'By Products' || (moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))))
       && (!linkedDocDeductsFromAi || Boolean(linkedDocNo.trim()))
       && (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== '')
       && !overKilos
@@ -863,7 +873,13 @@ function StockFormBase({ type, title, onClose, prefill }) {
   }
 
   const handleCustomerMatch = (customer) => {
-    if (customer.address) setCustomerAddress(customer.address)
+    // Prefer the address saved specifically for the current warehouse
+    // (e.g. "VARIOUS FARMERS" genuinely has a different address per
+    // warehouse) - falls back to the generic address when no
+    // warehouse-specific one has been saved for this customer yet.
+    const warehouseSpecificAddress = customer.addressesByWarehouse?.[currentWarehouseId]
+    if (warehouseSpecificAddress) setCustomerAddress(warehouseSpecificAddress)
+    else if (customer.address) setCustomerAddress(customer.address)
     if (customer.rsbsa) setFarmerRsbsa(customer.rsbsa)
     if (customer.gender) setFarmerGender(customer.gender)
     if (customer.isFarmerOrg) {
@@ -985,6 +1001,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
     setLoadedTransaction(null)
     setOpenedFromReports(false)
     setIsCancelled(false)
+    setPileFilterVarietyId(null)
+    setExtraPileAllocations([])
     setSerialNo(nextSerial)
     setDate(blankFormState.date)
     setLinkedDocNo('')
@@ -1340,20 +1358,55 @@ function StockFormBase({ type, title, onClose, prefill }) {
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
 
     await db.transactions.add(transaction)
-    await recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory)
-    await applyTransactionToPile(transaction)
-    await rememberCustomer({
-      name: customerName.trim(),
-      address: customerAddress.trim() || null,
-      rsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
-      gender: isProcurement ? farmerGender || null : null,
-      isFarmerOrg: farmerOrgEnabled,
-      farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
-      warehouseId: currentWarehouseId,
-    })
+    // These three don't depend on each other's results - running them
+    // concurrently reduces the total local save latency the user
+    // actually waits through, since this determines how long it takes
+    // before "saved" appears. The Sheet sync itself already happens
+    // entirely separately, in the background, unaffected either way.
+    await Promise.all([
+      recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory),
+      applyTransactionToPile(transaction),
+      rememberCustomer({
+        name: customerName.trim(),
+        address: customerAddress.trim() || null,
+        rsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
+        gender: isProcurement ? farmerGender || null : null,
+        isFarmerOrg: farmerOrgEnabled,
+        farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
+        warehouseId: currentWarehouseId,
+      }),
+    ])
+
+    // Multi-pile issuance: each additional pile allocation becomes its
+    // own separate, linked transaction record - same date/customer/AI/
+    // type as the primary one, but its own pileId and bags/kilos
+    // portion, with the base serial suffixed (A, B, C...) to stay
+    // unique. Not part of the core schema (still one pileId per
+    // transaction record) - reports, the pile ledger, and Sheet sync
+    // all see these as ordinary, independent transactions.
+    const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.kilos))
+    let extraBagsTotal = 0
+    let extraKilosTotal = 0
+    for (const [idx, alloc] of validExtraAllocations.entries()) {
+      const allocBags = alloc.bags ? parseFormattedNumber(alloc.bags) : 0
+      const allocKilos = alloc.kilos ? parseFormattedNumber(alloc.kilos) : 0
+      extraBagsTotal += allocBags
+      extraKilosTotal += allocKilos
+      const extraTransaction = {
+        ...transaction,
+        id: crypto.randomUUID(),
+        serialNo: `${serialNo.trim()}-${String.fromCharCode(65 + idx)}`,
+        pileId: alloc.pileId,
+        numberOfBags: allocBags,
+        grossKilos: allocKilos,
+        netKilos: allocKilos,
+      }
+      await db.transactions.add(extraTransaction)
+      await applyTransactionToPile(extraTransaction)
+    }
 
     if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
-      await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum, netKilos)
+      await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum + extraBagsTotal, netKilos + extraKilosTotal)
     }
 
     // The transaction saves regardless of the answer - it's a real
@@ -2038,6 +2091,66 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 </p>
               )}
             </div>
+
+            {type === 'WSI' && (
+              <div className="col-span-2">
+                {extraPileAllocations.map((alloc, i) => (
+                  <div key={i} className="mt-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-neutral-500">Additional pile {i + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
+                        aria-label="Remove pile"
+                        className="rounded-lg p-1 text-neutral-500 transition-colors hover:text-brand-crimson"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="mt-1 grid grid-cols-3 gap-2">
+                      <select
+                        value={alloc.pileId}
+                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, pileId: e.target.value } : r)))}
+                        className={`${inputClass} mt-0 ${!alloc.pileId ? '!border-brand-amber' : ''}`}
+                      >
+                        <option value="">Select pile…</option>
+                        {sortedPiles
+                          .filter((p) => p.pileId !== pileId && !extraPileAllocations.some((r, idx) => idx !== i && r.pileId === p.pileId))
+                          .filter((p) => !selectedVariety || p.varietyId === selectedVariety.varietyId)
+                          .map((p) => (
+                            <option key={p.pileId} value={p.pileId}>{p.pileName}</option>
+                          ))}
+                      </select>
+                      <input
+                        type="text" inputMode="numeric" placeholder="Bags"
+                        value={alloc.bags}
+                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r)))}
+                        className={`${inputClass} mt-0`}
+                      />
+                      <input
+                        type="text" inputMode="decimal" placeholder="Net Kilos"
+                        value={alloc.kilos}
+                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, kilos: liveFormatNumber(e.target.value) } : r)))}
+                        className={`${inputClass} mt-0`}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setExtraPileAllocations((rows) => [...rows, { pileId: '', bags: '', kilos: '' }])}
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                >
+                  <Plus size={14} /> Issue from another pile
+                </button>
+                {extraPileAllocations.length > 0 && (
+                  <p className="mt-1.5 text-xs text-neutral-500">
+                    Pile ID above covers its own share (with the Bags/Net Kilos fields further up) - each
+                    additional pile here adds its own separate share on top, saved as its own linked record.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div>
               <label className={labelClass}>Variety Type</label>
