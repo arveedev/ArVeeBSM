@@ -436,7 +436,9 @@ const SackFormBase = forwardRef(function SackFormBase(
   const totalPieces = sackLines.reduce((sum, l) => sum + parseFormattedNumber(l.pieces), 0)
 
   const handleCustomerMatch = (customer) => {
-    if (customer.address) setCustomerAddress(customer.address)
+    const warehouseSpecificAddress = customer.addressesByWarehouse?.[currentWarehouseId]
+    if (warehouseSpecificAddress) setCustomerAddress(warehouseSpecificAddress)
+    else if (customer.address) setCustomerAddress(customer.address)
   }
 
   const handleSelectAuthority = (authority) => {
@@ -727,12 +729,14 @@ const SackFormBase = forwardRef(function SackFormBase(
 
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
     await db.transactions.add(transaction)
-    await recordSerialUsed(type, currentWarehouseId, serialNo.trim())
-    await rememberCustomer({
-      name: customerName.trim(),
-      address: customerAddress.trim() || null,
-      warehouseId: currentWarehouseId,
-    })
+    await Promise.all([
+      recordSerialUsed(type, currentWarehouseId, serialNo.trim()),
+      rememberCustomer({
+        name: customerName.trim(),
+        address: customerAddress.trim() || null,
+        warehouseId: currentWarehouseId,
+      }),
+    ])
 
     if (type === 'ESI' && linkedDocNo.trim()) {
       await adjustSiaBalance(linkedDocNo.trim(), buildLineDeltas(sackLines, 1))
@@ -1219,6 +1223,15 @@ const SackFormBase = forwardRef(function SackFormBase(
             <div className="mt-1 space-y-2">
               {sackLines.map((line, i) => {
                 const availableConditions = conditionsFor(line.sackTypeId)
+                // Always keep a pre-filled condition displayable, even
+                // if it isn't currently in the computed list for this
+                // sack type - otherwise the browser silently can't
+                // show a <select> value with no matching <option>,
+                // making a correctly-set value look like it never
+                // auto-filled at all.
+                const displayConditions = line.condition && !availableConditions.includes(line.condition)
+                  ? [...availableConditions, line.condition]
+                  : availableConditions
                 return (
                   <div key={i} className="rounded-xl border border-neutral-800 bg-neutral-900 p-2">
                     <div className="flex items-center justify-between">
@@ -1254,7 +1267,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                         disabled={!line.sackTypeId}
                       >
                         <option value="">Cond…</option>
-                        {availableConditions.map((c) => (
+                        {displayConditions.map((c) => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>

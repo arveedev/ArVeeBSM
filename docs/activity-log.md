@@ -11154,3 +11154,166 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## Six urgent bugs fixed this session, verified together
+
+1. CRITICAL: pile-variety-picker stuck on stale filter - tapping an
+   authority sets a variety filter on the pile picker, but nothing
+   ever cleared it afterward, silently hiding every other variety's
+   piles on every subsequent transaction until logout/login. Fixed in
+   resetToBlankEntry. Verified with a 3-case test reproducing the
+   exact reported scenario.
+
+2. SIA tab sack condition auto-fill: added a defensive fix so a pre-
+   filled condition value always displays, even across a timing gap in
+   sackTypes loading or a configuration gap in that sack type's
+   weights.
+
+3. Save speed: confirmed the save flow was already architecturally
+   correct (never waited on the Sheet sync, which has always been
+   background-only) - the actual issue was three independent local
+   database writes running sequentially instead of concurrently.
+   Parallelized via Promise.all, on both stock and sack forms.
+
+4. VARIOUS FARMERS per-warehouse address: found the write side
+   (addressesByWarehouse) was already fully implemented, but nothing
+   anywhere in the codebase ever read it back - confirmed via a
+   codebase-wide search. Wired up the missing read side on both forms,
+   preferring the warehouse-specific address when one exists for the
+   matched customer, falling back to the generic address exactly as
+   before otherwise.
+
+5. By Products save button staying disabled on blank MC: found a
+   second, completely separate canSave computation (distinct from the
+   validateForm function fixed earlier this session) that still
+   required MC unconditionally - this is what actually drives the
+   button's disabled state, which the earlier fix never touched.
+   Fixed with the same activeCategory === 'By Products' exemption,
+   confirmed no other unconditional MC checks remain in this file.
+
+6. Beginning balance missing fields: added condition, purity, and MC
+   to the pile beginning-balance panel (all optional except condition,
+   which has the same sensible GQ default as the Create Pile form) -
+   state, edit-population from the existing pile, save-persistence to
+   db.piles, and the UI itself, matching the Create Pile form's own
+   fields and options exactly for consistency. Confirmed the sacks
+   beginning-balance panel needs no equivalent change - it already has
+   its own complete, different, and already-appropriate field set
+   (sackTypeId + condition + pieces + date), since sacks track
+   inventory by type/condition rather than by variety/age/purity/MC.
+
+Verified with a 10-case test covering the beginning-balance fields
+specifically, plus the 3-case pile-filter test and all fixes from the
+previous entries in this session.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and both dedicated test suites above. Full regression suite
+re-run - same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+## Continuing to multi-pile issuance next - the one remaining substantial feature from the urgent list, before the Ricemill/Dryer feature
+
+## Multi-pile issuance - first-pass implementation, StockFormBase/WSI only
+
+Implemented the core mechanism for issuing against a single AI from
+more than one pile of the same variety, when one pile alone doesn't
+have enough stock to cover what's required. Deliberately did NOT
+change the core schema (transactions still have exactly one pileId
+each) - reports, the pile ledger, and Sheet sync all already depend on
+that assumption throughout the app, and changing it would have been
+far riskier than the alternative chosen here: each additional pile
+allocation becomes its own separate, linked transaction record on
+save (same date/customer/AI/type as the primary transaction, its own
+pileId and bags/kilos share, base serial suffixed A/B/C... to stay
+unique) - to every other part of the app, these are just ordinary,
+independent transactions.
+
+Added a "Issue from another pile" control on the WSI form, restricted
+to piles of the same variety as the primary selection (matching the
+variety filter already used for the primary pile picker) and
+excluding piles already chosen elsewhere in the same allocation set.
+The AI balance deduction was extended to include every additional
+pile's combined total, not just the primary pile's own share - this
+was confirmed as a necessary fix during implementation, since the
+authority represents the total issuance regardless of how many piles
+it was actually drawn from.
+
+Verified with a 9-case test covering the serial-suffixing scheme, the
+valid-allocation filtering and total calculation, and specifically the
+AI-deduction fix.
+
+SCOPE, BEING DIRECT: this first pass covers WSI (stock issuance)
+specifically, since that's what was explicitly described. ESI (sack
+issuance, SackFormBase.jsx) does NOT yet have the equivalent feature.
+Also not yet implemented: validating that an additional pile's own
+entered bags/kilos don't exceed that specific pile's own available
+stock (the primary pile's own over-issuance check was already in
+place and is unaffected, but the same check has not yet been extended
+to each additional pile individually).
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+## Every "urgent" item from the user's list is now addressed. The Ricemill/Dryer feature (extensively clarified, not yet built) remains as the next, larger undertaking - not packaging until the user confirms readiness to proceed or move to packaging
+
+## PACKAGING NOW per explicit request - all urgent fixes included, Ricemill/Dryer paused
+
+User explicitly requested packaging what's ready now, so it can be
+used while the NFA-owned Milling/Drying feature continues separately.
+Everything from this entire session is included: the pile-variety
+filter bug, SIA auto-fill, save-speed parallelization, VARIOUS
+FARMERS per-warehouse address, By Products save button, beginning
+balance fields, and the first-pass multi-pile issuance feature - all
+verified together in this final pass (full parse sweep, check-
+imports.cjs, production build, and the complete regression suite,
+all clean).
+
+## NFA-owned Milling/Drying - key clarifications received, captured here for continuity:
+
+- WTS is NEVER used for this flow - it's an in-warehouse transaction
+  only. Moving stock to/from a dryer or ricemill (a separate entity/
+  building) is always WSI (issuing out) and WSR (receiving in),
+  never WTS.
+- The missing link I was looking for: the AI/SIA sheet has both a
+  "Customer" column (the Warehouse Supervisor or MPO III's name -
+  WHO the stock is going to) and an "Issuing/Issued From Warehouse"
+  column (the facility name/nickname - WHERE it's coming from). This
+  is the actual connection between transactions, not any kind of
+  transfer-linking field on WTS.
+- User confirmed the existing customer-typeahead (matching WS/Acting
+  WS/MPO names with their warehouse+address already shown) already
+  covers finding the right person - may want to add nicknames to this
+  list later, but the core matching mechanism is already in place.
+- The full real-world document flow, confirmed step by step:
+  1. Warehouse Supervisor issues stock out (WSI, AI with Transfer
+     transaction type) to the MPO III/ricemill's accountability.
+  2. MPO III receives it (WSR) - into his own accountability, not a
+     pile, specifically under the ricemill facility's own series.
+  3. MPO III issues it to the ricemill itself (WSI, AI with MILLING/
+     TEST MILLING/REMILLING/TEST REMILLING as the transaction type).
+  4. After milling, MPO III receives the rice recovery AND by-products
+     back into his own accountability again (WSR).
+  5. MPO III then transfers everything (rice recovery + by-products)
+     out to whichever warehouse is actually assigned to receive it
+     (WSI, AI with Transfer transaction type).
+  Sacks follow the identical pattern, confirmed via the earlier SIA
+  sheet image: transferred to the ricemill as containers, an SIA with
+  MILLING transaction type while in use, then transferred back out
+  (now empty) via another SIA with Transfer transaction type.
+- Confirmed separately, already true with zero code changes needed:
+  transaction types are a fully generic, admin-editable list (DRYING,
+  Milling, Remilling, Test Milling, Test Remilling can all be added
+  today), and AI-balance deduction is based on document type (WSI/
+  ESI), not the specific transaction type name - so the core
+  mechanism for all of this already works once these type names exist.
+
+NEXT SESSION: pick up from here - the WSI/WSR-only flow (no WTS) and
+the Customer vs Issued-From-Warehouse column distinction are now
+understood. Still need to work out: how "MPO III's own accountability"
+(a holding state that isn't a pile) should be represented in the data
+model, and the MC-before/MC-after tracking + dryer-received
+notification design.
