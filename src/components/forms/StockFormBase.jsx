@@ -67,6 +67,7 @@ import {
 import {
   suggestNextSerial,
   isSerialTaken,
+  getMatchingTransaction,
   stepSerial,
   findTransactionBySerial,
   recordSerialUsed,
@@ -151,7 +152,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
     useWarehouse() ?? {}
   const { weightUnit, autoAgeMonitoring } = useSettings() ?? {}
 
-  const linkedDocLabel = type === 'WSR' ? 'WSI No.' : 'AI No.'
+  const linkedDocLabel = type === 'WSR' ? 'WSI / PR / BL No.' : 'AI No.'
   const linkedDocDeductsFromAi = type !== 'WSR'
 
   // WSR and WSI keep genuinely separate serial series per cereal
@@ -1298,6 +1299,18 @@ function StockFormBase({ type, title, onClose, prefill }) {
       return false
     }
     if (await isSerialTaken(type, currentWarehouseId, serialNo.trim(), excludeId, activeCategory)) {
+      if (!excludeId) {
+        // A real, existing record was detected but never got loaded
+        // into edit mode - recover by loading it now, rather than
+        // leaving the user stuck unable to save the update they
+        // actually intended.
+        const match = await getMatchingTransaction(type, currentWarehouseId, serialNo.trim(), excludeId, activeCategory)
+        if (match) {
+          loadTransactionIntoForm(match)
+          toast.error(`Serial ${serialNo.trim()} already exists - loaded it for you to update instead`)
+          return false
+        }
+      }
       toast.error(`Serial ${serialNo.trim()} is already used for a ${type} document at this warehouse`)
       return false
     }
@@ -2149,7 +2162,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
             </div>
           </div>
 
-          {type === 'WSI' && (
+          {type === 'WSI' && !isAccountabilityFacility && (
             <div>
               {extraPileAllocations.map((alloc, i) => (
                 <div key={i} className="mt-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2">

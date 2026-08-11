@@ -31,6 +31,7 @@ import { db } from '../../db/dexie.js'
 import {
   suggestNextSerial,
   isSerialTaken,
+  getMatchingTransaction,
   stepSerial,
   findTransactionBySerial,
   recordSerialUsed,
@@ -667,6 +668,14 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (!currentWarehouseId) { toast.error('No warehouse selected'); return false }
     if (!serialNo.trim()) { toast.error('Serial No. is required'); return false }
     if (await isSerialTaken(type, currentWarehouseId, serialNo.trim(), excludeId)) {
+      if (!excludeId) {
+        const match = await getMatchingTransaction(type, currentWarehouseId, serialNo.trim(), excludeId)
+        if (match) {
+          loadTransactionIntoForm(match)
+          toast.error(`Serial ${serialNo.trim()} already exists - loaded it for you to update instead`)
+          return false
+        }
+      }
       toast.error(`Serial ${serialNo.trim()} is already used for a ${type} document at this warehouse`)
       return false
     }

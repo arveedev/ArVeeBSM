@@ -12,7 +12,7 @@
 // most at risk and the one worth surfacing first.
 
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Droplets } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { getPalayMoistureState, fmtBags } from '../../utils/calculations.js'
@@ -135,11 +135,67 @@ function WetPalayNotification() {
   )
 }
 
+function DriedStockReceivedNotification() {
+  const { currentWarehouseId, currentWarehouse } = useWarehouse() ?? {}
+
+  const received = useLiveQuery(async () => {
+    if (!currentWarehouseId || currentWarehouse?.facilityType === 'Mechanical Dryer') return null
+
+    const dryerWarehouses = await db.warehouses.where('facilityType').equals('Mechanical Dryer').toArray()
+    if (dryerWarehouses.length === 0) return null
+    const dryerIds = dryerWarehouses.map((w) => w.warehouseId)
+
+    // Every WSI issued out of a dryer's own accountability - the
+    // transfer-out step that hands dried stock off to a destination
+    // warehouse. Used to confirm a receipt actually originated at a
+    // dryer specifically, not just any warehouse-to-warehouse transfer.
+    const dryerTransferOuts = await db.transactions
+      .where('warehouseId').anyOf(dryerIds)
+      .and((t) => t.status === 'Active' && t.type === 'WSI')
+      .toArray()
+    const dryerAiNumbers = new Set(dryerTransferOuts.map((t) => t.aiNumber).filter(Boolean))
+    if (dryerAiNumbers.size === 0) return null
+
+    const localReceipts = await db.transactions
+      .where('warehouseId').equals(currentWarehouseId)
+      .and((t) => t.status === 'Active' && t.type === 'WSR' && dryerAiNumbers.has(t.linkedDocNo))
+      .toArray()
+    if (localReceipts.length === 0) return null
+
+    const mostRecent = [...localReceipts].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0]
+    return {
+      date: mostRecent.date,
+      warehouseName: currentWarehouse?.name,
+      moistureContent: mostRecent.moistureContent,
+      bags: mostRecent.numberOfBags ?? 0,
+      netKilos: mostRecent.netKilos ?? 0,
+    }
+  }, [currentWarehouseId, currentWarehouse?.facilityType, currentWarehouse?.name]) ?? null
+
+  if (!received) return null
+
+  return (
+    <div className="mt-3 flex items-start gap-2 rounded-xl border-2 border-brand-neon bg-brand-neon/10 px-3 py-2.5">
+      <Droplets size={18} className="mt-0.5 shrink-0 text-brand-neon" />
+      <div>
+        <p className="text-sm font-semibold text-brand-neon">
+          Dried stock received — {fmtBags(received.bags)} bags, {received.netKilos.toFixed(2)} net kgs
+        </p>
+        <p className="mt-0.5 text-xs text-brand-neon/80">
+          {received.date} · {received.warehouseName}
+          {received.moistureContent != null ? ` · MC ${received.moistureContent}%` : ''}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function PalayDryingStatus() {
   return (
     <>
       <DryerStatusCard />
       <WetPalayNotification />
+      <DriedStockReceivedNotification />
     </>
   )
 }

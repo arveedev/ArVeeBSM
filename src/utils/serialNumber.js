@@ -217,6 +217,28 @@ export const isSerialTaken = async (type, warehouseId, serialNo, excludeId = nul
 }
 
 /**
+ * Same exact query as isSerialTaken, but returns the actual matched
+ * record instead of a boolean - used to recover from a "serial
+ * already taken" detection by loading the real record the check
+ * found, rather than only being able to block with an error. This
+ * matters specifically when the earlier lookup that should have
+ * loaded this record for editing (checkAndLoadSerial, via
+ * findTransactionBySerial) missed it for any reason - the user is
+ * left thinking they're creating new when they're actually editing an
+ * existing record, and validateForm's duplicate check is the last
+ * point where that mismatch can still be caught and corrected.
+ */
+export const getMatchingTransaction = async (type, warehouseId, serialNo, excludeId = null, cerealCategory = null) => {
+  if (!serialNo || !warehouseId) return null
+  return db.transactions
+    .where('type')
+    .equals(type)
+    .and((tx) => tx.warehouseId === warehouseId && tx.serialNo === serialNo && tx.id !== excludeId
+      && (cerealCategory == null || tx.cerealCategory === cerealCategory))
+    .first()
+}
+
+/**
  * Looks up the existing transaction (if any) for a given (type,
  * warehouse, serial[, category]) — used for series back-navigation:
  * stepping to a serial that already has data should load it for

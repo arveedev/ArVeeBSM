@@ -9,7 +9,7 @@ function ESRForm({ onClose, prefill }) {
     <SackFormBase
       type="ESR"
       title="ESR"
-      linkedDocLabel="ESI No."
+      linkedDocLabel="ESI / AI"
       onClose={onClose}
       prefill={prefill}
     />

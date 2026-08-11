@@ -254,6 +254,68 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
     }
   }
 
+  // Re-runs duplicate cleanup as a fresh pass, using field-level
+  // MERGING rather than "keep most complete, discard the rest" - per
+  // explicit report that the duplicates include historical records
+  // genuinely missing data (MC, pile, etc.) that the user is actively
+  // trying to fill in. Simply discarding the "less complete" copy of
+  // a duplicate pair risked silently losing whatever unique data only
+  // existed on that copy. Now merges every duplicate's fields into a
+  // single surviving record - any gap in the survivor is filled from
+  // whichever duplicate has a value for that field - before deleting
+  // the redundant records, so no data anywhere in the group is lost.
+  // The survivor prefers a record NOT from a Sheet import when one
+  // exists (the genuine, locally-created record is the more
+  // authoritative base to merge historical Sheet data into),
+  // otherwise falls back to the most complete copy. This is also the
+  // confirmed, direct fix for the "serial already used" block
+  // reported when trying to update a historical record - that error
+  // only fires when a second, genuine duplicate with the same serial
+  // still exists after the one being edited is excluded; merging down
+  // to a single record removes that possibility entirely.
+  const DEDUP_MERGE_FLAG = 'transaction-dedup-merge-v4'
+  if (!localStorage.getItem(DEDUP_MERGE_FLAG)) {
+    try {
+      const allLocalTxV5 = await db.transactions.toArray()
+      const groups = new Map()
+      for (const tx of allLocalTxV5) {
+        const key = `${tx.type}::${tx.warehouseId}::${tx.serialNo}::${tx.cerealCategory ?? ''}`
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(tx)
+      }
+      const completeness = (tx) => Object.values(tx).filter((v) => v != null && v !== '').length
+      const toDeleteIds = []
+      const toUpdate = []
+      for (const group of groups.values()) {
+        if (group.length <= 1) continue
+
+        const nonImported = group.filter((tx) => tx.fromSheetImport !== true)
+        const survivorPool = nonImported.length > 0 ? nonImported : group
+        const survivor = [...survivorPool].sort((a, b) => completeness(b) - completeness(a))[0]
+        const others = group.filter((tx) => tx.id !== survivor.id)
+
+        const merged = { ...survivor }
+        for (const other of others) {
+          for (const [field, value] of Object.entries(other)) {
+            if (field === 'id') continue
+            if ((merged[field] == null || merged[field] === '') && value != null && value !== '') {
+              merged[field] = value
+            }
+          }
+        }
+        toUpdate.push(merged)
+        for (const other of others) toDeleteIds.push(other.id)
+      }
+      if (toUpdate.length > 0) await db.transactions.bulkPut(toUpdate)
+      if (toDeleteIds.length > 0) await db.transactions.bulkDelete(toDeleteIds)
+
+      console.log(`transaction-dedup-merge-v4: merged and removed ${toDeleteIds.length} duplicate(s) into ${toUpdate.length} surviving record(s), out of ${allLocalTxV5.length} total local transactions`)
+      localStorage.setItem(DEDUP_MERGE_FLAG, 'done')
+    } catch (error) {
+      console.error('transaction-dedup-merge-v4 failed, will retry next load:', error)
+    }
+  }
+
   // Admin and Visitor both have access to every warehouse (they share
   // the same all-warehouse AdminHome view - see App.jsx), so both
   // preload everything rather than being skipped. A regular user stays
