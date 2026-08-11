@@ -12012,3 +12012,32 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## Fixed the collapse control - it was only ever scrolling, never actually collapsing
+
+User correctly called out the previous entry's implementation: the
+button scrolled the widget into view but never actually hid the list
+- there was no collapsed state at all. Fixed properly this time: added
+real isExpanded state, the list itself (the <ul>, including its empty-
+state message) now genuinely disappears when collapsed rather than
+just staying visible off in some scroll position. The header title is
+now also clickable, with a chevron reflecting current state, giving a
+way to re-open the list after collapsing it. The bottom button now
+sets isExpanded to false (actually collapsing) and then scrolls the
+now-collapsed widget into view, so the result is visible rather than
+leaving the user scrolled to an empty spot.
+
+Also added a UX safeguard while implementing this: switching top tabs
+(MO/TMO) or toggling Show Completed now correctly re-expands the list
+- without this, a stale collapse from a previous tab would leave a
+newly-selected tab's content confusingly hidden.
+
+Verified with an 8-case test confirming the actual hide/show
+behavior (not just scroll), the button's visibility condition, the
+header toggle and its chevron, and both re-expand safeguards.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.

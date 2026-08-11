@@ -227,6 +227,7 @@ function MillingMonitor() {
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(true)
   const containerRef = useRef(null)
 
   const orders = useLiveQuery(() => computeMillingOrderStatuses(topTab), [topTab]) ?? []
@@ -290,7 +291,14 @@ function MillingMonitor() {
   return (
     <div ref={containerRef} className={`rounded-2xl border p-4 transition-all ${showCompleted ? 'border-brand-neon shadow-[0_0_16px_-4px_rgba(0,255,163,0.4)] bg-neutral-900' : 'border-neutral-800 bg-neutral-900'}`}>
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-app-text">Milling Operations</h2>
+        <button
+          type="button"
+          onClick={() => setIsExpanded((v) => !v)}
+          className="flex min-w-0 items-center gap-1.5 text-left"
+        >
+          <h2 className="text-base font-semibold text-app-text">Milling Operations</h2>
+          <ChevronUp size={16} className={`shrink-0 text-neutral-500 transition-transform ${isExpanded ? '' : 'rotate-180'}`} />
+        </button>
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
@@ -303,7 +311,7 @@ function MillingMonitor() {
           </button>
           <button
             type="button"
-            onClick={() => setShowCompleted((v) => !v)}
+            onClick={() => { setShowCompleted((v) => !v); setIsExpanded(true) }}
             className={`rounded-full px-3 py-1 text-xs font-semibold ${showCompleted ? 'bg-brand-neon text-brand-contrast' : 'border border-neutral-700 text-neutral-400'}`}
           >
             {showCompleted ? 'Showing Completed' : 'Show Completed'}
@@ -320,7 +328,7 @@ function MillingMonitor() {
           <button
             key={t}
             type="button"
-            onClick={() => setTopTab(t)}
+            onClick={() => { setTopTab(t); setIsExpanded(true) }}
             className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${topTab === t ? 'text-brand-contrast' : 'text-neutral-400'}`}
           >
             {t === 'MO' ? 'Milling' : 'Test Milling'}
@@ -339,6 +347,7 @@ function MillingMonitor() {
         </select>
       )}
 
+      {isExpanded && (
       <ul className="mt-3 space-y-1.5 animate-flow-down" key={`${topTab}-${showCompleted}`}>
         {filtered.length === 0 && (
           <p className="py-4 text-center text-xs text-neutral-500">
@@ -437,11 +446,15 @@ function MillingMonitor() {
           )
         })}
       </ul>
+      )}
 
-      {filtered.length > 0 && (
+      {isExpanded && filtered.length > 0 && (
         <button
           type="button"
-          onClick={() => containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          onClick={() => {
+            setIsExpanded(false)
+            containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
           aria-label="Collapse list back to top"
           className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs text-neutral-500 transition-colors hover:text-app-text"
         >
