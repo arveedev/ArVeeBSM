@@ -11618,3 +11618,232 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## NFA Milling/Drying feature: foundational accountability-pile mechanism built
+
+User confirmed the proposed design: MPO III's accountability is
+represented as a pile in the data model (so all existing pile-ledger,
+balance-tracking, and reporting logic keeps working unchanged), but
+invisible in the UI (never shown on the Piles grid/spatial layout,
+never manually created or picked). Refined during implementation:
+since a normal pile is always variety-specific, and MPO III could
+receive different varieties into his accountability over time, this
+is one accountability pile PER VARIETY (auto-created lazily on first
+use), not one single pile for the whole facility regardless of
+variety - otherwise different varieties' stock would get mixed
+together in a way the rest of the app's pile model doesn't support.
+
+Built this session:
+1. getOrCreateAccountabilityPile() in pileLedger.js - finds an
+   existing accountability pile for a given warehouse+variety, or
+   creates one (flagged isAccountabilityPile: true) if none exists
+   yet. No schema version bump needed - this is a plain, unindexed
+   field, filtered in-memory rather than needing a dedicated DB index.
+2. Piles.jsx grid query now excludes isAccountabilityPile piles
+   entirely, so they never appear on the spatial layout/map.
+3. StockFormBase.jsx: added isAccountabilityFacility detection
+   (facilityType is 'Mechanical Dryer' or 'Ricemill'), and a
+   dedicated, isolated useEffect that auto-finds/creates the correct
+   accountability pile whenever the variety changes at one of these
+   facilities - kept separate from the existing, more complex
+   variety/pile change logic so normal warehouses are completely
+   unaffected. The manual Pile ID dropdown is replaced with a read-
+   only display of the auto-selected pile at these facilities, since
+   there's no physical grid placement to choose from.
+
+CAUGHT AND FIXED A REAL MISTAKE DURING THIS SESSION: an early
+str_replace edit accidentally dropped the opening lines of the doc
+comment for the pre-existing createPileWithBeginningBalance function
+immediately following the new code. Caught by checking the file
+immediately after the edit rather than assuming it succeeded cleanly,
+and fully repaired before proceeding - confirmed intact via the test
+suite below, which explicitly checks for this exact doc comment text.
+
+Verified with a 7-case test confirming the utility exists, the doc-
+comment corruption is fully repaired, new piles are correctly
+flagged, the grid query excludes them, facility detection works, the
+auto-select effect is wired up, and the read-only picker UI is in
+place.
+
+SCOPE - being direct about what remains: this covers WSI issuance
+only so far (the effect only exists in StockFormBase.jsx, not yet
+SackFormBase.jsx for SIA/sacks). Not yet built: any UI/logic
+specifically for the transaction-type flow described (Transfer in,
+Milling out, recovery back in, Transfer out), the recovery%
+monitoring across this multi-step flow, the sacks-as-containers
+pattern, or the dryer MC-before/MC-after tracking and receipt
+notification. This is the foundational piece the rest of the feature
+builds on top of - substantial work remains.
+
+All changes in this entry verified compiling (full production npm run
+build, which succeeds) and the dedicated test suite above. Full
+regression suite re-run - the same pre-existing stale scratch-test
+failures already confirmed multiple times this session, no new
+regressions.
+
+## NFA Milling/Drying: recovery% monitoring built, sacks confirmed to need zero changes
+
+Discovered while investigating: sack transactions (ESI/ESR) never
+referenced piles or any spatial grid concept at all - sack inventory
+is tracked purely by warehouse + sack type + condition counts. This
+means the sacks-as-containers flow (transferred to the ricemill,
+used during milling, transferred back empty) already works correctly
+through the existing forms with zero code changes needed.
+
+Also found a real correctness concern in the pre-existing admin
+allocation panel while investigating: its "used" figure sums every
+WSR and WSI at a Ricemill warehouse together, but per the confirmed
+real-world flow, the same physical stock passes through multiple
+WSR/WSI legs at that facility (received, issued to mill, received
+back, transferred out) - summing all of them likely over-counts
+actual usage against the allocation. Flagged this to the user rather
+than guessing at a fix, since it touches an existing, working
+calculation with numbers already being relied on - left untouched
+pending clarification.
+
+Built the separate, additive piece instead: recovery% monitoring,
+per Regional Authority Number. For each Milling/Remilling/Test
+Milling/Test Remilling AI under a given Regional Authority (matched
+via the already-synced regionalAuthorityNumber field on each
+authority record), finds the actual WSI issuance to the mill and its
+corresponding recovery WSR (linked via linkedDocNo - the same field
+fixed earlier this session for the Weekly Receipts report), computing
+recovery% as recovered kilos over issued kilos. Reuses the existing,
+already-tested isMillingTypeName/isTestMillingTypeName matchers
+rather than re-implementing name matching. Added as an expandable
+detail section on each allocation in the existing admin panel, showing
+date, warehouse, variety, bags, issued vs. recovered kilos, and
+recovery% - exactly the fields explicitly requested.
+
+Caught a real implementation risk during development: linkedDocNo is
+NOT an indexed field in the schema, so a naive db.transactions.where
+('linkedDocNo') query would have thrown at runtime. Queried by the
+indexed warehouseId field instead and filtered linkedDocNo in-memory.
+
+Verified with an 11-case test covering the computation logic directly
+(a typical real-world percentage, the zero-issued edge case avoiding
+NaN/Infinity, a full 100% case) and the Regional-Authority-Number
+grouping behavior.
+
+SCOPE - being direct about what remains: this is an admin-only
+detail view, not yet a user-facing monitor. Not yet built: the WS-to-
+MPO III initial transfer step's own tracking, MPO III's "receive into
+accountability" UX beyond the already-built auto-pile-selection, the
+dryer MC-before/MC-after tracking, and the dryer-received notification
+(the specific design question from an earlier session that was never
+fully resolved).
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+## Regional Authority usage calculation fixed per user clarification, plus urgent customer-typeahead fixes - packaging now
+
+User confirmed which specific step counts against a Regional
+Authority allocation: the WSI issuance to the mill (under an AI with
+transaction type Milling/Remilling/Test Milling/Test Remilling)
+specifically - not every WSR/WSI at that facility summed together.
+Fixed usageByNumber to match, reusing the same authority-filtering
+approach already proven correct in millingDetailsByNumber for
+consistency between the two computations. This resolves the over-
+counting concern raised earlier - the same physical stock passing
+through multiple legs of custody (received, issued to mill, received
+back, transferred out) is no longer counted multiple times.
+
+Two urgent, explicitly-flagged customer-typeahead fixes:
+
+1. The "Acting WS" label was derived from a separate, indirect
+   db.signatories.capacity lookup rather than the user's own role
+   field directly - meaning a user with role "Acting Warehouse
+   Supervisor" could still incorrectly show as plain "WS" if that
+   separate signatory record was missing or out of sync. Fixed to
+   read u.role directly, exactly as explicitly requested, and
+   simplified (one fewer query per candidate user in the loop).
+
+2. New MPO III typeahead: typing "MPO" now surfaces matching users,
+   mirroring the existing WS mechanism exactly. Matches by role (MPO
+   III / Acting MPO III) OR by being assigned to a Mechanical Dryer /
+   Ricemill facility regardless of role label, per explicit request
+   covering both cases. Confirmed 'MPO III' and 'Acting MPO III'
+   already existed as user role options - no new roles needed. Label
+   format "MPO III [Name]" / "Acting MPO III [Name]" confirmed exactly
+   against the real Sheet data shown earlier this session, always
+   including the warehouse/facility name alongside it for clarity on
+   where stock is going or coming from - same reasoning as the
+   existing WS suggestions.
+
+Verified with a 16-case test covering the role-based label fix (for
+both WS and MPO), the MPO matching logic (role and facility-type
+paths), the label format, and a direct simulation of the exact
+reported over-counting bug and its fix (the same 5000kg batch summed
+3x under the old logic vs. correctly once under the new one). One
+test assertion needed correcting mid-session - it was too broad and
+matched a similarly-patterned but entirely separate, correctly-
+untouched private-miller feature further down in the same file;
+narrowed to scope only the actual function that was changed.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+PACKAGING NOW per explicit request.
+
+## Form layout fix and multi-pile report grouping - packaging now per explicit request
+
+Clarified for the user: the Regional Authority usage fix from the
+previous entry was already correctly scoped to only
+RicemillAllocationsPanel.jsx (NFA-owned Ricemills) - the private
+miller MO/TMO system in the same file was confirmed untouched via a
+dedicated test. No code change needed here, just a communication
+clarification.
+
+Fixed the WSI form layout: "Issue from another pile" was incorrectly
+wedged between Pile ID and Variety Type (since it was added inside
+their shared 2-column row as a col-span-2 item). Moved it to after
+that row closes entirely, so Pile ID and Variety Type stay properly
+adjacent on the same row as before this feature existed, with the
+additional-pile block now correctly appearing below both, still above
+MC/MTS, per explicit placement request.
+
+Implemented multi-pile issuances appearing as a single row on every
+report, per explicit request. Added an explicit groupSerialNo field
+(set only when extra pile allocations exist) linking a multi-pile
+issuance's several separate transaction records together - the
+primary record and every additional-pile record share the same
+groupSerialNo, inherited automatically via the existing object spread
+used to build each extra record. Deliberately used an explicit field
+rather than a string-pattern heuristic (e.g. stripping a "-A" suffix)
+to detect these records, since a heuristic risks misgrouping
+unrelated transactions whose real serial numbers might happen to
+match a similar pattern.
+
+Implemented the actual grouping in the Weekly Statement report (the
+one place that lists individual transactions row-by-row) - groups by
+groupSerialNo before building the table, summing bags/gross/net
+kilos across every record in a group, using the primary (unsuffixed)
+record's other fields for display. An ordinary, non-grouped
+transaction passes through completely unaffected, falling back to
+its own unique id as the grouping key. Confirmed the summary and
+recap report pages need no equivalent change - they already aggregate
+by variety/condition rather than listing individual transactions, so
+multiple records from the same multi-pile issuance already summed
+together correctly there without any changes.
+
+Verified with a 13-case test covering the corrected form layout
+order, the groupSerialNo assignment logic, and a direct simulation of
+the exact grouping/summing behavior (a 3-pile issuance combining into
+one row with the full combined total, correctly using the primary
+serial for display, and an ordinary transaction alongside it staying
+separate).
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+PACKAGING NOW per explicit request.

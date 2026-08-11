@@ -98,8 +98,7 @@ export const searchWarehouseSupervisors = async (query) => {
 
   const suggestions = []
   for (const u of matches) {
-    const signatory = await db.signatories.get(u.uid)
-    const prefixLabel = signatory?.capacity === 'Acting Warehouse Supervisor' ? 'Acting WS' : 'WS'
+    const prefixLabel = u.role === 'Acting Warehouse Supervisor' ? 'Acting WS' : 'WS'
 
     const assignedWarehouses = (u.assignedWarehouses ?? [])
       .map((id) => warehouseMap.get(id))
@@ -122,6 +121,76 @@ export const searchWarehouseSupervisors = async (query) => {
     for (const w of sortedAssigned) {
       suggestions.push({
         customerId: `ws-suggestion-${u.uid}-${w.warehouseId}`,
+        name: `${prefixLabel} ${u.name}`,
+        warehouseLabel: sortedAssigned.length > 1 ? `${w.code} — ${w.name}` : null,
+        address: w.address ?? null,
+        isWarehouseSupervisorSuggestion: true,
+      })
+    }
+  }
+
+  return suggestions
+}
+
+/**
+ * Same pattern as searchWarehouseSupervisors above, for MPO III /
+ * Acting MPO III - triggered by typing "MPO". Matches a user either
+ * by role (MPO III / Acting MPO III) OR by being assigned to a
+ * Mechanical Dryer / Ricemill facility regardless of their specific
+ * role label, since a user could be assigned to one of these
+ * facilities without necessarily having an MPO-specific role set.
+ * Label format "MPO III [Name]" / "Acting MPO III [Name]" - always
+ * includes the warehouse/facility name beside it, same reasoning as
+ * the WS suggestions: makes clear where stock is actually going or
+ * coming from.
+ */
+const MPO_PREFIX_PATTERN = /^mpo\s*(.*)$/i
+
+export const searchMpoUsers = async (query) => {
+  const match = MPO_PREFIX_PATTERN.exec(query.trim())
+  if (!match) return []
+
+  const [, nameFragment] = match
+
+  const warehouses = await db.warehouses.toArray()
+  const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
+  const accountabilityFacilityIds = new Set(
+    warehouses.filter((w) => w.facilityType === 'Mechanical Dryer' || w.facilityType === 'Ricemill').map((w) => w.warehouseId)
+  )
+
+  const allUsers = await db.users.toArray()
+  const fragment = nameFragment.trim().toLowerCase()
+  const matches = allUsers.filter((u) => {
+    if (fragment && !u.name.toLowerCase().includes(fragment)) return false
+    const isMpoRole = u.role === 'MPO III' || u.role === 'Acting MPO III'
+    const isAtAccountabilityFacility = (u.assignedWarehouses ?? []).some((id) => accountabilityFacilityIds.has(id))
+    return isMpoRole || isAtAccountabilityFacility
+  })
+
+  matches.sort((a, b) => a.name.localeCompare(b.name))
+
+  const suggestions = []
+  for (const u of matches) {
+    const prefixLabel = u.role === 'Acting MPO III' ? 'Acting MPO III' : 'MPO III'
+
+    const assignedWarehouses = (u.assignedWarehouses ?? [])
+      .map((id) => warehouseMap.get(id))
+      .filter(Boolean)
+
+    if (assignedWarehouses.length === 0) {
+      suggestions.push({
+        customerId: `mpo-suggestion-${u.uid}`,
+        name: `${prefixLabel} ${u.name}`,
+        address: null,
+        isWarehouseSupervisorSuggestion: true,
+      })
+      continue
+    }
+
+    const sortedAssigned = [...assignedWarehouses].sort((a, b) => a.name.localeCompare(b.name))
+    for (const w of sortedAssigned) {
+      suggestions.push({
+        customerId: `mpo-suggestion-${u.uid}-${w.warehouseId}`,
         name: `${prefixLabel} ${u.name}`,
         warehouseLabel: sortedAssigned.length > 1 ? `${w.code} — ${w.name}` : null,
         address: w.address ?? null,
