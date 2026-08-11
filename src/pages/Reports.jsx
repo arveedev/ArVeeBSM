@@ -351,12 +351,13 @@ function Reports() {
             <label className="mb-1 block text-xs text-neutral-500">From</label>
             <CalendarDatePicker
               value={summaryFrom}
+              label="Start Date"
               onChange={(iso) => { setSummaryFrom(iso); summaryToPickerRef.current?.open() }}
             />
           </div>
           <div>
             <label className="mb-1 block text-xs text-neutral-500">To</label>
-            <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} onChange={setSummaryTo} />
+            <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} label="End Date" onChange={setSummaryTo} />
           </div>
         </div>
         <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} currentFrom={summaryFrom} currentTo={summaryTo} />
@@ -382,12 +383,13 @@ function Reports() {
             <label className="mb-1 block text-xs text-neutral-500">Period From *</label>
             <CalendarDatePicker
               value={stmtFrom}
+              label="Start Date"
               onChange={(iso) => { setStmtFrom(iso); stmtToPickerRef.current?.open() }}
             />
           </div>
           <div>
             <label className="mb-1 block text-xs text-neutral-500">Period To *</label>
-            <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} onChange={setStmtTo} />
+            <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} label="End Date" onChange={setStmtTo} />
           </div>
         </div>
         <PeriodPresetPicker onSelectRange={(from, to) => { setStmtFrom(from); setStmtTo(to) }} currentFrom={stmtFrom} currentTo={stmtTo} />

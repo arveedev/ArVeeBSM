@@ -1,5 +1,5 @@
 // PeriodPresetPicker — month navigation + quick-pick reporting-period
-// buttons (1-7, 8-16, 16-22, 23-end of month), shared across every
+// buttons (1-7, 8-15, 16-22, 23-end of month), shared across every
 // date-range picker in the app (Piles, Reports' two date pairs) rather
 // than duplicating the same UI and logic in each place.
 

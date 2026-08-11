@@ -66,7 +66,7 @@ export const todayLocalISO = () => {
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 /**
- * Common reporting-period presets (1-7, 8-16, 16-22, 23-end of month)
+ * Common reporting-period presets (1-7, 8-15, 16-22, 23-end of month)
  * for a given month, plus a human-readable label for that month.
  * monthOffset: 0 = current month, -1 = previous month, etc. - lets the
  * caller navigate to a different month rather than assuming "current",
@@ -86,7 +86,7 @@ export const getPeriodPresetRanges = (monthOffset = 0) => {
     monthLabel: `${MONTH_NAMES[month]} ${year}`,
     ranges: [
       { label: '1–7', from: iso(1), to: iso(7) },
-      { label: '8–16', from: iso(8), to: iso(16) },
+      { label: '8–15', from: iso(8), to: iso(15) },
       { label: '16–22', from: iso(16), to: iso(22) },
       { label: `23–${lastDay}`, from: iso(23), to: iso(lastDay) },
     ],

@@ -836,19 +836,21 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // Gates the Save button - mirrors validateForm's synchronous checks
   // (serial-uniqueness is async and stays a save-time-only safety net,
   // not part of this live gate).
+  const isFillersType = selectedTransactionType?.name?.trim().toUpperCase() === 'FILLERS'
+
   const canSave = isCancelled
     ? Boolean(currentWarehouseId) && Boolean(serialNo.trim())
     : Boolean(currentWarehouseId)
       && Boolean(transactionTypeId)
       && Boolean(serialNo.trim())
       && Boolean(customerName.trim())
-      && Boolean(pileId)
-      && (Boolean(selectedPile) || Boolean(varietyId))
+      && (isFillersType || Boolean(pileId))
+      && (isFillersType || Boolean(selectedPile) || Boolean(varietyId))
       && (Boolean(numberOfBags) || Boolean(grossKilos))
-      && Boolean(sackSelection)
-      && (activeCategory === 'By Products' || (moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))))
+      && (isFillersType || Boolean(sackSelection))
+      && (isFillersType || activeCategory === 'By Products' || (moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))))
       && (!linkedDocDeductsFromAi || Boolean(linkedDocNo.trim()))
-      && (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== '')
+      && (isFillersType || (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== ''))
       && !overKilos
       && (!farmerOrgEnabled || members.every((m) => m.name.trim()))
 

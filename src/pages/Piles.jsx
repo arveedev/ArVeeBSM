@@ -674,6 +674,7 @@ function Piles() {
           <label className={labelClass}>Period From</label>
           <CalendarDatePicker
             value={periodFrom}
+            label="Start Date"
             onChange={(iso) => {
               setPeriodFrom(iso)
               periodToPickerRef.current?.open()
@@ -682,7 +683,7 @@ function Piles() {
         </div>
         <div>
           <label className={labelClass}>Period To</label>
-          <CalendarDatePicker ref={periodToPickerRef} value={periodTo} onChange={setPeriodTo} />
+          <CalendarDatePicker ref={periodToPickerRef} value={periodTo} label="End Date" onChange={setPeriodTo} />
         </div>
       </div>
 

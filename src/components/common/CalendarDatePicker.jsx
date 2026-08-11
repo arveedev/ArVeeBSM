@@ -55,7 +55,7 @@ const buildMonthGrid = (year, month) => {
   return cells
 }
 
-const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true }, ref) {
+const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true, label }, ref) {
   const [isOpen, setIsOpen] = useState(false)
   const shouldRenderPopup = useDelayedUnmount(isOpen, 180)
   const containerRef = useRef(null)
@@ -149,6 +149,7 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
             className={`max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl ${isOpen ? 'animate-pop-in' : 'animate-pop-out'}`}
             onClick={(e) => e.stopPropagation()}
           >
+          {label && <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-brand-neon">{label}</p>}
           <div className="flex items-center justify-between">
             <button
               type="button"
