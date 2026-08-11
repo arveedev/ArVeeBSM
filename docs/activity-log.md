@@ -11847,3 +11847,36 @@ re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
 
 PACKAGING NOW per explicit request.
+
+## Fixed: warehouse/facility name missing beside WS/Acting WS/MPO III users in customer typeahead
+
+User reported specific users (a WS, an Acting WS, and an MPO III) not
+showing their warehouse/facility name in the customer suggestion box.
+Found the exact cause: both the WS and MPO suggestion functions only
+set warehouseLabel when a user had MORE THAN ONE assigned warehouse -
+a user assigned to exactly one warehouse (which is the common,
+ordinary case) got warehouseLabel: null, and the UI only renders this
+label when it's truthy - so single-warehouse users silently showed no
+warehouse name at all, contradicting the explicit, earlier
+requirement that the warehouse name should always be shown, the same
+as everybody else. This bug pattern was pre-existing in
+searchWarehouseSupervisors (not introduced this session) and was
+inadvertently copied into the newer searchMpoUsers when it was built
+from the same pattern this session - both are now fixed.
+
+Confirmed the address field was already correctly set regardless of
+warehouse count - only warehouseLabel had the conditional gap.
+Searched the file for any other similar single/multiple conditional
+pattern and confirmed none remain.
+
+Verified with a 6-case test confirming both occurrences were fixed,
+the buggy pattern is completely gone, and a direct simulation of the
+exact reported scenario (a single-warehouse user now correctly
+getting a label) alongside confirming multi-warehouse users remain
+correctly unaffected.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.

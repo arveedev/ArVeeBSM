@@ -122,7 +122,7 @@ export const searchWarehouseSupervisors = async (query) => {
       suggestions.push({
         customerId: `ws-suggestion-${u.uid}-${w.warehouseId}`,
         name: `${prefixLabel} ${u.name}`,
-        warehouseLabel: sortedAssigned.length > 1 ? `${w.code} — ${w.name}` : null,
+        warehouseLabel: `${w.code} — ${w.name}`,
         address: w.address ?? null,
         isWarehouseSupervisorSuggestion: true,
       })
@@ -192,7 +192,7 @@ export const searchMpoUsers = async (query) => {
       suggestions.push({
         customerId: `mpo-suggestion-${u.uid}-${w.warehouseId}`,
         name: `${prefixLabel} ${u.name}`,
-        warehouseLabel: sortedAssigned.length > 1 ? `${w.code} — ${w.name}` : null,
+        warehouseLabel: `${w.code} — ${w.name}`,
         address: w.address ?? null,
         isWarehouseSupervisorSuggestion: true,
       })
