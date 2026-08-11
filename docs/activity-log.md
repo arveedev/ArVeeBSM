@@ -11587,3 +11587,34 @@ check-imports.cjs + a full production npm run build, which succeeds)
 and both dedicated test suites above. Full regression suite re-run -
 the same pre-existing stale scratch-test failures already confirmed
 multiple times this session, no new regressions.
+
+## CRITICAL FIX: WSI/PR/BL column on the Weekly Receipts statement was always hardcoded blank
+
+User reported the "WSI" column on the Statement of Weekly Receipts
+showed empty across every cereal type despite genuinely having WSI
+data. Confirmed directly in code: the receipts branch of this column
+was hardcoded to an empty string unconditionally - it never read any
+field at all, regardless of what data existed on the transaction.
+
+Traced the correct field: WSR transactions store their linked WSI
+reference in linkedDocNo (confirmed via the form's own field mapping
+- the form even labels this field "WSI No." specifically for WSR).
+This is a completely different field from aiNumber, which is what WSI
+transactions themselves use for their own AI reference on the issues
+side (which was already correctly wired). Fixed the receipts branch
+to read t.linkedDocNo instead of being hardcoded blank.
+
+Confirmed WTS transactions never set linkedDocNo at all, so a WTS
+receipt correctly and gracefully shows blank in this column rather
+than erroring - appropriate, since a warehouse transfer genuinely has
+no WSI to reference.
+
+Verified with a 5-case test confirming the fix directly, that the
+issues-side aiNumber column remains unaffected, and that a WTS
+receipt without any linkedDocNo still renders blank without error.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.

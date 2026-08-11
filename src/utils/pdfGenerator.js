@@ -376,7 +376,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
       fmtDate(t.date),
       t.transactionTypeName ?? '',
       t.serialNo ?? '',
-      isIssues ? (t.aiNumber ?? '') : '',
+      isIssues ? (t.aiNumber ?? '') : (t.linkedDocNo ?? ''),
       t.status === 'Cancelled' ? 'CANCELLED' : (t.customerName ?? ''),
       t.varietyName ?? '',
       ...(isByProducts ? [] : [t.moistureContent != null ? Number(t.moistureContent).toFixed(1) : '-']),
