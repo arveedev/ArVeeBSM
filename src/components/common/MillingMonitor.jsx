@@ -299,6 +299,7 @@ function MillingMonitor() {
           <h2 className="text-base font-semibold text-app-text">Milling Operations</h2>
           <ChevronUp size={16} className={`shrink-0 text-neutral-500 transition-transform ${isExpanded ? '' : 'rotate-180'}`} />
         </button>
+        {isExpanded && (
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
@@ -311,14 +312,16 @@ function MillingMonitor() {
           </button>
           <button
             type="button"
-            onClick={() => { setShowCompleted((v) => !v); setIsExpanded(true) }}
+            onClick={() => setShowCompleted((v) => !v)}
             className={`rounded-full px-3 py-1 text-xs font-semibold ${showCompleted ? 'bg-brand-neon text-brand-contrast' : 'border border-neutral-700 text-neutral-400'}`}
           >
             {showCompleted ? 'Showing Completed' : 'Show Completed'}
           </button>
         </div>
+        )}
       </div>
 
+      {isExpanded && (
       <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
         <div
           className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -328,15 +331,16 @@ function MillingMonitor() {
           <button
             key={t}
             type="button"
-            onClick={() => { setTopTab(t); setIsExpanded(true) }}
+            onClick={() => setTopTab(t)}
             className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${topTab === t ? 'text-brand-contrast' : 'text-neutral-400'}`}
           >
             {t === 'MO' ? 'Milling' : 'Test Milling'}
           </button>
         ))}
       </div>
+      )}
 
-      {availableRegionalAuthNumbers.length > 0 && (
+      {isExpanded && availableRegionalAuthNumbers.length > 0 && (
         <select
           value={regionalAuthFilter}
           onChange={(e) => setRegionalAuthFilter(e.target.value)}
