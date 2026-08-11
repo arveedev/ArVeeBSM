@@ -72,7 +72,7 @@ import {
   recordSerialUsed,
   recalculateSerialCounter,
 } from '../../utils/serialNumber.js'
-import { applyTransactionToPile, reverseTransactionFromPile } from '../../utils/pileLedger.js'
+import { applyTransactionToPile, reverseTransactionFromPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -449,6 +449,21 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const selectedVariety = sortedVarieties.find((v) => v.varietyId === varietyId)
   const isProcurement = isProcurementTypeName(selectedTransactionType?.name)
   const isSales = isSalesTypeName(selectedTransactionType?.name)
+
+  const isAccountabilityFacility = currentWarehouse?.facilityType === 'Mechanical Dryer' || currentWarehouse?.facilityType === 'Ricemill'
+  useEffect(() => {
+    if (!isAccountabilityFacility || !varietyId || !currentWarehouseId || !selectedVariety) return
+    let cancelled = false
+    getOrCreateAccountabilityPile({
+      warehouseId: currentWarehouseId,
+      category: selectedVariety.category,
+      varietyId,
+      warehouseName: currentWarehouse?.name,
+    }).then((pile) => {
+      if (!cancelled) setPileId(pile.pileId)
+    })
+    return () => { cancelled = true }
+  }, [isAccountabilityFacility, varietyId, currentWarehouseId, selectedVariety?.category])
 
   useEffect(() => {
     if (!isProcurement && farmerOrgEnabled) {
@@ -1355,7 +1370,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const performSave = async (trial3Confirmed) => {
     setIsSaving(true)
 
-    const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
+    const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.kilos))
+    const transaction = {
+      id: crypto.randomUUID(),
+      ...buildTransactionPayload(),
+      ...(validExtraAllocations.length > 0 ? { groupSerialNo: serialNo.trim() } : {}),
+    }
 
     await db.transactions.add(transaction)
     // These three don't depend on each other's results - running them
@@ -1381,10 +1401,12 @@ function StockFormBase({ type, title, onClose, prefill }) {
     // own separate, linked transaction record - same date/customer/AI/
     // type as the primary one, but its own pileId and bags/kilos
     // portion, with the base serial suffixed (A, B, C...) to stay
-    // unique. Not part of the core schema (still one pileId per
-    // transaction record) - reports, the pile ledger, and Sheet sync
-    // all see these as ordinary, independent transactions.
-    const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.kilos))
+    // unique, and the same groupSerialNo (inherited via the spread
+    // below) linking it back to the primary record - not part of the
+    // core schema (still one pileId per transaction record), but
+    // reports now recognize and combine these into a single row via
+    // groupSerialNo, while the pile ledger and Sheet sync still see
+    // them as the ordinary, independent records they actually are.
     let extraBagsTotal = 0
     let extraKilosTotal = 0
     for (const [idx, alloc] of validExtraAllocations.entries()) {
@@ -2069,88 +2091,32 @@ function StockFormBase({ type, title, onClose, prefill }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Pile ID</label>
-              <select
-                value={pileId}
-                onChange={(e) => handlePileChange(e.target.value)}
-                className={`${inputClass} ${!pileId ? '!border-brand-amber' : ''}`}
-              >
-                <option value="">Select pile…</option>
-                {sortedPiles.map((p) => {
-                  const variety = sortedVarieties.find((v) => v.varietyId === p.varietyId)
-                  return (
-                    <option key={p.pileId} value={p.pileId}>
-                      {p.pileName} ({variety ? variety.name : p.cerealType})
-                    </option>
-                  )
-                })}
-                <option value={NEW_PILE_OPTION}>+ New Pile</option>
-              </select>
-              {pileFilterVarietyId && (
+              {isAccountabilityFacility ? (
+                <div className={readOnlyClass}>{selectedPile?.pileName ?? 'Select a variety first…'}</div>
+              ) : (
+                <select
+                  value={pileId}
+                  onChange={(e) => handlePileChange(e.target.value)}
+                  className={`${inputClass} ${!pileId ? '!border-brand-amber' : ''}`}
+                >
+                  <option value="">Select pile…</option>
+                  {sortedPiles.map((p) => {
+                    const variety = sortedVarieties.find((v) => v.varietyId === p.varietyId)
+                    return (
+                      <option key={p.pileId} value={p.pileId}>
+                        {p.pileName} ({variety ? variety.name : p.cerealType})
+                      </option>
+                    )
+                  })}
+                  <option value={NEW_PILE_OPTION}>+ New Pile</option>
+                </select>
+              )}
+              {!isAccountabilityFacility && pileFilterVarietyId && (
                 <p className="mt-1 text-xs text-neutral-500">
                   Showing only piles matching the linked authority's variety.
                 </p>
               )}
             </div>
-
-            {type === 'WSI' && (
-              <div className="col-span-2">
-                {extraPileAllocations.map((alloc, i) => (
-                  <div key={i} className="mt-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-neutral-500">Additional pile {i + 1}</span>
-                      <button
-                        type="button"
-                        onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
-                        aria-label="Remove pile"
-                        className="rounded-lg p-1 text-neutral-500 transition-colors hover:text-brand-crimson"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <div className="mt-1 grid grid-cols-3 gap-2">
-                      <select
-                        value={alloc.pileId}
-                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, pileId: e.target.value } : r)))}
-                        className={`${inputClass} mt-0 ${!alloc.pileId ? '!border-brand-amber' : ''}`}
-                      >
-                        <option value="">Select pile…</option>
-                        {sortedPiles
-                          .filter((p) => p.pileId !== pileId && !extraPileAllocations.some((r, idx) => idx !== i && r.pileId === p.pileId))
-                          .filter((p) => !selectedVariety || p.varietyId === selectedVariety.varietyId)
-                          .map((p) => (
-                            <option key={p.pileId} value={p.pileId}>{p.pileName}</option>
-                          ))}
-                      </select>
-                      <input
-                        type="text" inputMode="numeric" placeholder="Bags"
-                        value={alloc.bags}
-                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r)))}
-                        className={`${inputClass} mt-0`}
-                      />
-                      <input
-                        type="text" inputMode="decimal" placeholder="Net Kilos"
-                        value={alloc.kilos}
-                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, kilos: liveFormatNumber(e.target.value) } : r)))}
-                        className={`${inputClass} mt-0`}
-                      />
-                    </div>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setExtraPileAllocations((rows) => [...rows, { pileId: '', bags: '', kilos: '' }])}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
-                >
-                  <Plus size={14} /> Issue from another pile
-                </button>
-                {extraPileAllocations.length > 0 && (
-                  <p className="mt-1.5 text-xs text-neutral-500">
-                    Pile ID above covers its own share (with the Bags/Net Kilos fields further up) - each
-                    additional pile here adds its own separate share on top, saved as its own linked record.
-                  </p>
-                )}
-              </div>
-            )}
 
             <div>
               <label className={labelClass}>Variety Type</label>
@@ -2182,6 +2148,66 @@ function StockFormBase({ type, title, onClose, prefill }) {
               )}
             </div>
           </div>
+
+          {type === 'WSI' && (
+            <div>
+              {extraPileAllocations.map((alloc, i) => (
+                <div key={i} className="mt-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-neutral-500">Additional pile {i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
+                      aria-label="Remove pile"
+                      className="rounded-lg p-1 text-neutral-500 transition-colors hover:text-brand-crimson"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="mt-1 grid grid-cols-3 gap-2">
+                    <select
+                      value={alloc.pileId}
+                      onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, pileId: e.target.value } : r)))}
+                      className={`${inputClass} mt-0 ${!alloc.pileId ? '!border-brand-amber' : ''}`}
+                    >
+                      <option value="">Select pile…</option>
+                      {sortedPiles
+                        .filter((p) => p.pileId !== pileId && !extraPileAllocations.some((r, idx) => idx !== i && r.pileId === p.pileId))
+                        .filter((p) => !selectedVariety || p.varietyId === selectedVariety.varietyId)
+                        .map((p) => (
+                          <option key={p.pileId} value={p.pileId}>{p.pileName}</option>
+                        ))}
+                    </select>
+                    <input
+                      type="text" inputMode="numeric" placeholder="Bags"
+                      value={alloc.bags}
+                      onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r)))}
+                      className={`${inputClass} mt-0`}
+                    />
+                    <input
+                      type="text" inputMode="decimal" placeholder="Net Kilos"
+                      value={alloc.kilos}
+                      onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, kilos: liveFormatNumber(e.target.value) } : r)))}
+                      className={`${inputClass} mt-0`}
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setExtraPileAllocations((rows) => [...rows, { pileId: '', bags: '', kilos: '' }])}
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+              >
+                <Plus size={14} /> Issue from another pile
+              </button>
+              {extraPileAllocations.length > 0 && (
+                <p className="mt-1.5 text-xs text-neutral-500">
+                  Pile ID above covers its own share (with the Bags/Net Kilos fields further up) - each
+                  additional pile here adds its own separate share on top, saved as its own linked record.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

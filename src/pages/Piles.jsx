@@ -202,7 +202,9 @@ function Piles() {
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
   const piles = useLiveQuery(
-    () => currentWarehouseId ? db.piles.where('warehouseId').equals(currentWarehouseId).toArray() : [],
+    () => currentWarehouseId
+      ? db.piles.where('warehouseId').equals(currentWarehouseId).and((p) => !p.isAccountabilityPile).toArray()
+      : [],
     [currentWarehouseId]
   ) ?? []
   const boxes = useLiveQuery(

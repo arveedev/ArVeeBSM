@@ -362,7 +362,34 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
 
   const isByProducts = cerealType === 'By Products'
 
-  const sorted = [...transactions].sort((a, b) => {
+  // Multi-pile issuances (linked via groupSerialNo) are combined into
+  // a single row here - per explicit request, these should appear as
+  // one transaction on every report, even though they're saved as
+  // several separate, linked records under the hood (one per pile,
+  // for accurate per-pile ledger tracking). An ordinary transaction
+  // has no groupSerialNo, so it falls back to its own unique id as the
+  // grouping key and passes through completely unaffected, as its own
+  // single-item group.
+  const groups = new Map()
+  for (const t of transactions) {
+    const key = t.groupSerialNo ?? t.id
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(t)
+  }
+  const combinedTransactions = [...groups.values()].map((group) => {
+    if (group.length === 1) return group[0]
+    // The primary record (no serial suffix) supplies every display
+    // field except the three that get summed across the whole group.
+    const primary = group.find((t) => t.serialNo === t.groupSerialNo) ?? group[0]
+    return {
+      ...primary,
+      numberOfBags: group.reduce((sum, t) => sum + (t.numberOfBags ?? 0), 0),
+      grossKilos: group.reduce((sum, t) => sum + (t.grossKilos ?? 0), 0),
+      netKilos: group.reduce((sum, t) => sum + (t.netKilos ?? 0), 0),
+    }
+  })
+
+  const sorted = [...combinedTransactions].sort((a, b) => {
     const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
     return n(a) - n(b)
   })

@@ -8,7 +8,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
-import { fmtWeight, liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
+import { fmtWeight, fmtBags, liveFormatNumber, parseFormattedNumber, isMillingTypeName, isTestMillingTypeName } from '../../../utils/calculations.js'
 import { useSettings } from '../../../context/SettingsContext.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, listItemClass, editIconClass, deleteIconClass, byAlpha } from './shared.js'
@@ -19,6 +19,7 @@ function RicemillAllocationsPanel() {
   const [totalNetKgs, setTotalNetKgs] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [expandedNumber, setExpandedNumber] = useState(null)
 
   const allocations = useLiveQuery(() => db.ricemillAllocations.toArray(), []) ?? []
   const sortedAllocations = [...allocations].sort((a, b) => byAlpha(a.regionalAuthorityNumber, b.regionalAuthorityNumber))
@@ -26,30 +27,92 @@ function RicemillAllocationsPanel() {
   // Actual usage - net kg moved through Ricemill-type warehouses under
   // this Regional Authority Number, so the admin can see allocation vs
   // actual side by side.
+  //
+  // "Used" is specifically the WSI issuance to the mill, under an AI
+  // with transaction type Milling/Remilling/Test Milling/Test
+  // Remilling - confirmed as the one step that actually draws against
+  // the Regional Authority allocation. Everything else in the full
+  // flow (MPO III receiving stock, receiving the recovery back,
+  // transferring it onward) is the same physical stock moving through
+  // custody, not additional usage of the authorization - summing
+  // every WSR/WSI together (the previous approach) would have counted
+  // the same stock multiple times across its different legs.
   const usageByNumber = useLiveQuery(async () => {
     const ricemillWarehouses = await db.warehouses.where('facilityType').equals('Ricemill').toArray()
-    const ricemillIds = new Set(ricemillWarehouses.map((w) => w.warehouseId))
-    if (ricemillIds.size === 0) return new Map()
+    const ricemillIds = ricemillWarehouses.map((w) => w.warehouseId)
+    if (ricemillIds.length === 0) return new Map()
 
-    const authorities = await db.authorities.toArray()
-    const authByAiOrSia = new Map()
-    for (const a of authorities) {
-      if (a.aiNumber) authByAiOrSia.set(a.aiNumber, a.regionalAuthorityNumber)
-      if (a.siaNumber) authByAiOrSia.set(a.siaNumber, a.regionalAuthorityNumber)
-    }
+    const authorities = await db.authorities.where('type').equals('AI').toArray()
+    const millingAuthorities = authorities.filter((a) =>
+      a.regionalAuthorityNumber && (isMillingTypeName(a.transactionTypeName) || isTestMillingTypeName(a.transactionTypeName))
+    )
+    if (millingAuthorities.length === 0) return new Map()
+    const regionalNumByAiNumber = new Map(millingAuthorities.map((a) => [a.aiNumber, a.regionalAuthorityNumber]))
 
     const tx = await db.transactions
-      .where('warehouseId').anyOf([...ricemillIds])
-      .and((t) => t.status === 'Active' && (t.type === 'WSR' || t.type === 'WSI'))
+      .where('warehouseId').anyOf(ricemillIds)
+      .and((t) => t.status === 'Active' && t.type === 'WSI' && regionalNumByAiNumber.has(t.aiNumber))
       .toArray()
 
     const usage = new Map()
     for (const t of tx) {
-      const regionalNum = t.aiNumber ? authByAiOrSia.get(t.aiNumber) : (t.linkedDocNo ? authByAiOrSia.get(t.linkedDocNo) : null)
-      if (!regionalNum) continue
+      const regionalNum = regionalNumByAiNumber.get(t.aiNumber)
       usage.set(regionalNum, (usage.get(regionalNum) ?? 0) + (t.netKilos ?? 0))
     }
     return usage
+  }, []) ?? new Map()
+
+  // Recovery% detail, per Regional Authority Number - for each actual
+  // Milling/Remilling/Test Milling/Test Remilling issuance, finds the
+  // matching recovery receipt (linked via linkedDocNo, the same field
+  // fixed earlier for the Weekly Receipts report) and computes
+  // recovery% as recovered kilos over issued kilos. Separate from
+  // usageByNumber above (which tracks allocation vs total activity) -
+  // this is specifically about how much came BACK out of what went IN
+  // to the mill.
+  const millingDetailsByNumber = useLiveQuery(async () => {
+    const ricemillWarehouses = await db.warehouses.where('facilityType').equals('Ricemill').toArray()
+    if (ricemillWarehouses.length === 0) return new Map()
+    const ricemillIds = ricemillWarehouses.map((w) => w.warehouseId)
+
+    const authorities = await db.authorities.where('type').equals('AI').toArray()
+    const millingAuthorities = authorities.filter((a) =>
+      a.regionalAuthorityNumber && (isMillingTypeName(a.transactionTypeName) || isTestMillingTypeName(a.transactionTypeName))
+    )
+    if (millingAuthorities.length === 0) return new Map()
+
+    const warehouseTx = await db.transactions
+      .where('warehouseId').anyOf(ricemillIds)
+      .and((t) => t.status === 'Active')
+      .toArray()
+    const varietyList = await db.varieties.toArray()
+    const varietyMap = new Map(varietyList.map((v) => [v.varietyId, v]))
+    const warehouseMap = new Map(ricemillWarehouses.map((w) => [w.warehouseId, w]))
+
+    const details = new Map()
+    for (const auth of millingAuthorities) {
+      const millingTx = warehouseTx.filter((t) => t.type === 'WSI' && t.aiNumber === auth.aiNumber)
+      for (const tx of millingTx) {
+        const recoveryTx = warehouseTx.filter((t) => t.type === 'WSR' && t.linkedDocNo === auth.aiNumber)
+        const recoveredKilos = recoveryTx.reduce((sum, r) => sum + (r.netKilos ?? 0), 0)
+        const issuedKilos = tx.netKilos ?? 0
+        const recoveryPct = issuedKilos > 0 ? (recoveredKilos / issuedKilos) * 100 : null
+
+        const key = auth.regionalAuthorityNumber
+        if (!details.has(key)) details.set(key, [])
+        details.get(key).push({
+          id: tx.id,
+          date: tx.date,
+          warehouseName: warehouseMap.get(tx.warehouseId)?.name ?? tx.warehouseId,
+          varietyName: varietyMap.get(tx.varietyId)?.name ?? '',
+          bags: tx.numberOfBags ?? 0,
+          issuedKilos,
+          recoveredKilos,
+          recoveryPct,
+        })
+      }
+    }
+    return details
   }, []) ?? new Map()
 
   const resetForm = () => {
@@ -128,22 +191,52 @@ function RicemillAllocationsPanel() {
         {sortedAllocations.map((a) => {
           const used = usageByNumber.get(a.regionalAuthorityNumber) ?? 0
           const remaining = a.totalNetKgs - used
+          const millingDetails = millingDetailsByNumber.get(a.regionalAuthorityNumber) ?? []
+          const isExpanded = expandedNumber === a.regionalAuthorityNumber
           return (
-            <li key={a.regionalAuthorityNumber} className={listItemClass}>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-app-text">{a.regionalAuthorityNumber}</p>
-                <p className="text-xs text-neutral-500">
-                  {fmtWeight(used, weightUnit)} used of {fmtWeight(a.totalNetKgs, weightUnit)}
-                  {' · '}
-                  <span className={remaining < 0 ? 'text-brand-crimson' : 'text-brand-neon'}>
-                    {fmtWeight(Math.abs(remaining), weightUnit)} {remaining < 0 ? 'over' : 'remaining'}
-                  </span>
-                </p>
+            <li key={a.regionalAuthorityNumber} className={`${listItemClass} flex-col items-stretch`}>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExpandedNumber(isExpanded ? null : a.regionalAuthorityNumber)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <p className="truncate text-sm font-medium text-app-text">{a.regionalAuthorityNumber}</p>
+                  <p className="text-xs text-neutral-500">
+                    {fmtWeight(used, weightUnit)} used of {fmtWeight(a.totalNetKgs, weightUnit)}
+                    {' · '}
+                    <span className={remaining < 0 ? 'text-brand-crimson' : 'text-brand-neon'}>
+                      {fmtWeight(Math.abs(remaining), weightUnit)} {remaining < 0 ? 'over' : 'remaining'}
+                    </span>
+                    {millingDetails.length > 0 && ` · ${millingDetails.length} milling record(s)`}
+                  </p>
+                </button>
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => handleEdit(a)} aria-label="Edit" className={editIconClass}><Pencil size={20} /></button>
+                  <button type="button" onClick={() => setPendingDelete(a)} aria-label="Delete" className={deleteIconClass}><Trash2 size={20} /></button>
+                </div>
               </div>
-              <div className="flex gap-1">
-                <button type="button" onClick={() => handleEdit(a)} aria-label="Edit" className={editIconClass}><Pencil size={20} /></button>
-                <button type="button" onClick={() => setPendingDelete(a)} aria-label="Delete" className={deleteIconClass}><Trash2 size={20} /></button>
-              </div>
+              {isExpanded && (
+                <div className="mt-2 space-y-1.5 border-t border-neutral-800 pt-2">
+                  {millingDetails.length === 0 && (
+                    <p className="text-xs text-neutral-500">No milling activity recorded yet for this Regional Authority Number.</p>
+                  )}
+                  {millingDetails.map((d) => (
+                    <div key={d.id} className="rounded-lg bg-neutral-950 p-2 text-xs">
+                      <div className="flex items-center justify-between text-neutral-400">
+                        <span>{d.date} · {d.warehouseName}</span>
+                        <span className="font-medium text-app-text">{d.varietyName}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-neutral-500">{fmtBags(d.bags)} bags · {fmtWeight(d.issuedKilos, weightUnit)} issued → {fmtWeight(d.recoveredKilos, weightUnit)} recovered</span>
+                        <span className={`font-semibold ${d.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
+                          {d.recoveryPct == null ? '—' : `${d.recoveryPct.toFixed(1)}%`}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </li>
           )
         })}

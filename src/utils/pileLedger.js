@@ -71,6 +71,44 @@ export const reverseTransactionFromPile = async (transaction) => {
 }
 
 /**
+ * Finds or creates the single accountability pile for a given
+ * warehouse+variety combination - used by Ricemill/Mechanical Dryer
+ * facilities to hold stock passing through MPO III's own
+ * accountability, which is not a physical, spatially-placed pile.
+ * Flagged isAccountabilityPile: true so it's excluded from the normal
+ * Piles grid/layout entirely. Created lazily on first use per variety,
+ * since which varieties will actually pass through a given facility
+ * isn't known ahead of time - one pile per variety, same as a normal
+ * pile, just without a manual placement step.
+ */
+export const getOrCreateAccountabilityPile = async ({ warehouseId, category, varietyId, warehouseName }) => {
+  const existing = await db.piles
+    .where('warehouseId').equals(warehouseId)
+    .and((p) => p.isAccountabilityPile === true && p.varietyId === varietyId)
+    .first()
+  if (existing) return existing
+
+  const pile = {
+    pileId: crypto.randomUUID(),
+    warehouseId,
+    pileName: `${warehouseName ?? 'Facility'} Accountability`,
+    cerealType: category,
+    varietyId,
+    currentBags: 0,
+    currentKilos: 0,
+    initialAgeValue: 0,
+    dateOfReceipt: todayLocalISO(),
+    purity: null,
+    dateProcured: null,
+    moistureContent: null,
+    condition: null,
+    isAccountabilityPile: true,
+  }
+  await db.piles.add(pile)
+  return pile
+}
+
+/**
  * Creates a pile seeded with a beginning balance, for onboarding a
  * warehouse that already has physical stock into the app. Creates the
  * pile plus a synthetic WSR transaction flagged isInitialBalance: true

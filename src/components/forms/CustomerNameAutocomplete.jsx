@@ -16,6 +16,7 @@ import {
   searchCustomers,
   findCustomerByName,
   searchWarehouseSupervisors,
+  searchMpoUsers,
 } from '../../utils/customerDirectory.js'
 import { inputClass, labelClass } from './shared.js'
 
@@ -51,8 +52,17 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
         return
       }
 
-      searchCustomers(value, 6, warehouseId).then((results) => {
-        if (!cancelled) setSuggestions(results)
+      searchMpoUsers(value).then((mpoMatches) => {
+        if (cancelled) return
+
+        if (mpoMatches.length > 0) {
+          setSuggestions(mpoMatches)
+          return
+        }
+
+        searchCustomers(value, 6, warehouseId).then((results) => {
+          if (!cancelled) setSuggestions(results)
+        })
       })
     })
 
