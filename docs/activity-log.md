@@ -12041,3 +12041,18 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## Fixed collapse to cover the whole panel, not just the list
+
+Per explicit correction: everything that appears when "Milling
+Operations" is expanded - the sync button, Show Completed toggle,
+MO/TMO tabs, regional authority filter, and the list - now collapses
+together back down to just the header button, not the list alone.
+Removed the now-unnecessary re-expand safeguards on the tab/toggle
+buttons, since those controls are hidden while collapsed and can no
+longer be clicked into a partial state at all - collapse is correctly
+all-or-nothing.
+
+Verified with an 8-case test (2 assertions updated to match this
+correct, simplified final behavior). Full regression suite and
+production build clean.
