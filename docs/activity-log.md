@@ -11880,3 +11880,115 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## NFA Milling/Drying: dryer notification built, multi-pile UI gap closed
+
+Found and fixed a real gap from earlier this session: the "Issue from
+another pile" multi-pile control was showing at accountability
+facilities (Ricemill/Mechanical Dryer), where it makes no sense -
+MPO III has exactly one auto-selected accountability pile per
+variety, no spatial grid of multiple piles to split an issuance
+across. Suppressed for isAccountabilityFacility. Also confirmed the
+accountability-pile auto-select effect already correctly applies to
+WSR as well as WSI, since it lives in the shared StockFormBase.jsx
+without a type-specific check.
+
+Built the dryer-received notification, the last explicitly-requested
+piece for the drying flow: DriedStockReceivedNotification, shown at a
+regular (non-dryer) warehouse when it has recently received dried
+stock back - date, warehouse, MC, bags, and net kilos, exactly the
+fields requested. Detected via the same linkedDocNo chain already
+proven correct for Ricemill recovery% monitoring this session: the
+receiving WSR's linkedDocNo is checked against every AI number of a
+WSI actually issued out of a genuine Mechanical Dryer facility's own
+accountability, confirming the receipt really originated at a dryer
+specifically rather than any ordinary warehouse-to-warehouse transfer.
+Wired into the existing PalayDryingStatus component alongside the two
+notifications already there (DryerStatusCard, WetPalayNotification).
+
+Confirmed MC-before/MC-after tracking needs no new schema at all -
+both WSI and WSR already have their own moistureContent field
+(MC before drying is simply the initial WSI's own value; MC after is
+the receiving WSR's own value, recorded by whoever takes receipt) -
+this notification is what surfaces the "after" figure clearly at the
+point of receipt, which was the one piece actually missing.
+
+Verified with a 10-case test covering the notification's dryer-
+warehouse exclusion (it's for the receiver, not the dryer itself),
+the genuine-dryer-origin confirmation logic, the linkedDocNo matching,
+all four displayed fields, correct wiring into PalayDryingStatus, the
+multi-pile UI suppression, and picking the most recent of several
+receipts when more than one exists.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+REMAINING for this feature: a user-facing (non-admin) view of the
+recovery% monitoring (currently admin-only), and confirming the full
+WS-transfer -> MPO III receive -> mill -> recovery -> transfer-out
+chain works smoothly end-to-end in actual use, which needs real
+hands-on testing rather than further code investigation.
+
+## Confirmed root cause of report duplication AND update-blocking - same bug, rebuilt the fix properly
+
+User's follow-up investigation was the key: the duplicated report
+rows ARE the historical, incomplete records (missing MC, pile, etc.)
+they were trying to update - and they confirmed the original lookup/
+load mechanism (checkAndLoadSerial) already works correctly, loading
+the right record with the right fields. The block happens specifically
+when saving the update, even with the loaded record's own id properly
+excluded from the check. That combination can only happen if a
+SECOND, genuine duplicate with the same serial still exists after the
+one being edited is excluded - directly confirming actual data
+duplication as the single root cause behind both reported symptoms
+(the report showing two rows for one real transaction, and the save
+being blocked because the exclusion still leaves the other copy).
+
+Rebuilt the deduplication migration entirely, replacing the previous
+"keep the more complete copy, discard the other" approach - that
+approach had a real data-loss risk given the user's own scenario:
+if the historical (less complete) record and its duplicate each have
+different fields filled in, discarding the "less complete" one
+outright could silently lose whatever unique data only existed there.
+The new migration (transaction-dedup-merge-v4) instead MERGES every
+duplicate's fields into a single surviving record - any gap in the
+survivor is filled from whichever duplicate has a value for that
+field - before deleting the redundant records, so nothing is lost.
+The survivor is chosen preferring a record that is NOT itself from a
+Sheet import when one exists (a genuine, locally-created record is
+the more authoritative base to merge historical Sheet data into),
+falling back to the most complete copy when every duplicate is
+equally Sheet-imported. This directly and completely resolves the
+"serial already used" block too - once only one record remains for a
+given serial, excluding it during an update finds no other match.
+
+Kept both complementary safeguards from the previous entry: the
+report-level defensive dedup in the PDF generator (still valuable
+regardless of how thoroughly the data-level fix works, given the
+stakes of an official report), and the validateForm recovery-load
+fix in both stock and sack forms (still a useful safety net for any
+future case where the original lookup might miss a record for a
+different reason).
+
+Also fixed the two remaining minor label requests: WSR's linked-
+document label now reads "WSI / PR / BL No." (was "WSI No."), and
+ESR's now reads "ESI / AI" (was "ESI No.").
+
+Verified with a 9-case test modeling the exact reported scenario
+directly - two Sheet-imported copies with different gaps correctly
+merging without data loss, a genuine local record correctly preferred
+as the survivor base over a more "complete" Sheet duplicate, and a
+direct confirmation that the false "already used" block cannot occur
+once only one record remains - plus a 4-case test for both label
+changes.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and both dedicated test suites above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+PACKAGING NOW.

@@ -362,6 +362,33 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
 
   const isByProducts = cerealType === 'By Products'
 
+  // Defensive safeguard against duplicate transaction records, given
+  // the severity of duplicated figures appearing on an official
+  // report - deduplicates first by id (in case the same record somehow
+  // appears twice in the input array), then by the same type+
+  // warehouseId+serialNo+cerealCategory key already proven correct for
+  // genuine data-level duplicates elsewhere this session. Runs before
+  // the groupSerialNo combination below, so a duplicated multi-pile
+  // record can't get summed twice into an already-correct total.
+  const seenIds = new Set()
+  const dedupedById = transactions.filter((t) => {
+    if (seenIds.has(t.id)) return false
+    seenIds.add(t.id)
+    return true
+  })
+  const seenKeys = new Map()
+  const dedupedTransactions = []
+  for (const t of dedupedById) {
+    const key = `${t.type}::${t.warehouseId}::${t.serialNo}::${t.cerealCategory ?? ''}`
+    const existing = seenKeys.get(key)
+    if (!existing) {
+      seenKeys.set(key, t)
+      dedupedTransactions.push(t)
+    }
+    // else: a genuine duplicate slipped through data cleanup - silently
+    // dropped here rather than shown twice on the printed report.
+  }
+
   // Multi-pile issuances (linked via groupSerialNo) are combined into
   // a single row here - per explicit request, these should appear as
   // one transaction on every report, even though they're saved as
@@ -371,7 +398,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   // grouping key and passes through completely unaffected, as its own
   // single-item group.
   const groups = new Map()
-  for (const t of transactions) {
+  for (const t of dedupedTransactions) {
     const key = t.groupSerialNo ?? t.id
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key).push(t)
