@@ -4,10 +4,10 @@
 // authorities. Shows both stock (WSR/WSI) and sack (ESR/ESI) activity
 // together, since a milling operation always involves both.
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, ChevronRight, X, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
@@ -227,6 +227,7 @@ function MillingMonitor() {
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  const containerRef = useRef(null)
 
   const orders = useLiveQuery(() => computeMillingOrderStatuses(topTab), [topTab]) ?? []
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
@@ -287,7 +288,7 @@ function MillingMonitor() {
   const availableRegionalAuthNumbers = [...new Set([...regionalAuthByOrder.values()].filter(Boolean))].sort()
 
   return (
-    <div className={`rounded-2xl border p-4 transition-all ${showCompleted ? 'border-brand-neon shadow-[0_0_16px_-4px_rgba(0,255,163,0.4)] bg-neutral-900' : 'border-neutral-800 bg-neutral-900'}`}>
+    <div ref={containerRef} className={`rounded-2xl border p-4 transition-all ${showCompleted ? 'border-brand-neon shadow-[0_0_16px_-4px_rgba(0,255,163,0.4)] bg-neutral-900' : 'border-neutral-800 bg-neutral-900'}`}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-app-text">Milling Operations</h2>
         <div className="flex shrink-0 items-center gap-2">
@@ -436,6 +437,17 @@ function MillingMonitor() {
           )
         })}
       </ul>
+
+      {filtered.length > 0 && (
+        <button
+          type="button"
+          onClick={() => containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          aria-label="Collapse list back to top"
+          className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs text-neutral-500 transition-colors hover:text-app-text"
+        >
+          <ChevronUp size={16} />
+        </button>
+      )}
 
       {selectedOrder && <MillingOrderDetail order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
     </div>

@@ -11992,3 +11992,23 @@ re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
 
 PACKAGING NOW.
+
+## Added collapse-to-top control on the Milling Operations pending/completed list
+
+Per explicit request: a small up-arrow button now appears right below
+the last row of the Milling Operations list (both pending and
+completed views), letting the user scroll the whole widget back into
+view without manually scrolling all the way up. Only shown when the
+list actually has items, since there's nothing to collapse for an
+empty list. Confirmed this shared component is used on both the
+user-facing Home page and the admin monitoring page, so this single
+fix covers the user side as requested.
+
+Verified with a 6-case test confirming the ref wiring, the button's
+placement and visibility condition, and its scroll behavior.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
