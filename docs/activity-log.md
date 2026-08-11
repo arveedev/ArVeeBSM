@@ -12056,3 +12056,72 @@ all-or-nothing.
 Verified with an 8-case test (2 assertions updated to match this
 correct, simplified final behavior). Full regression suite and
 production build clean.
+
+## Fixed default date period (8-16 to 8-15) and added start/end clarity to calendar pickers
+
+Fixed the single, shared preset source (getPeriodPresetRanges) used
+by every date-range picker in the app - Piles, and both of Reports'
+date pairs - so the "everywhere it appears" requirement is satisfied
+by this one change. Also fixed two now-stale comments referencing
+the old, incorrect range.
+
+Added an optional label prop to CalendarDatePicker, shown as a clear
+header inside the popup itself (not just the static label on the
+collapsed field, which is easy to lose track of once the full-screen
+popup covers it) - wired in as "Start Date"/"End Date" on every
+actual date-range pair in the app (Reports' Summary and Stock
+Statement pickers, Piles' period picker). Single-date pickers (a
+transaction's own date, a beginning balance's as-of date) were left
+unchanged, since the request specifically concerned range pickers.
+
+Verified with an 8-case test confirming the exact fixed preset dates,
+no gap or overlap with the adjacent preset, the label prop's presence
+and rendering, and its correct wiring at every range-picker call site.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+## Fixed FILLERS transaction: no longer requires stock-specific fields, resolving the report exclusion too
+
+Investigated the report-exclusion report first - confirmed the report
+query, splitStockTransactions, and every cereal-type/report-page loop
+have no special exclusion for any transaction type, missing variety,
+or missing pile. This ruled out a report-level bug and pointed to the
+real cause: the form's own save validation (canSave) unconditionally
+required pileId, a resolvable variety, an MTS sack selection, moisture
+content, and pile age - none of which apply to a FILLERS transaction,
+particularly "filler sacks" (per the SOP, documentation of empty
+containers, not stock tied to a physical pile). A FILLERS transaction
+almost certainly could never actually save in the first place, which
+directly explains why it was never showing up in any report - there
+was no record to report.
+
+Added an isFillersType exemption (detected from the selected
+transaction type's own name) to canSave, scoped narrowly to exactly
+the fields that don't apply: pile, variety, sack selection, moisture
+content, and age. Every other requirement (warehouse, transaction
+type itself, serial, customer, at least one of bags/kilos, linked AI
+when applicable) still applies to FILLERS exactly as before - only
+the stock-specific fields are exempted. Confirmed there is only one
+shared canSave computation for both creating and updating a
+transaction, so this fix covers both paths. Confirmed
+applyTransactionToPile already safely no-ops when pileId is missing,
+so a filler transaction with no pile doesn't affect any pile's ledger,
+as expected.
+
+Verified with a 9-case test confirming each field exemption
+individually, and a direct simulation proving a filler-sack scenario
+(no pile, no variety, no MTS, no MC, no age - just bags) now correctly
+passes validation, while confirming the exact same field set still
+correctly fails for a normal, non-FILLERS transaction type - proving
+the exemption is properly scoped, not a general loosening of
+validation.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
