@@ -211,9 +211,33 @@ function Reports() {
       // beginning-balance date to compare it against at all, and this
       // is what originally fixed the separate, still-valid "PD"
       // orphaned phantom-data bug.
+      //
+      // CRITICAL: sheet-imported transactions - virtually all of a
+      // real warehouse's historical data - always have pileId: null,
+      // since the Sheet never tracked pile assignment at all. Matching
+      // by pileId alone excluded every single one of them from ever
+      // counting as prior activity, since null never matches any real
+      // pile's own id - this is the confirmed, actual explanation for
+      // why beginning balance appeared completely frozen in real
+      // production reports, not just partially affected. Added a
+      // variety+condition fallback for any transaction whose pileId
+      // can't be resolved (null, or pointing to a pile that no longer
+      // exists) - the earliest dateOfReceipt among every current pile
+      // matching that variety+condition is used as the cutoff, since
+      // that's the only signal available for data never tied to a
+      // specific pile to begin with. Data matching no pile at all,
+      // even by variety+condition, is still excluded - preserving the
+      // original "PD" phantom-data fix.
       const pilesInWarehouse = await db.piles.where('warehouseId').equals(currentWarehouseId).toArray()
       const pileExistsById = new Set(pilesInWarehouse.map((p) => p.pileId))
       const pileDateOfReceiptById = new Map(pilesInWarehouse.map((p) => [p.pileId, p.dateOfReceipt]))
+      const earliestDateByVarietyCondition = new Map()
+      for (const p of pilesInWarehouse) {
+        if (!p.dateOfReceipt) continue
+        const vcKey = `${p.varietyId}::${p.condition}`
+        const existing = earliestDateByVarietyCondition.get(vcKey)
+        if (!existing || p.dateOfReceipt < existing) earliestDateByVarietyCondition.set(vcKey, p.dateOfReceipt)
+      }
       const stockBeginningBals = new Map()
       const priorStockRaw = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
@@ -222,10 +246,18 @@ function Reports() {
         .toArray())
         .filter((t) => {
           if (t.isInitialBalance) return true // the seed itself always counts, regardless of date
-          if (!pileExistsById.has(t.pileId)) return false // pile genuinely doesn't exist anymore - excluded, matching the original "PD" phantom-data fix
-          const pileDate = pileDateOfReceiptById.get(t.pileId)
-          if (!pileDate) return true // pile exists but has no beginning-balance date set at all - include, don't silently drop real activity for a real, current pile
-          return t.date > pileDate
+          if (pileExistsById.has(t.pileId)) {
+            const pileDate = pileDateOfReceiptById.get(t.pileId)
+            if (!pileDate) return true // pile exists but has no beginning-balance date set at all - include
+            return t.date > pileDate
+          }
+          // No resolvable pileId (sheet-imported data, or a pile that
+          // no longer exists) - fall back to matching by variety+
+          // condition against every current pile's own dates.
+          const vcKey = `${t.varietyId}::${t.condition}`
+          const fallbackDate = earliestDateByVarietyCondition.get(vcKey)
+          if (!fallbackDate) return false // no pile anywhere matches even by variety+condition - genuinely orphaned, excluded
+          return t.date > fallbackDate
         })
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {
