@@ -14,8 +14,10 @@
 // prior-transactions sum, since that query does not filter the flag out).
 
 import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
+import { db } from '../../db/dexie.js'
 import { createPileWithBeginningBalance } from '../../utils/pileLedger.js'
 import { liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
 import { inputClass, labelClass, primaryButtonClass, CONDITION_FLAGS } from './shared.js'
@@ -40,7 +42,18 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
   const [beginAge, setBeginAge] = useState('')
   const [beginAgeUnit, setBeginAgeUnit] = useState('Days')
   const [beginCondition, setBeginCondition] = useState('GQ')
+  const [mtsSelection, setMtsSelection] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+
+  const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
+  const mtsOptions = [...sackTypes]
+    .filter((s) => category === 'By Products' || s.category === category)
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .flatMap((s) =>
+      ['BN', 'SH', 'US']
+        .filter((cond) => s.weights?.[cond] != null)
+        .map((cond) => ({ key: `${s.sackTypeId}::${cond}`, label: `${s.code} - ${cond} (${s.weights[cond]} kg)` }))
+    )
 
   const categoryVarieties = varieties
     .filter((v) => v.category === category)

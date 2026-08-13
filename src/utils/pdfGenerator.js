@@ -269,29 +269,72 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   doc.text(`CEREAL TYPE: LOCAL ${cerealType.toUpperCase()}`, margin, y)
   y += 4
 
-  // Collect variety+condition keys from transactions AND from the
-  // beginning balance map itself - a pile with a beginning balance but
-  // zero transactions in this period must still get a row.
-  const keys = new Set()
+  // Collect variety+condition+mtsWeight raw keys from transactions AND
+  // from the beginning balance map itself - a pile with a beginning
+  // balance but zero transactions in this period must still get a
+  // row.
+  const mtsWeightOf = (t) => sackTypeMap?.get(t.mtsSackTypeId)?.weights?.[t.mtsCondition] ?? null
+  const rawKeys = new Set()
   for (const t of [...receipts, ...issues]) {
-    if (t.varietyId && t.condition) keys.add(`${t.varietyId}::${t.condition}`)
+    if (t.varietyId && t.condition) rawKeys.add(`${t.varietyId}::${t.condition}::${mtsWeightOf(t) ?? ''}`)
   }
   if (beginBalMap) {
-    for (const key of beginBalMap.keys()) keys.add(key)
+    for (const key of beginBalMap.keys()) rawKeys.add(key)
   }
+
+  // First pass: for each variety+condition pair, collect every
+  // distinct MTS weight actually in use across all its raw keys.
+  // Per explicit clarification, separation into labeled rows only
+  // happens when a pair genuinely has more than one distinct weight -
+  // a variety+condition using a single sack type throughout (the
+  // common case) stays merged as one plain row, exactly as before
+  // this feature existed.
+  const weightsByVarietyCondition = new Map()
+  for (const rawKey of rawKeys) {
+    const [varietyId, condition, mtsWeightStr] = rawKey.split('::')
+    if (!mtsWeightStr) continue
+    const vcKey = `${varietyId}::${condition}`
+    if (!weightsByVarietyCondition.has(vcKey)) weightsByVarietyCondition.set(vcKey, new Set())
+    weightsByVarietyCondition.get(vcKey).add(mtsWeightStr)
+  }
+
+  // Second pass: fold raw keys down to their display key - the raw
+  // key itself (separate per weight) when separation is needed, or
+  // just the variety+condition pair (merged) otherwise.
+  const keys = new Set()
+  const displayKeyOf = (rawKey) => {
+    const [varietyId, condition] = rawKey.split('::')
+    const vcKey = `${varietyId}::${condition}`
+    const needsSeparation = (weightsByVarietyCondition.get(vcKey)?.size ?? 0) > 1
+    return needsSeparation ? rawKey : vcKey
+  }
+  for (const rawKey of rawKeys) keys.add(displayKeyOf(rawKey))
 
   let totBegBags = 0, totBegKilos = 0
   let totRecBags = 0, totRecKilos = 0
   let totIssBags = 0, totIssKilos = 0
 
   const body = [...keys].sort().map((key) => {
-    const [varietyId, condition] = key.split('::')
+    const [varietyId, condition, mtsWeightStr] = key.split('::')
+    const mtsWeight = mtsWeightStr ? parseFloat(mtsWeightStr) : null
     const variety = varieties.find((v) => v.varietyId === varietyId)
-    const beg = beginBalMap?.get(key) ?? { bags: 0, kilos: 0 }
-    const recBags = receipts.filter(t => t.varietyId === varietyId && t.condition === condition).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
-    const recKilos = receipts.filter(t => t.varietyId === varietyId && t.condition === condition).reduce((s, t) => s + (t.netKilos ?? 0), 0)
-    const issBags = issues.filter(t => t.varietyId === varietyId && t.condition === condition).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
-    const issKilos = issues.filter(t => t.varietyId === varietyId && t.condition === condition).reduce((s, t) => s + (t.netKilos ?? 0), 0)
+    const matchesGroup = (t) => {
+      if (t.varietyId !== varietyId || t.condition !== condition) return false
+      const rawKey = `${t.varietyId}::${t.condition}::${mtsWeightOf(t) ?? ''}`
+      return displayKeyOf(rawKey) === key
+    }
+    let beg = { bags: 0, kilos: 0 }
+    if (beginBalMap) {
+      for (const [rawKey, val] of beginBalMap.entries()) {
+        if (displayKeyOf(rawKey) === key) {
+          beg = { bags: beg.bags + val.bags, kilos: beg.kilos + val.kilos }
+        }
+      }
+    }
+    const recBags = receipts.filter(matchesGroup).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
+    const recKilos = receipts.filter(matchesGroup).reduce((s, t) => s + (t.netKilos ?? 0), 0)
+    const issBags = issues.filter(matchesGroup).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
+    const issKilos = issues.filter(matchesGroup).reduce((s, t) => s + (t.netKilos ?? 0), 0)
     const endBags = beg.bags + recBags - issBags
     const endKilos = beg.kilos + recKilos - issKilos
 
@@ -300,7 +343,7 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
     totIssBags += issBags; totIssKilos += issKilos
 
     return [
-      variety?.name ?? varietyId,
+      mtsWeight != null ? `${variety?.name ?? varietyId} (${mtsWeight.toFixed(3)})` : (variety?.name ?? varietyId),
       condition,
       fmtBags(beg.bags), fmtKilos(beg.kilos),
       fmtBags(recBags), fmtKilos(recKilos),
@@ -838,7 +881,7 @@ export const generateNfaReport = ({
     // Summary always renders (beginning/ending balance is meaningful even
     // with zero activity). Statement/recap pages only render if there is
     // actual activity to list - a statement of zero rows is meaningless.
-    addStockSummaryPage(doc, { header, cerealType, varieties: catVars, receipts: catRec, issues: catIss, beginBalMap, sigCtx })
+    addStockSummaryPage(doc, { header, cerealType, varieties: catVars, receipts: catRec, issues: catIss, beginBalMap, sackTypeMap, sigCtx })
     if (catRec.length > 0) {
       addStockStatementPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx })
       addStockRecapPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx })

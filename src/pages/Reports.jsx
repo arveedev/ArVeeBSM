@@ -192,28 +192,29 @@ function Reports() {
       // balance - counted nowhere).
       //
       // Every other, non-seed transaction is only counted if it's dated
-      // strictly AFTER this warehouse's beginning-balance cutoff - per
-      // explicit clarification, NO transaction of any kind should ever
-      // appear in a report unless it's dated after the beginning
-      // balance was established, with no exceptions. An earlier version
-      // of this fix tried to match each transaction to its own pile's
-      // individual dateOfReceipt, falling back to "include" for any
-      // transaction whose pile couldn't be resolved - that fallback was
-      // itself the bug: a transaction with no resolvable current pile
-      // (e.g. old, orphaned Sheet-imported history for a pile that no
-      // longer exists) fell through to being included regardless of how
-      // old it actually was, which is exactly why a "PD" transaction
-      // from April was still appearing on a July report despite being
-      // well before the June 30 beginning balance date. Fixed by using
-      // one single cutoff for the whole warehouse - the latest
-      // dateOfReceipt across every currently-existing pile, representing
-      // the point by which every pile's beginning balance was
-      // established - and excluding anything on/before it unconditionally,
-      // with no fallback that could let anything slip through.
-      const pileDatesForWarehouse = (await db.piles.where('warehouseId').equals(currentWarehouseId).toArray())
-        .map((p) => p.dateOfReceipt)
-        .filter(Boolean)
-      const beginningBalanceCutoff = pileDatesForWarehouse.length > 0 ? pileDatesForWarehouse.sort().at(-1) : null
+      // strictly AFTER ITS OWN PILE's beginning-balance date - CRITICAL
+      // FIX: an earlier version used a single cutoff for the whole
+      // warehouse (the latest dateOfReceipt across every pile), which
+      // had a severe bug - creating even one new pile later would push
+      // that cutoff forward for the entire warehouse, silently
+      // excluding real, already-accumulated activity for every OTHER,
+      // unrelated pile whose own beginning balance was established
+      // much earlier. This is the confirmed direct cause of a
+      // "beginning balance never rolls forward day to day" report -
+      // the rolling balance appeared stuck because unrelated pile
+      // creation elsewhere kept resetting the effective cutoff for
+      // everything. Now compares each transaction against its own
+      // specific pile's own dateOfReceipt instead, so one pile's
+      // rolling balance is never affected by another pile's history.
+      // A transaction whose pile cannot be resolved to a current one
+      // is still excluded by default (not included) - there's no
+      // beginning-balance date to compare it against at all, and this
+      // is what originally fixed the separate, still-valid "PD"
+      // orphaned phantom-data bug.
+      const pileDateOfReceiptById = new Map(
+        (await db.piles.where('warehouseId').equals(currentWarehouseId).toArray())
+          .map((p) => [p.pileId, p.dateOfReceipt])
+      )
       const stockBeginningBals = new Map()
       const priorStockRaw = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
@@ -222,15 +223,17 @@ function Reports() {
         .toArray())
         .filter((t) => {
           if (t.isInitialBalance) return true // the seed itself always counts, regardless of date
-          if (!beginningBalanceCutoff) return true // no piles at all yet to establish a cutoff from
-          return t.date > beginningBalanceCutoff
+          const pileDate = pileDateOfReceiptById.get(t.pileId)
+          if (!pileDate) return false // no resolvable current pile to compare against - excluded, not included
+          return t.date > pileDate
         })
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {
         const variety = varietyMap.get(t.varietyId)
         if (!variety) return
         const cat = variety.category
-        const key = `${t.varietyId}::${t.condition}`
+        const mtsWeight = sackTypeMap.get(t.mtsSackTypeId)?.weights?.[t.mtsCondition] ?? null
+        const key = `${t.varietyId}::${t.condition}::${mtsWeight ?? ''}`
         if (!stockBeginningBals.has(cat)) stockBeginningBals.set(cat, new Map())
         const catMap = stockBeginningBals.get(cat)
         const cur = catMap.get(key) ?? { bags: 0, kilos: 0 }
@@ -248,13 +251,22 @@ function Reports() {
       // genuinely didn't exist yet as of this period).
       //
       // Every other, non-seed sack transaction is only counted if it's
-      // dated strictly AFTER this warehouse's beginning-balance cutoff -
-      // same single-cutoff approach as stocks above, and for the same
-      // reason: the previous per-key matching (sackTypeId::condition)
-      // had the identical gap - a sack line whose key had no matching
-      // current seed fell through a falsy "cutoff &&" check and was
-      // included regardless of how old it actually was.
+      // dated strictly AFTER ITS OWN sackTypeId+condition's own
+      // beginning-balance date - CRITICAL FIX: an earlier version used
+      // a single cutoff for the whole warehouse (the latest asOfDate
+      // across every sack seed), which had the identical severe bug as
+      // the stock side above - creating a new beginning-balance seed
+      // for one sack type/condition later would push that cutoff
+      // forward for every OTHER sack type/condition's rolling balance
+      // too, silently excluding real, already-accumulated activity
+      // that had nothing to do with the newly-seeded one. Now tracks
+      // each key's own as-of date independently. A transaction whose
+      // key has no matching seed at all is still excluded by default
+      // (not included) - this is what originally fixed the "included
+      // regardless of how old it actually was" gap from the per-key
+      // matching that predates this fix.
       const sackBeginningBals = new Map()
+      const sackAsOfDateByKey = new Map()
       const sackInventorySeed = await db.sackInventory
         .where('warehouseId').equals(currentWarehouseId)
         .toArray()
@@ -262,19 +274,20 @@ function Reports() {
         if (rec.asOfDate && rec.asOfDate > stmtFrom) continue
         const key = `${rec.sackTypeId}::${rec.condition}`
         sackBeginningBals.set(key, (sackBeginningBals.get(key) ?? 0) + (rec.pieces ?? 0))
+        sackAsOfDateByKey.set(key, rec.asOfDate ?? null)
       }
-      const sackAsOfDates = sackInventorySeed.map((rec) => rec.asOfDate).filter(Boolean)
-      const sackBeginningBalanceCutoff = sackAsOfDates.length > 0 ? sackAsOfDates.sort().at(-1) : null
       const priorSack = await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
-        .and((t) => ['ESR', 'ESI'].includes(t.type) && t.status === 'Active' && t.date < stmtFrom &&
-          (!sackBeginningBalanceCutoff || t.date > sackBeginningBalanceCutoff))
+        .and((t) => ['ESR', 'ESI'].includes(t.type) && t.status === 'Active' && t.date < stmtFrom)
         .toArray()
       for (const t of priorSack) {
         for (const l of (t.sackLines ?? [])) {
           const sType = sackTypeMap.get(l.sackTypeId)
           if (!sType) continue
           const key = `${l.sackTypeId}::${l.condition}`
+          if (!sackAsOfDateByKey.has(key)) continue // no matching seed for this key at all - excluded by default
+          const cutoff = sackAsOfDateByKey.get(key)
+          if (cutoff && t.date <= cutoff) continue
           const sign = t.type === 'ESI' ? -1 : 1
           sackBeginningBals.set(key, (sackBeginningBals.get(key) ?? 0) + (l.pieces ?? 0) * sign)
         }
