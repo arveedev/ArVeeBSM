@@ -59,19 +59,10 @@ const runSyncQueue = async () => {
   let failed = 0
 
   try {
-    // Uses the small, dedicated pendingSyncIds table (maintained
-    // automatically via hooks in dexie.js) instead of scanning the
-    // entire transactions table every 30 seconds - confirmed as a
-    // direct cause of ongoing save/update/delete slowness, since that
-    // full-table scan competed with any save operation for the same
-    // table on a database that can hold years of accumulated records.
-    // Still verifies isSynced === false on each candidate (a cheap
-    // check on a small set now, not a full scan) as a safety net
-    // against this tracking table ever drifting from the real data.
-    const pendingIds = (await db.pendingSyncIds.toArray()).map((r) => r.id)
-    const pending = pendingIds.length > 0
-      ? (await db.transactions.bulkGet(pendingIds)).filter((tx) => tx && tx.isSynced === false && !tx.isInitialBalance)
-      : []
+    // .filter() is used instead of .where('isSynced').equals(false) because
+    // IndexedDB cannot reliably index boolean values across browsers —
+    // filter() guarantees every record is checked regardless of index support.
+    const pending = await db.transactions.filter((tx) => tx.isSynced === false && !tx.isInitialBalance).toArray()
 
     for (const tx of pending) {
       try {
