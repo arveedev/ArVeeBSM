@@ -12254,3 +12254,34 @@ re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
 
 PACKAGING IMMEDIATELY per explicit urgency.
+
+## CRITICAL REGRESSION FIXED: PDF export completely broken (ReferenceError: sackTypeMap is not defined)
+
+User reported PDF export throwing immediately on every attempt. Found
+the exact cause: the previous entry's sack-condition-weight-
+separation fix updated addStockSummaryPage's caller to pass
+sackTypeMap in, but never actually added sackTypeMap to the
+function's own destructured parameters - so every reference to it
+inside the function body had no local binding at all, throwing
+ReferenceError (not "undefined", a hard crash) the moment the summary
+page tried to render. This blocked report export entirely, for every
+report, regardless of cereal type or period.
+
+Fixed by adding the missing parameter to the destructuring. Cross-
+checked every other PDF generator function's own signature against
+what its caller actually passes, confirming this was an isolated gap
+in this one function - not a symptom of a broader pattern across the
+report generator.
+
+Verified with a 7-case test that directly reproduces the exact bug
+mechanism (referencing an un-destructured parameter throws
+ReferenceError; a properly destructured one does not) and confirms
+every other report function's signature is correctly wired.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+PACKAGING IMMEDIATELY - this was a hard blocker on all report export.
