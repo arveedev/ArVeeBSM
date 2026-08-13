@@ -212,25 +212,24 @@ function Reports() {
       // is what originally fixed the separate, still-valid "PD"
       // orphaned phantom-data bug.
       //
-      // CRITICAL: sheet-imported transactions - virtually all of a
-      // real warehouse's historical data - always have pileId: null,
-      // since the Sheet never tracked pile assignment at all. Matching
-      // by pileId alone excluded every single one of them from ever
-      // counting as prior activity, since null never matches any real
-      // pile's own id - this is the confirmed, actual explanation for
-      // why beginning balance appeared completely frozen in real
-      // production reports, not just partially affected. Added a
-      // variety+condition fallback for any transaction whose pileId
-      // can't be resolved (null, or pointing to a pile that no longer
-      // exists) - the earliest dateOfReceipt among every current pile
-      // matching that variety+condition is used as the cutoff, since
-      // that's the only signal available for data never tied to a
-      // specific pile to begin with. Data matching no pile at all,
-      // even by variety+condition, is still excluded - preserving the
-      // original "PD" phantom-data fix.
+      // SIMPLIFIED per explicit confirmation: a warehouse can
+      // genuinely have multiple piles sharing the same variety and
+      // condition at once (old stock kept separate from new, one pile
+      // filling up and needing an overflow pile, etc.) - this is
+      // normal, real warehouse operation, not an edge case. Since
+      // every overview/report already displays and groups by variety
+      // (never by individual pile), every pile sharing a variety+
+      // condition is now treated as one combined pool for cutoff
+      // purposes too, rather than trying to attribute each transaction
+      // to one specific pile (which sheet-imported data, with no
+      // pileId at all, can never support anyway). The cutoff is the
+      // EARLIEST dateOfReceipt among every current pile sharing that
+      // variety+condition - safe because any transaction dated between
+      // the earliest pile's start and a later pile's own start could
+      // only belong to the earlier pile (the later one didn't exist
+      // yet), so counting it as prior activity for the combined pool
+      // is always correct.
       const pilesInWarehouse = await db.piles.where('warehouseId').equals(currentWarehouseId).toArray()
-      const pileExistsById = new Set(pilesInWarehouse.map((p) => p.pileId))
-      const pileDateOfReceiptById = new Map(pilesInWarehouse.map((p) => [p.pileId, p.dateOfReceipt]))
       const earliestDateByVarietyCondition = new Map()
       for (const p of pilesInWarehouse) {
         if (!p.dateOfReceipt) continue
@@ -246,18 +245,9 @@ function Reports() {
         .toArray())
         .filter((t) => {
           if (t.isInitialBalance) return true // the seed itself always counts, regardless of date
-          if (pileExistsById.has(t.pileId)) {
-            const pileDate = pileDateOfReceiptById.get(t.pileId)
-            if (!pileDate) return true // pile exists but has no beginning-balance date set at all - include
-            return t.date > pileDate
-          }
-          // No resolvable pileId (sheet-imported data, or a pile that
-          // no longer exists) - fall back to matching by variety+
-          // condition against every current pile's own dates.
-          const vcKey = `${t.varietyId}::${t.condition}`
-          const fallbackDate = earliestDateByVarietyCondition.get(vcKey)
-          if (!fallbackDate) return false // no pile anywhere matches even by variety+condition - genuinely orphaned, excluded
-          return t.date > fallbackDate
+          const cutoff = earliestDateByVarietyCondition.get(`${t.varietyId}::${t.condition}`)
+          if (!cutoff) return false // no pile anywhere matches this variety+condition - genuinely orphaned, excluded
+          return t.date > cutoff
         })
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {

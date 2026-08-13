@@ -862,3 +862,43 @@ window.fetch = async (...args) => {
   }
   return response
 }
+
+// v28 - pendingSyncIds tracks which transaction ids still need to be
+// synced to the Sheet, maintained automatically via hooks below
+// rather than at every individual save call site (avoids the risk of
+// missing one of the several places across the app that create/update
+// a transaction with isSynced: false). Lets the sync worker query
+// only the genuinely pending handful directly, instead of scanning
+// the entire transactions table every 30 seconds - confirmed as a
+// direct cause of ongoing save/update/delete slowness, since that
+// full-table scan competed with any save operation for the same
+// table on a database that can hold years of accumulated records.
+db.version(28).stores({
+  pendingSyncIds: 'id',
+}).upgrade(async (tx) => {
+  // One-time backfill: the hooks below only maintain this table for
+  // future changes - any record already pending sync before this
+  // version needs to be added here once, so it isn't silently missed.
+  const existingPending = await tx.table('transactions')
+    .filter((t) => t.isSynced === false)
+    .toArray()
+  if (existingPending.length > 0) {
+    await tx.table('pendingSyncIds').bulkPut(existingPending.map((t) => ({ id: t.id })))
+  }
+})
+
+db.transactions.hook('creating', (primKey, obj) => {
+  if (obj.isSynced === false) {
+    db.pendingSyncIds.put({ id: primKey }).catch(() => {})
+  }
+})
+db.transactions.hook('updating', (modifications, primKey) => {
+  if (modifications.isSynced === true) {
+    db.pendingSyncIds.delete(primKey).catch(() => {})
+  } else if (modifications.isSynced === false) {
+    db.pendingSyncIds.put({ id: primKey }).catch(() => {})
+  }
+})
+db.transactions.hook('deleting', (primKey) => {
+  db.pendingSyncIds.delete(primKey).catch(() => {})
+})
