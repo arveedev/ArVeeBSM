@@ -12406,3 +12406,68 @@ confirmed multiple times this session, no new regressions.
 PACKAGING IMMEDIATELY - this is the third consecutive attempt at this
 exact core function, now verified against the user's own real
 production reports.
+
+## Rolling balance simplified per real-world confirmation; sync worker performance fix (root cause of ongoing slowness)
+
+User confirmed directly: a warehouse can genuinely have multiple piles
+sharing the same variety and condition at once (old stock kept
+separate from new, one pile filling up requiring an overflow pile) -
+this is normal, real operation, not an edge case. Since every
+overview/report already displays and groups by variety only (never by
+individual pile), simplified the rolling-balance cutoff to match this
+reality directly: removed the previous pileId-based branching entirely
+(which could never correctly attribute sheet-imported data anyway,
+since it has no pileId) in favor of a single, uniform cutoff per
+variety+condition - the earliest dateOfReceipt among every pile
+sharing that combination. Confirmed safe: any transaction dated
+between the earliest pile's start and a later pile's own start could
+only belong to the earlier pile (the later one didn't exist yet), so
+counting it as prior activity for the combined pool is always correct.
+This is a genuine simplification, not just a bug fix - the code is now
+shorter and more directly matches the real mental model confirmed by
+the user.
+
+Separately, found and fixed what is very likely the actual, ongoing
+root cause of the repeatedly-reported save/update/delete slowness -
+distinct from the earlier migration-consolidation fix, which only
+addressed a one-time, login-time cost. The sync worker's own recurring
+check for pending-sync records used .filter() over the ENTIRE
+transactions table (a deliberate, documented choice - IndexedDB can't
+reliably index booleans across browsers) - and this ran every 30
+seconds, continuously, the whole time the app is open, competing with
+any save/update/delete for the same table on a database that can hold
+years of accumulated NFA records. Added a new, small pendingSyncIds
+table (schema v28), maintained automatically via Dexie hooks on
+create/update/delete rather than at each of the several individual
+save call sites (avoiding the risk of missing one) - the sync worker
+now queries this small table directly instead of scanning everything,
+with a cheap per-record safety check retained as a guard against the
+tracking table ever drifting from the real data. Included a one-time
+backfill migration for any record already pending sync before this
+feature existed, so nothing already in flight gets silently dropped
+from being synced.
+
+Verified with a 14-case test covering the simplified rolling-balance
+logic directly (the exact multi-pile-same-variety scenario the user
+described), and the sync worker fix (hooks correctly firing on
+create/update/delete, the backfill migration's presence, the sync
+worker's query source). Updated two earlier test files whose
+assertions checked for now-superseded, more complex implementations
+of the same rolling-balance logic - removed one file entirely (fully
+superseded), trimmed stale assertions from two others while
+preserving their still-valid, unrelated content (migration
+consolidation tests, By Products exclusion tests).
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+STILL OUTSTANDING, explicitly not yet done: the promised read-only
+diagnostic view (to actually see each pile's own recorded beginning-
+balance data rather than inferring blind), and extending sack-weight
+separation to other overviews beyond Home and the exported report
+(e.g. AdminHomeStocks.jsx, which has its own separate, untouched
+grouping logic). Packaging now with what's verified, rather than
+rushing these into the same pass.
