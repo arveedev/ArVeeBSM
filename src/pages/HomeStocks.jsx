@@ -95,7 +95,7 @@ function HomeStocks({ warehouseId } = {}) {
     const cerealType = p.variety?.category ?? p.cerealType ?? 'Unknown'
     const varietyName = p.variety?.name ?? '—'
     const mtsWeight = sackTypeMap.get(p.mtsSackTypeId)?.weights?.[p.mtsCondition]
-    const needsSeparation = (weightsByVariety.get(varietyName)?.size ?? 0) > 1
+    const needsSeparation = cerealType !== 'By Products' && (weightsByVariety.get(varietyName)?.size ?? 0) > 1
     const groupLabel = needsSeparation && mtsWeight != null ? `${varietyName} (${mtsWeight.toFixed(3)})` : varietyName
     const buckets = AGE_BUCKETS[cerealType] ?? AGE_BUCKETS.Rice
     const bucket = buckets.find((b) => b.test(p.age)) ?? buckets[buckets.length - 1]

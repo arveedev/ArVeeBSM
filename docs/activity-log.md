@@ -12285,3 +12285,60 @@ re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
 
 PACKAGING IMMEDIATELY - this was a hard blocker on all report export.
+
+## CRITICAL FOLLOW-UP: the rolling balance fix was still incomplete - found the real, deeper cause
+
+User showed two consecutive weekly reports proving the previous fix
+did not resolve the issue - beginning balance for July 8-15 was
+identical to July 1-7's own beginning balance, meaning July 1-7's
+real receipts and issues were never being counted at all, not even
+partially.
+
+Traced this to a different bug than the one fixed last time, in the
+same area of code: the per-pile cutoff fix correctly moved from a
+warehouse-wide cutoff to a per-pile one, but its "exclude by default"
+safety net (added to fix the earlier "PD" phantom-data bug) was too
+broad - it treated "this pile has no dateOfReceipt value" identically
+to "this pile doesn't exist at all," excluding both cases. But these
+are very different situations: a pile that genuinely no longer exists
+has no beginning-balance date to compare against and should be
+excluded (correct, matches the original PD-bug fix). A pile that
+DOES exist, currently, right now - just never had dateOfReceipt
+explicitly set on it (true for essentially any pile created before
+this session's beginning-balance date tracking was added, which is
+likely most of this user's real, existing production piles) - has
+every right to have its real activity counted. Conflating these two
+cases meant the "safety net" was silently discarding real activity
+for what is likely the vast majority of actual piles in production,
+directly explaining why beginning balance appeared completely frozen.
+
+Fixed by tracking pile existence (a Set of every currently-existing
+pileId in the warehouse) separately from each pile's own
+dateOfReceipt value. A transaction is now excluded only when its pile
+genuinely cannot be found at all; when the pile exists but simply has
+no date set, the transaction is correctly included with no cutoff
+applied. Confirmed the sacks side already handled this same
+distinction correctly on its own (a sack seed with no asOfDate falls
+through to "no cutoff, include" already) - no change needed there.
+
+Also implemented the second explicit request: sack-condition-weight
+separation now never applies to the By Products cereal type, in both
+the Home overview and the exported report - By Products always shows
+as a single, unseparated line regardless of how many distinct sack
+weights might technically be in use.
+
+Verified with a 12-case test directly modeling the exact reported
+scenario (a real, existing pile with no dateOfReceipt correctly
+including its July activity now, while a genuinely orphaned pile
+still correctly excludes) and the By Products exclusion in both
+locations. Updated one earlier test whose assertion checked for the
+prior, less precise logic.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+PACKAGING IMMEDIATELY - this is the core function of the app and
+directly affects officially submitted reports.

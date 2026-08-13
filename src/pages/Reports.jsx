@@ -211,10 +211,9 @@ function Reports() {
       // beginning-balance date to compare it against at all, and this
       // is what originally fixed the separate, still-valid "PD"
       // orphaned phantom-data bug.
-      const pileDateOfReceiptById = new Map(
-        (await db.piles.where('warehouseId').equals(currentWarehouseId).toArray())
-          .map((p) => [p.pileId, p.dateOfReceipt])
-      )
+      const pilesInWarehouse = await db.piles.where('warehouseId').equals(currentWarehouseId).toArray()
+      const pileExistsById = new Set(pilesInWarehouse.map((p) => p.pileId))
+      const pileDateOfReceiptById = new Map(pilesInWarehouse.map((p) => [p.pileId, p.dateOfReceipt]))
       const stockBeginningBals = new Map()
       const priorStockRaw = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
@@ -223,8 +222,9 @@ function Reports() {
         .toArray())
         .filter((t) => {
           if (t.isInitialBalance) return true // the seed itself always counts, regardless of date
+          if (!pileExistsById.has(t.pileId)) return false // pile genuinely doesn't exist anymore - excluded, matching the original "PD" phantom-data fix
           const pileDate = pileDateOfReceiptById.get(t.pileId)
-          if (!pileDate) return false // no resolvable current pile to compare against - excluded, not included
+          if (!pileDate) return true // pile exists but has no beginning-balance date set at all - include, don't silently drop real activity for a real, current pile
           return t.date > pileDate
         })
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
