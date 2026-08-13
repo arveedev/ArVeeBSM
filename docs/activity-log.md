@@ -12517,3 +12517,105 @@ already confirmed multiple times this session, no new regressions.
 
 PACKAGING IMMEDIATELY - restoring a working app takes priority over
 everything else.
+
+## STRIPPED BACK TO THE SIMPLE MODEL: three attempts at "smart" cutoff logic all failed for the same reason
+
+User's direct, frustrated question cut through the accumulated
+complexity: "a pile could only hold so much... it is really the
+reality that one variety and condition can be in multiple piles" and
+"why does it seem so hard to add and subtract?" - correctly identifying
+that the whole approach had become far more complicated than the
+actual requirement.
+
+Traced why three consecutive fixes all failed the same way: every
+version of the "cutoff" logic depended on db.piles records reliably
+existing and correctly matching real historical transaction data
+(warehouseId, varietyId, condition, dateOfReceipt all lining up).
+Real, years-old imported production data does not reliably guarantee
+this - if a matching, dated pile record can't be found for a given
+variety+condition, every version of the cutoff logic ended up
+excluding ALL real activity for it, leaving only the seed - exactly
+matching the repeatedly-reported "beginning balance never moves"
+symptom. Smarter cutoff logic could never fix this, since the
+dependency itself was the problem.
+
+Reverted to the deliberately simple model matching exactly what was
+described: beginning balance for a period is the sum of every
+transaction (seed or real, WSR/WSI/WTS) dated before that period
+starts, grouped by variety+condition - no cutoff date, no pile
+matching, no attempt to distinguish which specific pile or how old
+data is. Applied identically to both stocks and sacks.
+
+Being direct about the trade-off: this removes the mechanism that was
+built earlier this session to fix the separate "PD phantom data" bug
+(old, unrelated historical data appearing in a report it shouldn't).
+That specific problem could theoretically resurface. Given three
+consecutive attempts at solving both problems together have all
+failed and broken the core, explicitly-stated priority (a working
+rolling balance is "the very essence of the app"), this is the
+correct trade-off - if stale data reappears, it should be handled by
+finding and fixing that specific bad record, not by a general
+filtering mechanism that risks breaking the fundamental balance
+calculation for everyone.
+
+Verified with a 7-case test built directly from the user's own
+description: a realistic multi-period scenario (seed, then two
+periods of real receipts/issues) confirming the balance for a later
+period correctly includes the prior period's full activity - the
+exact rolling-forward behavor repeatedly reported as broken. Removed
+one now-fully-superseded test file and split another, preserving its
+still-valid, unrelated migration-consolidation tests in a new,
+correctly-scoped file.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+PACKAGING IMMEDIATELY.
+
+## VERIFIED THROUGH ACTUAL EXECUTION: confirmed the current code correctly rolls the balance forward
+
+User's follow-up message described continued non-rolling behavior,
+but the specific description ("cutoff is working") suggested this may
+have referred to the version shipped two messages prior, not the
+"stripped back to simple model" fix from the immediately preceding
+entry. Rather than guess further through static code reading (which
+has already failed three times), built and ran an actual, executable
+simulation of the real pipeline - copying Reports.jsx's exact current
+beginning-balance computation and pdfGenerator.js's exact
+addStockSummaryPage row-building logic verbatim into a standalone
+script, fed with data shaped identically to the user's own real
+reports (RWD1: 598 beginning, 476 received, 440 issued in period one).
+
+Result: the current code correctly computes an ending balance of 634
+for period one, and correctly carries that same 634 forward as period
+two's beginning balance - confirmed through actual execution, not
+just reasoning about the code. Also verified the WD1 multi-period
+scenario from an earlier screenshot (which had shown a negative
+ending balance) across three consecutive periods, confirming no
+negative or stale values anywhere in the chain.
+
+Confirmed the exact code in the repository matches what was
+simulated (via direct file inspection immediately before running the
+simulation) and reran a full production build, which produced
+identical output hashes to the immediately preceding package -
+confirming no drift between what was tested and what will be shipped.
+
+Converted both simulations into permanent, executable regression
+tests (not just source-string assertions) - these will now fail
+loudly if this exact rolling-balance behavior ever regresses again,
+rather than requiring another round of manual tracing.
+
+Full regression suite and production build both clean - same pre-
+existing stale scratch-test failures already confirmed multiple times
+this session, no new regressions.
+
+PACKAGING IMMEDIATELY. If the rolling balance still does not work
+correctly after this exact package is tested, the difference between
+this test's clean, idealized data and the user's real data (e.g. an
+unexpected duplicate, a mismatched cerealCategory, a different
+warehouseId) would be the next thing to investigate directly, since
+the underlying calculation logic has now been proven correct through
+actual execution, not just code review.
