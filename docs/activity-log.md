@@ -12471,3 +12471,49 @@ separation to other overviews beyond Home and the exported report
 (e.g. AdminHomeStocks.jsx, which has its own separate, untouched
 grouping logic). Packaging now with what's verified, rather than
 rushing these into the same pass.
+
+## EMERGENCY REVERT: the sync-performance fix broke the app entirely on load
+
+User reported the app rendering completely blank ("pitch black") with
+an uncaught error in the console immediately after the previous
+entry's package. This is a severe, unacceptable regression - the app
+was completely unusable, not just slow.
+
+The most recent, most invasive change was the new db.version(28)
+schema addition and the three Dexie hooks registered on the
+transactions table in dexie.js - added specifically to fix the sync
+worker's full-table-scan performance issue. Given this touches the
+most sensitive part of the app (database initialization, which
+dexie-cloud-addon also depends on) and was the clear, immediate
+suspect, reverted it completely and immediately rather than attempting
+to debug the exact interaction while the app was down in production:
+removed the version 28 schema block, its upgrade callback, and all
+three hooks (creating/updating/deleting) from dexie.js, and reverted
+syncWorker.js back to its original, previously-proven .filter() query
+that the removed pendingSyncIds table can no longer support. Confirmed
+via search that no other file anywhere references the removed table,
+and confirmed the schema version chain now ends cleanly back at 27
+with no gaps or dangling references - exactly matching what the
+user's own console log showed as expected.
+
+This means the sync-worker performance issue (the full-table scan
+every 30 seconds) is NOT fixed - it's back to its prior, slower but
+confirmed-working state. That specific problem still needs solving,
+but needs a more carefully tested approach given how badly this first
+attempt failed - not a quick re-attempt in the same urgent, reactive
+mode that just caused a full outage.
+
+The separate rolling-balance simplification from the same previous
+entry was NOT reverted, since it's isolated to Reports.jsx (a
+read-only reporting computation, not database schema/initialization)
+and had no involvement in this specific crash - kept its dedicated
+test file, trimmed to remove only the now-invalid sync-performance
+assertions.
+
+Verified with a 6-case test confirming the rolling-balance logic
+remains intact and correct. Full regression suite and production
+build both clean - same pre-existing stale scratch-test failures
+already confirmed multiple times this session, no new regressions.
+
+PACKAGING IMMEDIATELY - restoring a working app takes priority over
+everything else.
