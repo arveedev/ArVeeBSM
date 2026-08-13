@@ -305,7 +305,7 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   const displayKeyOf = (rawKey) => {
     const [varietyId, condition] = rawKey.split('::')
     const vcKey = `${varietyId}::${condition}`
-    const needsSeparation = (weightsByVarietyCondition.get(vcKey)?.size ?? 0) > 1
+    const needsSeparation = cerealType !== 'By Products' && (weightsByVarietyCondition.get(vcKey)?.size ?? 0) > 1
     return needsSeparation ? rawKey : vcKey
   }
   for (const rawKey of rawKeys) keys.add(displayKeyOf(rawKey))
