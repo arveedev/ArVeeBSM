@@ -168,151 +168,92 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
     }
   }
 
-  // CRITICAL FIX: mapSheetRowToTransaction always set isSynced: true
-  // for an imported row (since it already exists in the Sheet) but
-  // never set hasBeenBackedUp: true - and the sync worker's decision
-  // to append vs. update is based entirely on hasBeenBackedUp, not
-  // isSynced. This meant editing an already-imported record (e.g.
-  // filling in a missing Pile/MTS value) would reset isSynced to
-  // false, and the next sync would incorrectly APPEND a duplicate row
-  // instead of updating the existing one - confirmed to have already
-  // happened in production. This migration retroactively fixes every
-  // already-imported record so this can never happen to them again,
-  // and re-runs the same duplicate-cleanup logic above scoped to
-  // sheet-imported records, in case this bug already created
-  // duplicates before this fix existed.
+  // CONSOLIDATED: the three migrations below (hasBeenBackedUp fix,
+  // condition default, and dedup merge) each used to read the ENTIRE
+  // transactions table separately - on a device where they hadn't all
+  // completed yet, a single login could trigger three full-table
+  // reads and three separate bulkPut/bulkDelete rounds in sequence,
+  // directly competing with the same table any save operation needs
+  // to write to. Confirmed as the cause of a severe reported slowdown
+  // (multi-minute UI freezes on save). Now a single pass: one read,
+  // all three fixes applied in memory, one write - only for records
+  // that actually changed by any of the three fixes, not the whole
+  // table indiscriminately. Sets every old flag too, so this never
+  // re-does work a device already completed individually.
   const HAS_BEEN_BACKED_UP_FIX_FLAG = 'sheet-import-has-been-backed-up-fix-v2'
-  if (!localStorage.getItem(HAS_BEEN_BACKED_UP_FIX_FLAG)) {
-    try {
-      const allLocalTxV2 = await db.transactions.toArray()
-      const importedTx = allLocalTxV2.filter((tx) => tx.fromSheetImport === true)
-      const needsFix = importedTx.filter((tx) => tx.hasBeenBackedUp !== true)
-      for (const tx of needsFix) tx.hasBeenBackedUp = true
-      if (needsFix.length > 0) await db.transactions.bulkPut(needsFix)
-
-      // Duplicate cleanup - CRITICAL: scoped to ALL transactions, not
-      // just sheet-imported ones. The confirmed real-world scenario:
-      // a transaction created directly in the app (not sheet-
-      // imported) gets accidentally duplicated by a sheet-imported
-      // copy of itself (via the append-vs-update bug fixed earlier).
-      // Comparing only within the sheet-imported subset would never
-      // catch this - the original, locally-created half of the pair
-      // was never even in that comparison pool, so the migration saw
-      // a group of exactly one and concluded there was nothing to
-      // deduplicate, even though a genuine duplicate existed just
-      // outside its scope.
-      const groups = new Map()
-      for (const tx of allLocalTxV2) {
-        const key = `${tx.type}::${tx.warehouseId}::${tx.serialNo}::${tx.cerealCategory ?? ''}`
-        if (!groups.has(key)) groups.set(key, [])
-        groups.get(key).push(tx)
-      }
-      const completeness = (tx) => Object.values(tx).filter((v) => v != null && v !== '').length
-      const toDeleteIds = []
-      for (const group of groups.values()) {
-        if (group.length <= 1) continue
-        const sorted = [...group].sort((a, b) => completeness(b) - completeness(a))
-        for (const dupe of sorted.slice(1)) toDeleteIds.push(dupe.id)
-      }
-      if (toDeleteIds.length > 0) await db.transactions.bulkDelete(toDeleteIds)
-
-      console.log(`sheet-import-has-been-backed-up-fix-v2: fixed ${needsFix.length} sheet-imported record(s), removed ${toDeleteIds.length} duplicate(s) out of ${allLocalTxV2.length} total local transactions`)
-      localStorage.setItem(HAS_BEEN_BACKED_UP_FIX_FLAG, 'done')
-    } catch (error) {
-      console.error('sheet-import-has-been-backed-up-fix-v2 failed, will retry next load:', error)
-    }
-  }
-
-  // CRITICAL FIX: every sheet-imported stock transaction (WSR/WSI/WTS)
-  // was unconditionally given condition: null, since the Sheet never
-  // tracked a condition column at all - this is the confirmed root
-  // cause of the reported "phantom null-condition rows" in reports:
-  // a pile's real historical transactions were split across two
-  // separate report rows (one grouped under its real condition, one
-  // under null), rather than being correctly combined into one.
-  // Retroactively defaults every existing stock transaction that has
-  // condition === null to 'GQ', matching the explicit policy that all
-  // transactions default to GQ - strictly scoped to null only, never
-  // touching a transaction that already has a real, different
-  // condition value (TRD/INF/PD/TD), and strictly scoped to stock
-  // types only (WSR/WSI/WTS) - sacks use a completely different
-  // condition enum (BN/SH/US) that this must never touch.
   const STOCK_CONDITION_DEFAULT_FIX_FLAG = 'stock-condition-null-to-gq-fix-v1'
-  if (!localStorage.getItem(STOCK_CONDITION_DEFAULT_FIX_FLAG)) {
-    try {
-      const allLocalTxV3 = await db.transactions.toArray()
-      const needsConditionFix = allLocalTxV3.filter((tx) =>
-        ['WSR', 'WSI', 'WTS'].includes(tx.type) && tx.condition === null
-      )
-      for (const tx of needsConditionFix) tx.condition = 'GQ'
-      if (needsConditionFix.length > 0) await db.transactions.bulkPut(needsConditionFix)
-
-      console.log(`stock-condition-null-to-gq-fix-v1: defaulted ${needsConditionFix.length} stock transaction(s) with a missing condition to GQ, out of ${allLocalTxV3.length} total local transactions`)
-      localStorage.setItem(STOCK_CONDITION_DEFAULT_FIX_FLAG, 'done')
-    } catch (error) {
-      console.error('stock-condition-null-to-gq-fix-v1 failed, will retry next load:', error)
-    }
-  }
-
-  // Re-runs duplicate cleanup as a fresh pass, using field-level
-  // MERGING rather than "keep most complete, discard the rest" - per
-  // explicit report that the duplicates include historical records
-  // genuinely missing data (MC, pile, etc.) that the user is actively
-  // trying to fill in. Simply discarding the "less complete" copy of
-  // a duplicate pair risked silently losing whatever unique data only
-  // existed on that copy. Now merges every duplicate's fields into a
-  // single surviving record - any gap in the survivor is filled from
-  // whichever duplicate has a value for that field - before deleting
-  // the redundant records, so no data anywhere in the group is lost.
-  // The survivor prefers a record NOT from a Sheet import when one
-  // exists (the genuine, locally-created record is the more
-  // authoritative base to merge historical Sheet data into),
-  // otherwise falls back to the most complete copy. This is also the
-  // confirmed, direct fix for the "serial already used" block
-  // reported when trying to update a historical record - that error
-  // only fires when a second, genuine duplicate with the same serial
-  // still exists after the one being edited is excluded; merging down
-  // to a single record removes that possibility entirely.
   const DEDUP_MERGE_FLAG = 'transaction-dedup-merge-v4'
-  if (!localStorage.getItem(DEDUP_MERGE_FLAG)) {
+  const CONSOLIDATED_FIX_FLAG = 'transaction-consolidated-fix-v5'
+  const stillNeedsAny = [HAS_BEEN_BACKED_UP_FIX_FLAG, STOCK_CONDITION_DEFAULT_FIX_FLAG, DEDUP_MERGE_FLAG, CONSOLIDATED_FIX_FLAG]
+    .some((flag) => !localStorage.getItem(flag))
+  if (stillNeedsAny) {
     try {
-      const allLocalTxV5 = await db.transactions.toArray()
+      const allTx = await db.transactions.toArray() // the one and only full-table read for all three fixes combined
+      const modifiedById = new Map()
+      const markModified = (tx) => modifiedById.set(tx.id, tx)
+
+      // Fix 1: hasBeenBackedUp for sheet-imported records - without
+      // this, editing an already-imported record would incorrectly
+      // append a duplicate row on next sync instead of updating it.
+      for (const tx of allTx) {
+        if (tx.fromSheetImport === true && tx.hasBeenBackedUp !== true) {
+          tx.hasBeenBackedUp = true
+          markModified(tx)
+        }
+      }
+
+      // Fix 2: default missing condition to GQ for stock types - the
+      // Sheet never tracked a condition column, so every imported
+      // stock row previously arrived with condition: null.
+      for (const tx of allTx) {
+        if (['WSR', 'WSI', 'WTS'].includes(tx.type) && tx.condition === null) {
+          tx.condition = 'GQ'
+          markModified(tx)
+        }
+      }
+
+      // Fix 3: field-level merge dedup - combines every duplicate's
+      // fields into one surviving record before removing the rest, so
+      // no data anywhere in a duplicate group is lost. Survivor
+      // prefers a record NOT from a Sheet import when one exists.
       const groups = new Map()
-      for (const tx of allLocalTxV5) {
+      for (const tx of allTx) {
         const key = `${tx.type}::${tx.warehouseId}::${tx.serialNo}::${tx.cerealCategory ?? ''}`
         if (!groups.has(key)) groups.set(key, [])
         groups.get(key).push(tx)
       }
       const completeness = (tx) => Object.values(tx).filter((v) => v != null && v !== '').length
       const toDeleteIds = []
-      const toUpdate = []
+      let mergeCount = 0
       for (const group of groups.values()) {
         if (group.length <= 1) continue
-
+        mergeCount++
         const nonImported = group.filter((tx) => tx.fromSheetImport !== true)
         const survivorPool = nonImported.length > 0 ? nonImported : group
         const survivor = [...survivorPool].sort((a, b) => completeness(b) - completeness(a))[0]
         const others = group.filter((tx) => tx.id !== survivor.id)
-
-        const merged = { ...survivor }
         for (const other of others) {
           for (const [field, value] of Object.entries(other)) {
             if (field === 'id') continue
-            if ((merged[field] == null || merged[field] === '') && value != null && value !== '') {
-              merged[field] = value
-            }
+            if ((survivor[field] == null || survivor[field] === '') && value != null && value !== '') survivor[field] = value
           }
         }
-        toUpdate.push(merged)
+        markModified(survivor)
         for (const other of others) toDeleteIds.push(other.id)
       }
+
+      const toDeleteIdSet = new Set(toDeleteIds)
+      const toUpdate = [...modifiedById.values()].filter((tx) => !toDeleteIdSet.has(tx.id))
       if (toUpdate.length > 0) await db.transactions.bulkPut(toUpdate)
       if (toDeleteIds.length > 0) await db.transactions.bulkDelete(toDeleteIds)
 
-      console.log(`transaction-dedup-merge-v4: merged and removed ${toDeleteIds.length} duplicate(s) into ${toUpdate.length} surviving record(s), out of ${allLocalTxV5.length} total local transactions`)
+      console.log(`transaction-consolidated-fix-v5: updated ${toUpdate.length} record(s), merged/removed ${toDeleteIds.length} duplicate(s) across ${mergeCount} group(s), out of ${allTx.length} total local transactions`)
+      localStorage.setItem(HAS_BEEN_BACKED_UP_FIX_FLAG, 'done')
+      localStorage.setItem(STOCK_CONDITION_DEFAULT_FIX_FLAG, 'done')
       localStorage.setItem(DEDUP_MERGE_FLAG, 'done')
+      localStorage.setItem(CONSOLIDATED_FIX_FLAG, 'done')
     } catch (error) {
-      console.error('transaction-dedup-merge-v4 failed, will retry next load:', error)
+      console.error('transaction-consolidated-fix-v5 failed, will retry next load:', error)
     }
   }
 

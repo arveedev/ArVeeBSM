@@ -63,6 +63,8 @@ function HomeStocks({ warehouseId } = {}) {
 
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
+  const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
+  const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
 
   const enrichedPiles = piles.map((p) => ({
     ...p,
@@ -70,19 +72,39 @@ function HomeStocks({ warehouseId } = {}) {
     variety: varietyMap.get(p.varietyId),
   }))
 
-  // cerealType -> varietyName -> ageBucketLabel -> { bags, kilos }
+  // First pass: for each variety, collect every distinct MTS weight in
+  // use across its piles - only varieties with genuinely more than one
+  // distinct weight need separating at all. A variety using a single
+  // sack condition throughout (the common case) stays as one plain-
+  // named line, exactly as before this feature existed.
+  const weightsByVariety = new Map()
+  for (const p of enrichedPiles) {
+    const varietyName = p.variety?.name ?? '—'
+    const mtsWeight = sackTypeMap.get(p.mtsSackTypeId)?.weights?.[p.mtsCondition]
+    if (mtsWeight == null) continue
+    if (!weightsByVariety.has(varietyName)) weightsByVariety.set(varietyName, new Set())
+    weightsByVariety.get(varietyName).add(mtsWeight)
+  }
+
+  // cerealType -> displayLabel -> ageBucketLabel -> { bags, kilos }
+  // displayLabel is "varietyName (mtsWeight)" only when that variety
+  // has more than one distinct weight in use - otherwise just the
+  // plain variety name, merging everything into one line as usual.
   const stockGroups = {}
   for (const p of enrichedPiles) {
     const cerealType = p.variety?.category ?? p.cerealType ?? 'Unknown'
     const varietyName = p.variety?.name ?? '—'
+    const mtsWeight = sackTypeMap.get(p.mtsSackTypeId)?.weights?.[p.mtsCondition]
+    const needsSeparation = (weightsByVariety.get(varietyName)?.size ?? 0) > 1
+    const groupLabel = needsSeparation && mtsWeight != null ? `${varietyName} (${mtsWeight.toFixed(3)})` : varietyName
     const buckets = AGE_BUCKETS[cerealType] ?? AGE_BUCKETS.Rice
     const bucket = buckets.find((b) => b.test(p.age)) ?? buckets[buckets.length - 1]
 
     stockGroups[cerealType] ??= {}
-    stockGroups[cerealType][varietyName] ??= {}
-    stockGroups[cerealType][varietyName][bucket.label] ??= { bags: 0, kilos: 0 }
-    stockGroups[cerealType][varietyName][bucket.label].bags += p.currentBags ?? 0
-    stockGroups[cerealType][varietyName][bucket.label].kilos += p.currentKilos ?? 0
+    stockGroups[cerealType][groupLabel] ??= {}
+    stockGroups[cerealType][groupLabel][bucket.label] ??= { bags: 0, kilos: 0 }
+    stockGroups[cerealType][groupLabel][bucket.label].bags += p.currentBags ?? 0
+    stockGroups[cerealType][groupLabel][bucket.label].kilos += p.currentKilos ?? 0
   }
 
   const totalBags = piles.reduce((sum, p) => sum + (p.currentBags ?? 0), 0)

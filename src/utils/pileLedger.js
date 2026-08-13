@@ -117,7 +117,7 @@ export const getOrCreateAccountabilityPile = async ({ warehouseId, category, var
  */
 export const createPileWithBeginningBalance = async ({
   warehouseId, pileName, category, varietyId, bags, kilos, age, ageUnit, condition, purity, dateProcured, moistureContent,
-  asOfDate,
+  asOfDate, mtsSackTypeId, mtsCondition,
 }) => {
   const ageDays = age ? normalizeAgeToDays(Number(age), ageUnit) : 0
   const receiptDate = asOfDate || todayLocalISO()
@@ -136,6 +136,8 @@ export const createPileWithBeginningBalance = async ({
     dateProcured: dateProcured?.trim() || null,
     moistureContent: moistureContent?.trim() || null,
     condition: condition || null,
+    mtsSackTypeId: mtsSackTypeId || null,
+    mtsCondition: mtsCondition || null,
   }
 
   await db.piles.add(pile)
@@ -151,6 +153,8 @@ export const createPileWithBeginningBalance = async ({
       pileId: pile.pileId,
       varietyId,
       condition,
+      mtsSackTypeId: mtsSackTypeId || null,
+      mtsCondition: mtsCondition || null,
       numberOfBags: bags || 0,
       grossKilos: kilos || 0,
       netKilos: kilos || 0,

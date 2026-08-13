@@ -12125,3 +12125,132 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## CRITICAL CLARIFICATION APPLIED: sack condition weight separation is now conditional, not unconditional
+
+User caught a real design gap in the previous entry's implementation:
+the weight-based separation should only ever kick in when a variety
+genuinely has more than one distinct MTS weight in use - a variety
+using a single sack condition throughout (the common case) must show
+its plain name everywhere, merged as one line, exactly as before this
+feature existed. My earlier implementation always showed the
+parenthesized weight whenever it was resolvable, which would have
+needlessly split and relabeled every variety in the app, not just the
+ones that actually need it.
+
+Rebuilt both HomeStocks.jsx and the exported Stock Report's summary
+page as a proper two-pass computation:
+1. First pass: for each variety (HomeStocks) or variety+condition pair
+   (the report, which also tracks stock condition separately), collect
+   every distinct MTS weight actually in use.
+2. Second pass: only fold into separate, labeled groups when that set
+   has more than one entry - otherwise merge everything into a single,
+   plain-named row.
+
+The report side required more care than HomeStocks, since it combines
+three separate data sources (beginning balance, receipts, issues) that
+all need to agree on the same merge/separate decision. Restructured
+the row-building to compute a shared displayKeyOf() function - raw,
+weight-specific keys fold down to a plain variety+condition key unless
+that pair genuinely needs separation - and fixed the beginning-balance
+lookup to sum across every raw key that folds into a given display
+row, rather than a single direct map lookup (which would have missed
+data once merging was introduced).
+
+Also completed the pile-creation piece from the previous, interrupted
+entry: createPileWithBeginningBalance now accepts and saves
+mtsSackTypeId/mtsCondition on both the pile and its seed transaction,
+so a pile created through this path can correctly participate in the
+above separation logic.
+
+Verified with a 6-case test directly modeling the two scenarios named
+in the clarification - WD1 with a single sack weight staying merged
+and unlabeled, PD1-A with two distinct weights correctly separating
+into "PD1-A (0.095)" and "PD1-A (0.102)" - plus a mixed scenario
+confirming each variety follows its own rule independently, and a
+pile with no MTS sack configured at all falling back safely.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+STILL OUTSTANDING for this feature: NewPileDialog.jsx has the sack-
+condition dropdown state and options built but not yet wired into the
+form UI or the save call. BeginningBalancesPanel.jsx (updating an
+EXISTING pile's beginning balance) has not been touched at all yet.
+The admin-side Home overview (AdminHomeStocks.jsx) has its own,
+separate, undocumented grouping logic not yet reviewed for
+consistency with this fix.
+
+## TWO CRITICAL FIXES: rolling beginning balance repaired, severe save/update/delete slowdown fixed
+
+### Ending balance never becoming next period's beginning balance
+
+Found the exact bug: an earlier session's fix computed a single
+beginning-balance cutoff for the ENTIRE warehouse (the latest
+dateOfReceipt across every pile), rather than per pile. This meant
+creating even one new pile later would push that cutoff forward for
+the whole warehouse - silently excluding all the real, already-
+accumulated activity for every OTHER, unrelated pile whose own
+beginning balance had been established much earlier. This is the
+confirmed direct cause of the reported "beginning balance never rolls
+forward" bug - the rolling balance appeared permanently stuck because
+unrelated pile creation elsewhere kept resetting the effective cutoff
+for everything, not just the newly-created pile.
+
+Rebuilt as a genuinely per-pile cutoff: each transaction is now
+compared against its OWN specific pile's own dateOfReceipt, so one
+pile's rolling balance calculation is never affected by another,
+unrelated pile's history. Preserved the earlier, separately-confirmed
+fix for the original "PD" phantom-data bug: a transaction whose pile
+cannot be resolved to a current one is still excluded by default, not
+included. Applied the identical fix to the sacks side, which had the
+exact same warehouse-wide-cutoff bug pattern (fixed as per sackType+
+condition key instead of per warehouse).
+
+This is the single most important fix in this entry, given this is
+the core function of an inventory app and directly affects reports
+being officially submitted.
+
+### Severe save/update/delete slowdown (multi-minute UI freezes)
+
+Traced to the accumulation of separate, full-table-scanning
+migrations added over the course of this session - three of them
+(hasBeenBackedUp fix, condition default fix, and the most recent
+merge-based dedup) each independently called db.transactions.toArray()
+- loading the ENTIRE local transaction table into memory - and each
+did its own bulkPut/bulkDelete round. On any device where these
+hadn't all already completed, a single login would trigger three
+full-table reads and three separate write rounds in sequence,
+directly competing with the same table any save/update/delete
+operation needs to write to - explaining the reported multi-minute
+UI freezes and the Sheet appearing not to update for a long time
+(the operation was queued behind these migrations, not actually slow
+itself).
+
+Consolidated all three into a single migration: one read of the
+table, all three fixes applied in memory together, one write - only
+for records that actually changed by any of the three fixes, not the
+whole table indiscriminately. Every old individual flag is still set
+alongside the new consolidated one, so a device that already
+completed any of them individually is never redone.
+
+Verified with a 13-case test directly modeling the exact reported
+per-pile-cutoff bug scenario (confirming pile A's activity is
+correctly included in its own rolling balance, unaffected by an
+unrelated pile B being created much later - the precise scenario the
+bug report described), the sack-side equivalent, and the migration
+consolidation (single full-table read, backward-compatible flags).
+Updated one earlier test whose assertions referenced the pre-
+consolidation variable naming (same underlying logic, refactored
+during consolidation).
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+PACKAGING IMMEDIATELY per explicit urgency.
