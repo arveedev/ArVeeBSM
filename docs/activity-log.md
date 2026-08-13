@@ -12342,3 +12342,67 @@ confirmed multiple times this session, no new regressions.
 
 PACKAGING IMMEDIATELY - this is the core function of the app and
 directly affects officially submitted reports.
+
+## CRITICAL - THE REAL ROOT CAUSE FOUND: sheet-imported transactions have no pileId at all
+
+User provided both actual weekly reports side by side, proving beyond
+doubt the rolling balance was still completely broken - not partially,
+completely. RWD1 and WD1's beginning balance for Jul 08-15 was
+identical, to the kilogram, to their OWN beginning balance for Jul
+01-07 - meaning the entirety of Jul 01-07's real receipts and issues
+(1,226 bags received, 940 bags issued, real named customers, real
+serial numbers) contributed nothing at all to the next period's
+starting figures.
+
+Traced this to the actual root cause, confirmed directly against the
+Sheet-import code: mapSheetRowToTransaction always sets pileId: null
+for every imported row, since the Sheet never tracked pile assignment
+at all. Given this is real, years-of-operation production data, the
+overwhelming majority of it is sheet-imported - meaning the previous
+entry's fix (matching by pileId, falling back to variety+condition
+only when the pile itself doesn't exist) was still checking pileId
+first for every transaction, and pileId is null for virtually all of
+them. null never matches any real pile's own id, so the fallback path
+was never actually being reached for the data that needed it most -
+this fully explains why the balance appeared completely frozen rather
+than just occasionally wrong.
+
+Fixed by restructuring the check: a transaction's pileId is tried
+first (for genuine app-native transactions, which do have real pile
+ids), but any transaction with a null or otherwise unresolvable
+pileId now falls back to matching by variety+condition against every
+CURRENT pile sharing that combination, using the earliest matching
+dateOfReceipt as the cutoff (the safest, most inclusive choice when
+multiple piles could technically match). Data that matches no pile at
+all, even by variety+condition, is still excluded - this is what
+continues to protect the original "PD" phantom-data fix from earlier
+this session.
+
+Verified with a 10-case test built directly from this exact real-
+world scenario: a sheet-imported (pileId: null) July transaction is
+now correctly included via the fallback, the same transaction dated
+before the beginning balance is still correctly excluded, a truly
+orphaned transaction (no variety+condition match anywhere) remains
+excluded, and an app-native transaction with a real pileId is
+unaffected and still uses the precise, direct match. Confirmed the
+Sheet-import code itself as the source of truth for why pileId is
+null, rather than assuming. Confirmed the sacks side never had this
+specific vulnerability, since sack cutoff matching was already keyed
+directly off each transaction's own sackTypeId/condition fields
+(present on every sack transaction regardless of import origin), not
+a separate foreign key that could be missing.
+
+Updated two earlier tests whose assertions checked for the prior,
+narrower exclusion logic - same underlying guarantee (genuinely
+orphaned data stays excluded), now correctly implemented via the
+fallback path instead.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.
+
+PACKAGING IMMEDIATELY - this is the third consecutive attempt at this
+exact core function, now verified against the user's own real
+production reports.
