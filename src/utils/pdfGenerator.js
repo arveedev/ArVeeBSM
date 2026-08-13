@@ -258,7 +258,7 @@ const addFooter = (doc) => {
 
 // ── STOCK REPORT PAGES ────────────────────────────────────────────────────────
 
-const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, issues, beginBalMap, sigCtx }) => {
+const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, issues, beginBalMap, sackTypeMap, sigCtx }) => {
   doc.addPage()
   let y = addPageHeader(doc, { ...header, subtitle: 'Summary of Weekly Stock Receipts, Issues and Balances' })
   y = addRegionProvinceCodeWhse(doc, header, y)
