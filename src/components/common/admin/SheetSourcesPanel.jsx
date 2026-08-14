@@ -12,9 +12,10 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { todayLocalISO } from '../../../utils/calculations.js'
+import { syncAuthoritiesFromSheets } from '../../../services/googleSheetsBridge.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import {
@@ -47,6 +48,7 @@ function SheetSourcesPanel() {
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [resyncingId, setResyncingId] = useState(null)
 
   const sources = useLiveQuery(() => db.sheetSources.toArray(), []) ?? []
   const sortedSources = [...sources].sort((a, b) => byAlpha(b.dateFrom, a.dateFrom))
@@ -135,6 +137,27 @@ function SheetSourcesPanel() {
     if (editingId === pendingDelete) resetForm()
     setPendingDelete(null)
     toast.success('Sheet source deleted')
+  }
+
+  // Delta sync only re-fetches rows the Sheet's own "Last Modified"
+  // column shows as changed since lastSyncedAt - a cell edited any way
+  // other than direct typing/paste in the Sheets UI (script, import,
+  // certain fill paths) never re-stamps that column, so the row's
+  // real change (e.g. an Age Group value added after the fact) can sit
+  // permanently un-synced. Clearing this source's lastSyncedAt forces
+  // one full re-fetch of every row on the next sync, bypassing that.
+  const handleForceResync = async (source) => {
+    setResyncingId(source.id)
+    await db.sheetSources.update(source.id, { lastSyncedAt: null })
+    const result = await syncAuthoritiesFromSheets()
+    setResyncingId(null)
+    if (result.ok) {
+      toast.success(`Full resync done - ${result.aiCount} AI and ${result.siaCount} SIA record(s)`)
+    } else if (result.reason === 'offline') {
+      toast.error('No connection — resync will retry automatically once online')
+    } else {
+      toast.error('Resync failed — check the Web App URL and try again')
+    }
   }
 
   const isActiveToday = (source) => {
@@ -273,6 +296,16 @@ function SheetSourcesPanel() {
                 </p>
               </div>
               <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleForceResync(s)}
+                  disabled={resyncingId === s.id}
+                  aria-label="Force full resync"
+                  title="Force full resync - re-fetches every row, ignoring what's already synced"
+                  className="text-neutral-400 transition-all hover:text-brand-neon active:scale-90 disabled:opacity-50"
+                >
+                  <RefreshCw size={20} className={resyncingId === s.id ? 'animate-spin' : ''} />
+                </button>
                 <button type="button" onClick={() => handleEdit(s)} aria-label="Edit" className={editIconClass}>
                   <Pencil size={20} />
                 </button>
