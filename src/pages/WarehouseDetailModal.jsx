@@ -14,8 +14,8 @@ import HomeSacks from './HomeSacks.jsx'
 // Must match the transition durations used below.
 const SLIDE_MS = 280
 
-function WarehouseDetailModal({ warehouse, onClose }) {
-  const [activeTab, setActiveTab] = useState('stocks')
+function WarehouseDetailModal({ warehouse, initialTab = 'stocks', onClose }) {
+  const [activeTab, setActiveTab] = useState(initialTab)
   const { weightUnit, updateSetting } = useSettings() ?? {}
   const isMt = weightUnit === 'mt'
 
@@ -30,6 +30,10 @@ function WarehouseDetailModal({ warehouse, onClose }) {
     if (warehouse) {
       setDisplayedWarehouse(warehouse)
       setShouldRender(true)
+      // This component stays mounted across opens (only `warehouse` toggles
+      // null/object), so useState's initial value alone would only ever
+      // apply on first mount - re-sync on every new open instead.
+      setActiveTab(initialTab)
     } else {
       setHasEntered(false)
       const timer = setTimeout(() => setShouldRender(false), SLIDE_MS)

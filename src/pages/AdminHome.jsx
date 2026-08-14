@@ -14,6 +14,15 @@ function AdminHome() {
   const { setPageHeader } = usePageHeader() ?? {}
   const [activeTab, setActiveTab] = useState('stocks')
   const [selectedWarehouse, setSelectedWarehouse] = useState(null)
+  const [selectedWarehouseTab, setSelectedWarehouseTab] = useState('stocks')
+
+  // Tapping a warehouse from the Sacks tab should open its detail view
+  // already on Sacks, not always default back to Stocks - the admin
+  // just told the app which one they care about by which tab they were on.
+  const handleWarehouseSelect = (warehouse) => {
+    setSelectedWarehouseTab(activeTab)
+    setSelectedWarehouse(warehouse)
+  }
 
   useEffect(() => {
     setPageHeader?.({ title: 'Dashboard', subtitle: `Welcome back, ${user?.nickname ?? ''}.` })
@@ -42,11 +51,11 @@ function AdminHome() {
 
       <div key={activeTab} className="animate-flow-down">
         {activeTab === 'stocks'
-          ? <AdminHomeStocks onWarehouseSelect={setSelectedWarehouse} />
-          : <AdminHomeSacks onWarehouseSelect={setSelectedWarehouse} />}
+          ? <AdminHomeStocks onWarehouseSelect={handleWarehouseSelect} />
+          : <AdminHomeSacks onWarehouseSelect={handleWarehouseSelect} />}
       </div>
 
-      <WarehouseDetailModal warehouse={selectedWarehouse} onClose={() => setSelectedWarehouse(null)} />
+      <WarehouseDetailModal warehouse={selectedWarehouse} initialTab={selectedWarehouseTab} onClose={() => setSelectedWarehouse(null)} />
     </div>
   )
 }
