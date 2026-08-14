@@ -19,6 +19,8 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtBags, fmtWeight, fmtNetBags, AGE_BUCKETS } from '../utils/calculations.js'
+import { computeUnwithdrawnByVariety } from '../utils/unwithdrawnStock.js'
+import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 
 function SummaryCard({ label, value, sub = false }) {
   return (
@@ -38,6 +40,17 @@ const categoryColor = (cerealType) =>
  * this cereal type, rather than object insertion order. Falls back to
  * the end of the list for a label that (unexpectedly) isn't in
  * AGE_BUCKETS, rather than crashing on a missing lookup. */
+// The unwithdrawn/potential figures must track whichever unit the row
+// itself is currently displaying (Bags vs Net Bags), and must never show
+// a badge that rounds down to "0" (a few stray kilos of unwithdrawn
+// stock rounding to 0.00 net bags isn't worth flagging - the whole point
+// is only surfacing rows that genuinely still have something unwithdrawn).
+const unwithdrawnAmount = (unwithdrawn, showNetBags) => {
+  if (!unwithdrawn) return 0
+  return showNetBags ? unwithdrawn.kilos / 50 : unwithdrawn.bags
+}
+const formatAmount = (amount, showNetBags) => (showNetBags ? fmtNetBags(amount) : fmtBags(amount))
+
 const sortBucketEntries = (cerealType, entries) => {
   const order = (AGE_BUCKETS[cerealType] ?? AGE_BUCKETS.Rice).map((b) => b.label)
   return [...entries].sort(([a], [b]) => {
@@ -55,6 +68,9 @@ function HomeStocks({ warehouseId } = {}) {
   // net bags is not shown by default, kept out of view until the user
   // explicitly asks for it, for a cleaner default look.
   const [showNetBags, setShowNetBags] = useState(false)
+  // { varietyIds, title, subtitle } for the unwithdrawn drill-down modal,
+  // or null when closed.
+  const [detailContext, setDetailContext] = useState(null)
 
   const piles = useLiveQuery(async () => {
     if (!currentWarehouseId) return []
@@ -65,6 +81,10 @@ function HomeStocks({ warehouseId } = {}) {
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
+  const unwithdrawnMap = useLiveQuery(
+    () => computeUnwithdrawnByVariety(currentWarehouseId),
+    [currentWarehouseId]
+  ) ?? new Map()
 
   const enrichedPiles = piles.map((p) => ({
     ...p,
@@ -91,6 +111,10 @@ function HomeStocks({ warehouseId } = {}) {
   // has more than one distinct weight in use - otherwise just the
   // plain variety name, merging everything into one line as usual.
   const stockGroups = {}
+  // cerealType -> groupLabel -> varietyId, so the unwithdrawn-stock
+  // lookup (keyed by varietyId) can be joined back onto each rendered
+  // variety row below.
+  const groupVarietyId = {}
   for (const p of enrichedPiles) {
     const cerealType = p.variety?.category ?? p.cerealType ?? 'Unknown'
     const varietyName = p.variety?.name ?? '—'
@@ -105,6 +129,9 @@ function HomeStocks({ warehouseId } = {}) {
     stockGroups[cerealType][groupLabel][bucket.label] ??= { bags: 0, kilos: 0 }
     stockGroups[cerealType][groupLabel][bucket.label].bags += p.currentBags ?? 0
     stockGroups[cerealType][groupLabel][bucket.label].kilos += p.currentKilos ?? 0
+
+    groupVarietyId[cerealType] ??= {}
+    groupVarietyId[cerealType][groupLabel] = p.varietyId
   }
 
   const totalBags = piles.reduce((sum, p) => sum + (p.currentBags ?? 0), 0)
@@ -122,9 +149,18 @@ function HomeStocks({ warehouseId } = {}) {
     )
   }
 
-  const sortedGroups = Object.entries(stockGroups).sort(([a], [b]) => a.localeCompare(b))
+  // A cereal type/variety fully drawn down to 0 bags/kilos should stop
+  // showing up here rather than lingering as an empty card.
+  const groupTotals = (byVariety) => {
+    const vals = Object.values(byVariety).flatMap((v) => Object.values(v))
+    return { bags: vals.reduce((s, v) => s + v.bags, 0), kilos: vals.reduce((s, v) => s + v.kilos, 0) }
+  }
+  const sortedGroups = Object.entries(stockGroups)
+    .filter(([, byVariety]) => { const t = groupTotals(byVariety); return t.bags > 0 || t.kilos > 0 })
+    .sort(([a], [b]) => a.localeCompare(b))
 
   return (
+    <>
     <div className="relative mt-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <div className="absolute right-4 top-4 flex items-center gap-2">
         <span className="text-xs text-neutral-500">{showNetBags ? 'Net Bags' : 'Bags'}</span>
@@ -156,50 +192,120 @@ function HomeStocks({ warehouseId } = {}) {
             className={`mt-4 first:mt-0 ${i > 0 ? 'border-t-2 border-neutral-700 pt-4' : ''}`}
           >
             <p className={`text-base font-bold uppercase ${color}`}>{cerealType}</p>
-            {Object.entries(byVariety).sort(([a], [b]) => a.localeCompare(b)).map(([varietyName, byBucket]) => {
-              const varietyBags = Object.values(byBucket).reduce((s, v) => s + v.bags, 0)
-              const varietyKilos = Object.values(byBucket).reduce((s, v) => s + v.kilos, 0)
+            {(() => {
+              // A variety split across multiple sack-weight lines (see
+              // weightsByVariety above) would otherwise have its
+              // unwithdrawn total shown - and counted into the cereal
+              // total - once per split. Track which varietyIds have
+              // already had their unwithdrawn figure rendered/summed
+              // within this cereal type so it appears exactly once.
+              const shownVarietyIds = new Set()
+              return Object.entries(byVariety)
+                .filter(([, byBucket]) => {
+                  const vals = Object.values(byBucket)
+                  return vals.reduce((s, v) => s + v.bags, 0) > 0 || vals.reduce((s, v) => s + v.kilos, 0) > 0
+                })
+                .sort(([a], [b]) => a.localeCompare(b)).map(([varietyName, byBucket]) => {
+                const varietyBags = Object.values(byBucket).reduce((s, v) => s + v.bags, 0)
+                const varietyKilos = Object.values(byBucket).reduce((s, v) => s + v.kilos, 0)
+                const varietyId = groupVarietyId[cerealType]?.[varietyName]
+                const unwithdrawn = varietyId && !shownVarietyIds.has(varietyId) ? unwithdrawnMap.get(varietyId) : null
+                const unwithdrawnAmt = unwithdrawnAmount(unwithdrawn, showNetBags)
+                const hasUnwithdrawn = unwithdrawnAmt >= (showNetBags ? 0.005 : 1)
+                if (varietyId) shownVarietyIds.add(varietyId)
 
-              return (
-                <div key={varietyName} className="mt-3">
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg bg-neutral-800/50 px-2 py-1.5">
-                    <span className="truncate text-sm font-semibold text-app-text">{varietyName}</span>
-                    <div className="text-right">
-                      <p className="whitespace-nowrap text-sm font-semibold text-app-text">
-                        {showNetBags ? `${fmtNetBags(varietyKilos / 50)} net bags` : `${fmtBags(varietyBags)} bags`}
-                      </p>
-                      <p className="whitespace-nowrap text-sm font-semibold text-app-text">{fmtWeight(varietyKilos, weightUnit, 'Net')}</p>
+                return (
+                  <div key={varietyName} className="mt-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg bg-neutral-800/50 px-2 py-1.5">
+                      <span className="truncate text-sm font-semibold text-app-text">{varietyName}</span>
+                      <div className="text-right">
+                        <p className="whitespace-nowrap text-sm font-semibold text-app-text">
+                          {showNetBags ? `${fmtNetBags(varietyKilos / 50)} net bags` : `${fmtBags(varietyBags)} bags`}
+                          {hasUnwithdrawn && (
+                            <button
+                              type="button"
+                              onClick={() => setDetailContext({ varietyIds: [varietyId], title: varietyName, subtitle: `${cerealType} · Unwithdrawn` })}
+                              className="ml-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
+                            >
+                              {formatAmount(unwithdrawnAmt, showNetBags)} unwithdrawn
+                            </button>
+                          )}
+                        </p>
+                        <p className="whitespace-nowrap text-sm font-semibold text-app-text">{fmtWeight(varietyKilos, weightUnit, 'Net')}</p>
+                        {hasUnwithdrawn && (
+                          <p className="whitespace-nowrap text-[11px] text-brand-amber">
+                            Potential: {formatAmount(Math.max(0, (showNetBags ? varietyKilos / 50 : varietyBags) - unwithdrawnAmt), showNetBags)} {showNetBags ? 'net bags' : 'bags'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-1 space-y-1">
+                      {sortBucketEntries(cerealType, Object.entries(byBucket)).map(([bucketLabel, totals]) => (
+                        <div key={bucketLabel} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-b border-neutral-800/50 py-1">
+                          <span className="truncate pl-2 text-xs text-neutral-400">{bucketLabel}</span>
+                          <div className="text-right">
+                            <p className="whitespace-nowrap text-xs text-neutral-300">
+                              {showNetBags ? `${fmtNetBags(totals.kilos / 50)} net bags` : `${fmtBags(totals.bags)} bags`}
+                            </p>
+                            <p className="whitespace-nowrap text-xs text-neutral-300">{fmtWeight(totals.kilos, weightUnit, 'Net')}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="mt-1 space-y-1">
-                    {sortBucketEntries(cerealType, Object.entries(byBucket)).map(([bucketLabel, totals]) => (
-                      <div key={bucketLabel} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-b border-neutral-800/50 py-1">
-                        <span className="truncate pl-2 text-xs text-neutral-400">{bucketLabel}</span>
-                        <div className="text-right">
-                          <p className="whitespace-nowrap text-xs text-neutral-300">
-                            {showNetBags ? `${fmtNetBags(totals.kilos / 50)} net bags` : `${fmtBags(totals.bags)} bags`}
-                          </p>
-                          <p className="whitespace-nowrap text-xs text-neutral-300">{fmtWeight(totals.kilos, weightUnit, 'Net')}</p>
-                        </div>
-                      </div>
-                    ))}
+                )
+              })
+            })()}
+            {(() => {
+              const cerealVarietyIds = [...new Set(Object.values(groupVarietyId[cerealType] ?? {}))]
+              const cerealUnwithdrawn = cerealVarietyIds.reduce((acc, vid) => {
+                const uw = unwithdrawnMap.get(vid)
+                return uw ? { bags: acc.bags + uw.bags, kilos: acc.kilos + uw.kilos } : acc
+              }, { bags: 0, kilos: 0 })
+              const cerealUnwithdrawnAmt = unwithdrawnAmount(cerealUnwithdrawn, showNetBags)
+              const hasCerealUnwithdrawn = cerealUnwithdrawnAmt >= (showNetBags ? 0.005 : 1)
+              return (
+                <div className={`mt-3 rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                    <span className="truncate text-xs font-medium text-neutral-500">Total ({cerealType})</span>
+                    <div className="text-right">
+                      <p className={`whitespace-nowrap text-sm font-bold ${color}`}>
+                        {showNetBags ? `${fmtNetBags(cerealKilos / 50)} net bags` : `${fmtBags(cerealBags)} bags`}
+                        {hasCerealUnwithdrawn && (
+                          <button
+                            type="button"
+                            onClick={() => setDetailContext({ varietyIds: cerealVarietyIds, title: `${cerealType} — Unwithdrawn`, subtitle: 'All varieties in this category' })}
+                            className="ml-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
+                          >
+                            {formatAmount(cerealUnwithdrawnAmt, showNetBags)} unwithdrawn
+                          </button>
+                        )}
+                      </p>
+                      <p className={`whitespace-nowrap text-sm font-bold ${color}`}>{fmtWeight(cerealKilos, weightUnit, 'Net')}</p>
+                      {hasCerealUnwithdrawn && (
+                        <p className="whitespace-nowrap text-[11px] text-brand-amber">
+                          Potential: {formatAmount(Math.max(0, (showNetBags ? cerealKilos / 50 : cerealBags) - cerealUnwithdrawnAmt), showNetBags)} {showNetBags ? 'net bags' : 'bags'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
-            })}
-            <div className={`mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}>
-              <span className="truncate text-xs font-medium text-neutral-500">Total ({cerealType})</span>
-              <div className="text-right">
-                <p className={`whitespace-nowrap text-sm font-bold ${color}`}>
-                  {showNetBags ? `${fmtNetBags(cerealKilos / 50)} net bags` : `${fmtBags(cerealBags)} bags`}
-                </p>
-                <p className={`whitespace-nowrap text-sm font-bold ${color}`}>{fmtWeight(cerealKilos, weightUnit, 'Net')}</p>
-              </div>
-            </div>
+            })()}
           </div>
         )
       })}
     </div>
+    {detailContext && (
+      <UnwithdrawnDetailModal
+        warehouseId={currentWarehouseId}
+        varietyIds={detailContext.varietyIds}
+        title={detailContext.title}
+        subtitle={detailContext.subtitle}
+        onClose={() => setDetailContext(null)}
+      />
+    )}
+    </>
   )
 }
 
