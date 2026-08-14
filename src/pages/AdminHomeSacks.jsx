@@ -2,15 +2,28 @@
 // Pieces per province and per warehouse, per sack type, per condition.
 // No age grouping - sacks do not age.
 // Pieces = ESR adds - ESI subtracts + sackInventory initial balance.
+//
+// Card layout (sack type header, condition rows underneath) instead of
+// a <table> - mirrors HomeSacks.jsx. The old 3-column table
+// (Sack Type/Condition/Pieces, all `whitespace-nowrap`) overflowed the
+// narrow mobile width with no visible scrollbar (Section's wrapper is
+// `overflow-hidden`), so on a phone only a sliver of the table was ever
+// actually in frame - reading as an endless list of bare "Condition"
+// rows with no sack type or pieces value in sight.
 
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight } from 'lucide-react'
 import { db } from '../db/dexie.js'
 import { fmtBags } from '../utils/calculations.js'
 import { SACK_CONDITIONS } from '../components/common/admin/shared.js'
-import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
+import { Section, Empty } from './AdminHomeShared.jsx'
+
+const GROUP_TABS = ['Province', 'Warehouse']
 
 function AdminHomeSacks({ onWarehouseSelect }) {
+  const [groupTab, setGroupTab] = useState('Province')
+
   const provinces = useLiveQuery(() => db.provinces.toArray(), []) ?? []
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
@@ -48,98 +61,111 @@ function AdminHomeSacks({ onWarehouseSelect }) {
   const piecesFor = (warehouseId, sackTypeId, condition) =>
     pieces[warehouseId]?.[sackTypeId]?.[condition] ?? 0
 
+  // sackType -> [{condition, total}] for a given set of warehouseIds,
+  // zero-value combinations dropped.
+  const sackTypeRows = (warehouseIds) =>
+    sortedSackTypes
+      .map((st) => ({
+        sackType: st,
+        conditions: SACK_CONDITIONS
+          .map((c) => ({ condition: c, total: warehouseIds.reduce((s, wid) => s + piecesFor(wid, st.sackTypeId, c.code), 0) }))
+          .filter((r) => r.total !== 0),
+      }))
+      .filter((r) => r.conditions.length > 0)
+
+  const SackTypeCard = ({ label, onSelect, warehouseIds }) => {
+    const rows = sackTypeRows(warehouseIds)
+    if (rows.length === 0) return null
+    return (
+      <div>
+        {onSelect ? (
+          <button
+            type="button"
+            onClick={onSelect}
+            className="flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-xs font-semibold uppercase text-neutral-400 transition-all hover:border-brand-neon/50 hover:bg-brand-neon/10 hover:text-brand-neon active:scale-95"
+          >
+            {label}
+            <ChevronRight size={12} />
+          </button>
+        ) : (
+          <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
+        )}
+        <div className="mt-2 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+          {rows.map(({ sackType, conditions }, i) => (
+            <div key={sackType.sackTypeId} className={`${i > 0 ? 'mt-3 border-t border-neutral-800 pt-3' : ''}`}>
+              <p className="text-xs font-semibold uppercase text-neutral-400">{sackType.code}</p>
+              <div className="mt-1 space-y-1">
+                {conditions.map((r) => (
+                  <div key={r.condition.code} className="flex items-center justify-between">
+                    <span className="text-sm text-app-text">{r.condition.label}</span>
+                    <span className="text-sm font-semibold text-brand-neon">{fmtBags(r.total)} pcs</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
-      <Section title="Sack Pieces by Province">
-        {sortedProvinces.length === 0 ? <Empty /> : (
-          <div className="space-y-4">
-            {sortedProvinces.map((province) => {
-              const wIds = warehouses.filter((w) => w.provinceId === province.provinceId).map((w) => w.warehouseId)
-              const rows = sortedSackTypes.flatMap((st) =>
-                SACK_CONDITIONS.map((c) => ({
-                  sackType: st,
-                  condition: c,
-                  total: wIds.reduce((s, wid) => s + piecesFor(wid, st.sackTypeId, c.code), 0),
-                })).filter((r) => r.total !== 0)
-              )
-              if (rows.length === 0) return null
-              return (
-                <div key={province.provinceId}>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">
-                    {province.code} — {province.name}
-                  </p>
-                  <table className="mt-1 w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-neutral-800">
-                        <Th>Sack Type</Th>
-                        <Th>Condition</Th>
-                        <Th right>Pieces</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r) => (
-                        <tr key={`${r.sackType.sackTypeId}-${r.condition.code}`} className="border-b border-neutral-800/50">
-                          <Td>{r.sackType.code}</Td>
-                          <Td>{r.condition.label}</Td>
-                          <Td right>{fmtBags(r.total)}</Td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Section>
+      <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+        <div
+          className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+          style={{ transform: groupTab === GROUP_TABS[0] ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+        />
+        {GROUP_TABS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setGroupTab(t)}
+            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${groupTab === t ? 'text-brand-contrast' : 'text-neutral-400'}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
 
-      <Section title="Sack Pieces by Warehouse">
-        {sortedWarehouses.length === 0 ? <Empty /> : (
-          <div className="space-y-4">
-            {sortedWarehouses.map((warehouse) => {
-              const province = provinceMap.get(warehouse.provinceId)
-              const rows = sortedSackTypes.flatMap((st) =>
-                SACK_CONDITIONS.map((c) => ({
-                  sackType: st,
-                  condition: c,
-                  total: piecesFor(warehouse.warehouseId, st.sackTypeId, c.code),
-                })).filter((r) => r.total !== 0)
-              )
-              if (rows.length === 0) return null
-              return (
-                <div key={warehouse.warehouseId}>
-                  <button
-                    type="button"
-                    onClick={() => onWarehouseSelect?.(warehouse)}
-                    className="flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs font-semibold uppercase text-neutral-400 transition-all hover:border-brand-neon/50 hover:bg-brand-neon/10 hover:text-brand-neon active:scale-95"
-                  >
-                    {province?.code} · {warehouse.name}
-                    <ChevronRight size={12} />
-                  </button>
-                  <table className="mt-1 w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-neutral-800">
-                        <Th>Sack Type</Th>
-                        <Th>Condition</Th>
-                        <Th right>Pieces</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r) => (
-                        <tr key={`${r.sackType.sackTypeId}-${r.condition.code}`} className="border-b border-neutral-800/50">
-                          <Td>{r.sackType.code}</Td>
-                          <Td>{r.condition.label}</Td>
-                          <Td right>{fmtBags(r.total)}</Td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Section>
+      {groupTab === 'Province' && (
+        <Section title="Sack Pieces by Province">
+          {sortedProvinces.length === 0 ? <Empty /> : (
+            <div className="space-y-4">
+              {sortedProvinces.map((province) => {
+                const wIds = warehouses.filter((w) => w.provinceId === province.provinceId).map((w) => w.warehouseId)
+                return (
+                  <SackTypeCard
+                    key={province.provinceId}
+                    label={`${province.code} — ${province.name}`}
+                    warehouseIds={wIds}
+                  />
+                )
+              })}
+            </div>
+          )}
+        </Section>
+      )}
+
+      {groupTab === 'Warehouse' && (
+        <Section title="Sack Pieces by Warehouse">
+          {sortedWarehouses.length === 0 ? <Empty /> : (
+            <div className="space-y-4">
+              {sortedWarehouses.map((warehouse) => {
+                const province = provinceMap.get(warehouse.provinceId)
+                return (
+                  <SackTypeCard
+                    key={warehouse.warehouseId}
+                    label={`${province?.code ?? ''} · ${warehouse.name}`}
+                    onSelect={() => onWarehouseSelect?.(warehouse)}
+                    warehouseIds={[warehouse.warehouseId]}
+                  />
+                )
+              })}
+            </div>
+          )}
+        </Section>
+      )}
     </>
   )
 }
