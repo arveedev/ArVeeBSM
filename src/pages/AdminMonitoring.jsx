@@ -80,28 +80,80 @@ function AdminMonitoring() {
 
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
-      <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
-        <div
-          className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-          style={{
-            width: `calc(${100 / TABS.length}% - ${(TABS.length - 1) / TABS.length * 0.5}rem)`,
-            transform: `translateX(calc(${TABS.indexOf(activeTab) * 100}% + ${TABS.indexOf(activeTab) * 0.5}rem))`,
-          }}
-        />
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors active:scale-95 ${
-              activeTab === tab
-                ? 'text-brand-contrast'
-                : 'text-neutral-400 hover:text-app-text'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      {/* Tabs, search, and the regional-authority selector all stick
+          together as one cohesive block - keeping them in a single
+          sticky container (rather than each computing its own top
+          offset) is what keeps the spacing between them consistent and
+          keeps the authority selector from scrolling out of reach. */}
+      <div className="sticky top-16 z-40 -mx-4 mt-4 space-y-2 border-b border-neutral-800 bg-neutral-950 px-4 pb-3 pt-2">
+        <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+          <div
+            className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+            style={{
+              width: `calc(${100 / TABS.length}% - ${(TABS.length - 1) / TABS.length * 0.5}rem)`,
+              transform: `translateX(calc(${TABS.indexOf(activeTab) * 100}% + ${TABS.indexOf(activeTab) * 0.5}rem))`,
+            }}
+          />
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors active:scale-95 ${
+                activeTab === tab
+                  ? 'text-brand-contrast'
+                  : 'text-neutral-400 hover:text-app-text'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {activeTab !== 'MILLING' && (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Search ${activeTab} number for reconciliation…`}
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCompleted(true)}
+                className="shrink-0 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-medium text-brand-neon hover:border-brand-neon/50"
+              >
+                Completed
+              </button>
+            </div>
+
+            {availableRegionalAuthNumbers.length > 0 && (
+              <select
+                value={regionalAuthFilter}
+                onChange={(e) => setRegionalAuthFilter(e.target.value)}
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
+              >
+                <option value="">All Authority Numbers</option>
+                {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            )}
+          </>
+        )}
       </div>
 
       {activeTab === 'MILLING' ? (
@@ -110,47 +162,6 @@ function AdminMonitoring() {
         </div>
       ) : (
         <>
-      <div className="sticky top-16 z-30 -mx-4 mt-3 flex items-center gap-2 bg-neutral-950 px-4 py-2">
-        <div className="relative flex-1">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${activeTab} number for reconciliation…`}
-            className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowCompleted(true)}
-          className="shrink-0 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-medium text-brand-neon hover:border-brand-neon/50"
-        >
-          Completed
-        </button>
-      </div>
-
-      {availableRegionalAuthNumbers.length > 0 && (
-        <select
-          value={regionalAuthFilter}
-          onChange={(e) => setRegionalAuthFilter(e.target.value)}
-          className="mx-4 mt-2 w-[calc(100%-2rem)] rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
-        >
-          <option value="">All Authority Numbers</option>
-          {availableRegionalAuthNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
-      )}
-
       {regionalAuthFilter.trim() && (() => {
         // Every authority under this regional authority, regardless of
         // pending/completed status - gives the full picture for this
