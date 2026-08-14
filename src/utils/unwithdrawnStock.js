@@ -12,7 +12,28 @@
 // a different unit that doesn't roll into a bags/kilos "net bags" figure.
 
 import { db } from '../db/dexie.js'
-import { isAuthorityComplete } from './calculations.js'
+import { isAuthorityComplete, AGE_BUCKETS } from './calculations.js'
+
+export const UNSPECIFIED_AGE = 'Unspecified Age'
+
+// Best-effort: pulls a representative day-count out of an AI's free-text
+// ageGroup field (the Sheet's repurposed "Note3"/"Age Group" column,
+// e.g. "0-6 months", ">12 months", "6.1-12") so it can run through the
+// exact same AGE_BUCKETS test() functions used for pile age, instead of
+// maintaining a second parallel bucket definition. ageGroup is
+// unenforced free text (AI only, never set on SIA) - returns null for
+// anything blank or unparseable, which callers should treat as its own
+// "unspecified" bucket rather than guessing.
+const ageGroupToDays = (ageGroup) => {
+  if (!ageGroup) return null
+  const s = String(ageGroup).toLowerCase()
+  const openEnded = s.match(/(\d+(?:\.\d+)?)\s*\+|>\s*(\d+(?:\.\d+)?)/)
+  if (openEnded) return Math.round(Number(openEnded[1] ?? openEnded[2]) * 30) + 1
+  const range = s.match(/(\d+(?:\.\d+)?)\s*(?:-|to)\s*(\d+(?:\.\d+)?)/)
+  if (range) return Math.round(((Number(range[1]) + Number(range[2])) / 2) * 30)
+  const single = s.match(/(\d+(?:\.\d+)?)/)
+  return single ? Math.round(Number(single[1]) * 30) : null
+}
 
 // Every WSI/WTS actually withdrawn against one AI so far, plus the totals.
 const withdrawalsForAuthority = async (aiNumber) => {
@@ -89,4 +110,36 @@ export const getUnwithdrawnDetail = async (warehouseId, varietyIds) => {
   }
 
   return detail.sort((x, y) => (x.authority.aiNumber ?? '').localeCompare(y.authority.aiNumber ?? ''))
+}
+
+// Per warehouse, per cereal category, per age bucket: unwithdrawn net
+// bags - powers AdminHomeStocks.jsx's "Age Grouping" tab showing
+// potential (actual minus unwithdrawn) instead of raw actual inventory.
+// An authority whose ageGroup can't be resolved to a specific bucket
+// lands under UNSPECIFIED_AGE - callers should subtract that only from
+// a row/grand TOTAL, never attribute it to one specific age column,
+// since which bucket it actually belongs to is genuinely unknown.
+export const computeUnwithdrawnByCategoryAge = async (warehouseId, varietyCategoryMap) => {
+  const result = new Map() // category -> Map(bucketLabel -> netBags)
+  if (!warehouseId) return result
+
+  const authorities = await activeAiAuthoritiesFor(warehouseId)
+
+  for (const a of authorities) {
+    const category = varietyCategoryMap?.get(a.varietyId) ?? 'Unknown'
+    const { withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
+    const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
+    if (unwithdrawnKilos <= 0) continue
+
+    const days = ageGroupToDays(a.ageGroup)
+    const buckets = AGE_BUCKETS[category] ?? AGE_BUCKETS.Rice
+    const bucket = days != null ? buckets.find((b) => b.test(days)) : null
+    const label = bucket?.label ?? UNSPECIFIED_AGE
+
+    if (!result.has(category)) result.set(category, new Map())
+    const catMap = result.get(category)
+    catMap.set(label, (catMap.get(label) ?? 0) + unwithdrawnKilos / 50)
+  }
+
+  return result
 }

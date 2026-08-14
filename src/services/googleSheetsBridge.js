@@ -505,7 +505,15 @@ const runAuthoritiesSync = async () => {
           totalAllocationKilos: toNumberOrNull(row['NET KG']),
           remarks: row['REMARKS'] ?? null,
           orNumber: row['OR No.'] != null ? String(row['OR No.']).trim() || null : null,
-          ageGroup: row['Note3'] ?? null, // sheet column repurposed for age group, AI only
+          // The sheet's header cell for this column literally reads "Age
+          // Group" (confirmed against a live sheet screenshot), not
+          // "Note3" - it was repurposed from Note3 conceptually but the
+          // header text itself was renamed. Reading row['Note3'] here
+          // always came back undefined regardless of sync freshness,
+          // which is why a full resync alone never fixed it. Note3
+          // kept as a fallback in case any older/other sheet source
+          // still literally uses that header.
+          ageGroup: row['Age Group'] ?? row['Note3'] ?? null,
           note1: row['Note1'] ?? null,
           note2: row['Note2'] ?? null,
           sourceId: source.id,

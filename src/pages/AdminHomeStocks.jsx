@@ -13,7 +13,7 @@ import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
 import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
-import { computeUnwithdrawnByVariety } from '../utils/unwithdrawnStock.js'
+import { computeUnwithdrawnByVariety, computeUnwithdrawnByCategoryAge, UNSPECIFIED_AGE } from '../utils/unwithdrawnStock.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
@@ -55,6 +55,18 @@ function AdminHomeStocks({ onWarehouseSelect }) {
         byCategory.set(cat, (byCategory.get(cat) ?? 0) + uw.kilos / 50)
       }
       result.set(w.warehouseId, byCategory)
+    }
+    return result
+  }, [warehouses, varieties]) ?? new Map()
+
+  // Age Grouping shows POTENTIAL (actual minus unwithdrawn) instead of
+  // raw actual inventory - warehouseId -> category -> Map(bucketLabel
+  // -> unwithdrawn net bags), same underlying computation, bucketed by
+  // each AI's own ageGroup this time instead of collapsed to one total.
+  const unwithdrawnAgeByWarehouse = useLiveQuery(async () => {
+    const result = new Map()
+    for (const w of warehouses) {
+      result.set(w.warehouseId, await computeUnwithdrawnByCategoryAge(w.warehouseId, varietyCategoryMap))
     }
     return result
   }, [warehouses, varieties]) ?? new Map()
@@ -229,6 +241,9 @@ function AdminHomeStocks({ onWarehouseSelect }) {
 
       {breakdownTab === 'Age Grouping' && (
       <Section title="Stock Age Grouping">
+        <p className="mb-3 text-xs text-neutral-500">
+          Potential stock (actual minus unwithdrawn AI-authorized stock), not raw actual inventory.
+        </p>
         {sortedProvinces.length === 0 ? <Empty /> : (
           <div className="space-y-6">
             {sortedProvinces.map((province) => {
@@ -249,6 +264,38 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       )
                     )
                     if (!hasData) return null
+                    // Computed once per warehouse and reused for both the
+                    // body rows AND the footer totals, so the footer is
+                    // always exactly the sum of what's actually displayed
+                    // above it. Recomputing the footer independently from
+                    // raw actual/unwithdrawn sums (the previous approach)
+                    // went wrong whenever a warehouse's own unwithdrawn
+                    // amount for a bucket exceeded its actual stock there -
+                    // that row clamps to 0 and silently drops the excess,
+                    // but an independently-computed footer would still
+                    // subtract that full excess from the aggregate,
+                    // producing a footer lower than the rows summed to.
+                    const warehouseRows = provinceWarehouses
+                      .map((warehouse) => {
+                        const wCatPiles = enrichedPiles.filter(
+                          (p) => p.warehouseId === warehouse.warehouseId && p.cerealType === cat
+                        )
+                        if (wCatPiles.length === 0) return null
+                        const bucketTotals = buckets.map((b) => {
+                          const actual = wCatPiles.filter((p) => b.test(p.age)).reduce((s, p) => s + p.netBags, 0)
+                          const uw = unwithdrawnAgeByWarehouse.get(warehouse.warehouseId)?.get(cat)?.get(b.label) ?? 0
+                          return Math.max(0, actual - uw)
+                        })
+                        // Unwithdrawn stock whose age couldn't be determined
+                        // (no parseable ageGroup) can't be attributed to one
+                        // specific bucket column - only reduces the row total.
+                        const unspecified = unwithdrawnAgeByWarehouse.get(warehouse.warehouseId)?.get(cat)?.get(UNSPECIFIED_AGE) ?? 0
+                        const total = Math.max(0, bucketTotals.reduce((a, b) => a + b, 0) - unspecified)
+                        return { warehouse, bucketTotals, total }
+                      })
+                      .filter(Boolean)
+                    const columnTotals = buckets.map((_, i) => warehouseRows.reduce((s, r) => s + r.bucketTotals[i], 0))
+                    const grandTotal = warehouseRows.reduce((s, r) => s + r.total, 0)
                     return (
                       <div key={cat} className="mt-3">
                         <p className={`mb-1 text-sm font-bold uppercase ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>
@@ -264,65 +311,41 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                               </tr>
                             </thead>
                             <tbody>
-                              {provinceWarehouses.map((warehouse) => {
-                                const wCatPiles = enrichedPiles.filter(
-                                  (p) => p.warehouseId === warehouse.warehouseId &&
-                                         p.cerealType === cat
-                                )
-                                if (wCatPiles.length === 0) return null
-                                const bucketTotals = buckets.map((b) =>
-                                  wCatPiles.filter((p) => b.test(p.age))
-                                    .reduce((s, p) => s + p.netBags, 0)
-                                )
-                                const total = bucketTotals.reduce((a, b) => a + b, 0)
-                                return (
-                                  <tr key={warehouse.warehouseId} className="border-b border-neutral-800/50">
-                                    <Td>
-                                      <button
-                                        type="button"
-                                        onClick={() => onWarehouseSelect?.(warehouse)}
-                                        className="flex items-center gap-0.5 font-medium text-app-text transition-colors hover:text-brand-neon"
-                                      >
-                                        {warehouse.name}
-                                        <ChevronRight size={12} className="text-neutral-600" />
-                                      </button>
-                                    </Td>
-                                    {bucketTotals.map((val, i) => <Td key={i} right>{fmt(val)}</Td>)}
-                                    <Td right>
-                                      <span className={`font-semibold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>
-                                        {fmt(total)}
-                                      </span>
-                                    </Td>
-                                  </tr>
-                                )
-                              })}
+                              {warehouseRows.map(({ warehouse, bucketTotals, total }) => (
+                                <tr key={warehouse.warehouseId} className="border-b border-neutral-800/50">
+                                  <Td>
+                                    <button
+                                      type="button"
+                                      onClick={() => onWarehouseSelect?.(warehouse)}
+                                      className="flex items-center gap-0.5 font-medium text-app-text transition-colors hover:text-brand-neon"
+                                    >
+                                      {warehouse.name}
+                                      <ChevronRight size={12} className="text-neutral-600" />
+                                    </button>
+                                  </Td>
+                                  {bucketTotals.map((val, i) => <Td key={i} right>{fmt(val)}</Td>)}
+                                  <Td right>
+                                    <span className={`font-semibold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>
+                                      {fmt(total)}
+                                    </span>
+                                  </Td>
+                                </tr>
+                              ))}
                             </tbody>
                             <tfoot>
-                              {(() => {
-                                const catPiles = enrichedPiles.filter(
-                                  (p) => provinceWarehouses.some((w) => w.warehouseId === p.warehouseId) &&
-                                         p.cerealType === cat
-                                )
-                                const columnTotals = buckets.map((b) =>
-                                  catPiles.filter((p) => b.test(p.age)).reduce((s, p) => s + p.netBags, 0)
-                                )
-                                const grandTotal = columnTotals.reduce((a, b) => a + b, 0)
-                                return (
-                                  <tr className="border-t-2 border-neutral-700">
-                                    <Td><span className="font-bold text-app-text">Total</span></Td>
-                                    {columnTotals.map((val, i) => (
-                                      <Td key={i} right>
-                                        <span className={`font-bold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>{fmt(val)}</span>
-                                      </Td>
-                                    ))}
-                                    <Td right>
-                                      <span className={`font-bold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>
-                                        {fmt(grandTotal)}
-                                      </span>
-                                    </Td>
-                                  </tr>
-                                )
-                              })()}
+                              <tr className="border-t-2 border-neutral-700">
+                                <Td><span className="font-bold text-app-text">Total</span></Td>
+                                {columnTotals.map((val, i) => (
+                                  <Td key={i} right>
+                                    <span className={`font-bold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>{fmt(val)}</span>
+                                  </Td>
+                                ))}
+                                <Td right>
+                                  <span className={`font-bold ${cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'}`}>
+                                    {fmt(grandTotal)}
+                                  </span>
+                                </Td>
+                              </tr>
                             </tfoot>
                           </table>
                         </div>
