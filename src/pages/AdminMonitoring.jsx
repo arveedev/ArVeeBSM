@@ -63,8 +63,29 @@ function AdminMonitoring() {
 
   const typeAuthorities = authorities.filter((a) => a.type === activeTab)
   const availableRegionalAuthNumbers = [...new Set(typeAuthorities.map((a) => a.regionalAuthorityNumber).filter(Boolean))].sort()
-  const filtered = typeAuthorities
-    .filter((a) => !isAuthorityComplete(a))
+
+  // Sync-level cleanup (upsertAuthority) only consolidates duplicate
+  // aiNumber/siaNumber records the next time that specific number is
+  // re-synced - a stale row that hasn't been re-fetched yet (or a brief
+  // cross-run race) can leave two authId records for the same real
+  // authority sitting in db.authorities at once. AuthorityMonitor.jsx/
+  // AuthorityPickerModal.jsx already guard against this with a
+  // dedup-by-ref pass; this page never got the same guard, which is why
+  // duplicates were showing up here specifically.
+  const dedupeByRef = (list) => {
+    const byRef = new Map()
+    for (const a of list) {
+      const ref = a.type === 'AI' ? a.aiNumber : a.siaNumber
+      if (!ref) continue
+      const existing = byRef.get(ref)
+      if (!existing || (a.totalIssuedKilos ?? 0) > (existing.totalIssuedKilos ?? 0)) {
+        byRef.set(ref, a)
+      }
+    }
+    return [...byRef.values()]
+  }
+
+  const filtered = dedupeByRef(typeAuthorities.filter((a) => !isAuthorityComplete(a)))
     .filter((a) => {
       if (!query) return true
       const ref = a.type === 'AI' ? a.aiNumber : a.siaNumber
@@ -76,7 +97,7 @@ function AdminMonitoring() {
       const bRef = b.type === 'AI' ? b.aiNumber : b.siaNumber
       return (aRef ?? '').localeCompare(bRef ?? '')
     })
-  const completedList = typeAuthorities.filter(isAuthorityComplete)
+  const completedList = dedupeByRef(typeAuthorities.filter(isAuthorityComplete))
 
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
