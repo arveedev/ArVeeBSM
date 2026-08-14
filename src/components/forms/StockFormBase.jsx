@@ -1463,7 +1463,10 @@ function StockFormBase({ type, title, onClose, prefill }) {
         .toArray()
       const recoveredTrials = new Set(trialTx.map((t) => t.trialNumber))
       if (['1', '2', '3'].every((n) => recoveredTrials.has(n))) {
-        await markMillingOrderDone('TMO', tmoNumber.trim())
+        // Fire-and-forget - the transaction itself is already saved
+        // locally; marking the Sheet's TMO row DONE is a best-effort
+        // side effect that shouldn't make the user wait on the network.
+        markMillingOrderDone('TMO', tmoNumber.trim())
       }
     }
 
@@ -1480,7 +1483,8 @@ function StockFormBase({ type, title, onClose, prefill }) {
         const receivedKg = moTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
         const expectedKg = issuedKg * (order.recoveryPercent / 100)
         if (expectedKg > 0 && receivedKg >= expectedKg) {
-          await markMillingOrderDone('MO', moNumber.trim())
+          // Fire-and-forget - same reasoning as the TMO case above.
+          markMillingOrderDone('MO', moNumber.trim())
         }
       }
     }
