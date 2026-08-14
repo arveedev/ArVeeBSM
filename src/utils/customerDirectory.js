@@ -16,6 +16,13 @@
 // customers was explicitly rejected as bad UX.
 
 import { db } from '../db/dexie.js'
+import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
+
+// Prefixes a warehouse's own name/GID onto its address so a WS/MPO
+// suggestion's address reads e.g. "Tabaco GID, Tabaco City, Albay"
+// instead of just "Tabaco City, Albay" - without this, the address
+// alone gives no clue which specific warehouse it belongs to.
+const withWarehouseLabel = (w) => (w.address ? `${stripWarehouseCodePrefix(w.name)}, ${w.address}` : null)
 
 export const normalizeCustomerName = (name = '') =>
   name.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -123,7 +130,7 @@ export const searchWarehouseSupervisors = async (query) => {
         customerId: `ws-suggestion-${u.uid}-${w.warehouseId}`,
         name: `${prefixLabel} ${u.name}`,
         warehouseLabel: `${w.code} — ${w.name}`,
-        address: w.address ?? null,
+        address: withWarehouseLabel(w),
         isWarehouseSupervisorSuggestion: true,
       })
     }
@@ -144,13 +151,21 @@ export const searchWarehouseSupervisors = async (query) => {
  * the WS suggestions: makes clear where stock is actually going or
  * coming from.
  */
-const MPO_PREFIX_PATTERN = /^mpo\s*(.*)$/i
+// Must also strip a leading "acting" and the "III" rank suffix, not just
+// "mpo" - the generated suggestion label is always "MPO III [Name]" or
+// "Acting MPO III [Name]" (see prefixLabel below), and re-typing/re-
+// selecting that exact label has to reduce back to just [Name] for this
+// pattern to recognize its own suggestion. Failing to strip "III" left
+// it stuck in front of the name, breaking the self-match - which in turn
+// meant CustomerNameAutocomplete's WS/MPO-suggestion guard against a
+// stale db.customers record silently never engaged for MPO.
+const MPO_PREFIX_PATTERN = /^(acting\s+)?mpo(?:\s*iii)?\.?\s*(.*)$/i
 
 export const searchMpoUsers = async (query) => {
   const match = MPO_PREFIX_PATTERN.exec(query.trim())
   if (!match) return []
 
-  const [, nameFragment] = match
+  const [, , nameFragment] = match
 
   const warehouses = await db.warehouses.toArray()
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
@@ -193,7 +208,7 @@ export const searchMpoUsers = async (query) => {
         customerId: `mpo-suggestion-${u.uid}-${w.warehouseId}`,
         name: `${prefixLabel} ${u.name}`,
         warehouseLabel: `${w.code} — ${w.name}`,
-        address: w.address ?? null,
+        address: withWarehouseLabel(w),
         isWarehouseSupervisorSuggestion: true,
       })
     }
