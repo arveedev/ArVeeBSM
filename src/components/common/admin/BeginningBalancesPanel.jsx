@@ -8,7 +8,7 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2, MoreVertical } from 'lucide-react'
+import { Pencil, Trash2, MoreVertical, Plus, X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useWarehouse } from '../../../context/WarehouseContext.jsx'
 import { useSettings } from '../../../context/SettingsContext.jsx'
@@ -28,17 +28,22 @@ import { CONDITION_FLAGS } from '../../forms/shared.js'
 
 const AGE_UNITS = ['Days', 'Months']
 
+// One beginning-balance line = one seed (isInitialBalance) transaction. A
+// pile groups by variety, not by sack weight - it can legitimately have had
+// two different real sack weights in its beginning-balance history at once,
+// so this must be a repeatable list rather than one flat value per pile.
+const emptyLine = () => ({
+  txId: null, bags: '', kilos: '', condition: 'GQ', dateReceived: todayLocalISO(),
+  purity: '', moistureContent: '', mtsSackTypeId: '', mtsCondition: '',
+})
+
 function PilesBeginningBalances({ warehouseId }) {
   const { weightUnit } = useSettings() ?? {}
   const [editingPileId, setEditingPileId] = useState(null)
-  const [bags, setBags] = useState('')
-  const [kilos, setKilos] = useState('')
+  const [lines, setLines] = useState([emptyLine()])
+  const [originalSeedIds, setOriginalSeedIds] = useState([])
   const [age, setAge] = useState('')
   const [ageUnit, setAgeUnit] = useState('Days')
-  const [asOfDate, setAsOfDate] = useState(todayLocalISO())
-  const [condition, setCondition] = useState('GQ')
-  const [purity, setPurity] = useState('')
-  const [moistureContent, setMoistureContent] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
   const [openMenuPileId, setOpenMenuPileId] = useState(null)
@@ -52,26 +57,44 @@ function PilesBeginningBalances({ warehouseId }) {
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const sortedPiles = [...piles].sort((a, b) => byAlpha(a.pileName, b.pileName))
 
+  // Sack types, used to resolve each pile's MTS (empty-sack tare) weight -
+  // matched against the sack-weight bucket that Reports.jsx/pdfGenerator.js
+  // fall back to for transactions with no MTS of their own.
+  const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
+  const editingPile = piles.find((p) => p.pileId === editingPileId)
+  const editingCategory = varietyMap.get(editingPile?.varietyId)?.category
+  const sackTypesForCategory = sackTypes
+    .filter((s) => s.category === editingCategory)
+    .sort((a, b) => byAlpha(a.code, b.code))
+
   const resetForm = () => {
     setEditingPileId(null)
-    setBags('')
-    setKilos('')
+    setLines([emptyLine()])
+    setOriginalSeedIds([])
     setAge('')
     setAgeUnit('Days')
-    setAsOfDate(todayLocalISO())
-    setCondition('GQ')
-    setPurity('')
-    setMoistureContent('')
   }
 
   const handleEdit = async (pile) => {
-    const seed = await db.transactions
+    const seeds = await db.transactions
       .where('pileId').equals(pile.pileId)
       .and((t) => t.isInitialBalance)
-      .first()
+      .toArray()
     setEditingPileId(pile.pileId)
-    setBags(liveFormatNumber(String(seed?.numberOfBags ?? 0)))
-    setKilos(liveFormatNumber(String(seed?.netKilos ?? 0), 3))
+    setOriginalSeedIds(seeds.map((s) => s.id))
+    setLines(seeds.length
+      ? seeds.map((s) => ({
+          txId: s.id,
+          bags: liveFormatNumber(String(s.numberOfBags ?? 0)),
+          kilos: liveFormatNumber(String(s.netKilos ?? 0), 3),
+          condition: s.condition ?? 'GQ',
+          dateReceived: s.date ?? pile.dateOfReceipt ?? todayLocalISO(),
+          purity: s.purity ?? '',
+          moistureContent: s.moistureContent != null ? liveFormatNumber(String(s.moistureContent)) : '',
+          mtsSackTypeId: s.mtsSackTypeId ?? '',
+          mtsCondition: s.mtsCondition ?? '',
+        }))
+      : [emptyLine()])
     // The app only stores the normalized days value, not which unit it
     // was originally entered in - previously this always hardcoded
     // 'Days' regardless, meaning a pile entered in Months would show
@@ -84,11 +107,6 @@ function PilesBeginningBalances({ warehouseId }) {
     setAge(liveFormatNumber(String(
       storedDays > 0 && storedDays % 30 === 0 ? storedDays / 30 : storedDays
     )))
-    setAsOfDate(seed?.date ?? pile.dateOfReceipt ?? todayLocalISO())
-    setCondition(seed?.condition ?? pile.condition ?? 'GQ')
-    setPurity(seed?.purity ?? pile.purity ?? '')
-    const seedMoisture = seed?.moistureContent ?? pile.moistureContent
-    setMoistureContent(seedMoisture != null ? liveFormatNumber(String(seedMoisture)) : '')
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -96,45 +114,74 @@ function PilesBeginningBalances({ warehouseId }) {
     })
   }
 
+  const updateLine = (index, field, value) => {
+    setLines((rows) => rows.map((row, i) => {
+      if (i !== index) return row
+      const next = { ...row, [field]: value }
+      if (field === 'mtsSackTypeId') next.mtsCondition = ''
+      return next
+    }))
+  }
+  const addLine = () => setLines((rows) => [...rows, emptyLine()])
+  const removeLine = (index) => setLines((rows) => (rows.length > 1 ? rows.filter((_, i) => i !== index) : rows))
+
   const handleSave = async () => {
     if (!editingPileId) return
     setIsSaving(true)
-    const newBags = bags === '' ? 0 : parseFormattedNumber(bags)
-    const newKilos = kilos === '' ? 0 : parseFormattedNumber(kilos)
     const newAgeDays = age === '' ? 0 : normalizeAgeToDays(parseFormattedNumber(age), ageUnit)
+    const first = lines[0]
 
+    // Pile-level condition/purity/moisture/MTS are read elsewhere purely as
+    // display/prefill defaults (Piles.jsx, pileLayoutPdfGenerator.js,
+    // StockFormBase.jsx) - no longer authoritative for beginning-balance
+    // reporting now that a pile can have multiple lines, but they still need
+    // *some* sane value, so source them from the first line.
     await db.piles.update(editingPileId, {
       initialAgeValue: newAgeDays,
-      dateOfReceipt: asOfDate,
-      condition,
-      purity: purity.trim() || null,
-      moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
+      dateOfReceipt: first?.dateReceived || todayLocalISO(),
+      condition: first?.condition || 'GQ',
+      purity: first?.purity?.trim() || null,
+      moistureContent: first?.moistureContent === '' || first?.moistureContent == null
+        ? null : parseFloat(parseFormattedNumber(first.moistureContent).toFixed(2)),
+      mtsSackTypeId: first?.mtsSackTypeId || null,
+      mtsCondition: first?.mtsSackTypeId ? (first.mtsCondition || null) : null,
     })
 
-    const seed = await db.transactions
-      .where('pileId').equals(editingPileId)
-      .and((t) => t.isInitialBalance)
-      .first()
+    const pile = piles.find((p) => p.pileId === editingPileId)
+    const survivingTxIds = new Set()
 
-    const seedFields = {
-      condition,
-      purity: purity.trim() || null,
-      moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const newBags = line.bags === '' ? 0 : parseFormattedNumber(line.bags)
+      const newKilos = line.kilos === '' ? 0 : parseFormattedNumber(line.kilos)
+      const seedFields = {
+        condition: line.condition,
+        purity: line.purity.trim() || null,
+        moistureContent: line.moistureContent === '' ? null : parseFloat(parseFormattedNumber(line.moistureContent).toFixed(2)),
+        mtsSackTypeId: line.mtsSackTypeId || null,
+        mtsCondition: line.mtsSackTypeId ? (line.mtsCondition || null) : null,
+      }
+
+      if (line.txId) {
+        survivingTxIds.add(line.txId)
+        await db.transactions.update(line.txId, { date: line.dateReceived, numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos, ...seedFields })
+      } else if (newBags > 0 || newKilos > 0) {
+        await db.transactions.add({
+          id: crypto.randomUUID(), type: 'WSR', serialNo: `INIT-${editingPileId.slice(0, 8)}-${i + 1}`,
+          status: 'Active', date: line.dateReceived, warehouseId,
+          pileId: editingPileId, varietyId: pile?.varietyId ?? null,
+          numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos,
+          customerName: 'Beginning Balance',
+          isInitialBalance: true, isSynced: false,
+          ...seedFields,
+        })
+      }
     }
 
-    if (seed) {
-      await db.transactions.update(seed.id, { date: asOfDate, numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos, ...seedFields })
-    } else if (newBags > 0 || newKilos > 0) {
-      const pile = piles.find((p) => p.pileId === editingPileId)
-      await db.transactions.add({
-        id: crypto.randomUUID(), type: 'WSR', serialNo: `INIT-${editingPileId.slice(0, 8)}`,
-        status: 'Active', date: asOfDate, warehouseId,
-        pileId: editingPileId, varietyId: pile?.varietyId ?? null,
-        numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos,
-        customerName: 'Beginning Balance',
-        isInitialBalance: true, isSynced: false,
-        ...seedFields,
-      })
+    // Lines removed via the remove-line button never make it into
+    // survivingTxIds - delete their now-orphaned seed transactions.
+    for (const id of originalSeedIds) {
+      if (!survivingTxIds.has(id)) await db.transactions.delete(id)
     }
 
     // Never set the live totals directly from the form - always
@@ -192,9 +239,12 @@ function PilesBeginningBalances({ warehouseId }) {
       .where('type').equals('WTS')
       .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
       .toArray()
+    const transactionTypes = await db.transactionTypes.toArray()
+    const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
     const doc = generatePileBinCard({
       warehouse, branch, pile, variety,
       transactions: [...allPileTransactions, ...wtsTransfers],
+      transactionTypeMap,
     })
     doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
   }
@@ -206,16 +256,6 @@ function PilesBeginningBalances({ warehouseId }) {
           <p className="text-xs font-semibold text-brand-amber">
             Editing beginning balance: {piles.find((p) => p.pileId === editingPileId)?.pileName}
           </p>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={labelClass}>Bags</label>
-              <input type="text" inputMode="numeric" value={bags} onChange={(e) => setBags(liveFormatNumber(e.target.value))} className={inputClass} placeholder="0" />
-            </div>
-            <div>
-              <label className={labelClass}>Net Kilos</label>
-              <input type="text" inputMode="decimal" value={kilos} onChange={(e) => setKilos(liveFormatNumber(e.target.value, 3))} className={inputClass} placeholder="0.000" />
-            </div>
-          </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelClass}>Age</label>
@@ -240,35 +280,94 @@ function PilesBeginningBalances({ warehouseId }) {
               </select>
             </div>
           </div>
-          <div>
-            <label className={labelClass}>As of</label>
-            <CalendarDatePicker value={asOfDate} onChange={setAsOfDate} />
-          </div>
-          <div>
-            <label className={labelClass}>Condition</label>
-            <div className="mt-1 grid grid-cols-5 gap-1">
-              {CONDITION_FLAGS.map((flag) => (
-                <button key={flag} type="button" onClick={() => setCondition(flag)}
-                  className={`rounded-lg border py-1.5 text-xs font-medium transition-all active:scale-95 ${
-                    condition === flag ? 'border-brand-neon bg-brand-neon/10 text-brand-neon' : 'border-neutral-800 bg-neutral-950 text-neutral-400'
-                  }`}>
-                  {flag}
-                </button>
-              ))}
+          {lines.map((line, i) => (
+            <div key={i} className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-neutral-400">Line {i + 1}</p>
+                {lines.length > 1 && (
+                  <button type="button" onClick={() => removeLine(i)} aria-label="Remove line" className="rounded-lg p-1 text-neutral-500 hover:text-red-400 active:scale-90">
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>Bags</label>
+                  <input type="text" inputMode="numeric" value={line.bags} onChange={(e) => updateLine(i, 'bags', liveFormatNumber(e.target.value))} className={inputClass} placeholder="0" />
+                </div>
+                <div>
+                  <label className={labelClass}>Net Kilos</label>
+                  <input type="text" inputMode="decimal" value={line.kilos} onChange={(e) => updateLine(i, 'kilos', liveFormatNumber(e.target.value, 3))} className={inputClass} placeholder="0.000" />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Date Received</label>
+                <CalendarDatePicker value={line.dateReceived} onChange={(v) => updateLine(i, 'dateReceived', v)} />
+              </div>
+              <div>
+                <label className={labelClass}>Condition</label>
+                <div className="mt-1 grid grid-cols-5 gap-1">
+                  {CONDITION_FLAGS.map((flag) => (
+                    <button key={flag} type="button" onClick={() => updateLine(i, 'condition', flag)}
+                      className={`rounded-lg border py-1.5 text-xs font-medium transition-all active:scale-95 ${
+                        line.condition === flag ? 'border-brand-neon bg-brand-neon/10 text-brand-neon' : 'border-neutral-800 bg-neutral-900 text-neutral-400'
+                      }`}>
+                      {flag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>Sack Weight / MTS (optional)</label>
+                  <select
+                    value={line.mtsSackTypeId}
+                    onChange={(e) => updateLine(i, 'mtsSackTypeId', e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Unset (use pile's own if any)</option>
+                    {sackTypesForCategory.map((s) => (
+                      <option key={s.sackTypeId} value={s.sackTypeId}>{s.code}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Sack Condition</label>
+                  <select
+                    value={line.mtsCondition}
+                    onChange={(e) => updateLine(i, 'mtsCondition', e.target.value)}
+                    disabled={!line.mtsSackTypeId}
+                    className={inputClass}
+                  >
+                    <option value="">Select...</option>
+                    {SACK_CONDITIONS.map(({ code: cc, label }) => (
+                      <option key={cc} value={cc}>{label} ({cc})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>Purity (optional)</label>
+                  <input type="text" value={line.purity} onChange={(e) => updateLine(i, 'purity', e.target.value)}
+                    className={inputClass} placeholder="94%" />
+                </div>
+                <div>
+                  <label className={labelClass}>MC (optional)</label>
+                  <input type="text" value={line.moistureContent} onChange={(e) => updateLine(i, 'moistureContent', liveFormatNumber(e.target.value))}
+                    className={inputClass} placeholder="11.1" />
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={labelClass}>Purity (optional)</label>
-              <input type="text" value={purity} onChange={(e) => setPurity(e.target.value)}
-                className={inputClass} placeholder="94%" />
-            </div>
-            <div>
-              <label className={labelClass}>MC (optional)</label>
-              <input type="text" value={moistureContent} onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
-                className={inputClass} placeholder="11.1" />
-            </div>
-          </div>
+          ))}
+          <p className="text-[11px] text-neutral-500">
+            Add a separate line for each distinct sack weight/condition this pile's
+            beginning balance actually had - each becomes its own report row.
+          </p>
+          <button type="button" onClick={addLine} className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-700 py-1.5 text-xs font-medium text-neutral-400 hover:border-brand-neon hover:text-brand-neon">
+            <Plus size={14} /> Add line
+          </button>
+
           <div className="flex gap-2">
             <button type="button" onClick={handleSave} disabled={isSaving} className={`flex-1 ${primaryButtonClass}`}>Save</button>
             <button type="button" onClick={resetForm} className={secondaryButtonClass}>Cancel</button>
