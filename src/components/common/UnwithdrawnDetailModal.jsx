@@ -5,7 +5,7 @@
 // figure is shown, not the separately-tracked bag-count field), and
 // every WSI/WTS document actually withdrawn against it.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X } from 'lucide-react'
@@ -21,6 +21,14 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, title, subtitle, onCl
     setIsClosing(true)
     setTimeout(onClose, 250)
   }
+
+  // The modal has its own internal scroll region, but without this the
+  // page behind it is still technically scrollable even though visually
+  // covered - producing two scrollbars at once.
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
 
   const detail = useLiveQuery(
     () => getUnwithdrawnDetail(warehouseId, varietyIds),
