@@ -49,6 +49,12 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
 
       if (wsMatches.length > 0) {
         setSuggestions(wsMatches)
+        // WS suggestions take priority and MUST NOT be overwritten below -
+        // a same-named record already saved in db.customers (very likely,
+        // since every prior save remembers whoever was typed as
+        // "customer") would otherwise stomp the just-picked WS address
+        // (with its warehouse name/GID prefix) with whatever generic
+        // address that old record happens to hold.
         return
       }
 
@@ -57,19 +63,21 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
 
         if (mpoMatches.length > 0) {
           setSuggestions(mpoMatches)
-          return
+          return // same reasoning as the WS case above
         }
 
         searchCustomers(value, 6, warehouseId).then((results) => {
           if (!cancelled) setSuggestions(results)
         })
-      })
-    })
 
-    // Auto-fill if what's currently typed is already an exact match,
-    // even if the user didn't pick it from the dropdown.
-    findCustomerByName(value, warehouseId).then((match) => {
-      if (!cancelled && match) onMatch(match)
+        // Auto-fill if what's currently typed is already an exact match,
+        // even if the user didn't pick it from the dropdown. Only
+        // reached once WS/MPO suggestions are ruled out, for the same
+        // reason as above.
+        findCustomerByName(value, warehouseId).then((match) => {
+          if (!cancelled && match) onMatch(match)
+        })
+      })
     })
 
     return () => {
