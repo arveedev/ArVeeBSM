@@ -21,8 +21,15 @@ const fmtDate = (s) => {
   return d.toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+// Same Palay/Rice/By-Products convention used everywhere else in the app
+// (see HomeStocks.jsx's categoryColor) - kept here too so this modal's
+// colors match instead of using its own ad hoc issue/receive palette.
+const categoryColor = (category) =>
+  category === 'Rice' ? 'text-blue-400' : category === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
+
 function MillingOrderDetail({ order, onClose }) {
   const [isClosing, setIsClosing] = useState(false)
+  const [detailTab, setDetailTab] = useState('stocks')
   const handleClose = () => {
     setIsClosing(true)
     setTimeout(onClose, 300)
@@ -38,14 +45,24 @@ function MillingOrderDetail({ order, onClose }) {
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const piles = useLiveQuery(() => db.piles.toArray(), []) ?? []
+  const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const linkedAuthority = useLiveQuery(async () => {
     if (order.aiNumber) return db.authorities.where('aiNumber').equals(order.aiNumber).first()
     if (order.siaNumber) return db.authorities.where('siaNumber').equals(order.siaNumber).first()
     return null
   }, [order.aiNumber, order.siaNumber])
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w.name]))
-  const varietyMap = new Map(varieties.map((v) => [v.varietyId, v.name]))
+  const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const pileMap = new Map(piles.map((p) => [p.pileId, p.pileName]))
+  const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
+
+  const stockTx = allTx.filter((t) => t.type === 'WSR' || t.type === 'WSI')
+  const sackTx = allTx.filter((t) => t.type === 'ESR' || t.type === 'ESI')
+  const stockCategoryOf = (t) => t.cerealCategory ?? varietyMap.get(t.varietyId)?.category ?? 'Unknown'
+  const sackCategoryOf = (t) => {
+    const first = (t.sackLines ?? [])[0]
+    return sackTypeMap.get(first?.sackTypeId)?.category ?? t.cerealCategory ?? 'Unknown'
+  }
 
   // Last transaction summary, replacing the previously always-static
   // "Pending" text with something actually informative - e.g. "BSI
@@ -56,7 +73,7 @@ function MillingOrderDetail({ order, onClose }) {
     const isIssue = lastTx.type === 'WSI' || lastTx.type === 'ESI'
     const isSack = lastTx.type === 'ESI' || lastTx.type === 'ESR'
     const whName = stripWarehouseCodePrefix(warehouseMap.get(lastTx.warehouseId)) || '—'
-    const variety = varietyMap.get(lastTx.varietyId) ?? '—'
+    const variety = varietyMap.get(lastTx.varietyId)?.name ?? '—'
     const pileName = lastTx.pileId ? pileMap.get(lastTx.pileId) : null
     const varietyAndPile = pileName ? `${variety} (${pileName})` : variety
     const amount = isSack
@@ -159,65 +176,159 @@ function MillingOrderDetail({ order, onClose }) {
             </div>
           )}
 
-          <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-neutral-500">Transaction History</p>
+          <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
+            <div
+              className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+              style={{ transform: detailTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+            />
+            <button type="button" onClick={() => setDetailTab('stocks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-xs font-medium ${detailTab === 'stocks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Stocks</button>
+            <button type="button" onClick={() => setDetailTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-xs font-medium ${detailTab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
+          </div>
         </div>
 
         {/* Only this section scrolls */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-1.5">
-          <ul className="space-y-2">
-            {allTx.length === 0 && <p className="py-2 text-center text-xs text-neutral-500">No transactions recorded yet.</p>}
-            {allTx.map((t) => {
-              const isIssue = t.type === 'WSI' || t.type === 'ESI'
-              const isSack = t.type === 'ESI' || t.type === 'ESR'
-              const bagsOrPieces = isSack
-                ? (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
-                : t.numberOfBags
-              return (
-                <li key={t.id} className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className={`font-semibold ${isIssue ? 'text-brand-neon' : 'text-brand-amber'}`}>
-                      {isIssue ? 'Issued' : 'Received'} {isSack ? '(Sacks)' : '(Stock)'}
-                      {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
-                    </span>
-                    <span className="text-neutral-500">{fmtDate(t.date)}</span>
-                  </div>
-                  <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-neutral-400">
-                    <div>
-                      <p className="text-[10px] uppercase text-neutral-600">Miller</p>
-                      <p className="text-app-text">{t.customerName ?? order.ricemillName ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-neutral-600">Warehouse</p>
-                      <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-neutral-600">Variety</p>
-                      <p className="text-app-text">{varietyMap.get(t.varietyId) ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-neutral-600">Pile</p>
-                      <p className="text-app-text">{t.pileId ? (pileMap.get(t.pileId) ?? '—') : '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase text-neutral-600">{isSack ? 'Pieces' : 'Bags'}</p>
-                      <p className="text-app-text">{fmtBags(bagsOrPieces)}</p>
-                    </div>
-                    {!isSack && (
-                      <div>
-                        <p className="text-[10px] uppercase text-neutral-600">Net Kgs</p>
-                        <p className="text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-1.5 text-sm font-semibold text-app-text">{t.type} # {t.serialNo}</p>
-                </li>
-              )
-            })}
-          </ul>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-3">
+          {detailTab === 'stocks' ? (
+            <TransactionGroups
+              txs={stockTx}
+              categoryOf={stockCategoryOf}
+              renderRow={(t) => (
+                <StockRow key={t.id} t={t} order={order} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} weightUnit={weightUnit} />
+              )}
+            />
+          ) : (
+            <TransactionGroups
+              txs={sackTx}
+              categoryOf={sackCategoryOf}
+              renderRow={(t) => (
+                <SackRow key={t.id} t={t} order={order} warehouseMap={warehouseMap} sackTypeMap={sackTypeMap} />
+              )}
+            />
+          )}
         </div>
       </div>
     </div>,
     document.body
+  )
+}
+
+// Shared Issued/Received -> cereal (or sack) type grouping shell for both
+// tabs - only the row renderer and the category-resolution function differ.
+function TransactionGroups({ txs, categoryOf, renderRow }) {
+  const issued = txs.filter((t) => t.type === 'WSI' || t.type === 'ESI')
+  const received = txs.filter((t) => t.type === 'WSR' || t.type === 'ESR')
+  const groupByCategory = (list) => {
+    const groups = new Map()
+    for (const t of list) {
+      const key = categoryOf(t)
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(t)
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))
+  }
+
+  if (txs.length === 0) return <p className="py-2 text-center text-xs text-neutral-500">No transactions recorded yet.</p>
+
+  return (
+    <div className="space-y-4">
+      {[{ label: 'Issued', list: issued }, { label: 'Received', list: received }].map(({ label, list }) => (
+        list.length > 0 && (
+          <div key={label}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
+            <div className="mt-2 space-y-3">
+              {groupByCategory(list).map(([category, catTxs]) => (
+                <div key={category}>
+                  <p className={`text-xs font-semibold ${categoryColor(category)}`}>{category}</p>
+                  <ul className="mt-1 space-y-2">{catTxs.map(renderRow)}</ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      ))}
+    </div>
+  )
+}
+
+function StockRow({ t, order, warehouseMap, varietyMap, pileMap, weightUnit }) {
+  const isIssue = t.type === 'WSI'
+  return (
+    <li className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-app-text">
+          {isIssue ? 'Issued' : 'Received'}
+          {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
+        </span>
+        <span className="text-neutral-500">{fmtDate(t.date)}</span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-neutral-400">
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Miller</p>
+          <p className="text-app-text">{t.customerName ?? order.ricemillName ?? '—'}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Warehouse</p>
+          <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Variety</p>
+          <p className="text-app-text">{varietyMap.get(t.varietyId)?.name ?? '—'}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Pile</p>
+          <p className="text-app-text">{t.pileId ? (pileMap.get(t.pileId) ?? '—') : '—'}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Bags</p>
+          <p className="text-app-text">{fmtBags(t.numberOfBags)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Net Kgs</p>
+          <p className="text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
+        </div>
+      </div>
+      <p className="mt-1.5 text-sm font-semibold text-app-text">{t.type} # {t.serialNo}</p>
+    </li>
+  )
+}
+
+function SackRow({ t, order, warehouseMap, sackTypeMap }) {
+  const isIssue = t.type === 'ESI'
+  const lines = t.sackLines ?? []
+  return (
+    <li className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-app-text">
+          {isIssue ? 'Issued' : 'Received'}
+          {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
+        </span>
+        <span className="text-neutral-500">{fmtDate(t.date)}</span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-neutral-400">
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Miller</p>
+          <p className="text-app-text">{t.customerName ?? order.ricemillName ?? '—'}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Warehouse</p>
+          <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
+        </div>
+      </div>
+      {lines.length > 0 && (
+        <div className="mt-1.5 space-y-1 border-t border-neutral-800 pt-1.5">
+          {lines.map((l, i) => {
+            const st = sackTypeMap.get(l.sackTypeId)
+            return (
+              <div key={i} className="flex items-center justify-between text-neutral-400">
+                <span className="text-app-text">{st?.code ?? '—'} · {l.condition ?? '—'}</span>
+                <span>{fmtBags(l.pieces ?? 0)} pcs</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <p className="mt-1.5 text-sm font-semibold text-app-text">{t.type} # {t.serialNo}</p>
+    </li>
   )
 }
 
