@@ -29,6 +29,7 @@ function WarehousesPanel() {
   const [provinceId, setProvinceId] = useState('')
   const [aliases, setAliases] = useState('')
   const [facilityType, setFacilityType] = useState('Warehouse')
+  const [reportingCutoffDate, setReportingCutoffDate] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
 
@@ -53,6 +54,7 @@ function WarehousesPanel() {
     setProvinceId('')
     setAliases('')
     setFacilityType('Warehouse')
+    setReportingCutoffDate('')
     setEditingId(null)
   }
 
@@ -104,6 +106,7 @@ function WarehousesPanel() {
         address: address.trim() || null,
         provinceId,
         facilityType,
+        reportingCutoffDate: reportingCutoffDate || null,
       })
       toast.success('Warehouse updated')
     } else {
@@ -115,6 +118,7 @@ function WarehousesPanel() {
         address: address.trim() || null,
         provinceId,
         facilityType,
+        reportingCutoffDate: reportingCutoffDate || null,
       })
       toast.success('Warehouse saved')
     }
@@ -142,6 +146,7 @@ function WarehousesPanel() {
     setProvinceId(warehouse.provinceId)
     setAliases((aliasesByWarehouse.get(warehouse.warehouseId) ?? []).join(', '))
     setFacilityType(warehouse.facilityType ?? 'Warehouse')
+    setReportingCutoffDate(warehouse.reportingCutoffDate ?? '')
   }
 
   const confirmDelete = async () => {
@@ -215,6 +220,19 @@ function WarehousesPanel() {
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className={labelClass}>Reports Start Date</label>
+          <input
+            type="date"
+            value={reportingCutoffDate}
+            onChange={(e) => setReportingCutoffDate(e.target.value)}
+            className={inputClass}
+          />
+          <p className="mt-1 text-xs text-neutral-500">
+            Any data dated before this excludes from reports entirely (beginning balances still count). Leave blank to include all data regardless of date.
+          </p>
         </div>
 
         <div>

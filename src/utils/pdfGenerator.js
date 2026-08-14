@@ -258,7 +258,7 @@ const addFooter = (doc) => {
 
 // ── STOCK REPORT PAGES ────────────────────────────────────────────────────────
 
-const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, issues, beginBalMap, sackTypeMap, sigCtx }) => {
+const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, issues, beginBalMap, sackTypeMap, pileMtsById, sigCtx }) => {
   doc.addPage()
   let y = addPageHeader(doc, { ...header, subtitle: 'Summary of Weekly Stock Receipts, Issues and Balances' })
   y = addRegionProvinceCodeWhse(doc, header, y)
@@ -273,7 +273,11 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   // from the beginning balance map itself - a pile with a beginning
   // balance but zero transactions in this period must still get a
   // row.
-  const mtsWeightOf = (t) => sackTypeMap?.get(t.mtsSackTypeId)?.weights?.[t.mtsCondition] ?? null
+  const mtsWeightOf = (t) => {
+    const ownSackTypeId = t.mtsSackTypeId ?? pileMtsById?.get(t.pileId)?.mtsSackTypeId
+    const ownCondition = t.mtsCondition ?? pileMtsById?.get(t.pileId)?.mtsCondition
+    return sackTypeMap?.get(ownSackTypeId)?.weights?.[ownCondition] ?? null
+  }
   const rawKeys = new Set()
   for (const t of [...receipts, ...issues]) {
     if (t.varietyId && t.condition) rawKeys.add(`${t.varietyId}::${t.condition}::${mtsWeightOf(t) ?? ''}`)
@@ -851,7 +855,7 @@ export const generateNfaReport = ({
   sackReceipts, sackIssues,
   stockBeginningBals, sackBeginningBals,
   signatories, certifiedCorrect,
-  varieties, sackTypes, sackTypeMap,
+  varieties, sackTypes, sackTypeMap, pileMtsById,
 }) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   doc.deletePage(1)
@@ -881,7 +885,7 @@ export const generateNfaReport = ({
     // Summary always renders (beginning/ending balance is meaningful even
     // with zero activity). Statement/recap pages only render if there is
     // actual activity to list - a statement of zero rows is meaningless.
-    addStockSummaryPage(doc, { header, cerealType, varieties: catVars, receipts: catRec, issues: catIss, beginBalMap, sackTypeMap, sigCtx })
+    addStockSummaryPage(doc, { header, cerealType, varieties: catVars, receipts: catRec, issues: catIss, beginBalMap, sackTypeMap, pileMtsById, sigCtx })
     if (catRec.length > 0) {
       addStockStatementPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx })
       addStockRecapPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx })

@@ -12619,3 +12619,73 @@ unexpected duplicate, a mismatched cerealCategory, a different
 warehouseId) would be the next thing to investigate directly, since
 the underlying calculation logic has now been proven correct through
 actual execution, not just code review.
+
+## Two fixes: brought back the PD-bug cutoff (correctly this time) and fixed sack-weight over-separation
+
+### PD phantom-data cutoff, restored without breaking the rolling balance
+
+Confirmed the trade-off from the previous entry needed reversing - the
+rolling balance now genuinely works, but removing the cutoff
+mechanism entirely let old, unrelated pre-cutoff data leak back into
+reports. Per explicit clarification: any data before the confirmed
+beginning-balance date must be excluded from reports, but must remain
+fully available for serial-number checks and other form-level lookups.
+
+Rather than attempt a fourth version of pile-derived cutoff logic
+(three previous attempts all failed because they depended on db.piles
+records reliably existing and matching real historical data, which
+real, years-old imported data does not guarantee), added an explicit,
+admin-set reportingCutoffDate field on the warehouse record itself
+(Settings > Warehouses > "Reports Start Date") - a single, deliberate
+value the admin confirms once, with no dependency on pile data
+reliability at all. Any non-seed transaction dated on or before this
+date is excluded from every report; the seed itself always counts
+regardless, since it represents the confirmed truth as of that date.
+Applied identically to both stocks and sacks. No schema change needed
+- Dexie allows storing this as a plain, non-indexed field on the
+existing warehouses table.
+
+### Sack-weight separation over-splitting
+
+Traced the reported "PD1-A, PD1-A (0.095), PD1-A (0.102)" duplication
+to a real gap: a transaction's own mtsSackTypeId/mtsCondition fields
+are frequently unset (especially on older or sheet-imported records),
+even when the pile that transaction belongs to has a properly
+configured MTS sack type. Previously, an unset transaction fell into
+an unlabeled "no weight" bucket, separate from other transactions of
+the same variety that did have their own MTS explicitly set - even
+though both genuinely represent the same physical sack weight.
+
+Added a pile-based fallback (resolveMtsWeight in Reports.jsx,
+mirrored in pdfGenerator.js's mtsWeightOf) - a transaction's own MTS
+fields are checked first; only when unset does it fall back to the
+pile's own configured mtsSackTypeId/mtsCondition. This correctly
+merges historical/unset-MTS transactions with their pile's real
+weight instead of forming a spurious extra bucket. A genuinely
+different sack weight (a different, real pile) still correctly
+separates as before - this only fixes the case where the same weight
+was being incorrectly split by data-completeness accident, not
+genuine variation. Threaded pileMtsById through
+generateNfaReport/addStockSummaryPage carefully, double-checking the
+new parameter is destructured on the receiving end this time, given
+the earlier ReferenceError regression from a similar oversight. Home
+overview (HomeStocks.jsx) already operates on piles directly and was
+unaffected by this specific gap.
+
+Verified with a 14-case test covering both fixes directly (including
+the exact reported scenario: an unset-MTS and a set-MTS transaction
+of the same pile now resolving to the identical weight and merging
+correctly, while a genuinely different pile/weight still separates),
+plus a dedicated 3-case simulation proving both the cutoff exclusion
+and the rolling balance work correctly TOGETHER on the same data -
+old phantom data excluded, real activity still rolling forward.
+Re-ran the existing rolling-balance simulation test unchanged to
+confirm no regression from touching the same function again. Updated
+one earlier test whose exact-signature-string assertion needed
+updating for the new parameter.
+
+All changes in this entry verified compiling (full 87-file parse
+sweep + check-imports.cjs + a full production npm run build, which
+succeeds) and the dedicated test suite above. Full regression suite
+re-run - the same pre-existing stale scratch-test failures already
+confirmed multiple times this session, no new regressions.

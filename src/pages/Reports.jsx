@@ -183,35 +183,55 @@ function Reports() {
         notedByPosition: reportConfig?.notedByPosition ?? '',
       }
 
-      // Compute beginning balances for stocks - deliberately simple:
-      // beginning balance for a period is the sum of every WSR/WSI/WTS
-      // transaction (seed or real) dated before the period starts,
-      // grouped by variety+condition. This is the model confirmed
-      // directly: a variety's beginning balance is just the total
-      // across every pile of that variety, and every day's real
-      // activity adds or subtracts from it. No cutoff date, no pile
-      // matching - three earlier attempts at smarter, pile-based
-      // cutoff logic all failed for the same underlying reason: they
-      // depended on db.piles records reliably existing and matching
-      // real historical transaction data, which real, years-old
-      // imported data does not guarantee, silently breaking the core
-      // rolling-balance requirement instead. If a specific stale or
-      // incorrect historical record needs to be excluded from a
-      // report, that should be handled by fixing or removing the bad
-      // data itself, not by a general filtering mechanism that risks
-      // breaking this for everyone.
+      // Compute beginning balances for stocks. Beginning balance for a
+      // period is the sum of every WSR/WSI/WTS transaction (seed or
+      // real) dated before the period starts, grouped by variety+
+      // condition - simple addition/subtraction, no per-pile matching.
+      //
+      // reportingCutoffDate is an explicit, admin-set date on the
+      // warehouse record (Settings > Warehouses) - not derived from
+      // pile data at all, unlike three earlier attempts that all
+      // failed because they depended on db.piles records reliably
+      // matching real historical data, which real, years-old imported
+      // data does not guarantee. Any non-seed transaction dated on or
+      // before this explicit date is excluded from every report - the
+      // seed itself always counts regardless, since it represents the
+      // confirmed truth as of that date. This only affects what
+      // reports display; serial-number checks and other form-level
+      // lookups query transactions directly and are entirely
+      // unaffected by this report-only filter.
+      const reportingCutoffDate = currentWarehouse?.reportingCutoffDate || null
+      // Pile-based MTS fallback for display-grouping purposes only -
+      // many transactions (especially older/imported ones) have their
+      // own mtsSackTypeId/mtsCondition unset even though the pile they
+      // belong to has a properly configured one. Without this, such a
+      // transaction would incorrectly group as a separate, unlabeled
+      // "no weight" bucket instead of correctly merging with the
+      // pile's actual, real weight. This has no effect on the rolling-
+      // balance cutoff logic above or anywhere else - purely used to
+      // pick the correct weight label.
+      const pileMtsById = new Map(
+        (await db.piles.where('warehouseId').equals(currentWarehouseId).toArray())
+          .map((p) => [p.pileId, { mtsSackTypeId: p.mtsSackTypeId, mtsCondition: p.mtsCondition }])
+      )
+      const resolveMtsWeight = (t) => {
+        const ownSackTypeId = t.mtsSackTypeId ?? pileMtsById.get(t.pileId)?.mtsSackTypeId
+        const ownCondition = t.mtsCondition ?? pileMtsById.get(t.pileId)?.mtsCondition
+        return sackTypeMap.get(ownSackTypeId)?.weights?.[ownCondition] ?? null
+      }
       const stockBeginningBals = new Map()
       const priorStockRaw = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
         .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active' &&
           (t.isInitialBalance || t.date < stmtFrom))
         .toArray())
+        .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {
         const variety = varietyMap.get(t.varietyId)
         if (!variety) return
         const cat = variety.category
-        const mtsWeight = sackTypeMap.get(t.mtsSackTypeId)?.weights?.[t.mtsCondition] ?? null
+        const mtsWeight = resolveMtsWeight(t)
         const key = `${t.varietyId}::${t.condition}::${mtsWeight ?? ''}`
         if (!stockBeginningBals.has(cat)) stockBeginningBals.set(cat, new Map())
         const catMap = stockBeginningBals.get(cat)
@@ -224,10 +244,11 @@ function Reports() {
       for (const t of priorReceipts) addToBeginningBal(t, 1)
       for (const t of priorIssues) addToBeginningBal(t, -1)
 
-      // Compute beginning balances for sacks - same deliberately simple
-      // model as stocks above: everything (seed or real) dated before
-      // the period starts, summed by sackTypeId+condition. No cutoff,
-      // no per-key matching gate.
+      // Compute beginning balances for sacks - same model as stocks
+      // above: everything (seed or real) dated before the period
+      // starts, summed by sackTypeId+condition, with the same explicit
+      // reportingCutoffDate excluding real (non-seed) activity dated
+      // on/before it.
       const sackBeginningBals = new Map()
       const sackInventorySeed = await db.sackInventory
         .where('warehouseId').equals(currentWarehouseId)
@@ -237,10 +258,11 @@ function Reports() {
         const key = `${rec.sackTypeId}::${rec.condition}`
         sackBeginningBals.set(key, (sackBeginningBals.get(key) ?? 0) + (rec.pieces ?? 0))
       }
-      const priorSack = await db.transactions
+      const priorSack = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
         .and((t) => ['ESR', 'ESI'].includes(t.type) && t.status === 'Active' && t.date < stmtFrom)
-        .toArray()
+        .toArray())
+        .filter((t) => !reportingCutoffDate || t.date > reportingCutoffDate)
       for (const t of priorSack) {
         for (const l of (t.sackLines ?? [])) {
           const sType = sackTypeMap.get(l.sackTypeId)
@@ -268,6 +290,7 @@ function Reports() {
         varieties,
         sackTypes,
         sackTypeMap,
+        pileMtsById,
       })
 
       const filename = `${sanitizeForFilename(currentWarehouse?.name) || 'WH'}-StockReport-${fmtDateForFilename(stmtFrom)}-${fmtDateForFilename(stmtTo)}.pdf`
