@@ -12689,3 +12689,359 @@ sweep + check-imports.cjs + a full production npm run build, which
 succeeds) and the dedicated test suite above. Full regression suite
 re-run - the same pre-existing stale scratch-test failures already
 confirmed multiple times this session, no new regressions.
+
+## Added MTS sack weight to pile beginning balances (root cause of persistent sack-weight splitting)
+
+Investigated why the pile-based MTS fallback added last session (resolveMtsWeight in
+Reports.jsx, mtsWeightOf in pdfGenerator.js) was not merging PD1-A / PD1-A (0.095) /
+PD1-A (0.102) despite the fallback code being present and correct. Grepped the entire
+src tree for any writer of pile.mtsSackTypeId/mtsCondition - found none. NewPileDialog.jsx,
+Piles.jsx, and BeginningBalancesPanel.jsx never set these fields on a pile record, so the
+fallback always read undefined. The fix from last session was structurally correct but
+had no UI to supply it data - confirmed dead code, not a logic bug.
+
+Added Sack Weight/MTS (sack type + condition) fields to the per-pile beginning-balance
+edit form in BeginningBalancesPanel.jsx, scoped to sack types matching the pile's variety
+category. Saves to both db.piles (mtsSackTypeId/mtsCondition, read by the existing
+fallback) and the pile's isInitialBalance seed transaction (same fields, checked first by
+resolveMtsWeight/mtsWeightOf before falling back to the pile). No schema migration needed -
+Dexie only requires indexed fields to be declared in .stores().
+
+Not yet verified against the user's live data (this session has no access to the app's
+IndexedDB) - user to test in-app: edit each PD1-A pile's beginning balance, set its sack
+weight, confirm Reports/PDF merge the buckets. Code not yet committed to git - user has
+final review before commit per project rules.
+
+Separately, confirmed the persistent -355 PD1-A (0.095) balance is NOT a cutoff-filter
+bug: Reports.jsx line 228's filter always keeps isInitialBalance (seed) transactions
+regardless of reportingCutoffDate, by design. User confirmed all piles' beginning
+balances are dated June 30, 2026, but this has not yet been confirmed to match the
+warehouse's actual reportingCutoffDate setting in Settings > Warehouses (a separate
+field from the pile's own asOfDate) - still open, needs user to check that setting or
+this seed value directly.
+
+## Swapped Reports Start Date to CalendarDatePicker
+
+User flagged that the Reports Start Date field (WarehousesPanel.jsx, added last
+session) used a bare native input type="date" instead of the app's own
+CalendarDatePicker component used everywhere else a date is picked (e.g.
+BeginningBalancesPanel's As Of field) - a real style mismatch, not just cosmetic
+preference, since CalendarDatePicker was built specifically to avoid native
+date-input reliability problems (see its own file header).
+
+Swapped it. One catch found before swapping: CalendarDatePicker has no built-in
+way to clear a selected value back to blank - onChange only fires from an explicit
+day-cell tap, there is no clear/reset control in the component itself. Since Reports
+Start Date is explicitly optional ("leave blank to include all data"), a straight
+swap would have silently removed the ability to unset it once picked. Added a small
+local Clear button next to the picker in WarehousesPanel.jsx instead of modifying
+the shared component, to avoid touching behavior for every other place it's used.
+Passed required={false} so the field does not show the amber "needs input" styling
+the picker gives required dates by default.
+
+Not yet build-tested (no shell access to the actual repo from this session) - user
+to verify visually and via npm run build before committing.
+
+## Session handoff — sack weight (MTS) fix in progress, continuing in Claude Code
+
+Full session summary for continuity. Started because sack-weight splitting
+(PD1-A / PD1-A (0.095) / PD1-A (0.102) not merging) and a persistent -355
+PD1-A (0.095) balance were both still showing in the live weekly report
+despite last session's log claiming both fixed.
+
+### Root causes found (both confirmed by reading actual current code, not
+assuming the log's account was still accurate)
+
+1. Sack-weight splitting: last session's pile-based MTS fallback
+   (resolveMtsWeight in Reports.jsx, mtsWeightOf in pdfGenerator.js) is
+   correct logic but was dead in practice - grepped the whole src tree and
+   found NO admin UI wrote mtsSackTypeId/mtsCondition onto a pile record,
+   so the fallback always read undefined. CORRECTION to that finding,
+   found later in the same session: this is only true for the EDIT paths
+   (BeginningBalancesPanel.jsx, Piles.jsx). NewPileDialog.jsx ->
+   createPileWithBeginningBalance (pileLedger.js, ~line 118-172) already
+   does this correctly at pile-CREATION time - sets mtsSackTypeId/
+   mtsCondition on both the new pile and its seed transaction. That
+   existing pattern is what BeginningBalancesPanel.jsx's fix should mirror.
+
+2. The -355 PD1-A (0.095) balance persisting: Reports.jsx line ~228's
+   cutoff filter (`t.isInitialBalance || !reportingCutoffDate || t.date >
+   reportingCutoffDate`) ALWAYS keeps isInitialBalance (seed) transactions
+   regardless of reportingCutoffDate, by design (matches last session's
+   own stated intent - "the seed itself always counts regardless"). If
+   -355 is a seed value, no cutoff date will ever remove it - it needs
+   correcting directly. NOT YET CONFIRMED: whether warehouse CTD-GID 2
+   actually has reportingCutoffDate set in Settings > Warehouses (this is
+   a separate field from each pile's own beginning-balance asOfDate -
+   user confirmed piles are dated June 30 2026 but this does NOT confirm
+   the warehouse-level cutoff field itself is populated). STILL OPEN -
+   user needs to check Settings > Warehouses > Reports Start Date for
+   CTD-GID 2 specifically, then check whether that pile's beginning
+   balance figure is itself the source of the -355.
+
+### Also found and corrected during this session (real bug, unrelated to
+the two items above)
+
+3. IMPORTANT DESIGN CORRECTION - user caught this: a pile groups by
+   VARIETY, not by sack weight - one pile can legitimately have two
+   different real sack weights in its history/beginning balance at once.
+   A single mtsSackTypeId/mtsCondition per pile (what was first built,
+   see item 4 below) cannot represent this - it would silently mislabel
+   whichever weight wasn't chosen. CONFIRMED SEPARATELY: this is NOT a
+   problem for real going-forward transactions - StockFormBase.jsx's sack-
+   weight dropdown (~line 477-491) already lets any transaction pick any
+   configured sack type/condition for its variety's category, completely
+   independent of what the pile has used before, saved directly onto that
+   transaction's own mtsSackTypeId/mtsCondition. Reports.jsx/
+   pdfGenerator.js already bucket per-transaction, not per-pile, so a
+   genuinely new weight on a pile already forms its own report row
+   automatically today, zero extra setup. The only real gap is
+   RETROACTIVE: old/imported piles whose beginning balance was entered as
+   one blended figure before this app tracked sack weight at all, with no
+   per-transaction data to fall back on.
+
+### Code changes made this session (both written to disk, NEITHER
+committed to git yet - user is reviewing/testing first)
+
+4. src/components/common/admin/BeginningBalancesPanel.jsx - added a
+   single Sack Weight/MTS (sack type + condition) field per pile's
+   beginning balance, saved to both db.piles and the seed transaction.
+   SUPERSEDED BY ITEM 3 ABOVE - this single-value-per-pile version is
+   WRONG per the user's correction and needs to become a repeatable list
+   (multiple lines per pile, each with its own bags/kilos/sack weight/
+   condition) instead of one flat value. THIS REWORK IS THE NEXT STEP,
+   NOT YET STARTED. When building it: mirror createPileWithBeginningBalance's
+   already-correct field-setting pattern (item 1's correction above);
+   Reports.jsx's beginning-balance aggregation already loops over every
+   isInitialBalance transaction independently and buckets each by its own
+   variety::condition::mtsWeight key (see addToBeginningBal, ~line 230-245)
+   - it does NOT assume one seed per pile, so multiple seed transactions
+   per pile need zero changes on the Reports/pdfGenerator side, only the
+   panel's form/save/edit logic (currently hardcoded to a single bags/
+   kilos state and a single `.first()` seed lookup) needs to become a
+   list.
+
+5. src/components/common/admin/WarehousesPanel.jsx - Reports Start Date
+   field swapped from a native <input type="date"> to the app's own
+   CalendarDatePicker component (matches every other date field in the
+   app). CalendarDatePicker has no built-in clear affordance (onChange
+   only fires from an explicit day-cell tap) - added a small local Clear
+   button next to it since this field is documented as optional. Passed
+   required={false}.
+
+### Dev environment notes (unrelated to the code changes, discovered
+while user was trying to test locally - worth keeping so this doesn't
+get re-debugged from scratch)
+
+- `npm run dev` (plain Vite) does NOT serve api/dexie-cloud-tokens.js
+  (a Vercel serverless function) - causes a 404 on that endpoint and a
+  Dexie Cloud login failure. Use `npx vercel dev` instead (project is
+  already linked via .vercel/), which serves both the Vite app and api/
+  functions together.
+- Even with vercel dev, first run hit a CORS error from the Dexie Cloud
+  sync endpoint - localhost:3000 (vercel dev's default port, different
+  from Vite's own 5173) was not on the database's origin allowlist.
+  Fixed by running `npx dexie-cloud whitelist http://localhost:3000`
+  from the repo root (needs dexie-cloud.json/.key present there).
+- This project's Dexie Cloud database has no separate dev/staging
+  instance - DEXIE_CLOUD_DB_URL is a single production database, so
+  `vercel dev`/`npm run dev` both sync against real live data, not a
+  sandbox. Confirmed with the user they intend to test directly on real
+  data (declined a disposable test-pile suggestion) - just something to
+  stay aware of, no code implication.
+
+### Immediate next step for whoever picks this up
+
+Build the multi-line Beginning Balances editor described in item 4 above
+(this is the agreed, confirmed plan - user said "yes we can proceed" but
+work had not started when this session ended). After that: user still
+needs to check Settings > Warehouses > Reports Start Date for CTD-GID 2
+(item 2 above, unresolved). Neither of the two files already changed this
+session has been build-tested (no shell access to the real repo from that
+session, file-bridge only) or committed - review, test via vercel dev,
+then commit before or alongside the new work.
+
+## 2026-08-14 (continued) - Beginning Balances multi-line rework completed, plus a full pilot-feedback batch (Claude Code session)
+
+The multi-line Beginning Balances editor described above (item 4) is now
+built, build-tested (`npm run build` passes), and this session went on
+to work through a large follow-up round of user feedback on top of it.
+None of this has been manually tested in the running app by Claude - the
+user is doing all testing themselves this session; every item below was
+only verified via `npm run build` passing after each change.
+
+### 1. Beginning Balances multi-line rework (BeginningBalancesPanel.jsx)
+
+`PilesBeginningBalances`'s single bags/kilos/condition/purity/moisture/
+mtsSackTypeId/mtsCondition scalars replaced with a `lines` array state -
+`emptyLine()`/`updateLine`/`addLine`/`removeLine`, mirroring the existing
+repeatable-line pattern in SackFormBase.jsx. `handleEdit` now loads every
+`isInitialBalance` seed transaction for a pile as its own line (was
+`.first()`, now `.toArray()`); `handleSave` reconciles the line list
+against `originalSeedIds` captured at load time - updates matching
+`txId`s, creates new seed transactions for new lines (unique serials via
+`INIT-{pileId}-{index}`, was colliding before), deletes seeds for
+removed lines. Pile-level condition/purity/moisture/mtsSackTypeId/
+mtsCondition fields still get written (sourced from `lines[0]`) since
+Piles.jsx/pileLayoutPdfGenerator.js/StockFormBase.jsx read them as
+display/prefill defaults - no longer treated as authoritative for
+beginning-balance reporting now that a pile can have multiple lines.
+
+Follow-up: each line also got its own "Date Received" field (previously
+a single shared "As of" date) - same reasoning as the sack-weight split,
+a pile's beginning-balance lines can genuinely have been received on
+different real dates.
+
+### 2. Zero-value overview rows hidden (HomeStocks.jsx)
+
+A cereal type or variety fully drawn down to 0 bags/kilos no longer
+renders an empty card - filtered out at both the cereal-type
+(`sortedGroups`) and variety (`Object.entries(byVariety)`) level.
+
+### 3. Unwithdrawn stock + potential inventory (new: unwithdrawnStock.js, UnwithdrawnDetailModal.jsx)
+
+New concept: stock already authorized via an active AI but with no
+matching WSI/WTS withdrawal yet still counts in a pile's live bags, but
+is already committed to leave - `computeUnwithdrawnByVariety(warehouseId)`
+sums, per varietyId, `max(0, totalAllocationBags/Kilos - withdrawn)`
+across every active AI assigned to that warehouse (withdrawn = WSI
+numberOfBags/netKilos + WTS issuedBags/issuedNetKilos, status Active).
+Deliberately AI/WSI/WTS/bags-kilos only - SIA/ESI tracks sack pieces, a
+different unit, out of scope for this figure.
+
+Surfaced in HomeStocks.jsx (per variety row, and rolled up to the
+cereal-type Total row - deduped by varietyId so a sack-weight-split
+variety doesn't get double-counted) and AdminHomeStocks.jsx (rolled up
+to warehouse+category, since that page has no per-variety breakdown) as
+a small red badge next to the bags/net-bags total: "{amount} unwithdrawn"
++ a quiet amber "Potential: {actual - unwithdrawn}" line underneath.
+Iterated through a few display revisions per user feedback:
+- Started as full stacked red/amber text lines - too noisy; collapsed to
+  the current inline-badge form (design option "B" of four mocked-up
+  alternatives, user picked it).
+- Badge/potential amounts must track whichever unit the row is currently
+  showing (Bags vs Net Bags toggle in HomeStocks; kg vs MT in
+  AdminHomeStocks, via its existing `fmt()` helper) - was previously
+  always raw bag-count, mislabeled "net bags" on the admin page.
+  Guarded against a badge that rounds down to "0" (e.g. a few stray
+  kilos of float drift showing "0.00 unwithdrawn") by checking the
+  rounded display value, not just `> 0`.
+
+Tapping the badge opens `UnwithdrawnDetailModal.jsx`
+(`getUnwithdrawnDetail(warehouseId, varietyIds)` in unwithdrawnStock.js)
+- a bottom-sheet modal (matches the rest of the app's modal style, not a
+full-page push panel) showing a summary (Authorized/Withdrawn/Unwithdrawn,
+all in net bags) plus every contributing AI as its own card: variety,
+customer name, allocated/withdrawn/unwithdrawn (net bags), and every
+WSI/WTS document withdrawn against it (type, serial - shown larger/
+bolder now, date, variety, customer name, net bags). A card whose AI is
+now fully withdrawn (rounds to 0 unwithdrawn) gets a green border instead
+of red, shows "{amount} withdrawn" in green as its primary figure instead
+of "0.00 unwithdrawn" in red, and drops the now-redundant "· withdrawn"
+from its secondary line (just shows "{amount} allocated").
+
+### 4. AdminMonitoring.jsx sticky layout
+
+Tab bar (AI/SIA/MILLING) + search bar + "Completed" button + regional-
+authority `<select>` merged into one sticky container (`sticky top-16`)
+instead of two separately `top`-offset sticky elements - fixes cramped
+spacing between them and stops the regional-authority selector from
+scrolling out of reach once tabs+search became sticky.
+
+### 5. AdminHomeStocks.jsx tabs
+
+"Stock Breakdown — Warehouse & Category" and "Stock Age Grouping"
+sections split into their own tabs (mirrors the sliding-pill pattern
+used elsewhere) instead of one long scrolling page.
+
+### 6. BIN card "Transaction" column (pileBinCardGenerator.js)
+
+Root cause of the "just shows Receipt/Issuance" complaint: the column
+was reading `t.transactionTypeName`, a field that does not exist on raw
+transaction records (only `transactionTypeId` does) - so it always fell
+back to the literal `'Receipt'`/`'Issuance'` strings. Fixed by resolving
+the real `transactionTypeId -> name` (Procurement, Milling, Sales, etc)
+via a `transactionTypeMap` built from `db.transactionTypes` and threaded
+into `generatePileBinCard`/`buildLedgerRows` from all three call sites
+(BeginningBalancesPanel.jsx, Piles.jsx, Settings.jsx).
+
+### 7. WS/MPO address fixes (customerDirectory.js, CustomerNameAutocomplete.jsx)
+
+Addresses on WS/MPO suggestions now prefixed with the warehouse's own
+name/GID (via `stripWarehouseCodePrefix`), e.g. "Tabaco GID, Tabaco
+City, Albay" instead of just "Tabaco City, Albay".
+
+Real bug found and fixed while verifying this worked end-to-end:
+`CustomerNameAutocomplete.jsx`'s effect ran `searchWarehouseSupervisors`/
+`searchMpoUsers` AND `findCustomerByName` in parallel on every keystroke
+(including the one fired right after selecting a suggestion, since
+selecting it changes the `value` prop). If a `db.customers` record
+already existed under that exact WS/MPO name (near-certain in a real,
+actively-used warehouse - any prior transaction typed as that name would
+have saved one), `findCustomerByName` would resolve second and silently
+overwrite the just-picked, correctly-prefixed address with whatever
+stale address that old record held. Fixed by only running
+`findCustomerByName` once WS/MPO suggestions are confirmed empty for the
+current value, instead of unconditionally in parallel.
+
+This fix alone worked for WS but not MPO - second bug: `MPO_PREFIX_PATTERN`
+(`/^mpo\s*(.*)$/i`) only stripped the leading "mpo" token, not the "III"
+rank suffix that's always part of the generated suggestion label ("MPO
+III Name" / "Acting MPO III Name") - so re-parsing that exact label after
+selection never matched, `mpoMatches.length` came back 0, and the guard
+above silently never engaged for MPO. Fixed the regex to
+`/^(acting\s+)?mpo(?:\s*iii)?\.?\s*(.*)$/i` (also added "acting" support,
+which the old pattern lacked entirely) and updated the destructure for
+the new capture group.
+
+### 8. MillingMonitor.jsx detail modal rework
+
+Recolored to the app's standard Palay/Rice/By-Products convention
+(brand-neon/blue-400/brand-byproduct, matching HomeStocks.jsx's
+`categoryColor`) instead of an ad hoc issue/receive neon/amber palette.
+Split into Stocks/Sacks tabs (was one flat merged transaction-history
+list) - each tab groups Issued/Received separately, then by cereal
+category (Stocks) or sack type (Sacks) within each. Sacks tab no longer
+shows a blank "Variety" field (sack transactions have no varietyId) -
+shows sack type code + condition per `sackLines[]` entry instead.
+
+### 9. Save/update/delete freeze root-caused and fixed (googleSheetsBridge.js, StockFormBase.jsx, SackFormBase.jsx)
+
+User-reported symptom: UI freezes up to 3 minutes on every save/update/
+delete, success toast only appears after, and sometimes the just-saved
+record doesn't show as saved when the user navigates back (worst case: a
+new transaction's series still shows as open for new entries).
+
+Root cause found via code inspection (not live profiling): every
+`fetch()` call to the Google Apps Script backend in googleSheetsBridge.js
+had no timeout - a stalled Apps Script request (cold start, execution-
+quota contention) holds the connection open with no upper bound, and the
+browser's own connection timeout can be several minutes. `validate()`'s
+`fetchTransactionBySerial` duplicate-serial check runs synchronously
+before every new-record save; `postToSheetsWithRetry` (used by the
+backup push/update/delete functions) compounds this over up to 3
+attempts. Dexie Cloud sync itself was already correctly local-first
+(`requireAuth: false`, fire-and-forget `login()`, confirmed via
+`db.cloud.configure()` in dexie.js) and was NOT the bottleneck.
+
+Fix: added `fetchWithTimeout` (8s cap via AbortController) in
+googleSheetsBridge.js, used by every fetch in that file (`sed`-replaced
+all `await fetch(` call sites, verified the wrapper's own internal fetch
+call wasn't touched). Also made the "mark milling order done" Sheet
+side-effect calls in StockFormBase.jsx/SackFormBase.jsx fire-and-forget
+(not awaited) instead of blocking the success toast, matching the
+existing pattern already used for `queueTransactionDeletion` on delete
+(which had an explicit comment: "fire-and-forget - local delete is
+already done, don't make the UI wait on the network"). WTSForm.jsx's
+save/update/delete handlers were already fully local/fast, no changes
+needed there.
+
+### Next step for whoever picks this up
+
+Nothing in-progress was left mid-build this session. Still open from the
+prior session, unrelated to any of the above: the -355 bags PD1-A
+(0.095) persistent balance for warehouse CTD-GID 2 - user has not yet
+confirmed whether that warehouse's Settings > Warehouses > Reports Start
+Date field is actually populated. User is testing everything above
+themselves; nothing here has been clicked through in the running app by
+Claude.
