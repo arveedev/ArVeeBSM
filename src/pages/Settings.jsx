@@ -316,10 +316,13 @@ function PileBalanceSection({ warehouseId }) {
       .where('type').equals('WTS')
       .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
       .toArray()
+    const transactionTypes = await db.transactionTypes.toArray()
+    const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
 
     const doc = generatePileBinCard({
       warehouse, branch, pile, variety,
       transactions: [...allPileTransactions, ...wtsTransfers],
+      transactionTypeMap,
     })
     doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
   }

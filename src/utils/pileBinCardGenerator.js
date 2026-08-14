@@ -35,7 +35,7 @@ const fmtDate = (s) => {
  * entirely - a cancelled document never happened as far as the
  * pile's real stock movement is concerned.
  */
-const buildLedgerRows = (pile, transactions) => {
+const buildLedgerRows = (pile, transactions, transactionTypeMap) => {
   const relevant = transactions.filter((t) => {
     if (t.status === 'Cancelled') return false
     if (t.type === 'WTS') return t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId
@@ -64,25 +64,25 @@ const buildLedgerRows = (pile, transactions) => {
       receiptBags = t.numberOfBags ?? 0
       receiptKilos = t.netKilos ?? 0
     } else if (t.type === 'WSR') {
-      type = t.transactionTypeName ?? 'Receipt'
+      type = transactionTypeMap?.get(t.transactionTypeId) ?? t.type
       customer = t.customerName ?? ''
       reference = t.serialNo ?? ''
       receiptBags = t.numberOfBags ?? 0
       receiptKilos = t.netKilos ?? 0
     } else if (t.type === 'WSI') {
-      type = t.transactionTypeName ?? 'Issuance'
+      type = transactionTypeMap?.get(t.transactionTypeId) ?? t.type
       customer = t.customerName ?? ''
       reference = t.serialNo ?? ''
       issueBags = t.numberOfBags ?? 0
       issueKilos = t.netKilos ?? 0
     } else if (t.type === 'WTS' && t.receivedPileId === pile.pileId) {
-      type = 'Transfer In'
+      type = transactionTypeMap?.get(t.transactionTypeId) ?? t.type
       customer = ''
       reference = t.serialNo ?? ''
       receiptBags = t.receivedBags ?? 0
       receiptKilos = t.receivedNetKilos ?? 0
     } else if (t.type === 'WTS' && t.issuedPileId === pile.pileId) {
-      type = 'Transfer Out'
+      type = transactionTypeMap?.get(t.transactionTypeId) ?? t.type
       customer = ''
       reference = t.serialNo ?? ''
       issueBags = t.issuedBags ?? 0
@@ -120,7 +120,7 @@ const buildLedgerRows = (pile, transactions) => {
   return rows
 }
 
-export const generatePileBinCard = ({ warehouse, branch, pile, variety, transactions }) => {
+export const generatePileBinCard = ({ warehouse, branch, pile, variety, transactions, transactionTypeMap }) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
@@ -167,7 +167,7 @@ export const generatePileBinCard = ({ warehouse, branch, pile, variety, transact
   doc.text(variety?.name ?? '', margin + labelW, y)
   y += 7
 
-  const rows = buildLedgerRows(pile, transactions)
+  const rows = buildLedgerRows(pile, transactions, transactionTypeMap)
 
   const body = rows.map((r) => [
     fmtDate(r.date),
