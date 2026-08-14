@@ -9,6 +9,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { normalizeWarehouseAlias } from '../../../utils/warehouseMatching.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import {
   inputClass,
   labelClass,
@@ -224,12 +225,25 @@ function WarehousesPanel() {
 
         <div>
           <label className={labelClass}>Reports Start Date</label>
-          <input
-            type="date"
-            value={reportingCutoffDate}
-            onChange={(e) => setReportingCutoffDate(e.target.value)}
-            className={inputClass}
-          />
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <CalendarDatePicker
+                value={reportingCutoffDate}
+                onChange={setReportingCutoffDate}
+                required={false}
+                placeholder="No cutoff set"
+              />
+            </div>
+            {reportingCutoffDate && (
+              <button
+                type="button"
+                onClick={() => setReportingCutoffDate('')}
+                className="shrink-0 rounded-lg px-2 py-1 text-xs text-neutral-400 hover:text-app-text"
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <p className="mt-1 text-xs text-neutral-500">
             Any data dated before this excludes from reports entirely (beginning balances still count). Leave blank to include all data regardless of date.
           </p>
