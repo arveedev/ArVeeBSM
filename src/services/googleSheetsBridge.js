@@ -114,6 +114,22 @@ const getActiveSheetSource = async () => {
 
 const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false
 
+// Google Apps Script Web Apps can stall for a very long time (cold
+// start, execution-quota contention) while holding the connection open
+// the whole time - a bare fetch() with no timeout then hangs the
+// awaiting caller for however long the browser's own connection timeout
+// happens to be (observed: up to several minutes), freezing the UI for
+// a plain local save/delete that has nothing left to do but this one
+// best-effort Sheet call. Every fetch to a Sheet endpoint in this file
+// goes through this wrapper so no single call can hang longer than
+// TIMEOUT_MS, regardless of what the server does.
+const FETCH_TIMEOUT_MS = 8000
+const fetchWithTimeout = (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer))
+}
+
 /**
  * Fetches AI or SIA rows from one sheet source, using its own
  * lastSyncedAt for a delta request when available (first sync for a
@@ -130,7 +146,7 @@ const fetchMillingOrderRows = async (source, type) => {
   url.searchParams.set('sheet', sheetName)
   url.searchParams.set('type', type)
 
-  const response = await fetch(url.toString())
+  const response = await fetchWithTimeout(url.toString())
   if (!response.ok) {
     throw new Error(`Sheet request failed (${response.status})`)
   }
@@ -154,7 +170,7 @@ const fetchAuthorityRows = async (source, type) => {
     url.searchParams.set('modifiedSince', source.lastSyncedAt)
   }
 
-  const response = await fetch(url.toString())
+  const response = await fetchWithTimeout(url.toString())
   if (!response.ok) {
     throw new Error(`Sheet request failed (${response.status})`)
   }
@@ -309,7 +325,7 @@ export const markMillingOrderDone = async (type, number) => {
   if (!sheetName) return { ok: false, reason: 'not_configured' }
 
   try {
-    const response = await fetch(source.webAppUrl, {
+    const response = await fetchWithTimeout(source.webAppUrl, {
       method: 'POST',
       body: JSON.stringify({ action: 'markMillingOrderDone', sheet: sheetName, number }),
     })
@@ -814,7 +830,7 @@ const postToSheetsWithRetry = async (url, body, maxAttempts = 3) => {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method: 'POST',
         // Content-Type is deliberately text/plain, NOT application/json -
         // Google Apps Script Web Apps don't handle CORS preflight (OPTIONS)
@@ -1173,7 +1189,7 @@ export const fetchTransactionBySerial = async (type, warehouseName, serialNo) =>
     url.searchParams.set('warehouseValue', warehouseName ?? '')
 
     try {
-      const response = await fetch(url.toString())
+      const response = await fetchWithTimeout(url.toString())
       if (!response.ok) {
         console.error(`fetchTransactionBySerial: HTTP ${response.status} for ${type} #${serialNo} on sheet "${sheetName}"`)
         continue
@@ -1222,7 +1238,7 @@ export const fetchSerialFloorFromSheet = async (type, warehouseName) => {
     url.searchParams.set('warehouseValue', warehouseName ?? '')
 
     try {
-      const response = await fetch(url.toString())
+      const response = await fetchWithTimeout(url.toString())
       if (!response.ok) {
         console.error(`fetchSerialFloorFromSheet: HTTP ${response.status} for ${type} on sheet "${sheetName}"`)
         continue
@@ -1271,7 +1287,7 @@ export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSinc
     if (modifiedSince) url.searchParams.set('modifiedSince', modifiedSince)
 
     try {
-      const response = await fetch(url.toString())
+      const response = await fetchWithTimeout(url.toString())
       if (!response.ok) {
         console.error(`fetchTransactionsBulk: HTTP ${response.status} for ${type} on sheet "${sheetName}"`)
         return { sourceId: source.id, ok: false, rows: [] }
@@ -1320,7 +1336,7 @@ export const markRowsSeen = async (type, sourceId, serialNumbers) => {
     const sheetName = source?.[sheetNameKey]
     if (!source || !sheetName) return
 
-    await fetch(source.webAppUrl, {
+    await fetchWithTimeout(source.webAppUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({

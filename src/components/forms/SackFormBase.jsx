@@ -762,7 +762,10 @@ const SackFormBase = forwardRef(function SackFormBase(
         trialTx.filter((t) => (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0) > 0).map((t) => t.trialNumber)
       )
       if (['1', '2', '3'].every((n) => recoveredTrials.has(n))) {
-        await markMillingOrderDone('TMO', tmoNumber.trim())
+        // Fire-and-forget - the transaction itself is already saved
+        // locally; marking the Sheet's TMO row DONE is a best-effort
+        // side effect that shouldn't make the user wait on the network.
+        markMillingOrderDone('TMO', tmoNumber.trim())
       }
     }
 
@@ -778,7 +781,8 @@ const SackFormBase = forwardRef(function SackFormBase(
         const receivedPieces = moTx.filter((t) => t.type === 'ESR').reduce((s, t) => s + sumPieces(t), 0)
         const expectedPieces = issuedPieces * (order.recoveryPercent / 100)
         if (expectedPieces > 0 && receivedPieces >= expectedPieces) {
-          await markMillingOrderDone('MO', moNumber.trim())
+          // Fire-and-forget - same reasoning as the TMO case above.
+          markMillingOrderDone('MO', moNumber.trim())
         }
       }
     }
