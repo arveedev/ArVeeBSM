@@ -7,6 +7,11 @@ v13, said Home.jsx split was never done, said the pile layout grid was
 failure. Everything below reflects verified actual current state, not
 an accumulated/appended log (that's docs/activity-log.md's job).
 
+2026-08-14 addendum: added a new top-of-section entry under "In Progress
+/ Not Yet Done" for the sack-weight (MTS) reporting fix currently
+mid-implementation - read that section first, it is the most current
+open work. Rest of this file not otherwise re-verified this pass.
+
 ## Tech Stack
 - Vite + React, Tailwind CSS
 - Full dark/light theme system: brute-force CSS class overrides scoped
@@ -517,6 +522,74 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
+### DONE (2026-08-14 session) - sack weight (MTS) fix, plus a full pilot-feedback batch
+
+Full detail in docs/activity-log.md's entries for this date - read those
+first for exact file/line references. Summary here for quick orientation.
+
+The sack-weight (MTS) reporting fix from the previous session's handoff
+is now COMPLETE and built on top of: BeginningBalancesPanel.jsx's Piles
+tab is now a repeatable list of lines per pile (each its own bags/kilos/
+condition/sack-weight/date-received), fixing the original "a pile can
+have two real sack weights" bug. Reports.jsx needed no changes, as
+predicted.
+
+Same session also worked through a large follow-up feedback batch:
+- Zero-value cereal/variety rows now hidden from HomeStocks.jsx/
+  AdminHomeStocks.jsx instead of lingering as empty cards.
+- New "unwithdrawn stock" feature (src/utils/unwithdrawnStock.js): per
+  warehouse per variety, shows how much AI-authorized stock hasn't
+  actually been withdrawn yet (WSI/WTS), so live bags don't overstate
+  what's really available. Shown as a small badge next to the bags total
+  (HomeStocks + AdminHomeStocks); tapping it opens
+  UnwithdrawnDetailModal.jsx, a modal breaking down every contributing
+  AI and its WSI/WTS documents, all in net bags. Currently AI/WSI/WTS
+  only - SIA/ESI tracks pieces, a different unit, deliberately out of
+  scope for this figure.
+- AdminMonitoring.jsx: tab bar + search + regional-authority selector
+  merged into one sticky block (was two separately-offset sticky
+  elements, cramped and dropping the authority selector off-screen).
+- AdminHomeStocks.jsx: Stock Breakdown and Stock Age Grouping split into
+  their own tabs instead of one long page.
+- pileBinCardGenerator.js: BIN card "Transaction" column was reading a
+  nonexistent `t.transactionTypeName` field (always fell back to literal
+  "Receipt"/"Issuance") - now resolves the real transactionTypeId ->
+  name (Procurement, Milling, Sales, etc) via a map threaded in from all
+  three callers (BeginningBalancesPanel.jsx, Piles.jsx, Settings.jsx).
+- customerDirectory.js: WS/MPO suggestion addresses now prefixed with
+  the warehouse's own name/GID. Also found and fixed a real race in
+  CustomerNameAutocomplete.jsx - selecting a WS/MPO suggestion could get
+  its address immediately overwritten by a second `findCustomerByName`
+  lookup matching a stale db.customers record saved under the same name;
+  fixed by only running that lookup once WS/MPO suggestions are ruled
+  out. The MPO_PREFIX_PATTERN regex also didn't strip "III" from its own
+  generated label ("MPO III Name"), which silently broke this guard for
+  MPO specifically even after the WS fix landed - both now fixed.
+- MillingMonitor.jsx: detail modal recolored to the app's standard
+  Palay/Rice/By-Products palette, split into Stocks/Sacks tabs (each
+  grouped Issued/Received -> category), Sacks tab no longer shows a
+  blank Variety field (sacks have no variety - shows sack type +
+  condition instead).
+- Root-caused the "save/delete freezes for up to 3 minutes" bug:
+  googleSheetsBridge.js's fetch() calls to the Apps Script backend had
+  no timeout and could hang indefinitely holding the connection open;
+  postToSheetsWithRetry compounded this over 3 attempts. Added a shared
+  fetchWithTimeout wrapper (8s cap) used by every fetch in that file, and
+  made the "mark milling order done" side-effect calls in
+  StockFormBase.jsx/SackFormBase.jsx fire-and-forget instead of blocking
+  the success toast, matching the pattern already used for deletes.
+  Dexie Cloud sync itself was already correctly local-first
+  (requireAuth: false) - it was never the actual bottleneck.
+
+STILL OPEN from the prior session, unrelated to the above and not
+re-investigated this session:
+- The -355 bags PD1-A (0.095) persistent balance for warehouse CTD-GID 2
+  - user has not yet confirmed whether that warehouse's Settings >
+    Warehouses > Reports Start Date field is actually populated.
+- User is doing all testing themselves (explicit instruction this
+  session) - none of the above has been manually verified in the running
+  app beyond `npm run build` passing after every change.
+
 ### MASSIVE BACKLOG FROM PILOT TESTING FEEDBACK (2026-07-30) - work through in this priority order
 
 This was a single very large feedback message after real pilot testing.
@@ -805,6 +878,17 @@ itself. Applies to every inline validation message going forward, not
 just the ones already built.
 
 ## Known Issues
+- DEV ENVIRONMENT: `npm run dev` (plain Vite) does NOT serve
+  api/dexie-cloud-tokens.js (a Vercel serverless function) - causes a 404
+  there and a Dexie Cloud login failure. Use `npx vercel dev` instead
+  (project already linked via .vercel/). First run of vercel dev may also
+  hit a CORS error from the Dexie Cloud sync endpoint if the dev port
+  (vercel dev defaults to 3000, different from Vite's own 5173) isn't on
+  the database's allowed-origins list - fix with
+  `npx dexie-cloud whitelist http://localhost:3000` from the repo root.
+  This project's Dexie Cloud database has no separate dev/staging
+  instance - both `vercel dev` and `npm run dev` sync against the real
+  production database, not a sandbox.
 - FIXED but important context: the SIA architecture rework (one record
   per SIA number instead of per sack-type) needed every existing SIA
   row to be reprocessed, but the delta-sync optimization
