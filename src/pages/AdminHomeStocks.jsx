@@ -5,6 +5,7 @@
 // "Net bags" = pile.currentKilos / 50, the live running total on each
 // pile, not a re-derivation from transaction history.
 
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
@@ -12,11 +13,18 @@ import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
 import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
+import { computeUnwithdrawnByVariety } from '../utils/unwithdrawnStock.js'
+import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
+const BREAKDOWN_TABS = ['Breakdown', 'Age Grouping']
 
 function AdminHomeStocks({ onWarehouseSelect }) {
   const { autoAgeMonitoring, weightUnit } = useSettings() ?? {}
+  const [breakdownTab, setBreakdownTab] = useState('Breakdown')
+  // { warehouseId, varietyIds, title, subtitle } for the unwithdrawn
+  // drill-down modal, or null when closed.
+  const [detailContext, setDetailContext] = useState(null)
 
   // netBags is bags-of-50kg. When the toggle is set to MT, it converts
   // back to kilos (× 50, the confirmed inverse of bags = kilos / 50)
@@ -28,6 +36,28 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   const provinces = useLiveQuery(() => db.provinces.toArray(), []) ?? []
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const piles = useLiveQuery(() => db.piles.toArray(), []) ?? []
+  const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
+  const varietyCategoryMap = new Map(varieties.map((v) => [v.varietyId, v.category]))
+
+  // Same "authorized but not yet withdrawn" concept as HomeStocks, here
+  // rolled up to warehouse+category (this page has no per-variety
+  // breakdown) - warehouseId -> category -> unwithdrawn net bags. Kept
+  // in kilos internally (not the separate bag-count field) so it can be
+  // formatted the same way as the rest of this page - net bags, or MT
+  // when that's the active weight unit.
+  const unwithdrawnByWarehouse = useLiveQuery(async () => {
+    const result = new Map()
+    for (const w of warehouses) {
+      const byVariety = await computeUnwithdrawnByVariety(w.warehouseId)
+      const byCategory = new Map()
+      for (const [varietyId, uw] of byVariety) {
+        const cat = varietyCategoryMap.get(varietyId) ?? 'Unknown'
+        byCategory.set(cat, (byCategory.get(cat) ?? 0) + uw.kilos / 50)
+      }
+      result.set(w.warehouseId, byCategory)
+    }
+    return result
+  }, [warehouses, varieties]) ?? new Map()
 
   const provinceMap = new Map(provinces.map((p) => [p.provinceId, p]))
 
@@ -103,6 +133,24 @@ function AdminHomeStocks({ onWarehouseSelect }) {
         })()}
       </Section>
 
+      <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+        <div
+          className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+          style={{ transform: breakdownTab === BREAKDOWN_TABS[0] ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+        />
+        {BREAKDOWN_TABS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setBreakdownTab(t)}
+            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${breakdownTab === t ? 'text-brand-contrast' : 'text-neutral-400'}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {breakdownTab === 'Breakdown' && (
       <Section title="Stock Breakdown — Warehouse & Category">
         {sortedWarehouses.length === 0 ? <Empty /> : (
           <div className="space-y-4">
@@ -133,10 +181,39 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                           .reduce((s, p) => s + p.netBags, 0)
                         if (sum === 0) return null
                         const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
+                        const unwithdrawnNetBags = unwithdrawnByWarehouse.get(warehouse.warehouseId)?.get(cat) ?? 0
+                        // Guard against a rounds-to-zero badge (see HomeStocks.jsx
+                        // for the same reasoning) - only flag rows with a
+                        // genuinely meaningful unwithdrawn amount.
+                        const hasUnwithdrawn = unwithdrawnNetBags >= 0.005
+                        const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
                         return (
                           <tr key={cat} className="border-b border-neutral-800/50">
                             <Td><span className={`font-semibold ${colorClass}`}>{cat}</span></Td>
-                            <Td right><span className={`text-base font-bold ${colorClass}`}>{fmt(sum)}</span></Td>
+                            <Td right>
+                              <span className={`text-base font-bold ${colorClass}`}>
+                                {fmt(sum)}
+                                {hasUnwithdrawn && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDetailContext({
+                                      warehouseId: warehouse.warehouseId,
+                                      varietyIds: catVarietyIds,
+                                      title: `${cat} — Unwithdrawn`,
+                                      subtitle: `${province?.code} · ${stripWarehouseCodePrefix(warehouse.name)}`,
+                                    })}
+                                    className="ml-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
+                                  >
+                                    {fmt(unwithdrawnNetBags)} unwithdrawn
+                                  </button>
+                                )}
+                              </span>
+                              {hasUnwithdrawn && (
+                                <div className="mt-0.5 text-[11px]">
+                                  <span className="text-brand-amber">Potential: {fmt(Math.max(0, sum - unwithdrawnNetBags))}</span>
+                                </div>
+                              )}
+                            </Td>
                           </tr>
                         )
                       })}
@@ -148,7 +225,9 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           </div>
         )}
       </Section>
+      )}
 
+      {breakdownTab === 'Age Grouping' && (
       <Section title="Stock Age Grouping">
         {sortedProvinces.length === 0 ? <Empty /> : (
           <div className="space-y-6">
@@ -256,6 +335,16 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           </div>
         )}
       </Section>
+      )}
+      {detailContext && (
+        <UnwithdrawnDetailModal
+          warehouseId={detailContext.warehouseId}
+          varietyIds={detailContext.varietyIds}
+          title={detailContext.title}
+          subtitle={detailContext.subtitle}
+          onClose={() => setDetailContext(null)}
+        />
+      )}
     </>
   )
 }
