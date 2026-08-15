@@ -360,8 +360,12 @@ function Reports() {
       {/* Both tab panels stay mounted (visibility toggled via `hidden`,
           not conditional rendering) - switching tabs re-mounting
           DailySummaryCard's useLiveQuery would otherwise briefly flash
-          an empty state, same fix applied elsewhere this session. */}
-      <div className={`mt-5 ${pageTab === 'summary' ? '' : 'hidden'}`}>
+          an empty state, same fix applied elsewhere this session.
+          animate-flow-down is unconditional (not retriggered via a key)
+          - toggling `hidden` (display:none) already resets a CSS
+          animation on its own, so it replays every time this panel
+          becomes visible again without needing to remount anything. */}
+      <div className={`mt-5 animate-flow-down ${pageTab === 'summary' ? '' : 'hidden'}`}>
         <div className="mt-2 grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs text-neutral-500">From</label>
@@ -384,7 +388,7 @@ function Reports() {
       </div>
 
       {/* ── Stock Statement ─────────────────────────────────────────────── */}
-      <div className={`mt-5 ${pageTab === 'statement' ? '' : 'hidden'}`}>
+      <div className={`mt-5 animate-flow-down ${pageTab === 'statement' ? '' : 'hidden'}`}>
         <div className="flex items-center justify-end">
           <button type="button" onClick={handleExportPdf}
             disabled={isExporting || needsDates}
