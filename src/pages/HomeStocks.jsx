@@ -211,8 +211,11 @@ function CerealTotal({
   }, [hasUnwithdrawn])
 
   return (
-    <div className={`mt-3 rounded-lg border-t-2 px-2 py-2 [perspective:600px] ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}>
-      <div key={flipKey} className="animate-card-flip">
+    <div className="mt-3 [perspective:600px]">
+      <div
+        key={flipKey}
+        className={`animate-card-flip rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}
+      >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
           <span className={`truncate text-sm font-bold ${color}`}>Total ({cerealType})</span>
           <div className="text-right">

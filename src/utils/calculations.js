@@ -63,6 +63,21 @@ export const todayLocalISO = () => {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * Today minus N days, as a local-timezone ISO date - used when a
+ * manual age correction should back-date the anchor (dateOfReceipt)
+ * rather than resetting it to today, so "Date Received" keeps reading
+ * as a real date the age counts from instead of always showing today.
+ */
+export const localISODaysAgo = (days) => {
+  const d = new Date()
+  d.setDate(d.getDate() - Math.round(days || 0))
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 /**
