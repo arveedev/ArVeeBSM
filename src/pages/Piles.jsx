@@ -1112,8 +1112,24 @@ function Piles() {
           // one is tall: title + up to 7 field rows) overflows past a
           // fixed-width edge box sized for its pre-rotation shape.
           const useCenterAnchor = isFullScreen && isPortrait
+          // The anchor point itself needs clamping away from the
+          // screen edges, not just the box's own position - centering
+          // is only overflow-proof against the popup's OWN edges, not
+          // the viewport's. A box near a screen edge (e.g. the top-left
+          // of the grid) still pushed the rotated popup half off-screen.
+          // ROTATED_HALF_HEIGHT_ESTIMATE is a conservative half-height
+          // for the popup's pre-rotation height (title + up to 7 fields
+          // + a button row can run to ~360-400px) - exact content
+          // height varies, so this errs generous rather than risk still
+          // clipping a taller card.
+          const ROTATED_HALF_WIDTH = popupWidth / 2
+          const ROTATED_HALF_HEIGHT_ESTIMATE = 200
           const positionStyle = useCenterAnchor
-            ? { position: 'fixed', left: (viewportLeft + viewportRight) / 2, top: (viewportTop + viewportBottom) / 2 }
+            ? {
+                position: 'fixed',
+                left: Math.min(Math.max((viewportLeft + viewportRight) / 2, ROTATED_HALF_HEIGHT_ESTIMATE + 8), window.innerWidth - ROTATED_HALF_HEIGHT_ESTIMATE - 8),
+                top: Math.min(Math.max((viewportTop + viewportBottom) / 2, ROTATED_HALF_WIDTH + 8), window.innerHeight - ROTATED_HALF_WIDTH - 8),
+              }
             : {
                 position: 'fixed',
                 ...(isRightHalf
@@ -1212,8 +1228,24 @@ function Piles() {
           // to overflow past in the first place, regardless of how the
           // rotated footprint's dimensions come out.
           const useCenterAnchor = isFullScreen && isPortrait
+          // The anchor point itself needs clamping away from the
+          // screen edges, not just the box's own position - centering
+          // is only overflow-proof against the popup's OWN edges, not
+          // the viewport's. A box near a screen edge (e.g. the top-left
+          // of the grid) still pushed the rotated popup half off-screen.
+          // ROTATED_HALF_HEIGHT_ESTIMATE is a conservative half-height
+          // for the popup's pre-rotation height (title + up to 7 fields
+          // + a button row can run to ~360-400px) - exact content
+          // height varies, so this errs generous rather than risk still
+          // clipping a taller card.
+          const ROTATED_HALF_WIDTH = popupWidth / 2
+          const ROTATED_HALF_HEIGHT_ESTIMATE = 200
           const positionStyle = useCenterAnchor
-            ? { position: 'fixed', left: (viewportLeft + viewportRight) / 2, top: (viewportTop + viewportBottom) / 2 }
+            ? {
+                position: 'fixed',
+                left: Math.min(Math.max((viewportLeft + viewportRight) / 2, ROTATED_HALF_HEIGHT_ESTIMATE + 8), window.innerWidth - ROTATED_HALF_HEIGHT_ESTIMATE - 8),
+                top: Math.min(Math.max((viewportTop + viewportBottom) / 2, ROTATED_HALF_WIDTH + 8), window.innerHeight - ROTATED_HALF_WIDTH - 8),
+              }
             : {
                 position: 'fixed',
                 ...(isRightHalf
