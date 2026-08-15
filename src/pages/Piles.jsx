@@ -475,24 +475,34 @@ function Piles() {
   }
 
   const handleExportPileBinCard = async (pile) => {
-    const province = currentWarehouse?.provinceId ? await db.provinces.get(currentWarehouse.provinceId) : null
-    const branch = province?.branchId ? await db.branches.get(province.branchId) : null
-    const variety = varietyMap.get(pile.varietyId)
+    // Previously had no error handling at all - any failure (a thrown
+    // error inside generatePileBinCard, or doc.save() itself) rejected
+    // silently with no visible feedback, matching the reported symptom
+    // of the button just "not functioning." Same fix already applied
+    // to handleSave above.
+    try {
+      const province = currentWarehouse?.provinceId ? await db.provinces.get(currentWarehouse.provinceId) : null
+      const branch = province?.branchId ? await db.branches.get(province.branchId) : null
+      const variety = varietyMap.get(pile.varietyId)
 
-    const allPileTransactions = await db.transactions.where('pileId').equals(pile.pileId).toArray()
-    const wtsTransfers = await db.transactions
-      .where('type').equals('WTS')
-      .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
-      .toArray()
-    const transactionTypes = await db.transactionTypes.toArray()
-    const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
+      const allPileTransactions = await db.transactions.where('pileId').equals(pile.pileId).toArray()
+      const wtsTransfers = await db.transactions
+        .where('type').equals('WTS')
+        .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
+        .toArray()
+      const transactionTypes = await db.transactionTypes.toArray()
+      const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
 
-    const doc = generatePileBinCard({
-      warehouse: currentWarehouse, branch, pile, variety,
-      transactions: [...allPileTransactions, ...wtsTransfers],
-      transactionTypeMap,
-    })
-    doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
+      const doc = generatePileBinCard({
+        warehouse: currentWarehouse, branch, pile, variety,
+        transactions: [...allPileTransactions, ...wtsTransfers],
+        transactionTypeMap,
+      })
+      doc.save(`${(pile.pileName || 'Pile').replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
+    } catch (err) {
+      console.error('Failed to export pile BIN card:', err)
+      toast.error('Failed to export BIN card - see console for details')
+    }
   }
 
   const handleExport = async () => {
@@ -919,7 +929,12 @@ function Piles() {
             pixel size regardless of how much the grid itself is shrunk
             to fit the screen. Sized to fit every field at once - never
             truncated - and clamped to stay within this container. */}
-        {hoveredBoxId && hoveredBoxId !== editingBoxId && (() => {
+        {/* Suppressed entirely (not just for the same box) whenever a
+            tap-opened detail popup is showing for ANY box - previously
+            only checked hoveredBoxId !== editingBoxId, so hovering a
+            DIFFERENT box while another box's tap popup was still open
+            would show both at once, overlapping. */}
+        {hoveredBoxId && !editingBoxId && (() => {
           const box = boxes.find((b) => b.id === hoveredBoxId)
           if (!box) return null
           const pile = box.pileId ? pileMap.get(box.pileId) : null
@@ -937,7 +952,12 @@ function Piles() {
             pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
           ].filter(Boolean)
 
-          const popupWidth = 220
+          // 220 was cramped for the field text (especially at the
+          // larger root font-size now used on wider screens) and for
+          // the three-button Move/Delete/Edit row, which is what made
+          // both the hover preview and the tap-opened detail look
+          // squeezed and hard to read.
+          const popupWidth = 264
 
           const screenLeft = (box.colStart - 1) * BASE_CELL_PX * scale
           const screenTop = (box.rowStart - 1) * BASE_CELL_PX * scale
@@ -950,6 +970,15 @@ function Piles() {
           // clipped or need internal scrolling regardless of how short
           // that container is. containerOrigin converts the box's
           // grid-relative position into real screen coordinates.
+          // getBoundingClientRect() always returns coordinates in real,
+          // already-rotated screen space regardless of any transform
+          // on an ancestor (like FullScreenOverlay's portrait rotation)
+          // - so this popup's own position is already correct without
+          // any compensating rotation applied to it. A previous version
+          // additionally rotated the popup itself by 90deg in
+          // full-screen portrait mode, which was actually wrong (this
+          // popup was never inside the rotated container to begin with)
+          // and is what made it appear missing/garbled in that mode.
           const containerRect = containerRef.current?.getBoundingClientRect()
           const containerOrigin = { x: containerRect?.left ?? 0, y: containerRect?.top ?? 0 }
           const viewportLeft = containerOrigin.x + screenLeft
@@ -981,7 +1010,7 @@ function Piles() {
           return createPortal(
             <div
               className="pointer-events-none fixed z-[60] rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
-              style={{ ...positionStyle, width: popupWidth, transform: (isFullScreen && isPortrait) ? 'rotate(90deg)' : undefined }}
+              style={{ ...positionStyle, width: popupWidth }}
             >
               <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>
               {isVacant ? (
@@ -1001,7 +1030,12 @@ function Piles() {
           )
         })()}
 
-        {editingBoxId && !assignForm && !moving && (() => {
+        {/* !pendingDelete - previously this stayed visible while the
+            delete ConfirmDialog was also open (both are portals to
+            document.body at the same z-[60]), so the two overlapped
+            instead of the confirmation cleanly replacing the detail
+            view. */}
+        {editingBoxId && !assignForm && !moving && !pendingDelete && (() => {
           const box = boxes.find((b) => b.id === editingBoxId)
           if (!box) return null
           const pile = box.pileId ? pileMap.get(box.pileId) : null
@@ -1019,7 +1053,12 @@ function Piles() {
             pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
           ].filter(Boolean)
 
-          const popupWidth = 220
+          // 220 was cramped for the field text (especially at the
+          // larger root font-size now used on wider screens) and for
+          // the three-button Move/Delete/Edit row, which is what made
+          // both the hover preview and the tap-opened detail look
+          // squeezed and hard to read.
+          const popupWidth = 264
 
           const screenLeft = (box.colStart - 1) * BASE_CELL_PX * scale
           const screenTop = (box.rowStart - 1) * BASE_CELL_PX * scale
@@ -1053,7 +1092,7 @@ function Piles() {
           return createPortal(
             <div
               className="fixed z-[60] rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
-              style={{ ...positionStyle, width: popupWidth, transform: (isFullScreen && isPortrait) ? 'rotate(90deg)' : undefined }}
+              style={{ ...positionStyle, width: popupWidth }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-2">
