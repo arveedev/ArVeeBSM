@@ -5,8 +5,8 @@
 
 import StockFormBase from './StockFormBase.jsx'
 
-function WSIForm({ onClose, prefill }) {
-  return <StockFormBase type="WSI" title="WSI" onClose={onClose} prefill={prefill} />
+function WSIForm({ onClose, prefill, isOpen }) {
+  return <StockFormBase type="WSI" title="WSI" onClose={onClose} prefill={prefill} isOpen={isOpen} />
 }
 
 export default WSIForm

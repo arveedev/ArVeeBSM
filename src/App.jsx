@@ -23,6 +23,13 @@ import ESRForm from './components/forms/ESRForm.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 import AnimatedToast from './components/common/AnimatedToast.jsx'
+import useDelayedUnmount from './hooks/useDelayedUnmount.js'
+
+// Must match the form's own pop-out exit transition duration (see
+// StockFormBase/SackFormBase/WTSForm) - keeps the form mounted long
+// enough after activeFormType clears for its exit animation to finish
+// playing, instead of it vanishing mid-transition.
+const FORM_EXIT_MS = 350
 
 const FORM_COMPONENTS = {
   WSR: WSRForm,
@@ -56,14 +63,28 @@ function App() {
     }
     previousColumnRef.current = currentColumn ?? previousColumn
   }, [pathname])
+  // Kept mounted for FORM_EXIT_MS after activeFormType clears, so the
+  // form's own pop-out exit transition has time to actually play -
+  // otherwise it would vanish the instant the close button is tapped,
+  // since activeFormType (and thus this conditional render) now clears
+  // immediately rather than waiting for the form's local animation.
+  const shouldRenderForm = useDelayedUnmount(Boolean(activeFormType), FORM_EXIT_MS)
+  // activeFormType itself goes null immediately on close (so the header/
+  // nav bars start sliding back into view right away), but the form
+  // component still needs to know which one to keep rendering during
+  // that trailing exit window - this remembers the last non-null value.
+  const lastFormTypeRef = useRef(null)
+  if (activeFormType) lastFormTypeRef.current = activeFormType
+  const formTypeToRender = activeFormType ?? lastFormTypeRef.current
+
   // The form itself covers the full screen (fixed inset-0), but without
   // this the page behind it is still technically scrollable even though
   // visually hidden - producing two scrollbars side by side on desktop
   // (the form's own internal scroll, and the underlying page's).
   useEffect(() => {
-    document.body.style.overflow = activeFormType ? 'hidden' : ''
+    document.body.style.overflow = shouldRenderForm ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [activeFormType])
+  }, [shouldRenderForm])
   const [activeFormPrefill, setActiveFormPrefill] = useState(null)
 
   const isAdmin = user?.role === 'Admin'
@@ -90,8 +111,14 @@ function App() {
 
   const closeForm = () => {
     setActiveFormType(null)
-    setActiveFormPrefill(null)
   }
+
+  // Prefill data stays around through the trailing exit-animation window
+  // (the form itself doesn't need it updated after its initial load) and
+  // is only cleared once the form has actually finished unmounting.
+  useEffect(() => {
+    if (!shouldRenderForm) setActiveFormPrefill(null)
+  }, [shouldRenderForm])
 
   // Exposed so any page (e.g. an AI/SIA monitoring panel) can deep-link
   // straight into a transaction form pre-filled from an authority record,
@@ -206,12 +233,12 @@ function App() {
                 onClose={() => setTransactionModalOpen(false)}
                 onSelectType={(type) => openForm(type)}
               />
-              {activeFormType &&
+              {shouldRenderForm &&
                 (() => {
-                  const FormComponent = FORM_COMPONENTS[activeFormType]
+                  const FormComponent = FORM_COMPONENTS[formTypeToRender]
                   return (
-                    <SectionErrorBoundary label={`${activeFormType} form`} onClose={closeForm}>
-                      <FormComponent onClose={closeForm} prefill={activeFormPrefill} />
+                    <SectionErrorBoundary label={`${formTypeToRender} form`} onClose={closeForm}>
+                      <FormComponent isOpen={Boolean(activeFormType)} onClose={closeForm} prefill={activeFormPrefill} />
                     </SectionErrorBoundary>
                   )
                 })()}

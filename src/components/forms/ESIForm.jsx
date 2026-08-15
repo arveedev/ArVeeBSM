@@ -5,7 +5,7 @@
 
 import SackFormBase from './SackFormBase.jsx'
 
-function ESIForm({ onClose, prefill }) {
+function ESIForm({ onClose, prefill, isOpen }) {
   return (
     <SackFormBase
       type="ESI"
@@ -13,6 +13,7 @@ function ESIForm({ onClose, prefill }) {
       linkedDocLabel="SIA No."
       onClose={onClose}
       prefill={prefill}
+      isOpen={isOpen}
     />
   )
 }
