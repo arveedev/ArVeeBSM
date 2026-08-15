@@ -48,7 +48,7 @@ const useSquashOnChange = (dep) => {
 export const REGULAR_NAV_COLUMN = { '/': 0, '/piles': 1, '/monitoring': 1, '/reports': 3, '/settings': 4 }
 const VISITOR_NAV_COLUMN = { '/': 0, '/monitoring': 1 }
 
-function BottomNav({ onFabClick }) {
+function BottomNav({ onFabClick, hidden = false }) {
   const { user } = useAuth() ?? {}
   const isAdmin = user?.role === 'Admin'
   const isVisitor = user?.role === 'Visitor'
@@ -64,8 +64,13 @@ function BottomNav({ onFabClick }) {
     return () => cancelAnimationFrame(frame)
   }, [])
 
+  // hidden - stays mounted (so the pill's own interruption-safe
+  // transition logic, see comment below, keeps working correctly)
+  // rather than App.jsx unmounting it, so a transaction form opening
+  // slides it away instead of it just vanishing, coordinated with the
+  // header's own slide and the form's fade.
   const slideStyle = {
-    transform: hasEntered ? 'translateY(0)' : 'translateY(100%)',
+    transform: (hasEntered && !hidden) ? 'translateY(0)' : 'translateY(100%)',
     transition: 'transform 350ms ease-out',
   }
 

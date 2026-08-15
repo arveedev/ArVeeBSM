@@ -203,6 +203,37 @@ function Piles() {
   )
   const longPressTimer = useRef(null)
   const containerRef = useRef(null)
+  const tapPopupRef = useRef(null)
+
+  // Outside-click closes the tap-opened detail popup - previously the
+  // only way to dismiss it was the explicit X button. Checks against
+  // the popup's own DOM node (tapPopupRef) so a click actually inside
+  // it (its own buttons already stopPropagation, but this is a second,
+  // independent safety net) never closes it, and against the tapped
+  // box's own button so re-tapping the SAME box doesn't fight with its
+  // own onClick handler for who gets to decide the next state.
+  useEffect(() => {
+    if (!editingBoxId || assignForm) return
+    const handleOutside = (e) => {
+      const insidePopup = tapPopupRef.current?.contains(e.target)
+      const insideBox = e.target.closest?.('[data-box-id]')
+      if (!insidePopup && !insideBox) setEditingBoxId(null)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('touchstart', handleOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('touchstart', handleOutside)
+    }
+  }, [editingBoxId, assignForm])
+
+  // Both popups' orientation/positioning logic is keyed to isFullScreen
+  // (and isPortrait) - closing them on any full-screen toggle avoids a
+  // popup computed for one mode lingering, stale, into the other.
+  useEffect(() => {
+    setEditingBoxId(null)
+    setHoveredBoxId(null)
+  }, [isFullScreen])
   const [scale, setScale] = useState(1)
   // Pan/zoom, full-screen mode only - the normal view always stays at
   // the auto-fit "see everything" level below, with no manual zoom
@@ -1075,29 +1106,24 @@ function Piles() {
 
           const isRightHalf = viewportLeft > window.innerWidth / 2
           const isBottomHalf = viewportTop > (usableTop + usableBottom) / 2
-          const positionStyle = {
-            position: 'fixed',
-            ...(isRightHalf
-              ? { right: Math.max(8, window.innerWidth - viewportRight) }
-              : { left: viewportLeft }),
-            ...(isBottomHalf
-              ? { bottom: Math.max(8, window.innerHeight - viewportBottom) }
-              : { top: Math.max(usableTop + 8, viewportTop) }),
-          }
+          // Same center-point anchor as the tap-detail popup below for
+          // full-screen portrait - see its comment for why edge-
+          // anchoring a box that becomes wide/short once rotated (this
+          // one is tall: title + up to 7 field rows) overflows past a
+          // fixed-width edge box sized for its pre-rotation shape.
+          const useCenterAnchor = isFullScreen && isPortrait
+          const positionStyle = useCenterAnchor
+            ? { position: 'fixed', left: (viewportLeft + viewportRight) / 2, top: (viewportTop + viewportBottom) / 2 }
+            : {
+                position: 'fixed',
+                ...(isRightHalf
+                  ? { right: Math.max(8, window.innerWidth - viewportRight) }
+                  : { left: viewportLeft }),
+                ...(isBottomHalf
+                  ? { bottom: Math.max(8, window.innerHeight - viewportBottom) }
+                  : { top: Math.max(usableTop + 8, viewportTop) }),
+              }
 
-          // Rotating the OUTER positioned box directly (a previous
-          // attempt) shifted it out of place - positionStyle anchors it
-          // by edge (left/top), and rotating around the default center
-          // origin changes which edges end up where once width/height
-          // effectively swap. Rotating an INNER wrapper instead keeps
-          // the outer box's center anchored exactly where positionStyle
-          // put it (inner naturally fills outer with no size difference
-          // pre-rotation, so their centers coincide) while still making
-          // the actual content match the rotated, landscape-simulated
-          // orientation of the grid around it - needed because this
-          // popup is a portal straight to document.body, not a
-          // descendant of FullScreenOverlay's own rotated container, so
-          // nothing rotates it automatically.
           return createPortal(
             <div
               className="pointer-events-none fixed z-[60]"
@@ -1105,7 +1131,7 @@ function Piles() {
             >
               <div
                 className="rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
-                style={(isFullScreen && isPortrait) ? { transform: 'rotate(90deg)' } : undefined}
+                style={useCenterAnchor ? { transform: 'translate(-50%, -50%) rotate(90deg)' } : undefined}
               >
                 <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>
                 {isVacant ? (
@@ -1172,28 +1198,49 @@ function Piles() {
 
           const isRightHalf = viewportLeft > window.innerWidth / 2
           const isBottomHalf = viewportTop > (usableTop + usableBottom) / 2
-          const positionStyle = {
-            position: 'fixed',
-            ...(isRightHalf
-              ? { right: Math.max(8, window.innerWidth - viewportRight) }
-              : { left: viewportLeft }),
-            ...(isBottomHalf
-              ? { bottom: Math.max(8, window.innerHeight - viewportBottom) }
-              : { top: Math.max(usableTop + 8, viewportTop) }),
-          }
+          // Full-screen portrait uses a plain center-point anchor
+          // instead of the normal edge-anchored positioning - edge-
+          // anchoring assumes the popup's rotated footprint stays
+          // within the same width/height it had before rotating, which
+          // is only true for a roughly-square box. This popup is tall
+          // (title + fields + a 3-button row + an export button), so
+          // once rotated 90deg its visual footprint becomes wide/short
+          // instead - anchored by a fixed-width edge box sized for the
+          // PRE-rotation shape, it visibly overflowed past where that
+          // box's own bounds said it should stop. Centering the
+          // (post-rotation) box on a single point instead has no edge
+          // to overflow past in the first place, regardless of how the
+          // rotated footprint's dimensions come out.
+          const useCenterAnchor = isFullScreen && isPortrait
+          const positionStyle = useCenterAnchor
+            ? { position: 'fixed', left: (viewportLeft + viewportRight) / 2, top: (viewportTop + viewportBottom) / 2 }
+            : {
+                position: 'fixed',
+                ...(isRightHalf
+                  ? { right: Math.max(8, window.innerWidth - viewportRight) }
+                  : { left: viewportLeft }),
+                ...(isBottomHalf
+                  ? { bottom: Math.max(8, window.innerHeight - viewportBottom) }
+                  : { top: Math.max(usableTop + 8, viewportTop) }),
+              }
 
-          // Same inner-wrapper rotation as the hover popup above - see
-          // its comment for why rotating the outer positioned box
-          // directly breaks its anchoring.
           return createPortal(
             <div
+              ref={tapPopupRef}
               className="fixed z-[60]"
               style={{ ...positionStyle, width: popupWidth }}
               onClick={(e) => e.stopPropagation()}
             >
               <div
                 className="rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
-                style={(isFullScreen && isPortrait) ? { transform: 'rotate(90deg)' } : undefined}
+                // translate(-50%,-50%) first re-centers the box's own
+                // center exactly on the anchor point (translate % is
+                // relative to the element's own, pre-rotation size),
+                // then rotate spins it around that now-centered point
+                // (the default transform-origin, 50% 50%, is unchanged
+                // by the translate) - the box's center stays pinned at
+                // the anchor regardless of its rotated footprint size.
+                style={useCenterAnchor ? { transform: 'translate(-50%, -50%) rotate(90deg)' } : undefined}
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>

@@ -19,7 +19,7 @@ import ConfirmDialog from '../common/ConfirmDialog.jsx'
 // Must match the fade transition duration used on the overlay below.
 const LOGOUT_FADE_MS = 500
 
-function AppHeader() {
+function AppHeader({ hidden = false }) {
   const { logout } = useAuth() ?? {}
   const { theme, weightUnit, updateSetting } = useSettings() ?? {}
   const { title, subtitle, setHeaderHeight } = usePageHeader() ?? {}
@@ -74,7 +74,17 @@ function AppHeader() {
       <div
         ref={headerRef}
         style={{
-          transform: hasEntered ? 'translateY(0)' : 'translateY(-100%)',
+          // hidden - previously a transaction form opening simply
+          // unmounted this component outright (App.jsx conditionally
+          // rendered it on !activeFormType), so it vanished instantly
+          // with no exit motion at all, and reappeared the same way -
+          // abrupt in both directions, and never coordinated with the
+          // form's own fade timing. Now it stays mounted and slides up
+          // out of view instead, matching hasEntered's own transition
+          // so opening a form reads as one combined motion (header
+          // slides up, nav bar slides down, form fades in) rather than
+          // a jump cut plus a separate animation.
+          transform: (hasEntered && !hidden) ? 'translateY(0)' : 'translateY(-100%)',
           transition: 'transform 350ms ease-out',
         }}
         className="sticky top-0 z-50 border-b border-neutral-800 bg-neutral-950"
