@@ -285,19 +285,22 @@ function Piles() {
       // was checked.
       setScale(Math.min(1, widthScale, heightScale))
     }
-    // Entering full-screen mounts a fresh, newly-rotated DOM subtree
-    // via the portal - deferring by a frame ensures the browser has
-    // fully settled that layout (including the CSS rotation) before
-    // the first measurement, rather than risking a stale read taken
-    // mid-transition.
-    if (isFullScreen) {
-      const frame = requestAnimationFrame(measure)
-      window.addEventListener('resize', measure)
-      return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', measure) }
-    }
-    measure()
+    // Deferred by a frame in BOTH directions, not just when entering -
+    // toggling isFullScreen either way swaps FullScreenOverlay between
+    // portaling containerRef's subtree to document.body and rendering
+    // it inline, a real DOM restructuring (not just a style change).
+    // Measuring synchronously (the previous behavior when EXITING full
+    // screen) could read containerRef mid-reattachment, before the
+    // browser had settled its true post-toggle layout, producing a
+    // wrong (too-small) scale that then stuck indefinitely - nothing
+    // else was left to trigger a re-measure afterward. This is what
+    // made the normal, non-full-screen view revert to a shrunk,
+    // top-left-clustered layout after a full-screen round trip instead
+    // of staying at the properly fit "see everything, filling the
+    // space" scale it started at.
+    const frame = requestAnimationFrame(measure)
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', measure) }
   }, [visibleCols, visibleRows, isFullScreen, isPortrait])
 
   const assignedPileIds = new Set(
@@ -765,7 +768,16 @@ function Piles() {
         )}
         <div
           ref={containerRef}
-          className={`relative mt-2 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1 flex items-center justify-center' : ''}`}
+          // Centering (flex items-center justify-center) previously only
+          // applied in full-screen mode - in the normal view the grid
+          // just sat at its natural top-left position instead, which is
+          // what made the piles look stuck in a corner with a lot of
+          // dead space around them whenever the grid's own fit-scale
+          // came out smaller than the container. flex-1 (grow to fill
+          // the parent flex column) stays full-screen-only, since it
+          // has no meaning/effect outside FullScreenOverlay's flex
+          // column layout.
+          className={`relative mt-2 flex items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1' : ''}`}
           onTouchStart={handleGridTouchStart}
           onTouchMove={handleGridTouchMove}
           onTouchEnd={handleGridTouchEnd}
@@ -1252,6 +1264,7 @@ function Piles() {
         description="This cannot be undone."
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(null)}
+        rotate={isFullScreen && isPortrait}
       />
       </div>
       )}

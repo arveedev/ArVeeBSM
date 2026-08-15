@@ -57,7 +57,17 @@ const buildMonthGrid = (year, month) => {
 
 const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true, label, valueClassName = 'text-sm' }, ref) {
   const [isOpen, setIsOpen] = useState(false)
-  const shouldRenderPopup = useDelayedUnmount(isOpen, 180)
+  // No exit delay (0, not the slide-out's own 180ms) - this popup is
+  // commonly chained (picking a Start Date immediately opens the End
+  // Date picker via a ref, in the very same tick). With a delayed
+  // unmount, this picker's own backdrop stayed mounted for its exit
+  // animation at the same moment the NEXT picker's backdrop mounted for
+  // its entrance - two independent `fixed inset-0 bg-black/60` layers
+  // stacked briefly doubles the dimming, which read as the whole screen
+  // flickering rather than a clean handoff between the two pickers.
+  // The slide-out class stays defined for a standalone close (no chained
+  // picker opening right after), it just won't get time to play here.
+  const shouldRenderPopup = useDelayedUnmount(isOpen, 0)
   const containerRef = useRef(null)
   // The actual calendar popup renders via createPortal(document.body) -
   // it is NOT a DOM descendant of containerRef (which only wraps the
