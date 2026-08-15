@@ -452,10 +452,10 @@ select {
    as genuinely 3D. */
 @keyframes card-flip {
   0%      { transform: rotateX(0deg); }
-  48%     { transform: rotateX(85deg); opacity: 1; }
-  50%     { transform: rotateX(90deg); opacity: 0.25; }
-  50.01%  { transform: rotateX(-90deg); opacity: 0.25; }
-  52%     { transform: rotateX(-85deg); opacity: 1; }
+  48%     { transform: rotateX(-85deg); opacity: 1; }
+  50%     { transform: rotateX(-90deg); opacity: 0.25; }
+  50.01%  { transform: rotateX(90deg); opacity: 0.25; }
+  52%     { transform: rotateX(85deg); opacity: 1; }
   100%    { transform: rotateX(0deg); }
 }
 /* Hinged like an actual flip-board rather than pivoting from its own
