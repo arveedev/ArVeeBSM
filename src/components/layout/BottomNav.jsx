@@ -86,21 +86,34 @@ function BottomNav({ onFabClick }) {
       <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
         <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
         <div className="relative mx-auto grid h-16 max-w-md grid-cols-2 items-center">
-          {/* The outer box's own width must equal exactly one grid
-              column (50% here) for translateX(N * 100%) to land each
-              column dead-on - percentage translateX is relative to the
-              element's OWN box, not the container, so shrinking this
-              outer box for a gutter (as a first attempt did) made each
-              step short by that same amount, an error that compounds
-              with every column and is exactly what made the pill drift
-              out from under its icon on columns further from the left.
-              The gutter is applied to the inner squash element instead,
-              which does not affect the outer box's translate math. */}
-          <div
-            className="pointer-events-none absolute inset-y-2 z-0 w-1/2 transition-nav-elastic"
-            style={{ transform: `translateX(${visitorColumn * 100}%)` }}
-          >
-            <div ref={squashRef} className="mx-1 h-full rounded-2xl bg-brand-neon" />
+          {/* The pill lives in its own absolutely-positioned, exactly-
+              row-sized overflow-hidden wrapper - not on the row div
+              itself - so the elastic bounce's slight overshoot on the
+              edge columns gets clipped to the row's own bounds (it was
+              previously poking a few pixels past the row's edge
+              mid-animation, enough to register as horizontal page
+              overflow on some browsers: a scrollbar flickering in and
+              out on every tap, with the whole page visibly flinching
+              along with it) without this wrapper also having to contain
+              - and thus potentially clip - anything else in the row. */}
+          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+            {/* The pill box's own width must equal exactly one grid
+                column (50% here) for translateX(N * 100%) to land each
+                column dead-on - percentage translateX is relative to
+                the element's OWN box, not the container, so shrinking
+                this box for a gutter (as a first attempt did) made each
+                step short by that same amount, an error that compounds
+                with every column and is exactly what made the pill
+                drift out from under its icon on columns further from
+                the left. The gutter is applied to the inner squash
+                element instead, which does not affect this box's
+                translate math. */}
+            <div
+              className="absolute inset-y-2 w-1/2 transition-nav-elastic"
+              style={{ transform: `translateX(${visitorColumn * 100}%)` }}
+            >
+              <div ref={squashRef} className="mx-1 h-full rounded-2xl bg-brand-neon" />
+            </div>
           </div>
           <NavItem to="/" label="Home" Icon={Home} />
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />
@@ -114,14 +127,21 @@ function BottomNav({ onFabClick }) {
     <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
       <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
       <div className="relative mx-auto grid h-16 max-w-md grid-cols-5 items-center">
-        {/* Same self-width-must-equal-one-column reasoning as the
-            Visitor nav above - outer box is exactly 1/5, gutter lives
-            on the inner squash element only. */}
-        <div
-          className="pointer-events-none absolute inset-y-2 z-0 w-1/5 transition-nav-elastic"
-          style={{ transform: `translateX(${regularColumn * 100}%)` }}
-        >
-          <div ref={squashRef} className="mx-1 h-full rounded-2xl bg-brand-neon" />
+        {/* Clipping wrapper scoped to just the pill, same reasoning as
+            the Visitor nav above - deliberately NOT overflow-hidden on
+            this whole row, since the FAB button below intentionally
+            pokes up above the row (-translate-y-5) and would otherwise
+            get its top clipped off. */}
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          {/* Same self-width-must-equal-one-column reasoning as the
+              Visitor nav above - box is exactly 1/5, gutter lives on
+              the inner squash element only. */}
+          <div
+            className="absolute inset-y-2 w-1/5 transition-nav-elastic"
+            style={{ transform: `translateX(${regularColumn * 100}%)` }}
+          >
+            <div ref={squashRef} className="mx-1 h-full rounded-2xl bg-brand-neon" />
+          </div>
         </div>
 
         <NavItem to="/" label="Home" Icon={Home} />

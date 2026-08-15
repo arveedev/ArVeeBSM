@@ -21,6 +21,7 @@ import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtBags, fmtWeight, fmtNetBags, AGE_BUCKETS } from '../utils/calculations.js'
 import { computeUnwithdrawnByVariety } from '../utils/unwithdrawnStock.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
+import PillToggle from '../components/common/PillToggle.jsx'
 
 function SummaryCard({ label, value, sub = false }) {
   return (
@@ -162,21 +163,17 @@ function HomeStocks({ warehouseId } = {}) {
   return (
     <>
     <div className="relative mt-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <div className="absolute right-4 top-4 flex items-center gap-2">
-        <span className="text-xs text-neutral-500">{showNetBags ? 'Net Bags' : 'Bags'}</span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={showNetBags}
-          onClick={() => setShowNetBags((v) => !v)}
-          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${showNetBags ? 'bg-brand-neon' : 'bg-neutral-700'}`}
-        >
-          <span
-            className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform"
-            style={{ transform: showNetBags ? 'translateX(16px)' : 'translateX(0)' }}
-          />
-        </button>
+      <div className="absolute right-4 top-4">
+        <PillToggle
+          options={[{ value: false, label: 'Bags' }, { value: true, label: 'Net Bags' }]}
+          value={showNetBags}
+          onChange={setShowNetBags}
+        />
       </div>
+      {/* Keyed on both toggles so switching either one replays this
+          entrance animation on the now-different values, instead of the
+          numbers just silently swapping in place. */}
+      <div key={`${weightUnit}-${showNetBags}`} className="animate-flow-down">
       {sortedGroups.map(([cerealType, byVariety], i) => {
         const cerealBags = Object.values(byVariety)
           .flatMap((v) => Object.values(v))
@@ -295,6 +292,7 @@ function HomeStocks({ warehouseId } = {}) {
           </div>
         )
       })}
+      </div>
     </div>
     {detailContext && (
       <UnwithdrawnDetailModal
