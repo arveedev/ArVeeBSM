@@ -348,13 +348,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               problem this layout does not need to have at all. Each
               stat sizes to its own content and gap-controlled spacing
               stays tight and even regardless of viewport width. */}
-          {/* max-w-sm caps the card's own width regardless of viewport -
-              without it, the grid's 1fr bucket columns below still
-              stretch to fill a wide desktop screen and spread their
-              (left-anchored, naturally narrow) content apart with large
-              gaps, the same underlying problem as before just via grid
-              instead of flex this time. */}
-          <div className="mb-6 max-w-sm rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
+          <div className="mb-6 rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
             <p className="mb-2 text-sm font-bold uppercase tracking-wide text-brand-neon">Total Branch</p>
             {CATEGORIES.map((cat) => {
               const { buckets, columnTotals, grandTotal } = computeRows(sortedWarehouses, cat)
@@ -368,11 +362,23 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       buckets but Palay has 3: Total would land in a
                       different horizontal position per category,
                       reading as inconsistent/misaligned even with tight
-                      spacing. MAX_AGE_BUCKETS reserves the same 3 bucket
-                      columns for every category (unused ones stay
-                      empty for a 2-bucket row) so Total always sits in
-                      the same 4th column no matter which category. */}
-                  <div className="grid grid-cols-[repeat(3,minmax(3.75rem,1fr))_auto] gap-x-3 gap-y-2">
+                      spacing. Reserving the same 3 bucket columns for
+                      every category (unused ones stay empty for a
+                      2-bucket row) keeps Total in the same 4th column
+                      regardless of category. Columns are max-content,
+                      NOT 1fr/minmax(...,1fr) - a 1fr column keeps
+                      stretching to fill whatever width its container
+                      happens to have, which is exactly what produced
+                      both this section's earlier bugs: huge gaps on a
+                      wide desktop screen (columns over-stretched) and,
+                      after that was capped with a fixed max-width on
+                      the whole card, a cramped/wasted-space look on
+                      every OTHER width instead (that same cap now
+                      applying regardless of how much room was actually
+                      available). Sizing each column to its own content
+                      sidesteps the tension entirely - the row is only
+                      ever as wide as its numbers need, on any screen. */}
+                  <div className="grid grid-cols-[repeat(3,max-content)_auto] gap-x-5 gap-y-2">
                     {buckets.map((b, i) => (
                       <div key={b.label}>
                         <p className="truncate text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
