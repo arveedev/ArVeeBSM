@@ -11,10 +11,11 @@ import { ChevronRight } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
-import { Section, Th, Td, Empty, PillToggle } from './AdminHomeShared.jsx'
+import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 import { computeUnwithdrawnByVariety, computeUnwithdrawnByCategoryAge, UNSPECIFIED_AGE } from '../utils/unwithdrawnStock.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
+import PillToggle from '../components/common/PillToggle.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const BREAKDOWN_TABS = ['Breakdown', 'Age Grouping']
@@ -101,6 +102,11 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           />
         )}
       >
+        {/* Keyed on both the weight unit and the Actual/Potential
+            toggle, so switching either replays the entrance animation
+            on the now-different figures instead of them silently
+            swapping in place. */}
+        <div key={`${weightUnit}-${topCardShowPotential}`} className="animate-flow-down">
         {sortedProvinces.length === 0 ? (
           <Empty />
         ) : (
@@ -174,6 +180,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             </div>
           )
         })()}
+        </div>
       </Section>
 
       <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
@@ -204,6 +211,9 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           />
         )}
       >
+        {/* Keyed on both the weight unit and this tab's own Actual/
+            Potential toggle - see the top card's identical comment. */}
+        <div key={`${weightUnit}-${breakdownShowPotential}`} className="animate-flow-down">
         {sortedWarehouses.length === 0 ? <Empty /> : (
           <div className="space-y-4">
             {sortedWarehouses.map((warehouse) => {
@@ -276,6 +286,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             })}
           </div>
         )}
+        </div>
       </Section>
       )}
 
@@ -322,6 +333,12 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             Potential stock (actual minus unwithdrawn AI-authorized stock), not raw actual inventory.
           </p>
 
+          {/* Keyed on the weight unit, same reasoning as the top card
+              and Breakdown tab above - this tab has no Actual/Potential
+              toggle of its own (it always shows potential), but its
+              figures still change when KG/MT is switched. */}
+          <div key={weightUnit} className="animate-flow-down">
+
           {/* Total Branch - per-cereal, per-age-group totals aggregated
               across every province, shown before the province breakdown.
               A plain flex strip, not a table - there is only ever one
@@ -339,6 +356,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               return (
                 <div key={cat} className="mt-2 first:mt-0">
                   <p className={`mb-1.5 text-xs font-bold uppercase ${catColor(cat)}`}>{cat}</p>
+                  {/* No ml-auto pushing Total to the far edge - on a wide
+                      desktop screen that left a huge empty gap between
+                      the buckets and the total (the same "spread out"
+                      problem as the original table, just via flex this
+                      time). A border instead of positioning keeps Total
+                      visually set apart while staying right next to the
+                      other buckets at any viewport width. */}
                   <div className="flex flex-wrap gap-x-6 gap-y-2">
                     {buckets.map((b, i) => (
                       <div key={b.label}>
@@ -346,7 +370,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                         <p className={`text-sm font-semibold ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
                       </div>
                     ))}
-                    <div className="ml-auto">
+                    <div className="border-l border-neutral-800 pl-6">
                       <p className="text-[10px] uppercase text-neutral-500">Total</p>
                       <p className={`text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</p>
                     </div>
@@ -437,6 +461,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               })}
             </div>
           )}
+          </div>
         </Section>
         )
       })()}
