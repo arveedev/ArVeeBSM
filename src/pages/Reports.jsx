@@ -48,6 +48,7 @@ function Reports() {
     setPageHeader?.({ title: 'Reports', subtitle: '' })
   }, [])
 
+  const [pageTab, setPageTab] = useState('summary')
   const [mainTab, setMainTab] = useState('stocks')
   const [stockSubTab, setStockSubTab] = useState('receipts')
   const [sackSubTab, setSackSubTab] = useState('receipts')
@@ -337,9 +338,30 @@ function Reports() {
       </div>
       <StickyWarehouseIndicator targetRef={warehouseSectionRef} warehouse={currentWarehouse} />
 
+      {/* Page-level Summary / Stock Statement tabs - kept as two fully
+          separate views (not one long scroll) per explicit request, so
+          each reads as its own report rather than one crowded page. */}
+      <div className="relative mt-5 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+        <div
+          className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+          style={{ transform: pageTab === 'summary' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+        />
+        {[{ id: 'summary', label: 'Summary' }, { id: 'statement', label: 'Stock Statement' }].map((t) => (
+          <button key={t.id} type="button" onClick={() => setPageTab(t.id)}
+            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold transition-all active:scale-95 ${
+              pageTab === t.id ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* ── Summary period ─────────────────────────────────────────────── */}
-      <div className="mt-5">
-        <h2 className="text-sm font-semibold text-app-text">Summary</h2>
+      {/* Both tab panels stay mounted (visibility toggled via `hidden`,
+          not conditional rendering) - switching tabs re-mounting
+          DailySummaryCard's useLiveQuery would otherwise briefly flash
+          an empty state, same fix applied elsewhere this session. */}
+      <div className={`mt-5 ${pageTab === 'summary' ? '' : 'hidden'}`}>
         <div className="mt-2 grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs text-neutral-500">From</label>
@@ -362,9 +384,8 @@ function Reports() {
       </div>
 
       {/* ── Stock Statement ─────────────────────────────────────────────── */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-app-text">Stock Statement</h2>
+      <div className={`mt-5 ${pageTab === 'statement' ? '' : 'hidden'}`}>
+        <div className="flex items-center justify-end">
           <button type="button" onClick={handleExportPdf}
             disabled={isExporting || needsDates}
             className="flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-brand-neon transition-all hover:border-brand-neon/50 active:scale-95 disabled:opacity-40">

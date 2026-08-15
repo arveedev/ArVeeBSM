@@ -766,6 +766,24 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill?.orNumber, prefill?.transactionTypeName, prefill?.pileId, piles])
 
+  // For every other transaction type (SALES in particular - the OR #
+  // field only renders when isSales), prefill.orNumber is the actual OR
+  // # value and belongs in the OR # box itself. Previously nothing wrote
+  // it there at all - the effect above was the only consumer of
+  // prefill.orNumber, and it only fires for Milling/Test Milling - so
+  // tapping a SALES authority with an OR Number left the OR # field
+  // blank even though the value was right there in the prefill.
+  const appliedOrNumberRef = useRef(null)
+
+  useEffect(() => {
+    const prefillOrNumber = prefill?.orNumber != null ? String(prefill.orNumber).trim() : ''
+    if (!prefillOrNumber) return
+    if (isMillingTypeName(prefill?.transactionTypeName) || isTestMillingTypeName(prefill?.transactionTypeName)) return
+    if (appliedOrNumberRef.current === prefillOrNumber) return
+    setOrNumber(prefillOrNumber)
+    appliedOrNumberRef.current = prefillOrNumber
+  }, [prefill?.orNumber, prefill?.transactionTypeName])
+
   // Same reasoning as the pile-age effect above: transactionTypes loads
   // asynchronously, so this retries once it arrives rather than only
   // trying at the moment the prefill effect first runs.

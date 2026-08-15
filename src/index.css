@@ -4,12 +4,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Reserves the vertical scrollbar's width permanently, even on pages
+   short enough not to need one - without this, content whose height
+   crosses the scroll threshold (switching tabs, data loading in, a
+   toast appearing) causes the scrollbar to pop in/out, shifting every
+   fixed/sticky bar and the page content sideways by its width. That
+   sideways jump is what read as the display "moving" or "glitching".
+   overflow-x: hidden - this app is a single-column, mobile-width
+   layout that never intentionally scrolls sideways, so any transient
+   sub-pixel/fixed-element overflow (a wide toast, a transform on a
+   fixed-position ancestor, etc.) should never be allowed to surface
+   as a horizontal scrollbar - confirmed via screen recording that one
+   was appearing/disappearing even on the plain login screen, which
+   has no legitimately wide content of its own. */
+html {
+  scrollbar-gutter: stable;
+  overflow-x: hidden;
+}
+
 body {
   background-color: #0A0A0A;
   color: #FFFFFF;
   font-family: 'Inter', sans-serif;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
 }
 
 /* Every native <select> app-wide (19+ files share the same inputClass/
@@ -327,6 +346,19 @@ select {
    slight elastic bounce rather than a flat mechanical slide. */
 .transition-nav-elastic {
   transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Same transition, minus the back-out overshoot - used only when the
+   pill is landing on the first or last column. The bounce curve above
+   transiently overshoots past its target before settling back, which
+   at an interior column just overlaps the neighboring column (still
+   inside the row, invisible). At the two edge columns there is no
+   neighboring column to overshoot into - the overshoot pushes the
+   pill's box past the row's own edge, where it gets clipped flat by
+   the row's overflow-hidden wrapper, showing as a black cut corner on
+   an otherwise rounded pill. */
+.transition-nav-elastic-edge {
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Squash-and-stretch flourish layered on top of the pill's own position

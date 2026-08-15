@@ -143,8 +143,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       <span className="font-medium text-app-text">{province.code}</span>
                       <span className="ml-1 text-xs text-neutral-500">{province.name}</span>
                     </Td>
-                    <Td right><span className="text-blue-400">{fmt(riceValue)}</span></Td>
-                    <Td right><span className="text-brand-neon">{fmt(palayValue)}</span></Td>
+                    <Td right><span className="text-base font-bold text-blue-400">{fmt(riceValue)}</span></Td>
+                    <Td right><span className="text-base font-bold text-brand-neon">{fmt(palayValue)}</span></Td>
                   </tr>
                 )
               })}
@@ -169,13 +169,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
                   Total — Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
-                <span className="text-sm font-bold text-blue-400">{fmt(riceBranchValue)}</span>
+                <span className="text-lg font-bold text-blue-400">{fmt(riceBranchValue)}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
                   Total — Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
-                <span className="text-sm font-bold text-brand-neon">{fmt(palayBranchValue)}</span>
+                <span className="text-lg font-bold text-brand-neon">{fmt(palayBranchValue)}</span>
               </div>
             </div>
           )
