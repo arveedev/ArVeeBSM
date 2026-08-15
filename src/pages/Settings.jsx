@@ -516,12 +516,20 @@ function Settings() {
   const warehouseSectionRef = useRef(null)
   const pileCardRef = useRef(null)
   const [pileSection, setPileSection] = useState('create')
-  const isFirstPileSectionRender = useRef(true)
+  // Only scrolls when a real tab click set this flag first - NOT inferred
+  // from "is this the first render" (the previous approach), which
+  // React StrictMode's dev-only double-invocation of effects defeats:
+  // the first of its two synthetic invocations flips a "seen it" ref to
+  // false as intended, but the second invocation then reads that
+  // already-flipped ref and fires the scroll anyway, on every single
+  // mount - confirmed via a frame-by-frame screen recording showing the
+  // page landing on Settings already scrolled to this card. Setting the
+  // flag directly in the click handler is StrictMode-proof, since
+  // nothing but an actual click ever sets it.
+  const scrollOnTabChange = useRef(false)
   useEffect(() => {
-    if (isFirstPileSectionRender.current) {
-      isFirstPileSectionRender.current = false
-      return
-    }
+    if (!scrollOnTabChange.current) return
+    scrollOnTabChange.current = false
     pileCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [pileSection])
   const cloudUser = useObservable(db.cloud.currentUser)
@@ -716,14 +724,14 @@ function Settings() {
             />
             <button
               type="button"
-              onClick={() => setPileSection('create')}
+              onClick={() => { scrollOnTabChange.current = true; setPileSection('create') }}
               className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'create' ? 'text-brand-contrast' : 'text-neutral-400'}`}
             >
               Create Pile
             </button>
             <button
               type="button"
-              onClick={() => setPileSection('balances')}
+              onClick={() => { scrollOnTabChange.current = true; setPileSection('balances') }}
               className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'balances' ? 'text-brand-contrast' : 'text-neutral-400'}`}
             >
               Beginning Balances

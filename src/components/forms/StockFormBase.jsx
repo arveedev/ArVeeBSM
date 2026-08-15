@@ -42,6 +42,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
@@ -216,6 +217,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
   // must keep its typing/stepping navigation exactly as it always was.
   const [openedFromReports, setOpenedFromReports] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(false)
+  const [deleteAnimKey, setDeleteAnimKey] = useState(0)
 
   const [isSaving, setIsSaving] = useState(false)
   const [pendingTrial3Confirm, setPendingTrial3Confirm] = useState(false)
@@ -2584,17 +2586,17 @@ function StockFormBase({ type, title, onClose, prefill }) {
               type="button"
               onClick={handleUpdate}
               disabled={isSaving}
-              className="flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+              className="relative flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
-              Update
+              <UpdateButtonContent isSaving={isSaving} />
             </button>
             <button
               type="button"
-              onClick={() => setPendingDelete(true)}
+              onClick={() => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) }}
               disabled={isSaving}
               className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
-              Delete
+              <DeleteButtonLabel incrementKey={deleteAnimKey} />
             </button>
           </div>
         ) : (
@@ -2610,7 +2612,7 @@ function StockFormBase({ type, title, onClose, prefill }) {
                 canSave ? `${primaryButtonClass}` : 'border border-brand-neon/40 text-brand-neon/40'
               }`}
             >
-              Save
+              <SaveButtonLabel isSaving={isSaving} />
             </button>
             {showSaveHint && !canSave && (
               <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
