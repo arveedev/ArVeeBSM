@@ -499,6 +499,10 @@ function Piles() {
         transactionTypeMap,
       })
       doc.save(`${(pile.pileName || 'Pile').replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
+      // Was missing entirely - a silent success looked identical to a
+      // silent failure, which is exactly why this was reported as "not
+      // functioning" even on runs that actually worked.
+      toast.success('BIN card exported')
     } catch (err) {
       console.error('Failed to export pile BIN card:', err)
       toast.error('Failed to export BIN card - see console for details')
@@ -1007,24 +1011,42 @@ function Piles() {
               : { top: Math.max(usableTop + 8, viewportTop) }),
           }
 
+          // Rotating the OUTER positioned box directly (a previous
+          // attempt) shifted it out of place - positionStyle anchors it
+          // by edge (left/top), and rotating around the default center
+          // origin changes which edges end up where once width/height
+          // effectively swap. Rotating an INNER wrapper instead keeps
+          // the outer box's center anchored exactly where positionStyle
+          // put it (inner naturally fills outer with no size difference
+          // pre-rotation, so their centers coincide) while still making
+          // the actual content match the rotated, landscape-simulated
+          // orientation of the grid around it - needed because this
+          // popup is a portal straight to document.body, not a
+          // descendant of FullScreenOverlay's own rotated container, so
+          // nothing rotates it automatically.
           return createPortal(
             <div
-              className="pointer-events-none fixed z-[60] rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
+              className="pointer-events-none fixed z-[60]"
               style={{ ...positionStyle, width: popupWidth }}
             >
-              <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>
-              {isVacant ? (
-                <p className="mt-1 text-sm text-neutral-500">VACANT</p>
-              ) : (
-                <div className="mt-1 space-y-1">
-                  {fields.map(([lbl, val]) => (
-                    <div key={lbl} className="flex justify-between gap-3 text-sm">
-                      <span className="text-neutral-400">{lbl}</span>
-                      <span className="font-medium text-app-text">{val}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div
+                className="rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
+                style={(isFullScreen && isPortrait) ? { transform: 'rotate(90deg)' } : undefined}
+              >
+                <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>
+                {isVacant ? (
+                  <p className="mt-1 text-sm text-neutral-500">VACANT</p>
+                ) : (
+                  <div className="mt-1 space-y-1">
+                    {fields.map(([lbl, val]) => (
+                      <div key={lbl} className="flex justify-between gap-3 text-sm">
+                        <span className="text-neutral-400">{lbl}</span>
+                        <span className="font-medium text-app-text">{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>,
             document.body
           )
@@ -1089,69 +1111,77 @@ function Piles() {
               : { top: Math.max(usableTop + 8, viewportTop) }),
           }
 
+          // Same inner-wrapper rotation as the hover popup above - see
+          // its comment for why rotating the outer positioned box
+          // directly breaks its anchoring.
           return createPortal(
             <div
-              className="fixed z-[60] rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
+              className="fixed z-[60]"
               style={{ ...positionStyle, width: popupWidth }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>
-                <button
-                  type="button"
-                  onClick={() => setEditingBoxId(null)}
-                  aria-label="Close"
-                  className="shrink-0 rounded-lg p-2 text-neutral-500 transition-colors hover:text-app-text"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              {isVacant ? (
-                <p className="mt-1 text-sm text-neutral-500">VACANT</p>
-              ) : (
-                <div className="mt-1 space-y-1">
-                  {fields.map(([lbl, val]) => (
-                    <div key={lbl} className="flex justify-between gap-3 text-sm">
-                      <span className="text-neutral-400">{lbl}</span>
-                      <span className="font-medium text-app-text">{val}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="mt-3 flex gap-2 border-t border-neutral-800 pt-3">
-                <button
-                  type="button"
-                  onClick={handleStartMove}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-amber/40 py-2 text-xs font-medium text-brand-amber transition-all active:scale-95"
-                >
-                  <Move size={16} /> Move
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingDelete({ id: editingBoxId })}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-crimson/40 py-2 text-xs font-medium text-brand-crimson transition-all active:scale-95"
-                >
-                  <Trash2 size={16} /> Delete
-                </button>
-                {(!isTouchDevice || isVacant) && (
+              <div
+                className="rounded-xl border-2 border-brand-neon bg-neutral-900 p-3 shadow-2xl"
+                style={(isFullScreen && isPortrait) ? { transform: 'rotate(90deg)' } : undefined}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-base font-bold text-app-text">{pile?.pileName ?? box.label ?? 'Box'}</p>
                   <button
                     type="button"
-                    onClick={() => handleEditBox(box)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                    onClick={() => setEditingBoxId(null)}
+                    aria-label="Close"
+                    className="shrink-0 rounded-lg p-2 text-neutral-500 transition-colors hover:text-app-text"
                   >
-                    <Pencil size={16} /> {isVacant ? 'Assign' : 'Edit'}
+                    <X size={18} />
+                  </button>
+                </div>
+                {isVacant ? (
+                  <p className="mt-1 text-sm text-neutral-500">VACANT</p>
+                ) : (
+                  <div className="mt-1 space-y-1">
+                    {fields.map(([lbl, val]) => (
+                      <div key={lbl} className="flex justify-between gap-3 text-sm">
+                        <span className="text-neutral-400">{lbl}</span>
+                        <span className="font-medium text-app-text">{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-3 flex gap-2 border-t border-neutral-800 pt-3">
+                  <button
+                    type="button"
+                    onClick={handleStartMove}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-amber/40 py-2 text-xs font-medium text-brand-amber transition-all active:scale-95"
+                  >
+                    <Move size={16} /> Move
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete({ id: editingBoxId })}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-crimson/40 py-2 text-xs font-medium text-brand-crimson transition-all active:scale-95"
+                  >
+                    <Trash2 size={16} /> Delete
+                  </button>
+                  {(!isTouchDevice || isVacant) && (
+                    <button
+                      type="button"
+                      onClick={() => handleEditBox(box)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                    >
+                      <Pencil size={16} /> {isVacant ? 'Assign' : 'Edit'}
+                    </button>
+                  )}
+                </div>
+                {!isVacant && (
+                  <button
+                    type="button"
+                    onClick={() => handleExportPileBinCard(pile)}
+                    className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                  >
+                    Export BIN Card
                   </button>
                 )}
               </div>
-              {!isVacant && (
-                <button
-                  type="button"
-                  onClick={() => handleExportPileBinCard(pile)}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
-                >
-                  Export BIN Card
-                </button>
-              )}
             </div>,
             document.body
           )

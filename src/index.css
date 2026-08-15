@@ -463,6 +463,24 @@ body {
 }
 .animate-label-pulse { animation: label-pulse 1.6s ease-in-out infinite; }
 
+/* CalendarDatePicker's popup box - slides in from the right / out to
+   the left, instead of the plain fade (animate-pop-in/out) it used to
+   share with every other popup in the app. Matters most for the
+   Start->End Date flow (picking a start date auto-opens the End Date
+   picker next): the old fade made the whole transition read as one
+   popup vanishing and an unrelated one appearing, rather than a single
+   continuous "moving forward to the next step" motion. */
+@keyframes calendar-slide-in {
+  0% { transform: translateX(28px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes calendar-slide-out {
+  0% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(-28px); opacity: 0; }
+}
+.animate-calendar-slide-in { animation: calendar-slide-in 0.22s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.animate-calendar-slide-out { animation: calendar-slide-out 0.18s ease-in both; }
+
 /* Delete button's dust-burst flourish (AnimatedButtonBits.jsx) - each
    dot travels to its own --dust-x/--dust-y offset (set inline per dot,
    since the distance/angle varies per dot) while shrinking and fading. */
