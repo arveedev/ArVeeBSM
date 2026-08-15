@@ -347,11 +347,12 @@ function Reports() {
               value={summaryFrom}
               label="Start Date"
               onChange={(iso) => { setSummaryFrom(iso); summaryToPickerRef.current?.open() }}
+              valueClassName="text-base font-semibold"
             />
           </div>
           <div>
             <label className="mb-1 block text-xs text-neutral-500">To</label>
-            <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} label="End Date" onChange={setSummaryTo} />
+            <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} label="End Date" onChange={setSummaryTo} valueClassName="text-base font-semibold" />
           </div>
         </div>
         <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} currentFrom={summaryFrom} currentTo={summaryTo} />

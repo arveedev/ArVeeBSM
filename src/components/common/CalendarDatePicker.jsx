@@ -55,7 +55,7 @@ const buildMonthGrid = (year, month) => {
   return cells
 }
 
-const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true, label }, ref) {
+const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true, label, valueClassName = 'text-sm' }, ref) {
   const [isOpen, setIsOpen] = useState(false)
   const shouldRenderPopup = useDelayedUnmount(isOpen, 180)
   const containerRef = useRef(null)
@@ -132,11 +132,11 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
       <button
         type="button"
         onClick={() => setIsOpen((o) => !o)}
-        className={`flex w-full items-center justify-between rounded-xl border bg-neutral-950 px-3 py-2 text-left text-sm text-app-text outline-none transition-all hover:border-brand-neon/50 focus:border-brand-neon ${
+        className={`flex w-full items-center justify-between rounded-xl border bg-neutral-950 px-3 py-2 text-left text-app-text outline-none transition-all hover:border-brand-neon/50 focus:border-brand-neon ${
           required && !value ? '!border-brand-amber' : 'border-neutral-800'
         }`}
       >
-        <span className={value ? 'text-app-text' : 'text-neutral-500'}>
+        <span className={`${valueClassName} ${value ? 'text-app-text' : 'text-neutral-500'}`}>
           {value ? fmtDisplay(value) : placeholder}
         </span>
         <Calendar size={16} className="shrink-0 text-neutral-500" />

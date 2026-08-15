@@ -190,22 +190,26 @@ function DailySummaryCard({ dateFrom, dateTo }) {
                       const isProcurement = txTypeName === PROCUREMENT_TYPE_NAME
                       const individualCount = totals.individualFarmers?.size ?? 0
                       return (
-                        <div key={varietyName} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-app-text">{varietyName}</span>
-                            <div className="flex items-center gap-4 text-right">
-                              <div>
-                                <p className="text-xs text-neutral-500">Bags</p>
-                                <p className="font-mono text-sm font-semibold text-app-text">{fmtBags(totals.bags)}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-neutral-500">Net Kilos</p>
-                                <p className="font-mono text-sm font-semibold text-brand-neon">{fmtWeight(totals.kilos, weightUnit)}</p>
-                              </div>
-                            </div>
+                        // A fixed grid (not flex + gap, the previous
+                        // approach) - each numeric block's own width
+                        // used to be driven by its own digit count
+                        // ("86" vs "3,669" vs "1,856"), so Bags/Net
+                        // Kilos drifted left/right between rows instead
+                        // of lining up as real columns. Same fixed-
+                        // width-column fix already used for the Total
+                        // Branch stat grid elsewhere in the app.
+                        <div key={varietyName} className="grid grid-cols-[1fr_4rem_6rem] items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
+                          <span className="truncate text-xs text-app-text">{varietyName}</span>
+                          <div className="text-right">
+                            <p className="text-xs text-neutral-500">Bags</p>
+                            <p className="font-mono text-sm font-semibold text-app-text">{fmtBags(totals.bags)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-neutral-500">Net Kilos</p>
+                            <p className="font-mono text-sm font-semibold text-brand-neon">{fmtWeight(totals.kilos, weightUnit)}</p>
                           </div>
                           {isProcurement && (individualCount > 0 || totals.coopCount > 0) && (
-                            <p className="mt-1 text-[11px] text-neutral-500">
+                            <p className="col-span-3 mt-1 text-[11px] text-neutral-500">
                               {individualCount > 0 && `${individualCount} individual farmer${individualCount !== 1 ? 's' : ''}`}
                               {individualCount > 0 && totals.coopCount > 0 && ' · '}
                               {totals.coopCount > 0 && (
