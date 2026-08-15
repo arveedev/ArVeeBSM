@@ -13082,3 +13082,167 @@ dirty tree with docs untouched = blocks, dirty tree with docs also
 touched = silent) - passed cleanly, no `jq` available in this Windows
 Git Bash environment so validation went through a small Node script
 instead of the usual `jq -e` schema check.
+
+## 2026-08-15 - MillingMonitor card cleanup, Expected Recovery fix, AdminHomeStocks toggles, save-freeze and delete-sync bugs, first responsive pass
+
+### 1. MillingMonitor.jsx detail modal - card cleanup + tab animation
+
+Removed the redundant "Issued"/"Received" text and miller/customer name
+from inside each transaction card (both already shown once above the
+cards - a section header and the modal's own top block, respectively).
+"Warehouse" label made contextual: "Issuing Warehouse" / "Receiving
+Warehouse". Follow-up request then asked to also remove the duplicate
+WSI/WSR/ESI/ESR type text that was still appearing twice per card (once
+in the header, once again as "`{type} # {serialNo}`" at the bottom) -
+fixed by moving the serial number up beside the date
+(`{type} # {serialNo}{trialNumber ? " Trial N" : ""}`) and deleting the
+bottom line entirely. Stocks/Sacks tab switch now wrapped in
+`<div key={detailTab} className="animate-flow-down">` so the list
+doesn't just abruptly appear when switching tabs.
+
+### 2. Expected Recovery bug - was gated on transaction-derived data
+
+Reported symptom: "Expected Recovery" showed on MOs with NO transactions
+yet (as a meaningless "≈0 bags") but was MISSING on MOs with pending/
+ongoing transactions - the opposite of desired; it should always be
+visible once an MO has a target recovery % and a linked AI.
+
+Root cause (confirmed via full trace of millingOrderStatus.js and
+googleSheetsBridge.js): `expectedBagsEquivalent` in MillingMonitor.jsx
+multiplied `order.recoveryPercent` (a fixed target %, synced verbatim
+from the MO sheet row, genuinely transaction-independent) by
+`order.issuedKilos` - which is NOT from the AI, it's the sum of that
+order's actual posted WSI transactions, computed in
+millingOrderStatus.js's `computeMillingOrderStatuses`. Fresh MO with zero
+WSI activity -> issuedKilos = 0 -> shows "≈0 bags" (looks present but
+meaningless); MO with partial activity -> issuedKilos still understates
+the true allocation. Fixed to use `order.authorityAllocationKilos`
+instead - already computed once per order from the linked AI's own
+`totalAllocationKilos` (db.authorities), independent of any transaction
+- so the card is now always computable and always visible whenever the
+MO has both a recovery % and a linked AI.
+
+### 3. AdminHomeStocks.jsx - Actual/Potential toggles + Age Grouping rework
+
+Added a shared `PillToggle` component (AdminHomeShared.jsx) with a
+sliding highlight, used as two INDEPENDENT toggles (not shared state) on
+the "Net Bags by Province & Category" card and the "Breakdown" tab, both
+defaulting to Actual. First PillToggle build had a centering bug - the
+two options had unequal natural widths ("Actual" vs "Potential") but the
+sliding highlight assumed a fixed 50/50 split, so text and highlight
+didn't line up. Fixed by giving the toggle a fixed width and both
+buttons `flex-1` so they're always exactly equal halves.
+
+Per explicit request, the top card's Potential mode does NOT use the
+enriched badge/tag treatment - it just swaps the plain number for
+actual-minus-unwithdrawn, no red "unwithdrawn" badge, no amber
+"Potential:" line. That enriched treatment (clickable badge -> detail
+modal) is kept only on the Breakdown tab, gated by its own toggle.
+
+Age Grouping tab: added a "Total Branch" summary card at the top
+(per-cereal, per-age-bucket totals aggregated across every province via
+a shared `computeRows()` helper also used by the per-province tables, so
+totals and rows can never drift apart), and wrapped each province's
+block in its own bordered card for visual separation. The Total Branch
+table initially rendered with huge, uneven gaps between columns on a
+wide screen (user screenshot) - root cause: a table made entirely of
+short numeric columns has no naturally-wide column to absorb the extra
+width from `w-full`, so the browser spreads leftover space nearly
+equally across all of them. Fixed by adding a leading "Scope" / "All
+Warehouses" label column (mirrors the per-province table's own
+"Warehouse" column, which is what kept that one visually tight).
+
+### 4. Save freeze - blocking Sheet duplicate-serial check
+
+User-reported symptom: Update and Delete felt responsive, but adding/
+saving a NEW transaction froze the UI for a few seconds before the
+success toast appeared. Root cause: `validateForm()` in both
+StockFormBase.jsx and SackFormBase.jsx ran `await
+fetchTransactionBySerial(...)` - a live network round-trip to the Apps
+Script backend checking for a duplicate serial on the Sheet - and
+blocked the Save button on it BEFORE the record even reached local
+IndexedDB. Update/Delete never had this check, which is why only new
+saves felt frozen. Fixed by removing it from validateForm entirely and
+running it in the background, fire-and-forget, inside `performSave`
+AFTER `db.transactions.add()` already succeeded - the local save is now
+instant like Update/Delete; if a genuine cross-device duplicate is later
+found, a warning toast tells the user to verify it instead of freezing
+every single save on the (rare) chance of one.
+
+### 5. Delete not reflecting on the Sheet - Apps Script silently "succeeded"
+
+User-reported: deleting a transaction locally left it still present on
+the Google Sheet, with no error shown. Root cause found in
+docs/apps-script-full-replacement.js's `deleteTransaction` action: it
+always returned `{status: 'SUCCESS'}` even when `findRowIndexByMatch`
+found no matching row (rowIndex === -1) - "same end state either way, not
+an error" per the original comment - meaning the client could never tell
+an actual delete apart from "nothing was found, nothing happened". Fixed
+by returning `found: true`/`found: false` alongside status, threaded
+through `postToSheetsWithRetry` (now returns `{ok, found}` instead of
+just `{ok}`), `deleteTransactionBackup` (both the plain-type and WTS
+dual-row paths), and `queueTransactionDeletion`/the queued-deletion drain
+loop in syncWorker.js - both now show a warning toast ("deleted locally,
+but no matching row was found on the Sheet - please verify manually")
+when `found === false`, instead of silently treating it as done. NOTE:
+this required the user to manually re-paste and redeploy
+apps-script-full-replacement.js in their Google Apps Script editor -
+confirmed done, user reports it's working.
+
+### 6. Misc UI fixes
+
+- AuthorityReconciliationPanel.jsx (the AI/SIA "documents using this
+  authority" full-screen panel): the bottom "Total (N documents)" bar had
+  no safe-area-inset-bottom padding, so it sat flush against the phone's
+  home-indicator/gesture bar (user screenshot showed it nearly cut off).
+  Fixed to match the safe-area pattern already used elsewhere in the app.
+- Investigated the BottomNav "liquid glow" travel animation stuttering
+  mid-transition on rapid successive taps. Root cause: the glow element
+  only exists during a 400ms window and fully unmounts/remounts on each
+  navigation (`key={pathname}`), but `previousColumnRef.current` (its
+  "start position" for the next travel) is only updated at the END of
+  that 400ms timer - so a second rapid tap before the window closes
+  restarts the travel animation from a STALE start point instead of
+  wherever the glow visually was, producing the reported pause/jump.
+  NOT YET FIXED - built an interactive comparison demo (current
+  travel-glow vs. a persistent always-mounted sliding pill, the latter
+  driven by a continuous CSS transition so it can never have a "stale
+  start point" since it always animates from its true current position)
+  and presented both options to the user; awaiting their choice between
+  the persistent-pill redesign (visually different at rest - always
+  shows a highlight, not just during transitions) or a minimal bugfix to
+  the existing effect (keeps the "nothing at rest" look but is still
+  fighting mount/unmount timing under very rapid tapping).
+
+### 7. Responsive scaling - first pass
+
+Added a root `html` font-size bump at md (18px) / lg (20px) breakpoints
+in index.css. Since nearly all default Tailwind sizing utilities (text
+sizes, padding, margin, gap, rounded corners, most widths/heights) are
+rem-based and resolve against the root font-size, this scales font size
+AND spacing/padding/radii together in lockstep - addresses the user's
+"looks fine on mobile but font/layout is small on desktop" report
+without touching hundreds of individual class lists, and without the
+overlap/misalignment risk a naive font-only or CSS-zoom approach would
+have (every element's own internal spacing grows by the same proportion
+as its text). Known gap: a few components using fixed pixel values via
+Tailwind's arbitrary bracket syntax (e.g. PillToggle's `text-[10px]`
+labels) don't participate in this scaling - flagged as first-pass gaps,
+not yet addressed.
+
+### Commit/push
+
+All of the above (plus carried-over uncommitted work from the prior
+session - NfaMillingMonitor.jsx, Home.jsx facility-scoping,
+AdminMonitoring.jsx NFA tab, RicemillAllocationsPanel.jsx crash fix, SIA
+blank-pieces fixes) committed and pushed to origin/main as commit
+1bf0925, at the user's explicit request so they could verify on their
+own phone.
+
+### Next step for whoever picks this up
+
+BottomNav glow-stutter fix is the one open item - waiting on the user to
+choose persistent-pill vs. minimal bugfix before implementing either.
+Nothing else was left mid-build. User has confirmed the Apps Script
+redeploy and reports "everything seems to be working fine" after this
+session's fixes.
