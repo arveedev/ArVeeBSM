@@ -18,6 +18,7 @@ import { db } from '../db/dexie.js'
 import { fmtBags } from '../utils/calculations.js'
 import { SACK_CONDITIONS } from '../components/common/admin/shared.js'
 import { Section, Empty } from './AdminHomeShared.jsx'
+import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 
 const GROUP_TABS = ['Province', 'Warehouse']
 
@@ -131,7 +132,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
       {groupTab === 'Province' && (
         <Section title="Sack Pieces by Province">
           {sortedProvinces.length === 0 ? <Empty /> : (
-            <div className="space-y-4">
+            <div key="province" className="space-y-4 animate-flow-down">
               {sortedProvinces.map((province) => {
                 const wIds = warehouses.filter((w) => w.provinceId === province.provinceId).map((w) => w.warehouseId)
                 return (
@@ -150,13 +151,13 @@ function AdminHomeSacks({ onWarehouseSelect }) {
       {groupTab === 'Warehouse' && (
         <Section title="Sack Pieces by Warehouse">
           {sortedWarehouses.length === 0 ? <Empty /> : (
-            <div className="space-y-4">
+            <div key="warehouse" className="space-y-4 animate-flow-down">
               {sortedWarehouses.map((warehouse) => {
                 const province = provinceMap.get(warehouse.provinceId)
                 return (
                   <SackTypeCard
                     key={warehouse.warehouseId}
-                    label={`${province?.code ?? ''} · ${warehouse.name}`}
+                    label={`${province?.code ?? ''} · ${stripWarehouseCodePrefix(warehouse.name)}`}
                     onSelect={() => onWarehouseSelect?.(warehouse)}
                     warehouseIds={[warehouse.warehouseId]}
                   />
