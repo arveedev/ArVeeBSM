@@ -300,7 +300,27 @@ function Piles() {
     // space" scale it started at.
     const frame = requestAnimationFrame(measure)
     window.addEventListener('resize', measure)
-    return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', measure) }
+
+    // Belt-and-suspenders on top of the rAF defer above: a single frame
+    // is enough for the DOM restructuring itself to settle, but not
+    // necessarily for everything ABOVE this container (the sticky
+    // warehouse indicator, period pickers, etc.) to finish settling
+    // into ITS final layout too - containerTop above depends on all of
+    // that. A ResizeObserver re-measures whenever this container's own
+    // rendered box actually changes size, for any reason and after
+    // however many frames that genuinely takes, rather than betting on
+    // a fixed number of frames being enough.
+    let observer
+    if (containerRef.current && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => measure())
+      observer.observe(containerRef.current)
+    }
+
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', measure)
+      observer?.disconnect()
+    }
   }, [visibleCols, visibleRows, isFullScreen, isPortrait])
 
   const assignedPileIds = new Set(
@@ -640,6 +660,39 @@ function Piles() {
     : null
   const moveValid = moveRegion ? regionValid(moveRegion, moving.boxId) : false
 
+  // Drawing/moving status + its Cancel button, or the idle "Add Pile"
+  // button - rendered in two different places (the normal header, and
+  // again inside FullScreenOverlay for full-screen mode) since neither
+  // is a valid substitute for the other; a closure over drawing/moving/
+  // cancelDrawing/cancelMove/startDrawing here keeps both call sites in
+  // sync with zero duplicated JSX.
+  const PileControlsRow = () => (
+    drawing ? (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-brand-amber">
+          {drawing.start ? 'Tap the ending corner' : 'Tap the starting corner'}
+        </span>
+        <button type="button" onClick={cancelDrawing}
+          className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-400">
+          Cancel
+        </button>
+      </div>
+    ) : moving ? (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-brand-amber">Tap where this pile should go</span>
+        <button type="button" onClick={cancelMove}
+          className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-400">
+          Cancel
+        </button>
+      </div>
+    ) : (
+      <button type="button" onClick={startDrawing}
+        className="flex items-center gap-1 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-brand-neon">
+        <Plus size={14} /> Add Pile
+      </button>
+    )
+  )
+
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       <div ref={warehouseSectionRef}>
@@ -727,30 +780,15 @@ function Piles() {
             {isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
         </div>
-        {drawing ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-brand-amber">
-              {drawing.start ? 'Tap the ending corner' : 'Tap the starting corner'}
-            </span>
-            <button type="button" onClick={cancelDrawing}
-              className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-400">
-              Cancel
-            </button>
-          </div>
-        ) : moving ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-brand-amber">Tap where this pile should go</span>
-            <button type="button" onClick={cancelMove}
-              className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-400">
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={startDrawing}
-            className="flex items-center gap-1 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-brand-neon">
-            <Plus size={14} /> Add Pile
-          </button>
-        )}
+        {/* Hidden while full-screen (rendered again below, inside
+            FullScreenOverlay, instead) - this row sits outside the
+            overlay's own portaled DOM subtree, so while full-screen it
+            was completely covered by FullScreenOverlay's opaque
+            fixed/z-50 layer: not just visually behind it but genuinely
+            unreachable, which is why the Cancel button for an
+            in-progress move/draw seemed to vanish entirely once full
+            screen was toggled on mid-action. */}
+        {!isFullScreen && <PileControlsRow />}
       </div>
 
       {/* overflow-hidden so nothing ever renders outside this bordered
@@ -758,13 +796,16 @@ function Piles() {
           explicitly clamped to these same bounds. */}
       <FullScreenOverlay isFullScreen={isFullScreen} isPortrait={isPortrait}>
         {isFullScreen && (
-          <button
-            type="button"
-            onClick={() => setIsFullScreen(false)}
-            className="mb-2 flex w-fit items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-app-text active:scale-95"
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setIsFullScreen(false)}
+              className="flex w-fit items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-app-text active:scale-95"
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
+            <PileControlsRow />
+          </div>
         )}
         <div
           ref={containerRef}
@@ -1203,9 +1244,23 @@ function Piles() {
         {isTouchDevice ? 'Tap a pile to see its details, move, or delete it.' : 'Hover a pile to preview it, or click for details, move, delete, or edit.'}
       </p>
 
-      {assignForm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={cancelDrawing}>
-          <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4" onClick={(e) => e.stopPropagation()}>
+      {/* Portaled straight to document.body, and z-[65] (above
+          FullScreenOverlay's z-50) - previously a plain inline div at
+          the same z-50 as the full-screen overlay, so whichever of the
+          two happened to land later in document order for that tied
+          z-index could bury the other. That is what made this modal
+          seem to not appear at all when opened from full-screen mode:
+          FullScreenOverlay's own opaque layer was winning the tie and
+          covering it completely, not just visually dimming it. Rotated
+          to match the landscape-simulated view for the same reason as
+          ConfirmDialog. */}
+      {assignForm && createPortal(
+        <div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={cancelDrawing}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4"
+            style={(isFullScreen && isPortrait) ? { transform: 'rotate(90deg)' } : undefined}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-app-text">{editingBoxId ? 'Edit Pile' : 'Assign Pile'}</h3>
               <button type="button" onClick={cancelDrawing} aria-label="Close" className="text-neutral-400 hover:text-app-text">
@@ -1250,7 +1305,8 @@ function Piles() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <button type="button" onClick={handleExport} disabled={isExporting}
