@@ -594,10 +594,19 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
         <button type="button" onClick={() => setTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${tab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
       </div>
 
-      <div className="mt-3 animate-flow-down" key={tab}>
-        {tab === 'piles'
-          ? <PilesBeginningBalances warehouseId={effectiveWarehouseId} />
-          : <SacksBeginningBalances warehouseId={effectiveWarehouseId} />}
+      {/* Both stay mounted, toggled via a plain class rather than a
+          key-based remount - see Settings.jsx's identical fix for the
+          Create Pile/Beginning Balances switch for the full reasoning:
+          remounting on every switch restarted each panel's useLiveQuery
+          from undefined, flashing its empty state before real data
+          replaced it. */}
+      <div className="mt-3">
+        <div className={tab === 'piles' ? '' : 'hidden'}>
+          <PilesBeginningBalances warehouseId={effectiveWarehouseId} />
+        </div>
+        <div className={tab === 'sacks' ? '' : 'hidden'}>
+          <SacksBeginningBalances warehouseId={effectiveWarehouseId} />
+        </div>
       </div>
       </div>
     </section>
