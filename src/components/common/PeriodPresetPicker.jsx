@@ -58,7 +58,7 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
             key={preset.label}
             type="button"
             onClick={() => onSelectRange(preset.from, preset.to)}
-            className="relative z-10 flex-1 rounded-lg border border-transparent py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-brand-neon active:scale-95"
+            className="relative z-10 flex-1 rounded-lg border border-transparent py-1.5 text-sm font-medium text-neutral-400 transition-colors hover:text-brand-neon active:scale-95"
           >
             {preset.label}
           </button>

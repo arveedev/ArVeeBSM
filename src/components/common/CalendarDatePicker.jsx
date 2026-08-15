@@ -149,7 +149,13 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
             className={`max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl ${isOpen ? 'animate-pop-in' : 'animate-pop-out'}`}
             onClick={(e) => e.stopPropagation()}
           >
-          {label && <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-brand-neon">{label}</p>}
+          {label && (
+            <div className="mb-2 flex justify-center">
+              <p className="animate-label-pulse rounded-full border border-brand-neon/50 bg-brand-neon/10 px-3 py-1 text-center text-sm font-bold uppercase tracking-wide text-brand-neon">
+                {label}
+              </p>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <button
               type="button"
