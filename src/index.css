@@ -450,7 +450,24 @@ select {
    than a mirrored continuation of the first side. Needs `perspective`
    on the parent (`[perspective:*]` utility at the call site) to render
    as genuinely 3D. */
-@keyframes card-flip {
+/* Hinged like an actual flip-board rather than pivoting from its own
+   center, AND rotating the correct physical direction for each hinge:
+   opening hinges on the BOTTOM edge (transform-origin: bottom) - the
+   free (top) edge tips TOWARD the viewer first (rotateX going negative,
+   which visually "widens" the top under perspective as it approaches
+   the camera), then continues past edge-on (90deg, invisible) and
+   swings the rest of the way around to settle flat, reading as the top
+   flipping down and over to reveal the other side. Closing hinges on
+   the TOP edge instead, with the free (bottom) edge doing the mirror
+   image of the same motion (rotateX going positive first) - so it
+   widens forward then flips UP. The two directions are genuine mirror
+   images of each other (opposite rotation sign), not the same motion
+   just re-anchored - a real board flips differently depending on which
+   edge is doing the moving. The 90deg jump mid-animation swaps to the
+   sign that would otherwise show the newly-swapped-in content mirrored/
+   upside-down past the halfway point - both 90deg and -90deg are
+   edge-on and invisible, so the jump itself is imperceptible. */
+@keyframes card-flip-open {
   0%      { transform: rotateX(0deg); }
   48%     { transform: rotateX(-85deg); opacity: 1; }
   50%     { transform: rotateX(-90deg); opacity: 0.25; }
@@ -458,19 +475,20 @@ select {
   52%     { transform: rotateX(85deg); opacity: 1; }
   100%    { transform: rotateX(0deg); }
 }
-/* Hinged like an actual flip-board rather than pivoting from its own
-   center: opening (revealing the detail underneath) hinges on the
-   BOTTOM edge - the bottom stays put and the top swings down/away to
-   show the other side. Closing hinges on the TOP edge instead - the
-   top stays put and the bottom swings up/away - so each direction
-   folds like a real board flipping over its own opposite edge, not a
-   single edge going back and forth. */
+@keyframes card-flip-close {
+  0%      { transform: rotateX(0deg); }
+  48%     { transform: rotateX(85deg); opacity: 1; }
+  50%     { transform: rotateX(90deg); opacity: 0.25; }
+  50.01%  { transform: rotateX(-90deg); opacity: 0.25; }
+  52%     { transform: rotateX(-85deg); opacity: 1; }
+  100%    { transform: rotateX(0deg); }
+}
 .animate-card-flip-open {
-  animation: card-flip 0.6s ease-in-out;
+  animation: card-flip-open 0.6s ease-in-out;
   transform-origin: bottom;
 }
 .animate-card-flip-close {
-  animation: card-flip 0.6s ease-in-out;
+  animation: card-flip-close 0.6s ease-in-out;
   transform-origin: top;
 }
 
