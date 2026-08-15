@@ -13239,10 +13239,61 @@ blank-pieces fixes) committed and pushed to origin/main as commit
 1bf0925, at the user's explicit request so they could verify on their
 own phone.
 
+### 8. BottomNav persistent elastic pill (follow-up, same day)
+
+User chose the persistent-pill approach from the demo, requested it be
+"more elastic, more playful, more smooth" - iterated via an interactive
+widget demo (side-by-side travel-glow vs. persistent pill, then an
+elastic/squash-and-stretch version) before implementing for real.
+
+Implemented in BottomNav.jsx: removed `isTransitioning`/
+`previousColumnRef` entirely (no longer needed - see #6 above for why
+the old approach was fragile). The pill is now always mounted, one
+`<div>` per nav variant (regular 5-col, Visitor 2-col), position driven
+by `transition-nav-elastic` (new index.css utility: `transition: transform
+0.55s cubic-bezier(0.34, 1.56, 0.64, 1)` - a "back-out" curve that
+overshoots slightly past the target before settling, for a bounce rather
+than a flat slide). A nested inner element replays a squash-and-stretch
+keyframe (`animate-nav-pill-squash`) on every column change via a
+`useSquashOnChange` hook that force-reflows before re-adding the class
+(CSS animations, unlike transitions, don't restart just because the
+class is still present).
+
+Active tab styling changed from `text-brand-neon` icon-only to
+`text-brand-contrast` (dark text on the pill's solid `bg-brand-neon`
+fill), matching how the app's other pill-style toggles already indicate
+their active segment (PillToggle, tab switchers) - a lit icon sitting on
+a green fill needed dark text for contrast, plain green-on-green would
+have been invisible.
+
+Caught and fixed a real alignment bug during implementation (visible in
+the demo widget too, per user screenshot): the pill's outer positioning
+box was shrunk to `calc(20% - 0.5rem)` to leave a gutter, but
+`translateX(N * 100%)` is relative to the element's OWN width, not the
+grid column's - so each step moved by the shrunk width instead of the
+true column width, an error that compounds with every column (worst at
+the rightmost tab). Fixed by keeping the outer box's width exactly one
+grid column (`w-1/5` / `w-1/2`) and moving the gutter to a nested inner
+element (`mx-1`) that doesn't participate in the position transform.
+
+### 9. AdminHomeStocks Total Branch simplified (follow-up, same day)
+
+User reported the Total Branch card still looked cluttered (screenshot)
+and asked to drop the "Scope"/"All Warehouses" label column entirely -
+"in-line the cereal type is the value, then above them is the age
+group. much simpler." Replaced the `<table>` (which had needed a whole
+extra anchor column, see #3 above, specifically to counteract a wide
+table's tendency to spread narrow numeric-only columns apart) with a
+plain flex stat strip: each age bucket is its own small block (label
+above, value below), laid out with `flex flex-wrap gap-x-6`, ending in a
+visually-separated Total block (`ml-auto`). Since there's only ever one
+row of values here (the branch total, not a per-warehouse breakdown),
+a table was never actually necessary - the flex layout sizes to content
+naturally and needed no anchor-column workaround at all.
+
 ### Next step for whoever picks this up
 
-BottomNav glow-stutter fix is the one open item - waiting on the user to
-choose persistent-pill vs. minimal bugfix before implementing either.
-Nothing else was left mid-build. User has confirmed the Apps Script
-redeploy and reports "everything seems to be working fine" after this
-session's fixes.
+Nothing left mid-build. Both follow-up items from this session (nav
+pill, Total Branch) are done and pushed (commit 4e4bbf8). User has
+confirmed the Apps Script redeploy and reports "everything seems to be
+working fine" after the main round of fixes earlier in this session.

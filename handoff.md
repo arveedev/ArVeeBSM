@@ -537,36 +537,47 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-15 session) - BottomNav glow-stutter fix, awaiting user's choice
+### DONE (2026-08-15 session, follow-up) - BottomNav persistent elastic pill + Total Branch simplification
 
-BottomNav.jsx's "liquid glow" travel animation (the effect that plays
-briefly right after switching nav tabs) stutters/pauses when the user
-taps nav icons rapidly, one after another, before the previous 400ms
-travel animation finishes. Root cause: the glow element fully unmounts/
-remounts on every navigation (`key={pathname}`), but the ref tracking
-its "start position" for the NEXT travel (`previousColumnRef.current`)
-only updates at the end of that 400ms window - so an interrupting tap
-restarts the animation from a stale position instead of wherever the
-glow visually was.
+User chose the persistent-pill approach (from an interactive demo, see
+below) and asked for it to feel "more elastic, more playful, more
+smooth" - iterated on a second demo (squash-and-stretch + back-out
+overshoot easing) before implementing for real in BottomNav.jsx.
 
-Built an interactive demo comparing the current effect against a
-persistent, always-mounted sliding pill (driven by a continuous CSS
-`transition: transform`, same pattern already used by this app's own tab
-switchers/toggle pills) and presented both to the user. NOT YET
-IMPLEMENTED - waiting on their choice:
-- Persistent pill: fixes the bug completely (a continuous element always
-  animates from its true current position, no stale-ref possible), but
-  changes the at-rest look - currently NOTHING shows at rest by explicit
-  earlier design choice (only icon color marks the active tab); a
-  persistent pill means a highlight is always visible under the active
-  icon, not just during transitions.
-- Minimal bugfix: keep the "nothing at rest" look, fix the stale-ref bug
-  in the existing mount/unmount-based effect - still theoretically
-  fragile under very rapid tapping since it fights mount/unmount timing
-  rather than removing it, but preserves the current visual design
-  exactly.
+- Replaced the old transient "liquid glow" (existed only for a 400ms
+  window per navigation, fully unmounted/remounted each time, and
+  stuttered on rapid successive taps because its "start position" ref
+  only updated at the end of that window) with an always-mounted pill
+  positioned via a plain CSS `transition: transform` - a continuous
+  element always animates from its true current position, so there is
+  no stale "from" value left to go wrong.
+- `transition-nav-elastic` (index.css) uses a back-out cubic-bezier for
+  a slight overshoot-then-settle bounce; a nested inner element replays
+  a squash-and-stretch keyframe on every column change
+  (`animate-nav-pill-squash`, retriggered via a force-reflow hook since
+  CSS animations don't restart just from re-adding an already-present
+  class).
+- Active tab text changed from `text-brand-neon` to `text-brand-contrast`
+  (dark-on-green), since the icon now sits on the pill's solid green
+  fill - matches how PillToggle/tab switchers already indicate their
+  active segment elsewhere in the app.
+- Caught and fixed a real alignment bug along the way (seen in the demo
+  screenshot too): shrinking the pill's own box to make room for a
+  gutter broke its `translateX(N * 100%)` math, since percentage
+  translate is relative to the element's OWN width, not the grid
+  column's - the error compounded per column, worst at the rightmost
+  tab. Fixed by keeping the outer box exactly one grid column wide and
+  moving the gutter to a nested inner element instead.
 
-Full root-cause detail in docs/activity-log.md's 2026-08-15 entry (#6).
+Also, same follow-up round: AdminHomeStocks.jsx's Total Branch summary
+(added earlier this session, see below) still looked cluttered per a
+user screenshot - replaced its `<table>` with a plain flex stat strip
+(age-bucket label above, value below, Total visually separated via
+`ml-auto`) since it only ever holds one row of values and never actually
+needed table layout (or the anchor-column workaround that layout had
+required) in the first place.
+
+Full detail in docs/activity-log.md's 2026-08-15 entry, items #8-9.
 
 ### DONE (2026-08-15 session) - MillingMonitor cleanup, Expected Recovery fix, AdminHomeStocks toggles, save-freeze and delete-sync bugs
 
