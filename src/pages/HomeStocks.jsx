@@ -201,9 +201,14 @@ function CerealTotal({
 }) {
   const [displayed, setDisplayed] = useState(hasUnwithdrawn)
   const [flipKey, setFlipKey] = useState(0)
+  // Opening (revealing the detail) hinges on the bottom edge; closing
+  // hinges on the top edge - a real board flips over its opposite edge
+  // each time, not the same pivot back and forth.
+  const [flipDirection, setFlipDirection] = useState(hasUnwithdrawn ? 'open' : 'close')
 
   useEffect(() => {
     if (hasUnwithdrawn === displayed) return
+    setFlipDirection(hasUnwithdrawn ? 'open' : 'close')
     setFlipKey((k) => k + 1)
     const t = setTimeout(() => setDisplayed(hasUnwithdrawn), FLIP_MS / 2)
     return () => clearTimeout(t)
@@ -214,7 +219,7 @@ function CerealTotal({
     <div className="mt-3 [perspective:600px]">
       <div
         key={flipKey}
-        className={`animate-card-flip rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}
+        className={`${flipDirection === 'open' ? 'animate-card-flip-open' : 'animate-card-flip-close'} rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
           <span className={`truncate text-sm font-bold ${color}`}>Total ({cerealType})</span>

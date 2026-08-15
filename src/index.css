@@ -458,8 +458,20 @@ select {
   52%     { transform: rotateX(-85deg); opacity: 1; }
   100%    { transform: rotateX(0deg); }
 }
-.animate-card-flip {
+/* Hinged like an actual flip-board rather than pivoting from its own
+   center: opening (revealing the detail underneath) hinges on the
+   BOTTOM edge - the bottom stays put and the top swings down/away to
+   show the other side. Closing hinges on the TOP edge instead - the
+   top stays put and the bottom swings up/away - so each direction
+   folds like a real board flipping over its own opposite edge, not a
+   single edge going back and forth. */
+.animate-card-flip-open {
   animation: card-flip 0.6s ease-in-out;
+  transform-origin: bottom;
+}
+.animate-card-flip-close {
+  animation: card-flip 0.6s ease-in-out;
+  transform-origin: top;
 }
 
 /* Plain fade, for full-screen overlays where a scale-based pop would
