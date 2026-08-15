@@ -22,6 +22,7 @@ import ESIForm from './components/forms/ESIForm.jsx'
 import ESRForm from './components/forms/ESRForm.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
+import AnimatedToast from './components/common/AnimatedToast.jsx'
 
 const FORM_COMPONENTS = {
   WSR: WSRForm,
@@ -216,17 +217,13 @@ function App() {
         </>
       )}
 
-      {/* Global notification layer — replaces alert()/confirm() per Section 2.3 */}
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          style: {
-            background: '#171717',
-            color: '#FFFFFF',
-            border: '1px solid #262626',
-          },
-        }}
-      />
+      {/* Global notification layer — replaces alert()/confirm() per Section 2.3.
+          Custom-rendered via AnimatedToast (icon per type, entrance motion,
+          swipe-to-dismiss) - every existing toast.success/error/etc call
+          site is untouched, this hooks in once at the Toaster level. */}
+      <Toaster position="top-center">
+        {(t) => <AnimatedToast t={t} />}
+      </Toaster>
     </div>
   )
 }
