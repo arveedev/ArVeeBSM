@@ -91,9 +91,20 @@ export function UpdateButtonContent({ isSaving, label = 'Update' }) {
  * confirm dialog. */
 export function DeleteButtonLabel({ incrementKey, label = 'Delete' }) {
   const [playing, setPlaying] = useState(false)
-  const firstRun = useRef(true)
+  // Compares against the previous VALUE rather than a "have we run
+  // yet" boolean latch - the same class of bug just fixed in
+  // Settings.jsx: a boolean flipped unconditionally inside the "skip"
+  // branch gets flipped by the first of React StrictMode's two
+  // synthetic mount invocations, so the second invocation sees it
+  // already flipped and plays the animation anyway, on every mount
+  // (which is why this was firing on entrance, not just on tap). A
+  // value comparison is safe because both of StrictMode's invocations
+  // see the exact same incrementKey/prevKey pair and take the same
+  // branch, deterministically.
+  const prevKey = useRef(incrementKey)
   useEffect(() => {
-    if (firstRun.current) { firstRun.current = false; return }
+    if (incrementKey === prevKey.current) return
+    prevKey.current = incrementKey
     setPlaying(true)
     const timer = setTimeout(() => setPlaying(false), 500)
     return () => clearTimeout(timer)

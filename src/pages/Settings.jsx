@@ -712,7 +712,7 @@ function Settings() {
         <div
           className="mt-6"
           ref={pileCardRef}
-          style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 12}px` }}
+          style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 24}px` }}
         >
           <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
             <div
@@ -737,10 +737,23 @@ function Settings() {
               Beginning Balances
             </button>
           </div>
-          <div className="mt-3 animate-flow-down" key={pileSection}>
-            {pileSection === 'create'
-              ? <PileBalanceSection warehouseId={currentWarehouseId} />
-              : <BeginningBalancesPanel warehouseId={currentWarehouseId} />}
+          {/* Both stay mounted, toggled via a plain class rather than a
+              key-based remount - remounting on every switch meant each
+              panel's useLiveQuery started over from undefined, so its
+              "no piles/sacks yet" empty state (or a totally different,
+              sparser layout) would flash on screen for a moment before
+              the real, already-fetched-once data replaced it. That
+              flash is what read as a glitch. Keeping both mounted after
+              the first switch means the data is already loaded and
+              live-subscribed by the time you switch to it - nothing to
+              flash. */}
+          <div className="mt-3">
+            <div className={pileSection === 'create' ? '' : 'hidden'}>
+              <PileBalanceSection warehouseId={currentWarehouseId} />
+            </div>
+            <div className={pileSection === 'balances' ? '' : 'hidden'}>
+              <BeginningBalancesPanel warehouseId={currentWarehouseId} />
+            </div>
           </div>
         </div>
       )}
