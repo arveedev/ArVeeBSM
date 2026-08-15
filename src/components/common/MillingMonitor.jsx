@@ -4,16 +4,18 @@
 // authorities. Shows both stock (WSR/WSI) and sack (ESR/ESI) activity
 // together, since a milling operation always involves both.
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
-import { fmtBags, fmtWeight } from '../../utils/calculations.js'
+import { fmtBags, fmtWeight, calculateCurrentAge, AGE_BUCKETS } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix } from '../../services/googleSheetsBridge.js'
+import CompletedMillingModal from './CompletedMillingModal.jsx'
+import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 
 const fmtDate = (s) => {
   if (!s) return '—'
@@ -27,15 +29,42 @@ const fmtDate = (s) => {
 const categoryColor = (category) =>
   category === 'Rice' ? 'text-blue-400' : category === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
 
-function MillingOrderDetail({ order, onClose }) {
+export function MillingOrderDetail({ order, onClose }) {
   const [isClosing, setIsClosing] = useState(false)
   const [detailTab, setDetailTab] = useState('stocks')
+  // By Products/Source Warehouse/Last Activity are collapsed by
+  // default - per explicit request, the fixed (non-scrolling) header
+  // section was crowding out the actual transaction list below,
+  // leaving barely any room to view it without collapsing this first.
+  const [showMoreDetails, setShowMoreDetails] = useState(false)
+  // "more details" and the Stocks/Sacks tab section are mutually
+  // exclusive - only one is ever meant to be visible. Running each
+  // through its own independent useDelayedUnmount (as a first attempt
+  // did) meant both played their 250ms transitions in PARALLEL, so for
+  // that whole window both sections were simultaneously mounted -
+  // doubling the modal's content height and visibly overlapping mid-
+  // transition (confirmed via screen recording). This instead SEQUENCES
+  // them: `visibleSection` only flips to the new target once the old
+  // one's exit animation has actually finished, so the two are never
+  // both on screen at once - the currently-displayed section plays its
+  // exit alone, then (and only then) the other one mounts and plays
+  // its entrance.
+  const MORE_DETAILS_TRANSITION_MS = 250
+  const [visibleSection, setVisibleSection] = useState('tabs') // 'tabs' | 'details'
+  const targetSection = showMoreDetails ? 'details' : 'tabs'
+  const isSectionLeaving = visibleSection !== targetSection
+  useEffect(() => {
+    if (!isSectionLeaving) return
+    const timer = setTimeout(() => setVisibleSection(targetSection), MORE_DETAILS_TRANSITION_MS)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetSection])
   const handleClose = () => {
     setIsClosing(true)
     setTimeout(onClose, 300)
   }
 
-  const { weightUnit } = useSettings() ?? {}
+  const { weightUnit, autoAgeMonitoring } = useSettings() ?? {}
   const allTx = [...order.issueTx, ...order.receiptTx].sort((a, b) => {
     const numA = parseInt(String(a.serialNo).replace(/\D/g, ''), 10)
     const numB = parseInt(String(b.serialNo).replace(/\D/g, ''), 10)
@@ -54,6 +83,12 @@ function MillingOrderDetail({ order, onClose }) {
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w.name]))
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const pileMap = new Map(piles.map((p) => [p.pileId, p.pileName]))
+  // Full pile records (not just the name) - needed to compute each
+  // stock transaction's pile's current age/age-bucket the same way
+  // HomeStocks.jsx does, using the pile's own initialAgeValue/
+  // dateOfReceipt rather than anything stored on the transaction
+  // itself (age isn't a transaction-level field - it's the pile's).
+  const pileRecordMap = new Map(piles.map((p) => [p.pileId, p]))
   const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
 
   const stockTx = allTx.filter((t) => t.type === 'WSR' || t.type === 'WSI')
@@ -142,25 +177,41 @@ function MillingOrderDetail({ order, onClose }) {
             )}
           </div>
 
-          {byProductsBags > 0 && (
-            <div className="mt-2 rounded-lg border border-brand-byproduct/40 bg-brand-byproduct/10 p-2">
-              <p className="text-xs text-neutral-500">By Products (Total)</p>
-              <p className="font-semibold text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
-            </div>
-          )}
+          {(byProductsBags > 0 || linkedAuthority?.sourceWarehouse || lastTxSummary) && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowMoreDetails((v) => !v)}
+                className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg py-1 text-[11px] font-semibold text-brand-neon"
+              >
+                {showMoreDetails ? 'Hide' : 'Show'} more details
+                <ChevronUp size={12} className={`transition-transform ${showMoreDetails ? '' : 'rotate-180'}`} />
+              </button>
+              {shouldRenderMoreDetails && (
+                <div className={showMoreDetails ? 'animate-flow-down' : 'animate-flow-up-exit'}>
+                  {byProductsBags > 0 && (
+                    <div className="mt-2 rounded-lg border border-brand-byproduct/40 bg-brand-byproduct/10 p-2">
+                      <p className="text-xs text-neutral-500">By Products (Total)</p>
+                      <p className="font-semibold text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
+                    </div>
+                  )}
 
-          {linkedAuthority?.sourceWarehouse && (
-            <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
-              <p className="text-xs text-neutral-500">Source Warehouse</p>
-              <p className="font-semibold text-app-text">{linkedAuthority.sourceWarehouse}</p>
-            </div>
-          )}
+                  {linkedAuthority?.sourceWarehouse && (
+                    <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
+                      <p className="text-xs text-neutral-500">Source Warehouse</p>
+                      <p className="font-semibold text-app-text">{linkedAuthority.sourceWarehouse}</p>
+                    </div>
+                  )}
 
-          {lastTxSummary && (
-            <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-              <p className="text-xs text-neutral-500">Last Activity</p>
-              <p className="text-sm font-medium text-app-text">{lastTxSummary}</p>
-            </div>
+                  {lastTxSummary && (
+                    <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                      <p className="text-xs text-neutral-500">Last Activity</p>
+                      <p className="text-sm font-medium text-app-text">{lastTxSummary}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -183,38 +234,45 @@ function MillingOrderDetail({ order, onClose }) {
             </div>
           )}
 
-          <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1">
-            <div
-              className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-              style={{ transform: detailTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
-            />
-            <button type="button" onClick={() => setDetailTab('stocks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-xs font-medium ${detailTab === 'stocks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Stocks</button>
-            <button type="button" onClick={() => setDetailTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-xs font-medium ${detailTab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
-          </div>
+          {shouldRenderTabContent && (
+            <div className={`relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1 ${!showMoreDetails ? 'animate-flow-down' : 'animate-flow-up-exit'}`}>
+              <div
+                className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+                style={{ transform: detailTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+              />
+              <button type="button" onClick={() => setDetailTab('stocks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-xs font-medium ${detailTab === 'stocks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Stocks</button>
+              <button type="button" onClick={() => setDetailTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-xs font-medium ${detailTab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
+            </div>
+          )}
         </div>
 
-        {/* Only this section scrolls */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-3">
-          <div key={detailTab} className="animate-flow-down">
-            {detailTab === 'stocks' ? (
-              <TransactionGroups
-                txs={stockTx}
-                categoryOf={stockCategoryOf}
-                renderRow={(t) => (
-                  <StockRow key={t.id} t={t} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} weightUnit={weightUnit} />
-                )}
-              />
-            ) : (
-              <TransactionGroups
-                txs={sackTx}
-                categoryOf={sackCategoryOf}
-                renderRow={(t) => (
-                  <SackRow key={t.id} t={t} warehouseMap={warehouseMap} sackTypeMap={sackTypeMap} />
-                )}
-              />
-            )}
+        {/* Only this section scrolls - hidden along with the tab bar
+            above while "more details" is open, same reasoning: the
+            fixed header was crowding out the list, so the two are
+            mutually exclusive rather than both fighting for space. */}
+        {shouldRenderTabContent && (
+          <div className={`min-h-0 flex-1 overflow-y-auto p-4 pt-3 ${!showMoreDetails ? 'animate-flow-down' : 'animate-flow-up-exit'}`}>
+            <div key={detailTab} className="animate-flow-down">
+              {detailTab === 'stocks' ? (
+                <TransactionGroups
+                  txs={stockTx}
+                  categoryOf={stockCategoryOf}
+                  renderRow={(t) => (
+                    <StockRow key={t.id} t={t} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} pileRecordMap={pileRecordMap} weightUnit={weightUnit} autoAgeMonitoring={autoAgeMonitoring} />
+                  )}
+                />
+              ) : (
+                <TransactionGroups
+                  txs={sackTx}
+                  categoryOf={sackCategoryOf}
+                  renderRow={(t) => (
+                    <SackRow key={t.id} t={t} warehouseMap={warehouseMap} sackTypeMap={sackTypeMap} />
+                  )}
+                />
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>,
     document.body
@@ -259,8 +317,22 @@ function TransactionGroups({ txs, categoryOf, renderRow }) {
   )
 }
 
-function StockRow({ t, warehouseMap, varietyMap, pileMap, weightUnit }) {
+function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, weightUnit, autoAgeMonitoring }) {
   const isIssue = t.type === 'WSI'
+  // Age isn't a field on the transaction itself - it's the pile's own
+  // initialAgeValue/dateOfReceipt, computed the same way HomeStocks.jsx
+  // does for its age-bucket grouping. A transaction with no pileId
+  // (e.g. a sack-only or unassigned-pile flow) has nothing to compute
+  // this from.
+  const pile = t.pileId ? pileRecordMap.get(t.pileId) : null
+  const ageLabel = (() => {
+    if (!pile) return null
+    const category = t.cerealCategory ?? varietyMap.get(t.varietyId)?.category ?? 'Rice'
+    const age = calculateCurrentAge(pile.initialAgeValue ?? 0, pile.dateOfReceipt, autoAgeMonitoring)
+    const buckets = AGE_BUCKETS[category] ?? AGE_BUCKETS.Rice
+    const bucket = buckets.find((b) => b.test(age)) ?? buckets[buckets.length - 1]
+    return `${age}d · ${bucket.label}`
+  })()
   return (
     <li className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
       <div className="flex items-center justify-between">
@@ -281,6 +353,10 @@ function StockRow({ t, warehouseMap, varietyMap, pileMap, weightUnit }) {
         <div>
           <p className="text-[10px] uppercase text-neutral-600">Pile</p>
           <p className="text-app-text">{t.pileId ? (pileMap.get(t.pileId) ?? '—') : '—'}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-neutral-600">Age</p>
+          <p className="text-app-text">{ageLabel ?? '—'}</p>
         </div>
         <div>
           <p className="text-[10px] uppercase text-neutral-600">Bags</p>
@@ -327,9 +403,103 @@ function SackRow({ t, warehouseMap, sackTypeMap }) {
   )
 }
 
+// Shared pending/completed row renderer - identical progress-bar math
+// and layout for both MillingMonitor's inline pending list and
+// CompletedMillingModal's list, extracted so the two never drift.
+export function MillingOrderRow({ order: o, onSelect }) {
+  // Progress is issuance (0-50%) plus receipt (0-50%), not a single
+  // received-vs-expected ratio - so a fully-issued but not-yet-received
+  // order still shows real, visible progress (50%) rather than nothing
+  // until receipts start.
+  const roundTo3 = (n) => Math.round(n * 1000) / 1000
+
+  // TMO tracks TRIAL COUNT on both halves, not kg/pieces - a
+  // fully-issued-but-unreceived TMO should show exactly half full
+  // ("Trial 3 of 3" issued, "Trial 0 of 3" received) as a clear visual
+  // glimpse without opening the detail. MO is completely unaffected,
+  // keeping the kg-based calculation below exactly as it was.
+  const issuedTrialsCount = o.type === 'TMO'
+    ? new Set((o.issueTx ?? []).map((t) => t.trialNumber).filter(Boolean)).size
+    : null
+  const receivedTrialsCount = o.type === 'TMO' ? (o.recoveredTrials ?? []).length : null
+
+  const issuanceProgress = o.type === 'TMO'
+    ? roundTo3(Math.min(1, issuedTrialsCount / 3) * 50)
+    : roundTo3(
+        (o.authorityAllocationKilos
+          ? Math.min(1, o.issuedKilos / o.authorityAllocationKilos)
+          : (o.issuedKilos > 0 || o.issuedPieces > 0) ? 1 : 0
+        ) * 50
+      )
+
+  // Receipt half: proportional to received vs. expected recovery
+  // (issued x recovery%, per net kgs - e.g. 30,000kg issued at 63%
+  // recovery expects 18,900kg back). Sacks use pieces instead of kilos
+  // the same way. Falls back to received-vs-issued directly when no
+  // recovery % is set.
+  let receiptProgress
+  if (o.type === 'TMO') {
+    receiptProgress = roundTo3(Math.min(1, receivedTrialsCount / 3) * 50)
+  } else {
+    const expectedKilos = o.recoveryPercent != null ? o.issuedKilos * (o.recoveryPercent / 100) : null
+    const expectedPieces = o.recoveryPercent != null ? o.issuedPieces * (o.recoveryPercent / 100) : null
+    const kilosReceiptRatio = expectedKilos
+      ? Math.min(1, o.receivedKilos / expectedKilos)
+      : o.issuedKilos > 0 ? Math.min(1, o.receivedKilos / o.issuedKilos) : 0
+    const piecesReceiptRatio = expectedPieces
+      ? Math.min(1, o.receivedPieces / expectedPieces)
+      : o.issuedPieces > 0 ? Math.min(1, o.receivedPieces / o.issuedPieces) : 0
+    receiptProgress = roundTo3(Math.max(kilosReceiptRatio, piecesReceiptRatio) * 50)
+  }
+
+  const progress = roundTo3(issuanceProgress + receiptProgress)
+  const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
+  const isCompleted = o.sheetStatus === 'DONE' || o.fulfilled
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect(o)}
+        className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99]"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-app-text">{o.number}</p>
+          <p className="truncate text-xs text-neutral-500">
+            {o.ricemillName}
+            {o.type === 'MO' && o.batchCurrent != null && ` · Batch ${o.batchCurrent} of ${o.batchTotal}`}
+          </p>
+          {hasIssuance && (
+            <>
+              {o.type === 'TMO' && (
+                <div className="mt-1.5 flex justify-between text-[10px] text-neutral-500">
+                  <span>Trial {issuedTrialsCount} of 3 issued</span>
+                  <span>Trial {receivedTrialsCount} of 3 received</span>
+                </div>
+              )}
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+                <div
+                  className={`h-full rounded-full transition-all ${isCompleted ? 'bg-brand-neon' : 'bg-brand-amber'}`}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {!isCompleted && (o.issuedKilos > 0 || o.issuedPieces > 0) && (
+            <AlertTriangle size={14} className="text-brand-amber" />
+          )}
+          <ChevronRight size={18} className="text-neutral-600" />
+        </div>
+      </button>
+    </li>
+  )
+}
+
 function MillingMonitor() {
   const [topTab, setTopTab] = useState('MO')
-  const [showCompleted, setShowCompleted] = useState(false)
+  const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -375,27 +545,40 @@ function MillingMonitor() {
     ? sheetSources.map((s) => s.dateFrom).filter(Boolean).sort()[0]
     : null
 
-  const filtered = orders.filter((o) => {
+  // Sheet-marked DONE is unconditionally completed, regardless of what
+  // the kg/piece-based fulfilled calculation separately says -
+  // previously only fulfilled was checked here, so an order marked
+  // DONE directly on the sheet but not also satisfying that math (e.g.
+  // missing/mismatched recovery %) would incorrectly keep showing in
+  // the pending list forever.
+  const passesSharedFilters = (o) => {
     if (earliestSourceDateFrom) {
       const allDates = [...(o.issueTx ?? []), ...(o.receiptTx ?? [])].map((t) => t.date).filter(Boolean)
       if (allDates.length > 0 && allDates.every((d) => d < earliestSourceDateFrom)) return false
     }
-    // Sheet-marked DONE is unconditionally completed, regardless of
-    // what the kg/piece-based fulfilled calculation separately says -
-    // previously only fulfilled was checked here, so an order marked
-    // DONE directly on the sheet but not also satisfying that math
-    // (e.g. missing/mismatched recovery %) would incorrectly keep
-    // showing in the pending list forever.
-    const isCompleted = o.sheetStatus === 'DONE' || o.fulfilled
-    if (isCompleted !== showCompleted) return false
     if (regionalAuthFilter.trim() && regionalAuthByOrder.get(o.orderId) !== regionalAuthFilter.trim()) return false
     return true
-  })
+  }
+  const isOrderCompleted = (o) => o.sheetStatus === 'DONE' || o.fulfilled
+  // Inline list is always pending-only now - completed orders live in
+  // their own modal (CompletedMillingModal below) instead of replacing
+  // this list in place, matching the AI/SIA Monitor's own
+  // pending-list/separate-completed-modal convention.
+  const filtered = orders.filter((o) => !isOrderCompleted(o) && passesSharedFilters(o))
+  // Newest activity first, oldest last - per explicit request, matches
+  // CompletedAuthorityModal's own newest-first sort.
+  const lastActivityDate = (o) => {
+    const dates = [...(o.issueTx ?? []), ...(o.receiptTx ?? [])].map((t) => t.date).filter(Boolean)
+    return dates.length ? dates.reduce((max, d) => (d > max ? d : max)) : ''
+  }
+  const completedFiltered = orders
+    .filter((o) => isOrderCompleted(o) && passesSharedFilters(o))
+    .sort((a, b) => lastActivityDate(b).localeCompare(lastActivityDate(a)))
 
   const availableRegionalAuthNumbers = [...new Set([...regionalAuthByOrder.values()].filter(Boolean))].sort()
 
   return (
-    <div ref={containerRef} className={`rounded-2xl border p-4 transition-all ${showCompleted ? 'border-brand-neon shadow-[0_0_16px_-4px_rgba(0,255,163,0.4)] bg-neutral-900' : 'border-neutral-800 bg-neutral-900'}`}>
+    <div ref={containerRef} className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -418,10 +601,10 @@ function MillingMonitor() {
           </button>
           <button
             type="button"
-            onClick={() => setShowCompleted((v) => !v)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${showCompleted ? 'bg-brand-neon text-brand-contrast' : 'border border-neutral-700 text-neutral-400'}`}
+            onClick={() => setShowCompletedModal(true)}
+            className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-semibold text-neutral-400 transition-all active:scale-95"
           >
-            {showCompleted ? 'Showing Completed' : 'Show Completed'}
+            Show Completed
           </button>
         </div>
         )}
@@ -458,103 +641,15 @@ function MillingMonitor() {
       )}
 
       {isExpanded && (
-      <ul className="mt-3 space-y-1.5 animate-flow-down" key={`${topTab}-${showCompleted}`}>
+      <ul className="mt-3 space-y-1.5 animate-flow-down" key={topTab}>
         {filtered.length === 0 && (
           <p className="py-4 text-center text-xs text-neutral-500">
-            No {showCompleted ? 'completed' : 'pending'} {topTab} operations.
+            No pending {topTab} operations.
           </p>
         )}
-        {filtered.map((o) => {
-          // Progress is issuance (0-50%) plus receipt (0-50%), not a
-          // single received-vs-expected ratio - so a fully-issued but
-          // not-yet-received order still shows real, visible progress
-          // (50%) rather than nothing until receipts start.
-          const roundTo3 = (n) => Math.round(n * 1000) / 1000
-
-          // TMO tracks TRIAL COUNT on both halves, not kg/pieces - a
-          // fully-issued-but-unreceived TMO should show exactly half
-          // full ("Trial 3 of 3" issued, "Trial 0 of 3" received) as
-          // a clear visual glimpse without opening the detail. MO is
-          // completely unaffected, keeping the kg-based calculation
-          // below exactly as it was.
-          const issuedTrialsCount = o.type === 'TMO'
-            ? new Set((o.issueTx ?? []).map((t) => t.trialNumber).filter(Boolean)).size
-            : null
-          const receivedTrialsCount = o.type === 'TMO' ? (o.recoveredTrials ?? []).length : null
-
-          const issuanceProgress = o.type === 'TMO'
-            ? roundTo3(Math.min(1, issuedTrialsCount / 3) * 50)
-            : roundTo3(
-                (o.authorityAllocationKilos
-                  ? Math.min(1, o.issuedKilos / o.authorityAllocationKilos)
-                  : (o.issuedKilos > 0 || o.issuedPieces > 0) ? 1 : 0
-                ) * 50
-              )
-
-          // Receipt half: proportional to received vs. expected
-          // recovery (issued x recovery%, per net kgs - e.g. 30,000kg
-          // issued at 63% recovery expects 18,900kg back). Sacks use
-          // pieces instead of kilos the same way. Falls back to
-          // received-vs-issued directly when no recovery % is set.
-          let receiptProgress
-          if (o.type === 'TMO') {
-            receiptProgress = roundTo3(Math.min(1, receivedTrialsCount / 3) * 50)
-          } else {
-            const expectedKilos = o.recoveryPercent != null ? o.issuedKilos * (o.recoveryPercent / 100) : null
-            const expectedPieces = o.recoveryPercent != null ? o.issuedPieces * (o.recoveryPercent / 100) : null
-            const kilosReceiptRatio = expectedKilos
-              ? Math.min(1, o.receivedKilos / expectedKilos)
-              : o.issuedKilos > 0 ? Math.min(1, o.receivedKilos / o.issuedKilos) : 0
-            const piecesReceiptRatio = expectedPieces
-              ? Math.min(1, o.receivedPieces / expectedPieces)
-              : o.issuedPieces > 0 ? Math.min(1, o.receivedPieces / o.issuedPieces) : 0
-            receiptProgress = roundTo3(Math.max(kilosReceiptRatio, piecesReceiptRatio) * 50)
-          }
-
-          const progress = roundTo3(issuanceProgress + receiptProgress)
-          const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
-          const isCompleted = o.sheetStatus === 'DONE' || o.fulfilled
-
-          return (
-          <li key={o.orderId}>
-            <button
-              type="button"
-              onClick={() => setSelectedOrder(o)}
-              className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99]"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-app-text">{o.number}</p>
-                <p className="truncate text-xs text-neutral-500">
-                  {o.ricemillName}
-                  {o.type === 'MO' && o.batchCurrent != null && ` · Batch ${o.batchCurrent} of ${o.batchTotal}`}
-                </p>
-                {hasIssuance && (
-                  <>
-                    {o.type === 'TMO' && (
-                      <div className="mt-1.5 flex justify-between text-[10px] text-neutral-500">
-                        <span>Trial {issuedTrialsCount} of 3 issued</span>
-                        <span>Trial {receivedTrialsCount} of 3 received</span>
-                      </div>
-                    )}
-                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
-                      <div
-                        className={`h-full rounded-full transition-all ${isCompleted ? 'bg-brand-neon' : 'bg-brand-amber'}`}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {!isCompleted && (o.issuedKilos > 0 || o.issuedPieces > 0) && (
-                  <AlertTriangle size={14} className="text-brand-amber" />
-                )}
-                <ChevronRight size={18} className="text-neutral-600" />
-              </div>
-            </button>
-          </li>
-          )
-        })}
+        {filtered.map((o) => (
+          <MillingOrderRow key={o.orderId} order={o} onSelect={setSelectedOrder} />
+        ))}
       </ul>
       )}
 
@@ -573,6 +668,14 @@ function MillingMonitor() {
       )}
 
       {selectedOrder && <MillingOrderDetail order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
+      {showCompletedModal && (
+        <CompletedMillingModal
+          orders={completedFiltered}
+          type={topTab}
+          onSelectOrder={setSelectedOrder}
+          onClose={() => setShowCompletedModal(false)}
+        />
+      )}
     </div>
   )
 }

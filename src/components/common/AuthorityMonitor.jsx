@@ -17,13 +17,15 @@
 //
 // SIA quantities are PIECES, not bags — sacks are counted as pieces.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Check } from 'lucide-react'
+import { Check, Inbox, ChevronDown, ChevronUp } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
+import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 import CompletedAuthorityModal from './CompletedAuthorityModal.jsx'
 import AuthorityReconciliationPanel from './AuthorityReconciliationPanel.jsx'
 
@@ -36,6 +38,17 @@ function AuthorityMonitor() {
   const [showCompleted, setShowCompleted] = useState(false)
   const [choiceAuthority, setChoiceAuthority] = useState(null)
   const [viewingAuthority, setViewingAuthority] = useState(null)
+  // authId currently playing its "marked complete" glow+collapse exit
+  // animation, or null - the actual DB write (which is what makes it
+  // leave this pending list for real) is deliberately delayed until
+  // the animation finishes, so the row visibly glows green and shrinks
+  // away instead of just vanishing the instant it's tapped.
+  const [completingId, setCompletingId] = useState(null)
+  // Expanded by default (per explicit correction - an earlier pass
+  // defaulted this to collapsed, which wasn't what was wanted). Still
+  // collapsible via the header button, same as Milling Operations.
+  const [expanded, setExpanded] = useState(true)
+  const shouldRenderBody = useDelayedUnmount(expanded, 250)
 
   const accessibleIds = (accessibleWarehouses ?? []).map((w) => w.warehouseId)
   const accessibleIdsKey = accessibleIds.join(',')
@@ -45,6 +58,19 @@ function AuthorityMonitor() {
     return db.authorities.where('assignedWarehouse').anyOf(accessibleIds).toArray()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessibleIdsKey])
+
+  // Clears completingId only once the live query has actually caught
+  // up and the authority is genuinely no longer pending - clearing it
+  // on a fixed timer (matched to the CSS animation duration) instead
+  // raced against Dexie's own async re-query, so for one frame the row
+  // would revert to its normal, un-glowing appearance BEFORE the live
+  // query removed it from the list - reading as a flicker/reappear
+  // rather than one continuous glow-then-collapse.
+  useEffect(() => {
+    if (!completingId) return
+    const stillPending = authorities?.some((a) => a.authId === completingId && !isAuthorityComplete(a))
+    if (!stillPending) setCompletingId(null)
+  }, [authorities, completingId])
 
   // These must be above the early return — React requires hooks to be
   // called unconditionally on every render, never after a conditional
@@ -92,6 +118,15 @@ function AuthorityMonitor() {
     })
   })()
   const completedList = typeAuthorities.filter(isAuthorityComplete)
+  // Per-type pending counts for the collapsed header's "AI (3) / SIA
+  // (4)" chip - unlike `filtered` above these aren't ref-deduped (that
+  // dedup exists to keep the expanded LIST from showing a stray
+  // duplicate, not to keep a summary count exact), so it's a simpler
+  // pass over the same data rather than running the dedup twice for
+  // numbers that are just meant to give a rough sense of what's
+  // waiting in each type before the user taps to expand.
+  const aiPendingCount = authorities.filter((a) => a.type === 'AI' && !isAuthorityComplete(a)).length
+  const siaPendingCount = authorities.filter((a) => a.type === 'SIA' && !isAuthorityComplete(a)).length
 
   const handleOpen = (authority) => {
     if (authority.assignedWarehouse && authority.assignedWarehouse !== currentWarehouseId) {
@@ -144,18 +179,48 @@ function AuthorityMonitor() {
     }
   }
 
-  const toggleManualComplete = async (authority, e) => {
+  // Must match .animate-row-complete-out's duration in index.css.
+  const ROW_EXIT_MS = 700
+
+  const toggleManualComplete = (authority, e) => {
     e.stopPropagation()
-    await db.authorities.update(authority.authId, {
-      manuallyCompleted: !authority.manuallyCompleted,
-    })
+    setCompletingId(authority.authId)
+    setTimeout(() => {
+      db.authorities.update(authority.authId, { manuallyCompleted: true })
+      // completingId is cleared by the effect above, once the live
+      // query confirms the authority has actually left this list - not
+      // here, to avoid a race with Dexie's async re-query.
+    }, ROW_EXIT_MS)
   }
 
   return (
     <div className="mt-6">
-      <h2 className="text-sm font-semibold text-app-text">AI / SIA Monitor</h2>
+      <button
+        type="button"
+        onClick={() => setExpanded((o) => !o)}
+        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-left transition-all active:scale-[0.99]"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <Inbox size={20} className="shrink-0 text-brand-neon" />
+          <span className="truncate text-sm font-bold text-app-text">Authority Monitor</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          {(aiPendingCount > 0 || siaPendingCount > 0) && (
+            <span className="whitespace-nowrap rounded-full bg-brand-neon/15 px-3 py-1.5 text-sm font-bold text-brand-neon">
+              {aiPendingCount} AI · {siaPendingCount} SIA
+            </span>
+          )}
+          {expanded ? (
+            <ChevronUp size={20} className="text-neutral-500" />
+          ) : (
+            <ChevronDown size={20} className="text-neutral-500" />
+          )}
+        </span>
+      </button>
 
-      <div className="relative mt-2 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+      {shouldRenderBody && (
+        <div className={`mt-3 ${expanded ? 'animate-flow-down' : 'animate-flow-up-exit'}`}>
+      <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
         <div
           className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
           style={{ transform: topTab === TOP_TABS[0] ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
@@ -215,27 +280,35 @@ function AuthorityMonitor() {
                 ? 'text-brand-neon'
                 : 'text-app-text'
 
+          // Shows checked immediately on tap, independent of the
+          // (deliberately delayed) DB write - without this the
+          // checkmark never appeared at all, since a.manuallyCompleted
+          // only flips true right at the end of the animation, by
+          // which point the row is already about to disappear.
+          const isCompleting = completingId === a.authId
+          const showsChecked = a.manuallyCompleted || isCompleting
+
           return (
             <li
               key={a.authId}
-              className="flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 transition-all hover:border-brand-neon/50"
+              className={`flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 transition-all hover:border-brand-neon/50 ${isCompleting ? 'animate-row-complete-out pointer-events-none' : ''}`}
             >
               <button
                 type="button"
                 onClick={(e) => toggleManualComplete(a, e)}
-                aria-label={a.manuallyCompleted ? 'Mark as pending' : 'Mark as completed'}
+                aria-label={showsChecked ? 'Mark as pending' : 'Mark as completed'}
                 className={`flex w-10 shrink-0 items-center justify-center rounded-l-xl border-r border-neutral-800 transition-colors ${
-                  a.manuallyCompleted
+                  showsChecked
                     ? 'bg-brand-neon/10 text-brand-neon'
                     : 'text-neutral-600 hover:text-neutral-400'
                 }`}
               >
                 <span
                   className={`flex h-5 w-5 items-center justify-center rounded-md border ${
-                    a.manuallyCompleted ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
+                    showsChecked ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
                   }`}
                 >
-                  {a.manuallyCompleted && <Check size={14} />}
+                  {showsChecked && <Check size={14} />}
                 </span>
               </button>
 
@@ -297,6 +370,8 @@ function AuthorityMonitor() {
           )
         })}
       </ul>
+        </div>
+      )}
 
       {showCompleted && (
         <CompletedAuthorityModal
@@ -305,45 +380,18 @@ function AuthorityMonitor() {
           varietyMap={varietyMap}
           sackTypeMap={sackTypeMap}
           warehouseMap={warehouseMap}
+          accessibleWarehouses={accessibleWarehouses}
           onClose={() => setShowCompleted(false)}
         />
       )}
 
       {choiceAuthority && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4"
-          onClick={() => setChoiceAuthority(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="px-2 py-1 text-center text-sm font-medium text-app-text">
-              {choiceAuthority.type} · {choiceAuthority.type === 'AI' ? choiceAuthority.aiNumber : choiceAuthority.siaNumber}
-            </p>
-            <button
-              type="button"
-              onClick={() => { handleOpen(choiceAuthority); setChoiceAuthority(null) }}
-              className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-sm font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
-            >
-              Add New Transaction
-            </button>
-            <button
-              type="button"
-              onClick={() => { setViewingAuthority(choiceAuthority); setChoiceAuthority(null) }}
-              className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-sm font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
-            >
-              View Transactions
-            </button>
-            <button
-              type="button"
-              onClick={() => setChoiceAuthority(null)}
-              className="mt-2 w-full rounded-xl px-4 py-3 text-center text-sm font-medium text-neutral-500"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <ChoiceAuthorityModal
+          choiceAuthority={choiceAuthority}
+          onAddNew={() => { handleOpen(choiceAuthority); setChoiceAuthority(null) }}
+          onViewTransactions={() => { setViewingAuthority(choiceAuthority); setChoiceAuthority(null) }}
+          onClose={() => setChoiceAuthority(null)}
+        />
       )}
 
       {viewingAuthority && (
@@ -353,6 +401,62 @@ function AuthorityMonitor() {
         />
       )}
     </div>
+  )
+}
+
+// Portaled straight to document.body - this is opened from deep inside
+// AuthorityMonitor, which on Home.jsx sits under a `.stagger-fields`/
+// `.animate-flow-down` ancestor whose `animation-fill-mode: both`
+// leaves a lingering non-`none` transform applied even after the
+// animation finishes - and that becomes the containing block for any
+// `position: fixed` descendant instead of the real viewport, which is
+// exactly what left this dimming the screen but not actually rendering
+// visibly (same bug fixed for CompletedMillingModal/
+// CompletedAuthorityModal earlier this session). Also gained a proper
+// entrance/exit (was popping in/out instantly before).
+function ChoiceAuthorityModal({ choiceAuthority, onAddNew, onViewTransactions, onClose }) {
+  const [isClosing, setIsClosing] = useState(false)
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(onClose, 250)
+  }
+
+  return createPortal(
+    <div
+      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
+      onClick={handleClose}
+    >
+      <div
+        className={`w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-3 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="px-2 py-1 text-center text-sm font-medium text-app-text">
+          {choiceAuthority.type} · {choiceAuthority.type === 'AI' ? choiceAuthority.aiNumber : choiceAuthority.siaNumber}
+        </p>
+        <button
+          type="button"
+          onClick={onAddNew}
+          className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-sm font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+        >
+          Add New Transaction
+        </button>
+        <button
+          type="button"
+          onClick={onViewTransactions}
+          className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-sm font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+        >
+          View Transactions
+        </button>
+        <button
+          type="button"
+          onClick={handleClose}
+          className="mt-2 w-full rounded-xl px-4 py-3 text-center text-sm font-medium text-neutral-500"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>,
+    document.body
   )
 }
 

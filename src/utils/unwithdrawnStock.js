@@ -35,6 +35,18 @@ const ageGroupToDays = (ageGroup) => {
   return single ? Math.round(Number(single[1]) * 30) : null
 }
 
+// Resolves one authority's own age bucket label for a given category -
+// shared by the category-wide rollup below and by getUnwithdrawnDetail's
+// optional bucket filter, so both use the exact same resolution logic
+// and can never disagree with each other about which bucket an
+// authority belongs to.
+const resolveAuthorityBucketLabel = (authority, category) => {
+  const days = ageGroupToDays(authority.ageGroup)
+  const buckets = AGE_BUCKETS[category] ?? AGE_BUCKETS.Rice
+  const bucket = days != null ? buckets.find((b) => b.test(days)) : null
+  return bucket?.label ?? UNSPECIFIED_AGE
+}
+
 // Every WSI/WTS actually withdrawn against one AI so far, plus the totals.
 const withdrawalsForAuthority = async (aiNumber) => {
   const withdrawals = await db.transactions
@@ -85,13 +97,20 @@ export const computeUnwithdrawnByVariety = async (warehouseId) => {
 // varieties in one warehouse - the drill-down behind an "unwithdrawn"
 // badge, so a user can see exactly which AI(s) and which documents
 // produced that number instead of just the rolled-up total.
-export const getUnwithdrawnDetail = async (warehouseId, varietyIds) => {
+// bucketFilter, when passed as { category, label }, restricts the
+// result to only authorities whose OWN ageGroup resolves to that exact
+// bucket (via resolveAuthorityBucketLabel) - used for the per-age-group
+// drill-down on HomeStocks.jsx, so that modal shows genuinely bucket-
+// specific authorities/documents instead of the same full-variety list
+// regardless of which bucket was tapped.
+export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter) => {
   if (!warehouseId) return []
 
   const authorities = await activeAiAuthoritiesFor(warehouseId, varietyIds)
   const detail = []
 
   for (const a of authorities) {
+    if (bucketFilter && resolveAuthorityBucketLabel(a, bucketFilter.category) !== bucketFilter.label) continue
     const { withdrawals, withdrawnBags, withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
     const unwithdrawnBags = Math.max(0, (a.totalAllocationBags ?? 0) - withdrawnBags)
     const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
@@ -131,14 +150,46 @@ export const computeUnwithdrawnByCategoryAge = async (warehouseId, varietyCatego
     const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
     if (unwithdrawnKilos <= 0) continue
 
-    const days = ageGroupToDays(a.ageGroup)
-    const buckets = AGE_BUCKETS[category] ?? AGE_BUCKETS.Rice
-    const bucket = days != null ? buckets.find((b) => b.test(days)) : null
-    const label = bucket?.label ?? UNSPECIFIED_AGE
+    const label = resolveAuthorityBucketLabel(a, category)
 
     if (!result.has(category)) result.set(category, new Map())
     const catMap = result.get(category)
     catMap.set(label, (catMap.get(label) ?? 0) + unwithdrawnKilos / 50)
+  }
+
+  return result
+}
+
+// Per warehouse, per VARIETY (not just category), per age bucket:
+// unwithdrawn bags+kilos - powers HomeStocks.jsx's per-age-group
+// unwithdrawn figures. computeUnwithdrawnByCategoryAge above rolls up
+// every variety in a category together, which isn't precise enough
+// once a category has more than one variety in play; this keeps them
+// separate. Same UNSPECIFIED_AGE handling - an authority whose
+// ageGroup can't be resolved is excluded from every specific bucket
+// (only ever reflected in computeUnwithdrawnByVariety's plain total),
+// not attributed to a bucket it may not actually belong to.
+export const computeUnwithdrawnByVarietyAge = async (warehouseId, varietyCategoryMap) => {
+  const result = new Map() // varietyId -> Map(bucketLabel -> { bags, kilos })
+  if (!warehouseId) return result
+
+  const authorities = await activeAiAuthoritiesFor(warehouseId)
+
+  for (const a of authorities) {
+    if (!a.varietyId) continue
+    const category = varietyCategoryMap?.get(a.varietyId) ?? 'Unknown'
+    const { withdrawnBags, withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
+    const unwithdrawnBags = Math.max(0, (a.totalAllocationBags ?? 0) - withdrawnBags)
+    const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
+    if (unwithdrawnBags <= 0 && unwithdrawnKilos <= 0) continue
+
+    const label = resolveAuthorityBucketLabel(a, category)
+    if (label === UNSPECIFIED_AGE) continue
+
+    if (!result.has(a.varietyId)) result.set(a.varietyId, new Map())
+    const varietyMap = result.get(a.varietyId)
+    const cur = varietyMap.get(label) ?? { bags: 0, kilos: 0 }
+    varietyMap.set(label, { bags: cur.bags + unwithdrawnBags, kilos: cur.kilos + unwithdrawnKilos })
   }
 
   return result

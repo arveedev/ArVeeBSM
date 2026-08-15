@@ -13,13 +13,15 @@
 // from the database query and previously caused buckets to appear out
 // of sequence (e.g. "6.1-12 months" before "0-6 months").
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { ChevronDown } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtBags, fmtWeight, fmtNetBags, AGE_BUCKETS } from '../utils/calculations.js'
-import { computeUnwithdrawnByVariety } from '../utils/unwithdrawnStock.js'
+import { computeUnwithdrawnByVariety, computeUnwithdrawnByVarietyAge } from '../utils/unwithdrawnStock.js'
+import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
 
@@ -61,6 +63,184 @@ const sortBucketEntries = (cerealType, entries) => {
   })
 }
 
+// Extracted into its own component (rather than an inline render inside
+// a .map()) specifically so it can call useDelayedUnmount - React's
+// Rules of Hooks don't allow a hook call per loop iteration inside one
+// shared component body, but each VarietyCard here is its own component
+// instance, so each gets its own safely.
+function VarietyCard({
+  varietyName, varietyBags, varietyKilos, varietyId, cerealType,
+  bucketEntries, bucketUnwithdrawnMap,
+  showNetBags, weightUnit, isExpanded, onToggle, onOpenDetail,
+}) {
+  const unitLabel = showNetBags ? 'net bags' : 'bags'
+  const hasAnyBucketUnwithdrawn = bucketEntries.some(([label]) => {
+    const uw = bucketUnwithdrawnMap?.get(label)
+    const amt = unwithdrawnAmount(uw, showNetBags)
+    return amt >= (showNetBags ? 0.005 : 1)
+  })
+  const hasExpandableDetail = hasAnyBucketUnwithdrawn || bucketEntries.length > 1
+
+  // The detail region's HEIGHT animates (via CSS grid-template-rows
+  // 0fr -> 1fr), not just its opacity/translateY - a transform-based
+  // reveal (the animate-flow-down used elsewhere) doesn't change actual
+  // document height progressively, so the arrow below it would just
+  // snap to its new position the instant the block mounts rather than
+  // genuinely sliding down as the block grows. Height-animating this
+  // wrapper is what makes the arrow (and anything else below) reflow
+  // smoothly frame-by-frame instead of jumping.
+  const shouldRenderDetail = useDelayedUnmount(isExpanded, 300)
+
+  return (
+    <div className="mt-3">
+      <div
+        onClick={hasExpandableDetail ? onToggle : undefined}
+        className={`rounded-lg bg-neutral-800/50 px-2 py-1.5 transition-colors ${hasExpandableDetail ? 'cursor-pointer active:bg-neutral-800' : ''}`}
+      >
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+          <span className="truncate text-sm font-semibold text-app-text">{varietyName}</span>
+          <div className="text-right">
+            <p className="whitespace-nowrap text-sm font-semibold text-app-text">
+              {showNetBags ? `${fmtNetBags(varietyKilos / 50)} net bags` : `${fmtBags(varietyBags)} bags`}
+            </p>
+            <p className="whitespace-nowrap text-sm font-semibold text-app-text">{fmtWeight(varietyKilos, weightUnit, 'Net')}</p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          {shouldRenderDetail && (
+            <div className="mt-1 space-y-1">
+              {bucketEntries.length > 1 && bucketEntries.map(([bucketLabel, totals]) => {
+                // Real per-bucket figure, not an estimate - each AI's
+                // own ageGroup field resolves to a specific bucket
+                // (computeUnwithdrawnByVarietyAge), so this is the
+                // actual unwithdrawn amount for THIS age group, not the
+                // variety's total prorated by bag share.
+                const bucketUnwithdrawn = bucketUnwithdrawnMap?.get(bucketLabel)
+                const bucketUnwithdrawnAmt = unwithdrawnAmount(bucketUnwithdrawn, showNetBags)
+                const bucketHasUnwithdrawn = bucketUnwithdrawnAmt >= (showNetBags ? 0.005 : 1)
+                const bucketTotalAmt = showNetBags ? totals.kilos / 50 : totals.bags
+
+                return (
+                  <div key={bucketLabel} className="border-b border-neutral-800/50 py-1">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                      <span className="truncate pl-2 text-xs text-neutral-400">{bucketLabel}</span>
+                      <div className="text-right">
+                        <p className="whitespace-nowrap text-xs text-neutral-300">
+                          {showNetBags ? `${fmtNetBags(totals.kilos / 50)} net bags` : `${fmtBags(totals.bags)} bags`}
+                        </p>
+                        <p className="whitespace-nowrap text-xs text-neutral-300">{fmtWeight(totals.kilos, weightUnit, 'Net')}</p>
+                      </div>
+                    </div>
+                    {bucketHasUnwithdrawn && (
+                      <div className="mt-1 flex items-center justify-between gap-2 pl-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onOpenDetail({ varietyIds: [varietyId], bucketFilter: { category: cerealType, label: bucketLabel }, title: `${varietyName} — ${bucketLabel}`, subtitle: `${cerealType} · Unwithdrawn` }) }}
+                          className="whitespace-nowrap rounded-md bg-red-400/10 px-1.5 py-0.5 text-xs font-medium text-red-400/90 transition-colors hover:bg-red-400/20 active:scale-95 sm:text-sm"
+                        >
+                          {formatAmount(bucketUnwithdrawnAmt, showNetBags)} {unitLabel} unwithdrawn
+                        </button>
+                        <p className="whitespace-nowrap text-xs text-brand-amber/90 sm:text-sm">
+                          Potential: {formatAmount(Math.max(0, bucketTotalAmt - bucketUnwithdrawnAmt), showNetBags)} {unitLabel}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {hasExpandableDetail && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mt-0.5 flex w-full justify-center py-1"
+          aria-label={isExpanded ? 'Hide details' : 'Show details'}
+        >
+          {/* The rotate only starts once the 300ms height-slide above
+              has actually finished (transition-delay matches that
+              duration) - flipping at the same moment the slide starts
+              made the arrow's own motion (rotating) compete with the
+              content's motion (sliding) instead of reading as two
+              connected steps: slide, then flip to show the new state. */}
+          <ChevronDown
+            size={16}
+            className={`text-brand-neon transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+            style={{ transitionDelay: '300ms' }}
+          />
+        </button>
+      )}
+    </div>
+  )
+}
+
+// Extracted for the same reason as VarietyCard above (Rules of Hooks -
+// each cereal type's total needs its own useState/useEffect instance,
+// not one shared across a .map() loop). Flips between "just the actual
+// figure" and "actual + unwithdrawn/potential detail" as a genuine
+// two-sided card turn: `displayed` lags one animation-half behind the
+// real `hasUnwithdrawn` value, so the OLD content is still what's
+// showing for the first half of the rotation (until the card is
+// edge-on and invisible), then the NEW content takes over for the
+// second half - see the `card-flip` keyframes in index.css for why a
+// single element can fake two faces this way.
+const FLIP_MS = 600
+
+function CerealTotal({
+  cerealType, color, cerealBags, cerealKilos, showNetBags, weightUnit,
+  hasUnwithdrawn, unwithdrawnAmt, unitLabel, cerealVarietyIds, onOpenDetail,
+}) {
+  const [displayed, setDisplayed] = useState(hasUnwithdrawn)
+  const [flipKey, setFlipKey] = useState(0)
+
+  useEffect(() => {
+    if (hasUnwithdrawn === displayed) return
+    setFlipKey((k) => k + 1)
+    const t = setTimeout(() => setDisplayed(hasUnwithdrawn), FLIP_MS / 2)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnwithdrawn])
+
+  return (
+    <div className={`mt-3 rounded-lg border-t-2 px-2 py-2 [perspective:600px] ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}>
+      <div key={flipKey} className="animate-card-flip">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+          <span className={`truncate text-sm font-bold ${color}`}>Total ({cerealType})</span>
+          <div className="text-right">
+            <p className={`whitespace-nowrap text-base font-bold ${color}`}>
+              {showNetBags ? `${fmtNetBags(cerealKilos / 50)} net bags` : `${fmtBags(cerealBags)} bags`}
+            </p>
+            <p className={`whitespace-nowrap text-base font-bold ${color}`}>{fmtWeight(cerealKilos, weightUnit, 'Net')}</p>
+          </div>
+        </div>
+        {displayed && (
+          <div className="mt-2 flex items-center justify-between gap-2 border-t border-neutral-800/50 pt-2">
+            <button
+              type="button"
+              onClick={() => onOpenDetail({ varietyIds: cerealVarietyIds, title: `${cerealType} — Unwithdrawn`, subtitle: 'All varieties in this category' })}
+              className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-sm font-bold text-red-400 transition-colors hover:bg-red-400/25 active:scale-95 sm:text-base"
+            >
+              {formatAmount(unwithdrawnAmt, showNetBags)} {unitLabel} unwithdrawn
+            </button>
+            <p className="whitespace-nowrap text-xs font-medium text-brand-amber sm:text-sm">
+              Potential: {formatAmount(Math.max(0, (showNetBags ? cerealKilos / 50 : cerealBags) - unwithdrawnAmt), showNetBags)} {unitLabel}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function HomeStocks({ warehouseId } = {}) {
   const { autoAgeMonitoring, weightUnit } = useSettings() ?? {}
   const { currentWarehouseId: contextWarehouseId } = useWarehouse() ?? {}
@@ -69,9 +249,20 @@ function HomeStocks({ warehouseId } = {}) {
   // net bags is not shown by default, kept out of view until the user
   // explicitly asks for it, for a cleaner default look.
   const [showNetBags, setShowNetBags] = useState(false)
-  // { varietyIds, title, subtitle } for the unwithdrawn drill-down modal,
-  // or null when closed.
+  // { varietyIds, bucketFilter, title, subtitle } for the unwithdrawn
+  // drill-down modal, or null when closed.
   const [detailContext, setDetailContext] = useState(null)
+  // Per-variety age-bucket detail is collapsed by default, keyed on
+  // "cerealType::varietyName".
+  const [expandedVarieties, setExpandedVarieties] = useState(() => new Set())
+  const toggleVarietyBreakdown = (key) => {
+    setExpandedVarieties((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const piles = useLiveQuery(async () => {
     if (!currentWarehouseId) return []
@@ -80,11 +271,20 @@ function HomeStocks({ warehouseId } = {}) {
 
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
+  const varietyCategoryMap = new Map(varieties.map((v) => [v.varietyId, v.category]))
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
   const unwithdrawnMap = useLiveQuery(
     () => computeUnwithdrawnByVariety(currentWarehouseId),
     [currentWarehouseId]
+  ) ?? new Map()
+  // varietyId -> Map(bucketLabel -> { bags, kilos }) - real per-bucket
+  // figures (see unwithdrawnStock.js), replacing an earlier proportional
+  // estimate that showed the same full-variety numbers under every
+  // bucket regardless of which one was tapped.
+  const unwithdrawnByVarietyAge = useLiveQuery(
+    () => computeUnwithdrawnByVarietyAge(currentWarehouseId, varietyCategoryMap),
+    [currentWarehouseId, varieties]
   ) ?? new Map()
 
   const enrichedPiles = piles.map((p) => ({
@@ -156,9 +356,17 @@ function HomeStocks({ warehouseId } = {}) {
     const vals = Object.values(byVariety).flatMap((v) => Object.values(v))
     return { bags: vals.reduce((s, v) => s + v.bags, 0), kilos: vals.reduce((s, v) => s + v.kilos, 0) }
   }
+  // Explicit hierarchy, not alphabetical - Rice first, then Palay,
+  // then By Products last, per explicit request. Anything unexpected
+  // (not in this list) sorts after all three rather than crashing.
+  const CEREAL_TYPE_ORDER = ['Rice', 'Palay', 'By Products']
   const sortedGroups = Object.entries(stockGroups)
     .filter(([, byVariety]) => { const t = groupTotals(byVariety); return t.bags > 0 || t.kilos > 0 })
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => {
+      const ai = CEREAL_TYPE_ORDER.indexOf(a)
+      const bi = CEREAL_TYPE_ORDER.indexOf(b)
+      return (ai === -1 ? CEREAL_TYPE_ORDER.length : ai) - (bi === -1 ? CEREAL_TYPE_ORDER.length : bi)
+    })
 
   return (
     <>
@@ -183,6 +391,11 @@ function HomeStocks({ warehouseId } = {}) {
           .reduce((s, v) => s + v.kilos, 0)
         const color = categoryColor(cerealType)
 
+        // The cereal Total's own unwithdrawn/potential detail mirrors
+        // whether ANY variety in this cereal type is currently
+        // expanded - collapsed by default alongside the variety cards.
+        const categoryHasExpanded = Object.keys(byVariety).some((v) => expandedVarieties.has(`${cerealType}::${v}`))
+
         return (
           <div
             key={cerealType}
@@ -206,50 +419,28 @@ function HomeStocks({ warehouseId } = {}) {
                 const varietyBags = Object.values(byBucket).reduce((s, v) => s + v.bags, 0)
                 const varietyKilos = Object.values(byBucket).reduce((s, v) => s + v.kilos, 0)
                 const varietyId = groupVarietyId[cerealType]?.[varietyName]
-                const unwithdrawn = varietyId && !shownVarietyIds.has(varietyId) ? unwithdrawnMap.get(varietyId) : null
-                const unwithdrawnAmt = unwithdrawnAmount(unwithdrawn, showNetBags)
-                const hasUnwithdrawn = unwithdrawnAmt >= (showNetBags ? 0.005 : 1)
                 if (varietyId) shownVarietyIds.add(varietyId)
+                const bucketEntries = sortBucketEntries(cerealType, Object.entries(byBucket))
+                const varietyKey = `${cerealType}::${varietyName}`
+                const isExpanded = expandedVarieties.has(varietyKey)
+                const bucketUnwithdrawnMap = varietyId ? unwithdrawnByVarietyAge.get(varietyId) : null
 
                 return (
-                  <div key={varietyName} className="mt-3">
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg bg-neutral-800/50 px-2 py-1.5">
-                      <span className="truncate text-sm font-semibold text-app-text">{varietyName}</span>
-                      <div className="text-right">
-                        <p className="whitespace-nowrap text-sm font-semibold text-app-text">
-                          {showNetBags ? `${fmtNetBags(varietyKilos / 50)} net bags` : `${fmtBags(varietyBags)} bags`}
-                          {hasUnwithdrawn && (
-                            <button
-                              type="button"
-                              onClick={() => setDetailContext({ varietyIds: [varietyId], title: varietyName, subtitle: `${cerealType} · Unwithdrawn` })}
-                              className="ml-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
-                            >
-                              {formatAmount(unwithdrawnAmt, showNetBags)} unwithdrawn
-                            </button>
-                          )}
-                        </p>
-                        <p className="whitespace-nowrap text-sm font-semibold text-app-text">{fmtWeight(varietyKilos, weightUnit, 'Net')}</p>
-                        {hasUnwithdrawn && (
-                          <p className="whitespace-nowrap text-[11px] text-brand-amber">
-                            Potential: {formatAmount(Math.max(0, (showNetBags ? varietyKilos / 50 : varietyBags) - unwithdrawnAmt), showNetBags)} {showNetBags ? 'net bags' : 'bags'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-1 space-y-1">
-                      {sortBucketEntries(cerealType, Object.entries(byBucket)).map(([bucketLabel, totals]) => (
-                        <div key={bucketLabel} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-b border-neutral-800/50 py-1">
-                          <span className="truncate pl-2 text-xs text-neutral-400">{bucketLabel}</span>
-                          <div className="text-right">
-                            <p className="whitespace-nowrap text-xs text-neutral-300">
-                              {showNetBags ? `${fmtNetBags(totals.kilos / 50)} net bags` : `${fmtBags(totals.bags)} bags`}
-                            </p>
-                            <p className="whitespace-nowrap text-xs text-neutral-300">{fmtWeight(totals.kilos, weightUnit, 'Net')}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <VarietyCard
+                    key={varietyName}
+                    varietyName={varietyName}
+                    varietyBags={varietyBags}
+                    varietyKilos={varietyKilos}
+                    varietyId={varietyId}
+                    cerealType={cerealType}
+                    bucketEntries={bucketEntries}
+                    bucketUnwithdrawnMap={bucketUnwithdrawnMap}
+                    showNetBags={showNetBags}
+                    weightUnit={weightUnit}
+                    isExpanded={isExpanded}
+                    onToggle={() => toggleVarietyBreakdown(varietyKey)}
+                    onOpenDetail={setDetailContext}
+                  />
                 )
               })
             })()}
@@ -260,33 +451,22 @@ function HomeStocks({ warehouseId } = {}) {
                 return uw ? { bags: acc.bags + uw.bags, kilos: acc.kilos + uw.kilos } : acc
               }, { bags: 0, kilos: 0 })
               const cerealUnwithdrawnAmt = unwithdrawnAmount(cerealUnwithdrawn, showNetBags)
-              const hasCerealUnwithdrawn = cerealUnwithdrawnAmt >= (showNetBags ? 0.005 : 1)
+              const hasCerealUnwithdrawn = categoryHasExpanded && cerealUnwithdrawnAmt >= (showNetBags ? 0.005 : 1)
+              const cerealUnitLabel = showNetBags ? 'net bags' : 'bags'
               return (
-                <div className={`mt-3 rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                    <span className="truncate text-xs font-medium text-neutral-500">Total ({cerealType})</span>
-                    <div className="text-right">
-                      <p className={`whitespace-nowrap text-sm font-bold ${color}`}>
-                        {showNetBags ? `${fmtNetBags(cerealKilos / 50)} net bags` : `${fmtBags(cerealBags)} bags`}
-                        {hasCerealUnwithdrawn && (
-                          <button
-                            type="button"
-                            onClick={() => setDetailContext({ varietyIds: cerealVarietyIds, title: `${cerealType} — Unwithdrawn`, subtitle: 'All varieties in this category' })}
-                            className="ml-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
-                          >
-                            {formatAmount(cerealUnwithdrawnAmt, showNetBags)} unwithdrawn
-                          </button>
-                        )}
-                      </p>
-                      <p className={`whitespace-nowrap text-sm font-bold ${color}`}>{fmtWeight(cerealKilos, weightUnit, 'Net')}</p>
-                      {hasCerealUnwithdrawn && (
-                        <p className="whitespace-nowrap text-[11px] text-brand-amber">
-                          Potential: {formatAmount(Math.max(0, (showNetBags ? cerealKilos / 50 : cerealBags) - cerealUnwithdrawnAmt), showNetBags)} {showNetBags ? 'net bags' : 'bags'}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <CerealTotal
+                  cerealType={cerealType}
+                  color={color}
+                  cerealBags={cerealBags}
+                  cerealKilos={cerealKilos}
+                  showNetBags={showNetBags}
+                  weightUnit={weightUnit}
+                  hasUnwithdrawn={hasCerealUnwithdrawn}
+                  unwithdrawnAmt={cerealUnwithdrawnAmt}
+                  unitLabel={cerealUnitLabel}
+                  cerealVarietyIds={cerealVarietyIds}
+                  onOpenDetail={setDetailContext}
+                />
               )
             })()}
           </div>
@@ -298,6 +478,7 @@ function HomeStocks({ warehouseId } = {}) {
       <UnwithdrawnDetailModal
         warehouseId={currentWarehouseId}
         varietyIds={detailContext.varietyIds}
+        bucketFilter={detailContext.bucketFilter}
         title={detailContext.title}
         subtitle={detailContext.subtitle}
         onClose={() => setDetailContext(null)}

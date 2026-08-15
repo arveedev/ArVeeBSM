@@ -4,6 +4,7 @@
 // issued against it.
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
@@ -54,7 +55,17 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
     0
   )
 
-  return (
+  // Portaled straight to document.body - opened both from AuthorityMonitor
+  // directly and from inside CompletedAuthorityModal, both of which on
+  // Home.jsx sit under a `.stagger-fields`/`.animate-flow-down`
+  // ancestor whose `animation-fill-mode: both` leaves a lingering
+  // non-`none` transform applied even after the animation finishes -
+  // that becomes the containing block for `position: fixed`
+  // descendants instead of the real viewport, which is what rendered
+  // this panel inline in the page flow instead of covering the screen
+  // (same bug fixed for the other Authority/Milling modals this
+  // session).
+  return createPortal(
     <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isClosing ? 'animate-push-slide-out' : 'animate-push-slide-in'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
@@ -144,7 +155,8 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
 

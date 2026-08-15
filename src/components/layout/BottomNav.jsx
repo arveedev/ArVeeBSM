@@ -40,6 +40,32 @@ const useSquashOnChange = (dep) => {
   return ref
 }
 
+// The FAB sits at grid column 2 (between Piles/Monitor at 1 and Reports
+// at 3) - never itself a landing column for the pill (see
+// REGULAR_NAV_COLUMN above), so it's only ever in the pill's path when
+// the tap crosses from one side of it to the other (Home/Piles <->
+// Reports/Settings). Same retrigger-via-forced-reflow pattern as
+// useSquashOnChange, but only fires the dodge on a genuine crossing,
+// not on every column change.
+const FAB_COLUMN = 2
+const useFabDodge = (column) => {
+  const ref = useRef(null)
+  const prevColumnRef = useRef(column)
+  const first = useRef(true)
+  useEffect(() => {
+    if (first.current) { first.current = false; prevColumnRef.current = column; return }
+    const prev = prevColumnRef.current
+    const crossesFab = Math.min(prev, column) < FAB_COLUMN && Math.max(prev, column) > FAB_COLUMN
+    prevColumnRef.current = column
+    const el = ref.current
+    if (!crossesFab || !el) return
+    el.classList.remove('animate-fab-dodge')
+    void el.offsetWidth
+    el.classList.add('animate-fab-dodge')
+  }, [column])
+  return ref
+}
+
 // Column index of each route within the 5-column regular nav grid
 // (index 2 is the FAB - never a nav target, so it's absent here) and
 // the 2-column Visitor nav - used to position the sliding glow
@@ -84,6 +110,11 @@ function BottomNav({ onFabClick, hidden = false }) {
   // interruption or not - there is no "from" value to go stale.
   const columnForSquash = (isVisitor ? VISITOR_NAV_COLUMN : REGULAR_NAV_COLUMN)[pathname] ?? 0
   const squashRef = useSquashOnChange(columnForSquash)
+  // Computed unconditionally (hooks can't run after an early return) -
+  // the Visitor nav has no FAB at all, so fabRef simply never attaches
+  // to anything there and the hook's classList calls safely no-op.
+  const regularColumn = REGULAR_NAV_COLUMN[pathname] ?? 0
+  const fabRef = useFabDodge(regularColumn)
 
   if (isVisitor) {
     const visitorColumn = VISITOR_NAV_COLUMN[pathname] ?? 0
@@ -131,7 +162,6 @@ function BottomNav({ onFabClick, hidden = false }) {
     )
   }
 
-  const regularColumn = REGULAR_NAV_COLUMN[pathname] ?? 0
   return (
     <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
       <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
@@ -166,6 +196,7 @@ function BottomNav({ onFabClick, hidden = false }) {
 
         <div className="flex items-center justify-center">
           <button
+            ref={fabRef}
             type="button"
             onClick={onFabClick}
             aria-label="New transaction"
