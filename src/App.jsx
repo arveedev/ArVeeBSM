@@ -138,7 +138,10 @@ function App() {
 
   return (
     <div className={`min-h-screen bg-neutral-950 ${pathname !== '/login' ? 'animate-app-fade-in' : ''}`}>
-      {user && pathname !== '/login' && pathname !== '/admin' && !activeFormType && <AppHeader />}
+      {/* Stays mounted even while a transaction form is open (previously
+          unmounted outright via !activeFormType), so it can slide away
+          instead of just vanishing - see AppHeader's own comment. */}
+      {user && pathname !== '/login' && pathname !== '/admin' && <AppHeader hidden={Boolean(activeFormType)} />}
       <div key={pathname !== '/login' ? pathname : 'login'} className={pathname !== '/login' ? (pageDirection === 'back' ? 'animate-page-back' : 'animate-page-forward') : ''}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -195,7 +198,7 @@ function App() {
 
       {user && pathname !== '/login' && pathname !== '/admin' && (
         <>
-          <BottomNav onFabClick={() => setTransactionModalOpen(true)} />
+          <BottomNav onFabClick={() => setTransactionModalOpen(true)} hidden={Boolean(activeFormType)} />
           {!isVisitor && (
             <>
               <TransactionModal
