@@ -13485,3 +13485,688 @@ Two things confirmed by the user but not yet built:
    not the demo's hardcoded column indices).
 
 Everything else in this entry is done, built, and pushed.
+
+## Session: 2026-08-16 - Home page declutter and FAB dodge built for real; FAB dodge timing fixed twice
+
+Continuation of the 2026-08-15 session's two open demo items. Both are
+now implemented in real code. **Not committed or pushed** - user wants
+to try them on the running `localhost:3000` dev server first.
+
+### 1. FAB dodge - implemented, two rounds of timing fixes after the demo
+
+Ported the demo concept into [BottomNav.jsx](../src/components/layout/BottomNav.jsx)
+and [index.css](../src/index.css). A `useFabDodge(column)` hook (same
+retrigger-via-forced-reflow shape as the existing `useSquashOnChange`)
+fires the `.animate-fab-dodge` class only when the tap crosses the
+FAB's own grid column (`FAB_COLUMN = 2`) - i.e.
+`Math.min(prevColumn, column) < 2 < Math.max(prevColumn, column)` -
+so Home↔Piles and Reports↔Settings never trigger it, only a tap that
+crosses from one side to the other (e.g. Home→Reports). Called
+unconditionally (hooks can't be conditional) even though the Visitor
+nav has no FAB at all - the ref just never attaches there.
+
+Two more rounds of user feedback landed before this was right, both
+against the *demo* first (per this session's continued practice of
+prototyping in an Artifact before touching real code):
+
+- **"the two must never touch each other"** - the first demo pass had
+  lowered the FAB's resting height so it visually sat in the pill's
+  path (meant to look like a real near-miss). User correctly rejected
+  this: the FAB shouldn't rest lower at all, it should just never
+  actually intersect the pill. The real bug wasn't position, it was
+  timing - the dodge triggered ~90ms after tap, which wasn't enough of
+  a head start relative to how fast the pill's own back-out easing
+  (`cubic-bezier(0.34,1.56,0.64,1)`) sweeps across. Fixed by triggering
+  the dodge with **zero delay** and having the FAB reach full clearance
+  fast, then **hold** clear for the pill's entire realistic transit
+  window instead of trying to time a brief hop to a precise mid-flight
+  moment - removes the need to model the exact easing curve at all.
+- **"feels laggy or slow"** - the hold-the-whole-time fix above worked
+  (no more touching) but overshot: total duration was 0.78s against the
+  pill's own 0.55s transition, so the FAB was still descending ~230ms
+  after the pill had already settled, reading as sluggish. Tightened to
+  0.6s with per-keyframe `animation-timing-function` (a fast, punchy
+  ease into the leap; gentler easing through the hold and settle) -
+  the fully-clear window still comfortably covers the pill's real
+  danger zone (estimated at the first ~350ms of its transition, since
+  the back-out curve rises and overshoots early) without the long tail.
+
+The FAB's resting transform (`-translate-y-5`, i.e. `-1.25rem`) was
+never actually the problem in the end and is unchanged from before this
+session - the keyframe's 0%/100% match it exactly, so control handing
+back to the static Tailwind class when the animation ends doesn't snap.
+
+### 2. Home page declutter - all 4 approved changes implemented
+
+- **Home.jsx**: new page-level Overview/Activity tabs (same sliding-
+  pill pattern as Reports.jsx's Summary/Stock Statement split from the
+  prior session). Overview = warehouse selector + Stocks/Sacks
+  inventory card + the new Alerts panel. Activity = Milling Operations
+  (unchanged, already collapsible) + AI/SIA Monitor (now also
+  collapsible, see below). Both panels stay mounted, visibility
+  toggled via `hidden`, with `animate-flow-down` applied
+  unconditionally so it replays on every tab switch - no remount, no
+  JS retrigger, same `display:none`-resets-a-CSS-animation technique
+  used for Reports.jsx's tabs in the prior session.
+- **HomeStocks.jsx**: each variety's age-bucket breakdown (0-3 months /
+  >3 months / etc, previously always shown) now collapses behind a
+  "Show age breakdown" button, state tracked in an `expandedVarieties`
+  Set keyed by `cerealType::varietyName`, collapsed by default. Skipped
+  entirely for a variety with only one bucket - a disclosure toggle
+  that just re-reveals the same number already shown in the headline
+  isn't useful.
+- **New AlertsPanel.jsx** (`src/components/common/`): merges
+  ProcurementBagsNotification and PalayDryingStatus (itself a Fragment
+  of up to 3 sub-notifications) into one collapsed-by-default strip
+  with a live count badge. Implementation matches the plan from the
+  prior session's handoff note: a single always-mounted body wrapper
+  (hidden via CSS, not unmounted) holds the real notification
+  components, and a `MutationObserver` watches `el.children.length` -
+  since each sub-notification returns `null` when it has nothing to
+  show, this gives an exact count of currently-active alerts without
+  duplicating any of their internal useLiveQuery logic, and doubles as
+  the "hide the whole strip when zero" signal.
+- **AuthorityMonitor.jsx**: AI/SIA Monitor is now collapsible by
+  default (`expanded` state + `useDelayedUnmount`, matching Milling
+  Operations' existing flow-down/up-exit pattern), header now shows a
+  "N pending" count chip (`authorities.filter(a =>
+  !isAuthorityComplete(a)).length` - a simpler non-deduped count than
+  the ref-deduped `filtered` list used for the actual rows, which is
+  fine for a summary badge).
+
+### Verification
+
+`npm run build` passes cleanly after every change in this entry.
+Browser-tool verification was attempted but couldn't get past login -
+the README's documented seed PIN (`123456`) came back "Invalid access
+PIN" against this environment's real synced data, so visual
+confirmation is still pending the user's own testing on their running
+dev server (HMR should already be showing these changes there).
+
+### Next step for whoever picks this up
+
+Ask the user whether they've tried both changes on `localhost:3000`
+yet. If confirmed working, commit and push (nothing in this entry has
+been committed). If not yet tried, that's the next step before
+touching anything else.
+
+## Session: 2026-08-16 (continued) - fixed a sticky-header regression + reworked HomeStocks interaction + more feedback from testing the declutter on localhost
+
+User tried the previous entry's work on their running dev server and
+reported several issues. All fixed this pass, still **not committed or
+pushed** - same as the prior entry, waiting on the user's local
+confirmation.
+
+### 1. Sticky header/indicator regression - root cause was the horizontal-scrollbar fix from two sessions ago
+
+AppHeader (and StickyWarehouseIndicator) stopped sticking and scrolled
+away with the page. Root cause: `overflow-x: hidden` was added to
+`html`/`body` in the 2026-08-15 (continued) session to kill an
+intermittent horizontal scrollbar, but only `overflow-x` was set. Per
+the CSS spec, setting one axis to a non-`visible` value while leaving
+the other axis unset auto-promotes that other axis to `auto` - so
+`overflow-y` silently became `auto`, turning `html`/`body` into their
+own scrolling box distinct from the visual viewport. Every
+`position: sticky` element's nearest scrolling ancestor was then that
+box instead of the viewport, which broke sticking entirely. Fixed by
+explicitly declaring `overflow-y: visible` alongside `overflow-x:
+hidden` on both `html` and `body` in
+[index.css](../src/index.css) - prevents the auto-promotion while
+keeping the horizontal-scrollbar fix intact.
+
+### 2. HomeStocks.jsx variety cards reworked per explicit UX direction
+
+The "Show age breakdown" text-button approach from the prior entry was
+too cluttered on its own (screenshot showed the unwithdrawn badge and
+Potential line still always visible even collapsed). Replaced with:
+- Collapsed state shows ONLY variety name + bags + net kilos - no
+  unwithdrawn badge, no potential line, no age buckets. A centered
+  green chevron sits below the headline whenever there's anything to
+  reveal (`hasExpandableDetail = hasUnwithdrawn || bucketEntries.length
+  > 1` - skipped entirely for a variety with nothing extra to show).
+- The whole card is tappable (a `<div onClick>`, not just the arrow) -
+  matches the choiceAuthority chooser's own div-with-onClick +
+  `stopPropagation()` on the nested unwithdrawn button, since the
+  unwithdrawn badge needed to stay independently tappable (opens
+  UnwithdrawnDetailModal) without also triggering the card's own
+  collapse/expand.
+- Expanding rotates the chevron 180° and reveals the unwithdrawn badge
+  + potential line + age-bucket breakdown together via
+  `animate-flow-down`.
+- The cereal type's Total row now mirrors this: its own
+  unwithdrawn/potential detail only shows when `categoryHasExpanded`
+  (at least one variety in that cereal type is currently expanded) is
+  true, gated the same way as before but now scoped to expansion
+  state instead of always showing.
+
+### 3. Two real bugs found and fixed in Home.jsx
+
+- **Duplicate literal `key` on sibling elements**: the Overview and
+  Activity tab-panel `<div>`s both used `key={currentWarehouseId}` -
+  the exact same key string on two different sibling elements at the
+  same level, an anti-pattern that can confuse React's reconciler.
+  Given distinct keys (`overview-${currentWarehouseId}` /
+  `activity-${currentWarehouseId}`).
+- **Stocks/Sacks tab selection survived a warehouse switch**:
+  `inventoryTab` lives in Home.jsx, above the
+  `key={currentWarehouseId}` remount boundary on the panels below, so
+  nothing was ever telling it to reset - switching warehouses while on
+  the Sacks tab left Sacks selected for the new warehouse too. Fixed
+  with a `useEffect` resetting `inventoryTab` to `'stocks'` whenever
+  `currentWarehouseId` changes, mirroring the existing
+  `millingToggledByUserRef` reset-on-warehouse-change pattern already
+  in the same file. (The separately-reported "another tab showing
+  below with 2+ cereal types" wasn't reproduced by reading the code -
+  no second Stocks/Sacks tab bar exists anywhere in the render tree;
+  possibly a visual side-effect of the now-reworked variety cards, or
+  needs a fresh screenshot with 2+ cereal types to pin down if it
+  recurs.)
+
+### 4. AuthorityMonitor.jsx: per-type pending counts instead of one combined number
+
+Per explicit request ("AI (3) / SIA (4)"), replaced the single "N
+pending" chip with `aiPendingCount`/`siaPendingCount` computed
+separately and shown as `AI ({aiPendingCount}) / SIA
+({siaPendingCount})`. Still collapsed by default, unchanged from the
+prior entry.
+
+### 5. Milling Operations: completed list moved to its own modal
+
+Previously "Show Completed" toggled the SAME inline list in place
+(swapping pending rows for completed rows). Now matches
+AuthorityMonitor/CompletedAuthorityModal's convention exactly:
+- Extracted the per-order row (progress-bar math + layout) out of the
+  inline `.map()` into a shared `MillingOrderRow` component (exported
+  from [MillingMonitor.jsx](../src/components/common/MillingMonitor.jsx)),
+  so the inline pending list and the new completed modal can't drift
+  out of sync with each other.
+- New [CompletedMillingModal.jsx](../src/components/common/CompletedMillingModal.jsx),
+  mirroring CompletedAuthorityModal.jsx's `fixed inset-0` + `animate-
+  fade-in`/`animate-fade-out` + delayed-`onClose`-via-`isClosing`
+  pattern. Tapping a row calls the same `onSelectOrder` (=
+  `setSelectedOrder` in the parent) that the pending list already
+  uses, so `MillingOrderDetail` (now exported too) opens on top
+  regardless of which list it was opened from - no duplicate detail
+  logic.
+- MillingMonitor's own inline list is now always pending-only
+  (`filtered`); a new `completedFiltered` (same shared date/regional-
+  authority filters, just the completed half) feeds the modal.
+
+### Verification
+
+`npm run build` passes cleanly after every change in this entry.
+Browser-tool verification still blocked on login (same PIN mismatch as
+the prior entry) - relying on the user's own localhost testing.
+
+### Next step for whoever picks this up
+
+Ask whether the user has re-tested locally after this round of fixes,
+especially: (a) the sticky header/indicator actually sticking again,
+(b) the new tap-anywhere variety card behavior feeling right, (c)
+whether the "duplicate tab" report recurs with 2+ cereal types visible,
+(d) the Milling Operations completed modal's entrance/exit animation.
+If confirmed, commit and push - nothing in this or the prior entry has
+been committed yet.
+
+## Session: 2026-08-16 (continued again) - found the REAL sticky-header cause, portaled two modals, more UX refinements
+
+The previous entry's `overflow-y: visible` fix was verified as genuinely
+broken by testing live in the browser tool (not just reading code):
+setting `overflow-y: visible !important` directly as an inline style on
+`<html>` and checking `getComputedStyle` still returned `auto`. This is
+not a specificity bug - per the CSS spec, `overflow-x: hidden` paired
+with any `visible` value on the other axis unconditionally promotes
+that axis to `auto`, and no declaration (not even `!important` inline)
+can override that pairing rule. Tested `overflow-x: clip` as an
+alternative to `hidden` the same way, live in the browser - it does NOT
+trigger the promotion, `overflow-y` correctly stayed `visible`. Fixed
+[index.css](../src/index.css) to use `overflow-x: clip` instead of
+`overflow-x: hidden` on both `html` and `body`, dropping the now-
+ineffective `overflow-y: visible` declaration entirely. Confirmed live:
+`getComputedStyle(document.documentElement).overflowY` now correctly
+reports `visible`.
+
+### Modal containing-block bug found and fixed (2 files)
+
+User reported the new CompletedMillingModal (and, on inspection,
+CompletedAuthorityModal too) rendered trapped inside the scrolling list
+instead of covering the screen. Root cause: both are opened from deep
+inside a `.stagger-fields`/`.animate-flow-down`-classed ancestor (the
+Overview/Activity panel wrappers added earlier this session use
+`animate-flow-down`, and `.stagger-fields` was already used). Both of
+those animations use `animation-fill-mode: both`, so even after the
+entrance animation finishes, the element keeps a non-`none` `transform`
+computed value (e.g. `translateY(0px)`) - and ANY non-`none` transform
+on an ancestor becomes the containing block for `position: fixed`
+descendants instead of the true viewport (the exact same class of bug
+fixed for Piles.jsx's fullscreen ConfirmDialog earlier this session,
+just via a different ancestor mechanism this time - animation fill-mode
+instead of a live rotate() transform). Fixed both
+[CompletedMillingModal.jsx](../src/components/common/CompletedMillingModal.jsx)
+and
+[CompletedAuthorityModal.jsx](../src/components/common/CompletedAuthorityModal.jsx)
+by portaling to `document.body` via `createPortal`, same pattern
+already used by `ConfirmDialog`/`MillingOrderDetail`. Also switched
+both from a plain fade to `animate-sheet-slide-up`/`animate-sheet-
+slide-down` (already-existing keyframes, previously only used for
+MillingOrderDetail's inner box) per explicit request that these should
+slide in/out from the bottom rather than fade.
+
+### HomeStocks.jsx: arrow no longer rotates, per-bucket unwithdrawn/potential added
+
+- Chevron now nudges down (`translate-y-1`) instead of rotating 180° -
+  explicit correction ("should not flip... should slide down").
+- Each age bucket row (inside an expanded variety) now also shows its
+  own unwithdrawn/potential figures, in addition to the variety-level
+  total shown above the bucket list (kept exactly where it was). Since
+  `computeUnwithdrawnByVariety` only tracks unwithdrawn stock at the
+  variety level (no per-pile/per-bucket attribution exists in the data
+  model), each bucket's figure is a **proportional estimate** - the
+  variety's total unwithdrawn amount, split across buckets by each
+  bucket's own share of the variety's total bags/kilos. Commented
+  clearly in the code as an estimate, not an independently-tracked
+  fact, since presenting it as more precise than it is would be
+  misleading.
+- The cereal type Total row's reveal of its own unwithdrawn/potential
+  detail (already gated on `categoryHasExpanded` from the prior entry)
+  now animates in via `animate-flow-down` applied directly to the
+  conditionally-rendered button/paragraph - since these mount fresh
+  each time `hasCerealUnwithdrawn` flips true (plain `&&` conditional
+  rendering, not a hidden-class toggle), the class autoplays on every
+  reveal with no extra wiring needed.
+
+### AuthorityMonitor.jsx: renamed, restructured header, defaults reversed
+
+- "AI / SIA Monitor" → "Authority Monitor" (explicit rename request).
+- The single "AI (3) / SIA (4)" chip felt cramped inline with the
+  title - split into two separate pill chips on their own row below
+  the title/chevron row, with more generous padding
+  (`px-2.5 py-1 text-xs` vs the old `px-1.5 py-0.5 text-[10px]`).
+- `expanded` now defaults to `true`, not `false` - direct correction
+  of the immediately-prior entry's "collapsed by default" change (user
+  clarified they'd meant the opposite). Still collapsible via the same
+  header button.
+
+### Verification
+
+`npm run build` passes cleanly after every change. The `overflow-x:
+clip` fix and the modal-portal fix were BOTH verified live in the
+browser tool this time (not just by reading source), including testing
+the exact failure mode (`!important` inline override) before settling
+on the real fix - see the exchange in this session's transcript for the
+full diagnostic sequence if it's ever useful precedent for a similar
+"CSS declaration silently not applying" bug elsewhere.
+
+### Next step for whoever picks this up
+
+Ask the user to re-test all of: sticky header/indicator, the completed-
+list modals (both Milling and Authority) now covering the full screen
+and sliding from the bottom, the variety card's non-rotating arrow, the
+per-bucket unwithdrawn figures, and Authority Monitor's new layout +
+default-expanded state. If confirmed working, this is finally ready to
+commit and push - nothing across any of today's entries has been
+committed yet.
+
+## Session: 2026-08-16 (yet another continuation) - large batch of refinements from live testing screenshots
+
+User sent screenshots of the app running with all prior fixes applied
+and gave a long list of follow-up corrections. All implemented this
+pass, still **not committed/pushed**.
+
+### Milling Operations detail modal
+- By Products (Total), Source Warehouse, and Last Activity now sit
+  behind a "Show more details" disclosure (collapsed by default) in
+  `MillingOrderDetail` ([MillingMonitor.jsx](../src/components/common/MillingMonitor.jsx))
+  - the fixed (non-scrolling) header section was crowding out the
+    actual transaction list below it.
+- Each stock transaction row (`StockRow`) now shows an **Age** field -
+  computed from the transaction's linked pile's own
+  `initialAgeValue`/`dateOfReceipt` (age isn't a transaction-level
+  field, it belongs to the pile), bucketed via the same `AGE_BUCKETS`
+  HomeStocks.jsx uses. Needed expanding `pileMap` (name-only) into a
+  parallel `pileRecordMap` (full pile records) plus threading
+  `autoAgeMonitoring` through from `useSettings()`.
+- Completed Milling list (`completedFiltered`) now sorts by each
+  order's most recent transaction date, newest first.
+
+### CompletedAuthorityModal.jsx
+- The "mark as pending" (uncomplete) button was gated to only show for
+  authorities that were manually completed but not naturally complete
+  - meaning it never showed at all for the common case (naturally
+    complete = fully issued per the numbers). Now always shown,
+    backed by a new `manuallyReopened` override flag (see
+    `isAuthorityComplete` in [calculations.js](../src/utils/calculations.js) -
+    it now checks `manuallyReopened` first, forcing the authority back
+    to pending regardless of what the natural-completion math says).
+    Explicitly re-marking it complete via the pending list's own
+    checkbox (`AuthorityMonitor.jsx`'s `toggleManualComplete`) clears
+    the override so normal completion logic resumes.
+- Added a warehouse filter (defaults to "All Warehouses", listing
+  every warehouse the user can see - not just ones with a currently-
+  completed record, so the picker doesn't shrink under other active
+  filters).
+- Already sorted newest-first by completedDate - confirmed unchanged,
+  no fix needed there specifically (the Milling list above was the one
+  missing this).
+
+### AuthorityMonitor.jsx
+- The two-chip stacked-below layout from the previous pass ("ugly" per
+  direct feedback) reverted to one line: title and a single
+  `"{ai} AI · {sia} SIA"` pill sit in the same header row (title left,
+  pill + chevron right), with larger, better-padded type
+  (`text-sm font-bold`, `px-3 py-1.5`) than the original cramped
+  version - not just reverted, actually more legible than either
+  earlier attempt.
+
+### HomeStocks.jsx - variety card interaction reworked again
+- Arrow genuinely doesn't rotate anymore (earlier `translate-y-1`
+  nudge wasn't literal enough per feedback) - it's now two separate
+  elements: one that renders right after the headline while collapsed,
+  and a completely different one (same icon, no transform) that
+  renders as the LAST element after the full expanded detail (past the
+  bucket list) - so expanding genuinely moves "the next thing to tap"
+  down to the bottom of the revealed content, via normal document flow
+  rather than an animated transform.
+- Unwithdrawn badges now state their unit inline ("X bags unwithdrawn"
+  / "X net bags unwithdrawn") instead of leaving bags-vs-net-bags
+  ambiguous.
+- Per-bucket unwithdrawn tags are now real buttons (same
+  `UnwithdrawnDetailModal` the variety-level one opens, since the
+  underlying data is only ever tracked at the variety level - the
+  modal title notes "(estimated share)" for the bucket-scoped ones).
+- Variety-level unwithdrawn+potential block restructured: a "Total"
+  label on the left, unwithdrawn (button) and potential stacked
+  vertically on the right, instead of the previous single-row
+  justify-between layout.
+- Cereal-type Total row: the unwithdrawn badge no longer sits inline
+  next to the main bags figure - moved below, inline with "Potential"
+  on its own row, separated by a border-top. This row now also gets a
+  **flip reveal** (`animate-value-flip`, new `rotateX` keyframe in
+  [index.css](../src/index.css), keyed on `hasCerealUnwithdrawn` so it
+  remounts and replays every time) instead of the plain flow-down used
+  elsewhere - per explicit request for something more deliberate than
+  a fade/slide when this row's shape actually changes.
+- Cereal type sort order changed from alphabetical (which put "By
+  Products" first) to an explicit `['Rice', 'Palay', 'By Products']`
+  hierarchy.
+- Unwithdrawn/potential text bumped from fixed `text-[10px]`/
+  `text-[11px]` to `text-xs sm:text-sm` throughout (variety-level,
+  per-bucket, and cereal-total levels) - both slightly larger at the
+  base size and responsive to wider viewports. **Noted as a standing
+  principle going forward per explicit request: new UI text this app
+  adds should default to a responsive scale (e.g. `text-xs sm:text-sm`
+  or wider breakpoints as appropriate), not a single fixed size.**
+
+### Verification
+
+`npm run build` passes cleanly after every change in this entry.
+
+### Next step for whoever picks this up
+
+Ask the user to re-test all of the above on their running dev server.
+If confirmed working, this - along with every other 2026-08-16 entry
+today - is ready to commit and push. Nothing from today has been
+committed yet.
+
+## Session: 2026-08-16 (yet another continuation, round 3) - Milling modal glitch, completed-authority fixes, real per-bucket data, single sliding arrow
+
+Large round of fixes from continued live testing (screenshots + 2 screen
+recordings). All implemented, still not committed/pushed.
+
+### 1. Milling modal "more details" transition was glitchy - two sections were animating in parallel
+
+showMoreDetails and the Stocks/Sacks tab section each had their own
+independent useDelayedUnmount(..., 250). Since they are mutually
+exclusive but each ran its own 250ms transition independently, for
+that whole window BOTH were mounted at once - doubling the modal's
+content height and visibly overlapping mid-transition (confirmed via
+screen recording). Replaced both hooks with a single sequenced state
+machine (visibleSection only flips to the new target once the old
+one's exit animation has actually finished) so the two are never both
+on screen - see MillingMonitor.jsx.
+
+### 2. Fixed a real bug in calculateAuthorityStatus - zero allocation misread as "naturally complete"
+
+User showed a manually-completed authority with 0.000 kg allocated
+that had NO uncomplete option, contradicting the "manually completed
+authorities can always be uncompleted" rule just implemented.
+Root cause in calculations.js: calculateAuthorityStatus only bailed
+out to status: null for null/undefined/empty-string allocation - a
+literal 0 allocation fell through to the balance math (0 - 0 = 0), and
+a balance of exactly 0 reads as Complete. That misclassified a blank/
+zero-allocation authority as naturally complete, which incorrectly hid
+its uncomplete option (nothing "natural" was ever fulfilled - it is
+only complete because a user manually flagged it). Fixed by also
+bailing out to status: null when Number(totalAllocation) === 0.
+
+### 3. Portaled two more modals with the same containing-block bug
+
+Confirmed via screenshots: the Add/View Transaction chooser
+(choiceAuthority in AuthorityMonitor.jsx, extracted into a new
+ChoiceAuthorityModal) and AuthorityReconciliationPanel.jsx (the View
+Transactions list) both rendered trapped inside the page's scrolling
+content instead of covering the screen - same animation-fill-mode:
+both-leaves-a-lingering-transform cause as the Completed modals fixed
+earlier this session. Both portaled to document.body now;
+ChoiceAuthorityModal also gained a proper entrance/exit (was popping
+in/out instantly with no animation at all before). Did a proactive
+sweep (grep for fixed inset-0 minus createPortal) for any other
+candidates - found BeginningBalancesPanel.jsx, EditPileAgeDialog.jsx,
+TransactionModal.jsx, AdminDashboard.jsx, WarehouseDetailModal.jsx
+using the pattern unportaled, but none are reachable from the specific
+ancestor that causes the bug (Home.jsx's stagger-fields/animate-flow-
+down wrapper) as far as could be traced from their current call sites
+- left alone rather than speculatively changed, flagged here in case
+one surfaces later.
+
+### 4. CompletedAuthorityModal: confirmation + correct manual-only gating + accessible-warehouse scoping
+
+- Added a confirm step (ConfirmDialog) before actually sending an
+  authority back to Pending.
+- Reverted the "always show uncomplete" change from two entries ago
+  after explicit correction: only authorities that are complete
+  because of the MANUAL checkbox should ever show the option - one
+  genuinely fulfilled via real issuances is not "done by mistake" in
+  any sense a toggle could undo. Removed the manuallyReopened override
+  field entirely (added, then un-needed, in the same session) -
+  canUncomplete = !isAuthorityNaturallyComplete(a) is sufficient once
+  fix #2 above is in place.
+- The warehouse filter (added last entry) was listing every warehouse
+  in the app - now scoped to accessibleWarehouses from useWarehouse(),
+  passed down as a new prop from both AuthorityMonitor.jsx (regular
+  side) and AdminMonitoring.jsx (admin/visitor side, where
+  "accessible" is simply every warehouse - no narrower scope applies
+  there).
+- AdminMonitoring.jsx already reused this same CompletedAuthorityModal
+  component, so the regional-authority-number picker request ("also on
+  the admin/visitor side") turned out to already be satisfied by
+  reusing the shared component - it already had its own top-level
+  regional-auth filter for the pending list too. Only needed to wire
+  through the new accessibleWarehouses prop.
+
+### 5. HomeStocks.jsx: real per-bucket unwithdrawn data (not an estimate)
+
+Discovered that AI/SIA authorities carry a REAL ageGroup field (already
+used by computeUnwithdrawnByCategoryAge for AdminHomeStocks.jsx's Age
+Grouping tab) - meaning the proportional-estimate approach from two
+entries ago was solving a problem that did not need solving; genuine
+bucket-attributable data already existed. Reworked unwithdrawnStock.js:
+- Extracted resolveAuthorityBucketLabel(authority, category) (shared
+  by the category-wide rollup and the new per-variety one, so they can
+  never disagree).
+- New computeUnwithdrawnByVarietyAge(warehouseId, varietyCategoryMap)
+  - per VARIETY (not just category) per bucket, since a category with
+  multiple varieties needs them kept separate.
+- getUnwithdrawnDetail now accepts an optional bucketFilter:
+  { category, label }, restricting the returned list to only
+  authorities whose own ageGroup resolves to that bucket.
+- UnwithdrawnDetailModal.jsx passes bucketFilter through. This fixed a
+  real bug the user caught via screenshots: every bucket's modal was
+  showing the exact same full-variety numbers and list regardless of
+  which bucket was tapped (since the old estimate only scaled the
+  SUMMARY badge on the card, never actually filtered the modal's own
+  live query).
+
+### 6. HomeStocks.jsx: single persistent sliding arrow (genuine height animation, not a jump)
+
+The arrow "jump before slide" persisted from the previous entry
+because the fix described there was never actually implemented - the
+code still had two SEPARATE conditionally-rendered arrow elements (one
+in the header, one after the detail), which are different DOM nodes
+React mounts/unmounts instantly with no shared transition between
+them. Also, even a correct single-element version would not have
+genuinely slid: animate-flow-down (opacity + translateY) does not
+change actual document height progressively, so content below it would
+still snap to its final position the instant the block mounts.
+Extracted the per-variety row into its own VarietyCard component
+(needed so useDelayedUnmount can be called per-instance rather than
+inside a .map(), which the Rules of Hooks do not allow) with:
+- One arrow, always the same DOM node, positioned as the last child -
+  no detail above it while collapsed (renders right after the
+  headline), detail above it while expanded (naturally pushed down).
+- The detail region's HEIGHT animates via a CSS grid-template-rows
+  0fr -> 1fr transition (not a transform-based reveal), so the arrow
+  and anything else below it reflows smoothly frame-by-frame as the
+  block grows/shrinks - a genuine slide, not an instant snap.
+
+### 7. HomeStocks.jsx: removed the duplicate variety-level Total, restyled the cereal-level one
+
+Per explicit correction, removed the variety-level "Total" block added
+two entries ago (its unwithdrawn/potential figures were redundant with
+- and in the single-variety-per-category case, visually identical to -
+the cereal-level Total already below it). The cereal-level Total
+("Total (Rice)", blue-background card) is now the only one, restyled:
+bigger/bolder "Total (Cereal)" label and bags/net-kg figures (base
+size + bold, was smaller), unwithdrawn value sized larger than
+Potential (hierarchy, was equal), and the unwithdrawn+Potential row
+now uses justify-between (button left, Potential right) matching the
+per-bucket rows' own layout instead of both grouped and right-aligned
+together.
+
+### Verification
+
+npm run build passes cleanly after every change in this entry.
+
+### Next step for whoever picks this up
+
+Re-test on localhost: Milling modal's more-details toggle (should feel
+clean now, no overlap), a manually-completed zero-allocation authority
+now showing its uncomplete option, the Add/View Transaction chooser and
+transaction-list panel actually covering the screen, the warehouse
+filter only listing accessible warehouses, tapping different age-group
+tags on a variety card showing genuinely different data per bucket, and
+the arrow actually sliding (not jumping) as a variety card expands. If
+confirmed, this - along with every other 2026-08-16 entry - is ready to
+commit and push. Nothing from today has been committed yet.
+
+## Session: 2026-08-16 (round 4) - crash fix + completion animations + arrow/total flip timing
+
+### 0. Fixed a crash: useEffect was used but never imported
+
+The round-3 fix to MillingMonitor.jsx's "more details" sequencing used
+`useEffect` but the import line still only had `useState, useRef` -
+`npm run build` does NOT catch this (Vite/esbuild only check syntax
+and unresolved imports, not whether every identifier used at runtime
+is actually bound), so it built clean but crashed immediately on
+opening any Milling Operations detail modal
+(`ReferenceError: useEffect is not defined`). Added the missing
+import. Then proactively grepped every file touched today for the
+same class of mistake (hook called vs. hook imported) - nothing else
+missing. Lesson for future sessions: a clean `npm run build` is not
+sufficient evidence that a change actually works at runtime.
+
+### 1. Authority complete/uncomplete now glows and collapses instead of instantly vanishing
+
+Per explicit request: marking an authority done (pending list
+checkbox) now plays a green glow that fades, with the row's height
+collapsing to 0 over 0.6s (`animate-row-complete-out`, new keyframe in
+[index.css](../src/index.css)) - the actual `manuallyCompleted: true`
+DB write is deliberately delayed until the animation finishes, so
+rows below visibly slide up as a natural consequence of the shrinking
+row rather than the list just snapping shorter. Sending an authority
+back to Pending (from the Completed modal, after the confirm dialog)
+plays the same collapse with a **red** glow instead
+(`animate-row-revert-out`) - same delayed-DB-write pattern. Both reuse
+the exact "fade + max-height/margin collapse" technique already
+established for banner exits, just tuned for list rows (600ms instead
+of 250ms, taller max-height ceiling).
+
+### 2. HomeStocks.jsx: arrow now flips only after sliding, not simultaneously
+
+The chevron rotation is back (it was removed in an earlier round per
+a different, now-superseded request) but on a CSS `transition-delay`
+matching the height-slide's own 300ms duration - so tapping to expand
+first slides the arrow to the bottom of the revealed content, and only
+THEN does it flip to point up (signaling "tap to collapse"), and
+symmetrically on the way back down. Previously either not rotating at
+all, or (in an earlier attempt) rotating at the same instant as the
+slide, which read as the two motions fighting each other.
+
+### 3. HomeStocks.jsx: cereal Total block flips as one unit, not just the appended row
+
+The flip keyframe from round 3 only wrapped the newly-appended
+unwithdrawn/potential row, leaving the always-visible headline bags/
+net-kg figures static during that same moment - looked like two
+unrelated things happening at once. Now the whole block (headline +
+conditional detail) is keyed on `hasCerealUnwithdrawn` together and
+flips as one cohesive unit whenever it changes.
+
+### Verification
+
+`npm run build` passes. Manually verified (not just via build) that
+every hook used across every file touched today has a matching import,
+following the round-4-opening crash as a reminder that build success
+alone isn't proof of runtime correctness.
+
+### Next step for whoever picks this up
+
+Ask whether the crash is confirmed fixed first (highest priority - it
+was blocking the Milling Operations detail modal entirely), then the
+three animation refinements. If all confirmed, this and every prior
+2026-08-16 entry today are ready to commit and push - nothing from
+today has been committed yet.
+
+## Session: 2026-08-16 (round 5) - fixed the complete/uncomplete animation for real
+
+User reported the round-4 glow+collapse animation didn't actually show
+the checked/unchecked state, flickered rather than held a glow, and
+"reappeared for a second" before disappearing for good - plus asked for
+a genuine flatten (not just fade) on collapse.
+
+### Root causes found and fixed
+
+1. **Checkmark never visibly appeared**: the checkbox's checked/
+   unchecked styling read directly from `a.manuallyCompleted`, which
+   only flips in the DB at the very END of the (deliberately delayed)
+   animation - by which point the row was already about to disappear.
+   Now both [AuthorityMonitor.jsx](../src/components/common/AuthorityMonitor.jsx)
+   (pending list) and
+   [CompletedAuthorityModal.jsx](../src/components/common/CompletedAuthorityModal.jsx)
+   (completed list) derive the checkbox's visual state from local
+   `completingId`/`revertingId` too, so it flips the INSTANT the user
+   taps, independent of when the DB write actually lands.
+2. **"Reappears for a second" flicker**: both places cleared their
+   local animation-tracking id inside the same `setTimeout` that fired
+   the DB write - but Dexie's live query re-computes asynchronously
+   after a write, so for one frame the id was already cleared (row
+   back to normal appearance) while the item was STILL in the list
+   (live query hadn't caught up yet) - a genuine race, not a timing
+   tweak. Fixed by clearing the id in a `useEffect` gated on the item
+   actually being confirmed absent from the live-query-derived list,
+   removing the race entirely.
+3. **Flicker instead of a held glow, and fade instead of flatten**:
+   redesigned the keyframes in [index.css](../src/index.css)
+   (`row-complete-out`/`row-revert-out`) with per-keyframe
+   `animation-timing-function` (ease-out into the glow so it appears
+   with a snap, ease-in through the collapse so it accelerates like
+   folding under its own weight) and added `transform: scaleY(0)`
+   anchored at `transform-origin: top`, combined with the existing
+   max-height collapse - so the row now visibly flattens like the box
+   itself is being pressed flat, not just fading/shrinking. Duration
+   bumped 0.6s -> 0.7s to give the glow room to actually read before
+   the flatten starts.
+
+### Verification
+
+`npm run build` passes; re-checked hook imports in both touched files
+given round 4's crash (both correctly import `useEffect`).

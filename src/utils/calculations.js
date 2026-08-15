@@ -165,7 +165,16 @@ export const bestAgeUnit = (days) => {
  * Phase 5: AI/SIA can be bags-only, kilos-only, or both.
  */
 export const calculateAuthorityStatus = (totalAllocation, totalIssued) => {
-  if (totalAllocation === null || totalAllocation === undefined || totalAllocation === '') {
+  // A zero allocation (not just a missing one) must also bail out to
+  // status: null, not fall through to the balance math below - 0 - 0
+  // computes a balanceRemaining of 0, which the "within tolerance"
+  // check just below reads as genuinely Complete. That misclassified
+  // a blank/zero-allocation authority as naturally complete, which in
+  // turn hid the manual "mark as pending" option for one that was only
+  // ever complete because a user manually flagged it - there was
+  // nothing "natural" about it since it never had a real allocation to
+  // fulfill in the first place.
+  if (totalAllocation === null || totalAllocation === undefined || totalAllocation === '' || Number(totalAllocation) === 0) {
     return { balanceRemaining: null, status: null }
   }
 

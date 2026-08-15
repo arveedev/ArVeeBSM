@@ -339,6 +339,10 @@ function AdminMonitoring() {
           varietyMap={varietyMap}
           sackTypeMap={sackTypeMap}
           warehouseMap={warehouseMap}
+          // Admin/Visitor's "accessible" warehouses is every warehouse -
+          // unlike the regular warehouse-supervisor side, there's no
+          // narrower per-user scope to respect here.
+          accessibleWarehouses={warehouses}
           onClose={() => setShowCompleted(false)}
         />
       )}

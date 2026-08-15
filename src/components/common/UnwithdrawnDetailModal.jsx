@@ -15,7 +15,7 @@ import { getUnwithdrawnDetail } from '../../utils/unwithdrawnStock.js'
 
 const netBagsOf = (kilos) => (kilos ?? 0) / 50
 
-function UnwithdrawnDetailModal({ warehouseId, varietyIds, title, subtitle, onClose }) {
+function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, subtitle, onClose }) {
   const [isClosing, setIsClosing] = useState(false)
   const handleClose = () => {
     setIsClosing(true)
@@ -31,8 +31,8 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, title, subtitle, onCl
   }, [])
 
   const detail = useLiveQuery(
-    () => getUnwithdrawnDetail(warehouseId, varietyIds),
-    [warehouseId, JSON.stringify(varietyIds)]
+    () => getUnwithdrawnDetail(warehouseId, varietyIds, bucketFilter),
+    [warehouseId, JSON.stringify(varietyIds), JSON.stringify(bucketFilter)]
   ) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))

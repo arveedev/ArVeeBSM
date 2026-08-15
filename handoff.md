@@ -547,55 +547,357 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-15 session, continuation) - Home page declutter + FAB dodge, both demoed and approved, not yet built
+### OPEN (2026-08-16 session, round 5) - fixed round 4's animation for real - STILL NOT COMMITTED/PUSHED
 
-Two follow-up requests handled via interactive HTML demos (Artifact
-tool) before touching real code - both now confirmed by the user but
-**not yet implemented**:
+Round 4's glow+collapse animation had three real bugs, all fixed this round:
 
-- **Home page declutter**: user reported Home.jsx felt crowded (too
-  many always-expanded sections stacked at once). Recommended and
-  demoed 4 changes; user approved all 4 together:
-  1. Split Home into "Overview" (warehouse selector + Stocks/Sacks
-     inventory card + alerts) and "Activity" (Milling Operations +
-     AI/SIA Monitor) top-level tabs, same pill-tab pattern as the
-     Reports Summary/Stock Statement split.
-  2. HomeStocks.jsx's age-bucket breakdown (0-3 months / >3 months /
-     Total row) collapses behind a "Show age breakdown" disclosure -
-     only the headline bag count + net kilos show by default.
-  3. ProcurementBagsNotification.jsx + PalayDryingStatus.jsx (which is
-     itself 3 sub-components: DryerStatusCard, WetPalayNotification,
-     DriedStockReceivedNotification) merge into one collapsible
-     "Alerts" strip with a count badge, instead of each rendering its
-     own always-visible full-width banner.
-  4. AuthorityMonitor.jsx (the AI/SIA Monitor) becomes collapsible by
-     default with a "N pending" count chip, matching how Milling
-     Operations already behaves in Home.jsx - currently it's the one
-     section that's always fully expanded with its own tab bar.
-  - Implementation note worked out but not yet coded: for the Alerts
-    count badge without duplicating each sub-notification's own
-    useLiveQuery logic, the plan is to always mount the notification
-    stack (so their queries stay warm) inside an accordion body, and
-    use a `MutationObserver` on that body to track how many children
-    actually rendered (each sub-component still returns `null` when
-    inactive) - gives an accurate live count for the badge and the
-    "hide the whole strip when nothing's active" behavior, without
-    lifting any query logic up into the parent.
-- **FAB dodge**: a nav-bar micro-interaction where the BottomNav FAB
-  hops out of the way when the elastic pill's travel crosses its grid
-  column (e.g. Home→Reports), demoed as a standalone HTML mockup and
-  refined once per user feedback (FAB now sits low enough at rest to
-  visually intersect the pill's path, with a much bigger escape jump).
-  Not yet ported into the real BottomNav.jsx - needs the real crossing
-  check to reuse `REGULAR_NAV_COLUMN`/`VISITOR_NAV_COLUMN` (FAB's grid
-  column is index 2 in the 5-column regular nav; the 2-column Visitor
-  nav has no FAB at all, so this is regular-nav-only) rather than the
-  demo's hardcoded column indices.
+1. Checkbox never showed checked/unchecked at the moment of tap - it
+   read `a.manuallyCompleted` directly, which only flips in the DB at
+   the END of the (deliberately delayed) write. Both
+   [AuthorityMonitor.jsx](../src/components/common/AuthorityMonitor.jsx)
+   and [CompletedAuthorityModal.jsx](../src/components/common/CompletedAuthorityModal.jsx)
+   now derive the checkbox's visual state from local `completingId`/
+   `revertingId` so it flips instantly on tap, independent of the DB
+   write timing.
+2. "Reappears for a second" flicker was a real race: both places
+   cleared their local animation-tracking id inside the same
+   `setTimeout` that fired the DB write, but Dexie's live query
+   recomputes asynchronously - so for one frame the id was cleared
+   (row back to normal) while the item was still in the list. Fixed by
+   clearing the id in a `useEffect` gated on the item actually being
+   confirmed absent from the live-query-derived list.
+3. Keyframes in [index.css](../src/index.css)
+   (`row-complete-out`/`row-revert-out`) redesigned with per-keyframe
+   easing (ease-out into the glow, ease-in through the collapse) plus
+   `transform: scaleY(0)` from `transform-origin: top` combined with
+   the max-height collapse, so the row now visibly flattens instead of
+   just fading/shrinking. Duration 0.6s -> 0.7s so the glow has room to
+   read before the flatten starts.
 
-Full detail (including the diagnostic approach used for two of the
-same-session bugfixes - extracting/tiling video frames via Python+opencv
+`npm run build` passes; hook imports re-checked in both touched files
+(clean) given round 4's crash lesson below.
+
+### DONE (2026-08-16 session, round 4) - crash fix + completion animations + arrow/total flip timing
+
+1. **Crash fixed**: round 3's MillingMonitor.jsx sequencing change used
+   `useEffect` without importing it - `npm run build` doesn't catch
+   missing-identifier runtime errors, only syntax/unresolved-import
+   ones, so it built clean but crashed on opening any Milling
+   Operations detail modal. Fixed, then proactively re-checked every
+   file touched today for the same mistake (hook used vs. imported) -
+   clean. **Lesson: a clean build is not proof of runtime
+   correctness** - worth remembering for future sessions.
+2. Authority complete (pending list checkbox) / uncomplete (Completed
+   modal, after confirm) now glow green/red and collapse their row
+   height over 0.6s before the actual DB write happens, so rows below
+   visibly slide up as a natural consequence - new
+   `.animate-row-complete-out`/`.animate-row-revert-out` keyframes in
+   [index.css](../src/index.css), same collapse technique already
+   used for banner exits, just tuned for list rows.
+3. HomeStocks.jsx variety-card arrow: rotation is back, but delayed via
+   `transition-delay` to only start once the 300ms height-slide
+   finishes - so it slides, then flips, not both at once.
+4. HomeStocks.jsx cereal Total block: the flip animation now wraps the
+   WHOLE block (headline + detail) as one keyed unit, not just the
+   newly-appended unwithdrawn/potential row.
+
+Full detail in docs/activity-log.md's "2026-08-16 (round 4)" entry.
+`npm run build` passes.
+
+### DONE (2026-08-16 session, round 3) - Milling modal glitch, completed-authority fixes, real per-bucket data, single sliding arrow (see round 4 above for a crash this round introduced and then fixed)
+
+Read the entry directly below first for what this builds on. This round:
+
+1. Milling modal's "more details" toggle and the Stocks/Sacks tab
+   section were each on their own independent `useDelayedUnmount`,
+   so they animated in PARALLEL and briefly showed both at once
+   (confirmed via screen recording) - replaced with a sequenced state
+   machine so only one is ever mounted.
+2. Real bug fixed in `calculateAuthorityStatus`
+   ([calculations.js](../src/utils/calculations.js)): a literal `0`
+   allocation fell through to the balance math instead of the null/
+   undefined guard, computing balance=0 which reads as "Complete" -
+   misclassifying a blank/zero-allocation authority as naturally
+   complete and hiding its (correctly-deserved) uncomplete option.
+   Now also guards `Number(totalAllocation) === 0`.
+3. Two more modals had the same containing-block bug as last entry's
+   Completed-list modals: the Add/View Transaction chooser (now
+   `ChoiceAuthorityModal`, extracted from AuthorityMonitor.jsx) and
+   `AuthorityReconciliationPanel.jsx`. Both portaled now. A proactive
+   sweep found 5 more non-portaled `fixed inset-0` usages elsewhere in
+   the app (BeginningBalancesPanel, EditPileAgeDialog, TransactionModal,
+   AdminDashboard, WarehouseDetailModal) - none currently reachable
+   from the specific problem ancestor as far as traced, left alone,
+   flagged in the activity-log entry in case one surfaces later.
+4. CompletedAuthorityModal: added a confirm step before uncompleting;
+   **reverted** the prior entry's "always show uncomplete" back to
+   "only manually-completed (not naturally complete) authorities" per
+   explicit correction - removed the `manuallyReopened` field
+   entirely (added then un-needed within the same session); warehouse
+   filter now scoped to `accessibleWarehouses` (was showing every
+   warehouse in the app) via a new prop, wired from both
+   AuthorityMonitor.jsx and AdminMonitoring.jsx (which already reused
+   this same modal, so the "admin/visitor side" request needed only
+   this one prop, not a separate implementation).
+5. **Fixed the per-bucket estimate bug for real**: authorities have a
+   genuine `ageGroup` field already used elsewhere in the codebase
+   (`computeUnwithdrawnByCategoryAge`) - added
+   `computeUnwithdrawnByVarietyAge` and a `bucketFilter` param on
+   `getUnwithdrawnDetail` ([unwithdrawnStock.js](../src/utils/unwithdrawnStock.js))
+   so each age-group's unwithdrawn figure (and its drill-down modal) is
+   now genuinely bucket-scoped, not the same full-variety numbers
+   under every bucket (a real bug the user caught via screenshots).
+6. **Arrow "jump" actually fixed this time**: the previous entry's fix
+   was never actually implemented (still had two separate DOM nodes).
+   Extracted `VarietyCard` as its own component (needed so
+   `useDelayedUnmount` could be called per-instance, not inside a
+   `.map()` - Rules of Hooks) with ONE persistent arrow as the last
+   child, and the detail region's HEIGHT animating via CSS
+   `grid-template-rows: 0fr -> 1fr` (not a transform-based reveal,
+   which doesn't change layout height progressively) - so the arrow
+   genuinely reflows/slides as the block grows, frame by frame.
+7. Removed the redundant variety-level "Total" block (added two
+   entries ago, immediately reported as a duplicate of the cereal-
+   level Total when a category has one variety); restyled the
+   surviving cereal-level Total to be bigger/bolder and match the
+   per-bucket rows' `justify-between` layout.
+
+Full detail in docs/activity-log.md's "2026-08-16 (yet another
+continuation, round 3)" entry. `npm run build` passes throughout.
+
+### DONE (2026-08-16 session, round 2) - large batch of refinements from live testing screenshots (see above entry for round 3, which fixes several things round 2 didn't fully land)
+
+Read the entry directly below first for what this builds on. This
+round, from screenshots of the app actually running:
+
+- **MillingOrderDetail** ([MillingMonitor.jsx](../src/components/common/MillingMonitor.jsx)):
+  By Products/Source Warehouse/Last Activity collapsed behind "Show
+  more details" (was crowding the transaction list below); each
+  `StockRow` now shows the transaction's pile's **Age** (computed from
+  the pile's own `initialAgeValue`/`dateOfReceipt`, not a transaction
+  field); Completed Milling list now sorts newest-activity-first.
+- **CompletedAuthorityModal.jsx**: "mark as pending" is now always
+  available (was gated to only manually-completed-non-naturally-
+  complete authorities, so it never showed for the common case) - new
+  `manuallyReopened` override flag in `isAuthorityComplete`
+  ([calculations.js](../src/utils/calculations.js)) forces an authority
+  back to pending regardless of the natural-completion math, cleared
+  when explicitly re-marked complete from the pending list. Added a
+  warehouse filter (defaults "All Warehouses").
+- **AuthorityMonitor.jsx**: the two-chip stacked layout from the prior
+  entry was reverted to one line ("ugly" per direct feedback) - title
+  and a single `"{ai} AI · {sia} SIA"` pill share the header row, with
+  larger/better-padded type than either earlier attempt.
+- **HomeStocks.jsx variety cards, reworked again**: arrow now
+  genuinely doesn't rotate (two separate non-transformed elements -
+  one after the headline when collapsed, a different one after the
+  full expanded detail when open - so it moves via normal document
+  flow, not an animated transform); unwithdrawn badges state their
+  unit (bags vs net bags); per-bucket unwithdrawn tags are now
+  clickable (same modal, noted as "(estimated share)" since the
+  underlying data is only tracked per-variety, not per-bucket);
+  variety-level Total gets a left-side label + stacked values; cereal
+  Total row's unwithdrawn moved inline with Potential (no longer
+  beside the main figure) and gets a **flip** reveal
+  (`animate-value-flip`, new keyframe in
+  [index.css](../src/index.css)) instead of a fade/slide; sort order
+  fixed to explicit Rice → Palay → By Products (was alphabetical,
+  which put By Products first); unwithdrawn/potential text bumped to
+  `text-xs sm:text-sm` (responsive, not fixed-size).
+  **Standing principle going forward, per explicit request: new UI
+  text should default to a responsive scale, not a single fixed
+  size.**
+
+Full detail in docs/activity-log.md's "2026-08-16 (yet another
+continuation)" entry. `npm run build` passes. Still waiting on the
+user's own localhost re-test before anything from today (4 entries
+now) gets committed.
+
+### DONE (2026-08-16 session, second continuation) - found the REAL sticky-header cause, fixed a modal-containment bug, more UX corrections (see above entry for the round after this one)
+
+The previous round's `overflow-y: visible` fix (see the entry directly
+below) was verified LIVE in the browser to still be broken -
+`getComputedStyle` kept returning `overflow-y: auto` even with an
+inline `!important` override, which meant it wasn't a specificity bug
+at all: **`overflow-x: hidden` unconditionally forces the paired axis
+to `auto` per the CSS spec, and no declaration can override that
+pairing.** The actual fix, also verified live: use `overflow-x: clip`
+instead of `overflow-x: hidden` on `html`/`body` in
+[index.css](../src/index.css) - `clip` does not participate in that
+axis-promotion rule. If a similar "my CSS declaration isn't taking
+effect and I can't figure out why" problem ever comes up again, check
+whether the two overflow axes are fighting each other this same way
+before assuming it's a specificity/cascade issue.
+
+Also found and fixed, this pass:
+- **Modal containment bug**: CompletedMillingModal (new this session)
+  and CompletedAuthorityModal (pre-existing) both rendered trapped
+  inside their scrolling ancestor instead of covering the screen.
+  Cause: both are opened from inside a `.stagger-fields`/`.animate-
+  flow-down` ancestor, and those animations' `animation-fill-mode:
+  both` leaves a non-`none` `transform` permanently applied even after
+  the animation ends - which becomes the containing block for
+  `position: fixed` descendants (same bug class as the Piles.jsx
+  fullscreen ConfirmDialog fix from earlier this session, different
+  mechanism). Fixed by portaling both to `document.body` via
+  `createPortal`, and switched their entrance/exit from a fade to
+  `animate-sheet-slide-up`/`animate-sheet-slide-down` (slide from the
+  bottom) per explicit request.
+- HomeStocks.jsx: variety-card arrow no longer rotates (nudges down
+  instead, `translate-y-1`); each age bucket now also shows its own
+  unwithdrawn/potential figures (a **proportional estimate** - the
+  data model only tracks unwithdrawn stock at the variety level, not
+  per bucket/pile - clearly commented as such); the cereal-type Total
+  row's reveal of its own unwithdrawn detail now animates in via
+  `animate-flow-down` instead of popping in instantly.
+- AuthorityMonitor.jsx: renamed "AI / SIA Monitor" → "Authority
+  Monitor"; the "AI (3) / SIA (4)" count moved to its own row as two
+  separate, better-padded pill chips instead of one cramped inline
+  string; `expanded` now defaults to `true` (direct reversal of the
+  immediately-prior entry's "collapsed by default" - user clarified
+  they meant the opposite).
+
+Full detail in docs/activity-log.md's "2026-08-16 (continued again)"
+entry. `npm run build` passes; the overflow-x:clip fix and the modal-
+portal fix were both verified live in the browser tool this time, not
+just by reading source. Still waiting on the user's own localhost
+re-test before anything from today gets committed.
+
+### DONE (2026-08-16 session, first continuation) - user tested Home declutter/FAB dodge on localhost and reported 5 issues, all fixed (see above entry for what needed a SECOND round of fixes)
+
+Read the entry directly below this one first for the original scope
+(Home declutter + FAB dodge); this note only covers what changed after
+the user actually tried it locally:
+
+1. **Sticky header broke entirely** - root cause was the horizontal-
+   scrollbar fix from the 2026-08-15 (continued) session:
+   `overflow-x: hidden` alone on `html`/`body` silently auto-promotes
+   `overflow-y` to `auto` per the CSS spec, which turns them into their
+   own scroll container separate from the viewport and breaks every
+   `position: sticky` element's ancestor chain. Fixed by explicitly
+   pairing it with `overflow-y: visible` in
+   [index.css](../src/index.css).
+2. **HomeStocks.jsx variety cards redesigned again** - the "Show age
+   breakdown" button wasn't enough; per explicit direction the card
+   now shows ONLY bags+net kilos by default (no unwithdrawn badge, no
+   potential line either), with a centered chevron and the whole card
+   tappable to reveal everything at once. The cereal type's Total row
+   now mirrors whichever variety is expanded instead of always showing
+   its own unwithdrawn detail.
+3. **Two real Home.jsx bugs**: the Overview/Activity panel divs shared
+   the literal same `key={currentWarehouseId}` (fixed to unique keys),
+   and `inventoryTab` (Stocks/Sacks selection) lived above the
+   warehouse-keyed remount boundary so it never reset on a warehouse
+   switch (fixed with a `useEffect`). A third report - "a second
+   Stocks/Sacks tab appears with 2+ cereal types" - wasn't reproducible
+   by reading the code; flag to the user if it recurs after these
+   fixes, ideally with a fresh screenshot showing 2+ cereal types.
+4. **AI/SIA Monitor** now shows per-type counts (`AI (3) / SIA (4)`)
+   instead of one combined "N pending" chip.
+5. **Milling Operations completed list** moved out of the inline
+   pending list (which used to just swap in place) into its own modal
+   ([CompletedMillingModal.jsx](../src/components/common/CompletedMillingModal.jsx)),
+   matching AuthorityMonitor/CompletedAuthorityModal's existing
+   convention. Row rendering was extracted into a shared
+   `MillingOrderRow` (exported from MillingMonitor.jsx) so the pending
+   list and the completed modal can't drift apart.
+
+Full detail in docs/activity-log.md's "2026-08-16 (continued)" entry.
+`npm run build` passes. Still waiting on the user's own localhost
+re-test before anything in either 2026-08-16 entry gets committed.
+
+### DONE (2026-08-16 session, first pass) - Home page declutter + FAB dodge, IMPLEMENTED in real code (see above entry for post-testing fixes)
+
+Both items below were demoed first (see the 2026-08-15 entry this one
+replaces), then approved, then actually built this session. `npm run
+build` passes for all of it. **Not committed or pushed yet** - the user
+explicitly wants to try it on their running `localhost:3000` dev server
+first (HMR should pick these up automatically). Verifying it myself in
+the browser tool failed: the README's documented seed PIN (`123456`)
+returned "Invalid access PIN" against this environment's actual
+database, so login couldn't be completed from here - whoever picks this
+up next should confirm with the user whether it's already been tried
+locally before assuming it still needs testing.
+
+- **FAB dodge** - DONE, in [BottomNav.jsx](src/components/layout/BottomNav.jsx)
+  and [index.css](src/index.css) (`@keyframes fab-dodge` /
+  `.animate-fab-dodge`). A `useFabDodge(column)` hook (mirrors the
+  existing `useSquashOnChange` retrigger-via-forced-reflow pattern)
+  fires only when `Math.min(prev,col) < FAB_COLUMN < Math.max(prev,col)`
+  (`FAB_COLUMN = 2`, matching the gap in `REGULAR_NAV_COLUMN`) - i.e.
+  only on a genuine cross-FAB tap (Home/Piles ↔ Reports/Settings), never
+  on a same-side tap. Visitor nav has no FAB at all, so the hook is
+  still called unconditionally (hooks can't be conditional) but its ref
+  just never attaches to anything there.
+  - Went through two demo-iteration rounds before this: first version
+    had the FAB resting lower to visually sit "in the pill's path" -
+    user correctly rejected this ("does not need to rest lower, ...
+    must never touch"). Root cause was actually timing, not position:
+    the dodge fired ~90ms after tap and didn't reach full clearance
+    fast enough relative to how quickly the pill's own back-out easing
+    (`cubic-bezier(0.34,1.56,0.64,1)`) sweeps through. Fixed by
+    triggering the dodge with **zero delay** (same tick as the pill's
+    own transition starts) and holding the FAB at full clearance
+    (translateY beyond ~-3.1rem) for the pill's *entire* likely transit
+    window rather than trying to time a narrow hop precisely - removes
+    any need to model the exact bezier curve.
+    Second round: user reported the result felt "laggy/slow" - the
+    hold window (0.78s total) was outliving the pill's own 0.55s
+    transition by a wide margin, reading as the FAB dragging its feet
+    after the interaction was already over. Tightened to 0.6s total
+    with per-keyframe `animation-timing-function` (fast punch into the
+    leap, gentler hold/settle) so the fully-clear window still safely
+    covers the pill's real danger zone (estimated first ~350ms of its
+    transition) without the long trailing tail. FAB's rest transform
+    (`-translate-y-5` / `-1.25rem`) was never actually the problem and
+    is unchanged - the keyframe's 0%/100% match it exactly so handing
+    control back to the static utility class at animation-end doesn't
+    snap.
+- **Home page declutter** - DONE:
+  1. Overview/Activity top-level tabs in
+     [Home.jsx](src/pages/Home.jsx) - same full-width sliding-pill
+     pattern as Reports.jsx's Summary/Stock Statement split, panels
+     kept mounted and toggled via `hidden` (not conditional render, to
+     avoid the known useLiveQuery-remount-flash bug) with
+     `animate-flow-down` applied unconditionally so it replays on every
+     `hidden` toggle (display:none resets a running/finished CSS
+     animation on its own - no JS retrigger or remount key needed, same
+     technique just used for Reports.jsx's tabs).
+  2. [HomeStocks.jsx](src/pages/HomeStocks.jsx): per-variety age-bucket
+     breakdown now collapses behind a "Show age breakdown" button
+     (state: `expandedVarieties`, a `Set` keyed by
+     `${cerealType}::${varietyName}`, collapsed by default). Skipped
+     entirely (no button, no toggle) when a variety only has one age
+     bucket - showing a disclosure for a single row that just repeats
+     the headline number would be pointless.
+  3. New [AlertsPanel.jsx](src/components/common/AlertsPanel.jsx)
+     merges ProcurementBagsNotification + PalayDryingStatus (which
+     itself renders up to 3 sub-notifications as a Fragment) into one
+     collapsed-by-default strip with a count badge. Implemented exactly
+     per the plan noted in the prior handoff entry: a single always-
+     mounted body wrapper (visibility toggled via `hidden`, not
+     unmount) holds the real notification components, and a
+     `MutationObserver` on that wrapper tracks `el.children.length` -
+     since none of the sub-notifications wrap themselves in their own
+     DOM node beyond what they conditionally render (`null` when
+     inactive), this gives an exact live count without duplicating any
+     of their internal useLiveQuery logic, and the count doubles as
+     "hide the whole strip when 0" and "expand default section's
+     content it's already counting" in one wrapper - no duplicate
+     mounts.
+  4. [AuthorityMonitor.jsx](src/components/common/AuthorityMonitor.jsx)
+     (AI/SIA Monitor) is now collapsible by default (`expanded` state +
+     `useDelayedUnmount`, same flow-down/up-exit pattern Milling
+     Operations already used), with a "N pending" chip computed as
+     `authorities.filter(a => !isAuthorityComplete(a)).length` (a
+     simpler, non-ref-deduped count than the `filtered` list used for
+     actual rendering - fine for a rough summary badge, not meant to be
+     exact to the record).
+
+Full detail (including the diagnostic approach used for two of the prior
+session's bugfixes - extracting/tiling video frames via Python+opencv
 since no ffmpeg was available) in docs/activity-log.md's "2026-08-15
-(continued)" entry.
+(continued)" and "2026-08-16" entries.
 
 ### DONE (2026-08-15 session, continuation) - Piles popup edge-clamp, form pop animation + Admin Dashboard match, nav pill clipping, scrollbar overflow, OR# autofill, Reports tab animation
 

@@ -5,27 +5,32 @@
 // Tapping an entry opens the same reconciliation panel the admin side
 // already uses, showing every WSI/ESI document that used it.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { X, Check } from 'lucide-react'
+import { X, Check, AlertTriangle } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { isAuthorityNaturallyComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityReconciliationPanel from './AuthorityReconciliationPanel.jsx'
+import ConfirmDialog from './ConfirmDialog.jsx'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, warehouseMap, onClose }) {
+// Must match the exit transition duration below.
+const CLOSE_ANIMATION_MS = 300
+
+function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, warehouseMap, accessibleWarehouses, onClose }) {
   // Delays the actual onClose call until the exit animation has time
   // to play, per the standing rule that every entrance needs a
   // matching exit rather than an instant, jarring unmount.
   const [isClosing, setIsClosing] = useState(false)
   const handleClose = () => {
     setIsClosing(true)
-    setTimeout(onClose, 180)
+    setTimeout(onClose, CLOSE_ANIMATION_MS)
   }
 
   const { weightUnit } = useSettings() ?? {}
@@ -33,7 +38,32 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   const [month, setMonth] = useState('All')
   const [year, setYear] = useState(String(currentYear))
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
+  const [warehouseFilter, setWarehouseFilter] = useState('')
   const [reconciling, setReconciling] = useState(null)
+  // Authority currently awaiting confirmation to be sent back to
+  // Pending, or null when no confirmation is showing.
+  const [pendingUncomplete, setPendingUncomplete] = useState(null)
+  // authId currently playing its "sent back to pending" glow+collapse
+  // exit animation, or null - the actual DB write is deliberately
+  // delayed until the animation finishes, matching the same pattern
+  // used for "mark complete" in the pending list (AuthorityMonitor.jsx),
+  // just with a red glow instead of green.
+  const [revertingId, setRevertingId] = useState(null)
+  // Must match .animate-row-revert-out's duration in index.css.
+  const ROW_EXIT_MS = 700
+
+  // Clears revertingId only once `authorities` (derived from the
+  // parent's live query) has actually caught up and no longer
+  // contains this authority - clearing it on a fixed timer instead
+  // raced against Dexie's async re-query, leaving one frame where the
+  // row reverted to its normal appearance before the live query
+  // removed it, which read as a flicker/reappear rather than one
+  // continuous glow-then-collapse.
+  useEffect(() => {
+    if (!revertingId) return
+    const stillHere = authorities.some((a) => a.authId === revertingId)
+    if (!stillHere) setRevertingId(null)
+  }, [authorities, revertingId])
 
   // Palay is green, Rice is blue - matches the same convention used in
   // the pending list, for consistency across the whole AI/SIA monitor.
@@ -45,9 +75,26 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
     return 'text-app-text'
   }
 
-  const handleUncomplete = async (authority, e) => {
+  // Only ever offered for authorities completed by the MANUAL checkbox
+  // - one genuinely fulfilled via real issuances (isAuthorityNaturallyComplete)
+  // isn't "done by mistake" in any sense a toggle could undo; the
+  // numbers themselves say it's done. Confirmed before actually
+  // applying, since this affects what the rest of the app treats as
+  // outstanding/pending.
+  const requestUncomplete = (authority, e) => {
     e.stopPropagation()
-    await db.authorities.update(authority.authId, { manuallyCompleted: false })
+    setPendingUncomplete(authority)
+  }
+  const confirmUncomplete = () => {
+    if (!pendingUncomplete) return
+    const authId = pendingUncomplete.authId
+    setPendingUncomplete(null)
+    setRevertingId(authId)
+    setTimeout(() => {
+      db.authorities.update(authId, { manuallyCompleted: false })
+      // revertingId is cleared by the effect above, once the live
+      // query confirms the authority has actually left this list.
+    }, ROW_EXIT_MS)
   }
 
   const refNumbers = authorities.map((a) => (type === 'AI' ? a.aiNumber : a.siaNumber)).filter(Boolean)
@@ -78,6 +125,15 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   if (!availableYears.includes(String(currentYear))) availableYears.unshift(String(currentYear))
 
   const availableRegionalAuthNumbers = [...new Set(authorities.map((a) => a.regionalAuthorityNumber).filter(Boolean))].sort()
+  // Every warehouse the user can see, not just ones with a completed
+  // record right now - "shows all warehouses first" per explicit
+  // request, so the picker doesn't shrink to nothing when a filter
+  // (month/year/regional auth) has already narrowed the list down.
+  // Scoped to the warehouses THIS USER can access, not every warehouse
+  // in the app (warehouseMap is the full, unscoped set - only used for
+  // per-row display lookups below, not for populating this picker).
+  const availableWarehouses = [...(accessibleWarehouses ?? [])]
+    .sort((x, y) => (x.code ?? '').localeCompare(y.code ?? ''))
 
   const filtered = authorities
     .map((a) => ({ a, completedDate: lastDateFor(type === 'AI' ? a.aiNumber : a.siaNumber) }))
@@ -94,10 +150,21 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
       return true
     })
     .filter(({ a }) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
+    .filter(({ a }) => !warehouseFilter || a.assignedWarehouse === warehouseFilter)
     .sort((x, y) => (y.completedDate ?? '').localeCompare(x.completedDate ?? ''))
 
-  return (
-    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}>
+  // Portaled straight to document.body - opened from AuthorityMonitor,
+  // which on Home.jsx sits under a `.stagger-fields`/`.animate-flow-down`
+  // ancestor. Those animations use `animation-fill-mode: both`, so even
+  // after the animation finishes the element keeps a non-`none`
+  // `transform` applied (e.g. `translateY(0px)`), and any non-`none`
+  // transform on an ancestor becomes the containing block for
+  // `position: fixed` descendants instead of the real viewport -
+  // without the portal, this modal rendered "fixed" relative to that
+  // ancestor's own box, trapping it inside the scrolling list instead
+  // of covering the screen.
+  return createPortal(
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -133,6 +200,19 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
             {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
+
+        {availableWarehouses.length > 1 && (
+          <select
+            value={warehouseFilter}
+            onChange={(e) => setWarehouseFilter(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text"
+          >
+            <option value="">All Warehouses</option>
+            {availableWarehouses.map((w) => (
+              <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>
+            ))}
+          </select>
+        )}
 
         {availableRegionalAuthNumbers.length > 0 && (
           <select
@@ -196,19 +276,24 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
               const variety = type === 'AI' ? varietyMap.get(a.varietyId) : null
               const warehouse = warehouseMap.get(a.assignedWarehouse)
               const unitLabel = type === 'SIA' ? 'pieces' : 'bags'
-              const canUncomplete = a.manuallyCompleted && !isAuthorityNaturallyComplete(a)
+              const canUncomplete = !isAuthorityNaturallyComplete(a)
+              // Shows unchecked immediately on confirm, before the
+              // (deliberately delayed) DB write - without this the
+              // checkmark just stayed put until the row vanished,
+              // never visibly showing the "no longer marked done" state.
+              const isReverting = revertingId === a.authId
 
               return (
-                <li key={a.authId} className="flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900">
+                <li key={a.authId} className={`flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 ${isReverting ? 'animate-row-revert-out pointer-events-none' : ''}`}>
                   {canUncomplete && (
                     <button
                       type="button"
-                      onClick={(e) => handleUncomplete(a, e)}
+                      onClick={(e) => requestUncomplete(a, e)}
                       aria-label="Mark as pending"
-                      className="flex w-10 shrink-0 items-center justify-center rounded-l-xl border-r border-neutral-800 bg-brand-neon/10 text-brand-neon"
+                      className={`flex w-10 shrink-0 items-center justify-center rounded-l-xl border-r border-neutral-800 transition-colors ${isReverting ? 'text-neutral-600' : 'bg-brand-neon/10 text-brand-neon'}`}
                     >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-md border border-brand-neon bg-brand-neon/20">
-                        <Check size={14} />
+                      <span className={`flex h-5 w-5 items-center justify-center rounded-md border ${isReverting ? 'border-neutral-700' : 'border-brand-neon bg-brand-neon/20'}`}>
+                        {!isReverting && <Check size={14} />}
                       </span>
                     </button>
                   )}
@@ -265,7 +350,18 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
       {reconciling && (
         <AuthorityReconciliationPanel authority={reconciling} onClose={() => setReconciling(null)} />
       )}
-    </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingUncomplete)}
+        title="Mark this authority as pending again?"
+        description={pendingUncomplete ? `${pendingUncomplete.type} · ${pendingUncomplete.type === 'AI' ? pendingUncomplete.aiNumber : pendingUncomplete.siaNumber} will move back to the Pending list.` : undefined}
+        confirmLabel="Mark as Pending"
+        icon={AlertTriangle}
+        onConfirm={confirmUncomplete}
+        onCancel={() => setPendingUncomplete(null)}
+      />
+    </div>,
+    document.body
   )
 }
 
