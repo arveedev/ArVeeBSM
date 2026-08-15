@@ -146,7 +146,7 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
           <div
             ref={popupRef}
-            className={`max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl ${isOpen ? 'animate-pop-in' : 'animate-pop-out'}`}
+            className={`max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl ${isOpen ? 'animate-calendar-slide-in' : 'animate-calendar-slide-out'}`}
             onClick={(e) => e.stopPropagation()}
           >
           {label && (

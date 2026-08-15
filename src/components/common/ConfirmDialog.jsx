@@ -14,6 +14,7 @@
 // unaffected unless it explicitly asks for this treatment.
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 // Must match the transition duration used on the box below.
 const BOX_ANIMATION_MS = 220
@@ -46,7 +47,15 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
 
   if (isAnimated ? !shouldRender : !open) return null
 
-  return (
+  // Portaled straight to document.body - a plain `fixed` element gets
+  // constrained to the nearest ancestor with its own transform/filter/
+  // perspective (that ancestor becomes its containing block) instead of
+  // the real viewport. Piles.jsx's full-screen pile layout applies a
+  // rotate() transform to simulate landscape mode, which made this
+  // dialog render broken/invisible when opened from there since it
+  // wasn't a portal - it inherited that ancestor's rotated, resized box
+  // as its "fixed" reference frame instead of the actual screen.
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
       onClick={onCancel}
@@ -87,7 +96,8 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
