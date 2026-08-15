@@ -336,12 +336,30 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-neutral-800">
+                          {/* Without a wide left anchor column, a table
+                              made up entirely of short numeric columns
+                              (few characters each) gets its leftover
+                              width - from w-full stretching to the full
+                              container - spread almost equally across
+                              every column, since none of them has a
+                              naturally wide preferred size to absorb
+                              more than its share. That is what produced
+                              the huge, uneven gaps between narrow
+                              headers/values on a wide screen. This label
+                              column mirrors the per-province table's own
+                              "Warehouse" column below, which is what
+                              keeps that one visually tight - it is
+                              naturally wide, so it soaks up most of the
+                              slack instead of leaving it to the numeric
+                              columns. */}
+                          <Th>Scope</Th>
                           {buckets.map((b) => <Th key={b.label} right>{b.label.replace(/\s*months?$/i, '')}</Th>)}
                           <Th right>Total</Th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr>
+                          <Td><span className="font-medium text-app-text">All Warehouses</span></Td>
                           {columnTotals.map((val, i) => (
                             <Td key={i} right><span className={`font-semibold ${catColor(cat)}`}>{fmt(val)}</span></Td>
                           ))}

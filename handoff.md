@@ -19,6 +19,14 @@ neither doc was touched - see the matching activity-log.md entry for the
 exact mechanism and its limits (it can force an update attempt, not
 guarantee a good one).
 
+2026-08-15 addendum: new top-of-section entries under "In Progress / Not
+Yet Done" for this session's work (MillingMonitor cleanup, Expected
+Recovery fix, AdminHomeStocks toggles, save-freeze/delete-sync bugs,
+first responsive-scaling pass) and the one still-open item (BottomNav
+glow-stutter fix, awaiting the user's choice of approach) - read those
+first, they are the most current state. Rest of this file not otherwise
+re-verified this pass.
+
 ## Tech Stack
 - Vite + React, Tailwind CSS
 - Full dark/light theme system: brute-force CSS class overrides scoped
@@ -528,6 +536,99 @@ re-reading the actual discussion.
   URL - corrected.
 
 ## In Progress / Not Yet Done
+
+### OPEN (2026-08-15 session) - BottomNav glow-stutter fix, awaiting user's choice
+
+BottomNav.jsx's "liquid glow" travel animation (the effect that plays
+briefly right after switching nav tabs) stutters/pauses when the user
+taps nav icons rapidly, one after another, before the previous 400ms
+travel animation finishes. Root cause: the glow element fully unmounts/
+remounts on every navigation (`key={pathname}`), but the ref tracking
+its "start position" for the NEXT travel (`previousColumnRef.current`)
+only updates at the end of that 400ms window - so an interrupting tap
+restarts the animation from a stale position instead of wherever the
+glow visually was.
+
+Built an interactive demo comparing the current effect against a
+persistent, always-mounted sliding pill (driven by a continuous CSS
+`transition: transform`, same pattern already used by this app's own tab
+switchers/toggle pills) and presented both to the user. NOT YET
+IMPLEMENTED - waiting on their choice:
+- Persistent pill: fixes the bug completely (a continuous element always
+  animates from its true current position, no stale-ref possible), but
+  changes the at-rest look - currently NOTHING shows at rest by explicit
+  earlier design choice (only icon color marks the active tab); a
+  persistent pill means a highlight is always visible under the active
+  icon, not just during transitions.
+- Minimal bugfix: keep the "nothing at rest" look, fix the stale-ref bug
+  in the existing mount/unmount-based effect - still theoretically
+  fragile under very rapid tapping since it fights mount/unmount timing
+  rather than removing it, but preserves the current visual design
+  exactly.
+
+Full root-cause detail in docs/activity-log.md's 2026-08-15 entry (#6).
+
+### DONE (2026-08-15 session) - MillingMonitor cleanup, Expected Recovery fix, AdminHomeStocks toggles, save-freeze and delete-sync bugs
+
+Full detail in docs/activity-log.md's 2026-08-15 entry - read that first
+for exact root causes and file/line references. Summary here:
+- MillingMonitor.jsx: removed duplicate Issued/Received + miller-name
+  text from cards (already shown once above), "Warehouse" label now
+  contextual (Issuing/Receiving), removed duplicate WSI/WSR/ESI/ESR type
+  text (moved serial number up beside the date instead), animated the
+  Stocks/Sacks tab switch.
+- Expected Recovery card was gated on `order.issuedKilos` (sum of actual
+  posted WSI transactions - 0 or understated depending on progress)
+  instead of the linked AI's own `authorityAllocationKilos` (fixed at
+  AI-issuance time, transaction-independent) - fixed to use the latter,
+  so the card is now always visible once an MO has a recovery % and a
+  linked AI, regardless of transaction activity.
+- AdminHomeStocks.jsx: added a shared PillToggle component, wired as two
+  INDEPENDENT Actual/Potential toggles (top card + Breakdown tab, both
+  default Actual) - top card's Potential mode shows a plain swapped
+  number only, no badge/tag (that enriched treatment stays Breakdown-tab
+  only). Age Grouping tab got a "Total Branch" summary at the top
+  (aggregated across all provinces via a shared computeRows() helper,
+  same source as the per-province rows so they can't drift) and
+  per-province bordered-card separation; also fixed a wide-screen table
+  layout bug (added a leading label column so numeric columns don't
+  spread out with huge gaps - a table with no naturally-wide column gets
+  its w-full leftover space spread almost equally across every column).
+- Save freeze root-caused: validateForm() in StockFormBase.jsx/
+  SackFormBase.jsx ran a blocking network round-trip
+  (fetchTransactionBySerial, checking the Sheet for a duplicate serial)
+  BEFORE the local save, on every new transaction - moved to run in the
+  background, fire-and-forget, AFTER the local save succeeds. This is
+  why only NEW saves felt frozen while Update/Delete already felt fine.
+- Delete-not-reflecting-on-Sheet bug: Apps Script's deleteTransaction
+  action always returned SUCCESS even when no matching row was found,
+  so the app could never tell an actual delete apart from "nothing
+  happened" - fixed to return found:true/false, propagated through the
+  client, now shows a warning toast when a delete's target row wasn't
+  actually located on the Sheet. REQUIRED the user to manually redeploy
+  docs/apps-script-full-replacement.js in their Google Apps Script editor
+  - confirmed done.
+- AuthorityReconciliationPanel.jsx: fixed its bottom "Total" bar missing
+  safe-area-inset-bottom padding (was sitting flush against the phone's
+  home-indicator bar).
+- First responsive-scaling pass: root html font-size now bumps at md/lg
+  breakpoints (index.css) - since Tailwind's default sizing utilities are
+  rem-based, this scales font size and spacing/padding together in
+  lockstep across the whole app with one change, addressing "looks fine
+  on mobile but small on desktop" without per-component edits. Known
+  gap: components using fixed-pixel arbitrary values (e.g. PillToggle's
+  text-[10px] labels) don't participate yet.
+- All of the above, plus carried-over uncommitted work from the prior
+  session (NfaMillingMonitor.jsx, Home.jsx facility-scoping,
+  AdminMonitoring.jsx NFA tab, RicemillAllocationsPanel.jsx crash fix, SIA
+  blank-pieces fixes), committed and pushed to origin/main (commit
+  1bf0925) at the user's explicit request.
+
+STILL OPEN, unrelated to the above and not re-investigated this session:
+- The -355 bags PD1-A (0.095) persistent balance for warehouse CTD-GID 2.
+- Only per-component pixel-based sizing (not yet touched by the
+  responsive-scaling pass) as a follow-up if it reads too small on wide
+  screens.
 
 ### DONE (2026-08-14 session) - sack weight (MTS) fix, plus a full pilot-feedback batch
 
