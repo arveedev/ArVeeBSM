@@ -114,10 +114,14 @@ function BottomNav({ onFabClick, hidden = false }) {
                 element instead, which does not affect this box's
                 translate math. */}
             <div
-              className="absolute inset-y-2 w-1/2 transition-nav-elastic"
+              className="absolute inset-y-2 w-1/2 transition-nav-elastic-edge"
               style={{ transform: `translateX(${visitorColumn * 100}%)` }}
             >
-              <div ref={squashRef} className="mx-1 h-full rounded-2xl bg-brand-neon" />
+              <div
+                ref={squashRef}
+                className="mx-1 h-full rounded-2xl bg-brand-neon"
+                style={{ transformOrigin: visitorColumn === 0 ? 'left center' : 'right center' }}
+              />
             </div>
           </div>
           <NavItem to="/" label="Home" Icon={Home} />
@@ -142,10 +146,14 @@ function BottomNav({ onFabClick, hidden = false }) {
               Visitor nav above - box is exactly 1/5, gutter lives on
               the inner squash element only. */}
           <div
-            className="absolute inset-y-2 w-1/5 transition-nav-elastic"
+            className={`absolute inset-y-2 w-1/5 ${regularColumn === 0 || regularColumn === 4 ? 'transition-nav-elastic-edge' : 'transition-nav-elastic'}`}
             style={{ transform: `translateX(${regularColumn * 100}%)` }}
           >
-            <div ref={squashRef} className="mx-1 h-full rounded-2xl bg-brand-neon" />
+            <div
+              ref={squashRef}
+              className="mx-1 h-full rounded-2xl bg-brand-neon"
+              style={{ transformOrigin: regularColumn === 0 ? 'left center' : regularColumn === 4 ? 'right center' : 'center' }}
+            />
           </div>
         </div>
 

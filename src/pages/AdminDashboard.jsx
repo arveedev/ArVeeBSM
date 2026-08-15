@@ -7,7 +7,6 @@
 // -> Warehouses -> Users), the others are grouped by what they configure.
 
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import ProvincesPanel from '../components/common/admin/ProvincesPanel.jsx'
@@ -68,13 +67,47 @@ const GROUPS = [
   },
 ]
 
-function AdminDashboard() {
+function AdminDashboard({ onClose }) {
   const { setPageHeader } = usePageHeader() ?? {}
   const [activeGroupId, setActiveGroupId] = useState(GROUPS[0].id)
   const activeGroup = GROUPS.find((g) => g.id === activeGroupId) ?? GROUPS[0]
   const activeGroupIndex = GROUPS.indexOf(activeGroup)
 
   const [activeTabId, setActiveTabId] = useState(activeGroup.tabs[0].id)
+
+  // Same pop entrance/exit as the transaction forms (StockFormBase etc)
+  // - this page is reached by routing rather than the activeFormType
+  // state machine those use, but App.jsx's closeAdminDashboard callback
+  // (passed in as onClose) mirrors the same decoupled-timing fix: it
+  // flips the header/nav bars back into view immediately on tap, while
+  // the actual route change is deferred so this component's own
+  // pop-out transition (isClosing, below) has time to finish first.
+  const [hasEntered, setHasEntered] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+
+  useEffect(() => {
+    let raf2
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setHasEntered(true))
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
+  }, [])
+
+  // Matches App.jsx's body-scroll lock for the transaction forms - this
+  // page is now a fixed-position overlay with its own internal scroll,
+  // so the page behind it must not also be scrollable.
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
+  const handleClose = () => {
+    setIsClosing(true)
+    onClose?.()
+  }
 
   // Switching groups resets to that group's first tab - the
   // previously active tab id likely doesn't even exist in the new
@@ -93,81 +126,86 @@ function AdminDashboard() {
   }, [])
 
   return (
-    <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-app-text">Admin Dashboard</h1>
-          <p className="mt-0.5 text-xs text-neutral-500">Configure provinces, warehouses, users, varieties, and sack types.</p>
-        </div>
-        <Link
-          to="/settings"
-          aria-label="Close"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
-        >
-          <X size={20} />
-        </Link>
-      </div>
-
-      <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
-        <div
-          className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-          style={{
-            width: `calc(${100 / GROUPS.length}% - ${(GROUPS.length - 1) / GROUPS.length * 0.5}rem)`,
-            transform: `translateX(calc(${activeGroupIndex * 100}% + ${activeGroupIndex * 0.5}rem))`,
-          }}
-        />
-        {GROUPS.map((group) => (
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[350ms] ${hasEntered && !isClosing ? 'scale-100 opacity-100 ease-[cubic-bezier(0.34,1.56,0.64,1)]' : 'scale-95 opacity-0 ease-in'}`}>
+      <div className="border-b border-neutral-800 px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-app-text">Admin Dashboard</h1>
+            <p className="mt-0.5 text-xs text-neutral-500">Configure provinces, warehouses, users, varieties, and sack types.</p>
+          </div>
           <button
-            key={group.id}
             type="button"
-            onClick={() => handleGroupChange(group.id)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-              activeGroupId === group.id ? 'text-brand-contrast' : 'text-neutral-400'
-            }`}
+            onClick={handleClose}
+            aria-label="Close"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
           >
-            {group.label}
+            <X size={20} />
           </button>
-        ))}
-      </div>
+        </div>
 
-      <div key={activeGroupId} className="animate-flow-down">
-        <div className="relative mt-3 flex gap-2 overflow-x-auto pb-1">
-          {activeGroup.tabs.map((tab) => (
+        <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+          <div
+            className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+            style={{
+              width: `calc(${100 / GROUPS.length}% - ${(GROUPS.length - 1) / GROUPS.length * 0.5}rem)`,
+              transform: `translateX(calc(${activeGroupIndex * 100}% + ${activeGroupIndex * 0.5}rem))`,
+            }}
+          />
+          {GROUPS.map((group) => (
             <button
-              key={tab.id}
+              key={group.id}
               type="button"
-              onClick={() => setActiveTabId(tab.id)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95 ${
-                activeTabId === tab.id
-                  ? 'bg-brand-neon text-brand-contrast'
-                  : 'border border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-neutral-600 hover:text-app-text'
+              onClick={() => handleGroupChange(group.id)}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                activeGroupId === group.id ? 'text-brand-contrast' : 'text-neutral-400'
               }`}
             >
-              {tab.label}
+              {group.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Every panel across every group renders once, here, always
-          mounted - toggled via a plain hidden class instead of the
-          previous key={activeGroupId}/key={activeTabId} remount pair.
-          15 of these 16 panels call useLiveQuery internally; remounting
-          one on every single tab or group click restarted its query
-          from undefined each time, flashing an empty/loading state
-          before the real (already-fetched-once) data replaced it -
-          the exact same bug already fixed in Settings.jsx and
-          BeginningBalancesPanel.jsx's own tab switches. */}
-      <div className="mt-4">
-        {GROUPS.flatMap((group) => group.tabs.map((tab) => {
-          const Panel = tab.Panel
-          const isActive = activeGroupId === group.id && activeTabId === tab.id
-          return (
-            <div key={`${group.id}-${tab.id}`} className={isActive ? '' : 'hidden'}>
-              <Panel />
-            </div>
-          )
-        }))}
+      <div className="flex-1 overflow-y-auto px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3">
+        <div key={activeGroupId} className="animate-flow-down">
+          <div className="relative flex gap-2 overflow-x-auto pb-1">
+            {activeGroup.tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTabId(tab.id)}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95 ${
+                  activeTabId === tab.id
+                    ? 'bg-brand-neon text-brand-contrast'
+                    : 'border border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-neutral-600 hover:text-app-text'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Every panel across every group renders once, here, always
+            mounted - toggled via a plain hidden class instead of the
+            previous key={activeGroupId}/key={activeTabId} remount pair.
+            15 of these 16 panels call useLiveQuery internally; remounting
+            one on every single tab or group click restarted its query
+            from undefined each time, flashing an empty/loading state
+            before the real (already-fetched-once) data replaced it -
+            the exact same bug already fixed in Settings.jsx and
+            BeginningBalancesPanel.jsx's own tab switches. */}
+        <div className="mt-4">
+          {GROUPS.flatMap((group) => group.tabs.map((tab) => {
+            const Panel = tab.Panel
+            const isActive = activeGroupId === group.id && activeTabId === tab.id
+            return (
+              <div key={`${group.id}-${tab.id}`} className={isActive ? '' : 'hidden'}>
+                <Panel />
+              </div>
+            )
+          }))}
+        </div>
       </div>
     </div>
   )

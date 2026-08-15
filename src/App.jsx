@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { Toaster, toast } from 'react-hot-toast'
 import Login from './pages/Login.jsx'
 import Home from './pages/Home.jsx'
@@ -43,8 +43,24 @@ function App() {
   const { user } = useAuth()
   const { theme } = useSettings() ?? {}
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const [isTransactionModalOpen, setTransactionModalOpen] = useState(false)
   const [activeFormType, setActiveFormType] = useState(null)
+  // Admin Dashboard closes the same way the transaction forms do: tapping
+  // its own X starts its pop-out immediately (and this flag flips true
+  // right away, so the header/nav bars start sliding back into view in
+  // the same instant) while the actual route change - which is what
+  // really unmounts the page - is deferred by ADMIN_EXIT_MS so that
+  // pop-out has time to finish playing first.
+  const [adminClosing, setAdminClosing] = useState(false)
+  useEffect(() => {
+    if (pathname !== '/admin') setAdminClosing(false)
+  }, [pathname])
+  const closeAdminDashboard = () => {
+    setAdminClosing(true)
+    setTimeout(() => navigate('/settings'), FORM_EXIT_MS)
+  }
+  const barsHidden = Boolean(activeFormType) || (pathname === '/admin' && !adminClosing)
   // Tracks the previous pathname's nav column, to compute page-slide
   // direction on every route change - "forward" (deeper into the app,
   // e.g. Home to Piles) enters from the right, "back" (returning
@@ -165,11 +181,18 @@ function App() {
 
   return (
     <div className={`min-h-screen bg-neutral-950 ${pathname !== '/login' ? 'animate-app-fade-in' : ''}`}>
-      {/* Stays mounted even while a transaction form is open (previously
-          unmounted outright via !activeFormType), so it can slide away
-          instead of just vanishing - see AppHeader's own comment. */}
-      {user && pathname !== '/login' && pathname !== '/admin' && <AppHeader hidden={Boolean(activeFormType)} />}
-      <div key={pathname !== '/login' ? pathname : 'login'} className={pathname !== '/login' ? (pageDirection === 'back' ? 'animate-page-back' : 'animate-page-forward') : ''}>
+      {/* Stays mounted even while a transaction form (or the Admin
+          Dashboard, which uses the same fixed-overlay/pop treatment) is
+          open - previously unmounted outright via !activeFormType/
+          pathname==='/admin' - so it can slide away instead of just
+          vanishing - see AppHeader's own comment. */}
+      {user && pathname !== '/login' && <AppHeader hidden={barsHidden} />}
+      {/* No page-slide for /admin - it's a fixed-position overlay with
+          its own pop transition (see AdminDashboard.jsx), and a
+          transform applied by this wrapper would become its containing
+          block, dragging the "fixed" overlay along with the slide
+          instead of leaving it pinned to the real viewport. */}
+      <div key={pathname !== '/login' ? pathname : 'login'} className={pathname !== '/login' && pathname !== '/admin' ? (pageDirection === 'back' ? 'animate-page-back' : 'animate-page-forward') : ''}>
         <Routes>
           <Route path="/login" element={<Login />} />
         <Route
@@ -216,17 +239,17 @@ function App() {
           path="/admin"
           element={
             <ProtectedRoute requireRole="Admin">
-              <AdminDashboard />
+              <AdminDashboard onClose={closeAdminDashboard} />
             </ProtectedRoute>
           }
         />
       </Routes>
       </div>
 
-      {user && pathname !== '/login' && pathname !== '/admin' && (
+      {user && pathname !== '/login' && (
         <>
-          <BottomNav onFabClick={() => setTransactionModalOpen(true)} hidden={Boolean(activeFormType)} />
-          {!isVisitor && (
+          <BottomNav onFabClick={() => setTransactionModalOpen(true)} hidden={barsHidden} />
+          {!isVisitor && pathname !== '/admin' && (
             <>
               <TransactionModal
                 open={isTransactionModalOpen}
