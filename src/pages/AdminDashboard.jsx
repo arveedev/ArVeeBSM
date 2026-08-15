@@ -75,9 +75,6 @@ function AdminDashboard() {
   const activeGroupIndex = GROUPS.indexOf(activeGroup)
 
   const [activeTabId, setActiveTabId] = useState(activeGroup.tabs[0].id)
-  const activeTab = activeGroup.tabs.find((t) => t.id === activeTabId) ?? activeGroup.tabs[0]
-  const activeTabIndex = activeGroup.tabs.indexOf(activeTab)
-  const ActivePanel = activeTab.Panel
 
   // Switching groups resets to that group's first tab - the
   // previously active tab id likely doesn't even exist in the new
@@ -150,10 +147,27 @@ function AdminDashboard() {
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="mt-4 animate-flow-down" key={activeTabId}>
-          <ActivePanel />
-        </div>
+      {/* Every panel across every group renders once, here, always
+          mounted - toggled via a plain hidden class instead of the
+          previous key={activeGroupId}/key={activeTabId} remount pair.
+          15 of these 16 panels call useLiveQuery internally; remounting
+          one on every single tab or group click restarted its query
+          from undefined each time, flashing an empty/loading state
+          before the real (already-fetched-once) data replaced it -
+          the exact same bug already fixed in Settings.jsx and
+          BeginningBalancesPanel.jsx's own tab switches. */}
+      <div className="mt-4">
+        {GROUPS.flatMap((group) => group.tabs.map((tab) => {
+          const Panel = tab.Panel
+          const isActive = activeGroupId === group.id && activeTabId === tab.id
+          return (
+            <div key={`${group.id}-${tab.id}`} className={isActive ? '' : 'hidden'}>
+              <Panel />
+            </div>
+          )
+        }))}
       </div>
     </div>
   )

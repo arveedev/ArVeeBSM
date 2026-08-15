@@ -124,10 +124,16 @@ function WarehouseDetailModal({ warehouse, initialTab = 'stocks', onClose }) {
           ))}
         </div>
 
-        <div key={activeTab} className="animate-flow-down">
-          {activeTab === 'stocks'
-            ? <HomeStocks warehouseId={displayedWarehouse.warehouseId} />
-            : <HomeSacks warehouseId={displayedWarehouse.warehouseId} />}
+        {/* Both stay mounted, toggled via hidden - both call useLiveQuery
+            internally, so remounting either one on every tab click (the
+            previous key={activeTab} approach) restarted its queries from
+            undefined and flashed an empty/loading state before real data
+            replaced it. Same fix as Settings.jsx/BeginningBalancesPanel.jsx. */}
+        <div className={activeTab === 'stocks' ? '' : 'hidden'}>
+          <HomeStocks warehouseId={displayedWarehouse.warehouseId} />
+        </div>
+        <div className={activeTab === 'sacks' ? '' : 'hidden'}>
+          <HomeSacks warehouseId={displayedWarehouse.warehouseId} />
         </div>
       </div>
       </div>

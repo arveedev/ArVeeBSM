@@ -118,7 +118,14 @@ function Home() {
           ))}
         </div>
 
-        {inventoryTab === 'stocks' ? <HomeStocks /> : <HomeSacks />}
+        {/* Both stay mounted, toggled via hidden - both call useLiveQuery
+            internally, so switching between them as a plain type-swapping
+            ternary (React remounts on a component TYPE change regardless
+            of key) restarted queries from undefined each time, flashing
+            an empty/loading state before real data replaced it. Same fix
+            as Settings.jsx/BeginningBalancesPanel.jsx. */}
+        <div className={inventoryTab === 'stocks' ? '' : 'hidden'}><HomeStocks /></div>
+        <div className={inventoryTab === 'sacks' ? '' : 'hidden'}><HomeSacks /></div>
 
         <SectionErrorBoundary label="Procurement notification">
           <ProcurementBagsNotification />

@@ -178,14 +178,23 @@ function AdminMonitoring() {
         )}
       </div>
 
-      {activeTab === 'MILLING' ? (
-        <div className="mt-4">
-          <MillingMonitor />
-        </div>
-      ) : activeTab === 'NFA' ? (
+      {/* MillingMonitor/NfaMillingMonitor both call useLiveQuery
+          internally, so switching tabs via if/else (a different
+          component type each branch, which always remounts regardless
+          of any key) restarted their queries from undefined and
+          flashed an empty/loading state before real data replaced it -
+          same bug already fixed in Settings.jsx/BeginningBalancesPanel.jsx
+          etc. Both stay mounted, toggled via hidden instead. The AI/SIA
+          branch has no useLiveQuery of its own (authorities is fetched
+          once at the top of this component), so it's flash-safe either
+          way, but kept in the same always-mounted shape for consistency. */}
+      <div className={`mt-4 ${activeTab === 'MILLING' ? '' : 'hidden'}`}>
+        <MillingMonitor />
+      </div>
+      <div className={activeTab === 'NFA' ? '' : 'hidden'}>
         <NfaMillingMonitor />
-      ) : (
-        <>
+      </div>
+      <div className={activeTab === 'MILLING' || activeTab === 'NFA' ? 'hidden' : ''}>
       {regionalAuthFilter.trim() && (() => {
         // Every authority under this regional authority, regardless of
         // pending/completed status - gives the full picture for this
@@ -314,8 +323,7 @@ function AdminMonitoring() {
           )
         })}
       </ul>
-        </>
-      )}
+      </div>
 
       {selectedAuthority && (
         <AuthorityReconciliationPanel

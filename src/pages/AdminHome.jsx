@@ -49,10 +49,16 @@ function AdminHome() {
         ))}
       </div>
 
-      <div key={activeTab} className="animate-flow-down">
-        {activeTab === 'stocks'
-          ? <AdminHomeStocks onWarehouseSelect={handleWarehouseSelect} />
-          : <AdminHomeSacks onWarehouseSelect={handleWarehouseSelect} />}
+      {/* Both stay mounted, toggled via hidden - both call useLiveQuery
+          internally, so remounting either one on every tab click (the
+          previous key={activeTab} approach) restarted its queries from
+          undefined and flashed an empty/loading state before real data
+          replaced it. Same fix as Settings.jsx/BeginningBalancesPanel.jsx. */}
+      <div className={activeTab === 'stocks' ? '' : 'hidden'}>
+        <AdminHomeStocks onWarehouseSelect={handleWarehouseSelect} />
+      </div>
+      <div className={activeTab === 'sacks' ? '' : 'hidden'}>
+        <AdminHomeSacks onWarehouseSelect={handleWarehouseSelect} />
       </div>
 
       <WarehouseDetailModal warehouse={selectedWarehouse} initialTab={selectedWarehouseTab} onClose={() => setSelectedWarehouse(null)} />
