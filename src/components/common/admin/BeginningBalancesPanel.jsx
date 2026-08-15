@@ -301,7 +301,7 @@ function PilesBeginningBalances({ warehouseId }) {
                 </div>
               </div>
               <div>
-                <label className={labelClass}>Date Received</label>
+                <label className={labelClass}>As of</label>
                 <CalendarDatePicker value={line.dateReceived} onChange={(v) => updateLine(i, 'dateReceived', v)} />
               </div>
               <div>

@@ -11,16 +11,20 @@
 // entering "7" with Months selected stores 210 days, not 7 days, so it
 // correctly lands in the right age bucket (e.g. Palay's 6.1–12 months).
 //
-// Setting a new age value also resets dateOfReceipt to today, so the
-// auto-age-monitoring elapsed-days component starts fresh from this new
-// baseline rather than continuing to add elapsed days on top of a
-// now-stale receipt date.
+// Setting a new age value back-dates dateOfReceipt to (today - the new
+// age) and zeroes initialAgeValue, rather than resetting dateOfReceipt
+// to today with the override held separately - so "Date Received" keeps
+// reading as a real date the age genuinely counts forward from (e.g.
+// correcting "1 month" to "2 months" moves the date back an extra
+// month), and auto-age-monitoring's elapsed-days component continues
+// growing from that corrected baseline exactly as it would have from a
+// real receipt date.
 
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
-import { normalizeAgeToDays, fmtAge, todayLocalISO, bestAgeUnit, liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
+import { normalizeAgeToDays, fmtAge, localISODaysAgo, bestAgeUnit, liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
 import { inputClass, labelClass, primaryButtonClass } from '../forms/shared.js'
 
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
@@ -83,9 +87,16 @@ function EditPileAgeDialog({ pile, currentAge, onClose }) {
     }
 
     setIsSaving(true)
+    // Back-date dateOfReceipt to (today - days) instead of resetting it
+    // to today with the override held separately in initialAgeValue -
+    // both approaches produce the same age today, but back-dating keeps
+    // "Date Received" reading as a real date the age genuinely counts
+    // from (e.g. correcting "1 month" to "2 months" moves the date back
+    // an extra month), rather than always showing today's date after
+    // every correction.
     await db.piles.update(pile.pileId, {
-      initialAgeValue: days,
-      dateOfReceipt: todayLocalISO(),
+      initialAgeValue: 0,
+      dateOfReceipt: localISODaysAgo(days),
     })
     toast.success(`${pile.pileName} age set to ${fmtAge(days)}`)
     setIsSaving(false)
