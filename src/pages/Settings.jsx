@@ -512,7 +512,7 @@ function Settings() {
   const { user } = useAuth()
   const { autoAgeMonitoring, updateSetting } = useSettings() ?? {}
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } = useWarehouse() ?? {}
-  const { setPageHeader } = usePageHeader() ?? {}
+  const { setPageHeader, headerHeight, stickyIndicatorHeight } = usePageHeader() ?? {}
   const warehouseSectionRef = useRef(null)
   const pileCardRef = useRef(null)
   const [pileSection, setPileSection] = useState('create')
@@ -701,7 +701,11 @@ function Settings() {
       {currentWarehouseId && <ClassifierSection warehouseId={currentWarehouseId} />}
 
       {currentWarehouseId && (
-        <div className="mt-6" ref={pileCardRef}>
+        <div
+          className="mt-6"
+          ref={pileCardRef}
+          style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 12}px` }}
+        >
           <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
             <div
               className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"

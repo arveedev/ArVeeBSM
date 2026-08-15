@@ -104,6 +104,11 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, title, subtitle, onCl
                           {varietyMap.get(d.authority.varietyId)?.name ?? '—'}
                           {d.authority.customerName ? ` · ${d.authority.customerName}` : ''}
                         </p>
+                        {d.authority.ageGroup && (
+                          <p className="mt-0.5 inline-block rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-400">
+                            Age Group: {d.authority.ageGroup}
+                          </p>
+                        )}
                       </div>
                       <div className="shrink-0 text-right">
                         {isFullyWithdrawn ? (

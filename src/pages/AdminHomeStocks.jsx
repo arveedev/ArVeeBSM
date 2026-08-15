@@ -348,7 +348,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               problem this layout does not need to have at all. Each
               stat sizes to its own content and gap-controlled spacing
               stays tight and even regardless of viewport width. */}
-          <div className="mb-6 rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
+          {/* max-w-sm caps the card's own width regardless of viewport -
+              without it, the grid's 1fr bucket columns below still
+              stretch to fill a wide desktop screen and spread their
+              (left-anchored, naturally narrow) content apart with large
+              gaps, the same underlying problem as before just via grid
+              instead of flex this time. */}
+          <div className="mb-6 max-w-sm rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
             <p className="mb-2 text-sm font-bold uppercase tracking-wide text-brand-neon">Total Branch</p>
             {CATEGORIES.map((cat) => {
               const { buckets, columnTotals, grandTotal } = computeRows(sortedWarehouses, cat)
@@ -356,21 +362,24 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               return (
                 <div key={cat} className="mt-2 first:mt-0">
                   <p className={`mb-1.5 text-xs font-bold uppercase ${catColor(cat)}`}>{cat}</p>
-                  {/* No ml-auto pushing Total to the far edge - on a wide
-                      desktop screen that left a huge empty gap between
-                      the buckets and the total (the same "spread out"
-                      problem as the original table, just via flex this
-                      time). A border instead of positioning keeps Total
-                      visually set apart while staying right next to the
-                      other buckets at any viewport width. */}
-                  <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  {/* A fixed grid, not flex - a flex row's gap alone
+                      doesn't keep this genuinely aligned across the
+                      three categories, since Rice/By Products have 2
+                      buckets but Palay has 3: Total would land in a
+                      different horizontal position per category,
+                      reading as inconsistent/misaligned even with tight
+                      spacing. MAX_AGE_BUCKETS reserves the same 3 bucket
+                      columns for every category (unused ones stay
+                      empty for a 2-bucket row) so Total always sits in
+                      the same 4th column no matter which category. */}
+                  <div className="grid grid-cols-[repeat(3,minmax(3.75rem,1fr))_auto] gap-x-3 gap-y-2">
                     {buckets.map((b, i) => (
                       <div key={b.label}>
-                        <p className="text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
+                        <p className="truncate text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
                         <p className={`text-sm font-semibold ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
                       </div>
                     ))}
-                    <div className="border-l border-neutral-800 pl-6">
+                    <div className="col-start-4 border-l border-neutral-800 pl-3">
                       <p className="text-[10px] uppercase text-neutral-500">Total</p>
                       <p className={`text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</p>
                     </div>
