@@ -19,6 +19,27 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { Home, LayoutGrid, FileText, Settings, Plus, Radar } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 
+// Retriggers the squash-and-stretch keyframe on every column change - a
+// CSS animation (unlike a transition) does not restart on its own just
+// because a class is still present, so the class has to be removed and
+// re-added with a forced reflow (reading offsetWidth) in between, even
+// when the previous play already finished. This runs on a ref instead of
+// state so rapid consecutive taps each get their own fresh replay rather
+// than colliding with a pending re-render.
+const useSquashOnChange = (dep) => {
+  const ref = useRef(null)
+  const first = useRef(true)
+  useEffect(() => {
+    if (first.current) { first.current = false; return }
+    const el = ref.current
+    if (!el) return
+    el.classList.remove('animate-nav-pill-squash')
+    void el.offsetWidth
+    el.classList.add('animate-nav-pill-squash')
+  }, [dep])
+  return ref
+}
+
 // Column index of each route within the 5-column regular nav grid
 // (index 2 is the FAB - never a nav target, so it's absent here) and
 // the 2-column Visitor nav - used to position the sliding glow
@@ -48,28 +69,16 @@ function BottomNav({ onFabClick }) {
     transition: 'transform 350ms ease-out',
   }
 
-  // Tracks the previous nav column so the liquid-glow animation knows
-  // where to start from - computed once here (before any conditional
-  // return) per hooks rules, shared by both the regular and Visitor
-  // nav branches below.
-  const currentColumnForTracking = (isVisitor ? VISITOR_NAV_COLUMN : REGULAR_NAV_COLUMN)[pathname] ?? 0
-  const previousColumnRef = useRef(currentColumnForTracking)
-  const fromColumn = previousColumnRef.current
-
-  // The glow only exists during this brief window right after a
-  // navigation - at rest, nothing is rendered at all (no persistent
-  // bar/pill/dot), per explicit request. Only the icon's own color
-  // (handled separately by NavLink) indicates the active tab at rest.
-  const [isTransitioning, setIsTransitioning] = useState(false)
-  useEffect(() => {
-    if (previousColumnRef.current === currentColumnForTracking) return // same position - no travel to show
-    setIsTransitioning(true)
-    const timer = setTimeout(() => {
-      setIsTransitioning(false)
-      previousColumnRef.current = currentColumnForTracking
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [currentColumnForTracking])
+  // The pill is always mounted (unlike the old transient glow, which
+  // fully unmounted/remounted on every navigation and could only ever
+  // animate from a remembered "previous" position - stale by the time a
+  // second rapid tap interrupted it, which is what caused the reported
+  // stutter/pause). Being a plain, always-present element driven purely
+  // by a CSS transition on transform means the browser always continues
+  // from whatever the pill's actual current on-screen position is,
+  // interruption or not - there is no "from" value to go stale.
+  const columnForSquash = (isVisitor ? VISITOR_NAV_COLUMN : REGULAR_NAV_COLUMN)[pathname] ?? 0
+  const squashRef = useSquashOnChange(columnForSquash)
 
   if (isVisitor) {
     const visitorColumn = VISITOR_NAV_COLUMN[pathname] ?? 0
@@ -77,19 +86,22 @@ function BottomNav({ onFabClick }) {
       <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
         <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
         <div className="relative mx-auto grid h-16 max-w-md grid-cols-2 items-center">
-          {isTransitioning && (
-            <div
-              key={pathname}
-              className="pointer-events-none absolute inset-y-0 z-0 flex w-1/2 items-center justify-center animate-nav-liquid-travel"
-              style={{
-                '--nav-from-x': `${fromColumn * 100}%`,
-                '--nav-to-x': `${visitorColumn * 100}%`,
-                transform: `translateX(${visitorColumn * 100}%)`,
-              }}
-            >
-              <div className="h-6 w-6 rounded-full bg-brand-neon/70 blur-md" />
-            </div>
-          )}
+          {/* The outer box's own width must equal exactly one grid
+              column (50% here) for translateX(N * 100%) to land each
+              column dead-on - percentage translateX is relative to the
+              element's OWN box, not the container, so shrinking this
+              outer box for a gutter (as a first attempt did) made each
+              step short by that same amount, an error that compounds
+              with every column and is exactly what made the pill drift
+              out from under its icon on columns further from the left.
+              The gutter is applied to the inner squash element instead,
+              which does not affect the outer box's translate math. */}
+          <div
+            className="pointer-events-none absolute inset-y-2 z-0 w-1/2 transition-nav-elastic"
+            style={{ transform: `translateX(${visitorColumn * 100}%)` }}
+          >
+            <div ref={squashRef} className="mx-1 h-full rounded-2xl bg-brand-neon" />
+          </div>
           <NavItem to="/" label="Home" Icon={Home} />
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />
         </div>
@@ -97,24 +109,21 @@ function BottomNav({ onFabClick }) {
     )
   }
 
-  const regularColumn = REGULAR_NAV_COLUMN[pathname]
+  const regularColumn = REGULAR_NAV_COLUMN[pathname] ?? 0
   return (
     <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
       <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
       <div className="relative mx-auto grid h-16 max-w-md grid-cols-5 items-center">
-        {isTransitioning && (
-          <div
-            key={pathname}
-            className="pointer-events-none absolute inset-y-0 z-0 flex w-1/5 items-center justify-center animate-nav-liquid-travel"
-            style={{
-              '--nav-from-x': `${fromColumn * 100}%`,
-              '--nav-to-x': `${(regularColumn ?? 0) * 100}%`,
-              transform: `translateX(${(regularColumn ?? 0) * 100}%)`,
-            }}
-          >
-            <div className="h-6 w-6 rounded-full bg-brand-neon/70 blur-md" />
-          </div>
-        )}
+        {/* Same self-width-must-equal-one-column reasoning as the
+            Visitor nav above - outer box is exactly 1/5, gutter lives
+            on the inner squash element only. */}
+        <div
+          className="pointer-events-none absolute inset-y-2 z-0 w-1/5 transition-nav-elastic"
+          style={{ transform: `translateX(${regularColumn * 100}%)` }}
+        >
+          <div ref={squashRef} className="mx-1 h-full rounded-2xl bg-brand-neon" />
+        </div>
+
         <NavItem to="/" label="Home" Icon={Home} />
         {isAdmin ? (
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />
@@ -146,8 +155,8 @@ function NavItem({ to, label, Icon }) {
       to={to}
       end
       className={({ isActive }) =>
-        `flex flex-col items-center justify-center gap-0.5 text-xs transition-colors hover:text-brand-neon/70 active:scale-95 ${
-          isActive ? 'text-brand-neon' : 'text-neutral-400'
+        `relative z-10 flex flex-col items-center justify-center gap-0.5 text-xs transition-colors active:scale-95 ${
+          isActive ? 'text-brand-contrast' : 'text-neutral-400 hover:text-brand-neon/70'
         }`
       }
     >

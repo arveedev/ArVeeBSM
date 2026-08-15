@@ -323,7 +323,14 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           </p>
 
           {/* Total Branch - per-cereal, per-age-group totals aggregated
-              across every province, shown before the province breakdown. */}
+              across every province, shown before the province breakdown.
+              A plain flex strip, not a table - there is only ever one
+              row of values here (the branch total), so a table's column-
+              stretching behavior (which needed a whole extra anchor
+              column to counteract on a wide screen) was solving a
+              problem this layout does not need to have at all. Each
+              stat sizes to its own content and gap-controlled spacing
+              stays tight and even regardless of viewport width. */}
           <div className="mb-6 rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
             <p className="mb-2 text-sm font-bold uppercase tracking-wide text-brand-neon">Total Branch</p>
             {CATEGORIES.map((cat) => {
@@ -331,42 +338,18 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               if (grandTotal === 0 && columnTotals.every((v) => v === 0)) return null
               return (
                 <div key={cat} className="mt-2 first:mt-0">
-                  <p className={`mb-1 text-xs font-bold uppercase ${catColor(cat)}`}>{cat}</p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-neutral-800">
-                          {/* Without a wide left anchor column, a table
-                              made up entirely of short numeric columns
-                              (few characters each) gets its leftover
-                              width - from w-full stretching to the full
-                              container - spread almost equally across
-                              every column, since none of them has a
-                              naturally wide preferred size to absorb
-                              more than its share. That is what produced
-                              the huge, uneven gaps between narrow
-                              headers/values on a wide screen. This label
-                              column mirrors the per-province table's own
-                              "Warehouse" column below, which is what
-                              keeps that one visually tight - it is
-                              naturally wide, so it soaks up most of the
-                              slack instead of leaving it to the numeric
-                              columns. */}
-                          <Th>Scope</Th>
-                          {buckets.map((b) => <Th key={b.label} right>{b.label.replace(/\s*months?$/i, '')}</Th>)}
-                          <Th right>Total</Th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <Td><span className="font-medium text-app-text">All Warehouses</span></Td>
-                          {columnTotals.map((val, i) => (
-                            <Td key={i} right><span className={`font-semibold ${catColor(cat)}`}>{fmt(val)}</span></Td>
-                          ))}
-                          <Td right><span className={`font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</span></Td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <p className={`mb-1.5 text-xs font-bold uppercase ${catColor(cat)}`}>{cat}</p>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2">
+                    {buckets.map((b, i) => (
+                      <div key={b.label}>
+                        <p className="text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
+                        <p className={`text-sm font-semibold ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
+                      </div>
+                    ))}
+                    <div className="ml-auto">
+                      <p className="text-[10px] uppercase text-neutral-500">Total</p>
+                      <p className={`text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</p>
+                    </div>
                   </div>
                 </div>
               )
