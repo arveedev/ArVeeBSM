@@ -13297,3 +13297,191 @@ Nothing left mid-build. Both follow-up items from this session (nav
 pill, Total Branch) are done and pushed (commit 4e4bbf8). User has
 confirmed the Apps Script redeploy and reports "everything seems to be
 working fine" after the main round of fixes earlier in this session.
+
+## 2026-08-15 (continued) - Piles popup edge-clamp, form pop animation, nav pill clipping, Admin Dashboard animation, OR# autofill, Reports tabs
+
+Claude Code session, continued after a context compaction. Everything
+below was built, verified via `npm run build`, and pushed to origin/main
+across commits 3ec48b7, de36ee4, b50ae05, 28bedca.
+
+### 1. Piles.jsx fullscreen popup still overflowing near screen edges
+
+The center-anchor rotation fix from the previous entry correctly
+centers the hover/tap detail popup on the tapped box's center point, but
+that only prevents the popup overflowing against its OWN edges - a box
+near a screen edge (user's example: PILE 4, top-left of the grid) still
+pushed the rotated popup half off-screen, since centering says nothing
+about the popup's position relative to the VIEWPORT's edges. Fixed by
+clamping the anchor coordinates themselves via `Math.min(Math.max(...))`
+against conservative half-dimension estimates, applied identically to
+both the hover and tap-detail popups (commit 3ec48b7).
+
+### 2. Form open/close: fade+slide-up → pop animation, fixed the "bars take a while" delay
+
+User: "change the entrance on the form, from fade in slide up to pop
+out... because right now it takes awhile before the top bar and nav bar
+to slide back in view."
+
+Root cause of the delay: each form (StockFormBase/SackFormBase/WTSForm)
+called `setIsClosing(true)` then `setTimeout(onClose, 380)` - `onClose`
+is App.jsx's `closeForm`, which clears `activeFormType` and is what
+drives the header/nav bars' own `hidden` prop. So the bars' reveal only
+STARTED after the form's own 380ms exit animation had already fully
+finished, for a ~730ms combined wait.
+
+Fixed by decoupling the two: `onClose` now fires immediately on tap
+(clearing `activeFormType` right away, so the bars start sliding back
+in the same instant), while App.jsx keeps the form component mounted a
+bit longer via `useDelayedUnmount(Boolean(activeFormType), FORM_EXIT_MS)`
+so its own pop-out transition still has time to play - driven by a new
+`isOpen` prop passed down from the parent instead of each form's own
+local `isClosing` state/timer. Entrance/exit style itself changed from
+`translate-y-10 opacity-0 → translate-y-0 opacity-100` to a scale+fade
+pop (`scale-95 opacity-0 → scale-100 opacity-100`, bouncy cubic-bezier
+on entrance, plain ease-in on exit) matching the app's existing
+`animate-pop-in`/`animate-pop-out` convention, just expressed as a
+transition (not a keyframe animation) since it needs to run in both
+directions off one boolean. Applied identically across StockFormBase,
+SackFormBase, and WTSForm - all three shared the exact same broken
+pattern (commit de36ee4).
+
+### 3. BottomNav elastic pill clipped flat at the Home/Settings edge columns
+
+User: "there is like a boundary on the edge of the home and settings
+icons, that when the elastic reach the edge, the part of the elastic
+pill shows black, not showing the full pill." Diagnosed by extracting
+and tiling frames from the user's screen recording (no ffmpeg installed
+- used Python + opencv via the system Python instead) rather than
+guessing from the description alone.
+
+Root cause: the pill's squash-and-stretch keyframe scales up to 1.35x
+around its own center, and the position transition's back-out easing
+overshoots slightly past its target before settling - both are fine at
+interior columns (the overshoot just overlaps the neighboring column,
+still inside the row, invisible) but at the two edge columns (Home=0,
+Settings=4 in the 5-column regular nav; both columns in the 2-column
+Visitor nav) there's no neighboring column to overshoot into, so the
+overshoot pushes the pill's box past the row's own edge, where the
+row's `overflow-hidden` wrapper clips it flat.
+
+Fixed with two edge-column-only changes in BottomNav.jsx: the squash
+element's `transformOrigin` is `left center`/`right center` (not
+`center`) at the two edge columns, so it only grows inward, never past
+the true edge; and a new `.transition-nav-elastic-edge` CSS class
+(index.css) - a non-overshooting ease-out curve - replaces the bouncy
+`.transition-nav-elastic` specifically when landing on an edge column.
+Visitor nav (only 2 columns, both always edges) always uses the edge
+variant (commit b50ae05).
+
+### 4. Horizontal scrollbar appearing/disappearing - "the display moving or glitching"
+
+Same screen-recording-frame-extraction approach confirmed a horizontal
+scrollbar intermittently appearing even on the plain PIN-entry login
+screen, which has no legitimately wide content of its own - ruled out
+component-specific causes. Since this app is a single-column, mobile-
+width layout that should never need horizontal scroll, fixed
+defensively rather than chasing the one-off overflowing element: added
+`overflow-x: hidden` to both `html` and `body`, plus
+`scrollbar-gutter: stable` on `html` (reserves the VERTICAL scrollbar's
+width permanently, so content crossing the vertical scroll threshold -
+tab switches, data loading in, a toast appearing - doesn't shift every
+fixed/sticky bar sideways either) (index.css, commit b50ae05).
+
+### 5. Admin Dashboard now opens/closes like the transaction forms
+
+User: "let the admin dashboard entrance exit look the same as the form
+entrance and exit." AdminDashboard was a normal routed page (`/admin`)
+with AppHeader/BottomNav fully unmounted (not slid away) while it was
+open, and its own content used the generic route-level slide transition.
+
+Converted it to the same fixed-overlay/pop-transition treatment as the
+forms: AppHeader/BottomNav now stay mounted for `/admin` too (their
+`hidden` prop, previously only `Boolean(activeFormType)`, is now
+`Boolean(activeFormType) || (pathname === '/admin' && !adminClosing)`),
+and the page-slide wrapper in App.jsx skips its slide animation
+specifically for `/admin` (a transform on that wrapper would become the
+containing block for AdminDashboard's own `fixed` positioning, dragging
+it along with the slide - the same containing-block quirk from the
+Piles.jsx fullscreen work earlier this session). AdminDashboard itself
+gained the same double-RAF mount-entrance + `isClosing`-driven exit pop
+as the forms. Since AdminDashboard is reached via routing rather than
+the `activeFormType` state machine, closing it needed its own
+decoupling: a new `adminClosing` state in App.jsx flips true immediately
+on tap (un-hiding the bars right away) while the actual
+`navigate('/settings')` is deferred by the same `FORM_EXIT_MS` so the
+page's own pop-out has time to finish first (commit b50ae05).
+
+### 6. OR # not autofilling from the AI/SIA Monitor list for SALES transactions
+
+User: "when the user taps on an authority with the OR Number value it
+does not auto-fill that data on the OR # box, this only applies to
+SALES transaction type." Root cause: `prefill.orNumber` was only ever
+consumed by ONE effect in StockFormBase.jsx - the one that resolves a
+Milling/Test-Milling authority's OR# field into a `pileId` (the Sheet
+intentionally repurposes that column as a pile name for those two
+transaction types) - nothing anywhere else wrote it into the actual
+`orNumber` input state, so the field stayed blank for every other
+transaction type including SALES. Added a second effect that sets
+`orNumber` directly from `prefill.orNumber`, explicitly skipping the
+Milling/Test-Milling case so the two effects never fight over the same
+prefill value (commit b50ae05).
+
+### 7. Reports page: Summary and Stock Statement split into their own tabs, then animated
+
+Per explicit request, added a page-level Summary/Stock Statement pill
+tab bar (same sliding-highlight pattern as the existing Stocks/Sacks
+tab), both panels kept mounted and toggled via a `hidden` class (not
+conditional rendering) to avoid the known useLiveQuery-remount-flash
+bug (commit b50ae05). Initial cut had no entrance animation on the tab
+switch at all - user caught this immediately after. Fixed by adding
+`animate-flow-down` unconditionally to both panel divs: toggling
+`hidden` (`display:none`) already resets a running/finished CSS
+animation on its own, so it replays every time the panel becomes
+visible again with no remount and no retrigger key needed (commit
+28bedca).
+
+### 8. Also this session: enlarged Net Bags text, two interactive demos built (not yet implemented)
+
+- AdminHomeStocks.jsx: Rice/Palay values in the "Net Bags by Province &
+  Category" table were reported as too small - bumped per-province rows
+  to `text-base font-bold`, branch totals to `text-lg font-bold`
+  (commit b50ae05).
+- Built and published two interactive HTML demos (Artifact tool, not
+  app code) for two follow-up requests, both awaiting the user's
+  go-ahead before real implementation:
+  - **Home page declutter**: side-by-side before/after phone mockups
+    showing 3 proposed changes (collapse the stock card's age-bucket
+    breakdown behind a disclosure, merge the Procurement/Palay-drying
+    notification banners into one collapsible "Alerts" strip, make
+    AI/SIA Monitor collapsible like Milling Operations already is) plus
+    a 4th noted-but-not-demoed option (split Home into "Overview"/
+    "Activity" top-level tabs, mirroring the Reports Summary/Statement
+    split above). User has since confirmed: implement ALL of the above
+    (the tab split PLUS all three collapsing changes) - **this is the
+    next open item, not yet started as real code.**
+  - **FAB dodge**: a fun nav-bar micro-interaction concept - the FAB
+    hops out of the way when the elastic pill's travel crosses its
+    grid column (e.g. Home→Reports), but stays put on same-side taps
+    (Home↔Piles, Reports↔Settings) since the pill never gets near it
+    then. First pass had the FAB positioned too high above the pill's
+    band to read as an actual near-miss ("the FAB is letting the pill
+    go through" per user feedback) - fixed by lowering the FAB's resting
+    height so it visually sits in the pill's path, and replacing the
+    small hop with a much bigger escape jump (with a brief dip toward
+    the pill first, for a beat of "uh oh") timed to clear well before
+    the pill arrives. **Also not yet implemented for real** - awaiting
+    confirmation the feel is right before wiring it into BottomNav.jsx.
+
+### Next step for whoever picks this up
+
+Two things confirmed by the user but not yet built:
+1. Home page declutter - full scope (Overview/Activity tab split +
+   collapsed age breakdown + merged Alerts strip + collapsible AI/SIA
+   Monitor), demoed and approved.
+2. FAB dodge nav micro-interaction - demoed, one round of feedback
+   already applied to the demo, awaiting final confirmation before
+   porting the keyframes/trigger logic into BottomNav.jsx for real
+   (needs the real column-crossing check reusing REGULAR_NAV_COLUMN,
+   not the demo's hardcoded column indices).
+
+Everything else in this entry is done, built, and pushed.
