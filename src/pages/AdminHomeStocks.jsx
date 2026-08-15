@@ -356,30 +356,32 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               return (
                 <div key={cat} className="mt-2 first:mt-0">
                   <p className={`mb-1.5 text-xs font-bold uppercase ${catColor(cat)}`}>{cat}</p>
-                  {/* Always exactly 4 equal-width tiles (grid-cols-4,
-                      genuinely responsive via 1fr - fills the available
-                      width on any screen, mobile or desktop) - up to 3
-                      bucket tiles (Rice/By Products only fill 2 of
-                      them, Palay fills all 3) plus Total, forced to
-                      col-start-4 so it lands in the same column
-                      regardless of how many buckets a category has.
-                      Bordered tiles (not bare text in open space) are
-                      what makes stretching to fill a wide screen read
-                      as an intentional grid instead of the earlier
-                      "gaps between scattered numbers" look - the tile's
-                      own border/background gives eyes something to
-                      anchor to, whether the tile itself ends up wide or
-                      narrow. */}
-                  <div className="grid grid-cols-4 gap-2">
+                  {/* 2 columns on mobile, 4 on sm+ - fixing this at 4
+                      columns unconditionally (the previous attempt) was
+                      what squeezed each tile too narrow for its own
+                      number on a phone, forcing truncate to clip real
+                      values (unacceptable - every figure has to stay
+                      fully visible). At 2 columns, tiles simply wrap
+                      into extra rows instead of getting squeezed, so
+                      nothing needs clipping at any width. The invisible
+                      spacer only renders at sm+ (a 2-bucket category
+                      like Rice has no 3rd bucket to fill that slot) so
+                      Total stays pinned to the last cell of the row on
+                      desktop; on mobile the spacer is dropped entirely
+                      and Total just starts its own fresh row via normal
+                      DOM-order wrapping, which needs no special pinning
+                      since there is no shared row to align across. */}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {buckets.map((b, i) => (
                       <div key={b.label} className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
-                        <p className="truncate text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
-                        <p className={`truncate text-sm font-semibold ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
+                        <p className="text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
+                        <p className={`text-sm font-semibold ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
                       </div>
                     ))}
-                    <div className="col-start-4 rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
+                    {buckets.length < 3 && <div className="hidden sm:block" aria-hidden="true" />}
+                    <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
                       <p className="text-[10px] uppercase text-neutral-500">Total</p>
-                      <p className={`truncate text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</p>
+                      <p className={`text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</p>
                     </div>
                   </div>
                 </div>
