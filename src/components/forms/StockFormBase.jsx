@@ -1316,19 +1316,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
       toast.error(`Serial ${serialNo.trim()} is already used for a ${type} document at this warehouse`)
       return false
     }
-    // Final Sheet-side check, only when creating new (not editing an
-    // existing record's own serial) and only when online - a serial
-    // could theoretically become taken by another device between when
-    // it was first typed and this exact moment of saving. The local
-    // check above remains the only safety net when offline, since
-    // saving must still work without a network connection.
-    if (!excludeId && navigator.onLine) {
-      const sheetCheck = await fetchTransactionBySerial(type, currentWarehouse?.name, serialNo.trim())
-      if (sheetCheck.ok && sheetCheck.row) {
-        toast.error(`Serial ${serialNo.trim()} already exists on the Sheet - refresh and try a different number`)
-        return false
-      }
-    }
     if (isCancelled) return true
     if (!customerName.trim()) {
       toast.error('Name is required')
@@ -1393,6 +1380,22 @@ function StockFormBase({ type, title, onClose, prefill }) {
     }
 
     await db.transactions.add(transaction)
+
+    // Sheet-side duplicate-serial check, moved out of the blocking
+    // validateForm path (where it used to make every new save wait on
+    // a full Apps Script round-trip before the record even hit local
+    // IndexedDB) and run here instead, after the local save already
+    // succeeded - a genuine cross-device collision is rare enough that
+    // catching it a few seconds later with a warning toast is an
+    // acceptable trade for not freezing the UI on every single save.
+    if (navigator.onLine) {
+      fetchTransactionBySerial(type, currentWarehouse?.name, transaction.serialNo).then((sheetCheck) => {
+        if (sheetCheck.ok && sheetCheck.row) {
+          toast.error(`Serial ${transaction.serialNo} may already exist on the Sheet — please verify before syncing`, { duration: 8000 })
+        }
+      })
+    }
+
     // These three don't depend on each other's results - running them
     // concurrently reduces the total local save latency the user
     // actually waits through, since this determines how long it takes

@@ -555,12 +555,26 @@ const runAuthoritiesSync = async () => {
         }
 
         // A row using the old compact/compound format (a slash in the
-        // sack type, or a non-numeric piece count) doesn't match the
-        // multi-row convention this parser expects - skip it rather
-        // than guess at an ambiguous split, matching the earlier
-        // decision to require manual review for that format instead of
-        // parsing it automatically.
-        if (sackCode.includes('/') || pieces == null) continue
+        // sack type) doesn't match the multi-row convention this parser
+        // expects - skip it rather than guess at an ambiguous split,
+        // matching the earlier decision to require manual review for
+        // that format instead of parsing it automatically. A row with
+        // no sack type or no condition at all is too incomplete to
+        // become a line either way.
+        //
+        // A row that DOES name a real sack type + condition but has a
+        // still-blank Pieces cell (the admin hasn't filled it in on the
+        // sheet yet) must NOT be dropped - it's a real, expected line
+        // (e.g. SIA 0112233's second row: PPRE50/SH with no piece count
+        // yet, alongside its already-filled PPMG50/BN/390 row). Silently
+        // skipping it made that line vanish from the app entirely
+        // instead of showing up with 0 pieces, waiting to be filled in.
+        if (sackCode.includes('/') || !sackCode || !condition) continue
+        // pieces stays null here (not coerced to 0) - null means "not
+        // authorized yet, waiting on the sheet", a genuinely different
+        // state from an authorized amount of exactly 0. Collapsing them
+        // to the same 0 would make the ESI form treat "not yet set" as
+        // "authorized for nothing", blocking any real input for it.
 
         parsedSiaRows.push({
           siaNumber: siaNum,
@@ -855,7 +869,11 @@ const postToSheetsWithRetry = async (url, body, maxAttempts = 3) => {
         lastError = { ok: false, reason: 'request_failed', httpStatus: response.status }
       } else {
         const payload = await response.json()
-        if (payload.status === 'SUCCESS') return { ok: true }
+        // `found` is only meaningful for deleteTransaction (distinguishes
+        // an actual delete from "no matching row" - see that action's
+        // Apps Script comment); every other action simply omits it, so
+        // this stays undefined and harmless for those callers.
+        if (payload.status === 'SUCCESS') return { ok: true, found: payload.found }
         lastError = { ok: false, reason: 'bad_response', message: payload.message ?? null }
       }
     } catch (error) {
@@ -1014,7 +1032,7 @@ export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => 
       }),
     ])
     return (receivedResult.ok && issuedResult.ok)
-      ? { ok: true }
+      ? { ok: true, found: receivedResult.found !== false && issuedResult.found !== false }
       : { ok: false, reason: 'wts_partial_failure', receivedResult, issuedResult }
   }
 

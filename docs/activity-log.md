@@ -13045,3 +13045,40 @@ confirmed whether that warehouse's Settings > Warehouses > Reports Start
 Date field is actually populated. User is testing everything above
 themselves; nothing here has been clicked through in the running app by
 Claude.
+
+## 2026-08-14 (continued) - added a Stop hook that enforces this file getting updated
+
+Not a feature change to the app itself - tooling only, `.claude/settings.json`.
+
+User asked whether this activity log and handoff.md are always kept
+current. Answer: no - it's convention (the `handoff` skill's own
+instructions), not enforced by anything, so a session that skips it
+leaves both files silently stale with no signal that happened.
+
+Added a `Stop` hook (checked into `.claude/settings.json`, so it applies
+to anyone working in this repo, not just one machine) that runs whenever
+a Claude session tries to end its turn: it checks `git status` for any
+changes outside `docs/activity-log.md`/`handoff.md`; if there are code
+changes but neither doc was touched, it blocks the stop with a message
+telling the session to update them first. This is the mechanism that
+produced this very entry - the hook fired after the settings.json edit
+itself went uncommitted with no matching doc update, exactly the case
+it's meant to catch.
+
+Explicitly NOT solved by this: the hook can force *something* to get
+written before a session ends, it cannot make that something a good or
+complete summary - that's still entirely on whichever Claude session is
+writing it. It also only gates the FINAL stop of a turn, not every
+intermediate action within one. And since `.claude/settings.json` didn't
+exist in this project before this change, the hook won't take effect in
+any session that was already running when it was added - needs `/hooks`
+(reloads config) or a fresh session first.
+
+Command logic (bash, `git status --porcelain` scoped with pathspecs
+excluding the two doc files, `printf`/heredoc for the JSON block output
+- see the file for the exact string): pipe-tested directly against this
+repo's real state before being written to settings (clean tree = silent,
+dirty tree with docs untouched = blocks, dirty tree with docs also
+touched = silent) - passed cleanly, no `jq` available in this Windows
+Git Bash environment so validation went through a small Node script
+instead of the usual `jq -e` schema check.

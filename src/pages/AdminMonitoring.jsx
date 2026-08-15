@@ -24,8 +24,9 @@ import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, f
 import AuthorityReconciliationPanel from '../components/common/AuthorityReconciliationPanel.jsx'
 import CompletedAuthorityModal from '../components/common/CompletedAuthorityModal.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
+import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
 
-const TABS = ['AI', 'SIA', 'MILLING']
+const TABS = ['AI', 'SIA', 'MILLING', 'NFA']
 
 function AdminMonitoring() {
   const { weightUnit } = useSettings() ?? {}
@@ -131,7 +132,7 @@ function AdminMonitoring() {
           ))}
         </div>
 
-        {activeTab !== 'MILLING' && (
+        {activeTab !== 'MILLING' && activeTab !== 'NFA' && (
           <>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -181,6 +182,8 @@ function AdminMonitoring() {
         <div className="mt-4">
           <MillingMonitor />
         </div>
+      ) : activeTab === 'NFA' ? (
+        <NfaMillingMonitor />
       ) : (
         <>
       {regionalAuthFilter.trim() && (() => {

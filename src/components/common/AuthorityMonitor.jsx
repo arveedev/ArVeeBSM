@@ -120,13 +120,19 @@ function AuthorityMonitor() {
         autoComputeNet: false,
       })
     } else {
+      // A line with no allocation yet (blank Pieces cell on the sheet)
+      // must still show up, with pieces left null so the ESI form
+      // renders it blank for the user to fill in - only a line whose
+      // real allocation is already fully used up should be dropped.
       const remainingLines = (authority.sackLines ?? [])
-        .map((l) => ({
-          sackTypeId: l.sackTypeId,
-          condition: l.condition,
-          pieces: Math.max(0, (l.totalAllocationBags ?? 0) - (l.totalIssuedBags ?? 0)),
-        }))
-        .filter((l) => l.pieces > 0)
+        .filter((l) => l.sackTypeId && l.condition)
+        .map((l) => {
+          const hasAllocation = l.totalAllocationBags != null && l.totalAllocationBags > 0
+          const pieces = hasAllocation ? Math.max(0, l.totalAllocationBags - (l.totalIssuedBags ?? 0)) : null
+          return { sackTypeId: l.sackTypeId, condition: l.condition, pieces, hasAllocation }
+        })
+        .filter((l) => !l.hasAllocation || l.pieces > 0)
+        .map(({ sackTypeId, condition, pieces }) => ({ sackTypeId, condition, pieces }))
 
       window.openTransactionForm('ESI', {
         linkedDocNo: authority.siaNumber,
