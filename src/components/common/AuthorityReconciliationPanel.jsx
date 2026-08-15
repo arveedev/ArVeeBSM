@@ -128,7 +128,7 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
       </div>
 
       {rows.length > 0 && (
-        <div className="border-t border-neutral-800 bg-neutral-900 px-4 py-3">
+        <div className="border-t border-neutral-800 bg-neutral-900 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-app-text">
               Total ({rows.length} document{rows.length !== 1 ? 's' : ''})

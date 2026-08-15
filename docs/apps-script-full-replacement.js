@@ -496,10 +496,16 @@ function doPost(e) {
       const rowIndex = findRowIndexByMatch(sheet, body.matchColumn, body.matchValue);
       if (rowIndex === -1) {
         // Already gone (or never existed) - same end state either way, not an error.
-        return jsonResponse({ status: 'SUCCESS' });
+        // `found: false` lets the caller tell this apart from an actual
+        // deletion - a row that was never located here (e.g. it lives on
+        // a different date-ranged sheet source than the one this request
+        // targeted) previously looked identical to a successful delete,
+        // silently leaving stale rows behind with no way for the app to
+        // notice or warn the user.
+        return jsonResponse({ status: 'SUCCESS', found: false });
       }
       sheet.deleteRow(rowIndex);
-      return jsonResponse({ status: 'SUCCESS' });
+      return jsonResponse({ status: 'SUCCESS', found: true });
     }
 
     if (body.action === 'markLastModified') {

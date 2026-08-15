@@ -12,6 +12,25 @@ body {
   padding: 0;
 }
 
+/* Most Tailwind size utilities (text sizes, padding, margin, gap,
+   rounded corners, most widths/heights) are expressed in rem, which
+   resolves against the root html font-size - so scaling that one
+   root value scales font size AND spacing/padding/radii together, in
+   lockstep, rather than growing text alone while paddings and gaps
+   stay phone-sized around it. This is why elements do not overlap or
+   misalign as the root grows: every element own internal spacing
+   grows by the same proportion as its text, so relative layout stays
+   preserved at every breakpoint. Only truly fixed pixel values (a few
+   arbitrary bracket-syntax utilities, e.g. in PillToggle) do not
+   participate - deliberately left as first-pass gaps to size manually
+   later if they read as too small on a wide screen after this. */
+@media (min-width: 768px) {
+  html { font-size: 18px; }
+}
+@media (min-width: 1024px) {
+  html { font-size: 20px; }
+}
+
 /* Smooths the dark/light theme toggle across the whole app - the
    light theme override touches dozens of individual utility classes
    scattered throughout every page, not just body, so a universal

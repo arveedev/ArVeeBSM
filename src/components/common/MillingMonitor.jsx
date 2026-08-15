@@ -84,9 +84,16 @@ function MillingOrderDetail({ order, onClose }) {
 
   // Recovery percent expressed as an equivalent net bags figure, per
   // explicit request - a 50kg bag is the standard conversion used
-  // throughout this app's own weight calculations.
-  const expectedBagsEquivalent = order.type === 'MO' && order.recoveryPercent != null
-    ? Math.round((order.issuedKilos * (order.recoveryPercent / 100)) / 50)
+  // throughout this app's own weight calculations. Deliberately based
+  // on the linked AI's own authorized allocation (authorityAllocationKilos),
+  // NOT order.issuedKilos - the latter is the sum of actually-posted WSI
+  // transactions, so it's 0 (or partial) until milling activity happens,
+  // which made this card show a meaningless "0 bags" on fresh MOs and
+  // silently disappear once transactions came in and issuedKilos math
+  // stopped lining up with recoveryPercent's sheet-side blank rows. The
+  // allocation is known at AI-issuance time, so this is always computable.
+  const expectedBagsEquivalent = order.type === 'MO' && order.recoveryPercent != null && order.authorityAllocationKilos != null
+    ? Math.round((order.authorityAllocationKilos * (order.recoveryPercent / 100)) / 50)
     : null
 
   // By Products from this same milling run - same MO/TMO number, but
@@ -188,23 +195,25 @@ function MillingOrderDetail({ order, onClose }) {
 
         {/* Only this section scrolls */}
         <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-3">
-          {detailTab === 'stocks' ? (
-            <TransactionGroups
-              txs={stockTx}
-              categoryOf={stockCategoryOf}
-              renderRow={(t) => (
-                <StockRow key={t.id} t={t} order={order} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} weightUnit={weightUnit} />
-              )}
-            />
-          ) : (
-            <TransactionGroups
-              txs={sackTx}
-              categoryOf={sackCategoryOf}
-              renderRow={(t) => (
-                <SackRow key={t.id} t={t} order={order} warehouseMap={warehouseMap} sackTypeMap={sackTypeMap} />
-              )}
-            />
-          )}
+          <div key={detailTab} className="animate-flow-down">
+            {detailTab === 'stocks' ? (
+              <TransactionGroups
+                txs={stockTx}
+                categoryOf={stockCategoryOf}
+                renderRow={(t) => (
+                  <StockRow key={t.id} t={t} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} weightUnit={weightUnit} />
+                )}
+              />
+            ) : (
+              <TransactionGroups
+                txs={sackTx}
+                categoryOf={sackCategoryOf}
+                renderRow={(t) => (
+                  <SackRow key={t.id} t={t} warehouseMap={warehouseMap} sackTypeMap={sackTypeMap} />
+                )}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>,
@@ -250,24 +259,19 @@ function TransactionGroups({ txs, categoryOf, renderRow }) {
   )
 }
 
-function StockRow({ t, order, warehouseMap, varietyMap, pileMap, weightUnit }) {
+function StockRow({ t, warehouseMap, varietyMap, pileMap, weightUnit }) {
   const isIssue = t.type === 'WSI'
   return (
     <li className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-app-text">
-          {isIssue ? 'Issued' : 'Received'}
-          {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
+          {t.type} # {t.serialNo}{t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
         </span>
         <span className="text-neutral-500">{fmtDate(t.date)}</span>
       </div>
       <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-neutral-400">
         <div>
-          <p className="text-[10px] uppercase text-neutral-600">Miller</p>
-          <p className="text-app-text">{t.customerName ?? order.ricemillName ?? '—'}</p>
-        </div>
-        <div>
-          <p className="text-[10px] uppercase text-neutral-600">Warehouse</p>
+          <p className="text-[10px] uppercase text-neutral-600">{isIssue ? 'Issuing Warehouse' : 'Receiving Warehouse'}</p>
           <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
         </div>
         <div>
@@ -287,32 +291,24 @@ function StockRow({ t, order, warehouseMap, varietyMap, pileMap, weightUnit }) {
           <p className="text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
         </div>
       </div>
-      <p className="mt-1.5 text-sm font-semibold text-app-text">{t.type} # {t.serialNo}</p>
     </li>
   )
 }
 
-function SackRow({ t, order, warehouseMap, sackTypeMap }) {
+function SackRow({ t, warehouseMap, sackTypeMap }) {
   const isIssue = t.type === 'ESI'
   const lines = t.sackLines ?? []
   return (
     <li className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-app-text">
-          {isIssue ? 'Issued' : 'Received'}
-          {t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
+          {t.type} # {t.serialNo}{t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
         </span>
         <span className="text-neutral-500">{fmtDate(t.date)}</span>
       </div>
-      <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-neutral-400">
-        <div>
-          <p className="text-[10px] uppercase text-neutral-600">Miller</p>
-          <p className="text-app-text">{t.customerName ?? order.ricemillName ?? '—'}</p>
-        </div>
-        <div>
-          <p className="text-[10px] uppercase text-neutral-600">Warehouse</p>
-          <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
-        </div>
+      <div className="mt-1.5">
+        <p className="text-[10px] uppercase text-neutral-600">{isIssue ? 'Issuing Warehouse' : 'Receiving Warehouse'}</p>
+        <p className="text-app-text">{warehouseMap.get(t.warehouseId) ?? '—'}</p>
       </div>
       {lines.length > 0 && (
         <div className="mt-1.5 space-y-1 border-t border-neutral-800 pt-1.5">
@@ -327,7 +323,6 @@ function SackRow({ t, order, warehouseMap, sackTypeMap }) {
           })}
         </div>
       )}
-      <p className="mt-1.5 text-sm font-semibold text-app-text">{t.type} # {t.serialNo}</p>
     </li>
   )
 }

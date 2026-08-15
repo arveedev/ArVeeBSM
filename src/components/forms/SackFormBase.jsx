@@ -451,19 +451,25 @@ const SackFormBase = forwardRef(function SackFormBase(
       if (match) setTransactionTypeId(match.transactionTypeId)
     }
 
+    // A sack-type/condition line whose Pieces cell is still blank on the
+    // sheet (totalAllocationBags null/0, never issued against) must
+    // still show up here with an empty pieces field for the user to
+    // fill in - only a line whose real allocation has been fully used
+    // up should actually drop off the list.
     const remainingLines = (authority.sackLines ?? [])
-      .map((l) => ({
-        sackTypeId: l.sackTypeId,
-        condition: l.condition,
-        pieces: Math.max(0, (l.totalAllocationBags ?? 0) - (l.totalIssuedBags ?? 0)),
-      }))
-      .filter((l) => l.pieces > 0)
+      .filter((l) => l.sackTypeId && l.condition)
+      .map((l) => {
+        const hasAllocation = l.totalAllocationBags != null && l.totalAllocationBags > 0
+        const remaining = hasAllocation ? Math.max(0, l.totalAllocationBags - (l.totalIssuedBags ?? 0)) : null
+        return { sackTypeId: l.sackTypeId, condition: l.condition, hasAllocation, remaining }
+      })
+      .filter((l) => !l.hasAllocation || l.remaining > 0)
 
     if (remainingLines.length > 0) {
       setSackLines(remainingLines.map((l) => ({
         sackTypeId: l.sackTypeId,
         condition: l.condition,
-        pieces: liveFormatNumber(String(l.pieces)),
+        pieces: l.hasAllocation ? liveFormatNumber(String(l.remaining)) : '',
       })))
     }
 
@@ -679,13 +685,6 @@ const SackFormBase = forwardRef(function SackFormBase(
       toast.error(`Serial ${serialNo.trim()} is already used for a ${type} document at this warehouse`)
       return false
     }
-    if (!excludeId && navigator.onLine) {
-      const sheetCheck = await fetchTransactionBySerial(type, currentWarehouse?.name, serialNo.trim())
-      if (sheetCheck.ok && sheetCheck.row) {
-        toast.error(`Serial ${serialNo.trim()} already exists on the Sheet - refresh and try a different number`)
-        return false
-      }
-    }
     if (isCancelled) return true
     if (!customerName.trim()) { toast.error('Name is required'); return false }
 
@@ -738,6 +737,22 @@ const SackFormBase = forwardRef(function SackFormBase(
 
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
     await db.transactions.add(transaction)
+
+    // Sheet-side duplicate-serial check, moved out of the blocking
+    // validateForm path (where it used to make every new save wait on
+    // a full Apps Script round-trip before the record even hit local
+    // IndexedDB) and run here instead, after the local save already
+    // succeeded - a genuine cross-device collision is rare enough that
+    // catching it a few seconds later with a warning toast is an
+    // acceptable trade for not freezing the UI on every single save.
+    if (navigator.onLine) {
+      fetchTransactionBySerial(type, currentWarehouse?.name, transaction.serialNo).then((sheetCheck) => {
+        if (sheetCheck.ok && sheetCheck.row) {
+          toast.error(`Serial ${transaction.serialNo} may already exist on the Sheet — please verify before syncing`, { duration: 8000 })
+        }
+      })
+    }
+
     await Promise.all([
       recordSerialUsed(type, currentWarehouseId, serialNo.trim()),
       rememberCustomer({
@@ -1181,7 +1196,12 @@ const SackFormBase = forwardRef(function SackFormBase(
                     matches exactly what's in the TMO sheet's Column I.
                   </p>
                 )}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Trial only applies on the receipt (ESR) side, where
+                    recovery is confirmed trial-by-trial (see
+                    trial3Confirmed below) - sacks are ISSUED per Test
+                    Milling Order as a whole, not per trial, so ESI has
+                    no Trial concept at all and must not require one. */}
+                <div className={type === 'ESR' ? 'grid grid-cols-2 gap-3' : ''}>
                 <div>
                   <label className={labelClass}>TMO Number</label>
                   <select
@@ -1204,21 +1224,23 @@ const SackFormBase = forwardRef(function SackFormBase(
                     )}
                   </select>
                 </div>
-                <div>
-                  <label className={labelClass}>Trial</label>
-                  <select
-                    value={trialNumber}
-                    onChange={(e) => setTrialNumber(e.target.value)}
-                    className={`${inputClass} ${!trialNumber ? '!border-brand-amber' : ''}`}
-                  >
-                    <option value="">Select…</option>
-                    {['1', '2', '3'].map((n) => (
-                      <option key={n} value={n} disabled={takenTrialNumbers.includes(n) && n !== trialNumber}>
-                        Trial {n}{takenTrialNumbers.includes(n) && n !== trialNumber ? ' (used)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {type === 'ESR' && (
+                  <div>
+                    <label className={labelClass}>Trial</label>
+                    <select
+                      value={trialNumber}
+                      onChange={(e) => setTrialNumber(e.target.value)}
+                      className={`${inputClass} ${!trialNumber ? '!border-brand-amber' : ''}`}
+                    >
+                      <option value="">Select…</option>
+                      {['1', '2', '3'].map((n) => (
+                        <option key={n} value={n} disabled={takenTrialNumbers.includes(n) && n !== trialNumber}>
+                          Trial {n}{takenTrialNumbers.includes(n) && n !== trialNumber ? ' (used)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 </div>
               </div>
             )
@@ -1303,11 +1325,22 @@ const SackFormBase = forwardRef(function SackFormBase(
                         SIA balance remaining: {getSiaRemainingPieces(line.sackTypeId, line.condition).toLocaleString()} pcs
                       </p>
                     )}
-                    {type === 'ESI' && line.sackTypeId && line.condition && (
-                      <p className="mt-1 text-xs text-neutral-500">
-                        Available: {fmtBags(getAvailablePieces(line.sackTypeId, line.condition))} pcs
-                      </p>
-                    )}
+                    {type === 'ESI' && line.sackTypeId && line.condition && (() => {
+                      const available = getAvailablePieces(line.sackTypeId, line.condition)
+                      // This is physical sack stock on hand at this warehouse -
+                      // a separate check from the SIA balance above it, and the
+                      // one actually behind the red border. Spelled out here so
+                      // "red border but SIA balance looks fine" doesn't read as
+                      // a contradiction - the SIA authorizes the amount, this
+                      // checks whether the physical sacks to issue exist.
+                      const exceedsAvailable = parseFormattedNumber(line.pieces) > available
+                      return (
+                        <p className={`mt-1 text-xs ${exceedsAvailable ? 'text-brand-crimson' : 'text-neutral-500'}`}>
+                          Available (physical stock): {fmtBags(available)} pcs
+                          {exceedsAvailable ? ' — exceeds what this warehouse has on hand, not an SIA limit' : ''}
+                        </p>
+                      )
+                    })()}
                   </div>
                 )
               })}

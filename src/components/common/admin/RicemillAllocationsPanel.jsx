@@ -85,7 +85,7 @@ function RicemillAllocationsPanel() {
       .where('warehouseId').anyOf(ricemillIds)
       .and((t) => t.status === 'Active')
       .toArray()
-    const varietyList = await db.varieties.toArray()
+    const varietyList = await db.varietyTypes.toArray()
     const varietyMap = new Map(varietyList.map((v) => [v.varietyId, v]))
     const warehouseMap = new Map(ricemillWarehouses.map((w) => [w.warehouseId, w]))
 

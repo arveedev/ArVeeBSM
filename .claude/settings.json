@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"C:/Users/DjArVee/Documents/GitHub/claude bsm app/bsm-app\" 2>/dev/null || exit 0; git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0; CHANGED=$(git status --porcelain -- . \":!docs/activity-log.md\" \":!handoff.md\" 2>/dev/null); DOCS_CHANGED=$(git status --porcelain -- docs/activity-log.md handoff.md 2>/dev/null); if [ -n \"$CHANGED\" ] && [ -z \"$DOCS_CHANGED\" ]; then cat <<'HOOKEOF'\n{\"decision\":\"block\",\"reason\":\"You changed files this session but docs/activity-log.md and handoff.md were not updated. Append a dated entry to docs/activity-log.md summarizing what changed and why, and update the relevant section(s) of handoff.md, before finishing.\"}\nHOOKEOF\nfi",
+            "shell": "bash"
+          }
+        ]
+      }
+    ]
+  }
+}

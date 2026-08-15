@@ -12,6 +12,13 @@ an accumulated/appended log (that's docs/activity-log.md's job).
 mid-implementation - read that section first, it is the most current
 open work. Rest of this file not otherwise re-verified this pass.
 
+2026-08-14 addendum #2: this file and docs/activity-log.md are no longer
+purely convention-based. A `Stop` hook in `.claude/settings.json` now
+blocks a Claude session from ending its turn if it changed files but
+neither doc was touched - see the matching activity-log.md entry for the
+exact mechanism and its limits (it can force an update attempt, not
+guarantee a good one).
+
 ## Tech Stack
 - Vite + React, Tailwind CSS
 - Full dark/light theme system: brute-force CSS class overrides scoped

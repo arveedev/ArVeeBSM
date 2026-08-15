@@ -8,6 +8,7 @@
 // now is the Sheets backup log), pushes each one, and flips the local
 // isSynced flag to true once the Sheet confirms the write.
 
+import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
 import { preloadTransactionsForUser } from './transactionPreload.js'
@@ -128,6 +129,9 @@ const runSyncQueue = async () => {
       try {
         const result = await deleteTransactionBackup(deletion.serialNo, deletion.type, deletion.warehouseCode)
         if (result.ok) {
+          if (result.found === false) {
+            toast.error(`${deletion.type} ${deletion.serialNo} deleted locally, but no matching row was found on the Sheet — please verify manually`, { duration: 10000 })
+          }
           await db.pendingSheetDeletions.delete(deletion.id)
           synced += 1
         } else {
@@ -172,7 +176,20 @@ const runSyncQueue = async () => {
 export const queueTransactionDeletion = async (serialNo, type, warehouseCode) => {
   try {
     const result = await deleteTransactionBackup(serialNo, type, warehouseCode)
-    if (result.ok) return
+    if (result.ok) {
+      // The Apps Script side reports SUCCESS even when it couldn't find
+      // a matching row to delete (see deleteTransaction's own comment) -
+      // that used to look identical to an actual delete, so a row on a
+      // different date-ranged sheet source (or any other mismatch) was
+      // silently left behind forever with no signal to the user. Not
+      // re-queued here since retrying against the same source won't
+      // find it any better the second time - surfacing it is the only
+      // useful next step, so the user can go check the Sheet by hand.
+      if (result.found === false) {
+        toast.error(`${type} ${serialNo} deleted locally, but no matching row was found on the Sheet — please verify manually`, { duration: 10000 })
+      }
+      return
+    }
   } catch {
     // fall through to queueing below
   }

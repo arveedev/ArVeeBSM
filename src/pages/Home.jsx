@@ -12,6 +12,7 @@ import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import AuthorityMonitor from '../components/common/AuthorityMonitor.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
+import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
 import { Factory, ChevronDown, ChevronUp } from 'lucide-react'
 import SectionErrorBoundary from '../components/common/SectionErrorBoundary.jsx'
 import ProcurementBagsNotification from '../components/common/ProcurementBagsNotification.jsx'
@@ -28,6 +29,16 @@ function Home() {
     useWarehouse() ?? {}
   const { setPageHeader } = usePageHeader() ?? {}
   const hasMillingOrders = (useLiveQuery(() => db.millingOrders.count(), []) ?? 0) > 0
+  // NFA-owned Ricemills/Mechanical Dryers don't use MO/TMO numbers at
+  // all (a separate rule, see RicemillAllocationsPanel.jsx) - the
+  // generic Milling Operations (MO/TMO) list is irrelevant to them.
+  // A Ricemill facility gets its own NFA allocation/usage monitor in
+  // its place; a Dryer facility's own monitor is PalayDryingStatus
+  // (already shown unconditionally below), so the MO/TMO section is
+  // simply not relevant there and stays hidden rather than duplicated.
+  const isRicemillFacility = currentWarehouse?.facilityType === 'Ricemill'
+  const isDryerFacility = currentWarehouse?.facilityType === 'Mechanical Dryer'
+  const showMillingSection = isRicemillFacility || (hasMillingOrders && !isDryerFacility)
 
   const [inventoryTab, setInventoryTab] = useState('stocks')
   const [showMillingMonitor, setShowMillingMonitor] = useState(false)
@@ -116,7 +127,7 @@ function Home() {
           <PalayDryingStatus />
         </SectionErrorBoundary>
 
-        {hasMillingOrders && (
+        {showMillingSection && (
           <SectionErrorBoundary label="Milling monitor">
             <button
               type="button"
@@ -128,7 +139,9 @@ function Home() {
             >
               <span className="flex items-center gap-2">
                 <Factory size={20} className="text-brand-amber" />
-                <span className="text-sm font-bold text-app-text">Milling Operations</span>
+                <span className="text-sm font-bold text-app-text">
+                  {isRicemillFacility ? 'NFA Ricemill Status' : 'Milling Operations'}
+                </span>
               </span>
               {showMillingMonitor ? (
                 <ChevronUp size={20} className="text-neutral-500" />
@@ -142,7 +155,7 @@ function Home() {
                   millingToggledByUserRef.current ? (showMillingMonitor ? 'animate-flow-down' : 'animate-flow-up-exit') : ''
                 }`}
               >
-                <MillingMonitor />
+                {isRicemillFacility ? <NfaMillingMonitor warehouseId={currentWarehouseId} /> : <MillingMonitor />}
               </div>
             )}
           </SectionErrorBoundary>
