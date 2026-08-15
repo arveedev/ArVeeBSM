@@ -356,38 +356,30 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               return (
                 <div key={cat} className="mt-2 first:mt-0">
                   <p className={`mb-1.5 text-xs font-bold uppercase ${catColor(cat)}`}>{cat}</p>
-                  {/* A fixed grid, not flex - a flex row's gap alone
-                      doesn't keep this genuinely aligned across the
-                      three categories, since Rice/By Products have 2
-                      buckets but Palay has 3: Total would land in a
-                      different horizontal position per category,
-                      reading as inconsistent/misaligned even with tight
-                      spacing. Reserving the same 3 bucket columns for
-                      every category (unused ones stay empty for a
-                      2-bucket row) keeps Total in the same 4th column
-                      regardless of category. Columns are max-content,
-                      NOT 1fr/minmax(...,1fr) - a 1fr column keeps
-                      stretching to fill whatever width its container
-                      happens to have, which is exactly what produced
-                      both this section's earlier bugs: huge gaps on a
-                      wide desktop screen (columns over-stretched) and,
-                      after that was capped with a fixed max-width on
-                      the whole card, a cramped/wasted-space look on
-                      every OTHER width instead (that same cap now
-                      applying regardless of how much room was actually
-                      available). Sizing each column to its own content
-                      sidesteps the tension entirely - the row is only
-                      ever as wide as its numbers need, on any screen. */}
-                  <div className="grid grid-cols-[repeat(3,max-content)_auto] gap-x-5 gap-y-2">
+                  {/* Always exactly 4 equal-width tiles (grid-cols-4,
+                      genuinely responsive via 1fr - fills the available
+                      width on any screen, mobile or desktop) - up to 3
+                      bucket tiles (Rice/By Products only fill 2 of
+                      them, Palay fills all 3) plus Total, forced to
+                      col-start-4 so it lands in the same column
+                      regardless of how many buckets a category has.
+                      Bordered tiles (not bare text in open space) are
+                      what makes stretching to fill a wide screen read
+                      as an intentional grid instead of the earlier
+                      "gaps between scattered numbers" look - the tile's
+                      own border/background gives eyes something to
+                      anchor to, whether the tile itself ends up wide or
+                      narrow. */}
+                  <div className="grid grid-cols-4 gap-2">
                     {buckets.map((b, i) => (
-                      <div key={b.label}>
+                      <div key={b.label} className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
                         <p className="truncate text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
-                        <p className={`text-sm font-semibold ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
+                        <p className={`truncate text-sm font-semibold ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
                       </div>
                     ))}
-                    <div className="col-start-4 border-l border-neutral-800 pl-3">
+                    <div className="col-start-4 rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
                       <p className="text-[10px] uppercase text-neutral-500">Total</p>
-                      <p className={`text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</p>
+                      <p className={`truncate text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</p>
                     </div>
                   </div>
                 </div>
