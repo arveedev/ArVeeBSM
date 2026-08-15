@@ -12,6 +12,28 @@ body {
   padding: 0;
 }
 
+/* Every native <select> app-wide (19+ files share the same inputClass/
+   selectClass string, but the browser's own default dropdown arrow
+   still renders flush against the box's edge regardless of that
+   class's own padding, since the arrow is drawn by the browser/OS, not
+   part of the padding box) - a plain element selector here fixes every
+   instance at once instead of needing to touch each file individually.
+   appearance:none removes the native arrow so this custom one (an
+   inline SVG chevron, color matching neutral-500) is the only one
+   shown, with real breathing room from the edge. !important is needed
+   because Tailwind's own padding utility classes (e.g. px-3) are class
+   selectors, which outrank a bare element selector like this one on
+   specificity alone, regardless of source order. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23737373' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 16px;
+  padding-right: 2.5rem !important;
+}
+
 /* Most Tailwind size utilities (text sizes, padding, margin, gap,
    rounded corners, most widths/heights) are expressed in rem, which
    resolves against the root html font-size - so scaling that one

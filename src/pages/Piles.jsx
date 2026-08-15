@@ -18,7 +18,7 @@
 // itself scales up 1.5x for readability - no separate floating card,
 // which was causing layout shift/glitching.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
@@ -100,10 +100,25 @@ const effectiveRowSpan = (box, fieldCount) => {
 // would otherwise create a containing block that constrains a plain
 // `fixed` element to that ancestor's own bounds instead of the real
 // screen).
-function FullScreenOverlay({ isFullScreen, isPortrait, children }) {
+// overlayRef (a plain callback ref, e.g. useState's setter passed
+// directly) exposes the actual rotated DOM node to the parent - so
+// content that genuinely needs to LIVE inside the rotated coordinate
+// system (the Edit/Assign Pile form, which is tall, variable-height,
+// and bottom-anchored on mobile - not a simple small centered dialog)
+// can be portaled straight into it instead of guessing a compensating
+// rotate() transform of its own. A manually-rotated version of that
+// form previously came out badly mispositioned/clipped, since rotating
+// a tall, edge-anchored box around its own center swaps its effective
+// width/height without correctly compensating for where its edges then
+// land - portaling into the already-correctly-rotated ancestor
+// sidesteps that math entirely, the same way the pile grid's own boxes
+// are already correctly oriented for free, just by being real
+// descendants of this rotated container.
+const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, children }, overlayRef) {
   if (!isFullScreen) return children
   return createPortal(
     <div
+      ref={overlayRef}
       className="fixed z-50 flex flex-col bg-neutral-950 p-3"
       style={
         isPortrait
@@ -120,7 +135,7 @@ function FullScreenOverlay({ isFullScreen, isPortrait, children }) {
     </div>,
     document.body
   )
-}
+})
 
 function Piles() {
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
@@ -134,6 +149,11 @@ function Piles() {
 
   const [pilesTab, setPilesTab] = useState('list')
   const [isFullScreen, setIsFullScreen] = useState(false)
+  // The full-screen overlay's own rotated DOM node, once mounted - lets
+  // the Edit/Assign Pile form portal directly into it (see
+  // FullScreenOverlay's comment) instead of needing its own
+  // compensating rotation.
+  const [overlayNode, setOverlayNode] = useState(null)
   useEffect(() => {
     document.body.style.overflow = isFullScreen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
@@ -794,7 +814,7 @@ function Piles() {
       {/* overflow-hidden so nothing ever renders outside this bordered
           display area - including the hover-detail popup below, which is
           explicitly clamped to these same bounds. */}
-      <FullScreenOverlay isFullScreen={isFullScreen} isPortrait={isPortrait}>
+      <FullScreenOverlay ref={setOverlayNode} isFullScreen={isFullScreen} isPortrait={isPortrait}>
         {isFullScreen && (
           <div className="mb-2 flex items-center justify-between gap-2">
             <button
@@ -856,6 +876,7 @@ function Piles() {
               return (
                 <button
                   key={box.id}
+                  data-box-id={box.id}
                   type="button"
                   disabled={Boolean(drawing || moving)}
                   onClick={() => !drawing && handleTapBox(box)}
@@ -1016,32 +1037,32 @@ function Piles() {
           // squeezed and hard to read.
           const popupWidth = 264
 
-          const screenLeft = (box.colStart - 1) * BASE_CELL_PX * scale
-          const screenTop = (box.rowStart - 1) * BASE_CELL_PX * scale
-          const screenRight = screenLeft + box.colSpan * BASE_CELL_PX * scale
-          const screenBottom = screenTop + box.rowSpan * BASE_CELL_PX * scale
-
-          // True viewport coordinates - the popup renders via a portal
-          // straight to document.body (below), not as a child of the
-          // grid's own overflow:hidden container, so it can never be
-          // clipped or need internal scrolling regardless of how short
-          // that container is. containerOrigin converts the box's
-          // grid-relative position into real screen coordinates.
-          // getBoundingClientRect() always returns coordinates in real,
-          // already-rotated screen space regardless of any transform
-          // on an ancestor (like FullScreenOverlay's portrait rotation)
-          // - so this popup's own position is already correct without
-          // any compensating rotation applied to it. A previous version
-          // additionally rotated the popup itself by 90deg in
-          // full-screen portrait mode, which was actually wrong (this
-          // popup was never inside the rotated container to begin with)
-          // and is what made it appear missing/garbled in that mode.
-          const containerRect = containerRef.current?.getBoundingClientRect()
-          const containerOrigin = { x: containerRect?.left ?? 0, y: containerRect?.top ?? 0 }
-          const viewportLeft = containerOrigin.x + screenLeft
-          const viewportTop = containerOrigin.y + screenTop
-          const viewportRight = containerOrigin.x + screenRight
-          const viewportBottom = containerOrigin.y + screenBottom
+          // The box's OWN real rendered position, read directly via
+          // getBoundingClientRect() on its actual DOM element (matched
+          // via data-box-id) rather than recomputed via a parallel
+          // formula (the previous approach, using colStart/rowStart *
+          // BASE_CELL_PX * scale plus the container's own origin). That
+          // formula had to be kept in sync with every layout-affecting
+          // change to the grid (padding, centering, zoom, pan...) and
+          // had already drifted out of sync at least once - when
+          // centering was made unconditional, it never accounted for
+          // the box's now-centered offset within the container, which
+          // is what put this popup far away from the pile it was
+          // actually describing. Reading the real rect sidesteps that
+          // whole class of bug entirely: correct regardless of scale,
+          // zoom, pan, centering, or padding, since it is the browser's
+          // own already-computed answer, not a re-derivation of it. It
+          // is also automatically correct in full-screen portrait mode
+          // without any compensating rotation on the popup itself,
+          // since getBoundingClientRect() always returns real,
+          // already-rotated screen coordinates regardless of any
+          // transform on an ancestor.
+          const boxEl = containerRef.current?.querySelector(`[data-box-id="${box.id}"]`)
+          const boxRect = boxEl?.getBoundingClientRect()
+          const viewportLeft = boxRect?.left ?? 0
+          const viewportTop = boxRect?.top ?? 0
+          const viewportRight = boxRect?.right ?? 0
+          const viewportBottom = boxRect?.bottom ?? 0
 
           // Header (sticky, ~64px) and BottomNav (fixed, 64px) both
           // visually cover part of the true viewport regardless of
@@ -1135,17 +1156,14 @@ function Piles() {
           // squeezed and hard to read.
           const popupWidth = 264
 
-          const screenLeft = (box.colStart - 1) * BASE_CELL_PX * scale
-          const screenTop = (box.rowStart - 1) * BASE_CELL_PX * scale
-          const screenRight = screenLeft + box.colSpan * BASE_CELL_PX * scale
-          const screenBottom = screenTop + box.rowSpan * BASE_CELL_PX * scale
-
-          const containerRect = containerRef.current?.getBoundingClientRect()
-          const containerOrigin = { x: containerRect?.left ?? 0, y: containerRect?.top ?? 0 }
-          const viewportLeft = containerOrigin.x + screenLeft
-          const viewportTop = containerOrigin.y + screenTop
-          const viewportRight = containerOrigin.x + screenRight
-          const viewportBottom = containerOrigin.y + screenBottom
+          // Same real-rect lookup as the hover popup above - see its
+          // comment for the full reasoning.
+          const boxEl = containerRef.current?.querySelector(`[data-box-id="${box.id}"]`)
+          const boxRect = boxEl?.getBoundingClientRect()
+          const viewportLeft = boxRect?.left ?? 0
+          const viewportTop = boxRect?.top ?? 0
+          const viewportRight = boxRect?.right ?? 0
+          const viewportBottom = boxRect?.bottom ?? 0
 
           const HEADER_HEIGHT = isFullScreen ? 0 : 64
           const BOTTOM_NAV_HEIGHT = isFullScreen ? 0 : 64
@@ -1244,21 +1262,25 @@ function Piles() {
         {isTouchDevice ? 'Tap a pile to see its details, move, or delete it.' : 'Hover a pile to preview it, or click for details, move, delete, or edit.'}
       </p>
 
-      {/* Portaled straight to document.body, and z-[65] (above
-          FullScreenOverlay's z-50) - previously a plain inline div at
-          the same z-50 as the full-screen overlay, so whichever of the
-          two happened to land later in document order for that tied
-          z-index could bury the other. That is what made this modal
-          seem to not appear at all when opened from full-screen mode:
-          FullScreenOverlay's own opaque layer was winning the tie and
-          covering it completely, not just visually dimming it. Rotated
-          to match the landscape-simulated view for the same reason as
-          ConfirmDialog. */}
+      {/* While full-screen, portals directly into FullScreenOverlay's
+          own already-rotated DOM node (overlayNode) instead of
+          document.body - this form is tall, variable-height, and
+          bottom-anchored on mobile (not a small centered dialog like
+          ConfirmDialog), so a manually-applied compensating rotate()
+          came out badly mispositioned/clipped (rotating a tall,
+          edge-anchored box around its own center swaps its effective
+          width/height without correctly accounting for where its edges
+          then land). Being a genuine descendant of the rotated
+          container instead means it inherits the correct orientation
+          for free, the same way the pile grid's own boxes already do -
+          no rotation math needed on this end at all. Previously this
+          was also a plain (non-portaled) div sharing FullScreenOverlay's
+          own z-50, so document order alone decided which one visually
+          buried the other - portaling explicitly avoids that tie too. */}
       {assignForm && createPortal(
         <div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/60 p-4 sm:items-center" onClick={cancelDrawing}>
           <div
             className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4"
-            style={(isFullScreen && isPortrait) ? { transform: 'rotate(90deg)' } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -1306,7 +1328,7 @@ function Piles() {
             </div>
           </div>
         </div>,
-        document.body
+        (isFullScreen && overlayNode) ? overlayNode : document.body
       )}
 
       <button type="button" onClick={handleExport} disabled={isExporting}
