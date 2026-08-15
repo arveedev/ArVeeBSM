@@ -27,6 +27,16 @@ glow-stutter fix, awaiting the user's choice of approach) - read those
 first, they are the most current state. Rest of this file not otherwise
 re-verified this pass.
 
+2026-08-15 addendum #2 (continuation session): another new top-of-section
+entry for Piles popup edge-clamping, the form pop-animation/timing fix
+(now also applied to Admin Dashboard), the BottomNav pill edge-clipping
+fix, a horizontal-scrollbar-overflow fix, OR# autofill, and the Reports
+Summary/Stock Statement tab split - all done and pushed. Two items
+confirmed by the user via interactive demos but NOT YET BUILT: the full
+Home page declutter (Overview/Activity tabs + 3 collapsing changes) and
+a "FAB dodges the nav pill" micro-interaction - both are the most
+current open work, read that entry first.
+
 ## Tech Stack
 - Vite + React, Tailwind CSS
 - Full dark/light theme system: brute-force CSS class overrides scoped
@@ -536,6 +546,90 @@ re-reading the actual discussion.
   URL - corrected.
 
 ## In Progress / Not Yet Done
+
+### OPEN (2026-08-15 session, continuation) - Home page declutter + FAB dodge, both demoed and approved, not yet built
+
+Two follow-up requests handled via interactive HTML demos (Artifact
+tool) before touching real code - both now confirmed by the user but
+**not yet implemented**:
+
+- **Home page declutter**: user reported Home.jsx felt crowded (too
+  many always-expanded sections stacked at once). Recommended and
+  demoed 4 changes; user approved all 4 together:
+  1. Split Home into "Overview" (warehouse selector + Stocks/Sacks
+     inventory card + alerts) and "Activity" (Milling Operations +
+     AI/SIA Monitor) top-level tabs, same pill-tab pattern as the
+     Reports Summary/Stock Statement split.
+  2. HomeStocks.jsx's age-bucket breakdown (0-3 months / >3 months /
+     Total row) collapses behind a "Show age breakdown" disclosure -
+     only the headline bag count + net kilos show by default.
+  3. ProcurementBagsNotification.jsx + PalayDryingStatus.jsx (which is
+     itself 3 sub-components: DryerStatusCard, WetPalayNotification,
+     DriedStockReceivedNotification) merge into one collapsible
+     "Alerts" strip with a count badge, instead of each rendering its
+     own always-visible full-width banner.
+  4. AuthorityMonitor.jsx (the AI/SIA Monitor) becomes collapsible by
+     default with a "N pending" count chip, matching how Milling
+     Operations already behaves in Home.jsx - currently it's the one
+     section that's always fully expanded with its own tab bar.
+  - Implementation note worked out but not yet coded: for the Alerts
+    count badge without duplicating each sub-notification's own
+    useLiveQuery logic, the plan is to always mount the notification
+    stack (so their queries stay warm) inside an accordion body, and
+    use a `MutationObserver` on that body to track how many children
+    actually rendered (each sub-component still returns `null` when
+    inactive) - gives an accurate live count for the badge and the
+    "hide the whole strip when nothing's active" behavior, without
+    lifting any query logic up into the parent.
+- **FAB dodge**: a nav-bar micro-interaction where the BottomNav FAB
+  hops out of the way when the elastic pill's travel crosses its grid
+  column (e.g. Home→Reports), demoed as a standalone HTML mockup and
+  refined once per user feedback (FAB now sits low enough at rest to
+  visually intersect the pill's path, with a much bigger escape jump).
+  Not yet ported into the real BottomNav.jsx - needs the real crossing
+  check to reuse `REGULAR_NAV_COLUMN`/`VISITOR_NAV_COLUMN` (FAB's grid
+  column is index 2 in the 5-column regular nav; the 2-column Visitor
+  nav has no FAB at all, so this is regular-nav-only) rather than the
+  demo's hardcoded column indices.
+
+Full detail (including the diagnostic approach used for two of the
+same-session bugfixes - extracting/tiling video frames via Python+opencv
+since no ffmpeg was available) in docs/activity-log.md's "2026-08-15
+(continued)" entry.
+
+### DONE (2026-08-15 session, continuation) - Piles popup edge-clamp, form pop animation + Admin Dashboard match, nav pill clipping, scrollbar overflow, OR# autofill, Reports tab animation
+
+All pushed (commits 3ec48b7, de36ee4, b50ae05, 28bedca). Summary:
+- Piles.jsx hover/tap popup: clamped the fullscreen center-anchor point
+  away from viewport edges (was still overflowing near edge boxes like
+  PILE 4 even after the earlier center-anchor fix).
+- Transaction forms (StockFormBase/SackFormBase/WTSForm): entrance/exit
+  changed from fade+slide-up to a scale+fade pop; closing now fires
+  `onClose` immediately (un-hiding the header/nav bars right away)
+  instead of after a 380ms local timeout, fixing a reported ~730ms
+  "bars take a while to come back" delay. Admin Dashboard converted to
+  the exact same fixed-overlay/pop treatment, with the same
+  immediate-signal/deferred-navigate decoupling for its close button.
+- BottomNav: fixed the elastic pill getting clipped flat (showing a
+  black cut edge) at the Home/Settings columns - the squash keyframe's
+  scale-up and the position transition's back-out overshoot both
+  extend past the row's own edge there, with no neighboring column to
+  absorb it like interior columns have.
+- index.css: `overflow-x: hidden` on html/body (a horizontal scrollbar
+  was intermittently appearing/disappearing, even on the login screen)
+  plus `scrollbar-gutter: stable` for the vertical one.
+- StockFormBase.jsx: OR # now actually autofills from the AI/SIA
+  Monitor list for SALES transactions - `prefill.orNumber` was
+  previously only consumed by the Milling/Test-Milling pile-lookup
+  effect, nothing wrote it into the real OR # field for any other type.
+- Reports.jsx: Summary and Stock Statement split into their own tabs,
+  then given an actual entrance animation on switch (initial cut had
+  none - `hidden`-class toggling with no animation class just snaps).
+- AdminHomeStocks.jsx: Rice/Palay values enlarged in the Province &
+  Category table per report they were too small.
+
+Full root-cause detail in docs/activity-log.md's "2026-08-15
+(continued)" entry.
 
 ### DONE (2026-08-15 session, follow-up) - BottomNav persistent elastic pill + Total Branch simplification
 
