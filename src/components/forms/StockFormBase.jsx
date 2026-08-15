@@ -137,7 +137,7 @@ const blankFormState = {
   members: [emptyMember()],
 }
 
-function StockFormBase({ type, title, onClose, prefill }) {
+function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // Pause the periodic background transaction sync for as long as
   // this form is open - it competes for the same local database
   // connection as every lookup this form does, which is the confirmed
@@ -231,7 +231,6 @@ function StockFormBase({ type, title, onClose, prefill }) {
   const [floorSerialNumber, setFloorSerialNumber] = useState(null) // lowest known real serial number (local + Sheet combined) for this (type, warehouse)
   const [showFloorWarning, setShowFloorWarning] = useState(false)
   const [hasEntered, setHasEntered] = useState(false)
-  const [isClosing, setIsClosing] = useState(false)
 
   // Two-effect pattern (same as elsewhere in this app): guarantees the
   // browser paints the initial off-screen state before animating in,
@@ -1681,19 +1680,20 @@ function StockFormBase({ type, title, onClose, prefill }) {
 
   const isEditMode = Boolean(loadedTransaction)
 
-  const handleCloseWithAnimation = () => {
-    setIsClosing(true)
-    setTimeout(onClose, 380)
-  }
-
+  // Pop scale+fade, coordinated with the nav bar/header's own 350ms
+  // slide (see App.jsx's FORM_EXIT_MS) - onClose now fires immediately
+  // on tap (App.jsx keeps this component mounted for the trailing
+  // exit window via useDelayedUnmount), so the bars and this form
+  // animate out together instead of the bars waiting on this form's
+  // own animation to finish first.
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[380ms] ease-out ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[350ms] ${hasEntered && isOpen ? 'scale-100 opacity-100 ease-[cubic-bezier(0.34,1.56,0.64,1)]' : 'scale-95 opacity-0 ease-in'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold text-app-text">{title}</h1>
           <button
             type="button"
-            onClick={handleCloseWithAnimation}
+            onClick={onClose}
             disabled={isSaving}
             aria-label="Close"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 hover:shadow-[0_0_12px_rgba(239,68,68,0.4)] active:scale-90 disabled:opacity-50"

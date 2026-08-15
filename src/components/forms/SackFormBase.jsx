@@ -67,7 +67,7 @@ const stripMoTmoPrefix = (value) => (value ?? '').replace(/^(MO|TMO)\s*No\.?\s*/
 const emptySackLine = () => ({ sackTypeId: '', condition: '', pieces: '' })
 
 const SackFormBase = forwardRef(function SackFormBase(
-  { type, title, linkedDocLabel, onClose, prefill },
+  { type, title, linkedDocLabel, onClose, prefill, isOpen = true },
   ref
 ) {
   // Same reasoning as StockFormBase.jsx's identical fix.
@@ -101,7 +101,6 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [floorSerialNumber, setFloorSerialNumber] = useState(null)
   const [showFloorWarning, setShowFloorWarning] = useState(false)
   const [hasEntered, setHasEntered] = useState(false)
-  const [isClosing, setIsClosing] = useState(false)
 
   useEffect(() => {
     let raf2
@@ -927,13 +926,13 @@ const SackFormBase = forwardRef(function SackFormBase(
       && sackLines.some((l) => l.sackTypeId && l.condition && l.pieces !== '')
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[380ms] ease-out ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[350ms] ${hasEntered && isOpen ? 'scale-100 opacity-100 ease-[cubic-bezier(0.34,1.56,0.64,1)]' : 'scale-95 opacity-0 ease-in'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-xl font-semibold text-app-text">{title}</h1>
           <button
             type="button"
-            onClick={() => { setIsClosing(true); setTimeout(onClose, 380) }}
+            onClick={onClose}
             disabled={isSaving}
             aria-label="Close"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 hover:shadow-[0_0_12px_rgba(239,68,68,0.4)] active:scale-90 disabled:opacity-50"

@@ -4,7 +4,7 @@
 
 import SackFormBase from './SackFormBase.jsx'
 
-function ESRForm({ onClose, prefill }) {
+function ESRForm({ onClose, prefill, isOpen }) {
   return (
     <SackFormBase
       type="ESR"
@@ -12,6 +12,7 @@ function ESRForm({ onClose, prefill }) {
       linkedDocLabel="ESI / AI"
       onClose={onClose}
       prefill={prefill}
+      isOpen={isOpen}
     />
   )
 }

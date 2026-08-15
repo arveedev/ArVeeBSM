@@ -2,8 +2,8 @@
 
 import StockFormBase from './StockFormBase.jsx'
 
-function WSRForm({ onClose, prefill }) {
-  return <StockFormBase type="WSR" title="WSR" onClose={onClose} prefill={prefill} />
+function WSRForm({ onClose, prefill, isOpen }) {
+  return <StockFormBase type="WSR" title="WSR" onClose={onClose} prefill={prefill} isOpen={isOpen} />
 }
 
 export default WSRForm

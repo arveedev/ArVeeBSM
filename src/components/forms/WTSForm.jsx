@@ -165,7 +165,7 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
   )
 }
 
-function WTSForm({ onClose, prefill }) {
+function WTSForm({ onClose, prefill, isOpen = true }) {
   // Same reasoning as StockFormBase.jsx's identical fix.
   useEffect(() => {
     pauseTransactionSync()
@@ -193,7 +193,6 @@ function WTSForm({ onClose, prefill }) {
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [hasEntered, setHasEntered] = useState(false)
-  const [isClosing, setIsClosing] = useState(false)
 
   useEffect(() => {
     let raf2
@@ -584,11 +583,11 @@ function WTSForm({ onClose, prefill }) {
   const isEditMode = Boolean(loadedTransaction)
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[380ms] ease-out ${hasEntered && !isClosing ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+    <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[350ms] ${hasEntered && isOpen ? 'scale-100 opacity-100 ease-[cubic-bezier(0.34,1.56,0.64,1)]' : 'scale-95 opacity-0 ease-in'}`}>
       <div className="border-b border-neutral-800 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-xl font-semibold text-app-text">WTS</h1>
-          <button type="button" onClick={() => { setIsClosing(true); setTimeout(onClose, 380) }} disabled={isSaving} aria-label="Close"
+          <button type="button" onClick={onClose} disabled={isSaving} aria-label="Close"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90 disabled:opacity-50">
             <X size={18} />
           </button>
