@@ -19,7 +19,7 @@ import { createPortal } from 'react-dom'
 // Must match the transition duration used on the box below.
 const BOX_ANIMATION_MS = 220
 
-function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon }) {
+function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon, rotate = false }) {
   const [shouldRender, setShouldRender] = useState(open)
   const [hasEntered, setHasEntered] = useState(false)
 
@@ -60,12 +60,23 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
       onClick={onCancel}
     >
+      {/* rotate - for callers (Piles.jsx's full-screen pile layout) that
+          simulate landscape via a rotated container on a physically
+          portrait device: this dialog is centered via flex, so rotating
+          it around its own center matches the surrounding rotated
+          content without needing any position compensation. Composed
+          into the same transform as the scale entrance animation
+          (isAnimated) rather than a separate wrapping element, which
+          would have needed its own width to keep w-full meaningful. */}
       <div
-        style={isAnimated ? {
-          transform: hasEntered ? 'scale(1)' : 'scale(0.85)',
-          opacity: hasEntered ? 1 : 0,
-          transition: `transform ${BOX_ANIMATION_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity ${BOX_ANIMATION_MS}ms ease-out`,
-        } : undefined}
+        style={{
+          transform: [
+            isAnimated ? (hasEntered ? 'scale(1)' : 'scale(0.85)') : null,
+            rotate ? 'rotate(90deg)' : null,
+          ].filter(Boolean).join(' ') || undefined,
+          opacity: isAnimated ? (hasEntered ? 1 : 0) : undefined,
+          transition: isAnimated ? `transform ${BOX_ANIMATION_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity ${BOX_ANIMATION_MS}ms ease-out` : undefined,
+        }}
         className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4"
         onClick={(e) => e.stopPropagation()}
       >
