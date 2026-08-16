@@ -579,7 +579,12 @@ function doPost(e) {
         return jsonResponse({ status: 'ERROR', message: `No row found matching "${targetNumber}"` });
       }
 
-      sheet.getRange(foundRow, 13).setValue('DONE'); // Column M
+      // value defaults to 'DONE' (existing natural-completion callers
+      // never send it) - an explicit empty string clears the cell
+      // instead, used when an admin manually reverts a completed
+      // MO/TMO back to pending from the app.
+      const statusValue = body.value !== undefined ? body.value : 'DONE';
+      sheet.getRange(foundRow, 13).setValue(statusValue); // Column M
       return jsonResponse({ status: 'SUCCESS' });
     }
 

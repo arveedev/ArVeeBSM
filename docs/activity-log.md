@@ -14525,3 +14525,118 @@ filters rather than bypassing them.
 `src/components/common/CompletedAuthorityModal.jsx`.
 
 `npm run build` passes. Not yet pushed - awaiting user confirmation.
+
+## Session: 2026-08-16 (round 11) - real transaction race fixed in MO/TMO manual-complete; missing-order bug still under investigation
+
+User reported (with screenshot evidence) two problems on the live app:
+marking an MO/TMO as done via the new admin checkbox didn't actually
+stick, and a real Milling Order (MO No. ALB - 2026-G-151) visible on the
+Sheet wasn't showing up in the app's pending list at all despite a
+successful "Synced 209 MO/TMO record(s)" sync.
+
+**Bug 1 - confirmed and fixed.** `syncMillingOrdersFromSheets` auto-runs
+every 5 minutes (bundled into `startAuthoritySyncWorker`), immediately
+at login, and on every reconnect - on top of the manual "Sync Now"
+button. The round-9 fix that preserves `manuallyCompleted` across this
+sync's full clear-and-rebuild read the existing flags BEFORE the sync's
+own network fetch (which can take real time), then used that stale
+snapshot when finally clearing and rewriting the table. Any admin
+checkbox write landing during that window (very likely right after a
+manual sync, exactly what the screenshot showed) got silently erased.
+Fixed in `src/services/googleSheetsBridge.js` by moving the
+existing-flags read to be the FIRST statement inside the same
+`db.transaction('rw', db.millingOrders, ...)` block as the
+clear+bulkPut, making it atomic against any concurrent write via
+Dexie's same-table transaction serialization - the admin's update now
+either lands fully before the sync starts or is queued to apply after
+it commits, never caught in between. (Had to hoist `records` to a
+`let` declared before the transaction, since the diagnostic console.log
+after it needed to reference the same array.)
+
+**Bug 2 - not yet resolved, real diagnostic step requested from user.**
+Read through every client-side filter (`passesSharedFilters`,
+`isOrderCompleted`, `computeMillingOrderStatuses`) and the documented
+Apps Script's own `fetchMillingOrders` row-inclusion logic
+(`docs/apps-script-full-replacement.js`) - none of them exclude a
+brand-new order with blank AI#/SIA#/Date-of-Milling fields (the
+Sheet-side filter only requires a constructible `number`). Since the
+order isn't rendering at all (not pending, presumably not completed
+either), it most likely never reached `db.millingOrders` in the first
+place - pointing at the ACTUALLY DEPLOYED Apps Script possibly
+differing from what's checked into this repo, not a client bug. Asked
+the user to check the browser console's
+`[syncMillingOrdersFromSheets] synced N record(s): [...]` log line
+after their next sync, to confirm whether `"MO::MO No. ALB -
+2026-G-151"` is actually in the synced list - this will definitively
+point to either a remaining client-side bug (if present) or a stale
+deployed script (if absent), rather than guessing further.
+
+### Files touched
+`src/services/googleSheetsBridge.js`.
+
+`npm run build` passes. Not yet pushed - awaiting user confirmation and
+the console-log diagnostic before considering this fully resolved.
+
+## Session: 2026-08-16 (round 12) - fixed a genuine MillingOrderDetail crash, added Sheet STATUS write-back for admin manual complete/uncomplete
+
+User's live testing surfaced two more things while investigating the
+round-11 "MO 151 missing" bug.
+
+**Confirmed MO 151 is not a Sheet-side problem** - the console-log
+diagnostic from round 11 showed it IS present in the synced list, and a
+direct IndexedDB query confirmed it's stored locally with full AI#/SIA#
+data matching MO 150's pattern. Follow-up check found it's actually
+sitting in the *Completed* list, not simply missing - meaning
+`isOrderCompleted`/`fulfilled` is evaluating true for it somehow. Root
+cause not yet found - still needs the exact stored record's
+`manuallyCompleted`/`sheetStatus` values to pin down, which is where
+this thread was interrupted by the crash below. **Still open.**
+
+**Real crash found and fixed**: opening the detail view of a completed
+MO (one with By Products/Source Warehouse/Last Activity content, which
+is what shows the "Show more details" toggle at all) threw
+`ReferenceError: shouldRenderMoreDetails is not defined` and crashed
+the whole modal. Root cause: a latent bug from an EARLIER session's
+"sequenced state machine" refactor (replacing two independent
+`useDelayedUnmount` hooks with `visibleSection`/`targetSection`/
+`isSectionLeaving` to fix a parallel-animation overlap glitch) - the
+JSX referenced `shouldRenderMoreDetails`/`shouldRenderTabContent` as if
+derived from that state machine, but those two consts were never
+actually defined anywhere. Only crashed for orders WITH extra detail
+content, which is why it went unnoticed until now. Fixed by adding
+`const shouldRenderMoreDetails = visibleSection === 'details'` and
+`const shouldRenderTabContent = visibleSection === 'tabs'` - verified
+by hand-tracing the full open/close sequence against the existing
+comments describing the intended sequenced (never-overlapping)
+behavior.
+
+**Added Sheet STATUS write-back for the admin manual complete/uncomplete
+feature**, per explicit user request - previously (round 9's design)
+`manuallyCompleted` was purely local, matching how authorities work.
+`markMillingOrderDone(type, number, value = 'DONE')` in
+`googleSheetsBridge.js` (already existed, called elsewhere for NATURAL
+completion from StockFormBase/SackFormBase) gained an explicit `value`
+parameter - defaults to `'DONE'` unchanged for every existing caller,
+but now accepts `''` to clear the cell instead. Wired into
+`MillingMonitor.jsx`'s `toggleManualComplete` (writes DONE) and
+`CompletedMillingModal.jsx`'s `confirmUncomplete` (clears it) as
+best-effort, fire-and-forget calls alongside the existing local
+`db.millingOrders.update`, matching the exact pattern already used for
+natural completion elsewhere.
+
+**IMPORTANT - requires a Sheet-side redeploy**: `docs/apps-script-full-
+replacement.js`'s `markMillingOrderDone` action was updated to read
+`body.value` (defaulting to `'DONE'` when absent, exactly matching
+today's deployed behavior). The "clear DONE on revert-to-pending"
+direction will NOT work until the user redeploys this updated Apps
+Script to Google - marking done will keep working immediately (default
+value unchanged), but reverting won't actually clear the Sheet cell
+until redeployed.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx`,
+`src/components/common/CompletedMillingModal.jsx`,
+`src/services/googleSheetsBridge.js`,
+`docs/apps-script-full-replacement.js`.
+
+`npm run build` passes.

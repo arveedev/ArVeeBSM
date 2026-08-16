@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, AlertTriangle } from 'lucide-react'
 import { db } from '../../db/dexie.js'
+import { markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { MillingOrderRow } from './MillingMonitor.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 
@@ -54,11 +55,15 @@ function CompletedMillingModal({ orders, type, onSelectOrder, onClose, isAdmin =
   }
   const confirmUncomplete = () => {
     if (!pendingUncomplete) return
-    const orderId = pendingUncomplete.orderId
+    const order = pendingUncomplete
     setPendingUncomplete(null)
-    setRevertingId(orderId)
+    setRevertingId(order.orderId)
     setTimeout(() => {
-      db.millingOrders.update(orderId, { manuallyCompleted: false })
+      db.millingOrders.update(order.orderId, { manuallyCompleted: false })
+      // Best-effort, fire-and-forget - clears the Sheet's STATUS cell
+      // back to blank so it doesn't keep showing DONE there after
+      // being reverted to pending in the app.
+      markMillingOrderDone(order.type, order.number, '')
     }, ROW_EXIT_MS)
   }
 

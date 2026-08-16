@@ -547,7 +547,53 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 10) - version bump, admin Authority Number picker scope bug, Completed AI/SIA search - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 12) - fixed a real MillingOrderDetail crash + added Sheet STATUS write-back for admin MO/TMO mark-done/undone - NOT YET COMMITTED/PUSHED
+
+`ReferenceError: shouldRenderMoreDetails is not defined` was crashing
+the completed-order detail view for any MO/TMO with By Products/Source
+Warehouse/Last Activity content - a latent bug from an earlier
+session's animation-sequencing refactor where two derived consts were
+referenced in JSX but never actually defined. Fixed in
+`MillingMonitor.jsx` (`shouldRenderMoreDetails`/`shouldRenderTabContent`
+now correctly derived from `visibleSection`).
+
+Also added Sheet STATUS write-back per user request: admin mark-done
+now writes "DONE" to the Sheet's STATUS column (reusing the existing
+`markMillingOrderDone`, already used for natural completion elsewhere),
+and admin mark-pending clears it. **`docs/apps-script-full-
+replacement.js` needs to be redeployed to Google** for the "clear on
+revert" direction to actually take effect - marking done keeps working
+immediately either way (default behavior unchanged).
+
+Still OPEN from round 11: MO 151 is confirmed present locally with full
+data but incorrectly showing as Completed - root cause (which field is
+flipping `isOrderCompleted` true) not yet found, investigation was
+interrupted by the crash above. Next step: get the exact stored
+record's `manuallyCompleted`/`sheetStatus` values from the user.
+
+### OPEN (2026-08-16 session, round 11) - fixed a real transaction race that silently reverted admin MO/TMO mark-done; MO 151 missing-order bug still open - PUSHED
+
+User found (via live testing, screenshot evidence) that admin's new
+MO/TMO checkbox wasn't sticking. Real root cause: `syncMillingOrders
+FromSheets` auto-runs every 5 min + on login + on reconnect (bundled
+into `startAuthoritySyncWorker`), fully clearing and rebuilding
+`db.millingOrders` every time. Round 9's `manuallyCompleted`
+preservation read the existing flags BEFORE the sync's network fetch
+instead of atomically with the clear+rebuild, so any admin write
+landing during that window (likely right after a manual sync) got
+silently erased. Fixed in `googleSheetsBridge.js` by moving that read
+inside the same `db.transaction('rw', ...)` block as the clear+bulkPut.
+
+Second bug from the same report - a real MO (151) visible on the Sheet
+never appears in the app despite a successful sync - is NOT yet
+resolved. Checked every client-side filter and the documented Apps
+Script logic; none would exclude it. Waiting on the user to check the
+browser console's `[syncMillingOrdersFromSheets] synced N record(s)`
+log after their next sync to confirm whether it's even being fetched at
+all - if not, the deployed Apps Script (not just this repo's copy) is
+the next place to look.
+
+### OPEN (2026-08-16 session, round 10) - version bump, admin Authority Number picker scope bug, Completed AI/SIA search - PUSHED
 
 `src/version.js` bumped to `1.8` (was pushed as part of round 9 without
 actually updating this - caught by the user). `AdminMonitoring.jsx`'s
