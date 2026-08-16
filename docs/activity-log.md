@@ -14170,3 +14170,185 @@ a genuine flatten (not just fade) on collapse.
 
 `npm run build` passes; re-checked hook imports in both touched files
 given round 4's crash (both correctly import `useEffect`).
+
+## Session: 2026-08-16 (round 6) - cereal Total flip iteration, then reportingCutoffDate app-wide + pile lifecycle/historical layout (full plan, implemented)
+
+### Part 1 - cereal Total flip, iterated to match a real flip-board (several rounds of user feedback)
+
+Landed via several small pushes: switched the flip axis from side-to-side
+(rotateY) to top-to-bottom (rotateX) per feedback; moved the card's own
+background/border/padding onto the flipping element itself so the whole
+colored box turns, not just its text; split one shared keyframe into
+`card-flip-open`/`card-flip-close` with genuinely mirrored (opposite-sign)
+rotation per direction, since a real board doesn't use the same rotation
+sign for opening (bottom hinge, top tips toward viewer/"widens" then
+swings down) and closing (top hinge, bottom does the true mirror) - a
+single shared keyframe re-anchored to a different `transform-origin`
+looked wrong because the rotation *sign*, not just the pivot, needed to
+differ per direction.
+
+### Part 2 - three linked features, planned then fully implemented
+
+User's real (not test) transaction data is spread messily across several
+warehouses. Rather than hunting down/editing every bad row per warehouse,
+decided the cleaner fix was extending `reportingCutoffDate` (previously
+Reports.jsx-only) to govern every calculation app-wide, plus building out
+a long-requested pile lifecycle/historical-layout system and closing the
+"ghost pile" gap in transaction pickers. Researched thoroughly (2 rounds
+of Explore + 1 Plan-agent validation pass) before writing the plan to
+`now-can-you-continue-vectorized-russell.md`, then implemented all three
+approved features in one pass. `npm run build` passes after every phase.
+
+**Feature A - reportingCutoffDate everywhere** (previously Reports.jsx
+only):
+- `pileLedger.js`'s `computeHistoricalPileState` now internally looks up
+  the pile's warehouse's `reportingCutoffDate` and excludes any non-seed
+  transaction dated on or before it (`isInitialBalance` always counts
+  regardless of date) - matches Reports.jsx's existing rule exactly, now
+  applied everywhere that function is used (live pile totals via
+  `recalculatePileCurrentState`, and Piles.jsx's own historical/period
+  view). Added an optional `warehouseOverride` 3rd param to avoid N
+  redundant `db.warehouses.get` calls in a loop.
+- `WarehousesPanel.jsx`'s save handler now recalculates every pile in a
+  warehouse when its `reportingCutoffDate` actually changes - the totals
+  are a CACHED field, not computed fresh on every read, so saving a new
+  cutoff previously had zero visible effect until something else
+  happened to touch each pile.
+- `pileBinCardGenerator.js`'s `buildLedgerRows` now takes the warehouse's
+  cutoff and excludes the same pre-cutoff non-seed transactions from the
+  printed ledger - user explicitly wants the BIN Card to respect the
+  cutoff too, reversing an earlier assumption that it should always show
+  full raw history. Nothing is deleted; unsetting the cutoff shows it
+  again.
+- `HomeSacks.jsx`/`AdminHomeSacks.jsx`'s live ESR/ESI sack computation
+  loops gained the same exclusion (per-warehouse map in the Admin
+  version, since it spans every warehouse at once) - both already fully
+  reactive (`useLiveQuery`, no caching), so no extra recompute-trigger
+  wiring needed there unlike the pile-totals case above.
+
+**Feature B - pile lifecycle + historical layout**:
+- New `piles.zeroedDate` field (dexie v28) - distinct from the existing
+  manual `closedDate`, silently tracks the moment a pile's bags AND
+  kilos both hit exactly zero (cleared the instant either goes back
+  above zero), via a new shared `deriveZeroedDateUpdate` helper wired
+  into every write path that touches `currentBags`/`currentKilos`:
+  `applyTransactionToPile`/`reverseTransactionFromPile`,
+  `recalculatePileCurrentState` (covers `closePile`/`reopenPile`/
+  BeginningBalancesPanel's save/Settings' save automatically, since they
+  all funnel through it), and `WTSForm.jsx`'s own two-sided
+  apply/reverse logic (WTS was never routed through `pileLedger.js`'s
+  incremental functions).
+- New `pileLayoutHistory` table (dexie v28) - one row per closed
+  occupancy "stint" of a `pileLayoutBoxes` box, capturing its full prior
+  geometry (position AND size, not just which pile occupied it) so a
+  past date can be reconstructed exactly. `pileLayoutBoxes` gained
+  `pileId` (indexed, for reverse lookup) and `assignedDate` (when the
+  box's current stint began).
+- New `vacateBoxForPile(pileId, effectiveDate)` in `pileLedger.js` -
+  snapshots a box's current geometry into `pileLayoutHistory` before
+  clearing its `pileId`/`label`, turning it genuinely vacant/
+  reassignable. `closePile` now calls this immediately (no grace
+  period - it's a deliberate confirmed action).
+- Piles.jsx gained a reactive auto-vacate `useEffect` - a pile that's
+  been at zero since before today (one full calendar day's grace period,
+  so it still displays normally with its 0 values for the rest of the
+  day it actually zeroes) gets its box auto-vacated the next time this
+  page is open for that warehouse. No background job exists in this
+  client-side app, so a warehouse nobody checks won't auto-vacate until
+  someone does - an accepted tradeoff, not a bug.
+- Piles.jsx's existing `periodTo` date picker (previously only drove
+  pile *totals* via `historicalMap`/`effectivePiles`) now ALSO drives
+  box occupancy/position/size via a new `effectiveBoxes` array, sourced
+  from `pileLayoutHistory` when `periodTo` predates a box's current
+  stint. Boxes untouched since this shipped have no `assignedDate` yet,
+  so they always show today's occupant regardless of `periodTo` - no
+  history exists yet to substitute for them, which is the correct
+  fallback, not a bug. `handleConfirmAssign` and the new `handleMoveClick`
+  history-snapshot logic both stamp `assignedDate` going forward.
+- `calculateCurrentAge` gained an optional 4th `asOfDate` param (defaults
+  to real today, so every other call site is unaffected) - Age was
+  previously always computed against real `new Date()` even while
+  viewing a historical `periodTo`, so it silently didn't match the
+  bags/kilos figures shown right next to it. Only Piles.jsx's three
+  Age-display call sites pass `periodTo` through now.
+- `BeginningBalancesPanel.jsx` gained a confirm dialog for both close and
+  reopen (mirroring the existing pile-deletion `ConfirmDialog` pattern
+  exactly) - previously fired immediately on click with just a toast.
+
+**Feature C - date-aware pile picker** (closes the "ghost pile" risk
+flagged during planning): `StockFormBase.jsx` and `WTSForm.jsx`'s pile
+pickers previously listed every pile in a warehouse with zero awareness
+of closure - a pile closed/vacated months ago was just as selectable as
+an active one. Both now exclude a pile once `effectiveCutoff =
+pile.closedDate ?? pile.zeroedDate` exists and the transaction's own
+`date` field is strictly after it - a same-day entry against a pile that
+just zeroed today, or a genuinely backdated correction predating the
+closure, both remain selectable, matching the user's explicit
+requirement not to block legitimate historical entry.
+
+**Explicitly verified, not assumed**: BIN Card transaction-to-pile
+matching is by `pileId` (UUID) everywhere in the export path, never by
+`pileName` - matters specifically because this app's real pile-naming
+convention ("Pile 1", "Pile 2"...) means names get reused across
+different physical piles over time. A new pile placed in a reused box
+was already guaranteed a fresh BIN Card by construction (fresh
+`crypto.randomUUID()` `pileId` per pile) - required no code change,
+just explicit confirmation against the actual matching code.
+
+### Files touched
+`src/utils/pileLedger.js`, `src/db/dexie.js` (v28),
+`src/components/common/admin/WarehousesPanel.jsx`,
+`src/utils/pileBinCardGenerator.js`, `src/pages/HomeSacks.jsx`,
+`src/pages/AdminHomeSacks.jsx`, `src/components/forms/WTSForm.jsx`,
+`src/components/common/admin/BeginningBalancesPanel.jsx`,
+`src/pages/Piles.jsx`, `src/utils/calculations.js`,
+`src/components/forms/StockFormBase.jsx`, `src/index.css` (flip
+keyframes).
+
+### Known, accepted limitations (see the plan file for full detail)
+Historical box geometry only reconstructs going forward from when this
+shipped (existing boxes have no `assignedDate` until next touched);
+auto-vacate only runs reactively when Piles.jsx is opened for that
+warehouse; reopening a pile does not restore its box (surfaced via the
+confirm dialog's own description text).
+
+### Verification
+`npm run build` passes after every phase (A, then B, then C). Manual
+end-to-end testing (setting a real cutoff, zeroing a real pile, moving a
+box and checking `periodTo`, closing/reopening via the new confirm
+dialog, and the picker exclusion) is still pending on localhost -
+`npx vercel dev` required for the Dexie Cloud token route.
+
+## Session: 2026-08-16 (round 6, continued) - real bug found: deleting a pile deleted its transactions too
+
+User caught a genuine, serious data-integrity bug while reviewing the
+plan above: both `BeginningBalancesPanel.jsx`'s and `Settings.jsx`'s
+pile-delete flows looped over every transaction linked to a pile's
+`pileId` and deleted them BEFORE deleting the pile itself - so removing
+a pile record (e.g. to clean up a mis-drawn/renamed one) permanently
+destroyed its real WSR/WSI/WTS history too. Fixed in both files: deleting
+a pile now only removes the `piles` record (and clears `pileId`/`label`
+on any layout box still pointing at it, so nothing is left dangling) -
+every transaction stays in the database forever, still linked by
+`pileId`, regardless of whether the pile record itself still exists.
+Confirmation dialog text updated to say so explicitly. The layout page's
+own box-delete (for fixing a wrongly-sized/positioned box) was already
+correct - it only ever removed the `pileLayoutBoxes` row, never touched
+pile or transaction data.
+
+`Settings.jsx`'s copy of this delete flow turned out to be unreachable
+dead code (its `confirmDelete` trigger was never actually wired to any
+button) - not an active risk, but fixed anyway for consistency since it
+would be if it's ever wired up later.
+
+Also clarified for the user: `unwithdrawnStock.js`'s unwithdrawn/
+potential-inventory calculations are entirely independent of
+`reportingCutoffDate` - unwithdrawn is computed purely from
+`authority.totalAllocation` minus WSI/WTS transactions tied to that
+authority's AI/SIA number, with no date filtering anywhere in that code
+path, confirmed by reading it directly. Potential (actual minus
+unwithdrawn) DOES shift once a cutoff changes "actual," but that's the
+intended behavior, not a side effect to worry about.
+
+`npm run build` passes. Pushed to `main` this round after user
+confirmation.

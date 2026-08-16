@@ -126,11 +126,11 @@ export const normalizeAgeToDays = (value, unit) => {
  * If autoAgeMonitoring is false, the manual base value is returned unchanged.
  * (Section 4.2)
  */
-export const calculateCurrentAge = (baseInitialAge, dateOfReceipt, autoAgeMonitoring) => {
+export const calculateCurrentAge = (baseInitialAge, dateOfReceipt, autoAgeMonitoring, asOfDate = new Date()) => {
   if (!autoAgeMonitoring) return baseInitialAge
 
   const receipt = new Date(dateOfReceipt)
-  const today = new Date()
+  const today = new Date(asOfDate)
 
   receipt.setHours(0, 0, 0, 0)
   today.setHours(0, 0, 0, 0)

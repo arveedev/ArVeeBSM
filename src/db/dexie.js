@@ -723,6 +723,35 @@ db.version(26).stores({
   })
 })
 
+// v28 - Pile lifecycle tracking.
+//
+// piles gains `zeroedDate` (indexed) - distinct from the existing
+// manual `closedDate`. Silently set the moment an incremental or
+// full-recompute write leaves a pile at exactly zero bags AND zero
+// kilos; cleared the moment either goes back above zero. A box's pile
+// becomes eligible to auto-vacate once zeroedDate is set AND strictly
+// before today (one full calendar day's grace period).
+//
+// pileLayoutBoxes gains `pileId` (indexed, for vacateBoxForPile's
+// reverse lookup) and `assignedDate` (when the box's CURRENT
+// occupant/geometry stint began - stamped on every reassignment or
+// move going forward; absent/undefined on existing boxes until they're
+// next touched).
+//
+// New pileLayoutHistory table - one row per closed occupancy "stint"
+// of a pileLayoutBoxes box. Captures the box's full prior geometry (not
+// just which pile occupied it), snapshotted right before any
+// reassignment, move, or vacate overwrites the live pileLayoutBoxes
+// row - lets a past date's Piles layout be reconstructed exactly
+// (position/size, not just totals), unlimited hops back. Synced like
+// any other real data (not added to unsyncedTables below) since it's
+// genuine historical record, not a per-device cache.
+db.version(28).stores({
+  piles: 'pileId, warehouseId, pileName, cerealType, varietyId, zeroedDate',
+  pileLayoutBoxes: 'id, warehouseId, pileId',
+  pileLayoutHistory: 'id, warehouseId, boxId, pileId, occupiedTo',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

@@ -38,6 +38,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
   const sortedProvinces = [...provinces].sort((a, b) => a.code.localeCompare(b.code))
   const sortedWarehouses = [...warehouses].sort((a, b) => a.name.localeCompare(b.name))
   const sortedSackTypes = [...sackTypes].sort((a, b) => a.code.localeCompare(b.code))
+  const warehouseCutoffById = new Map(warehouses.map((w) => [w.warehouseId, w.reportingCutoffDate || null]))
 
   // pieces[warehouseId][sackTypeId][condition] = net pieces on hand
   const pieces = {}
@@ -52,6 +53,8 @@ function AdminHomeSacks({ onWarehouseSelect }) {
     sackAsOfDateByKey[`${rec.warehouseId}::${rec.sackTypeId}::${rec.condition}`] = rec.asOfDate ?? null
   }
   for (const t of sackTx) {
+    const warehouseCutoff = warehouseCutoffById.get(t.warehouseId)
+    if (warehouseCutoff && t.date <= warehouseCutoff) continue
     const sign = t.type === 'ESR' ? 1 : -1
     for (const line of t.sackLines ?? []) {
       const cutoff = sackAsOfDateByKey[`${t.warehouseId}::${line.sackTypeId}::${line.condition}`]

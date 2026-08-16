@@ -29,6 +29,7 @@ import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../comm
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
+import { deriveZeroedDateUpdate } from '../../utils/pileLedger.js'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
@@ -238,7 +239,15 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
   const txTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
 
-  const sortedPiles = [...(piles ?? [])].sort((a, b) => byAlpha(a.pileName, b.pileName))
+  // A pile that's already closed/zeroed stays out of the picker for a
+  // transfer dated on or after that point - a backdated entry against
+  // its still-active period remains selectable.
+  const sortedPiles = [...(piles ?? [])]
+    .filter((p) => {
+      const effectiveCutoff = p.closedDate ?? p.zeroedDate
+      return !effectiveCutoff || !date || date <= effectiveCutoff
+    })
+    .sort((a, b) => byAlpha(a.pileName, b.pileName))
   const sortedVarieties = [...(varieties ?? [])].sort((a, b) => byAlpha(a.name, b.name))
   const sortedSackTypes = [...(sackTypes ?? [])].sort((a, b) => byAlpha(a.code, b.code))
   const sortedTxTypes = [...(txTypes ?? [])].sort((a, b) => byAlpha(a.name, b.name))
@@ -429,18 +438,24 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (tx.issuedPileId && tx.issuedBags != null) {
       const pile = await db.piles.get(tx.issuedPileId)
       if (pile) {
+        const newBags = Math.max(0, (pile.currentBags ?? 0) - tx.issuedBags)
+        const newKilos = Math.max(0, (pile.currentKilos ?? 0) - (tx.issuedNetKilos ?? 0))
         await db.piles.update(pile.pileId, {
-          currentBags: Math.max(0, (pile.currentBags ?? 0) - tx.issuedBags),
-          currentKilos: Math.max(0, (pile.currentKilos ?? 0) - (tx.issuedNetKilos ?? 0)),
+          currentBags: newBags,
+          currentKilos: newKilos,
+          ...deriveZeroedDateUpdate(pile, newBags, newKilos),
         })
       }
     }
     if (tx.receivedPileId && tx.receivedBags != null) {
       const pile = await db.piles.get(tx.receivedPileId)
       if (pile) {
+        const newBags = (pile.currentBags ?? 0) + tx.receivedBags
+        const newKilos = (pile.currentKilos ?? 0) + (tx.receivedNetKilos ?? 0)
         await db.piles.update(pile.pileId, {
-          currentBags: (pile.currentBags ?? 0) + tx.receivedBags,
-          currentKilos: (pile.currentKilos ?? 0) + (tx.receivedNetKilos ?? 0),
+          currentBags: newBags,
+          currentKilos: newKilos,
+          ...deriveZeroedDateUpdate(pile, newBags, newKilos),
         })
       }
     }
@@ -450,18 +465,24 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (tx.issuedPileId && tx.issuedBags != null) {
       const pile = await db.piles.get(tx.issuedPileId)
       if (pile) {
+        const newBags = (pile.currentBags ?? 0) + tx.issuedBags
+        const newKilos = (pile.currentKilos ?? 0) + (tx.issuedNetKilos ?? 0)
         await db.piles.update(pile.pileId, {
-          currentBags: (pile.currentBags ?? 0) + tx.issuedBags,
-          currentKilos: (pile.currentKilos ?? 0) + (tx.issuedNetKilos ?? 0),
+          currentBags: newBags,
+          currentKilos: newKilos,
+          ...deriveZeroedDateUpdate(pile, newBags, newKilos),
         })
       }
     }
     if (tx.receivedPileId && tx.receivedBags != null) {
       const pile = await db.piles.get(tx.receivedPileId)
       if (pile) {
+        const newBags = Math.max(0, (pile.currentBags ?? 0) - tx.receivedBags)
+        const newKilos = Math.max(0, (pile.currentKilos ?? 0) - (tx.receivedNetKilos ?? 0))
         await db.piles.update(pile.pileId, {
-          currentBags: Math.max(0, (pile.currentBags ?? 0) - tx.receivedBags),
-          currentKilos: Math.max(0, (pile.currentKilos ?? 0) - (tx.receivedNetKilos ?? 0)),
+          currentBags: newBags,
+          currentKilos: newKilos,
+          ...deriveZeroedDateUpdate(pile, newBags, newKilos),
         })
       }
     }

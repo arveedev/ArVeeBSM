@@ -18,6 +18,12 @@ function HomeSacks({ warehouseId } = {}) {
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const sortedSackTypes = [...sackTypes].sort((a, b) => byAlpha(a.code, b.code))
 
+  const currentWarehouse = useLiveQuery(
+    () => currentWarehouseId ? db.warehouses.get(currentWarehouseId) : null,
+    [currentWarehouseId]
+  )
+  const reportingCutoffDate = currentWarehouse?.reportingCutoffDate || null
+
   const sackTx = useLiveQuery(
     () => currentWarehouseId
       ? db.transactions.where('warehouseId').equals(currentWarehouseId)
@@ -42,6 +48,7 @@ function HomeSacks({ warehouseId } = {}) {
     sackAsOfDateByKey[`${rec.sackTypeId}::${rec.condition}`] = rec.asOfDate ?? null
   }
   for (const t of sackTx) {
+    if (reportingCutoffDate && t.date <= reportingCutoffDate) continue
     const sign = t.type === 'ESR' ? 1 : -1
     for (const line of t.sackLines ?? []) {
       const cutoff = sackAsOfDateByKey[`${line.sackTypeId}::${line.condition}`]

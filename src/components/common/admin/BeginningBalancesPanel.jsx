@@ -46,6 +46,7 @@ function PilesBeginningBalances({ warehouseId }) {
   const [ageUnit, setAgeUnit] = useState('Days')
   const [isSaving, setIsSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
   const [openMenuPileId, setOpenMenuPileId] = useState(null)
   const formRef = useRef(null)
 
@@ -195,8 +196,8 @@ function PilesBeginningBalances({ warehouseId }) {
     setIsSaving(false)
   }
 
-  // Checks for real transactions beyond the pile's own seed, to warn
-  // before deleting rather than silently orphaning transaction history.
+  // Checks for real transactions beyond the pile's own seed, purely to
+  // inform the confirmation text below - never deleted, only mentioned.
   const confirmDelete = async (pile) => {
     const others = await db.transactions
       .where('pileId').equals(pile.pileId)
@@ -205,18 +206,32 @@ function PilesBeginningBalances({ warehouseId }) {
     setPendingDelete({ ...pile, hasHistory: others > 0 })
   }
 
+  // Deletes only the pile RECORD - never its transactions. Every WSR/
+  // WSI/WTS ever recorded stays in the database forever, still linked
+  // by pileId, exactly as it happened - a deleted pile just means that
+  // record no longer shows in live totals or the layout, not that the
+  // history it created ceases to exist. Also clears any layout box
+  // still pointing at this pile, so it doesn't end up silently
+  // dangling (occupied-looking but referencing a pile that no longer
+  // resolves to anything).
   const handleDeleteConfirmed = async () => {
     const pile = pendingDelete
     setPendingDelete(null)
-    const linked = await db.transactions.where('pileId').equals(pile.pileId).toArray()
-    for (const t of linked) await db.transactions.delete(t.id)
+    const linkedBox = await db.pileLayoutBoxes.where('pileId').equals(pile.pileId).first()
+    if (linkedBox) await db.pileLayoutBoxes.update(linkedBox.id, { pileId: null, label: null })
     await db.piles.delete(pile.pileId)
-    toast.success(`Pile "${pile.pileName}" deleted`)
+    toast.success(`Pile "${pile.pileName}" deleted - its transactions were kept`)
     if (editingPileId === pile.pileId) resetForm()
   }
 
-  const handleToggleClosePile = async (pile) => {
+  const confirmCloseToggle = (pile) => {
     setOpenMenuPileId(null)
+    setPendingCloseToggle({ ...pile, willClose: !pile.closedDate })
+  }
+
+  const handleCloseToggleConfirmed = async () => {
+    const pile = pendingCloseToggle
+    setPendingCloseToggle(null)
     if (pile.closedDate) {
       await reopenPile(pile.pileId)
       toast.success(`Pile "${pile.pileName}" re-opened`)
@@ -408,7 +423,7 @@ function PilesBeginningBalances({ warehouseId }) {
                     <button type="button" onClick={() => handleExportBinCard(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
                       Export BIN Card
                     </button>
-                    <button type="button" onClick={() => handleToggleClosePile(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                    <button type="button" onClick={() => confirmCloseToggle(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
                       {p.closedDate ? 'Re-open Pile' : 'Close Pile'}
                     </button>
                   </div>
@@ -424,11 +439,24 @@ function PilesBeginningBalances({ warehouseId }) {
         title={`Delete pile "${pendingDelete?.pileName}"?`}
         description={
           pendingDelete?.hasHistory
-            ? 'This pile has real transactions beyond its beginning balance - deleting it will orphan those transactions in reports. This cannot be undone.'
+            ? 'This pile has real transactions beyond its beginning balance - those transactions are NOT deleted and stay in the system permanently, still linked to this pile ID. Only the pile record itself (and its layout box, if any) is removed. This cannot be undone.'
             : 'This cannot be undone.'
         }
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingCloseToggle)}
+        title={pendingCloseToggle?.willClose ? `Close pile "${pendingCloseToggle?.pileName}"?` : `Re-open pile "${pendingCloseToggle?.pileName}"?`}
+        description={
+          pendingCloseToggle?.willClose
+            ? 'This zeroes out its remaining balance and vacates its layout box (if any) immediately. Its full history stays exportable as a BIN Card.'
+            : 'This restores its live balance from its full transaction history. Note: it does not automatically get a box back on the layout - it must be re-placed like a new pile if it needs one.'
+        }
+        confirmLabel={pendingCloseToggle?.willClose ? 'Close' : 'Re-open'}
+        onConfirm={handleCloseToggleConfirmed}
+        onCancel={() => setPendingCloseToggle(null)}
       />
     </div>
   )

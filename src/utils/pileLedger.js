@@ -15,6 +15,28 @@ const DIRECTION_BY_TYPE = {
 }
 
 /**
+ * Sets or clears piles.zeroedDate based on a pile's new bags/kilos
+ * totals. Called from every path that writes currentBags/currentKilos -
+ * both the O(1) incremental apply/reverse functions below AND the O(n)
+ * full-recompute path (recalculatePileCurrentState), plus WTSForm.jsx's
+ * own two-sided apply/reverse - a beginning-balance edit or metadata
+ * save can flip a pile to/from zero just as legitimately as a normal
+ * transaction can.
+ *
+ * Preserves the ORIGINAL zero date on repeated zero-writes (does not
+ * reset it to today every time a no-op transaction leaves the pile at
+ * zero) - only sets it the first time zero is newly reached. Always
+ * clears it once nonzero, regardless of prior state. Distinct from the
+ * manual closedDate - this is silent/automatic, closedDate is a
+ * deliberate user action.
+ */
+export const deriveZeroedDateUpdate = (pile, newBags, newKilos) => {
+  const isZero = newBags === 0 && newKilos === 0
+  if (isZero) return pile.zeroedDate ? {} : { zeroedDate: todayLocalISO() }
+  return pile.zeroedDate ? { zeroedDate: null } : {}
+}
+
+/**
  * Applies a stock transaction's effect to its target pile's running
  * totals. Call this once, right after the transaction itself is saved.
  * No-ops safely if the pile no longer exists or the type has no defined
@@ -29,10 +51,13 @@ export const applyTransactionToPile = async (transaction) => {
 
   const bagsDelta = (transaction.numberOfBags ?? 0) * direction
   const kilosDelta = (transaction.netKilos ?? 0) * direction
+  const newBags = Math.max(0, (pile.currentBags ?? 0) + bagsDelta)
+  const newKilos = Math.max(0, (pile.currentKilos ?? 0) + kilosDelta)
 
   const update = {
-    currentBags: Math.max(0, (pile.currentBags ?? 0) + bagsDelta),
-    currentKilos: Math.max(0, (pile.currentKilos ?? 0) + kilosDelta),
+    currentBags: newBags,
+    currentKilos: newKilos,
+    ...deriveZeroedDateUpdate(pile, newBags, newKilos),
   }
 
   // A receipt's entered age was previously stored only on the
@@ -63,10 +88,13 @@ export const reverseTransactionFromPile = async (transaction) => {
 
   const bagsDelta = (transaction.numberOfBags ?? 0) * direction
   const kilosDelta = (transaction.netKilos ?? 0) * direction
+  const newBags = Math.max(0, (pile.currentBags ?? 0) - bagsDelta)
+  const newKilos = Math.max(0, (pile.currentKilos ?? 0) - kilosDelta)
 
   await db.piles.update(pile.pileId, {
-    currentBags: Math.max(0, (pile.currentBags ?? 0) - bagsDelta),
-    currentKilos: Math.max(0, (pile.currentKilos ?? 0) - kilosDelta),
+    currentBags: newBags,
+    currentKilos: newKilos,
+    ...deriveZeroedDateUpdate(pile, newBags, newKilos),
   })
 }
 
@@ -194,8 +222,25 @@ export const createPileWithBeginningBalance = async ({
  * WSR/WSI use the pileId field directly; WTS never sets it (only
  * issuedPileId/receivedPileId), so it needs a separate pass to avoid
  * missing (or double-counting) a pile's transfer history.
+ *
+ * Also applies the pile's warehouse's reportingCutoffDate (Admin
+ * Dashboard > Warehouses > "Reports Start Date") as a LOWER-bound
+ * exclusion - a completely separate concept from the `cutoffDate`
+ * param above (which is an UPPER bound, "state as of this date").
+ * A non-seed transaction dated on or before reportingCutoffDate is
+ * excluded from every calculation everywhere in the app (not just
+ * Reports.jsx, which is where this rule originated) - matching
+ * Reports.jsx's exact existing semantics (isInitialBalance always
+ * counts regardless of date; strict > comparison otherwise). Pass
+ * warehouseOverride when the caller already has the warehouse record
+ * in scope (e.g. a loop over every pile in one warehouse) to avoid a
+ * redundant db.warehouses.get per call.
  */
-export const computeHistoricalPileState = async (pileId, cutoffDate) => {
+export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOverride = null) => {
+  const pile = await db.piles.get(pileId)
+  const warehouse = warehouseOverride ?? (pile?.warehouseId ? await db.warehouses.get(pile.warehouseId) : null)
+  const reportingCutoffDate = warehouse?.reportingCutoffDate || null
+
   // Unlike the report-summary context (where isInitialBalance
   // intentionally bypasses date filtering, since it represents that
   // period's own opening figure), a point-in-time "as of this date"
@@ -203,17 +248,19 @@ export const computeHistoricalPileState = async (pileId, cutoffDate) => {
   // before that date, the pile genuinely did not exist yet, and should
   // show zero rather than silently including a balance from the future
   // (relative to the date being viewed).
-  const direct = await db.transactions
+  const direct = (await db.transactions
     .where('pileId').equals(pileId)
     .and((t) => t.status === 'Active' && t.date <= cutoffDate)
-    .toArray()
+    .toArray())
+    .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
 
-  const wtsAll = await db.transactions
+  const wtsAll = (await db.transactions
     .where('type').equals('WTS')
     .and((t) => t.status === 'Active' &&
       (t.issuedPileId === pileId || t.receivedPileId === pileId) &&
       t.date <= cutoffDate)
-    .toArray()
+    .toArray())
+    .filter((t) => !reportingCutoffDate || t.date > reportingCutoffDate)
 
   let bags = 0
   let kilos = 0
@@ -250,8 +297,13 @@ export const computeHistoricalPileState = async (pileId, cutoffDate) => {
  */
 export const recalculatePileCurrentState = async (pileId) => {
   const farFuture = '9999-12-31'
+  const pile = await db.piles.get(pileId)
   const { bags, kilos } = await computeHistoricalPileState(pileId, farFuture)
-  await db.piles.update(pileId, { currentBags: bags, currentKilos: kilos })
+  await db.piles.update(pileId, {
+    currentBags: bags,
+    currentKilos: kilos,
+    ...deriveZeroedDateUpdate(pile, bags, kilos),
+  })
   return { bags, kilos }
 }
 
@@ -262,16 +314,51 @@ export const recalculatePileCurrentState = async (pileId) => {
  * remains at that point regardless of its sign or size. No reason or
  * note is required - just the ability to close it. The BIN Card
  * generator reads pile.closedDate to render this as the ledger's final
- * entry, showing exactly what was zeroed out.
+ * entry, showing exactly what was zeroed out. Also immediately vacates
+ * whichever layout box currently links to this pile (no one-day grace
+ * period - unlike the automatic zero-detection path, this is a
+ * deliberate, confirmed user action).
  */
 export const closePile = async (pileId) => {
   const { bags, kilos } = await recalculatePileCurrentState(pileId)
+  const closedDate = todayLocalISO()
   await db.piles.update(pileId, {
-    closedDate: todayLocalISO(),
+    closedDate,
     currentBags: 0,
     currentKilos: 0,
+    zeroedDate: closedDate,
   })
+  await vacateBoxForPile(pileId, closedDate)
   return { previousBags: bags, previousKilos: kilos }
+}
+
+/**
+ * Finds the box (if any) currently linked to this pile and vacates it:
+ * snapshots its current geometry+pileId into pileLayoutHistory with
+ * occupiedTo = effectiveDate (so a past-dated layout view can still
+ * reconstruct which pile occupied it, and at what position/size), then
+ * clears pileId/label on the live pileLayoutBoxes row so it renders as
+ * plain vacant going forward. No-op if the pile isn't currently linked
+ * to any box. Safe to assume at most one box links to a given pile at
+ * once - box assignment already rejects assigning a pile that's in use
+ * by another box.
+ */
+export const vacateBoxForPile = async (pileId, effectiveDate) => {
+  const box = await db.pileLayoutBoxes.where('pileId').equals(pileId).first()
+  if (!box) return
+  await db.pileLayoutHistory.add({
+    id: crypto.randomUUID(),
+    warehouseId: box.warehouseId,
+    boxId: box.id,
+    pileId: box.pileId,
+    rowStart: box.rowStart,
+    rowSpan: box.rowSpan,
+    colStart: box.colStart,
+    colSpan: box.colSpan,
+    occupiedFrom: box.assignedDate ?? null,
+    occupiedTo: effectiveDate,
+  })
+  await db.pileLayoutBoxes.update(box.id, { pileId: null, label: null })
 }
 
 /**

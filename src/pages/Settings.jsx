@@ -289,16 +289,20 @@ function PileBalanceSection({ warehouseId }) {
     setIsSaving(false)
   }
 
+  // Deletes only the pile RECORD, never its transactions - every WSR/
+  // WSI/WTS ever recorded stays in the database permanently, still
+  // linked by pileId. Also clears any layout box still pointing at
+  // this pile so it doesn't end up dangling.
   const handleDeleteConfirmed = async () => {
     const pile = pendingDelete
     setPendingDelete(null)
     setIsSaving(true)
 
-    const linked = await db.transactions.where('pileId').equals(pile.pileId).toArray()
-    for (const t of linked) await db.transactions.delete(t.id)
+    const linkedBox = await db.pileLayoutBoxes.where('pileId').equals(pile.pileId).first()
+    if (linkedBox) await db.pileLayoutBoxes.update(linkedBox.id, { pileId: null, label: null })
     await db.piles.delete(pile.pileId)
 
-    toast.success(`Pile "${pile.pileName}" deleted`)
+    toast.success(`Pile "${pile.pileName}" deleted - its transactions were kept`)
     if (editingPileId === pile.pileId) resetForm()
     setIsSaving(false)
   }
