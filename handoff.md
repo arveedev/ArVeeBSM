@@ -547,7 +547,21 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 16) - inline duplicate pile-name checker - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 17) - pile layout historical bug + PDF color mismatch + full-screen animation - NOT YET COMMITTED/PUSHED
+
+Real bug fix: a box assigned to a backdated pile (beginning balance
+"as of" an earlier date) only showed in the layout from the day it was
+actually clicked/assigned in the UI, never for periods before that.
+`Piles.jsx`'s `handleConfirmAssign` now stamps a box's `assignedDate`
+with the assigned pile's own `dateOfReceipt` instead of always
+`todayLocalISO()`, and a new one-time self-heal effect back-dates any
+already-mis-stamped box automatically (no manual reassignment needed
+for boxes assigned before this fix). Also fixed the exported PDF's box
+colors to exactly match the on-screen colors (previously independently
+hardcoded, only approximately similar), and gave full-screen pile
+layout mode a fade in/out instead of snapping instantly.
+
+### OPEN (2026-08-16 session, round 16) - inline duplicate pile-name checker - PUSHED
 
 Blur-triggered (not live-per-keystroke), per-warehouse duplicate
 pile-name check in both places a pile name can be entered/edited:

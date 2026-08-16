@@ -14780,3 +14780,47 @@ import was removed.
 `src/components/forms/NewPileDialog.jsx`, `src/pages/Settings.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 17) - pile layout historical bug + PDF color mismatch + full-screen animation
+
+User reported three issues after assigning newly created piles (with a
+backdated beginning-balance "as of" date, e.g. July 31) to boxes in the
+Pile Layout:
+
+1. **Real bug**: a box assigned to a backdated pile only appeared in
+   the layout from the day it was actually clicked/assigned in the UI
+   onward, never for periods before that (even though the pile's
+   beginning balance was as of a much earlier date). Root cause:
+   `handleConfirmAssign` in `Piles.jsx` always stamped a box's
+   `assignedDate` with `todayLocalISO()` on a fresh pile assignment,
+   which is what the historical-layout logic (`effectiveBoxes`) uses to
+   decide whether a box's occupant should show for a given `periodTo` -
+   `assignedDate` reflected "the day an admin clicked in the layout
+   editor," not "the day this pile's stock actually started existing."
+   Fixed by stamping `assignedDate` with the assigned pile's own
+   `dateOfReceipt` (its beginning-balance "as of" date, or its first
+   receipt date) instead. Also added a one-time self-heal effect that
+   silently back-dates any already-assigned box whose `assignedDate` is
+   later than its current pile's `dateOfReceipt`, so boxes assigned
+   before this fix correct themselves automatically without the user
+   needing to manually reassign anything.
+
+2. Exported Pile Layout PDF box colors didn't match the on-screen
+   colors - `pileLayoutPdfGenerator.js` had its own independently
+   hardcoded RGB values that were only approximately similar to
+   `Piles.jsx`'s `PALAY_COLOR`/`RICE_COLOR`/`BYPRODUCT_COLOR` (By
+   Products happened to match; Palay and Rice did not). Fixed by
+   converting the screen's actual hex values to the exact matching RGB
+   triples for the PDF.
+
+3. Added enter/exit animation to full-screen pile layout mode - it
+   previously snapped instantly in both directions. `FullScreenOverlay`
+   now stays mounted for 180ms after exiting so the fade-out (reusing
+   the existing `animate-fade-in`/`animate-fade-out` classes, already
+   built specifically for full-screen overlays) has time to actually
+   play before the portal unmounts.
+
+### Files touched
+`src/pages/Piles.jsx`, `src/utils/pileLayoutPdfGenerator.js`.
+
+`npm run build` passes.
