@@ -19,6 +19,11 @@
 //   1.5    - Rolling balance rework, repeatable beginning-balance lines, unwithdrawn/potential monitoring
 //   1.6    - UI polish marathon (nav pill, Total Branch, real save/update/delete animations)
 //   1.7a   - Completion animation overhaul (authority complete/uncomplete, cereal Total flip)
-//   1.7b-1 - reportingCutoffDate extended app-wide + new pile lifecycle/historical layout system
-//   1.7b-2 - Fixed pile deletion cascading into transaction deletion (current)
-export const APP_VERSION = '1.7b-2'
+//   1.7b-1 - reportingCutoffDate extended app-wide + new pile lifecycle/historical layout
+//            system + fixed pile deletion cascading into transaction deletion
+//   1.7b-2 - Unwithdrawn/potential-inventory math now also respects reportingCutoffDate
+//   1.8    - Admin-only manual complete/uncomplete for Authorities AND MO/TMO on the
+//            Monitoring page (current) - new feature domain, not a continuation of the
+//            pile-lifecycle/cutoff thread above, so it gets its own MINOR rather than
+//            another 1.7 sub-letter
+export const APP_VERSION = '1.8'
