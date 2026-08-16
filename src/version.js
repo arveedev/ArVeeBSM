@@ -52,5 +52,9 @@
 //            clicked in the UI, so historical layout views correctly
 //            show a backdated beginning balance; PDF export box colors
 //            now match the on-screen colors exactly; full-screen pile
-//            layout now fades in/out instead of snapping (current)
-export const APP_VERSION = '1.8-7'
+//            layout now fades in/out instead of snapping
+//   1.8-8  - Full-screen pile layout's fade replaced with a rotate+zoom
+//            entrance/exit, gated on the auto-fit scale actually being
+//            measured first so it no longer visibly snaps mid-animation
+//            (current)
+export const APP_VERSION = '1.8-8'

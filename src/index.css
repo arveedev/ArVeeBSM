@@ -511,6 +511,27 @@ select {
   animation: fade-out 0.18s ease-in both;
 }
 
+/* Rotate+zoom entrance/exit for the Pile Layout's full-screen mode
+   specifically - a plain fade felt like a glitch rather than a
+   transition, so this gives it a deliberate spin-and-scale motion
+   instead: eases past 100% scale slightly (the bounce-flavored cubic-
+   bezier below) so it feels like the layout swings into place, then
+   mirrors that back out on exit. */
+@keyframes fullscreen-zoom-in {
+  0% { opacity: 0; transform: scale(0.8) rotate(-8deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes fullscreen-zoom-out {
+  0% { opacity: 1; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: scale(0.8) rotate(8deg); }
+}
+.animate-fullscreen-zoom-in {
+  animation: fullscreen-zoom-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.animate-fullscreen-zoom-out {
+  animation: fullscreen-zoom-out 0.22s ease-in both;
+}
+
 /* Full-screen slide, like a native app's "push" navigation - for
    detail panels that should feel like navigating deeper into the app
    rather than a modal popping up (which is what the fade above is

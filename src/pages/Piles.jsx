@@ -118,8 +118,8 @@ const effectiveRowSpan = (box, fieldCount) => {
 // exit fade actually gets to play - otherwise the portal would vanish
 // instantly on the same render that starts the animation, and no
 // animation happens without a screen present to animate on.
-const FULLSCREEN_EXIT_MS = 180
-const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, children }, overlayRef) {
+const FULLSCREEN_EXIT_MS = 220
+const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, ready, children }, overlayRef) {
   const [shouldRender, setShouldRender] = useState(isFullScreen)
   const [isClosing, setIsClosing] = useState(false)
 
@@ -141,9 +141,14 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
 
   if (!shouldRender) return children
   return createPortal(
+    // Outer node: fixed positioning + the STATIC device-orientation
+    // rotation only, never animated - the Edit/Assign Pile form portals
+    // directly into this exact DOM node (see overlayRef's usage further
+    // down), and it must always sit in the correctly-rotated coordinate
+    // system, not a transiently zoomed/rotated one mid-animation.
     <div
       ref={overlayRef}
-      className={`fixed z-50 flex flex-col bg-neutral-950 p-3 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
+      className="fixed z-50 flex flex-col bg-neutral-950 p-3"
       style={
         isPortrait
           ? {
@@ -155,7 +160,21 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
           : { top: 0, left: 0, right: 0, bottom: 0 }
       }
     >
-      {children}
+      {/* Inner node: the actual rotate+zoom entrance/exit animation,
+          isolated from the outer static rotation above so the two
+          transforms never fight each other. Stays invisible (not
+          unmounted - still needs to be measurable) until `ready`
+          signals the fit-to-screen scale has actually been computed,
+          so the animation always plays at the correct final size
+          instead of visibly snapping mid-animation. */}
+      <div
+        className={`flex flex-1 flex-col ${
+          isClosing ? 'animate-fullscreen-zoom-out' : ready ? 'animate-fullscreen-zoom-in' : 'opacity-0'
+        }`}
+        style={{ transformOrigin: 'center' }}
+      >
+        {children}
+      </div>
     </div>,
     document.body
   )
@@ -268,9 +287,19 @@ function Piles() {
   // by showing everything, with zoom/pan available from there for detail.
   const [zoomScale, setZoomScale] = useState(1)
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  // Gates the full-screen entrance animation: the auto-fit `scale` below
+  // is measured asynchronously (a frame or more after mount), so playing
+  // the rotate+zoom-in animation immediately would animate in AT THE
+  // WRONG (stale, pre-fullscreen) scale and then have the grid visibly
+  // snap to its correct size mid-animation - exactly the "glitch" this
+  // is meant to prevent. Content stays invisible (not unmounted, so it's
+  // still measurable) until the first post-toggle measurement lands,
+  // then the entrance animation plays once, at the correct final size.
+  const [scaleReady, setScaleReady] = useState(false)
   useEffect(() => {
     setZoomScale(1)
     setPanOffset({ x: 0, y: 0 })
+    setScaleReady(false)
   }, [isFullScreen])
   const gestureRef = useRef(null) // tracks in-progress pan/pinch state between touch events
 
@@ -431,6 +460,7 @@ function Piles() {
       // fit within BOTH width and height at once, not just whichever
       // was checked.
       setScale(Math.min(1, widthScale, heightScale))
+      setScaleReady(true)
     }
     // Deferred by a frame in BOTH directions, not just when entering -
     // toggling isFullScreen either way swaps FullScreenOverlay between
@@ -967,7 +997,7 @@ function Piles() {
       {/* overflow-hidden so nothing ever renders outside this bordered
           display area - including the hover-detail popup below, which is
           explicitly clamped to these same bounds. */}
-      <FullScreenOverlay ref={setOverlayNode} isFullScreen={isFullScreen} isPortrait={isPortrait}>
+      <FullScreenOverlay ref={setOverlayNode} isFullScreen={isFullScreen} isPortrait={isPortrait} ready={scaleReady}>
         {isFullScreen && (
           <div className="mb-2 flex items-center justify-between gap-2">
             <button
