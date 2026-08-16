@@ -91,7 +91,15 @@ function AdminMonitoring() {
   const query = searchQuery.trim().toLowerCase()
 
   const typeAuthorities = authorities.filter((a) => a.type === activeTab)
-  const availableRegionalAuthNumbers = [...new Set(typeAuthorities.map((a) => a.regionalAuthorityNumber).filter(Boolean))].sort()
+  // Scoped to PENDING authorities only - this picker sits alongside the
+  // pending list, so it should never offer a regional authority number
+  // that has no pending records under it (previously built from every
+  // authority of this type regardless of status, so picking one could
+  // silently land on "No pending records" even though that number is
+  // real, just fully completed already).
+  const availableRegionalAuthNumbers = [...new Set(
+    typeAuthorities.filter((a) => !isAuthorityComplete(a)).map((a) => a.regionalAuthorityNumber).filter(Boolean)
+  )].sort()
 
   // Sync-level cleanup (upsertAuthority) only consolidates duplicate
   // aiNumber/siaNumber records the next time that specific number is
