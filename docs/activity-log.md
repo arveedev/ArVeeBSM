@@ -14492,3 +14492,36 @@ matching the pattern that already existed for authorities.
 `src/components/common/CompletedMillingModal.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 10) - version bump follow-up, admin Authority Number picker scope bug, search added to Completed AI/SIA modal
+
+Bumped `src/version.js`'s `APP_VERSION` to `1.8` - the round 9 admin
+manual-complete feature was pushed without actually updating the
+version label, caught by the user. Rewrote the file's own history
+comment to correctly reflect that `1.7b-1`/`1.7b-2` were both about the
+cutoff/pile-lifecycle thread and `1.8` is a genuinely separate feature
+domain (admin monitoring capabilities), not another `1.7` sub-letter.
+
+User caught a second real bug: `AdminMonitoring.jsx`'s Authority Number
+picker shown alongside the PENDING list was built from every authority
+of that type regardless of status (`typeAuthorities`, pending +
+completed combined) - so it could offer a regional authority number
+that only had completed records under it, and selecting it would
+silently show "No pending records" even though that number is real,
+just fully completed already. Fixed by scoping
+`availableRegionalAuthNumbers` to `!isAuthorityComplete(a)` only.
+`CompletedAuthorityModal.jsx`'s own picker was already correctly scoped
+to completed-only (built from the already-completed `authorities`
+prop) - confirmed, no change needed there.
+
+Also added a search box to `CompletedAuthorityModal.jsx` (previously
+had month/year/warehouse/regional-number filters but no free-text
+search), matching the same style/placement as the pending list's
+existing search - filters by AI/SIA number, combined with the existing
+filters rather than bypassing them.
+
+### Files touched
+`src/version.js`, `src/pages/AdminMonitoring.jsx`,
+`src/components/common/CompletedAuthorityModal.jsx`.
+
+`npm run build` passes. Not yet pushed - awaiting user confirmation.

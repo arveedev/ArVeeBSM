@@ -23,7 +23,10 @@
 //            system + fixed pile deletion cascading into transaction deletion
 //   1.7b-2 - Unwithdrawn/potential-inventory math now also respects reportingCutoffDate
 //   1.8    - Admin-only manual complete/uncomplete for Authorities AND MO/TMO on the
-//            Monitoring page (current) - new feature domain, not a continuation of the
+//            Monitoring page - new feature domain, not a continuation of the
 //            pile-lifecycle/cutoff thread above, so it gets its own MINOR rather than
 //            another 1.7 sub-letter
-export const APP_VERSION = '1.8'
+//   1.8-1  - Fixed the pending Authority Number picker's scope (was offering
+//            completed-only numbers) + added search to the Completed AI/SIA modal
+//            (current) - a follow-up round within the same 1.8 era, not a new MINOR
+export const APP_VERSION = '1.8-1'

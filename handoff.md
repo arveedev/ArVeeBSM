@@ -547,7 +547,18 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 9) - admin-only manual complete/uncomplete for Authorities AND MO/TMO on the Monitoring page - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 10) - version bump, admin Authority Number picker scope bug, Completed AI/SIA search - NOT YET COMMITTED/PUSHED
+
+`src/version.js` bumped to `1.8` (was pushed as part of round 9 without
+actually updating this - caught by the user). `AdminMonitoring.jsx`'s
+Authority Number picker next to the PENDING list was scoped to every
+authority of that type regardless of status - fixed to pending-only
+(`CompletedAuthorityModal.jsx`'s own picker was already correctly
+completed-only, no change needed there). Also added a free-text
+AI/SIA-number search box to `CompletedAuthorityModal.jsx`, matching the
+pending list's existing search style. `npm run build` passes.
+
+### OPEN (2026-08-16 session, round 9) - admin-only manual complete/uncomplete for Authorities AND MO/TMO on the Monitoring page - PUSHED
 
 Full plan on file at
 `C:\Users\DjArVee\.claude\plans\now-can-you-continue-vectorized-russell.md`

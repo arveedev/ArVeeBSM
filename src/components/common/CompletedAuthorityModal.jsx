@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { X, Check, AlertTriangle } from 'lucide-react'
+import { X, Check, AlertTriangle, Search } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { isAuthorityNaturallyComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -39,6 +39,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   const [year, setYear] = useState(String(currentYear))
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [reconciling, setReconciling] = useState(null)
   // Authority currently awaiting confirmation to be sent back to
   // Pending, or null when no confirmation is showing.
@@ -151,6 +152,12 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
     })
     .filter(({ a }) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
     .filter(({ a }) => !warehouseFilter || a.assignedWarehouse === warehouseFilter)
+    .filter(({ a }) => {
+      const query = searchQuery.trim().toLowerCase()
+      if (!query) return true
+      const ref = type === 'AI' ? a.aiNumber : a.siaNumber
+      return (ref ?? '').toLowerCase().includes(query)
+    })
     .sort((x, y) => (y.completedDate ?? '').localeCompare(x.completedDate ?? ''))
 
   // Portaled straight to document.body - opened from AuthorityMonitor,
@@ -183,7 +190,28 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="relative mt-3">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={`Search ${type} number…`}
+            className="w-full rounded-lg border border-neutral-800 bg-neutral-900 py-1.5 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="mt-2 grid grid-cols-2 gap-2">
           <select
             value={month}
             onChange={(e) => setMonth(e.target.value)}
