@@ -124,7 +124,7 @@ const effectiveRowSpan = (box, fieldCount) => {
 // CSS animation's own duration by hand, and any mismatch (or a dropped/
 // delayed frame on a slower phone) reintroduced the exact DOM-swap-vs-
 // still-old-content race this is meant to prevent.
-const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, children }, overlayRef) {
+const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, onExited, children }, overlayRef) {
   const [shouldRender, setShouldRender] = useState(isFullScreen)
   const [isClosing, setIsClosing] = useState(false)
   // True for one animation's worth of time right after returning to the
@@ -149,6 +149,7 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
     setShouldRender(false)
     setIsClosing(false)
     setJustExited(true)
+    onExited?.()
   }
 
   if (!shouldRender) {
@@ -229,7 +230,7 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
           animation is imperceptible; a permanently invisible button
           is not. */}
       <div
-        className={`flex min-h-0 flex-1 flex-col ${isClosing ? 'animate-fade-out' : 'animate-fullscreen-zoom-in'}`}
+        className={`flex min-h-0 flex-1 flex-col ${isClosing ? 'animate-fullscreen-slide-fade-out' : 'animate-fullscreen-zoom-in'}`}
         style={{ transformOrigin: 'center' }}
         onAnimationEnd={handleExitAnimationEnd}
       >
@@ -252,6 +253,20 @@ function Piles() {
 
   const [pilesTab, setPilesTab] = useState('list')
   const [isFullScreen, setIsFullScreen] = useState(false)
+  // Hides the grid's own bordered box THE INSTANT Back/exit is tapped -
+  // set synchronously in the same click handler that starts the exit,
+  // so it's already gone from the very first animation frame, before
+  // the auto-fit scale has any chance to visibly show a wrong/mid-
+  // recalculation size during the closing transition. Cleared once the
+  // overlay's real exit animation has actually finished (via
+  // FullScreenOverlay's onExited callback below), at which point the
+  // grid reappears already correctly sized for whichever view (normal
+  // or full-screen) it's returning to.
+  const [hideGridDuringExit, setHideGridDuringExit] = useState(false)
+  const exitFullScreen = () => {
+    setHideGridDuringExit(true)
+    setIsFullScreen(false)
+  }
   // Slides AppHeader/BottomNav out of view while the pile layout is
   // full-screen, coordinated with the same "hidden" mechanism already
   // used while a transaction form is open - and slides them back in as
@@ -1054,7 +1069,7 @@ function Piles() {
           <h2 className="text-sm font-semibold text-app-text">Layout</h2>
           <button
             type="button"
-            onClick={() => setIsFullScreen((v) => !v)}
+            onClick={() => (isFullScreen ? exitFullScreen() : setIsFullScreen(true))}
             aria-label={isFullScreen ? 'Exit full screen' : 'Full screen'}
             className="rounded-lg p-1.5 text-neutral-400 transition-all hover:text-brand-neon active:scale-90"
           >
@@ -1075,12 +1090,17 @@ function Piles() {
       {/* overflow-hidden so nothing ever renders outside this bordered
           display area - including the hover-detail popup below, which is
           explicitly clamped to these same bounds. */}
-      <FullScreenOverlay ref={setOverlayNode} isFullScreen={isFullScreen} isPortrait={isPortrait}>
+      <FullScreenOverlay
+        ref={setOverlayNode}
+        isFullScreen={isFullScreen}
+        isPortrait={isPortrait}
+        onExited={() => setHideGridDuringExit(false)}
+      >
         {isFullScreen && (
           <div className="mb-2 flex items-center justify-between gap-2">
             <button
               type="button"
-              onClick={() => setIsFullScreen(false)}
+              onClick={exitFullScreen}
               className="flex w-fit items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-app-text active:scale-95"
             >
               <ArrowLeft size={16} /> Back
@@ -1099,7 +1119,14 @@ function Piles() {
           // the parent flex column) stays full-screen-only, since it
           // has no meaning/effect outside FullScreenOverlay's flex
           // column layout.
-          className={`relative mt-2 flex items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1' : ''}`}
+          //
+          // invisible (not unmounted) the instant exit is tapped, until
+          // the overlay's own exit animation genuinely finishes - see
+          // hideGridDuringExit's own comment. Staying mounted (rather
+          // than being conditionally removed) keeps containerRef/its
+          // ResizeObserver attached throughout, so nothing about the
+          // measurement wiring is disturbed by hiding it.
+          className={`relative mt-2 flex items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 p-2 ${isFullScreen ? 'flex-1' : ''} ${hideGridDuringExit ? 'invisible' : ''}`}
           onTouchStart={handleGridTouchStart}
           onTouchMove={handleGridTouchMove}
           onTouchEnd={handleGridTouchEnd}

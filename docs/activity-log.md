@@ -15063,3 +15063,31 @@ it - matching how the app already handles a transaction form closing
 `src/context/PageHeaderContext.jsx`.
 
 `npm run build` passes, no console errors on desktop preview.
+
+## Session: 2026-08-16 (round 24) - exit is slide+fade together, grid box hidden the instant Back is tapped
+
+User clarified round 23's fade-out wasn't what was asked - they wanted
+slide AND fade together, not fade replacing the slide. Also asked for
+a more direct fix to the recurring "flash of a zoomed layout" during
+exit: hide the pile layout's bordered box immediately on tapping Back,
+so it's not rendered during the closing animation at all, instead of
+continuing to try to time the animation around it.
+
+- `fullscreen-slide-fade-out` (index.css) replaces the round 23
+  `.animate-fade-out` reuse - `translateY(0)` -> `translateY(40px)`
+  combined with opacity 1 -> 0.
+- New `hideGridDuringExit` state in Piles.jsx, set to `true`
+  SYNCHRONOUSLY inside the exact same click handler (`exitFullScreen`,
+  now used by both the Back button and the toggle button) that starts
+  the exit - so the grid's bordered box (`invisible`, not unmounted -
+  keeps containerRef/its ResizeObserver attached) is already gone from
+  the very first animation frame, before any auto-fit scale
+  recalculation has a chance to be visible at all. Cleared via a new
+  `onExited` callback prop on `FullScreenOverlay`, fired from the same
+  real `animationend` handler that already drives the unmount - so the
+  grid only reappears once the exit has genuinely finished.
+
+### Files touched
+`src/pages/Piles.jsx`, `src/index.css`.
+
+`npm run build` passes, no console errors on desktop preview.
