@@ -119,7 +119,7 @@ const effectiveRowSpan = (box, fieldCount) => {
 // instantly on the same render that starts the animation, and no
 // animation happens without a screen present to animate on.
 const FULLSCREEN_EXIT_MS = 220
-const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, ready, children }, overlayRef) {
+const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, children }, overlayRef) {
   const [shouldRender, setShouldRender] = useState(isFullScreen)
   const [isClosing, setIsClosing] = useState(false)
 
@@ -146,9 +146,17 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
     // directly into this exact DOM node (see overlayRef's usage further
     // down), and it must always sit in the correctly-rotated coordinate
     // system, not a transiently zoomed/rotated one mid-animation.
+    // z-[55], deliberately above AppHeader's z-50 (AppHeader.jsx) rather
+    // than tied with it - a tie was fine 99% of the time (this portal's
+    // DOM position, appended later in <body>, usually won ties), but
+    // right when a same-z-index sibling portal (ConfirmDialog, z-60)
+    // unmounted with no exit transition of its own, the browser could
+    // repaint the tie the other way for a frame, flashing the header
+    // through underneath. An explicit, non-tied z-index removes the
+    // ambiguity entirely.
     <div
       ref={overlayRef}
-      className="fixed z-50 flex flex-col bg-neutral-950 p-3"
+      className="fixed z-[55] flex flex-col bg-neutral-950 p-3"
       style={
         isPortrait
           ? {
@@ -162,15 +170,21 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
     >
       {/* Inner node: the actual rotate+zoom entrance/exit animation,
           isolated from the outer static rotation above so the two
-          transforms never fight each other. Stays invisible (not
-          unmounted - still needs to be measurable) until `ready`
-          signals the fit-to-screen scale has actually been computed,
-          so the animation always plays at the correct final size
-          instead of visibly snapping mid-animation. */}
+          transforms never fight each other. min-h-0 keeps this a
+          well-behaved flex child (without it, a nested flex column
+          defaults to min-height:auto, which refused to shrink below
+          its content's natural height and pushed part of the grid
+          below the visible screen - the "layout isn't 100% in view"
+          bug). Plays immediately on mount rather than waiting on the
+          grid's own fit-to-screen measurement, since gating visibility
+          on that turned out to be the real bug: on some phones the
+          measurement effect never resolved in time, leaving the Add
+          Pile/Cancel controls invisible indefinitely. A one-frame
+          scale correction happening underneath a 320ms scale-up
+          animation is imperceptible; a permanently invisible button
+          is not. */}
       <div
-        className={`flex flex-1 flex-col ${
-          isClosing ? 'animate-fullscreen-zoom-out' : ready ? 'animate-fullscreen-zoom-in' : 'opacity-0'
-        }`}
+        className={`flex min-h-0 flex-1 flex-col ${isClosing ? 'animate-fullscreen-zoom-out' : 'animate-fullscreen-zoom-in'}`}
         style={{ transformOrigin: 'center' }}
       >
         {children}
@@ -287,19 +301,9 @@ function Piles() {
   // by showing everything, with zoom/pan available from there for detail.
   const [zoomScale, setZoomScale] = useState(1)
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
-  // Gates the full-screen entrance animation: the auto-fit `scale` below
-  // is measured asynchronously (a frame or more after mount), so playing
-  // the rotate+zoom-in animation immediately would animate in AT THE
-  // WRONG (stale, pre-fullscreen) scale and then have the grid visibly
-  // snap to its correct size mid-animation - exactly the "glitch" this
-  // is meant to prevent. Content stays invisible (not unmounted, so it's
-  // still measurable) until the first post-toggle measurement lands,
-  // then the entrance animation plays once, at the correct final size.
-  const [scaleReady, setScaleReady] = useState(false)
   useEffect(() => {
     setZoomScale(1)
     setPanOffset({ x: 0, y: 0 })
-    setScaleReady(false)
   }, [isFullScreen])
   const gestureRef = useRef(null) // tracks in-progress pan/pinch state between touch events
 
@@ -460,7 +464,6 @@ function Piles() {
       // fit within BOTH width and height at once, not just whichever
       // was checked.
       setScale(Math.min(1, widthScale, heightScale))
-      setScaleReady(true)
     }
     // Deferred by a frame in BOTH directions, not just when entering -
     // toggling isFullScreen either way swaps FullScreenOverlay between
@@ -997,7 +1000,7 @@ function Piles() {
       {/* overflow-hidden so nothing ever renders outside this bordered
           display area - including the hover-detail popup below, which is
           explicitly clamped to these same bounds. */}
-      <FullScreenOverlay ref={setOverlayNode} isFullScreen={isFullScreen} isPortrait={isPortrait} ready={scaleReady}>
+      <FullScreenOverlay ref={setOverlayNode} isFullScreen={isFullScreen} isPortrait={isPortrait}>
         {isFullScreen && (
           <div className="mb-2 flex items-center justify-between gap-2">
             <button
