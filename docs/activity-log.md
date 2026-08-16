@@ -14352,3 +14352,73 @@ intended behavior, not a side effect to worry about.
 
 `npm run build` passes. Pushed to `main` this round after user
 confirmation.
+
+## Session: 2026-08-16 (round 7) - app version label on the Login page
+
+User asked for a versioning scheme covering the app's entire history
+(not just "Version 1"/"Version 10") and a small label on the Login page
+showing it. Analyzed the full git history (169 commits, 2026-06-23 to
+2026-08-16) plus docs/activity-log.md's own session dividers, grouped
+into 9 meaningful eras (foundation, cloud-sync hardening, Milling
+Operations, sync-integrity + animation system, beginning-balance/cutoff
+introduced, rolling-balance rework + monitoring, UI polish marathon,
+and today's two threads), and proposed a scheme:
+`MAJOR.MINOR<letter>-BUILD<letter>` - MAJOR only for a full architecture
+rebuild, MINOR for a new feature domain or fundamental rework of a major
+system, a letter right after MINOR for a distinct sub-thread within that
+era, a build number per round of work, and an optional trailing letter
+for same-day micro-iterations. Presented the scheme and era table to the
+user for approval before writing any code.
+
+Implemented once approved:
+- New `src/version.js` - single source of truth for `APP_VERSION`
+  (currently `'1.7b-2'`), with the full era history recorded in its own
+  comment block so future bumps have the same reasoning on hand.
+- `src/pages/Login.jsx` - added a small `v{APP_VERSION}` label directly
+  below the existing "by ArVee" credit line, its own `bottom-6` offset
+  (not just a smaller font nested under it) so it stays clear of the
+  gesture-bar/home-indicator area on short mobile viewports, at
+  `opacity-35` (vs. "by ArVee"'s `opacity-20`) since it's meant to be
+  legible enough to actually confirm the deployed version, not purely
+  decorative.
+
+Verified by reading the live DOM (`by ArVee` / `v1.7b-2` both present,
+correctly ordered) rather than a screenshot - the Browser pane's
+screenshot capture was unavailable in this environment session
+("Browser pane is not displayed"). Also built a static visual mockup
+(via the visualize tool) matching the real spacing/opacity/typography so
+the user could see it without a live screenshot.
+
+Note: a duplicate local dev server was started on port 3001 during this
+verification (the user's own real Dexie Cloud-connected instance was
+already occupying port 3000) - port 3001 is a plain `vite` dev server
+with no Vercel API routes, so it can't complete Dexie Cloud login; safe
+to leave running or stop, touches no real data either way.
+
+`npm run build` passes.
+
+## Session: 2026-08-16 (round 8) - authorities now respect reportingCutoffDate too, for unwithdrawn/potential math only
+
+User caught another real gap from the round-6 cutoff work: a July AI
+authority still not fully withdrawn was still counting as "unwithdrawn"
+today, dragging Potential inventory down even though its own pile's July
+stock had already stopped being counted in "actual." `dateFrom` on
+Sheet Sources only prevents FUTURE imports of pre-cutoff authorities -
+it doesn't touch ones already sitting in the database from before it was
+set, which is exactly what was happening here.
+
+Fixed in `src/utils/unwithdrawnStock.js`'s single shared
+`activeAiAuthoritiesFor` helper (used by all four exported unwithdrawn/
+potential functions) - now excludes an authority dated on or before the
+warehouse's `reportingCutoffDate` from the unwithdrawn math, same rule
+as everywhere else the cutoff applies. Deliberately does NOT hide the
+authority from AuthorityMonitor's pending/completed lists - that's a
+different, intentional distinction: a warehouse manager still needs to
+see and act on an old outstanding authority, it just shouldn't keep
+subtracting from Potential once its allocated stock is no longer part of
+visible "actual."
+
+`npm run build` passes. Also confirmed for the user: Sheet Sources
+"Date From" stays August 1, 2026 - unaffected by this fix, still governs
+future imports only (inclusive lower bound, `aiDate < dateFrom` is
+skipped).

@@ -64,12 +64,23 @@ const withdrawalsForAuthority = async (aiNumber) => {
   return { withdrawals, withdrawnBags, withdrawnKilos }
 }
 
+// Excludes an authority dated on or before the warehouse's
+// reportingCutoffDate from unwithdrawn/potential-inventory math - same
+// rule as everywhere else the cutoff applies. An authority itself is
+// NOT hidden from the Authority Monitor by this (that's a separate,
+// intentional distinction - a warehouse manager still needs to see and
+// act on an old outstanding authority), only excluded from the numbers
+// that assume its allocated stock is still part of "actual" - which it
+// isn't once that stock's own pre-cutoff history stops being counted.
 const activeAiAuthoritiesFor = async (warehouseId, varietyIds) => {
   const varietySet = varietyIds ? new Set(varietyIds) : null
+  const warehouse = await db.warehouses.get(warehouseId)
+  const reportingCutoffDate = warehouse?.reportingCutoffDate || null
   return db.authorities
     .where('assignedWarehouse').equals(warehouseId)
     .and((a) => a.type === 'AI' && Boolean(a.varietyId) && !isAuthorityComplete(a)
-      && (!varietySet || varietySet.has(a.varietyId)))
+      && (!varietySet || varietySet.has(a.varietyId))
+      && (!reportingCutoffDate || !a.date || a.date > reportingCutoffDate))
     .toArray()
 }
 
