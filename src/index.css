@@ -511,27 +511,28 @@ select {
   animation: fade-out 0.18s ease-in both;
 }
 
-/* Rotate+zoom entrance/exit for the Pile Layout's full-screen mode
-   specifically - a plain fade felt like a glitch rather than a
-   transition, so this gives it a deliberate spin-and-scale motion
-   instead: eases past 100% scale slightly (the bounce-flavored cubic-
-   bezier below) so it feels like the layout swings into place. Exit
-   is the exact reverse of entrance (same -8deg endpoint, not +8deg) -
-   it needs to look like rewinding the entrance motion, not continuing
-   to spin further past it in the same direction. */
+/* Entrance only: rotate+zoom for the Pile Layout's full-screen mode -
+   eases past 100% scale slightly (the bounce-flavored cubic-bezier
+   below) so it feels like the layout swings into place. Exit uses a
+   plain slide instead (see fullscreen-slide-out below) - per explicit
+   request, simpler than mirroring the entrance rotation. */
 @keyframes fullscreen-zoom-in {
   0% { opacity: 0; transform: scale(0.8) rotate(-8deg); }
   100% { opacity: 1; transform: scale(1) rotate(0deg); }
 }
-@keyframes fullscreen-zoom-out {
-  0% { opacity: 1; transform: scale(1) rotate(0deg); }
-  100% { opacity: 0; transform: scale(0.8) rotate(-8deg); }
-}
 .animate-fullscreen-zoom-in {
   animation: fullscreen-zoom-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
-.animate-fullscreen-zoom-out {
-  animation: fullscreen-zoom-out 0.22s ease-in both;
+
+/* Exit only: a plain slide off the bottom of the box, not a mirror of
+   the rotate+zoom entrance - simpler, and was explicitly requested
+   over reversing the entrance motion. */
+@keyframes fullscreen-slide-out {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(100%); }
+}
+.animate-fullscreen-slide-out {
+  animation: fullscreen-slide-out 0.28s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 /* Full-screen slide, like a native app's "push" navigation - for

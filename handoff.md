@@ -547,7 +547,18 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 21) - hardened full-screen mechanism, removed all guessed timings - NOT YET COMMITTED/PUSHED, NEEDS MOBILE RE-TEST
+### OPEN (2026-08-16 session, round 22) - simplified full-screen exit to a plain slide - NOT YET COMMITTED/PUSHED
+
+Round 21 confirmed working on device (Add Pile/Cancel controls and the
+grid boundary box now display correctly). User asked to simplify the
+exit animation - drop the rotate+zoom-out, just slide the layout off
+screen instead. Replaced `fullscreen-zoom-out` with a new
+`fullscreen-slide-out` keyframe (`translateY(0)` -> `translateY(100%)`
++ fade, no rotation/scale) in `index.css`; entrance is unchanged. The
+round 21 `animationend`-driven unmount logic still applies as-is, just
+now listening for the slide's completion instead of the old zoom-out's.
+
+### OPEN (2026-08-16 session, round 21) - hardened full-screen mechanism, removed all guessed timings - PUSHED
 
 User reported round 20 showed NO visible change on their phone.
 Replaced every remaining guessed value with a real signal: 100vh/100vw

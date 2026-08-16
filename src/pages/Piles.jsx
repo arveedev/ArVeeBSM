@@ -218,7 +218,7 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
           animation is imperceptible; a permanently invisible button
           is not. */}
       <div
-        className={`flex min-h-0 flex-1 flex-col ${isClosing ? 'animate-fullscreen-zoom-out' : 'animate-fullscreen-zoom-in'}`}
+        className={`flex min-h-0 flex-1 flex-col ${isClosing ? 'animate-fullscreen-slide-out' : 'animate-fullscreen-zoom-in'}`}
         style={{ transformOrigin: 'center' }}
         onAnimationEnd={handleExitAnimationEnd}
       >

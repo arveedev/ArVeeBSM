@@ -15004,3 +15004,27 @@ actually loading this build at all (check the version number on the
 Login page reads v1.8-11; if it shows an older version, a hard
 refresh/reinstall of the app is needed before any code fix here could
 possibly be visible).
+
+## Session: 2026-08-16 (round 22) - full-screen buttons/boundary confirmed fixed; simplified exit animation to a plain slide
+
+User confirmed round 21's fixes worked - Add Pile/Cancel controls and
+the grid's boundary box now display correctly on their phone. Only the
+exit animation itself remained a concern, and they asked to simplify
+it: drop the rotate+zoom-out entirely and just slide the layout off
+screen instead.
+
+`fullscreen-zoom-out` (in `index.css`) replaced with a new
+`fullscreen-slide-out` keyframe - `translateY(0)` to `translateY(100%)`
+with a fade, no rotation or scale involved. Entrance
+(`fullscreen-zoom-in`, the rotate+zoom swing-in) is unchanged - only
+exit was simplified, per the request. `Piles.jsx`'s
+`FullScreenOverlay` now applies `animate-fullscreen-slide-out` instead
+of `animate-fullscreen-zoom-out` when `isClosing`; the real
+`animationend`-driven unmount from round 21 still applies unchanged,
+now just listening for the slide's own completion instead of the old
+zoom-out's.
+
+### Files touched
+`src/pages/Piles.jsx`, `src/index.css`.
+
+`npm run build` passes.
