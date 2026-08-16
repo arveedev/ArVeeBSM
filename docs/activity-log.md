@@ -14640,3 +14640,32 @@ until redeployed.
 `docs/apps-script-full-replacement.js`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 13) - MO 151 confirmed not a bug; expected-vs-actual recovery comparison added to completed MillingOrderDetail
+
+User checked MO 151's detail view (now that the crash is fixed) and
+confirmed it was genuinely, correctly complete - they had already
+encoded the real recovery data for it. Closes the round-11/12 "MO 151
+wrongly shows completed" investigation with no code change needed -
+the app was right, not buggy.
+
+New request: `MillingOrderDetail`'s "Expected Recovery" card only ever
+showed the allocation-based preview figure, useful for a still-pending
+order but not informative once an order is done (it never compared
+against what was actually received). Added a second, MO-only card
+that replaces it once the order is completed
+(`manuallyCompleted || sheetStatus==='DONE' || fulfilled`) - shows
+Expected (now recalculated from what was actually ISSUED, not the full
+allocation, matching the same math `computeMillingOrderStatuses`
+already uses to decide `fulfilled`) side by side with Actual (received),
+with the whole card's border/background turning green
+(`border-brand-neon`) when actual meets or exceeds expected for both
+kilos and pieces, amber (`border-brand-amber`) when either falls short.
+Pending orders are completely unaffected - they keep the original
+allocation-based "Expected Recovery" card exactly as before, per
+explicit confirmation that the pending view was already correct.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx`.
+
+`npm run build` passes.

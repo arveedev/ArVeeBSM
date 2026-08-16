@@ -141,6 +141,23 @@ export function MillingOrderDetail({ order, onClose }) {
     ? Math.round((order.authorityAllocationKilos * (order.recoveryPercent / 100)) / 50)
     : null
 
+  // Once the order is done, "expected" switches from the allocation-
+  // based preview above to what was actually ISSUED - that's the real
+  // "did we get back what we should have for what was actually sent"
+  // question, using the exact same math computeMillingOrderStatuses
+  // already uses to decide `fulfilled` (an expected figure of 0 counts
+  // as automatically met, same as there).
+  const isCompleted = order.manuallyCompleted || order.sheetStatus === 'DONE' || order.fulfilled
+  const expectedKilosFromIssued = order.type === 'MO' && order.recoveryPercent != null
+    ? order.issuedKilos * (order.recoveryPercent / 100)
+    : null
+  const expectedPiecesFromIssued = order.type === 'MO' && order.recoveryPercent != null
+    ? order.issuedPieces * (order.recoveryPercent / 100)
+    : null
+  const meetsExpectedKilos = expectedKilosFromIssued == null || expectedKilosFromIssued === 0 || order.receivedKilos >= expectedKilosFromIssued
+  const meetsExpectedPieces = expectedPiecesFromIssued == null || expectedPiecesFromIssued === 0 || order.receivedPieces >= expectedPiecesFromIssued
+  const showRecoveryComparison = isCompleted && order.type === 'MO' && order.recoveryPercent != null
+
   // By Products from this same milling run - same MO/TMO number, but
   // tagged with cerealCategory 'By Products' rather than the main
   // Rice/Palay product. Only relevant for receipts (WSR/ESR), since By
@@ -237,11 +254,29 @@ export function MillingOrderDetail({ order, onClose }) {
             </div>
           </div>
 
-          {expectedBagsEquivalent != null && (
-            <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
-              <p className="text-xs text-neutral-500">Expected Recovery ({order.recoveryPercent}%)</p>
-              <p className="font-semibold text-app-text">≈ {fmtBags(expectedBagsEquivalent)} bags</p>
+          {showRecoveryComparison ? (
+            <div className={`mt-2 rounded-lg border-2 p-2 text-sm ${meetsExpectedKilos && meetsExpectedPieces ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
+              <p className="text-xs text-neutral-500">Recovery ({order.recoveryPercent}%) — Expected vs Actual</p>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[10px] uppercase text-neutral-600">Expected</p>
+                  <p className="font-semibold text-app-text">{fmtWeight(expectedKilosFromIssued, weightUnit, 'Net')}</p>
+                  <p className="font-semibold text-app-text">{fmtBags(expectedPiecesFromIssued)} pcs</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-neutral-600">Actual</p>
+                  <p className={`font-semibold ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
+                  <p className={`font-semibold ${meetsExpectedPieces ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtBags(order.receivedPieces)} pcs</p>
+                </div>
+              </div>
             </div>
+          ) : (
+            expectedBagsEquivalent != null && (
+              <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
+                <p className="text-xs text-neutral-500">Expected Recovery ({order.recoveryPercent}%)</p>
+                <p className="font-semibold text-app-text">≈ {fmtBags(expectedBagsEquivalent)} bags</p>
+              </div>
+            )
           )}
 
           {shouldRenderTabContent && (

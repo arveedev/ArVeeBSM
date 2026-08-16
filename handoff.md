@@ -547,7 +547,20 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 12) - fixed a real MillingOrderDetail crash + added Sheet STATUS write-back for admin MO/TMO mark-done/undone - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 13) - expected-vs-actual recovery comparison on completed MillingOrderDetail - NOT YET COMMITTED/PUSHED
+
+MO 151 (round 11/12's "wrongly shows completed" investigation) turned
+out to be a real, correctly-completed order - user had already encoded
+its recovery data. No bug, closed.
+
+`MillingOrderDetail`'s "Expected Recovery" card now shows a second,
+MO-only variant once an order is completed: Expected (recalculated
+from what was actually ISSUED, not the full allocation) side by side
+with Actual (received), whole-card border green when actual meets/
+exceeds expected, amber when it falls short. Pending orders unchanged
+- still show the original allocation-based preview card.
+
+### OPEN (2026-08-16 session, round 12) - fixed a real MillingOrderDetail crash + added Sheet STATUS write-back for admin MO/TMO mark-done/undone - PUSHED
 
 `ReferenceError: shouldRenderMoreDetails is not defined` was crashing
 the completed-order detail view for any MO/TMO with By Products/Source

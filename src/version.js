@@ -31,6 +31,8 @@
 //   1.8-2  - Fixed a real Dexie transaction race that silently reverted admin
 //            MO/TMO mark-done on the next sync; fixed a genuine crash opening a
 //            completed MO/TMO's detail view; added Sheet STATUS write-back for
-//            admin mark-done/undone (current) - all follow-up rounds within the
-//            same 1.8 era, not a new MINOR
-export const APP_VERSION = '1.8-2'
+//            admin mark-done/undone - all follow-up rounds within the same 1.8
+//            era, not a new MINOR
+//   1.8-3  - Completed MillingOrderDetail now compares expected (from actual
+//            issued) vs actual recovery inline, amber/green bordered (current)
+export const APP_VERSION = '1.8-3'
