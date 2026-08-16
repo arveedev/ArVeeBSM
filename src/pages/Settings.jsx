@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2, ShieldCheck, MoreVertical } from 'lucide-react'
+import { Pencil, Trash2, ShieldCheck, MoreVertical, Check, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -19,7 +19,6 @@ import { CONDITION_FLAGS } from '../components/forms/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
 import BeginningBalancesPanel from '../components/common/admin/BeginningBalancesPanel.jsx'
-import ValidatedField from '../components/forms/ValidatedField.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
@@ -167,6 +166,21 @@ function PileBalanceSection({ warehouseId }) {
   const formRef = useRef(null)
   const pileNameInputRef = useRef(null)
   const [showPileHint, setShowPileHint] = useState(false)
+  // 'idle' | 'checking' | 'ok' | 'duplicate' - checked on blur, not on
+  // every keystroke, so it only reflects the name as the user last
+  // actually finished typing it, not a half-typed value mid-edit.
+  const [nameCheckStatus, setNameCheckStatus] = useState('idle')
+
+  const checkPileNameDuplicate = async () => {
+    const trimmed = pileName.trim()
+    if (!trimmed) { setNameCheckStatus('idle'); return }
+    setNameCheckStatus('checking')
+    const existing = await db.piles
+      .where('warehouseId').equals(warehouseId)
+      .and((p) => p.pileId !== editingPileId && p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
+      .first()
+    setNameCheckStatus(existing ? 'duplicate' : 'ok')
+  }
 
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const warehouse = useLiveQuery(() => db.warehouses.get(warehouseId), [warehouseId])
@@ -198,6 +212,7 @@ function PileBalanceSection({ warehouseId }) {
     setDateProcured('')
     setMoistureContent('')
     setEditingPileId(null)
+    setNameCheckStatus('idle')
   }
 
   // Loads a pile plus its linked seed transaction (for condition, since
@@ -210,6 +225,7 @@ function PileBalanceSection({ warehouseId }) {
       .first()
 
     setEditingPileId(pile.pileId)
+    setNameCheckStatus('idle')
     setPileName(pile.pileName)
     setCategory(variety?.category ?? 'Rice')
     setVarietyId(pile.varietyId)
@@ -246,6 +262,20 @@ function PileBalanceSection({ warehouseId }) {
     if (!pileName.trim()) { toast.error('Pile name is required'); return }
     if (!varietyId) { toast.error('Select a variety'); return }
 
+    // Re-checked fresh rather than trusting the last blur result, in
+    // case the user ignored the inline warning or another pile with
+    // the same name got created elsewhere in the meantime.
+    const trimmedCreateName = pileName.trim()
+    const createDuplicate = await db.piles
+      .where('warehouseId').equals(warehouseId)
+      .and((p) => p.pileName.trim().toLowerCase() === trimmedCreateName.toLowerCase())
+      .first()
+    if (createDuplicate) {
+      toast.error(`A pile named "${trimmedCreateName}" already exists in this warehouse`)
+      setNameCheckStatus('duplicate')
+      return
+    }
+
     setIsSaving(true)
     const pile = await createPileWithBeginningBalance({
       warehouseId, pileName, category, varietyId,
@@ -268,6 +298,19 @@ function PileBalanceSection({ warehouseId }) {
   // there is only ever one place a balance correction can happen.
   const handleUpdate = async () => {
     if (!pileName.trim()) { toast.error('Pile name is required'); return }
+
+    // Re-checked fresh, excluding the pile being edited itself so
+    // saving an unchanged (or reverted) name never falsely flags.
+    const trimmedUpdateName = pileName.trim()
+    const updateDuplicate = await db.piles
+      .where('warehouseId').equals(warehouseId)
+      .and((p) => p.pileId !== editingPileId && p.pileName.trim().toLowerCase() === trimmedUpdateName.toLowerCase())
+      .first()
+    if (updateDuplicate) {
+      toast.error(`A pile named "${trimmedUpdateName}" already exists in this warehouse`)
+      setNameCheckStatus('duplicate')
+      return
+    }
 
     setIsSaving(true)
 
@@ -367,16 +410,26 @@ function PileBalanceSection({ warehouseId }) {
       >
         <div>
           <label className={labelClass}>Pile Name</label>
-          <ValidatedField
-            ref={pileNameInputRef}
-            value={pileName}
-            onChange={(e) => setPileName(e.target.value)}
-            placeholder="Pile C-1"
-            validate={(v) => {
-              if (!v.trim()) return { valid: false, message: 'Pile name is blank — every pile needs a name to be found later. Enter a name like "Pile C-1".' }
-              return { valid: true }
-            }}
-          />
+          <div className="relative">
+            <input
+              ref={pileNameInputRef}
+              type="text"
+              value={pileName}
+              onChange={(e) => { setPileName(e.target.value); setNameCheckStatus('idle') }}
+              onBlur={checkPileNameDuplicate}
+              className={`${inputClass} ${nameCheckStatus === 'ok' ? '!border-brand-neon' : nameCheckStatus === 'duplicate' ? '!border-brand-amber' : !pileName.trim() ? '!border-brand-amber' : ''} ${nameCheckStatus === 'ok' || nameCheckStatus === 'duplicate' ? 'pr-9' : ''}`}
+              placeholder="Pile C-1"
+            />
+            {nameCheckStatus === 'ok' && (
+              <Check size={16} className="pointer-events-none absolute bottom-2.5 right-3 text-brand-neon" />
+            )}
+            {nameCheckStatus === 'duplicate' && (
+              <AlertTriangle size={16} className="pointer-events-none absolute bottom-2.5 right-3 text-brand-amber" />
+            )}
+          </div>
+          {nameCheckStatus === 'duplicate' && (
+            <p className="mt-1 text-xs text-brand-amber">This pile name is already used in this warehouse.</p>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
