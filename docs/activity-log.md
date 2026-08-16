@@ -14824,3 +14824,35 @@ Pile Layout:
 `src/pages/Piles.jsx`, `src/utils/pileLayoutPdfGenerator.js`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 18) - full-screen pile layout: rotate+zoom entrance/exit, fixed the real glitch cause
+
+User reported the round 17 fade in/out for full-screen pile layout mode
+looked like a glitch, not a smooth transition, and asked for a proper
+rotate+zoom entrance (reversed on exit) instead.
+
+Root cause of the "glitch": the grid's auto-fit `scale` (computed by a
+`useEffect` that measures the container via `requestAnimationFrame` +
+`ResizeObserver` after full-screen mode mounts) starts from whatever
+value it held before - so the very first render of the full-screen
+overlay could render the grid at the WRONG (pre-fullscreen) size, then
+visibly snap to the correct fit-to-screen size a frame or two later.
+A plain opacity fade did nothing to hide that snap.
+
+Fixed by gating the entrance animation behind a new `scaleReady` state:
+content stays invisible (not unmounted - still needs to be measurable
+by the ResizeObserver) until the first post-toggle measurement lands,
+then the entrance animation plays once, already at the correct final
+size. `FullScreenOverlay` now has two nested nodes instead of one: the
+outer node keeps only the STATIC device-orientation rotation (the
+Edit/Assign Pile form portals directly into this exact node and must
+stay in a stable coordinate system), while a new inner node carries the
+actual entrance/exit animation, so the two transforms never fight each
+other. New CSS keyframes `fullscreen-zoom-in`/`fullscreen-zoom-out` in
+`index.css` (a bouncy scale+rotate, not a plain fade) replace the
+round 17 fade classes for this specific case.
+
+### Files touched
+`src/pages/Piles.jsx`, `src/index.css`.
+
+`npm run build` passes.

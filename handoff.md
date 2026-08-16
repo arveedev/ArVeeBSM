@@ -547,7 +547,21 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 17) - pile layout historical bug + PDF color mismatch + full-screen animation - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 18) - full-screen pile layout rotate+zoom entrance/exit - NOT YET COMMITTED/PUSHED
+
+Replaced round 17's plain fade with a rotate+zoom entrance/exit, per
+user feedback that the fade looked like a glitch. Found and fixed the
+actual glitch cause along the way: the grid's auto-fit `scale` is
+measured asynchronously after full-screen mode mounts, so the overlay
+could briefly render at the wrong (stale) size before snapping to the
+correct fit - a new `scaleReady` gate keeps the content invisible
+(but still measurable) until that first measurement lands, so the
+animation always plays at the correct final size. `FullScreenOverlay`
+now has an outer node (static device-orientation rotation only, since
+the Edit/Assign form portals directly into it) and an inner node
+(the actual animation), so the two transforms don't conflict.
+
+### OPEN (2026-08-16 session, round 17) - pile layout historical bug + PDF color mismatch + full-screen fade - PUSHED
 
 Real bug fix: a box assigned to a backdated pile (beginning balance
 "as of" an earlier date) only showed in the layout from the day it was
