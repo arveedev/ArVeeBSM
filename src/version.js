@@ -88,5 +88,8 @@
 //            containerVersion state that only changes when the grid's
 //            DOM node is actually reattached, so remeasurement fires at
 //            the true right moment instead of a hardcoded number of ms
-//            (current)
-export const APP_VERSION = '1.8-11'
+//   1.8-12 - Buttons/boundary box confirmed fixed on device. Simplified
+//            the full-screen exit animation per explicit request -
+//            plain slide-out instead of mirroring the rotate+zoom
+//            entrance (current)
+export const APP_VERSION = '1.8-12'
