@@ -14708,3 +14708,38 @@ sort behaves exactly as it did before this fix (harmless, not worse).
 `docs/apps-script-full-replacement.js`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 15) - fixed Purity/MC not auto-filling when editing a pile
+
+User reported Purity and Moisture Content don't auto-fill when editing
+a pile via Beginning Balances. Real, confirmed bug: `pileLedger.js`'s
+`createPileWithBeginningBalance` correctly saved `purity`/
+`moistureContent` onto the `piles` record at creation time, but never
+wrote them onto the seed (`isInitialBalance`) transaction it also
+creates - `moistureContent` was hardcoded to `null` there, and `purity`
+was omitted from the transaction object entirely. Since
+`BeginningBalancesPanel.jsx`'s `handleEdit` reads these two fields FROM
+the seed transaction (not the pile record), every pile created with a
+beginning balance since this code existed had a real value on its pile
+record but showed blank Purity/MC every time it was reopened for
+editing.
+
+Fixed both sides: `createPileWithBeginningBalance` now writes the real
+`purity`/`moistureContent` onto the seed transaction too, so newly
+created piles stop losing this data going forward. `handleEdit` in
+`BeginningBalancesPanel.jsx` now falls back to the pile record's own
+`purity`/`moistureContent` when the seed transaction's own values are
+blank - this retroactively fixes every ALREADY-EXISTING pile too, no
+data migration needed, since the pile record always had the correct
+value even when the seed didn't.
+
+Both `Settings.jsx`'s Create Pile panel and `NewPileDialog.jsx` (the
+"+ New Pile" flow from stock forms) call the same
+`createPileWithBeginningBalance`, so this one fix covers every
+pile-creation path at once.
+
+### Files touched
+`src/utils/pileLedger.js`,
+`src/components/common/admin/BeginningBalancesPanel.jsx`.
+
+`npm run build` passes.

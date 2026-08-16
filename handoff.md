@@ -547,7 +547,21 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 14) - Completed MO/TMO sort now uses the Sheet's own milling date - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 15) - fixed Purity/MC not auto-filling when editing a pile - NOT YET COMMITTED/PUSHED
+
+`createPileWithBeginningBalance` (pileLedger.js) saved `purity`/
+`moistureContent` onto the `piles` record but never onto its own seed
+transaction (`moistureContent` hardcoded `null`, `purity` omitted
+entirely) - since `BeginningBalancesPanel.jsx`'s `handleEdit` reads
+these two fields FROM the seed, every pile with a beginning balance had
+a real value on the pile record but showed blank on edit. Fixed both
+sides: the seed now gets the real values going forward, and
+`handleEdit` now falls back to the pile record's own values when the
+seed's are blank - retroactively fixes every already-existing pile too,
+no migration needed. Covers all pile-creation paths (Settings.jsx,
+NewPileDialog.jsx) since they share the one function.
+
+### OPEN (2026-08-16 session, round 14) - Completed MO/TMO sort now uses the Sheet's own milling date - PUSHED
 
 The Completed list's sort only ever used LOCAL transaction dates - an
 order with no real WSI/WSR ever posted through this app fell back to
