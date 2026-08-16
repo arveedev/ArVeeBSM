@@ -547,7 +547,25 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 7-8) - app version label + authority cutoff fix - PUSHING NOW
+### OPEN (2026-08-16 session, round 9) - admin-only manual complete/uncomplete for Authorities AND MO/TMO on the Monitoring page - NOT YET COMMITTED/PUSHED
+
+Full plan on file at
+`C:\Users\DjArVee\.claude\plans\now-can-you-continue-vectorized-russell.md`
+(implemented in full - read that file for exact diffs/reasoning if
+picking this up cold). Short version: `AdminMonitoring.jsx` now gates
+mark-done/undo controls on `isAdmin = user?.role === 'Admin'` (Visitor
+still read-only). Authorities reused the existing `manuallyCompleted`
+mechanism (small change). MO/TMO had NO manual-override concept at all
+before this - new `millingOrders.manuallyCompleted` field (dexie v29),
+with a critical gotcha fixed: `syncMillingOrdersFromSheets` fully
+clears+rebuilds the table every sync, so the flag has to be explicitly
+read and merged back in before every resync or it silently reverts.
+`MillingMonitor`/`CompletedMillingModal` both gained a new `isAdmin`
+prop (default `false`) - the regular user-side `Home.jsx` milling
+widget never passes it, so it's completely unaffected. `npm run build`
+passes; not yet manually tested on localhost or pushed.
+
+### OPEN (2026-08-16 session, round 7-8) - app version label + authority cutoff fix - PUSHED
 
 Round 8 addendum: `src/utils/unwithdrawnStock.js`'s shared
 `activeAiAuthoritiesFor` helper now excludes an authority dated on or

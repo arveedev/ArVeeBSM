@@ -23,7 +23,7 @@ const MONTHS = [
 // Must match the exit transition duration below.
 const CLOSE_ANIMATION_MS = 300
 
-function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, warehouseMap, accessibleWarehouses, onClose }) {
+function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, warehouseMap, accessibleWarehouses, canManuallyToggle = true, onClose }) {
   // Delays the actual onClose call until the exit animation has time
   // to play, per the standing rule that every entrance needs a
   // matching exit rather than an instant, jarring unmount.
@@ -276,7 +276,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
               const variety = type === 'AI' ? varietyMap.get(a.varietyId) : null
               const warehouse = warehouseMap.get(a.assignedWarehouse)
               const unitLabel = type === 'SIA' ? 'pieces' : 'bags'
-              const canUncomplete = !isAuthorityNaturallyComplete(a)
+              const canUncomplete = canManuallyToggle && !isAuthorityNaturallyComplete(a)
               // Shows unchecked immediately on confirm, before the
               // (deliberately delayed) DB write - without this the
               // checkmark just stayed put until the row vanished,

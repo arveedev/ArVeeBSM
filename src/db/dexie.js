@@ -752,6 +752,19 @@ db.version(28).stores({
   pileLayoutHistory: 'id, warehouseId, boxId, pileId, occupiedTo',
 })
 
+// v29 - Admin-only manual complete/uncomplete for Milling Orders
+// (MO/TMO), mirroring authorities.manuallyCompleted. Unlike authorities
+// (upserted per-record on sync), millingOrders is fully cleared and
+// rebuilt on every sync (see syncMillingOrdersFromSheets in
+// googleSheetsBridge.js) - that function now explicitly reads existing
+// manuallyCompleted values before the clear and merges them back in,
+// so a manual mark survives the next resync instead of silently
+// reverting. Indexed for consistency with how authorities.manuallyCompleted
+// is indexed.
+db.version(29).stores({
+  millingOrders: 'orderId, type, number, status, manuallyCompleted',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

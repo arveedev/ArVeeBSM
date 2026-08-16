@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
@@ -406,7 +406,7 @@ function SackRow({ t, warehouseMap, sackTypeMap }) {
 // Shared pending/completed row renderer - identical progress-bar math
 // and layout for both MillingMonitor's inline pending list and
 // CompletedMillingModal's list, extracted so the two never drift.
-export function MillingOrderRow({ order: o, onSelect }) {
+export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimating = false, onToggleComplete }) {
   // Progress is issuance (0-50%) plus receipt (0-50%), not a single
   // received-vs-expected ratio - so a fully-issued but not-yet-received
   // order still shows real, visible progress (50%) rather than nothing
@@ -454,14 +454,38 @@ export function MillingOrderRow({ order: o, onSelect }) {
 
   const progress = roundTo3(issuanceProgress + receiptProgress)
   const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
-  const isCompleted = o.sheetStatus === 'DONE' || o.fulfilled
+  const isCompleted = o.manuallyCompleted || o.sheetStatus === 'DONE' || o.fulfilled
+  // Shows checked/unchecked immediately on tap, independent of the
+  // (deliberately delayed) DB write - same pattern as the AI/SIA
+  // Monitor's own checkbox.
+  const showsChecked = o.manuallyCompleted || isAnimating
 
   return (
-    <li>
+    <li className={`flex items-stretch gap-2 ${isAnimating ? 'animate-row-complete-out pointer-events-none' : ''}`}>
+      {isAdmin && onToggleComplete && (
+        <button
+          type="button"
+          onClick={(e) => onToggleComplete(o, e)}
+          aria-label={showsChecked ? 'Mark as pending' : 'Mark as completed'}
+          className={`flex w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+            showsChecked
+              ? 'border-brand-neon/40 bg-brand-neon/10 text-brand-neon'
+              : 'border-neutral-800 text-neutral-600 hover:text-neutral-400'
+          }`}
+        >
+          <span
+            className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+              showsChecked ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
+            }`}
+          >
+            {showsChecked && <Check size={14} />}
+          </span>
+        </button>
+      )}
       <button
         type="button"
         onClick={() => onSelect(o)}
-        className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99]"
+        className="flex flex-1 items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99]"
       >
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-app-text">{o.number}</p>
@@ -497,7 +521,7 @@ export function MillingOrderRow({ order: o, onSelect }) {
   )
 }
 
-function MillingMonitor() {
+function MillingMonitor({ isAdmin = false }) {
   const [topTab, setTopTab] = useState('MO')
   const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
@@ -505,9 +529,31 @@ function MillingMonitor() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
   const containerRef = useRef(null)
+  // orderId currently playing its "marked complete" glow+collapse exit
+  // animation - admin-only, mirrors AuthorityMonitor.jsx's exact
+  // pattern (delayed DB write, cleared only once the live query
+  // confirms the order has actually left the pending list).
+  const [completingId, setCompletingId] = useState(null)
 
   const orders = useLiveQuery(() => computeMillingOrderStatuses(topTab), [topTab]) ?? []
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
+
+  useEffect(() => {
+    if (!completingId) return
+    const stillPending = orders.some((o) => o.orderId === completingId && !(o.manuallyCompleted || o.sheetStatus === 'DONE' || o.fulfilled))
+    if (!stillPending) setCompletingId(null)
+  }, [orders, completingId])
+
+  // Must match .animate-row-complete-out's duration in index.css.
+  const ROW_EXIT_MS = 700
+
+  const toggleManualComplete = (order, e) => {
+    e.stopPropagation()
+    setCompletingId(order.orderId)
+    setTimeout(() => {
+      db.millingOrders.update(order.orderId, { manuallyCompleted: true })
+    }, ROW_EXIT_MS)
+  }
 
   const handleSyncNow = async () => {
     setIsSyncing(true)
@@ -559,7 +605,7 @@ function MillingMonitor() {
     if (regionalAuthFilter.trim() && regionalAuthByOrder.get(o.orderId) !== regionalAuthFilter.trim()) return false
     return true
   }
-  const isOrderCompleted = (o) => o.sheetStatus === 'DONE' || o.fulfilled
+  const isOrderCompleted = (o) => o.manuallyCompleted || o.sheetStatus === 'DONE' || o.fulfilled
   // Inline list is always pending-only now - completed orders live in
   // their own modal (CompletedMillingModal below) instead of replacing
   // this list in place, matching the AI/SIA Monitor's own
@@ -648,7 +694,14 @@ function MillingMonitor() {
           </p>
         )}
         {filtered.map((o) => (
-          <MillingOrderRow key={o.orderId} order={o} onSelect={setSelectedOrder} />
+          <MillingOrderRow
+            key={o.orderId}
+            order={o}
+            onSelect={setSelectedOrder}
+            isAdmin={isAdmin}
+            isAnimating={completingId === o.orderId}
+            onToggleComplete={toggleManualComplete}
+          />
         ))}
       </ul>
       )}
@@ -674,6 +727,7 @@ function MillingMonitor() {
           type={topTab}
           onSelectOrder={setSelectedOrder}
           onClose={() => setShowCompletedModal(false)}
+          isAdmin={isAdmin}
         />
       )}
     </div>

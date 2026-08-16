@@ -382,22 +382,35 @@ const runMillingOrdersSync = async () => {
       allOrders.push(...moOrders, ...tmoOrders)
     }
 
-    const records = allOrders.map((order) => ({
-      // Keyed by (type + number) - confirmed an MO/TMO number is
-      // always exactly one row, so type+number is a sufficient key.
-      orderId: `${order.type}::${order.number}`,
-      type: order.type,
-      number: order.number,
-      ricemillName: order.ricemillName || null,
-      recoveryPercent: order.recoveryPercent,
-      batchCurrent: order.batchCurrent ?? null,
-      batchTotal: order.batchTotal ?? null,
-      aiNumber: order.aiNumber ?? null,
-      siaNumber: order.siaNumber ?? null,
-      receivingWarehouse: order.receivingWarehouse ?? null,
-      sheetStatus: order.sheetStatus ?? null,
-      status: 'Active',
-    }))
+    // This sync fully clears and rebuilds db.millingOrders every time
+    // (see below) - unlike authorities, which upserts per-record. An
+    // admin's manual "mark done" (manuallyCompleted, not present in
+    // any Sheet column) would silently revert on the very next sync
+    // unless explicitly carried forward here.
+    const existingManuallyCompletedByOrderId = new Map(
+      (await db.millingOrders.toArray()).map((o) => [o.orderId, o.manuallyCompleted ?? false])
+    )
+
+    const records = allOrders.map((order) => {
+      const orderId = `${order.type}::${order.number}`
+      return {
+        // Keyed by (type + number) - confirmed an MO/TMO number is
+        // always exactly one row, so type+number is a sufficient key.
+        orderId,
+        type: order.type,
+        number: order.number,
+        ricemillName: order.ricemillName || null,
+        recoveryPercent: order.recoveryPercent,
+        batchCurrent: order.batchCurrent ?? null,
+        batchTotal: order.batchTotal ?? null,
+        aiNumber: order.aiNumber ?? null,
+        siaNumber: order.siaNumber ?? null,
+        receivingWarehouse: order.receivingWarehouse ?? null,
+        sheetStatus: order.sheetStatus ?? null,
+        status: 'Active',
+        manuallyCompleted: existingManuallyCompletedByOrderId.get(orderId) ?? false,
+      }
+    })
 
     // Clear and repopulate as a single atomic transaction - Dexie
     // guarantees any reactive observer (useLiveQuery) only ever sees

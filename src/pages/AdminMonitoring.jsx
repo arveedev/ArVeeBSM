@@ -16,8 +16,9 @@
 
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, X } from 'lucide-react'
+import { Search, X, Check } from 'lucide-react'
 import { db } from '../db/dexie.js'
+import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../utils/calculations.js'
@@ -29,6 +30,8 @@ import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
 const TABS = ['AI', 'SIA', 'MILLING', 'NFA']
 
 function AdminMonitoring() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
   const { weightUnit } = useSettings() ?? {}
   const { setPageHeader } = usePageHeader() ?? {}
   const [activeTab, setActiveTab] = useState('AI')
@@ -36,12 +39,37 @@ function AdminMonitoring() {
   const [selectedAuthority, setSelectedAuthority] = useState(null)
   const [showCompleted, setShowCompleted] = useState(false)
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
+  // authId currently playing its "marked complete" glow+collapse exit
+  // animation - admin-only, mirrors AuthorityMonitor.jsx's exact
+  // pattern (the DB write is deliberately delayed until the animation
+  // finishes, and completingId is cleared only once the live query
+  // confirms the authority has actually left this list, not on a fixed
+  // timer, to avoid a flicker/reappear race against Dexie's async
+  // re-query).
+  const [completingId, setCompletingId] = useState(null)
 
   useEffect(() => {
     setPageHeader?.({ title: 'Monitoring', subtitle: 'Cross-warehouse AI / SIA oversight.' })
   }, [])
 
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
+
+  useEffect(() => {
+    if (!completingId) return
+    const stillPending = authorities.some((a) => a.authId === completingId && !isAuthorityComplete(a))
+    if (!stillPending) setCompletingId(null)
+  }, [authorities, completingId])
+
+  // Must match .animate-row-complete-out's duration in index.css.
+  const ROW_EXIT_MS = 700
+
+  const toggleManualComplete = (authority, e) => {
+    e.stopPropagation()
+    setCompletingId(authority.authId)
+    setTimeout(() => {
+      db.authorities.update(authority.authId, { manuallyCompleted: true })
+    }, ROW_EXIT_MS)
+  }
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
@@ -189,7 +217,7 @@ function AdminMonitoring() {
           once at the top of this component), so it's flash-safe either
           way, but kept in the same always-mounted shape for consistency. */}
       <div className={`mt-4 ${activeTab === 'MILLING' ? '' : 'hidden'}`}>
-        <MillingMonitor />
+        <MillingMonitor isAdmin={isAdmin} />
       </div>
       <div className={activeTab === 'NFA' ? '' : 'hidden'}>
         <NfaMillingMonitor />
@@ -268,12 +296,41 @@ function AdminMonitoring() {
                 ? 'text-brand-neon'
                 : 'text-app-text'
 
+          // Shows checked immediately on tap, independent of the
+          // (deliberately delayed) DB write - same as
+          // AuthorityMonitor.jsx's own pending list.
+          const isCompleting = completingId === a.authId
+          const showsChecked = a.manuallyCompleted || isCompleting
+
           return (
-            <li key={a.authId}>
+            <li
+              key={a.authId}
+              className={`flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 transition-all hover:border-brand-neon/50 ${isCompleting ? 'animate-row-complete-out pointer-events-none' : ''}`}
+            >
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={(e) => toggleManualComplete(a, e)}
+                  aria-label={showsChecked ? 'Mark as pending' : 'Mark as completed'}
+                  className={`flex w-10 shrink-0 items-center justify-center rounded-l-xl border-r border-neutral-800 transition-colors ${
+                    showsChecked
+                      ? 'bg-brand-neon/10 text-brand-neon'
+                      : 'text-neutral-600 hover:text-neutral-400'
+                  }`}
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+                      showsChecked ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
+                    }`}
+                  >
+                    {showsChecked && <Check size={14} />}
+                  </span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedAuthority(a)}
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-left transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+                className="flex-1 rounded-xl px-3 py-2.5 text-left transition-all active:scale-[0.99]"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -343,6 +400,7 @@ function AdminMonitoring() {
           // unlike the regular warehouse-supervisor side, there's no
           // narrower per-user scope to respect here.
           accessibleWarehouses={warehouses}
+          canManuallyToggle={isAdmin}
           onClose={() => setShowCompleted(false)}
         />
       )}
