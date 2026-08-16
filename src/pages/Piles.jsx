@@ -18,7 +18,7 @@
 // itself scales up 1.5x for readability - no separate floating card,
 // which was causing layout shift/glitching.
 
-import { useEffect, useRef, useState, forwardRef } from 'react'
+import { useCallback, useEffect, useRef, useState, forwardRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
@@ -115,10 +115,15 @@ const effectiveRowSpan = (box, fieldCount) => {
 // are already correctly oriented for free, just by being real
 // descendants of this rotated container.
 // Stays mounted for one extra tick after isFullScreen flips false so the
-// exit fade actually gets to play - otherwise the portal would vanish
-// instantly on the same render that starts the animation, and no
-// animation happens without a screen present to animate on.
-const FULLSCREEN_EXIT_MS = 220
+// exit animation actually gets to play - otherwise the portal would
+// vanish instantly on the same render that starts the animation, and no
+// animation happens without a screen present to animate on. The actual
+// unmount is triggered by the real `animationend` event on the closing
+// animation (see onAnimationEnd below), not a guessed timeout - a
+// hardcoded duration previously had to be kept in exact sync with the
+// CSS animation's own duration by hand, and any mismatch (or a dropped/
+// delayed frame on a slower phone) reintroduced the exact DOM-swap-vs-
+// still-old-content race this is meant to prevent.
 const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, children }, overlayRef) {
   const [shouldRender, setShouldRender] = useState(isFullScreen)
   const [isClosing, setIsClosing] = useState(false)
@@ -127,17 +132,19 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
     if (isFullScreen) {
       setShouldRender(true)
       setIsClosing(false)
-      return
+    } else if (shouldRender) {
+      setIsClosing(true)
     }
-    if (!shouldRender) return
-    setIsClosing(true)
-    const t = setTimeout(() => {
-      setShouldRender(false)
-      setIsClosing(false)
-    }, FULLSCREEN_EXIT_MS)
-    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFullScreen])
+
+  const handleExitAnimationEnd = (e) => {
+    // Guards against the ENTRANCE animation's own end event (which also
+    // fires on this same element) being mistaken for the exit finishing.
+    if (!isClosing || e.target !== e.currentTarget) return
+    setShouldRender(false)
+    setIsClosing(false)
+  }
 
   if (!shouldRender) return children
   return createPortal(
@@ -161,7 +168,18 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
         isPortrait
           ? {
               top: 0, left: 0,
-              width: '100vh', height: '100vw',
+              // dvh/dvw (dynamic viewport units), not vh/vw - plain vh/vw
+              // reflect the LARGEST possible viewport (as if the mobile
+              // browser's address/toolbar chrome were always hidden),
+              // which on many phones is taller than what's ACTUALLY
+              // visible the moment this measures. Sizing this box off
+              // that too-large figure while it's rotated into place
+              // means part of it - and everything anchored to its far
+              // edge, including this row's controls and the grid's own
+              // border - can end up genuinely beyond the real visible
+              // screen, not just tightly spaced. dvh/dvw track the
+              // CURRENT real visible viewport instead.
+              width: '100dvh', height: '100dvw',
               transform: 'rotate(90deg) translateY(-100%)',
               transformOrigin: 'top left',
               // This box's PRE-rotation top edge - where the Back/Add
@@ -202,6 +220,7 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
       <div
         className={`flex min-h-0 flex-1 flex-col ${isClosing ? 'animate-fullscreen-zoom-out' : 'animate-fullscreen-zoom-in'}`}
         style={{ transformOrigin: 'center' }}
+        onAnimationEnd={handleExitAnimationEnd}
       >
         {children}
       </div>
@@ -275,7 +294,22 @@ function Piles() {
     typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
   )
   const longPressTimer = useRef(null)
+  // containerRef is a plain ref for all the point-in-time DOM reads
+  // elsewhere (querySelector, getBoundingClientRect) - those don't need
+  // reactivity. containerVersion exists purely so the measure effect
+  // below can react to the DOM node ITSELF being swapped (full-screen
+  // toggling re-parents this container between a portal and inline,
+  // a real mount/unmount, not just a style change) - a plain ref
+  // mutation is invisible to React, so setContainerRef bumps a real
+  // state value exactly when that swap actually happens, letting the
+  // measurement effect fire at the true right moment instead of
+  // guessing a duration to wait.
   const containerRef = useRef(null)
+  const [containerVersion, setContainerVersion] = useState(0)
+  const setContainerRef = useCallback((node) => {
+    containerRef.current = node
+    setContainerVersion((v) => v + 1)
+  }, [])
   const tapPopupRef = useRef(null)
 
   // Outside-click closes the tap-opened detail popup - previously the
@@ -481,44 +515,35 @@ function Piles() {
       // was checked.
       setScale(Math.min(1, widthScale, heightScale))
     }
-    // Deferred in BOTH directions, not just when entering - toggling
-    // isFullScreen either way swaps FullScreenOverlay between portaling
-    // containerRef's subtree to document.body and rendering it inline,
-    // a real DOM restructuring (not just a style change). Measuring
-    // synchronously could read containerRef mid-reattachment, before
-    // the browser had settled its true post-toggle layout, producing a
-    // wrong scale that then stuck indefinitely - nothing else was left
-    // to trigger a re-measure afterward.
-    //
-    // The two directions need very different defer lengths, though.
-    // ENTERING re-parents the DOM immediately (FullScreenOverlay's
-    // shouldRender flips true in the same commit), so one frame is
-    // enough. EXITING no longer re-parents immediately - FullScreenOverlay
-    // keeps the old, still-rotated full-screen DOM mounted for
-    // FULLSCREEN_EXIT_MS while its own closing animation plays. A
-    // measurement fired after only one frame was reading THAT stale,
-    // still-full-screen-sized DOM while this effect's own `isFullScreen`
-    // closure had already flipped to its NORMAL-view math (comparing
-    // against window.innerHeight instead of window.innerWidth) - the
-    // mismatch produced a wildly wrong, too-large scale that visibly
-    // ballooned the grid for a moment right as the exit animation
-    // started, reading as a "zooms in, then fades and rotates" glitch.
-    // Deferring the exit remeasurement until after the real DOM swap
-    // has happened avoids ever mixing the two.
-    const deferMs = isFullScreen ? 0 : FULLSCREEN_EXIT_MS + 30
+    // Toggling isFullScreen either way swaps FullScreenOverlay between
+    // portaling containerRef's subtree to document.body and rendering
+    // it inline - a real DOM restructuring (not just a style change),
+    // and the two directions settle on very different schedules.
+    // ENTERING re-parents the DOM within the same render cascade as
+    // isFullScreen flipping true (no artificial delay), so measuring
+    // eagerly after a single frame is safe and keeps the entrance
+    // prompt. EXITING deliberately does NOT re-parent immediately -
+    // FullScreenOverlay keeps the old, still-rotated full-screen DOM
+    // mounted until its closing animation's real `animationend` fires,
+    // which can be any amount of time later. Eagerly measuring after
+    // one frame here would read that stale, still-full-screen DOM
+    // combined with this effect's already-updated non-fullscreen math
+    // (comparing against window.innerHeight instead of the rotated
+    // window.innerWidth) - the mismatch produced a wildly wrong, too-
+    // large scale that visibly ballooned the grid right as the exit
+    // animation started. So on exit this effect does nothing eager at
+    // all - containerVersion (bumped by setContainerRef, only when the
+    // DOM node is ACTUALLY swapped - see its own comment) re-runs this
+    // whole effect at the real right moment instead, and the fresh
+    // ResizeObserver created below reports the new node's real size
+    // asynchronously as soon as it starts observing, with no guessed
+    // duration involved anywhere.
     let frame
-    const timer = setTimeout(() => { frame = requestAnimationFrame(measure) }, deferMs)
+    if (isFullScreen) {
+      frame = requestAnimationFrame(measure)
+    }
     window.addEventListener('resize', measure)
 
-    // Belt-and-suspenders on top of the rAF defer above: a single frame
-    // is enough for the DOM restructuring itself to settle, but not
-    // necessarily for everything ABOVE this container (the sticky
-    // warehouse indicator, period pickers, etc.) to finish settling
-    // into ITS final layout too - containerTop above depends on all of
-    // that. A ResizeObserver re-measures whenever this container's own
-    // rendered box actually changes size, for any reason and after
-    // however many frames that genuinely takes, rather than betting on
-    // a fixed number of frames being enough.
     let observer
     if (containerRef.current && typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(() => measure())
@@ -526,12 +551,11 @@ function Piles() {
     }
 
     return () => {
-      clearTimeout(timer)
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', measure)
       observer?.disconnect()
     }
-  }, [visibleCols, visibleRows, isFullScreen, isPortrait])
+  }, [visibleCols, visibleRows, isFullScreen, isPortrait, containerVersion])
 
   const assignedPileIds = new Set(
     boxes.filter((b) => b.id !== editingBoxId && b.pileId).map((b) => b.pileId)
@@ -1044,7 +1068,7 @@ function Piles() {
           </div>
         )}
         <div
-          ref={containerRef}
+          ref={setContainerRef}
           // Centering (flex items-center justify-center) previously only
           // applied in full-screen mode - in the normal view the grid
           // just sat at its natural top-left position instead, which is

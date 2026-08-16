@@ -74,5 +74,19 @@
 //            measurement effect fired one frame after exit began,
 //            reading the still-full-screen DOM with already-flipped
 //            normal-view math - now deferred until the real post-exit
-//            DOM swap actually happens) (current)
-export const APP_VERSION = '1.8-10'
+//            DOM swap actually happens)
+//   1.8-11 - User reported round 1.8-10's fixes showed no visible
+//            change on their phone - hardened the whole mechanism
+//            rather than re-guessing: switched 100vh/100vw to 100dvh/
+//            100dvw (plain vh/vw can be taller than what's actually
+//            visible on mobile, which is a plausible root cause of
+//            content genuinely extending past the real screen, not
+//            just being tightly spaced); replaced the guessed-duration
+//            exit timer with the real `animationend` event so the DOM
+//            never swaps before the animation has actually finished;
+//            replaced the guessed post-exit remeasure delay with a
+//            containerVersion state that only changes when the grid's
+//            DOM node is actually reattached, so remeasurement fires at
+//            the true right moment instead of a hardcoded number of ms
+//            (current)
+export const APP_VERSION = '1.8-11'
