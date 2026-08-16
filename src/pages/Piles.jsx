@@ -164,6 +164,22 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
               width: '100vh', height: '100vw',
               transform: 'rotate(90deg) translateY(-100%)',
               transformOrigin: 'top left',
+              // This box's PRE-rotation top edge - where the Back/Add
+              // Pile controls row sits, being the first thing rendered
+              // in the flex column below - becomes the VISUAL RIGHT
+              // edge of the real screen once the 90deg rotation is
+              // applied (rotating a box swaps which of its own edges
+              // ends up where on screen). The plain p-3 above wasn't
+              // enough clearance there - phones commonly need MORE room
+              // on that specific edge for a rounded corner, camera
+              // cutout, or gesture-nav zone (env(safe-area-inset-right)
+              // describes exactly that real, visual edge), which is why
+              // it was specifically the Add Pile button - sitting at
+              // the far end of that row, so also closest to the
+              // visual-bottom-right corner - that came out clipped to
+              // an unreachable sliver instead of the Back button next
+              // to it.
+              paddingTop: 'max(1.5rem, calc(0.75rem + env(safe-area-inset-right, 0px)))',
             }
           : { top: 0, left: 0, right: 0, bottom: 0 }
       }
@@ -465,20 +481,33 @@ function Piles() {
       // was checked.
       setScale(Math.min(1, widthScale, heightScale))
     }
-    // Deferred by a frame in BOTH directions, not just when entering -
-    // toggling isFullScreen either way swaps FullScreenOverlay between
-    // portaling containerRef's subtree to document.body and rendering
-    // it inline, a real DOM restructuring (not just a style change).
-    // Measuring synchronously (the previous behavior when EXITING full
-    // screen) could read containerRef mid-reattachment, before the
-    // browser had settled its true post-toggle layout, producing a
-    // wrong (too-small) scale that then stuck indefinitely - nothing
-    // else was left to trigger a re-measure afterward. This is what
-    // made the normal, non-full-screen view revert to a shrunk,
-    // top-left-clustered layout after a full-screen round trip instead
-    // of staying at the properly fit "see everything, filling the
-    // space" scale it started at.
-    const frame = requestAnimationFrame(measure)
+    // Deferred in BOTH directions, not just when entering - toggling
+    // isFullScreen either way swaps FullScreenOverlay between portaling
+    // containerRef's subtree to document.body and rendering it inline,
+    // a real DOM restructuring (not just a style change). Measuring
+    // synchronously could read containerRef mid-reattachment, before
+    // the browser had settled its true post-toggle layout, producing a
+    // wrong scale that then stuck indefinitely - nothing else was left
+    // to trigger a re-measure afterward.
+    //
+    // The two directions need very different defer lengths, though.
+    // ENTERING re-parents the DOM immediately (FullScreenOverlay's
+    // shouldRender flips true in the same commit), so one frame is
+    // enough. EXITING no longer re-parents immediately - FullScreenOverlay
+    // keeps the old, still-rotated full-screen DOM mounted for
+    // FULLSCREEN_EXIT_MS while its own closing animation plays. A
+    // measurement fired after only one frame was reading THAT stale,
+    // still-full-screen-sized DOM while this effect's own `isFullScreen`
+    // closure had already flipped to its NORMAL-view math (comparing
+    // against window.innerHeight instead of window.innerWidth) - the
+    // mismatch produced a wildly wrong, too-large scale that visibly
+    // ballooned the grid for a moment right as the exit animation
+    // started, reading as a "zooms in, then fades and rotates" glitch.
+    // Deferring the exit remeasurement until after the real DOM swap
+    // has happened avoids ever mixing the two.
+    const deferMs = isFullScreen ? 0 : FULLSCREEN_EXIT_MS + 30
+    let frame
+    const timer = setTimeout(() => { frame = requestAnimationFrame(measure) }, deferMs)
     window.addEventListener('resize', measure)
 
     // Belt-and-suspenders on top of the rAF defer above: a single frame
@@ -497,6 +526,7 @@ function Piles() {
     }
 
     return () => {
+      clearTimeout(timer)
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', measure)
       observer?.disconnect()

@@ -14898,3 +14898,53 @@ found several regressions that hadn't shown up on desktop testing:
 `npm run build` passes. Verified on desktop preview only (no console
 errors); the actual mobile-only symptoms need re-testing on a real
 phone since they couldn't be reproduced in this session's browser.
+
+## Session: 2026-08-16 (round 20) - Add Pile clipped on the right, grid "zooms in" glitch on exit
+
+User re-tested round 19's fixes on their phone: Add Pile was still
+mostly clipped (only a corner visible, not clickable), and the exit
+animation now visibly zoomed the grid IN for a moment before the
+fade+rotate played, reading as a twitch.
+
+**Add Pile clipping, worked out geometrically rather than guessed.**
+Full-screen portrait mode fakes landscape by giving the overlay
+`width: 100vh; height: 100vw` then `rotate(90deg) translateY(-100%)`.
+Tracing where a PRE-rotation point ends up on screen (rotating a box
+90deg clockwise about its own top-left corner, after the translateY
+compensation) works out to: pre-rotation TOP -> visual RIGHT,
+pre-rotation LEFT -> visual TOP, pre-rotation RIGHT -> visual BOTTOM.
+The Back/Add-Pile controls row is the first thing in the flex column
+(pre-rotation top), so it lands along the VISUAL RIGHT edge once
+rotated - and Add Pile, being the far end of that `justify-between`
+row (pre-rotation right), lands specifically in the visual
+BOTTOM-RIGHT corner, exactly where a phone's rounded corner/gesture-nav
+zone is most likely to eat into it. The uniform `p-3` wasn't enough
+clearance there. Added `paddingTop: max(1.5rem, calc(0.75rem +
+env(safe-area-inset-right)))` on the portrait branch specifically -
+that env() value describes the real visual right edge's safe inset,
+which is exactly the edge this padding needs to protect against once
+rotated.
+
+**Grid "zooming in" on exit.** The auto-fit `scale` measurement effect
+depends on `isFullScreen`, and re-fires (after a 1-frame
+`requestAnimationFrame` defer) whenever it changes. That 1-frame defer
+was correct for ENTERING (the DOM re-parents into the portal
+immediately), but round 18 made EXITING keep the OLD, still-rotated,
+full-screen-sized DOM mounted for `FULLSCREEN_EXIT_MS` (220ms) while
+the closing animation plays - so the 1-frame-deferred measurement fired
+against that STILL-full-screen DOM while its own closure had already
+picked up the NEW isFullScreen=false branch (comparing against
+`window.innerHeight` instead of the rotated `window.innerWidth`). The
+mismatch produced a wildly wrong, too-large scale that visibly
+ballooned the grid right as the exit animation began. Fixed by
+deferring the exit-direction remeasurement until `FULLSCREEN_EXIT_MS +
+30ms`, i.e. until after the real DOM swap has actually happened; entry
+still measures after a single frame as before.
+
+### Files touched
+`src/pages/Piles.jsx`.
+
+`npm run build` passes. The right-side padding fix is derived from
+tracing the CSS rotation math by hand, not from a live device, and the
+measurement-timing fix likewise couldn't be exercised on a real phone
+in this session - both need re-testing on the actual device.
