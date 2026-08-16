@@ -547,7 +547,18 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 24) - exit is slide+fade together, grid box hidden instantly on Back tap - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 25) - fixed single-age-bucket varieties showing no detail on Home Stocks - NOT YET COMMITTED/PUSHED
+
+Real bug: `HomeStocks.jsx`'s `VarietyCard` required MORE THAN one age
+bucket before it would render any per-bucket detail row at all (and
+before the expand arrow itself would even appear, if that lone bucket
+had no unwithdrawn stock) - so a variety whose entire stock sat in a
+single bucket (e.g. only ever received in the last 0-3/0-6 months, no
+older stock yet) showed nothing. Fixed both the `hasExpandableDetail`
+gate and the bucket-mapping render to work correctly with exactly one
+bucket too.
+
+### OPEN (2026-08-16 session, round 24) - exit is slide+fade together, grid box hidden instantly on Back tap - PUSHED
 
 User clarified round 23's plain fade wasn't what was asked - wanted
 slide AND fade together. Also asked to directly eliminate the

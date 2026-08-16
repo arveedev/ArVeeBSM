@@ -15091,3 +15091,28 @@ continuing to try to time the animation around it.
 `src/pages/Piles.jsx`, `src/index.css`.
 
 `npm run build` passes, no console errors on desktop preview.
+
+## Session: 2026-08-16 (round 25) - fixed a real bug: single-age-bucket varieties showed no age-group detail at all
+
+User reported some varieties with stock only in the youngest age
+bucket (e.g. 0-3 months for Rice, 0-6 for Palay, with no older stock
+yet) showed nothing at all on Home Stocks - no expand arrow, no age
+breakdown - even though that stock genuinely belongs to a specific,
+knowable age group.
+
+Real bug, confirmed in code: `HomeStocks.jsx`'s `VarietyCard` gated its
+per-bucket detail rows on `bucketEntries.length > 1` - i.e. it only
+ever rendered the age-group breakdown when a variety had MORE than one
+bucket to compare, so a variety whose stock happened to sit entirely
+in a single bucket got no detail rendered at all (and `hasExpandableDetail`
+also required `bucketEntries.length > 1` as a fallback, so with no
+unwithdrawn stock in that single bucket either, the arrow itself never
+even appeared). Fixed both: `hasExpandableDetail` now allows any
+variety with at least one bucket, and the bucket-mapping render no
+longer requires more than one entry - a variety with a single age
+bucket now correctly shows that one bucket's detail on expand.
+
+### Files touched
+`src/pages/HomeStocks.jsx`.
+
+`npm run build` passes.

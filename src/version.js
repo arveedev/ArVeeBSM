@@ -107,5 +107,13 @@
 //            onExited callback once the exit animation genuinely
 //            finishes) - eliminates the split-second flash of a wrong/
 //            mid-recalculation grid size during the closing transition
-//            entirely, rather than trying to out-time it (current)
-export const APP_VERSION = '1.8-14'
+//            entirely, rather than trying to out-time it
+//   1.8-15 - Fixed a real bug on the Home Stocks tab: a variety whose
+//            entire stock sat in a single age bucket (e.g. only ever
+//            received within the last 0-3/0-6 months, no older stock
+//            yet) showed no expand arrow and no age-group detail at
+//            all, since the detail row only ever rendered for MORE
+//            THAN one bucket - now shows the single bucket too, so the
+//            age group a variety's stock belongs to is always visible
+//            (current)
+export const APP_VERSION = '1.8-15'

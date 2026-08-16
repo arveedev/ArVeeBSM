@@ -79,7 +79,14 @@ function VarietyCard({
     const amt = unwithdrawnAmount(uw, showNetBags)
     return amt >= (showNetBags ? 0.005 : 1)
   })
-  const hasExpandableDetail = hasAnyBucketUnwithdrawn || bucketEntries.length > 1
+  // Previously required MORE THAN one age bucket to be expandable at
+  // all, so a variety whose entire stock sat in a single bucket (e.g.
+  // only ever received within the last 0-3 months, no older stock yet)
+  // showed no arrow and no age-group detail whatsoever - there was
+  // nothing wrong with the bucket itself, just nothing else to compare
+  // it against. A single bucket is still worth showing, so the user can
+  // see which age group the variety's stock actually belongs to.
+  const hasExpandableDetail = hasAnyBucketUnwithdrawn || bucketEntries.length > 0
 
   // The detail region's HEIGHT animates (via CSS grid-template-rows
   // 0fr -> 1fr), not just its opacity/translateY - a transform-based
@@ -115,7 +122,7 @@ function VarietyCard({
         <div className="overflow-hidden">
           {shouldRenderDetail && (
             <div className="mt-1 space-y-1">
-              {bucketEntries.length > 1 && bucketEntries.map(([bucketLabel, totals]) => {
+              {bucketEntries.map(([bucketLabel, totals]) => {
                 // Real per-bucket figure, not an estimate - each AI's
                 // own ageGroup field resolves to a specific bucket
                 // (computeUnwithdrawnByVarietyAge), so this is the
