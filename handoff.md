@@ -547,7 +547,20 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 22) - simplified full-screen exit to a plain slide - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 23) - full-screen exit fades, page fades back in, header/nav slide in - NOT YET COMMITTED/PUSHED
+
+User found round 22's slide-out still glitchy and asked for something
+more coordinated instead: exit now fades (reusing `.animate-fade-out`),
+the underlying normal page fades back in once the overlay is actually
+gone (`justExited` flag + `.animate-fade-in` wrapper, triggered by the
+real `animationend`), and AppHeader/BottomNav now slide back into view
+in step with it - via a new `chromeHidden`/`setChromeHidden` in
+`PageHeaderContext.jsx` that `Piles.jsx` drives off `isFullScreen`,
+OR'd into `App.jsx`'s existing `barsHidden` (same mechanism already
+used for transaction forms/admin dashboard). Not verified on an actual
+phone this session.
+
+### OPEN (2026-08-16 session, round 22) - simplified full-screen exit to a plain slide - PUSHED
 
 Round 21 confirmed working on device (Add Pile/Cancel controls and the
 grid boundary box now display correctly). User asked to simplify the

@@ -15028,3 +15028,38 @@ zoom-out's.
 `src/pages/Piles.jsx`, `src/index.css`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 23) - full-screen exit now fades, page fades back in, header/nav slide in
+
+User still found the slide-out glitchy and asked for something more
+coordinated: a fade out on exit, the underlying page fading in at the
+same time, and the top bar/bottom nav sliding back into view alongside
+it - matching how the app already handles a transaction form closing
+(header slides up, nav slides down, form fades - all coordinated).
+
+- **Exit fade**: `FullScreenOverlay`'s closing animation switched from
+  the round 22 slide-out back to the existing `.animate-fade-out`
+  class (the same one already used for other full-screen overlays) -
+  no new CSS needed, just reusing what already fit.
+- **Page fades in on return**: previously, once `shouldRender` flipped
+  false, the overlay returned `children` completely bare with no
+  wrapper - the normal page just snapped into view. Now a `justExited`
+  flag (set true the instant the exit animation's real `animationend`
+  fires) wraps that return in a `div` with `.animate-fade-in`, clearing
+  itself via its own `onAnimationEnd` once played.
+- **Header/nav slide in**: `AppHeader.jsx` and `BottomNav.jsx` already
+  had a `hidden` prop driving exactly this slide (built for when a
+  transaction form opens), but nothing wired it to the pile layout's
+  full-screen state. Added `chromeHidden`/`setChromeHidden` to
+  `PageHeaderContext.jsx` (a context Piles.jsx already consumes for its
+  page title), had `Piles.jsx` call `setChromeHidden(isFullScreen)`
+  (with cleanup on unmount so leaving the page mid-full-screen can't
+  leave the bars stuck hidden), and OR'd `chromeHidden` into
+  `App.jsx`'s existing `barsHidden` computation alongside the
+  transaction-form and admin-dashboard conditions already there.
+
+### Files touched
+`src/pages/Piles.jsx`, `src/index.css`, `src/App.jsx`,
+`src/context/PageHeaderContext.jsx`.
+
+`npm run build` passes, no console errors on desktop preview.

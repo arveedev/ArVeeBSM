@@ -21,6 +21,7 @@ import WTSForm from './components/forms/WTSForm.jsx'
 import ESIForm from './components/forms/ESIForm.jsx'
 import ESRForm from './components/forms/ESRForm.jsx'
 import { useAuth } from './context/AuthContext.jsx'
+import { usePageHeader } from './context/PageHeaderContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 import AnimatedToast from './components/common/AnimatedToast.jsx'
 import useDelayedUnmount from './hooks/useDelayedUnmount.js'
@@ -42,6 +43,7 @@ const FORM_COMPONENTS = {
 function App() {
   const { user } = useAuth()
   const { theme } = useSettings() ?? {}
+  const { chromeHidden } = usePageHeader() ?? {}
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const [isTransactionModalOpen, setTransactionModalOpen] = useState(false)
@@ -60,7 +62,7 @@ function App() {
     setAdminClosing(true)
     setTimeout(() => navigate('/settings'), FORM_EXIT_MS)
   }
-  const barsHidden = Boolean(activeFormType) || (pathname === '/admin' && !adminClosing)
+  const barsHidden = Boolean(activeFormType) || (pathname === '/admin' && !adminClosing) || Boolean(chromeHidden)
   // Tracks the previous pathname's nav column, to compute page-slide
   // direction on every route change - "forward" (deeper into the app,
   // e.g. Home to Piles) enters from the right, "back" (returning
