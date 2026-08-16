@@ -37,5 +37,9 @@
 //            issued) vs actual recovery inline, amber/green bordered
 //   1.8-4  - Completed MO/TMO sort now falls back to the Sheet's own
 //            "Date of Milling" column when an order has no local
-//            transaction date, instead of arbitrary order (current)
-export const APP_VERSION = '1.8-4'
+//            transaction date, instead of arbitrary order
+//   1.8-5  - Fixed Purity/Moisture Content never auto-filling when editing a
+//            pile's beginning balance - they were saved to the pile record
+//            but never to its own seed transaction, which is what the edit
+//            form actually reads from (current)
+export const APP_VERSION = '1.8-5'

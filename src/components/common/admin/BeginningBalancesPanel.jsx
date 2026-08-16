@@ -90,8 +90,17 @@ function PilesBeginningBalances({ warehouseId }) {
           kilos: liveFormatNumber(String(s.netKilos ?? 0), 3),
           condition: s.condition ?? 'GQ',
           dateReceived: s.date ?? pile.dateOfReceipt ?? todayLocalISO(),
-          purity: s.purity ?? '',
-          moistureContent: s.moistureContent != null ? liveFormatNumber(String(s.moistureContent)) : '',
+          // Falls back to the pile record's own purity/moistureContent
+          // when the seed transaction itself has none - older piles
+          // created before this was fixed had these two fields written
+          // to the pile but never to its own seed transaction, so
+          // editing showed them blank even though the pile genuinely
+          // had real values on file.
+          purity: (s.purity ?? pile.purity) ?? '',
+          moistureContent: (() => {
+            const mc = s.moistureContent ?? pile.moistureContent
+            return mc != null ? liveFormatNumber(String(mc)) : ''
+          })(),
           mtsSackTypeId: s.mtsSackTypeId ?? '',
           mtsCondition: s.mtsCondition ?? '',
         }))
