@@ -16,7 +16,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { X } from 'lucide-react'
+import { X, Check, AlertTriangle } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { createPileWithBeginningBalance } from '../../utils/pileLedger.js'
 import { liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
@@ -44,6 +44,21 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
   const [beginCondition, setBeginCondition] = useState('GQ')
   const [mtsSelection, setMtsSelection] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  // 'idle' | 'checking' | 'ok' | 'duplicate' - checked on blur, not on
+  // every keystroke, so it only reflects the name as the user last
+  // actually finished typing it, not a half-typed value mid-edit.
+  const [nameCheckStatus, setNameCheckStatus] = useState('idle')
+
+  const checkPileNameDuplicate = async () => {
+    const trimmed = pileName.trim()
+    if (!trimmed) { setNameCheckStatus('idle'); return }
+    setNameCheckStatus('checking')
+    const existing = await db.piles
+      .where('warehouseId').equals(warehouseId)
+      .and((p) => p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
+      .first()
+    setNameCheckStatus(existing ? 'duplicate' : 'ok')
+  }
 
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const mtsOptions = [...sackTypes]
@@ -66,6 +81,20 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
     }
     if (!varietyId) {
       toast.error('Select a variety for this pile')
+      return
+    }
+
+    // Re-checked fresh rather than trusting the last blur result, in
+    // case the user ignored the inline warning or another pile with
+    // the same name got created elsewhere in the meantime.
+    const trimmed = pileName.trim()
+    const duplicate = await db.piles
+      .where('warehouseId').equals(warehouseId)
+      .and((p) => p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
+      .first()
+    if (duplicate) {
+      toast.error(`A pile named "${trimmed}" already exists in this warehouse`)
+      setNameCheckStatus('duplicate')
       return
     }
 
@@ -113,13 +142,25 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
         <div className="mt-4 space-y-3">
           <div>
             <label className={labelClass}>Pile Name</label>
-            <input
-              type="text"
-              value={pileName}
-              onChange={(e) => setPileName(e.target.value)}
-              className={inputClass}
-              placeholder="Pile C-1"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={pileName}
+                onChange={(e) => { setPileName(e.target.value); setNameCheckStatus('idle') }}
+                onBlur={checkPileNameDuplicate}
+                className={`${inputClass} ${nameCheckStatus === 'ok' ? '!border-brand-neon' : nameCheckStatus === 'duplicate' ? '!border-brand-amber' : ''} ${nameCheckStatus === 'ok' || nameCheckStatus === 'duplicate' ? 'pr-9' : ''}`}
+                placeholder="Pile C-1"
+              />
+              {nameCheckStatus === 'ok' && (
+                <Check size={16} className="pointer-events-none absolute bottom-2.5 right-3 text-brand-neon" />
+              )}
+              {nameCheckStatus === 'duplicate' && (
+                <AlertTriangle size={16} className="pointer-events-none absolute bottom-2.5 right-3 text-brand-amber" />
+              )}
+            </div>
+            {nameCheckStatus === 'duplicate' && (
+              <p className="mt-1 text-xs text-brand-amber">This pile name is already used in this warehouse.</p>
+            )}
           </div>
 
           <div>

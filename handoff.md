@@ -547,7 +547,24 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 15) - fixed Purity/MC not auto-filling when editing a pile - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 16) - inline duplicate pile-name checker - NOT YET COMMITTED/PUSHED
+
+Blur-triggered (not live-per-keystroke), per-warehouse duplicate
+pile-name check in both places a pile name can be entered/edited:
+`NewPileDialog.jsx` ("+ New Pile" from a stock form, create-only) and
+`Settings.jsx`'s Create/Edit Pile panel (create + rename, so its check
+excludes the pile currently being edited). Green check icon + neon
+border when unique, amber warning icon + amber border + amber subtext
+("This pile name is already used in this warehouse.") when a duplicate
+exists, both triggered `onBlur` via a Dexie query, reset to idle on
+every keystroke. Both files also re-run the check fresh right before
+actually saving (`handleCreate`/`handleUpdate`) and block with a toast
+if a duplicate slipped through - defends against the user ignoring the
+inline warning or a collision from concurrent activity. Settings.jsx's
+now-unused `ValidatedField` import for the pile-name field was removed
+(shared component itself untouched, still used elsewhere presumably).
+
+### OPEN (2026-08-16 session, round 15) - fixed Purity/MC not auto-filling when editing a pile - PUSHED
 
 `createPileWithBeginningBalance` (pileLedger.js) saved `purity`/
 `moistureContent` onto the `piles` record but never onto its own seed

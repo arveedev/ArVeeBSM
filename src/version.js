@@ -41,5 +41,10 @@
 //   1.8-5  - Fixed Purity/Moisture Content never auto-filling when editing a
 //            pile's beginning balance - they were saved to the pile record
 //            but never to its own seed transaction, which is what the edit
-//            form actually reads from (current)
-export const APP_VERSION = '1.8-5'
+//            form actually reads from
+//   1.8-6  - Inline, blur-triggered duplicate pile-name checker (green
+//            check / amber warning) on both the New Pile dialog and the
+//            Settings Create/Edit Pile panel, scoped per-warehouse, with
+//            a fresh re-check right before save in case the inline
+//            warning was ignored (current)
+export const APP_VERSION = '1.8-6'

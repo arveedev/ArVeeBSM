@@ -14743,3 +14743,40 @@ pile-creation path at once.
 `src/components/common/admin/BeginningBalancesPanel.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 16) - inline duplicate pile-name checker
+
+User requested: when typing a pile name, check on blur (not live per
+keystroke) whether that name is already used by another pile in the
+same warehouse - green check if OK, amber warning icon + amber subtext
+below the field if it's a duplicate.
+
+Implemented in both places a pile's name can be typed/edited:
+
+- `NewPileDialog.jsx` (the "+ New Pile" flow opened from a stock form's
+  Pile ID dropdown, create-only): added a `nameCheckStatus` state
+  (`'idle' | 'checking' | 'ok' | 'duplicate'`), reset to `'idle'` on
+  every keystroke and re-evaluated on blur via a Dexie query scoped to
+  `warehouseId` (case-insensitive, trimmed). `handleCreate` re-runs the
+  same check fresh right before saving and blocks with a toast if a
+  duplicate slipped through.
+- `Settings.jsx`'s Create/Edit Pile panel: same pattern, but this panel
+  also renames existing piles (`handleUpdate`, gated on
+  `editingPileId`), so its duplicate query excludes the pile currently
+  being edited (`p.pileId !== editingPileId`) - otherwise saving a pile
+  back with its own unchanged name would falsely flag as a duplicate.
+  Both `handleCreate` and `handleUpdate` re-check fresh before writing.
+  `resetForm()` and `handleEdit()` both reset `nameCheckStatus` back to
+  `'idle'` so a stale badge never lingers between edits.
+
+The existing shared `ValidatedField` component was evaluated and ruled
+out for this - it only supports synchronous, every-keystroke
+validation with just green/red states, no blur-only trigger and no
+amber "valid but warning" state, so a bespoke local pattern was used
+instead in both files. `Settings.jsx`'s now-unused `ValidatedField`
+import was removed.
+
+### Files touched
+`src/components/forms/NewPileDialog.jsx`, `src/pages/Settings.jsx`.
+
+`npm run build` passes.
