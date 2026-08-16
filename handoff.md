@@ -547,7 +547,24 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 23) - full-screen exit fades, page fades back in, header/nav slide in - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 24) - exit is slide+fade together, grid box hidden instantly on Back tap - NOT YET COMMITTED/PUSHED
+
+User clarified round 23's plain fade wasn't what was asked - wanted
+slide AND fade together. Also asked to directly eliminate the
+recurring "flash of zoomed layout" glitch by hiding the grid's bordered
+box THE INSTANT Back/exit is tapped, rather than continuing to try to
+time the animation around it. New `hideGridDuringExit` state (Piles.jsx)
+set synchronously in the same click handler that starts the exit
+(`exitFullScreen`, now shared by the Back button and the toggle
+button), applied as `invisible` (not unmounted, so containerRef/its
+ResizeObserver stay attached) on the grid's bordered box; cleared via a
+new `onExited` callback on `FullScreenOverlay`, fired from the same
+real `animationend` handler that drives the unmount. Exit animation
+itself: new `fullscreen-slide-fade-out` keyframe (translateY + opacity
+together) replaces round 23's plain fade reuse. Not verified on an
+actual phone this session.
+
+### OPEN (2026-08-16 session, round 23) - full-screen exit fades, page fades back in, header/nav slide in - PUSHED
 
 User found round 22's slide-out still glitchy and asked for something
 more coordinated instead: exit now fades (reusing `.animate-fade-out`),

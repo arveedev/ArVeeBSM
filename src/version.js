@@ -99,5 +99,13 @@
 //            new chromeHidden flag (PageHeaderContext) lets Piles.jsx
 //            ask App.jsx to hide/reveal them, reusing the exact same
 //            slide mechanism already used while a transaction form is
-//            open (current)
-export const APP_VERSION = '1.8-13'
+//            open
+//   1.8-14 - Exit animation is now slide+fade together (not fade
+//            alone, which wasn't what was asked for). More importantly:
+//            the grid's own bordered box is now hidden THE INSTANT
+//            Back/exit is tapped (hideGridDuringExit, cleared via a new
+//            onExited callback once the exit animation genuinely
+//            finishes) - eliminates the split-second flash of a wrong/
+//            mid-recalculation grid size during the closing transition
+//            entirely, rather than trying to out-time it (current)
+export const APP_VERSION = '1.8-14'
