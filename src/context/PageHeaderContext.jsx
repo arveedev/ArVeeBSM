@@ -22,11 +22,17 @@ export const PageHeaderProvider = ({ children }) => {
   // top of headerHeight for the scroll target to land correctly below
   // it, not underneath it.
   const [stickyIndicatorHeight, setStickyIndicatorHeight] = useState(0)
+  // Lets a page (currently just Piles.jsx's full-screen pile layout)
+  // ask App.jsx to slide the persistent AppHeader/BottomNav out of view
+  // - the same "hidden" mechanism already used while a transaction
+  // form is open - without App.jsx needing to know anything about that
+  // page's own internal full-screen state.
+  const [chromeHidden, setChromeHidden] = useState(false)
 
   const setPageHeader = (next) => setHeader((prev) => ({ ...prev, ...next }))
 
   return (
-    <PageHeaderContext.Provider value={{ ...header, setPageHeader, headerHeight, setHeaderHeight, stickyIndicatorHeight, setStickyIndicatorHeight }}>
+    <PageHeaderContext.Provider value={{ ...header, setPageHeader, headerHeight, setHeaderHeight, stickyIndicatorHeight, setStickyIndicatorHeight, chromeHidden, setChromeHidden }}>
       {children}
     </PageHeaderContext.Provider>
   )

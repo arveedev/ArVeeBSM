@@ -513,26 +513,15 @@ select {
 
 /* Entrance only: rotate+zoom for the Pile Layout's full-screen mode -
    eases past 100% scale slightly (the bounce-flavored cubic-bezier
-   below) so it feels like the layout swings into place. Exit uses a
-   plain slide instead (see fullscreen-slide-out below) - per explicit
-   request, simpler than mirroring the entrance rotation. */
+   below) so it feels like the layout swings into place. Exit reuses
+   the plain animate-fade-out above instead of mirroring this rotation
+   - per explicit request, simpler than a symmetric reverse. */
 @keyframes fullscreen-zoom-in {
   0% { opacity: 0; transform: scale(0.8) rotate(-8deg); }
   100% { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 .animate-fullscreen-zoom-in {
   animation: fullscreen-zoom-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-/* Exit only: a plain slide off the bottom of the box, not a mirror of
-   the rotate+zoom entrance - simpler, and was explicitly requested
-   over reversing the entrance motion. */
-@keyframes fullscreen-slide-out {
-  0% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(100%); }
-}
-.animate-fullscreen-slide-out {
-  animation: fullscreen-slide-out 0.28s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 /* Full-screen slide, like a native app's "push" navigation - for

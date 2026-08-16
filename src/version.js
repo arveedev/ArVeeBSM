@@ -91,5 +91,13 @@
 //   1.8-12 - Buttons/boundary box confirmed fixed on device. Simplified
 //            the full-screen exit animation per explicit request -
 //            plain slide-out instead of mirroring the rotate+zoom
-//            entrance (current)
-export const APP_VERSION = '1.8-12'
+//            entrance
+//   1.8-13 - Full-screen pile layout exit now fades out (reusing the
+//            existing plain fade instead of the slide), the normal
+//            page fades back in once it settles, and AppHeader/
+//            BottomNav now slide back into view in step with it - a
+//            new chromeHidden flag (PageHeaderContext) lets Piles.jsx
+//            ask App.jsx to hide/reveal them, reusing the exact same
+//            slide mechanism already used while a transaction form is
+//            open (current)
+export const APP_VERSION = '1.8-13'

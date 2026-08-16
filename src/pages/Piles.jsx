@@ -127,6 +127,10 @@ const effectiveRowSpan = (box, fieldCount) => {
 const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, children }, overlayRef) {
   const [shouldRender, setShouldRender] = useState(isFullScreen)
   const [isClosing, setIsClosing] = useState(false)
+  // True for one animation's worth of time right after returning to the
+  // normal (non-full-screen) view, so that reveal fades in too instead
+  // of just snapping into place the instant the overlay is gone.
+  const [justExited, setJustExited] = useState(false)
 
   useEffect(() => {
     if (isFullScreen) {
@@ -144,9 +148,16 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
     if (!isClosing || e.target !== e.currentTarget) return
     setShouldRender(false)
     setIsClosing(false)
+    setJustExited(true)
   }
 
-  if (!shouldRender) return children
+  if (!shouldRender) {
+    return (
+      <div className={justExited ? 'animate-fade-in' : undefined} onAnimationEnd={() => setJustExited(false)}>
+        {children}
+      </div>
+    )
+  }
   return createPortal(
     // Outer node: fixed positioning + the STATIC device-orientation
     // rotation only, never animated - the Edit/Assign Pile form portals
@@ -218,7 +229,7 @@ const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, 
           animation is imperceptible; a permanently invisible button
           is not. */}
       <div
-        className={`flex min-h-0 flex-1 flex-col ${isClosing ? 'animate-fullscreen-slide-out' : 'animate-fullscreen-zoom-in'}`}
+        className={`flex min-h-0 flex-1 flex-col ${isClosing ? 'animate-fade-out' : 'animate-fullscreen-zoom-in'}`}
         style={{ transformOrigin: 'center' }}
         onAnimationEnd={handleExitAnimationEnd}
       >
@@ -233,7 +244,7 @@ function Piles() {
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
   const { weightUnit, autoAgeMonitoring } = useSettings() ?? {}
-  const { setPageHeader } = usePageHeader() ?? {}
+  const { setPageHeader, setChromeHidden } = usePageHeader() ?? {}
 
   useEffect(() => {
     setPageHeader?.({ title: 'Piles', subtitle: 'Pile list and visual warehouse layout.' })
@@ -241,6 +252,16 @@ function Piles() {
 
   const [pilesTab, setPilesTab] = useState('list')
   const [isFullScreen, setIsFullScreen] = useState(false)
+  // Slides AppHeader/BottomNav out of view while the pile layout is
+  // full-screen, coordinated with the same "hidden" mechanism already
+  // used while a transaction form is open - and slides them back in as
+  // soon as full-screen exits, in step with the overlay's own fade-out.
+  // Reset on unmount too, so navigating away from this page mid-full-
+  // screen (rare, but possible) never leaves the bars permanently hidden.
+  useEffect(() => {
+    setChromeHidden?.(isFullScreen)
+    return () => setChromeHidden?.(false)
+  }, [isFullScreen])
   // The full-screen overlay's own rotated DOM node, once mounted - lets
   // the Edit/Assign Pile form portal directly into it (see
   // FullScreenOverlay's comment) instead of needing its own
