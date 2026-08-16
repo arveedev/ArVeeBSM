@@ -547,7 +547,26 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 19) - four real mobile-only full-screen bugs from round 18 - NOT YET COMMITTED/PUSHED, NEEDS MOBILE RE-TEST
+### OPEN (2026-08-16 session, round 20) - Add Pile still clipped + exit "zoom in" glitch - NOT YET COMMITTED/PUSHED, NEEDS MOBILE RE-TEST
+
+Round 19 wasn't enough: Add Pile was still clipped to a corner sliver,
+and exiting full-screen visibly zoomed the grid IN for a moment before
+the fade+rotate. Both traced to real causes this time (see
+activity-log round 20 for the full geometric reasoning on the first
+one): the controls row sits at the overlay's PRE-rotation top edge,
+which becomes the VISUAL RIGHT edge once the portrait rotation is
+applied - Add Pile, at the far end of that row, lands in the visual
+bottom-right corner specifically, where phones commonly need real
+safe-area clearance. Added `paddingTop: max(1.5rem, calc(0.75rem +
+env(safe-area-inset-right)))` on the portrait branch. The zoom-in
+glitch was the auto-fit scale measurement firing one frame after exit
+began, reading the still-full-screen DOM (kept mounted for 220ms by
+round 18's exit animation) against already-flipped normal-view math -
+now deferred until after the real post-exit DOM swap. Neither fix
+could be exercised on an actual phone this session - needs real-device
+re-test.
+
+### OPEN (2026-08-16 session, round 19) - four real mobile-only full-screen bugs from round 18 - PUSHED
 
 Round 18's animation gate (`scaleReady`, hiding all full-screen content
 until the grid's fit-to-screen scale was measured) caused Add Pile/

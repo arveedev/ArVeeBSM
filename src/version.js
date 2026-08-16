@@ -63,5 +63,16 @@
 //            missing min-h-0 on a nested flex column), the app header
 //            flashing through on ConfirmDialog close (a z-index tie
 //            with AppHeader), and the exit animation spinning further
-//            instead of reversing the entrance (current)
-export const APP_VERSION = '1.8-9'
+//            instead of reversing the entrance
+//   1.8-10 - Fixed the Add Pile button being clipped to an unreachable
+//            sliver on the right in full-screen portrait mode (the
+//            controls row sits at the box's PRE-rotation top edge,
+//            which becomes the VISUAL RIGHT edge once rotated - needed
+//            real clearance there, including safe-area-inset-right, not
+//            just p-3); fixed the grid visibly "zooming in" for a
+//            moment right as the exit animation started (the auto-fit
+//            measurement effect fired one frame after exit began,
+//            reading the still-full-screen DOM with already-flipped
+//            normal-view math - now deferred until the real post-exit
+//            DOM swap actually happens) (current)
+export const APP_VERSION = '1.8-10'
