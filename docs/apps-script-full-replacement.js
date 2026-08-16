@@ -238,6 +238,16 @@ function doGet(e) {
           const aiNumber = String(row[7] ?? '').trim() || null; // Column H
           const siaNumber = String(row[8] ?? '').trim() || null; // Column I
           const receivingWarehouse = String(row[10] ?? '').trim() || null; // Column K
+          // Column J - when the actual milling happened, per the Sheet
+          // itself. Needed so a completed order that never had a real
+          // WSI/WSR transaction posted through this app (fully done via
+          // some other path before this tracking existed) still has a
+          // real date to sort by, instead of falling back to arbitrary
+          // row order. Dates come back as real Date objects from
+          // getValues() - convert to ISO so JSON.stringify doesn't
+          // silently mangle them, matching the same convention already
+          // used for transaction/authority dates elsewhere in this file.
+          const dateOfMilling = row[9] instanceof Date ? row[9].toISOString() : (row[9] || null);
           // Column M - manually typed "DONE" by the admin. Previously
           // this caused the row to be excluded entirely from every
           // response, meaning once an MO/TMO was marked DONE, the app
@@ -251,7 +261,7 @@ function doGet(e) {
           // exactly which MO/TMO was actually selected).
           const sheetStatus = String(row[12] ?? '').trim().toUpperCase();
 
-          const result = { number, ricemillName, recoveryPercent, aiNumber, siaNumber, receivingWarehouse, type: orderType, sheetStatus: sheetStatus || null };
+          const result = { number, ricemillName, recoveryPercent, aiNumber, siaNumber, receivingWarehouse, type: orderType, sheetStatus: sheetStatus || null, dateOfMilling };
 
           if (orderType === 'MO') {
             // Column G - "1 of 15" format: current batch / total batches
