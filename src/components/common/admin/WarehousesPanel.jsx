@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { normalizeWarehouseAlias } from '../../../utils/warehouseMatching.js'
+import { recalculatePileCurrentState } from '../../../utils/pileLedger.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import {
@@ -100,6 +101,11 @@ function WarehousesPanel() {
     }
 
     let warehouseId = editingId
+    // Detected before the write so the comparison is against the
+    // PREVIOUS saved value, not the one we're about to write.
+    const cutoffChanged = editingId
+      ? (warehouses ?? []).find((w) => w.warehouseId === editingId)?.reportingCutoffDate !== (reportingCutoffDate || null)
+      : false
     if (editingId) {
       await db.warehouses.update(editingId, {
         code: normalizedCode,
@@ -134,6 +140,18 @@ function WarehousesPanel() {
         displayLabel,
         warehouseId,
       })))
+    }
+
+    // The cutoff now governs live pile totals everywhere (not just
+    // Reports), but those totals are a CACHED field
+    // (pile.currentBags/currentKilos) rather than computed fresh on
+    // every read - saving a new cutoff has zero visible effect until
+    // this cache is refreshed. Only recompute when the value actually
+    // changed, so an unrelated edit (renaming the warehouse) doesn't
+    // redo every pile for nothing.
+    if (cutoffChanged) {
+      const affectedPiles = await db.piles.where('warehouseId').equals(warehouseId).toArray()
+      await Promise.all(affectedPiles.map((p) => recalculatePileCurrentState(p.pileId)))
     }
 
     resetForm()
@@ -245,7 +263,9 @@ function WarehousesPanel() {
             )}
           </div>
           <p className="mt-1 text-xs text-neutral-500">
-            Any data dated before this excludes from reports entirely (beginning balances still count). Leave blank to include all data regardless of date.
+            Any data dated on or before this is ignored everywhere in the app - live stock,
+            sacks, BIN Cards, and reports (beginning balances still always count). Nothing is
+            deleted, it just stops being counted. Leave blank to include all data regardless of date.
           </p>
         </div>
 

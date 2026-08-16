@@ -547,7 +547,60 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 5) - fixed round 4's animation for real - STILL NOT COMMITTED/PUSHED
+### PUSHED (2026-08-16 session, round 6) - reportingCutoffDate app-wide + pile lifecycle/historical layout + date-aware pile picker + a real pile-delete bug fix - NOT MANUALLY TESTED ON LOCALHOST YET
+
+**Addendum**: user caught a real, serious bug while reviewing this round
+- deleting a pile (via Beginning Balances or the old, actually-unreachable
+Settings.jsx copy) deleted every transaction tied to it too. Fixed:
+pile deletion now only removes the `piles` record and unlinks its layout
+box - transactions are NEVER deleted, always kept, always resolvable by
+`pileId`. This was true of the ENTIRE feature set below by design
+(nothing in Features A/B/C ever deletes a transaction), but this one
+pre-existing delete flow was the one real exception, now closed.
+
+Full plan (still on file at
+`C:\Users\DjArVee\.claude\plans\now-can-you-continue-vectorized-russell.md`)
+implemented in one pass across three linked features - read that file
+for exact diffs/reasoning if picking this up cold. `npm run build`
+passes after every phase, but **none of this has been manually verified
+on localhost yet** - needs `npx vercel dev` (not plain `npm run dev`,
+see Dev Environment notes below) and real click-through testing before
+push. Full detail in docs/activity-log.md's "round 6" entry; short
+version:
+
+1. **`reportingCutoffDate`** (Admin > Warehouses > "Reports Start Date")
+   now governs EVERY calculation, not just Reports.jsx - live pile
+   totals (`pileLedger.js`'s `computeHistoricalPileState`, with a
+   `WarehousesPanel.jsx` trigger to refresh the cached totals when the
+   cutoff changes), live sack totals (`HomeSacks.jsx`/
+   `AdminHomeSacks.jsx`, fully reactive already), and BIN Card exports
+   (`pileBinCardGenerator.js`). Nothing is ever deleted - pre-cutoff
+   transactions just stop being counted, everywhere, consistently.
+2. **New pile lifecycle system**: `piles.zeroedDate` (dexie v28,
+   distinct from manual `closedDate`) silently tracks when a pile hits
+   zero, via a new shared `deriveZeroedDateUpdate` helper wired into
+   every write path including `WTSForm.jsx`'s own two-sided logic. New
+   `pileLayoutHistory` table captures a box's full prior geometry
+   (position AND size) every time it's reassigned, moved, or auto-
+   vacated. Piles.jsx gained a reactive auto-vacate effect (one day's
+   grace period - a pile that zeroes still shows normally for the rest
+   of that day) and its existing `periodTo` date picker now drives box
+   occupancy/position/size too, not just totals - plus pile Age now
+   correctly reflects the picked historical date instead of always
+   showing today's age. Manual "Close Pile" in Beginning Balances now
+   has a confirmation dialog and immediately vacates the pile's box.
+3. **Date-aware pile picker**: `StockFormBase.jsx`/`WTSForm.jsx` no
+   longer show a closed/zeroed pile for a same-or-future-dated
+   transaction (closes the "ghost pile" risk flagged during planning),
+   but still allow genuinely backdated entries against a pile's
+   still-active period.
+
+Explicitly verified (not assumed): BIN Card transaction matching is by
+`pileId` (UUID) everywhere, never `pileName` - matters given this app's
+real "Pile 1, Pile 2..." naming convention reuses names across different
+physical piles over time.
+
+### DONE (2026-08-16 session, round 5) - fixed round 4's animation for real
 
 Round 4's glow+collapse animation had three real bugs, all fixed this round:
 

@@ -35,9 +35,10 @@ const fmtDate = (s) => {
  * entirely - a cancelled document never happened as far as the
  * pile's real stock movement is concerned.
  */
-const buildLedgerRows = (pile, transactions, transactionTypeMap) => {
+const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoffDate) => {
   const relevant = transactions.filter((t) => {
     if (t.status === 'Cancelled') return false
+    if (!t.isInitialBalance && reportingCutoffDate && t.date <= reportingCutoffDate) return false
     if (t.type === 'WTS') return t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId
     return t.pileId === pile.pileId
   })
@@ -167,7 +168,7 @@ export const generatePileBinCard = ({ warehouse, branch, pile, variety, transact
   doc.text(variety?.name ?? '', margin + labelW, y)
   y += 7
 
-  const rows = buildLedgerRows(pile, transactions, transactionTypeMap)
+  const rows = buildLedgerRows(pile, transactions, transactionTypeMap, warehouse?.reportingCutoffDate || null)
 
   const body = rows.map((r) => [
     fmtDate(r.date),

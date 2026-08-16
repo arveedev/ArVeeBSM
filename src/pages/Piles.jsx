@@ -27,11 +27,11 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db } from '../db/dexie.js'
-import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge } from '../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO } from '../utils/calculations.js'
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
-import { computeHistoricalPileState } from '../utils/pileLedger.js'
+import { computeHistoricalPileState, vacateBoxForPile } from '../utils/pileLedger.js'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
@@ -289,6 +289,53 @@ function Piles() {
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const sortedPiles = [...effectivePiles].sort((a, b) => byAlpha(a.pileName, b.pileName))
 
+  // Auto-vacate: a pile that's been at zero bags AND zero kilos since
+  // before today (one full calendar day's grace period - it still
+  // shows normally, with its 0 values and transactions, for the rest
+  // of the day it actually reaches zero) has its box cleared so the
+  // layout reflects reality without a user having to remember to
+  // manually close it. Runs whenever this page is open for this
+  // warehouse - there's no background job in this client-side app, so
+  // a pile that never gets its warehouse's layout viewed again simply
+  // won't auto-vacate until it is.
+  useEffect(() => {
+    if (!currentWarehouseId || boxes.length === 0 || piles.length === 0) return
+    const today = todayLocalISO()
+    const pileById = new Map(piles.map((p) => [p.pileId, p]))
+    const eligible = boxes.filter((b) => {
+      if (!b.pileId) return false
+      const p = pileById.get(b.pileId)
+      return p?.zeroedDate && p.zeroedDate < today && !p.closedDate
+    })
+    if (eligible.length === 0) return
+    ;(async () => {
+      for (const box of eligible) await vacateBoxForPile(box.pileId, today)
+    })()
+  }, [currentWarehouseId, boxes, piles])
+
+  // History-aware box rendering: when periodTo predates a box's current
+  // occupancy stint (assignedDate), substitute whichever pileLayoutHistory
+  // stint actually covered periodTo for THAT box - position, size, and
+  // occupant, not just totals (which historicalMap/effectivePiles above
+  // already handles). Boxes never touched since this feature shipped have
+  // no assignedDate yet, so they always show their live/current state
+  // regardless of periodTo - there's no history to substitute for them.
+  const layoutHistory = useLiveQuery(
+    () => (periodTo && currentWarehouseId)
+      ? db.pileLayoutHistory.where('warehouseId').equals(currentWarehouseId).toArray()
+      : [],
+    [periodTo, currentWarehouseId]
+  ) ?? []
+
+  const effectiveBoxes = !periodTo ? boxes : boxes.map((box) => {
+    if (!box.assignedDate || periodTo >= box.assignedDate) return box
+    const covering = layoutHistory
+      .filter((h) => h.boxId === box.id && h.occupiedTo && periodTo <= h.occupiedTo && (!h.occupiedFrom || periodTo >= h.occupiedFrom))
+      .sort((a, b) => (a.occupiedTo < b.occupiedTo ? 1 : -1))[0]
+    if (!covering) return { ...box, pileId: null, label: null }
+    return { ...box, pileId: covering.pileId, rowStart: covering.rowStart, rowSpan: covering.rowSpan, colStart: covering.colStart, colSpan: covering.colSpan }
+  })
+
   // The DISPLAY crops to only the columns/rows actually in use, so unused
   // grid space isn't wasted as blank margin - this directly makes every
   // cell (and its text) bigger on screen. While actively drawing a new
@@ -487,7 +534,20 @@ function Piles() {
       toast.error('That position overlaps an existing pile or exceeds the layout boundary')
       return
     }
-    await db.pileLayoutBoxes.update(moving.boxId, { rowStart: row, colStart: col })
+    // pileLayoutHistory tracks GEOMETRY, not just occupant identity - a
+    // move repositions the box without changing its pile, but a
+    // historical layout view still needs to know where it used to sit.
+    // Only log if the box currently holds a pile - a move of an empty/
+    // vacant box has no history worth reconstructing.
+    const box = boxes.find((b) => b.id === moving.boxId)
+    if (box?.pileId) {
+      await db.pileLayoutHistory.add({
+        id: crypto.randomUUID(), warehouseId: box.warehouseId, boxId: box.id, pileId: box.pileId,
+        rowStart: box.rowStart, rowSpan: box.rowSpan, colStart: box.colStart, colSpan: box.colSpan,
+        occupiedFrom: box.assignedDate ?? null, occupiedTo: todayLocalISO(),
+      })
+    }
+    await db.pileLayoutBoxes.update(moving.boxId, { rowStart: row, colStart: col, assignedDate: todayLocalISO() })
     toast.success('Pile moved')
     setMoving(null)
     setEditingBoxId(null)
@@ -513,6 +573,13 @@ function Piles() {
       ...assignForm.region,
       pileId: pileId || null,
       label: label.trim() || null,
+    }
+    // Stamp when this box's CURRENT occupant/geometry stint began -
+    // only when pileId is genuinely changing (fresh assignment or
+    // reassignment), not on every metadata edit of an unchanged pile.
+    const previousBox = editingBoxId ? boxes.find((b) => b.id === editingBoxId) : null
+    if (pileId && pileId !== previousBox?.pileId) {
+      payload.assignedDate = todayLocalISO()
     }
 
     try {
@@ -609,11 +676,11 @@ function Piles() {
         ? 'Acting Warehouse Supervisor'
         : 'Warehouse Supervisor'
 
-      const enrichedBoxes = boxes.map((box) => {
+      const enrichedBoxes = effectiveBoxes.map((box) => {
         const pile = box.pileId ? pileMap.get(box.pileId) : null
         const variety = pile ? varietyMap.get(pile.varietyId) : null
         const formattedAge = pile?.initialAgeValue != null
-          ? fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring))
+          ? fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring, periodTo || undefined))
           : null
         return { ...box, pile: pile ? { ...pile, formattedAge } : pile, variety }
       })
@@ -890,7 +957,7 @@ function Piles() {
               transform: `scale(${scale})`, transformOrigin: 'top left',
             }}
           >
-            {boxes.map((box) => {
+            {effectiveBoxes.map((box) => {
               if (moving?.boxId === box.id) return null
               const pile = box.pileId ? pileMap.get(box.pileId) : null
               const variety = pile ? varietyMap.get(pile.varietyId) : null
@@ -1044,7 +1111,7 @@ function Piles() {
             DIFFERENT box while another box's tap popup was still open
             would show both at once, overlapping. */}
         {hoveredBoxId && !editingBoxId && (() => {
-          const box = boxes.find((b) => b.id === hoveredBoxId)
+          const box = effectiveBoxes.find((b) => b.id === hoveredBoxId)
           if (!box) return null
           const pile = box.pileId ? pileMap.get(box.pileId) : null
           const variety = pile ? varietyMap.get(pile.varietyId) : null
@@ -1054,7 +1121,7 @@ function Piles() {
             variety?.name && ['Variety', variety.name],
             pile.currentBags != null && ['Bags', fmtBags(pile.currentBags)],
             pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
-            pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring))],
+            pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring, periodTo || undefined))],
             pile.condition && ['Condition', pile.condition],
             pile.moistureContent && ['MC', pile.moistureContent],
             pile.purity && ['Purity', pile.purity],
@@ -1174,7 +1241,7 @@ function Piles() {
             instead of the confirmation cleanly replacing the detail
             view. */}
         {editingBoxId && !assignForm && !moving && !pendingDelete && (() => {
-          const box = boxes.find((b) => b.id === editingBoxId)
+          const box = effectiveBoxes.find((b) => b.id === editingBoxId)
           if (!box) return null
           const pile = box.pileId ? pileMap.get(box.pileId) : null
           const variety = pile ? varietyMap.get(pile.varietyId) : null
@@ -1184,7 +1251,7 @@ function Piles() {
             variety?.name && ['Variety', variety.name],
             pile.currentBags != null && ['Bags', fmtBags(pile.currentBags)],
             pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
-            pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring))],
+            pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring, periodTo || undefined))],
             pile.condition && ['Condition', pile.condition],
             pile.moistureContent && ['MC', pile.moistureContent],
             pile.purity && ['Purity', pile.purity],

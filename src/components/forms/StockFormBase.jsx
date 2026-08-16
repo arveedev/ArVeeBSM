@@ -445,6 +445,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const sortedPiles = [...(piles ?? [])]
     .filter((p) => !isCategoryScoped || p.cerealType === activeCategory)
     .filter((p) => !pileFilterVarietyId || p.varietyId === pileFilterVarietyId)
+    // A pile that's already closed/zeroed stays out of the picker for
+    // a transaction dated on or after that point - but a backdated
+    // entry (a correction, or catching up on a late-entered document
+    // from before the pile closed) still needs to find it, so the
+    // exclusion is date-aware, not a blanket hide.
+    .filter((p) => {
+      const effectiveCutoff = p.closedDate ?? p.zeroedDate
+      return !effectiveCutoff || !date || date <= effectiveCutoff
+    })
     .sort((a, b) => byAlpha(a.pileName, b.pileName))
 
   const selectedPile = (piles ?? []).find((p) => p.pileId === pileId)
