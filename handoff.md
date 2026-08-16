@@ -547,7 +547,25 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 20) - Add Pile still clipped + exit "zoom in" glitch - NOT YET COMMITTED/PUSHED, NEEDS MOBILE RE-TEST
+### OPEN (2026-08-16 session, round 21) - hardened full-screen mechanism, removed all guessed timings - NOT YET COMMITTED/PUSHED, NEEDS MOBILE RE-TEST
+
+User reported round 20 showed NO visible change on their phone.
+Replaced every remaining guessed value with a real signal: 100vh/100vw
+-> 100dvh/100dvw (plain vh/vw can be taller than the actually-visible
+mobile viewport, a plausible reason content still extended past the
+real screen even with round 20's padding); the exit unmount now
+triggers off the real `animationend` event instead of a hardcoded
+setTimeout that had to be hand-kept in sync with the CSS duration; the
+post-exit scale remeasurement now fires off a `containerVersion` state
+that only changes when the grid's DOM node is actually reattached
+(via a proper callback ref), instead of guessing how long the DOM swap
+takes. If this ALSO shows no visible change, next step is confirming
+the phone is even loading this build - check the Login page's version
+label reads v1.8-11, otherwise it's a caching/stale-build issue, not a
+code issue. Could not verify any of this on an actual phone this
+session.
+
+### OPEN (2026-08-16 session, round 20) - Add Pile still clipped + exit "zoom in" glitch - PUSHED
 
 Round 19 wasn't enough: Add Pile was still clipped to a corner sliver,
 and exiting full-screen visibly zoomed the grid IN for a moment before

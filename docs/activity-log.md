@@ -14948,3 +14948,59 @@ still measures after a single frame as before.
 tracing the CSS rotation math by hand, not from a live device, and the
 measurement-timing fix likewise couldn't be exercised on a real phone
 in this session - both need re-testing on the actual device.
+
+## Session: 2026-08-16 (round 21) - hardened the full-screen mechanism after round 20's fixes showed no visible change
+
+User re-tested round 20 on their phone and reported it looked
+identical - Add Pile still clipped, exit still glitching. Rather than
+guess at another narrow patch, replaced every remaining GUESSED value
+in the whole full-screen mount/animation/measurement chain with a real
+signal:
+
+1. **100vh/100vw -> 100dvh/100dvw.** Plain `vh`/`vw` reflect the
+   LARGEST possible viewport, as if a mobile browser's address/toolbar
+   chrome were always hidden - on many phones that's taller than what's
+   actually visible at the moment this measures. Since the portrait
+   full-screen box is sized directly off this value before being
+   rotated into place, an inflated size there would push part of the
+   box - and everything anchored to its far edge - genuinely past the
+   real visible screen, not just tightly spaced. This is a very
+   plausible root cause of the box/controls still not being "fully
+   visible" even after round 20's safe-area padding addition. `dvh`/
+   `dvw` track the CURRENT real visible viewport instead.
+2. **Guessed exit-unmount timeout -> real `animationend` event.**
+   `FullScreenOverlay` previously unmounted the portal via
+   `setTimeout(..., FULLSCREEN_EXIT_MS)`, a hardcoded duration that had
+   to be kept in exact sync with the CSS animation's own duration by
+   hand - any mismatch, or a dropped/delayed frame on a slower phone,
+   would swap the DOM before the animation had genuinely finished,
+   reproducing the exact glitch this was meant to prevent. Now the
+   closing animation's own `animationend` event triggers the unmount
+   directly - it fires exactly when the animation is actually done, on
+   any device, at any actual duration.
+3. **Guessed post-exit remeasure delay -> containerVersion state.**
+   The grid's auto-fit scale is measured off `containerRef`, which gets
+   torn down and rebuilt (portal -> inline) on every full-screen
+   toggle. Rather than guessing how long that swap takes and setting a
+   timer to match, `containerRef` was converted to a proper callback
+   ref (`setContainerRef`) that bumps a new `containerVersion` state
+   the INSTANT React actually reattaches it to a new DOM node - this
+   feeds directly into the measurement effect's dependency array, so
+   remeasurement fires at the true right moment on any device, no
+   duration guess anywhere in the chain anymore. The effect's eager
+   `requestAnimationFrame` measurement now only runs when ENTERING
+   full-screen (which re-parents immediately, no delay); exiting relies
+   purely on the ResizeObserver's own built-in behavior of reporting
+   the new node's real size as soon as it starts observing it.
+
+### Files touched
+`src/pages/Piles.jsx`.
+
+`npm run build` passes, no console errors on desktop preview. Could
+not reproduce or verify the mobile-only symptoms directly in this
+session - needs real-device re-test. If this round STILL shows no
+visible change, the next thing to rule out is whether the phone is
+actually loading this build at all (check the version number on the
+Login page reads v1.8-11; if it shows an older version, a hard
+refresh/reinstall of the app is needed before any code fix here could
+possibly be visible).
