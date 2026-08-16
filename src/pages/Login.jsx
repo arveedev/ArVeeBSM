@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
+import { APP_VERSION } from '../version.js'
 
 const PIN_LENGTH = 6
 const KEYPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -179,6 +180,15 @@ function Login() {
     <div className={`relative flex min-h-screen flex-col items-center justify-center px-6 ${(isExiting || !hasEntered) ? 'overflow-hidden' : ''}`}>
       <p className="pointer-events-none absolute bottom-14 left-1/2 -translate-x-1/2 select-none text-xs tracking-wide text-neutral-500 opacity-20">
         by ArVee
+      </p>
+      {/* Version label - sits below "by ArVee" with its own generous
+          bottom offset (not just a smaller font under it) so it stays
+          clear of the home-indicator/gesture-bar area on short mobile
+          viewports. Slightly more visible than "by ArVee" (opacity-35
+          vs 20) since it's meant to be legible enough to actually
+          confirm the deployed version, not purely decorative. */}
+      <p className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 select-none px-4 text-center text-[10px] tracking-wide text-neutral-500 opacity-35">
+        v{APP_VERSION}
       </p>
       <div className="w-full max-w-sm">
         <img

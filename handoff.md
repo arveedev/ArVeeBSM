@@ -547,6 +547,24 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
+### OPEN (2026-08-16 session, round 7-8) - app version label + authority cutoff fix - PUSHING NOW
+
+Round 8 addendum: `src/utils/unwithdrawnStock.js`'s shared
+`activeAiAuthoritiesFor` helper now excludes an authority dated on or
+before the warehouse's `reportingCutoffDate` from unwithdrawn/potential
+math (all 4 exported functions route through it) - a pre-cutoff
+authority still not withdrawn was wrongly dragging Potential down.
+Deliberately does NOT hide it from AuthorityMonitor's own pending/
+completed lists, only from the inventory math.
+
+New `src/version.js` holds a single `APP_VERSION` constant (currently
+`'1.7b-2'`) plus the full era-by-era reasoning in its own comment block
+- read that file before ever bumping the version, it explains the
+scheme (`MAJOR.MINOR<letter>-BUILD<letter>`) and where the current
+number came from. `src/pages/Login.jsx` shows it as a small, muted line
+directly below the existing "by ArVee" credit.
+waiting on user go-ahead per the last message in this session.
+
 ### PUSHED (2026-08-16 session, round 6) - reportingCutoffDate app-wide + pile lifecycle/historical layout + date-aware pile picker + a real pile-delete bug fix - NOT MANUALLY TESTED ON LOCALHOST YET
 
 **Addendum**: user caught a real, serious bug while reviewing this round
