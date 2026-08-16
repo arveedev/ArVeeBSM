@@ -14669,3 +14669,42 @@ explicit confirmation that the pending view was already correct.
 `src/components/common/MillingMonitor.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 14) - Completed MO/TMO sort fixed by syncing the Sheet's own milling date
+
+User reported the Completed MO/TMO list wasn't sorted newest-first
+properly - screenshots showed a recently-completed order (151, with
+real local transactions) correctly first, but everything after it in
+essentially arbitrary/alphabetical order rather than by actual date.
+
+Root cause: `lastActivityDate` (the sort key) only ever looked at local
+WSI/WSR/ESI/ESR transaction dates - an order completed via some other
+path (never had a real transaction posted through this app) fell back
+to an empty string, and the stable sort left it wherever it happened to
+land in the original array (`orders`, effectively DB/insertion order).
+The Sheet itself has always had this information ("DATE OF MILLING",
+column J) - the sync just never captured it.
+
+Fixed by threading a new `dateOfMilling` field through the pipeline:
+`docs/apps-script-full-replacement.js`'s `fetchMillingOrders` handler
+now reads column J (converting real `Date` objects to ISO, matching the
+convention already used for transaction/authority dates elsewhere in
+that file) and includes it in the response.
+`googleSheetsBridge.js`'s `runMillingOrdersSync` stores it (sliced to a
+plain date) on each `db.millingOrders` record. `MillingMonitor.jsx`'s
+`lastActivityDate` now falls back to `o.dateOfMilling` when there's no
+local transaction date at all, instead of the empty-string/arbitrary-
+order fallback.
+
+**Requires another Sheet-side redeploy** (same as round 12's STATUS
+write-back) - `docs/apps-script-full-replacement.js` needs to be
+redeployed to Google, and a resync run afterward, before
+`dateOfMilling` actually populates for existing records. Until then the
+sort behaves exactly as it did before this fix (harmless, not worse).
+
+### Files touched
+`src/components/common/MillingMonitor.jsx`,
+`src/services/googleSheetsBridge.js`,
+`docs/apps-script-full-replacement.js`.
+
+`npm run build` passes.

@@ -666,7 +666,12 @@ function MillingMonitor({ isAdmin = false }) {
   // CompletedAuthorityModal's own newest-first sort.
   const lastActivityDate = (o) => {
     const dates = [...(o.issueTx ?? []), ...(o.receiptTx ?? [])].map((t) => t.date).filter(Boolean)
-    return dates.length ? dates.reduce((max, d) => (d > max ? d : max)) : ''
+    if (dates.length) return dates.reduce((max, d) => (d > max ? d : max))
+    // No local transaction ever posted for this order (fully done via
+    // some other path before this app tracked it, or never transacted
+    // through the app at all) - fall back to the Sheet's own recorded
+    // milling date instead of sorting it into an arbitrary position.
+    return o.dateOfMilling ?? ''
   }
   const completedFiltered = orders
     .filter((o) => isOrderCompleted(o) && passesSharedFilters(o))

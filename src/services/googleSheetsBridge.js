@@ -420,6 +420,11 @@ const runMillingOrdersSync = async () => {
           number: order.number,
           ricemillName: order.ricemillName || null,
           recoveryPercent: order.recoveryPercent,
+          // Sliced to a plain date (matching how transaction/authority
+          // dates are already stored) - needed as the sort fallback for
+          // a completed order that never had a real local transaction,
+          // so it lands in the right place instead of arbitrary order.
+          dateOfMilling: order.dateOfMilling ? String(order.dateOfMilling).slice(0, 10) : null,
           batchCurrent: order.batchCurrent ?? null,
           batchTotal: order.batchTotal ?? null,
           aiNumber: order.aiNumber ?? null,

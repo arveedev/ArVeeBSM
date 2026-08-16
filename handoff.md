@@ -547,7 +547,20 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 13) - expected-vs-actual recovery comparison on completed MillingOrderDetail - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 14) - Completed MO/TMO sort now uses the Sheet's own milling date - NOT YET COMMITTED/PUSHED
+
+The Completed list's sort only ever used LOCAL transaction dates - an
+order with no real WSI/WSR ever posted through this app fell back to
+arbitrary/insertion order instead of a real date. New `dateOfMilling`
+field (from the Sheet's column J, "DATE OF MILLING") now flows through
+`docs/apps-script-full-replacement.js` -> `googleSheetsBridge.js` ->
+`db.millingOrders`, and `MillingMonitor.jsx`'s `lastActivityDate` falls
+back to it when there's no local transaction date. **Requires another
+Apps Script redeploy** (same file, already updated for round 12's
+STATUS write-back too) plus a resync before it actually populates -
+until then the sort behaves exactly as before, not worse.
+
+### OPEN (2026-08-16 session, round 13) - expected-vs-actual recovery comparison on completed MillingOrderDetail - PUSHED
 
 MO 151 (round 11/12's "wrongly shows completed" investigation) turned
 out to be a real, correctly-completed order - user had already encoded

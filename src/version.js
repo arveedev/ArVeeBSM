@@ -34,5 +34,8 @@
 //            admin mark-done/undone - all follow-up rounds within the same 1.8
 //            era, not a new MINOR
 //   1.8-3  - Completed MillingOrderDetail now compares expected (from actual
-//            issued) vs actual recovery inline, amber/green bordered (current)
-export const APP_VERSION = '1.8-3'
+//            issued) vs actual recovery inline, amber/green bordered
+//   1.8-4  - Completed MO/TMO sort now falls back to the Sheet's own
+//            "Date of Milling" column when an order has no local
+//            transaction date, instead of arbitrary order (current)
+export const APP_VERSION = '1.8-4'
