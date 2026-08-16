@@ -313,11 +313,13 @@ let syncInProgress = false
  * result is a genuine way to end up with duplicate SIA records, since
  * both would conclude "no canonical record exists yet" independently.
  */
-// Writes "DONE" to the STATUS column for exactly one MO/TMO row - the
-// only write the app ever makes to these sheets, and only this one
-// column. Triggered when an MO's recovery is fully met, or when a
-// TMO's Trial 3 is confirmed complete.
-export const markMillingOrderDone = async (type, number) => {
+// Writes to the STATUS column for exactly one MO/TMO row - the only
+// write the app ever makes to these sheets, and only this one column.
+// Defaults to "DONE" (triggered when an MO's recovery is fully met, a
+// TMO's Trial 3 is confirmed complete, or an admin manually marks one
+// done from the app) - pass value: '' to clear it instead, used when an
+// admin manually reverts a completed MO/TMO back to pending.
+export const markMillingOrderDone = async (type, number, value = 'DONE') => {
   const sources = await getAllSheetSources()
   if (sources.length === 0) return { ok: false, reason: 'not_configured' }
   const source = sources[0]
@@ -327,7 +329,7 @@ export const markMillingOrderDone = async (type, number) => {
   try {
     const response = await fetchWithTimeout(source.webAppUrl, {
       method: 'POST',
-      body: JSON.stringify({ action: 'markMillingOrderDone', sheet: sheetName, number }),
+      body: JSON.stringify({ action: 'markMillingOrderDone', sheet: sheetName, number, value }),
     })
     const payload = await response.json()
     return { ok: payload.status === 'SUCCESS', message: payload.message }
@@ -382,41 +384,53 @@ const runMillingOrdersSync = async () => {
       allOrders.push(...moOrders, ...tmoOrders)
     }
 
-    // This sync fully clears and rebuilds db.millingOrders every time
-    // (see below) - unlike authorities, which upserts per-record. An
-    // admin's manual "mark done" (manuallyCompleted, not present in
-    // any Sheet column) would silently revert on the very next sync
-    // unless explicitly carried forward here.
-    const existingManuallyCompletedByOrderId = new Map(
-      (await db.millingOrders.toArray()).map((o) => [o.orderId, o.manuallyCompleted ?? false])
-    )
-
-    const records = allOrders.map((order) => {
-      const orderId = `${order.type}::${order.number}`
-      return {
-        // Keyed by (type + number) - confirmed an MO/TMO number is
-        // always exactly one row, so type+number is a sufficient key.
-        orderId,
-        type: order.type,
-        number: order.number,
-        ricemillName: order.ricemillName || null,
-        recoveryPercent: order.recoveryPercent,
-        batchCurrent: order.batchCurrent ?? null,
-        batchTotal: order.batchTotal ?? null,
-        aiNumber: order.aiNumber ?? null,
-        siaNumber: order.siaNumber ?? null,
-        receivingWarehouse: order.receivingWarehouse ?? null,
-        sheetStatus: order.sheetStatus ?? null,
-        status: 'Active',
-        manuallyCompleted: existingManuallyCompletedByOrderId.get(orderId) ?? false,
-      }
-    })
-
     // Clear and repopulate as a single atomic transaction - Dexie
     // guarantees any reactive observer (useLiveQuery) only ever sees
     // the state immediately before this transaction or the complete
     // state immediately after it, never an intermediate empty table.
+    //
+    // Reading existing manuallyCompleted values MUST happen INSIDE this
+    // same transaction, not before it starts - this sync's own network
+    // fetch above can take several seconds, and an admin's manual
+    // "mark done" (via a separate db.millingOrders.update() call,
+    // itself an independent 'rw' transaction on this table) can land
+    // at any point during that window. Reading the snapshot outside the
+    // transaction let exactly that write slip through, undetected, and
+    // then get silently overwritten the moment this transaction's
+    // clear()+bulkPut() ran with a now-stale snapshot. Doing the read
+    // as the FIRST step inside this transaction instead makes it
+    // atomic against any concurrent write to the table - Dexie
+    // serializes 'rw' transactions on the same table, so the admin's
+    // update either fully lands before this transaction begins (and is
+    // correctly picked up) or is queued to run after it commits (and
+    // lands on top of the freshly-synced data) - never in between.
+    let records = []
     await db.transaction('rw', db.millingOrders, async () => {
+      const existingManuallyCompletedByOrderId = new Map(
+        (await db.millingOrders.toArray()).map((o) => [o.orderId, o.manuallyCompleted ?? false])
+      )
+
+      records = allOrders.map((order) => {
+        const orderId = `${order.type}::${order.number}`
+        return {
+          // Keyed by (type + number) - confirmed an MO/TMO number is
+          // always exactly one row, so type+number is a sufficient key.
+          orderId,
+          type: order.type,
+          number: order.number,
+          ricemillName: order.ricemillName || null,
+          recoveryPercent: order.recoveryPercent,
+          batchCurrent: order.batchCurrent ?? null,
+          batchTotal: order.batchTotal ?? null,
+          aiNumber: order.aiNumber ?? null,
+          siaNumber: order.siaNumber ?? null,
+          receivingWarehouse: order.receivingWarehouse ?? null,
+          sheetStatus: order.sheetStatus ?? null,
+          status: 'Active',
+          manuallyCompleted: existingManuallyCompletedByOrderId.get(orderId) ?? false,
+        }
+      })
+
       await db.millingOrders.clear()
       if (records.length > 0) await db.millingOrders.bulkPut(records)
     })

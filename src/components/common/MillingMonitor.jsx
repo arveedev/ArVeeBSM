@@ -13,7 +13,7 @@ import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
 import { fmtBags, fmtWeight, calculateCurrentAge, AGE_BUCKETS } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
-import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix } from '../../services/googleSheetsBridge.js'
+import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
 import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 
@@ -53,6 +53,16 @@ export function MillingOrderDetail({ order, onClose }) {
   const [visibleSection, setVisibleSection] = useState('tabs') // 'tabs' | 'details'
   const targetSection = showMoreDetails ? 'details' : 'tabs'
   const isSectionLeaving = visibleSection !== targetSection
+  // Render conditions derived from visibleSection (the CURRENTLY active
+  // section, which lags behind targetSection until the transition timer
+  // below fires) - these were referenced in the JSX further down but
+  // never actually defined, a latent bug from the original sequencing
+  // refactor that crashed only when a completed order (with By
+  // Products/Source Warehouse/Last Activity content) was opened, since
+  // that's the only case where the "Show more details" button - and
+  // thus this code path - exists at all.
+  const shouldRenderMoreDetails = visibleSection === 'details'
+  const shouldRenderTabContent = visibleSection === 'tabs'
   useEffect(() => {
     if (!isSectionLeaving) return
     const timer = setTimeout(() => setVisibleSection(targetSection), MORE_DETAILS_TRANSITION_MS)
@@ -552,6 +562,12 @@ function MillingMonitor({ isAdmin = false }) {
     setCompletingId(order.orderId)
     setTimeout(() => {
       db.millingOrders.update(order.orderId, { manuallyCompleted: true })
+      // Best-effort, fire-and-forget - same pattern already used
+      // elsewhere for natural completion (StockFormBase/SackFormBase).
+      // The local flag is the source of truth either way; this just
+      // keeps the Sheet's own STATUS column in sync for anyone viewing
+      // it directly.
+      markMillingOrderDone(order.type, order.number)
     }, ROW_EXIT_MS)
   }
 

@@ -28,5 +28,9 @@
 //            another 1.7 sub-letter
 //   1.8-1  - Fixed the pending Authority Number picker's scope (was offering
 //            completed-only numbers) + added search to the Completed AI/SIA modal
-//            (current) - a follow-up round within the same 1.8 era, not a new MINOR
-export const APP_VERSION = '1.8-1'
+//   1.8-2  - Fixed a real Dexie transaction race that silently reverted admin
+//            MO/TMO mark-done on the next sync; fixed a genuine crash opening a
+//            completed MO/TMO's detail view; added Sheet STATUS write-back for
+//            admin mark-done/undone (current) - all follow-up rounds within the
+//            same 1.8 era, not a new MINOR
+export const APP_VERSION = '1.8-2'
