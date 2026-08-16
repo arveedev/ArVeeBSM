@@ -14422,3 +14422,73 @@ visible "actual."
 "Date From" stays August 1, 2026 - unaffected by this fix, still governs
 future imports only (inclusive lower bound, `aiDate < dateFrom` is
 skipped).
+
+## Session: 2026-08-16 (round 9) - admin-only manual complete/uncomplete for Authorities AND Milling Orders on the admin Monitoring page
+
+User wants the admin to be able to manually mark AI/SIA authorities and
+MO/TMO milling orders done/undone directly from the admin Monitoring
+page, with the same glow+flatten animations already built for the
+regular user-side Authority Monitor - so the admin doesn't have to log
+into a specific user's account just to mark something on their behalf.
+Explicitly admin-only, never Visitor (both roles reach this same page).
+Planned first (2 Explore passes to map the exact existing pattern and
+confirm milling orders had NO manual-override mechanism at all today),
+then implemented in full.
+
+**Part A - Authorities** (small, the mechanism already existed):
+- `src/pages/AdminMonitoring.jsx` - added `useAuth`, `isAdmin = user?.role
+  === 'Admin'`, and copied `AuthorityMonitor.jsx`'s exact
+  `completingId`/clearing-effect/`toggleManualComplete` pattern into its
+  own (separately hand-rolled, not a shared component) pending-row
+  rendering - checkbox only renders when `isAdmin`.
+- `CompletedAuthorityModal.jsx` gained a `canManuallyToggle = true` prop
+  (default preserves the existing regular-user Home-page call site
+  exactly as before), combined with the existing `canUncomplete =
+  !isAuthorityNaturallyComplete(a)` check. `AdminMonitoring.jsx` passes
+  `canManuallyToggle={isAdmin}` - Visitor sees the completed list
+  read-only, same as before.
+
+**Part B - MO/TMO** (larger - no manual-override concept existed at all;
+completion was 100% derived from real batch/trial/kg data or the
+Sheet's own `sheetStatus`):
+- New `db.version(29)`: `millingOrders` gains `manuallyCompleted`
+  (indexed, matching `authorities.manuallyCompleted`'s pattern).
+- Critical gotcha caught during planning: unlike authorities (upserted
+  per-record on sync), `syncMillingOrdersFromSheets` in
+  `googleSheetsBridge.js` fully `clear()`s and `bulkPut()`s the whole
+  table every sync - a manual flag would silently revert on the very
+  next sync unless explicitly carried forward. Fixed by reading every
+  existing `manuallyCompleted` value into a Map keyed by `orderId`
+  before the clear, then merging it back into the freshly-built
+  records.
+- `MillingMonitor.jsx`: `isOrderCompleted` (the shared pending/completed
+  split) and `MillingOrderRow`'s own inline `isCompleted` both gained an
+  `o.manuallyCompleted ||` prefix. `MillingOrderRow` (shared between the
+  inline pending list and `CompletedMillingModal`) gained
+  `isAdmin`/`isAnimating`/`onToggleComplete` props and the same
+  checkbox markup as the Authority pattern - the actual
+  `completingId` state lives in `MillingMonitor` itself (own component,
+  gained a new `isAdmin` prop defaulting `false` so the regular
+  user-side `Home.jsx` milling widget is completely unaffected - it
+  never passes this prop).
+- `CompletedMillingModal.jsx` gained the full uncomplete flow from
+  scratch (`revertingId`, `requestUncomplete`/`confirmUncomplete`,
+  `ConfirmDialog`), with `canUncomplete = isAdmin && !(o.fulfilled ||
+  o.sheetStatus === 'DONE')` - the milling equivalent of
+  `isAuthorityNaturallyComplete`, so a genuinely, naturally-complete
+  order (or one the Sheet itself marked DONE) can never be
+  "uncompleted," only ones completed purely by the manual flag.
+- `AdminMonitoring.jsx` passes `isAdmin` down into `<MillingMonitor>`.
+
+Deliberately no Sheet write-back for either Authorities or Milling -
+`manuallyCompleted` stays a purely local override in both cases,
+matching the pattern that already existed for authorities.
+
+### Files touched
+`src/pages/AdminMonitoring.jsx`,
+`src/components/common/CompletedAuthorityModal.jsx`,
+`src/db/dexie.js` (v29), `src/services/googleSheetsBridge.js`,
+`src/components/common/MillingMonitor.jsx`,
+`src/components/common/CompletedMillingModal.jsx`.
+
+`npm run build` passes.

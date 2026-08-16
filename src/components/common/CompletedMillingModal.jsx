@@ -6,15 +6,17 @@
 // place. Reuses MillingOrderRow (exported from MillingMonitor.jsx) so
 // the two lists never visually drift from each other.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { X, AlertTriangle } from 'lucide-react'
+import { db } from '../../db/dexie.js'
 import { MillingOrderRow } from './MillingMonitor.jsx'
+import ConfirmDialog from './ConfirmDialog.jsx'
 
 // Must match the transition duration below.
 const CLOSE_ANIMATION_MS = 300
 
-function CompletedMillingModal({ orders, type, onSelectOrder, onClose }) {
+function CompletedMillingModal({ orders, type, onSelectOrder, onClose, isAdmin = false }) {
   // Delays the actual onClose call until the exit animation has time
   // to play, same rule as CompletedAuthorityModal.jsx - every entrance
   // needs a matching exit rather than an instant, jarring unmount.
@@ -22,6 +24,42 @@ function CompletedMillingModal({ orders, type, onSelectOrder, onClose }) {
   const handleClose = () => {
     setIsClosing(true)
     setTimeout(onClose, CLOSE_ANIMATION_MS)
+  }
+
+  // Order currently awaiting confirmation to be sent back to pending,
+  // or null when no confirmation is showing.
+  const [pendingUncomplete, setPendingUncomplete] = useState(null)
+  // orderId currently playing its "sent back to pending" glow+collapse
+  // exit animation - mirrors CompletedAuthorityModal.jsx's exact
+  // pattern (delayed DB write, red glow instead of green).
+  const [revertingId, setRevertingId] = useState(null)
+  // Must match .animate-row-revert-out's duration in index.css.
+  const ROW_EXIT_MS = 700
+
+  useEffect(() => {
+    if (!revertingId) return
+    const stillHere = orders.some((o) => o.orderId === revertingId)
+    if (!stillHere) setRevertingId(null)
+  }, [orders, revertingId])
+
+  // Only ever offered for orders completed by the MANUAL checkbox - one
+  // genuinely fulfilled via real batch/trial data (o.fulfilled) or
+  // marked DONE directly on the Sheet isn't "done by mistake" in any
+  // sense a toggle could undo.
+  const canUncomplete = (o) => isAdmin && !(o.fulfilled || o.sheetStatus === 'DONE')
+
+  const requestUncomplete = (order, e) => {
+    e.stopPropagation()
+    setPendingUncomplete(order)
+  }
+  const confirmUncomplete = () => {
+    if (!pendingUncomplete) return
+    const orderId = pendingUncomplete.orderId
+    setPendingUncomplete(null)
+    setRevertingId(orderId)
+    setTimeout(() => {
+      db.millingOrders.update(orderId, { manuallyCompleted: false })
+    }, ROW_EXIT_MS)
   }
 
   const label = type === 'MO' ? 'Milling' : 'Test Milling'
@@ -64,11 +102,28 @@ function CompletedMillingModal({ orders, type, onSelectOrder, onClose }) {
         ) : (
           <ul className="space-y-1.5">
             {orders.map((o) => (
-              <MillingOrderRow key={o.orderId} order={o} onSelect={onSelectOrder} />
+              <MillingOrderRow
+                key={o.orderId}
+                order={o}
+                onSelect={onSelectOrder}
+                isAdmin={canUncomplete(o)}
+                isAnimating={revertingId === o.orderId}
+                onToggleComplete={requestUncomplete}
+              />
             ))}
           </ul>
         )}
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingUncomplete)}
+        title="Mark this order as pending again?"
+        description={pendingUncomplete ? `${pendingUncomplete.number} will move back to the Pending list.` : undefined}
+        confirmLabel="Mark as Pending"
+        icon={AlertTriangle}
+        onConfirm={confirmUncomplete}
+        onCancel={() => setPendingUncomplete(null)}
+      />
     </div>,
     document.body
   )
