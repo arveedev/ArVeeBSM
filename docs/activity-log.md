@@ -14856,3 +14856,45 @@ round 17 fade classes for this specific case.
 `src/pages/Piles.jsx`, `src/index.css`.
 
 `npm run build` passes.
+
+## Session: 2026-08-16 (round 19) - four real mobile-only full-screen bugs from round 18's animation gate
+
+User tested round 18's rotate+zoom animation on an actual phone and
+found several regressions that hadn't shown up on desktop testing:
+
+1. **Add Pile / Cancel controls permanently invisible in full-screen.**
+   Root cause: round 18's `scaleReady` gate kept ALL full-screen content
+   (not just the grid) at `opacity-0` until the auto-fit scale had been
+   measured at least once. On some phones that measurement apparently
+   never resolved in time (or at all), so the gate never lifted and the
+   controls stayed invisible indefinitely - a real regression from
+   trying to prevent a scale-snap glitch by hiding everything, when the
+   actual fix only needed to concern the grid's own size. Removed the
+   gate entirely; the entrance animation now plays immediately on
+   mount. A one-frame scale correction hidden inside a 320ms scale-up
+   animation is imperceptible - a permanently invisible button is not.
+2. **Grid not filling 100% of the full screen (~90%).** The inner
+   animation wrapper added in round 18 (`flex flex-1 flex-col`) was
+   missing `min-h-0` - without it, a nested flex column defaults to
+   `min-height: auto`, refusing to shrink below its content's natural
+   height and pushing part of the grid below the visible screen.
+3. **App header flashing through in the background right after
+   dismissing the delete ConfirmDialog.** `FullScreenOverlay`'s portal
+   and `AppHeader.jsx`'s sticky bar were BOTH `z-50` - a tie that
+   normally resolved correctly via DOM order, but broke for a frame
+   right when a same-z-index sibling portal (ConfirmDialog, `z-60`,
+   which has no exit transition and unmounts instantly on Cancel) was
+   removed from the DOM. Bumped `FullScreenOverlay` to `z-[55]`,
+   clearly above the header, removing the ambiguity.
+4. **Exit animation rotating further instead of reversing.** The
+   `fullscreen-zoom-out` keyframe ended at `rotate(8deg)` - continuing
+   to spin past 0deg in the same direction as entrance, instead of
+   rewinding back through entrance's own `rotate(-8deg)` starting
+   point. Fixed to mirror entrance exactly.
+
+### Files touched
+`src/pages/Piles.jsx`, `src/index.css`.
+
+`npm run build` passes. Verified on desktop preview only (no console
+errors); the actual mobile-only symptoms need re-testing on a real
+phone since they couldn't be reproduced in this session's browser.

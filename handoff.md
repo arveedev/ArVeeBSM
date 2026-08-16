@@ -547,7 +547,23 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 18) - full-screen pile layout rotate+zoom entrance/exit - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-16 session, round 19) - four real mobile-only full-screen bugs from round 18 - NOT YET COMMITTED/PUSHED, NEEDS MOBILE RE-TEST
+
+Round 18's animation gate (`scaleReady`, hiding all full-screen content
+until the grid's fit-to-screen scale was measured) caused Add Pile/
+Cancel controls to go permanently invisible on some phones - removed
+entirely, entrance animation now plays immediately on mount instead.
+Also fixed: grid not filling 100% of the screen (missing `min-h-0` on
+the round 18 inner animation wrapper), the app header flashing through
+right after dismissing the delete ConfirmDialog (a z-index tie between
+`FullScreenOverlay` and `AppHeader`, both `z-50` - bumped the overlay
+to `z-[55]`), and the exit animation spinning further instead of
+reversing the entrance (fixed the `fullscreen-zoom-out` keyframe to
+mirror entrance exactly, `-8deg` both ways instead of `-8deg` in /
+`+8deg` out). Could not verify on an actual phone this session - user
+needs to re-test on mobile.
+
+### OPEN (2026-08-16 session, round 18) - full-screen pile layout rotate+zoom entrance/exit - PUSHED
 
 Replaced round 17's plain fade with a rotate+zoom entrance/exit, per
 user feedback that the fade looked like a glitch. Found and fixed the

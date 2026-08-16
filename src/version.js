@@ -56,5 +56,12 @@
 //   1.8-8  - Full-screen pile layout's fade replaced with a rotate+zoom
 //            entrance/exit, gated on the auto-fit scale actually being
 //            measured first so it no longer visibly snaps mid-animation
-//            (current)
-export const APP_VERSION = '1.8-8'
+//   1.8-9  - Fixed four real mobile-only full-screen pile layout bugs:
+//            Add Pile/Cancel controls going permanently invisible (the
+//            round 1.8-8 measurement gate never resolving in time on
+//            some phones), the grid not filling 100% of the screen (a
+//            missing min-h-0 on a nested flex column), the app header
+//            flashing through on ConfirmDialog close (a z-index tie
+//            with AppHeader), and the exit animation spinning further
+//            instead of reversing the entrance (current)
+export const APP_VERSION = '1.8-9'
