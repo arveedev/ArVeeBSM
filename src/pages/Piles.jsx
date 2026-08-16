@@ -114,12 +114,36 @@ const effectiveRowSpan = (box, fieldCount) => {
 // sidesteps that math entirely, the same way the pile grid's own boxes
 // are already correctly oriented for free, just by being real
 // descendants of this rotated container.
+// Stays mounted for one extra tick after isFullScreen flips false so the
+// exit fade actually gets to play - otherwise the portal would vanish
+// instantly on the same render that starts the animation, and no
+// animation happens without a screen present to animate on.
+const FULLSCREEN_EXIT_MS = 180
 const FullScreenOverlay = forwardRef(function FullScreenOverlay({ isFullScreen, isPortrait, children }, overlayRef) {
-  if (!isFullScreen) return children
+  const [shouldRender, setShouldRender] = useState(isFullScreen)
+  const [isClosing, setIsClosing] = useState(false)
+
+  useEffect(() => {
+    if (isFullScreen) {
+      setShouldRender(true)
+      setIsClosing(false)
+      return
+    }
+    if (!shouldRender) return
+    setIsClosing(true)
+    const t = setTimeout(() => {
+      setShouldRender(false)
+      setIsClosing(false)
+    }, FULLSCREEN_EXIT_MS)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullScreen])
+
+  if (!shouldRender) return children
   return createPortal(
     <div
       ref={overlayRef}
-      className="fixed z-50 flex flex-col bg-neutral-950 p-3"
+      className={`fixed z-50 flex flex-col bg-neutral-950 p-3 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
       style={
         isPortrait
           ? {
@@ -310,6 +334,31 @@ function Piles() {
     if (eligible.length === 0) return
     ;(async () => {
       for (const box of eligible) await vacateBoxForPile(box.pileId, today)
+    })()
+  }, [currentWarehouseId, boxes, piles])
+
+  // One-time self-heal: boxes assigned before assignedDate was corrected
+  // to use the pile's own dateOfReceipt (see handleConfirmAssign) got
+  // stamped with the UI-click date instead, which hid them from any
+  // historical view predating that click even though their pile's real
+  // "as of" date was earlier. Whenever a box's assignedDate is later
+  // than its current occupant's dateOfReceipt, back-date it to match -
+  // safe to run every time this page loads since it's a no-op once
+  // corrected.
+  useEffect(() => {
+    if (!currentWarehouseId || boxes.length === 0 || piles.length === 0) return
+    const pileById = new Map(piles.map((p) => [p.pileId, p]))
+    const stale = boxes.filter((b) => {
+      if (!b.pileId || !b.assignedDate) return false
+      const p = pileById.get(b.pileId)
+      return p?.dateOfReceipt && p.dateOfReceipt < b.assignedDate
+    })
+    if (stale.length === 0) return
+    ;(async () => {
+      for (const box of stale) {
+        const p = pileById.get(box.pileId)
+        await db.pileLayoutBoxes.update(box.id, { assignedDate: p.dateOfReceipt })
+      }
     })()
   }, [currentWarehouseId, boxes, piles])
 
@@ -577,9 +626,15 @@ function Piles() {
     // Stamp when this box's CURRENT occupant/geometry stint began -
     // only when pileId is genuinely changing (fresh assignment or
     // reassignment), not on every metadata edit of an unchanged pile.
+    // Uses the PILE's own start date (dateOfReceipt - either its
+    // beginning-balance "as of" date or its first receipt date), not
+    // the date the admin happened to click assign in the layout UI -
+    // otherwise a pile backdated to e.g. July 31 would only appear in
+    // the layout from today onward instead of from its real as-of date.
     const previousBox = editingBoxId ? boxes.find((b) => b.id === editingBoxId) : null
     if (pileId && pileId !== previousBox?.pileId) {
-      payload.assignedDate = todayLocalISO()
+      const assignedPile = piles.find((p) => p.pileId === pileId)
+      payload.assignedDate = assignedPile?.dateOfReceipt || todayLocalISO()
     }
 
     try {

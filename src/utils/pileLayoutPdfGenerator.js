@@ -211,13 +211,17 @@ export const generatePileLayoutReport = ({
     const x = rawX + boxGap / 2
     const boxY = rawY + boxGap / 2
 
+    // Matches the on-screen box colors exactly (Piles.jsx's PALAY_COLOR/
+    // RICE_COLOR/BYPRODUCT_COLOR) - previously used different, only
+    // vaguely similar hardcoded values, so the exported PDF didn't
+    // actually match what the user sees in the app.
     const fillColor = isVacant
       ? [255, 255, 255]
       : box.variety?.category === 'Palay'
-        ? [184, 255, 229]   // light tint of brand-neon (#00FFA3)
+        ? [173, 235, 179]   // #ADEBB3
         : box.variety?.category === 'By Products'
-          ? [251, 235, 204]  // light tint of brand-byproduct (#F2B949)
-          : [211, 230, 254]  // light tint of Rice blue (#60A5FA)
+          ? [251, 235, 204]  // #FBEBCC
+          : [184, 227, 233]  // #B8E3E9
 
     doc.setFillColor(...fillColor)
     doc.rect(x, boxY, w, h, 'F')

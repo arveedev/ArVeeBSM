@@ -46,5 +46,11 @@
 //            check / amber warning) on both the New Pile dialog and the
 //            Settings Create/Edit Pile panel, scoped per-warehouse, with
 //            a fresh re-check right before save in case the inline
-//            warning was ignored (current)
-export const APP_VERSION = '1.8-6'
+//            warning was ignored
+//   1.8-7  - Pile layout box "assigned since" now uses the pile's own
+//            dateOfReceipt/as-of date instead of the date it was
+//            clicked in the UI, so historical layout views correctly
+//            show a backdated beginning balance; PDF export box colors
+//            now match the on-screen colors exactly; full-screen pile
+//            layout now fades in/out instead of snapping (current)
+export const APP_VERSION = '1.8-7'
