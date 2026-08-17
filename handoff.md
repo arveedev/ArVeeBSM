@@ -608,6 +608,27 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**Multi-pile -A sibling records no longer shown/tappable as their own
+entries in Reports - fixed, not yet confirmed by user.** Follow-up to
+the reload fix below - user saw a `-A` serial as its own separately-
+tappable row in Reports, showing just that one pile. Root cause:
+`Reports.jsx`'s on-screen statement list never grouped multi-pile
+siblings at all, unlike `pdfGenerator.js`, which already correctly
+combines them into one row for the exported PDF via `groupSerialNo` -
+the on-screen list and the PDF had been showing genuinely different
+pictures of the same issuance. Fixed by adding `combineMultiPileGroups`
+to `Reports.jsx`, mirroring `pdfGenerator.js`'s own grouping exactly
+(group by `groupSerialNo ?? id`, primary = the record whose own
+serialNo equals the groupSerialNo, sum bags/kilos across the group).
+Tapping the combined row opens the primary serial, which now correctly
+reconstructs the full multi-pile picture (previous round's fix).
+`DailySummaryCard.jsx` (Summary tab) is purely aggregate totals, no
+itemized rows - unaffected either way. NOT changed: a `-A` serial typed
+directly into the Serial No. field would still be found/loaded on its
+own (the stepper can't land there by itself; blocking exact manual
+lookup could hinder legitimate admin troubleshooting) - flagged as a
+much rarer edge case, not fixed unless the user says it matters too.
+
 **Real bug fixed: multi-pile WSI issuances never reloaded their other
 piles - fixed, not yet confirmed by user.** User-reported: tapping an
 existing multi-pile transaction from Reports, or stepping back to its
