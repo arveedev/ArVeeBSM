@@ -15523,3 +15523,32 @@ needs-confirmation order, unrelated to list membership.
 `src/components/common/CompletedMillingModal.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #6 merged; continued) - Pile ID dropdown drops the misleading variety-name parenthetical for By Products piles
+
+Per explicit request: on the Pile ID picker, a By Products pile's
+option showed `PileName (VarietyName)` same as Rice/Palay piles - but
+a By Products pile genuinely accepts any mix of By Products varieties
+over its lifetime (per NewPileDialog.jsx's own existing design), so
+showing one specific variety name in parentheses wrongly implied it
+was locked to that variety, same category of misleading label as the
+Trial/Moisture-Content By-Products exceptions fixed earlier this
+session.
+
+Fixed in both places a Pile ID/Pile select renders this label:
+`StockFormBase.jsx` (WSR/WSI, tab-scoped via activeCategory) and
+`WTSForm.jsx`'s `SidePanel` (issued/received sides - no category tabs
+there, all piles listed together regardless of category, but the same
+per-row `p.cerealType === 'By Products'` check applies just as well).
+Both now render the bare pile name with no parenthetical when
+`p.cerealType === 'By Products'`, and keep the existing `(variety
+name)` parenthetical unchanged for Rice/Palay piles, which genuinely
+are locked to a single variety. `SackFormBase.jsx` has no Pile ID
+picker at all (sacks are keyed by sack type/condition, not a pile) -
+nothing to change there.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`,
+`src/components/forms/WTSForm.jsx`.
+
+`npm run build` passes.
