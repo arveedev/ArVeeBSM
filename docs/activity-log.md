@@ -16050,3 +16050,72 @@ unaffected since bags/kilos didn't change).
 `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes. Not yet verified against the user's real data.
+
+## Session: 2026-08-17 (round 27, PR #19 merged; continued) - Void/Unvoid multi-pile support (Option A), full field parity for extra piles, and a plain-language over-limit message
+
+Per explicit request: Option A for the void/unvoid gap flagged last
+round (each extra pile becomes its own Cancelled record when voiding,
+mirroring the primary, rather than being deleted or left Active) -
+plus three more things found while actually using the additional-pile
+UI: missing MC/MTS/Gross Kilos/auto-compute/Net Kilos fields on each
+extra pile, an unclear hard-limit error message, and no labels on the
+extra-pile inputs at all.
+
+**Void/Unvoid (Option A).** `handleConfirmVoid`'s reversal step now
+uses the existing `reverseGroupEffect` (primary + every original
+extra) instead of only ever reversing the primary. After the primary
+becomes its own Cancelled record, loops `originalExtraAllocations` and
+converts each one to ITS OWN Cancelled record too (same
+`buildCancelledPayload()`, with its own real `serialNo` substituted
+in) - a no-op when voiding a brand-new entry that was never loaded, so
+`originalExtraAllocations` is empty. `handleConfirmUnvoid` deletes
+every extra's Cancelled record right alongside the primary's (each
+gets its own `queueTransactionDeletion` too), same reasoning as
+Delete's own "the whole group is one real-world event" rule from two
+rounds ago.
+
+**Full field parity for extra piles.** Previously an extra pile
+allocation line was just `{ pileId, bags, kilos }` - `kilos` was typed
+directly as the final net figure, with MC/MTS/autoComputeNet never
+even asked for, silently staying `null` on every extra's own saved
+record (inherited from the PRIMARY's values only via the `...transaction`
+spread, not something the user could see or independently set).
+`emptyExtraAllocation()` now matches a real transaction's actual field
+set: `pileId, bags, grossKilos, autoComputeNet, manualKilos,
+moistureContent, sackSelection`. New shared `computeAllocFields(alloc)`
+- same MTS-tare-deduction math the primary's own fields already use
+(`calculateMtsFromSackWeight`/`calculateNetKilos`), applied per line -
+used by both `performSave` (new allocations) and `handleUpdate`
+(reconciling existing ones), so the two can never compute a saved
+record's fields differently. `loadTransactionIntoForm`'s sibling
+reconstruction populates all the new fields the same way the primary's
+own load path already does.
+
+New `extraAllocInfos` derived array - the per-line equivalent of the
+primary's own `availableKilos`/`overKilos`/`avgWeightPerBag`
+calculations, each scoped to THAT line's own selected pile (not the
+primary's), with the same "already deducted by this line's own prior
+save" adjustment for editing an existing allocation. `canSave` now
+requires each line that has a pile picked to also have its other
+required fields filled in and not be over that pile's own limit -
+previously an extra pile's stock had ZERO validation against real
+availability at all, a real, separate gap only found while building
+this (a user could enter more kilos than a pile actually had and it
+would save with no warning whatsoever).
+
+**Plain-language over-limit message**, applied to both the primary
+pile's own Net Kilos field and every extra pile's: "Cannot exceed
+available Net Kilos (X) — this is a hard limit." -> "{PileName} only
+has {X} - add another pile to complete the transaction," per explicit
+wording request.
+
+**Full JSX rewrite of the additional-pile card** - every field now has
+its own label (Pile, MC %, MTS, Number of Bags, Gross Kilos, Net
+Kilos), matching the primary's own layout, plus an "Available on
+{pile}" hint row and the Auto-compute toggle, so nothing is an
+unlabeled box anymore.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes. Not yet verified against the user's real data.

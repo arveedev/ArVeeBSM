@@ -608,6 +608,43 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**Void/Unvoid multi-pile support (Option A), full field parity for
+extra piles, plain-language over-limit message - fixed, not yet
+confirmed by user.** Per explicit request: Option A for the flagged
+void/unvoid gap (each extra pile becomes its own Cancelled record when
+voiding, mirroring the primary - `handleConfirmVoid` now uses
+`reverseGroupEffect` then loops `originalExtraAllocations` converting
+each to its own Cancelled record; `handleConfirmUnvoid` deletes every
+extra's Cancelled record alongside the primary's). Plus three more
+gaps found while actually using the additional-pile UI:
+1. **Missing fields** - an extra pile allocation was just `{ pileId,
+   bags, kilos }`, with MC/MTS/autoComputeNet never asked for at all
+   (silently `null` on every extra's saved record, only ever
+   inheriting the PRIMARY's values via a spread the user never saw).
+   `emptyExtraAllocation()` now matches a real transaction's actual
+   field set. New shared `computeAllocFields(alloc)` - same MTS-tare
+   math the primary's fields already use - used by both `performSave`
+   and `handleUpdate` so they can't compute a saved record's fields
+   differently. `loadTransactionIntoForm`'s sibling reconstruction
+   populates all the new fields.
+2. **No stock validation on extras at all** - new `extraAllocInfos`
+   derived array (per-line `availableKilos`/`overKilos`/
+   `avgWeightPerBag`, scoped to THAT line's own pile) - `canSave` now
+   requires each started line to be genuinely complete and not exceed
+   its own pile's stock, previously a real, separate gap (an extra
+   pile's kilos had zero validation against real availability - could
+   silently save over-limit with no warning).
+3. **No labels** - full JSX rewrite of the additional-pile card, every
+   field now labeled (Pile, MC %, MTS, Number of Bags, Gross Kilos,
+   Net Kilos) matching the primary's own layout, plus an "Available on
+   {pile}" hint and the Auto-compute toggle.
+
+Also reworded the hard-limit message (both the primary pile's Net
+Kilos field and every extra pile's) from "Cannot exceed available Net
+Kilos (X) — this is a hard limit" to "{PileName} only has {X} - add
+another pile to complete the transaction," per explicit wording
+request.
+
 **SELF-CAUGHT BUG: the multi-pile reload fix from two rounds ago never
 actually worked - fixed, not yet confirmed by user.** User tested and
 found the multi-pile view now missing entirely on the base serial -
