@@ -563,7 +563,7 @@ backoff. None of these needed a code change from this session - the
 user verified them directly. Round 27 below (MO/TMO sort + missing
 numbers) is the only genuinely open item as of this pass.
 
-### OPEN (2026-08-17 session, round 27) - MO/TMO pending list sort fixed; MO/TMO numbers missing from the app despite re-sync - STILL BEING INVESTIGATED
+### OPEN (2026-08-17 session, round 27) - MO/TMO pending list sort fixed; MO/TMO numbers wrongly hidden from Monitor - FIXED AND PUSHED; a second, different picker still needs a user check
 
 User reported two MO/TMO monitor problems: not sorted by MO/TMO number,
 and specific MO/TMO numbers that exist on the live Sheet never show up
@@ -577,26 +577,37 @@ number. Now sorted via `order.number.localeCompare(..., { numeric:
 true })` (Completed's own separate newest-activity-first sort from
 round 14 is correct as designed, untouched).
 
-**Missing numbers - not yet resolved, waiting on the user.** Traced the
-full fetch/sync chain, found no client-side filter that would exclude
-a brand-new order. Two candidate root causes from reading the code,
-neither confirmed against real sheet data:
-1. `apps-script-full-replacement.js`'s `fetchMillingOrders` drops any
-   row with a blank Column A. If the Sheet merges the MO/TMO number
-   cell across multiple rows (plausible - the code's own existing
-   comment notes one MO can span several ricemill rows, each with its
-   own batch/recovery columns), `getValues()` returns blank for every
-   row below the merge's first, silently dropping them.
-2. Orders are keyed `` `${type}::${number}` `` - if the same number
-   legitimately appears on more than one row (same multi-ricemill
-   case), `bulkPut()` overwrites earlier rows sharing that key, so
-   only the last one synced survives.
-Next step: get one concrete missing MO/TMO number from the user, check
-whether that Sheet row's number column is blank/merged, and check
-whether the number appears in the browser console's
-`[syncMillingOrdersFromSheets] synced N record(s):` log after Sync Now
-- needed to tell which candidate (or neither) is the real cause before
-writing any fix.
+**Missing numbers - root cause found and fixed.** User confirmed the
+missing number DID appear in the sync console log (ruling out both
+candidates originally logged here - no merged cells either, user
+confirmed every Sheet row is the same consistent format) - meaning it
+reached `db.millingOrders` fine and something client-side was hiding
+it. Found it: `passesSharedFilters` (gates BOTH the pending and
+Completed arrays) excluded any order whose local transaction history
+existed but was entirely dated before the earliest configured Sheet
+Source's Date From - so a real, still-relevant order could vanish from
+the Monitor completely, not just from some total. Same class of bug as
+round 8's authority-cutoff work, but that one got it right (excludes
+pre-cutoff data from the unwithdrawn/potential MATH only, never hides
+the record from AuthorityMonitor's own lists) and this one didn't -
+user called this out directly ("the pending list and completed is
+there for a reason, why does the app hide data that is supposed to be
+on that list?"), correctly. Fixed by deleting the
+`earliestSourceDateFrom` computation and its check entirely (confirmed
+via grep it had no other use - `passesSharedFilters` now only applies
+the Regional Authority Number dropdown filter).
+
+**Separate, NOT YET addressed:** user also asked why the by-products
+TMO wasn't available for entering its own receipt - that's a different
+picker, in `StockFormBase.jsx`/`SackFormBase.jsx`'s own
+`millingOrderOptions`, hard-filtered to only the currently-typed
+Customer Name's own ricemill (exact `ricemillName` match, no fallback
+message on zero matches) - a deliberate earlier design choice ("a
+selection for one miller should never show every other miller's
+MOs/TMOs"), not an oversight like the Monitor bug. Waiting on the user
+to confirm whether their typed Customer Name actually matches the
+Sheet's ricemill name for that TMO before deciding whether/how to
+change this one.
 
 ### OPEN (2026-08-17 session, round 26) - sack-weight separation bug + phantom deleted-pile beginning balance bug - PUSHED, user has since confirmed this is fixed
 

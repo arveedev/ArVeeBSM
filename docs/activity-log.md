@@ -15237,3 +15237,58 @@ out both) before touching any code for this half of the report.
 missing-numbers issue has no code change yet, investigation only).
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, continued) - root cause found and fixed: the MO/TMO pre-cutoff exclusion was hiding real orders from BOTH the pending and Completed lists
+
+User pushed back hard on round 27's open investigation, correctly: the
+missing MO/TMO's own sync console log confirmed the record WAS
+successfully synced into `db.millingOrders` - ruling out both
+candidate causes logged above (merged-cell blank rows, orderId
+collisions). That meant the record existed locally but was being
+hidden by something client-side, and user's sheet rows are all one
+consistent format anyway (no merged cells), which independently ruled
+out candidate 1.
+
+Root cause: `MillingMonitor.jsx`'s `passesSharedFilters` (shared by
+both the pending-list `filtered` and `completedFiltered` arrays)
+excluded any order whose local transaction history existed but was
+*entirely* dated before the earliest configured Sheet Source's Date
+From (the user's is 2026-08-01). Since this filter gates BOTH lists,
+an order failing it disappeared from the Monitor entirely - not hidden
+from some separate total, genuinely gone from view, with no way to
+even select it to record a new transaction against it from that page.
+User's exact framing: "the pending list and completed is there for a
+reason, why does the app hide data that is supposed to be on that
+list?" - correct, and inconsistent with how the equivalent cutoff
+already works for AI/SIA Authorities elsewhere in this app: round 8's
+`activeAiAuthoritiesFor` deliberately excludes pre-cutoff authorities
+from the unwithdrawn/potential MATH only, explicitly preserving their
+visibility in AuthorityMonitor's own pending/completed lists. The
+MO/TMO version never had that same distinction - its only purpose was
+list-visibility filtering, so removing it has no other side effect.
+
+Fixed by deleting the `earliestSourceDateFrom` computation and its
+check inside `passesSharedFilters` entirely (confirmed via grep it had
+no other use in the file - `sheetSources` itself, only fetched to
+compute this value, was removed too). `passesSharedFilters` now only
+applies the Regional Authority Number dropdown filter.
+
+Flagged, not yet resolved: user also asked why the by-products TMO
+wasn't available for entering its own receipt - that's a *different*
+picker, in `StockFormBase.jsx`/`SackFormBase.jsx`'s own
+`millingOrderOptions`, which deliberately hard-filters to only the
+currently-typed Customer Name's own ricemill (`ricemillName` exact
+match, case-insensitive/trimmed) with no fallback message when it
+matches nothing - a real design decision from an earlier session ("a
+selection for one miller should never show every other miller's MOs"),
+not an oversight like the Monitor bug was. Not touched this round -
+asked the user to confirm whether the Customer Name field they typed
+actually matches the Sheet's ricemill name for that TMO before
+deciding whether/how to change it.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx`.
+
+`npm run build` passes. Not yet verified against the user's real data
+- waiting on them to re-check Monitoring for the previously-missing
+TMO.
