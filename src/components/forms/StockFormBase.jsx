@@ -1196,9 +1196,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setManualNetKilos(tx.autoComputeNet ? '' : liveFormatNumber(String(tx.netKilos ?? ''), 3))
     setAgeValue(tx.ageValue != null ? liveFormatNumber(String(tx.ageValue)) : '')
     setAgeUnit(tx.ageUnit ?? 'Days')
-    if (tx.ageUnit === 'Months + Days' && tx.initialAgeValue != null) {
-      setMonthsValue(liveFormatNumber(String(Math.floor(tx.initialAgeValue / 30))))
-      setDaysValue(liveFormatNumber(String(tx.initialAgeValue % 30)))
+    if (tx.ageUnit === 'Months + Days') {
+      // ageValue holds the same total-days figure as initialAgeValue for
+      // this unit (see buildTransactionPayload) - falls back to it when
+      // initialAgeValue itself is missing (older records saved before
+      // that field existed), and always sets both fields on every load
+      // (no bare `if` that silently leaves a PREVIOUSLY loaded record's
+      // months/days sitting stale when this one has nothing to show).
+      const totalDays = tx.initialAgeValue ?? tx.ageValue ?? 0
+      setMonthsValue(liveFormatNumber(String(Math.floor(totalDays / 30))))
+      setDaysValue(liveFormatNumber(String(totalDays % 30)))
+    } else {
+      setMonthsValue('0')
+      setDaysValue('0')
     }
     setCondition(tx.condition ?? '')
     setMoistureContent(tx.moistureContent != null ? liveFormatNumber(String(tx.moistureContent)) : '')
@@ -2534,7 +2544,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Stacked, not side-by-side like the primary pile's own
+                      matching fields further down - this card sits nested
+                      inside a narrower bordered container, and the MTS
+                      label is long enough to wrap to two lines there,
+                      which pushed its select down out of alignment with
+                      the MC input next to it on small screens. */}
+                  <div className="space-y-2">
                     <div>
                       <label className={labelClass}>MC % (Moisture Content)</label>
                       <input
