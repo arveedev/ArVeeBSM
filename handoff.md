@@ -547,7 +547,69 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-17 session, round 26) - sack-weight separation bug + phantom deleted-pile beginning balance bug - NOT YET COMMITTED/PUSHED
+**2026-08-17 status check (user-confirmed):** the user confirmed the
+following, previously flagged as open/unverified below, are now
+actually done - kept in place for historical reasoning but should be
+read as CLOSED, not open: round 26's sack-weight/report fix (verified
+against real data); the MO 151 "wrongly shows Completed" investigation
+(round 11/12); every full-screen pile-layout mobile/device
+verification across rounds 9-25 (confirmed working on an actual
+phone); both `docs/apps-script-full-replacement.js` redeploys called
+out in rounds 12 and 14 (STATUS write-back clear-on-revert, and the
+Date of Milling sort field); the Mock Data section's "no signup/
+bootstrap flow for a fresh database" gap; and the Live Google Sheets
+Integration section's adaptive (foreground/background) polling
+backoff. None of these needed a code change from this session - the
+user verified them directly. Round 27 below (MO/TMO sort + missing
+numbers) is the only genuinely open item as of this pass.
+
+### OPEN (2026-08-17 session, round 27) - MO/TMO pending list sort fixed; MO/TMO numbers wrongly hidden from Monitor - FIXED AND PUSHED; a second, different picker still needs a user check
+
+User reported two MO/TMO monitor problems: not sorted by MO/TMO number,
+and specific MO/TMO numbers that exist on the live Sheet never show up
+in the app (checked both pending and Completed), surviving both a
+Milling Operations re-sync and a Sheet Sources re-sync.
+
+**Sort - fixed and pushed.** `MillingMonitor.jsx`'s pending list
+(`filtered`) was filtered but never actually sorted - order came from
+whatever Dexie's IndexedDB cursor happened to return, not MO/TMO
+number. Now sorted via `order.number.localeCompare(..., { numeric:
+true })` (Completed's own separate newest-activity-first sort from
+round 14 is correct as designed, untouched).
+
+**Missing numbers - root cause found and fixed.** User confirmed the
+missing number DID appear in the sync console log (ruling out both
+candidates originally logged here - no merged cells either, user
+confirmed every Sheet row is the same consistent format) - meaning it
+reached `db.millingOrders` fine and something client-side was hiding
+it. Found it: `passesSharedFilters` (gates BOTH the pending and
+Completed arrays) excluded any order whose local transaction history
+existed but was entirely dated before the earliest configured Sheet
+Source's Date From - so a real, still-relevant order could vanish from
+the Monitor completely, not just from some total. Same class of bug as
+round 8's authority-cutoff work, but that one got it right (excludes
+pre-cutoff data from the unwithdrawn/potential MATH only, never hides
+the record from AuthorityMonitor's own lists) and this one didn't -
+user called this out directly ("the pending list and completed is
+there for a reason, why does the app hide data that is supposed to be
+on that list?"), correctly. Fixed by deleting the
+`earliestSourceDateFrom` computation and its check entirely (confirmed
+via grep it had no other use - `passesSharedFilters` now only applies
+the Regional Authority Number dropdown filter).
+
+**Separate, NOT YET addressed:** user also asked why the by-products
+TMO wasn't available for entering its own receipt - that's a different
+picker, in `StockFormBase.jsx`/`SackFormBase.jsx`'s own
+`millingOrderOptions`, hard-filtered to only the currently-typed
+Customer Name's own ricemill (exact `ricemillName` match, no fallback
+message on zero matches) - a deliberate earlier design choice ("a
+selection for one miller should never show every other miller's
+MOs/TMOs"), not an oversight like the Monitor bug. Waiting on the user
+to confirm whether their typed Customer Name actually matches the
+Sheet's ricemill name for that TMO before deciding whether/how to
+change this one.
+
+### OPEN (2026-08-17 session, round 26) - sack-weight separation bug + phantom deleted-pile beginning balance bug - PUSHED, user has since confirmed this is fixed
 
 Two real bugs found and fixed. (1) Home Stocks' Rice/Palay sack-weight
 separation read `piles.mtsSackTypeId`, which only reflects whichever
