@@ -635,26 +635,23 @@ authority-balance bug found two rounds ago (`handleUpdate` never
 reversed/reapplied the extras' share at all, only the primary's).
 Waiting on the user's go-ahead before building that out.
 
-**REVERTED - a `-A` serial being independently reachable is fixed
-entirely inside `StockFormBase.jsx` now, `Reports.jsx` was never
-touched.** A previous round added `combineMultiPileGroups` to
-`Reports.jsx` on the theory that the user's "-A shows up as its own
-entry" comment was about Reports' own on-screen list. User corrected
-this directly - Reports never had a problem, both original symptoms
-("multi-pile doesn't load" from a Reports tap, AND from stepping back
-to the serial on the input form) actually pointed at the FORM's own
-loading behavior the whole time, just observed via two different entry
-points into that same form. Reverted `Reports.jsx` completely (the
-helper and both call sites, back to its exact pre-round-27 state).
-Root-fixed instead entirely inside `checkAndLoadSerial`
-(`StockFormBase.jsx`), which both real entry points already funnel
-through: if the found record is a multi-pile extra (`groupSerialNo`
-set and different from its own `serialNo` - a primary's groupSerialNo
-always equals its own serialNo), redirects to the group's real primary
-record and corrects the Serial No. field to match what actually
-loaded. Makes a `-A` record permanently unreachable as its own
-standalone view from any entry point, without Reports.jsx involved at
-all.
+**Multi-pile `-A` sibling rows fixed on two fronts - both belt and
+suspenders now, not yet confirmed by user.** Went through a revert-
+then-restore this session: a round added `combineMultiPileGroups` to
+`Reports.jsx` (groups multi-pile siblings into one on-screen row,
+mirroring how `pdfGenerator.js` already combines them for the PDF
+export - that file itself was never touched). User initially pushed
+back thinking this meant the PDF export was being changed - it wasn't
+- so it got reverted and root-fixed only inside `StockFormBase.jsx`'s
+`checkAndLoadSerial` instead (redirects a `-A` lookup, however
+reached, to the group's real primary record and corrects the Serial
+No. field to match). User then re-read both files, confirmed the
+Reports.jsx grouping was correct and wanted after all, and it was
+restored. Current, correct, final state: BOTH fixes are in place
+together - `Reports.jsx`'s grouping stops a `-A` row from ever
+appearing there in the first place, and `StockFormBase.jsx`'s redirect
+is the backstop for a `-A` serial typed directly into the Serial No.
+field, a path Reports grouping alone can't cover.
 
 **Real bug fixed: multi-pile WSI issuances never reloaded their other
 piles - fixed, not yet confirmed by user.** User-reported: tapping an
