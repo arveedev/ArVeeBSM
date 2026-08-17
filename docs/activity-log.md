@@ -16240,3 +16240,38 @@ earlier this session - no code change made here.
 `src/services/transactionPreload.js`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 30) - Version label kept up to date, Login layout, "Issue from another pile" moved
+
+User pointed out `version.js`'s `APP_VERSION` hadn't been bumped
+through the last several rounds of work, and that the Login page's
+"by ArVee" and version text sit far enough apart (bottom-14 vs
+bottom-6) that a short viewport could only ever show one of them.
+
+### Version history caught up
+Added entries 1.8-17 through 1.9-3 covering everything shipped since
+1.8-16 (PR #1 through #22 this session: MO/TMO Monitor fixes, input
+form polish, By Products pile creation/picker fixes, the
+always-enabled auto-compute fix, the full multi-pile WSI issuance
+feature and its follow-up fixes, and this round's own changes).
+`APP_VERSION` bumped to `1.9-3`.
+
+### Login page layout
+"by ArVee" and the version label were two independently
+absolutely-positioned lines (bottom-14 and bottom-6). Combined into
+one flex column at a single bottom-8 offset so they move and get
+seen as one small unit, fitting inside the same visible area even on
+a short viewport.
+
+### "Issue from another pile" moved
+Per explicit request, the additional-pile section (the button and
+the extra pile cards it reveals) moved from just after the Pile
+ID/Variety Type row to right after the primary pile's own Net Kilos
+field, before Age - by the time the user reaches Net Kilos they
+already know whether this one pile covers the issuance, which is the
+natural point to decide whether another pile is needed.
+
+### Files touched
+`src/version.js`, `src/pages/Login.jsx`, `src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes.
