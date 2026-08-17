@@ -1158,8 +1158,25 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     latestRequestedSerial.current = serial
     setIsLookingUp(true)
     try {
-      const existing = await findTransactionBySerial(type, currentWarehouseId, serial, skipCategoryFilter ? null : activeCategory)
+      let existing = await findTransactionBySerial(type, currentWarehouseId, serial, skipCategoryFilter ? null : activeCategory)
       if (latestRequestedSerial.current !== serial) return false // superseded by a newer request - discard this stale result
+      // A multi-pile issuance's extra piles are saved as their own
+      // sibling records (base serial + letter suffix, e.g. "12345-A")
+      // - purely an internal storage detail (see performSave), never
+      // meant to be reachable as its own standalone document. Landing
+      // on one directly (typed serial, or a prefill.serialNo handoff
+      // from elsewhere) redirects to the group's real primary record
+      // instead, so the full multi-pile picture always shows - never
+      // an isolated single-pile fragment. A primary record's own
+      // groupSerialNo always equals its own serialNo (see performSave),
+      // so this only ever fires for a genuine extra.
+      if (existing?.groupSerialNo && existing.groupSerialNo !== existing.serialNo) {
+        const primary = await findTransactionBySerial(type, currentWarehouseId, existing.groupSerialNo, skipCategoryFilter ? null : activeCategory)
+        if (primary) {
+          existing = primary
+          if (latestRequestedSerial.current === serial) setSerialNo(primary.serialNo)
+        }
+      }
       if (existing) {
         loadTransactionIntoForm(existing)
 

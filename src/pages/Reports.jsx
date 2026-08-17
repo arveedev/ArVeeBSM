@@ -37,38 +37,6 @@ const bySerial = (a, b) => {
   return n(a) - n(b)
 }
 
-// Multi-pile issuances save each additional pile as its own separate,
-// linked transaction record (same groupSerialNo, base serial + letter
-// suffix - see StockFormBase.jsx's performSave). pdfGenerator.js
-// already combines these into one row for the exported PDF; this
-// on-screen list never did, so a multi-pile issuance's extra piles
-// showed up as their own separately-tappable rows here (each looking
-// like an independent, single-pile transaction) - confusing, and per
-// explicit request they shouldn't be individually reachable at all.
-// Mirrors pdfGenerator.js's own grouping exactly, so the two views
-// never disagree on what one issuance's real total is. An ordinary
-// transaction has no groupSerialNo, so it falls back to its own
-// unique id as the key and passes through unaffected, as its own
-// single-item group.
-const combineMultiPileGroups = (transactions) => {
-  const groups = new Map()
-  for (const t of transactions) {
-    const key = t.groupSerialNo ?? t.id
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(t)
-  }
-  return [...groups.values()].map((group) => {
-    if (group.length === 1) return group[0]
-    const primary = group.find((t) => t.serialNo === t.groupSerialNo) ?? group[0]
-    return {
-      ...primary,
-      numberOfBags: group.reduce((sum, t) => sum + (t.numberOfBags ?? 0), 0),
-      grossKilos: group.reduce((sum, t) => sum + (t.grossKilos ?? 0), 0),
-      netKilos: group.reduce((sum, t) => sum + (t.netKilos ?? 0), 0),
-    }
-  })
-}
-
 function Reports() {
   const { user } = useAuth()
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
@@ -145,12 +113,8 @@ function Reports() {
   })
 
   const { receipts: rawStockReceipts, issues: rawStockIssues } = splitStockTransactions(stockTxRaw ?? [])
-  // Only issues can be multi-pile (WSI's own extraPileAllocations
-  // feature - see combineMultiPileGroups) - combining receipts too is
-  // harmless either way, since an ordinary WSR has no groupSerialNo
-  // and passes through as its own single-item group regardless.
-  const stockReceipts = combineMultiPileGroups(rawStockReceipts).map(enrichStock).sort(bySerial)
-  const stockIssues = combineMultiPileGroups(rawStockIssues).map(enrichStock).sort(bySerial)
+  const stockReceipts = rawStockReceipts.map(enrichStock).sort(bySerial)
+  const stockIssues = rawStockIssues.map(enrichStock).sort(bySerial)
   const sackReceipts = (sackTxRaw ?? []).filter((t) => t.type === 'ESR').map(enrichSack).sort(bySerial)
   const sackIssues = (sackTxRaw ?? []).filter((t) => t.type === 'ESI').map(enrichSack).sort(bySerial)
 
