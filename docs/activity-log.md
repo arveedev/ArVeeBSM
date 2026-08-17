@@ -15380,3 +15380,32 @@ of any externally-sourced status flag).
 `src/components/common/CompletedMillingModal.jsx`.
 
 `npm run build` passes. Not yet verified against the user's real data.
+
+## Session: 2026-08-17 (round 27, PR #2 merged; continued) - Trial field's amber "required" border wrongly shown for By Products
+
+User reported the Trial dropdown (Test Milling receipts, StockFormBase.jsx)
+shows an amber "this is required" border even when on the By Products
+category tab, where Trial Number isn't actually needed - confusing
+users into thinking they must pick one.
+
+Confirmed `canSave` never actually required `trialNumber` for any
+category in the first place (not in its gate list at all) - the amber
+border was purely cosmetic and unconditional (`!trialNumber ?
+'!border-brand-amber' : ''`), with no category check. The exact same
+"don't flag this as required for By Products" pattern already exists
+a few lines below for Moisture Content
+(`moistureContent === '' && activeCategory !== 'By Products' ?
+'!border-brand-amber' : ''`, plus a placeholder that reads "Optional"
+on that tab) - Trial just never got the same treatment. Fixed by
+adding the identical `activeCategory !== 'By Products'` condition to
+Trial's amber-border check.
+
+Checked `SackFormBase.jsx`'s own Trial field (ESR only, already
+correctly hidden for ESI per an existing comment) for the same
+issue - it has no `activeCategory`/By-Products concept at all, so
+nothing to change there.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes. Not yet verified against the user's real data.
