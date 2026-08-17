@@ -15863,3 +15863,41 @@ so left as-is pending the user actually caring about that path too.
 `src/pages/Reports.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #15 merged; continued) - self-caught bug: the multi-pile reload fix from two rounds ago never actually worked
+
+User tested and reported the multi-pile view was now missing entirely
+when opening the base serial - worse than before. Root cause was in
+MY OWN earlier fix, not something new: `loadTransactionIntoForm`
+queried `db.transactions.where('groupSerialNo').equals(...)`, but
+`groupSerialNo` was never added as an indexed field anywhere in
+`db/dexie.js`'s schema (confirmed via grep - zero matches across every
+version). Dexie throws when `.where()` targets a non-indexed keyPath -
+and that throw was silently swallowed by an empty `.catch(() => {})`,
+so the sibling lookup failed on literally every call, from the moment
+it shipped. It looked like it worked at the time (clean build, no
+visible error) purely because the failure was invisible - the exact
+"logged explicitly so it at least shows up" lesson this codebase has
+already learned once before (see the syncMillingOrdersFromSheets entry
+in Known Issues), re-learned the hard way here.
+
+Fixed by querying off `type` (indexed) with `.and()` filtering the
+non-indexed `groupSerialNo`/`status`/`id` conditions instead of trying
+to `.where()` an unindexed field directly, and replaced the silent
+catch with `console.error` so a future failure here is never invisible
+again.
+
+User has also now explicitly asked for the multi-pile allocations to
+be genuinely editable, not just visible/read-only, when reopening an
+existing transaction. Not implemented this round - flagged to the user
+directly rather than rushed, since it means reconciling pile-ledger
+and authority-balance math across multiple linked records on a live
+production system with real data, including a related pre-existing
+authority-balance bug found two rounds ago
+(handleUpdate never reversed/reapplied the extras' share at all). Asked
+whether to proceed with that as its own careful pass.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes.
