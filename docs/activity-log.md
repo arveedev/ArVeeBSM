@@ -15552,3 +15552,22 @@ nothing to change there.
 `src/components/forms/WTSForm.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #7 merged; continued) - user clarified: remove the variety parenthetical from Pile ID entirely, not just for By Products
+
+The immediately-previous round's fix kept the `(VarietyName)`
+parenthetical for Rice/Palay piles, only dropping it for By Products.
+User clarified that's not what they meant - they want it gone from
+the Pile ID picker altogether, all categories, still "confusing"
+regardless. Simplified both `StockFormBase.jsx` and `WTSForm.jsx`'s
+`SidePanel` Pile selects down to just `{p.pileName}`, unconditionally.
+The now-unused local `variety`/`v` lookups were removed from each
+`.map()`; `sortedVarieties` (StockFormBase) and `varietyMap`
+(WTSForm) are both still used elsewhere in their respective files, so
+nothing else needed cleanup.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`,
+`src/components/forms/WTSForm.jsx`.
+
+`npm run build` passes.

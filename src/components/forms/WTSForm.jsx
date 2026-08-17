@@ -90,19 +90,11 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
             <label className={labelClass}>Pile</label>
             <select value={side.pileId} onChange={(e) => setSide((s) => ({ ...s, pileId: e.target.value }))} className={`${inputClass} ${!side.pileId ? '!border-brand-amber' : ''}`}>
               <option value="">Select pile…</option>
-              {sortedPiles.map((p) => {
-                const v = varietyMap.get(p.varietyId)
-                // A By Products pile accepts any mix of By Products
-                // varieties over its lifetime - showing one variety name
-                // in parentheses wrongly implied the pile was locked to
-                // it. Rice/Palay piles genuinely are locked to a single
-                // variety, so they keep the parenthetical.
-                return (
-                  <option key={p.pileId} value={p.pileId}>
-                    {p.cerealType === 'By Products' ? p.pileName : `${p.pileName} (${v?.name ?? p.cerealType})`}
-                  </option>
-                )
-              })}
+              {sortedPiles.map((p) => (
+                <option key={p.pileId} value={p.pileId}>
+                  {p.pileName}
+                </option>
+              ))}
             </select>
           </div>
           <div>
