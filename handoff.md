@@ -608,6 +608,33 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**SELF-CAUGHT BUG: the multi-pile reload fix from two rounds ago never
+actually worked - fixed, not yet confirmed by user.** User tested and
+found the multi-pile view now missing entirely on the base serial -
+this was a bug in an EARLIER fix this session, not something new.
+`loadTransactionIntoForm` queried
+`db.transactions.where('groupSerialNo').equals(...)`, but
+`groupSerialNo` was never added as an indexed field anywhere in
+`db/dexie.js` (confirmed via grep, zero matches in any version). Dexie
+throws on `.where()` against a non-indexed keyPath, and that throw was
+silently swallowed by an empty `.catch(() => {})` - so the sibling
+lookup failed on every single call from the moment it shipped, with no
+visible error anywhere. Same "log it, don't swallow it" lesson this
+codebase already learned once before (Known Issues'
+syncMillingOrdersFromSheets entry). Fixed by querying off `type`
+(indexed) with `.and()` filtering the rest, and replaced the silent
+catch with `console.error`.
+
+User has ALSO now explicitly asked for the multi-pile allocations to
+be genuinely EDITABLE when reopening an existing transaction, not just
+visible/read-only. NOT implemented yet - deliberately flagged to the
+user rather than rushed, since it means reconciling pile-ledger and
+authority-balance math across multiple linked records on a LIVE
+production system with real data, including the related pre-existing
+authority-balance bug found two rounds ago (`handleUpdate` never
+reversed/reapplied the extras' share at all, only the primary's).
+Waiting on the user's go-ahead before building that out.
+
 **Multi-pile -A sibling records no longer shown/tappable as their own
 entries in Reports - fixed, not yet confirmed by user.** Follow-up to
 the reload fix below - user saw a `-A` serial as its own separately-

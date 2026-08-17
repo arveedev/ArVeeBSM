@@ -1046,9 +1046,18 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // rest of the form rather than blocking on it.
     setExtraPileAllocations([])
     if (tx.groupSerialNo) {
+      // groupSerialNo is NOT an indexed field (confirmed via
+      // db/dexie.js - never added in any version) - a previous version
+      // of this queried `.where('groupSerialNo')` directly, which
+      // Dexie throws on for a non-indexed keyPath. That throw was
+      // silently swallowed by an empty .catch(), so this whole lookup
+      // failed on every single call without ever surfacing an error -
+      // the "fix" never actually worked. Queries off `type` instead
+      // (indexed), which is also a tighter starting scope than a full
+      // table scan.
       db.transactions
-        .where('groupSerialNo').equals(tx.groupSerialNo)
-        .and((t) => t.status === 'Active' && t.id !== tx.id)
+        .where('type').equals(tx.type)
+        .and((t) => t.groupSerialNo === tx.groupSerialNo && t.status === 'Active' && t.id !== tx.id)
         .toArray()
         .then((siblings) => {
           if (siblings.length === 0) return
@@ -1058,7 +1067,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             kilos: s.netKilos != null ? liveFormatNumber(String(s.netKilos), 3) : '',
           })))
         })
-        .catch(() => {}) // best-effort - the primary record's own data is already showing regardless
+        .catch((err) => console.error('[loadTransactionIntoForm] failed to load multi-pile siblings:', err))
     }
     setDate(tx.date ?? blankFormState.date)
     setLinkedDocNo(tx.linkedDocNo ?? tx.aiNumber ?? '')
