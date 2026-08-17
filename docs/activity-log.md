@@ -15816,3 +15816,50 @@ Flagged to the user rather than attempted blind.
 `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #14 merged; continued) - multi-pile -A sibling records no longer shown/tappable as their own entries in Reports
+
+Follow-up to the previous round's reload fix. User saw a `-A` suffixed
+serial appear as its own separately-tappable transaction row in
+Reports, showing just that one pile - asked for the `-A`/`-B` sibling
+records not to be independently reachable/shown as their own entries
+at all anywhere.
+
+Root cause: `Reports.jsx`'s on-screen statement list never grouped
+multi-pile siblings at all - each got listed as its own fully separate
+row (own serialNo, own bags/kilos), same underlying data
+`pdfGenerator.js` already correctly combines into one row for the
+exported PDF (via `groupSerialNo`). The on-screen list and the PDF had
+silently been showing genuinely different pictures of the same
+issuance the whole time.
+
+Fixed by adding `combineMultiPileGroups` to `Reports.jsx`, mirroring
+`pdfGenerator.js`'s own grouping exactly (group by `t.groupSerialNo ??
+t.id`, pick the primary record - the one whose own serialNo equals
+the groupSerialNo - as the display base, sum numberOfBags/grossKilos/
+netKilos across the whole group) so the two views can never disagree.
+Applied to both `stockReceipts` and `stockIssues` (only issues can
+actually be multi-pile - WSI's own `extraPileAllocations` feature -
+but running it on receipts too is harmless, an ordinary WSR has no
+groupSerialNo and passes through as its own single-item group).
+Tapping the now-combined row opens the primary/base serial, which
+(thanks to the previous round's fix) correctly reconstructs the full
+multi-pile picture.
+
+Checked `DailySummaryCard.jsx` (Summary tab) - purely aggregate
+totals, no itemized per-transaction rows or tap-to-open at all, so
+grouping doesn't change anything there (a sum is the same whether or
+not the underlying records are combined first).
+
+Not changed, flagged as a much rarer edge case: a `-A` serial typed
+directly into the Serial No. field on the input form (not reached via
+Reports) would still be found and loaded as its own single-pile
+record - the stepper (`<`/`>`) only ever increments plain numeric
+serials and could never land there on its own, and blocking exact
+manual lookup could get in the way of legitimate admin troubleshooting,
+so left as-is pending the user actually caring about that path too.
+
+### Files touched
+`src/pages/Reports.jsx`.
+
+`npm run build` passes.
