@@ -608,6 +608,18 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**Trial field amber "required" border wrongly shown for By Products -
+fixed, not yet confirmed by user.** `StockFormBase.jsx`'s Trial
+dropdown (Test Milling receipts) applied its amber border
+unconditionally whenever empty - `canSave` never actually required
+`trialNumber` for any category, so the border was purely cosmetic and
+misleading for By Products, where Trial Number genuinely isn't needed.
+Same pattern already existed for Moisture Content a few lines below
+(`activeCategory !== 'By Products'` exception, plus an "Optional"
+placeholder) - Trial just never got it. Added the identical condition.
+`SackFormBase.jsx`'s own Trial field has no By-Products concept at all
+(no `activeCategory`), so nothing to change there.
+
 **Uncheck-complete self-lockout - fixed, not yet confirmed by user.**
 After using the admin checkbox to mark several MO/TMO complete, none
 showed an uncheck control anymore. Genuine race, not a missing
