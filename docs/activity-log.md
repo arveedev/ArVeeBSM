@@ -15625,3 +15625,67 @@ Pile panel).
 `src/components/forms/NewPileDialog.jsx`, `src/pages/Settings.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #10 merged; continued) - By Products pile beginning balance goes per-variety; NewPileDialog gets a genuine Age requirement
+
+Per explicit request, three-way split across the three places pile
+data gets entered:
+
+1. **Settings.jsx's Create Pile tab, By Products only**: replaced the
+   single Bags/Kilos pair with one row per configured By Products
+   variety (`categoryVarieties`, fixed - not an addable/removable
+   list, since the set of By Products varieties is admin-configured
+   elsewhere), each with its own Bags/Kilos, all optional ("not
+   necessarily that every variety should have a value"). New
+   `byProductBalances` state (keyed by varietyId), cleared on
+   category change and in `resetForm`. `handleCreate`'s By Products
+   branch now creates the bare pile first (bags/kilos 0, so
+   `createPileWithBeginningBalance` seeds nothing), then loops the
+   configured varieties and adds one `isInitialBalance` WSR
+   transaction per line that actually has a value (mirrors
+   BeginningBalancesPanel.jsx's own repeatable-line pattern), then
+   calls `recalculatePileCurrentState` to re-derive currentBags/
+   currentKilos from the real ledger rather than summing by hand.
+   `canSavePile` no longer requires the single bags/kilos fields for
+   By Products, since the lines replace them entirely.
+2. **BeginningBalancesPanel.jsx's Piles tab (edit existing)**: its
+   existing repeatable-line UI already supported multiple seed
+   transactions per pile, but every line shared the SAME pile-level
+   variety (designed for Rice/Palay's "same variety, different sack
+   weight" case) - added a per-line Variety `<select>`, shown only
+   when editing a By Products pile, so each line can now genuinely
+   represent a different variety. `emptyLine()` gained `varietyId`;
+   `handleEdit` populates it from each seed transaction's own
+   varietyId; `handleSave` now writes `lineVarietyId = line.varietyId
+   || pile?.varietyId || null` onto both new and updated seed
+   transactions (previously always used the pile's own varietyId,
+   silently ignoring any per-line value). Also fixed `editingCategory`
+   - it was derived via `varietyMap.get(editingPile?.varietyId)?.category`,
+   which fails for any pile with a blank varietyId (now possible for
+   By Products since the earlier round's variety-optional change) -
+   switched to reading `editingPile?.cerealType` directly, the
+   pile's own authoritative category field. This incidentally fixed a
+   real pre-existing bug this surfaced: `sackTypesForCategory` filtered
+   by `s.category === editingCategory`, but sack types have no 'By
+   Products' category of their own (they're Rice/Palay tare-weight
+   defs reused for By Products sacking, same as NewPileDialog.jsx's
+   own `mtsOptions` already handles) - was silently showing zero sack-
+   weight options for every By Products pile. Matched the same
+   `category === 'By Products' || s.category === category` pattern.
+3. **NewPileDialog.jsx ("+ New Pile" from a transaction form) stays
+   simple, per explicit contrast with the two panels above** - no
+   per-variety lines here. Age is now a genuine requirement (amber
+   border + a blocking toast on save if blank), matching Pile Name -
+   previously it silently fell back to 0 with no validation at all.
+   Condition needs no separate check, since its button-group state
+   always has a value by construction (defaults to 'GQ'). Reworded the
+   "Beginning Balance (optional)" section heading/description, since
+   Age inside that same section is no longer actually optional -
+   Bags/Kilos still are.
+
+### Files touched
+`src/pages/Settings.jsx`,
+`src/components/common/admin/BeginningBalancesPanel.jsx`,
+`src/components/forms/NewPileDialog.jsx`.
+
+`npm run build` passes.
