@@ -15901,3 +15901,43 @@ whether to proceed with that as its own careful pass.
 `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #16 merged; continued) - reverted the Reports.jsx grouping change entirely - misread scope, user confirmed Reports never had a problem
+
+User pushed back directly: "why are you doing something on the
+reports? The reports had no problem, we are just trying to fix the
+update form." Re-reading the original report - "on the reports page
+when i tap an existing transaction... the multi-pile does not load,
+only shows one pile, i also tried going back the series on the input
+forms, it still did not show the multi-pile" - both symptoms actually
+point at the FORM's own loading behavior (`loadTransactionIntoForm`),
+observed via two different entry points into that same form, not a
+Reports-specific display bug. The later "-A serial showing the other
+pile" comment was similarly about something hit through the form, not
+Reports' own on-screen list. The `combineMultiPileGroups` grouping
+added to `Reports.jsx` two rounds ago was scope creep from
+misinterpreting an AskUserQuestion answer - reverted completely (the
+helper function and both call sites, back to the exact pre-change
+state).
+
+Root-fixed the actual concern instead, entirely inside
+`StockFormBase.jsx`'s own serial lookup (`checkAndLoadSerial`), which
+is what BOTH real entry points (typing/stepping a serial on the form,
+and a Reports tap handing off `prefill.serialNo`) already funnel
+through - no Reports.jsx involvement needed at all. If the found
+record is a multi-pile extra (`groupSerialNo` set and different from
+its own `serialNo` - a primary record's groupSerialNo always equals
+its own serialNo, see `performSave`), redirects to load the group's
+real primary record instead, and corrects the Serial No. field to
+match what actually loaded (previously would have shown the typed/
+tapped "-A" serial while the rest of the form displayed the redirected
+primary's data - a mismatch). This makes a `-A` record permanently
+unreachable as its own standalone view from any entry point in the
+app, without touching how Reports.jsx lists or displays transactions
+at all.
+
+### Files touched
+`src/pages/Reports.jsx` (fully reverted to pre-round-27 state),
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes.
