@@ -625,15 +625,43 @@ syncMillingOrdersFromSheets entry). Fixed by querying off `type`
 (indexed) with `.and()` filtering the rest, and replaced the silent
 catch with `console.error`.
 
-User has ALSO now explicitly asked for the multi-pile allocations to
-be genuinely EDITABLE when reopening an existing transaction, not just
-visible/read-only. NOT implemented yet - deliberately flagged to the
-user rather than rushed, since it means reconciling pile-ledger and
-authority-balance math across multiple linked records on a LIVE
-production system with real data, including the related pre-existing
-authority-balance bug found two rounds ago (`handleUpdate` never
-reversed/reapplied the extras' share at all, only the primary's).
-Waiting on the user's go-ahead before building that out.
+User then asked to proceed with full edit/update support for the
+multi-pile allocations - DONE. New `originalExtraAllocations` state
+(snapshot of each real sibling exactly as loaded - `{ id, serialNo,
+pileId, numberOfBags, netKilos }` - separate from `extraPileAllocations`
+itself, which mutates live as the user edits). New shared
+`reverseGroupEffect(primary)` helper reverses the primary's AND every
+original extra's pile effect, then reverses the GROUP's combined old
+bags/kilos from the authority balance in one call - fixes the bug
+above, used by both `handleUpdate` and `handleDeleteConfirmed`.
+`handleUpdate` reconciles `extraPileAllocations` against
+`originalExtraAllocations` by `txId`: a retained line updates its own
+record in place (keeps its existing serialNo - avoids unnecessary
+Sheet-backup churn), a line with no `txId` is new this edit and gets
+the next unused letter suffix, a removed original gets deleted
+(`queueTransactionDeletion` fired). Primary's `groupSerialNo` is set/
+cleared based on whether any valid extras remain, so a transaction can
+transition single-pile <-> multi-pile cleanly. Finishes via
+`loadTransactionIntoForm(updated)` (fresh sibling re-fetch) rather than
+a bare `setLoadedTransaction`, so a second edit in the same session
+reconciles correctly. `handleDeleteConfirmed` now deletes the WHOLE
+group, not just the primary - avoids orphaning extras with a
+non-existent primary while their share stays silently stuck in pile
+totals and the authority balance. The extra-pile JSX inputs are
+interactive again (previous round's read-only lock removed).
+
+Deliberately NOT touched, flagged as a known related gap:
+`handleConfirmVoid`/`handleConfirmUnvoid` have the identical
+"primary-only" flaw, but voiding a multi-pile group raises its own
+design question (should extras become their own Cancelled records
+mirroring the primary?) that wasn't part of this round's actual ask -
+scoped out rather than guessed at.
+
+Traced through several scenarios by hand before shipping (unchanged
+extras, removing the only extra, adding a new extra, moving an extra
+to a different pile) given the stakes - live production data, pile
+ledger + authority balance math. Not yet verified against the user's
+real data.
 
 **Multi-pile `-A` sibling rows fixed on two fronts - both belt and
 suspenders now, not yet confirmed by user.** Went through a revert-

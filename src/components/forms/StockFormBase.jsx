@@ -184,6 +184,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // Defaults to a single entry so normal, single-pile saves (still
   // the vast majority of all transactions) are completely unaffected.
   const [extraPileAllocations, setExtraPileAllocations] = useState([])
+  // Snapshot of extraPileAllocations exactly as loaded (id/serialNo/
+  // pileId/numberOfBags/netKilos of each real sibling record) - used
+  // by handleUpdate/handleDeleteConfirmed to correctly reverse the
+  // GROUP's old combined pile/authority effect before applying the
+  // new one, and to tell which lines the user removed during editing.
+  // extraPileAllocations itself gets mutated live as the user edits,
+  // so it can't also serve as "what this actually was before".
+  const [originalExtraAllocations, setOriginalExtraAllocations] = useState([])
   const [varietyId, setVarietyId] = useState('')
   const [sackSelection, setSackSelection] = useState('')
   const [numberOfBags, setNumberOfBags] = useState('')
@@ -1045,6 +1053,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // further down - extraPileAllocations populates a moment after the
     // rest of the form rather than blocking on it.
     setExtraPileAllocations([])
+    setOriginalExtraAllocations([])
     if (tx.groupSerialNo) {
       // groupSerialNo is NOT an indexed field (confirmed via
       // db/dexie.js - never added in any version) - a previous version
@@ -1062,9 +1071,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         .then((siblings) => {
           if (siblings.length === 0) return
           setExtraPileAllocations(siblings.map((s) => ({
+            txId: s.id,
             pileId: s.pileId ?? '',
             bags: s.numberOfBags != null ? liveFormatNumber(String(s.numberOfBags)) : '',
             kilos: s.netKilos != null ? liveFormatNumber(String(s.netKilos), 3) : '',
+          })))
+          setOriginalExtraAllocations(siblings.map((s) => ({
+            id: s.id,
+            serialNo: s.serialNo,
+            pileId: s.pileId ?? null,
+            numberOfBags: s.numberOfBags ?? 0,
+            netKilos: s.netKilos ?? 0,
           })))
         })
         .catch((err) => console.error('[loadTransactionIntoForm] failed to load multi-pile siblings:', err))
@@ -1108,6 +1125,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setIsCancelled(false)
     setPileFilterVarietyId(null)
     setExtraPileAllocations([])
+    setOriginalExtraAllocations([])
     setSerialNo(nextSerial)
     setDate(blankFormState.date)
     setLinkedDocNo('')
@@ -1473,6 +1491,28 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     })
   }
 
+  // Reverses a loaded transaction's OWN prior pile effect AND every
+  // one of its multi-pile group's extra allocations, as they existed
+  // at load time (originalExtraAllocations) - the authority balance
+  // reversal covers the GROUP's combined old bags/kilos, not just the
+  // primary record's own share. Used by every path that undoes a
+  // loaded transaction before writing something new (Update, Delete) -
+  // a previous version of both only ever reversed the primary's own
+  // portion, silently leaving the extras' contribution stuck in the
+  // authority's running issued total on every edit to a multi-pile
+  // transaction, even one that never touched the extras at all.
+  const reverseGroupEffect = async (primary) => {
+    await reverseTransactionFromPile(primary)
+    for (const orig of originalExtraAllocations) {
+      await reverseTransactionFromPile({ type: 'WSI', pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
+    }
+    if (primary.aiNumber) {
+      const totalBags = (primary.numberOfBags ?? 0) + originalExtraAllocations.reduce((s, o) => s + (o.numberOfBags ?? 0), 0)
+      const totalKilos = (primary.netKilos ?? 0) + originalExtraAllocations.reduce((s, o) => s + (o.netKilos ?? 0), 0)
+      await adjustAuthorityBalance(primary.aiNumber, -totalBags, -totalKilos)
+    }
+  }
+
   const performSave = async (trial3Confirmed) => {
     setIsSaving(true)
 
@@ -1639,6 +1679,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     await performSave(false)
   }
 
+  // Finds the lowest letter suffix not already taken by a RETAINED
+  // (still-existing) sibling this update, so a newly-added extra pile
+  // never collides with one that's staying put. Deliberately does NOT
+  // renumber a retained sibling's own existing suffix - keeping an
+  // unchanged line's serialNo stable avoids unnecessary churn against
+  // the Sheet backup log, which matches records by exact serial.
+  const nextAvailableLetter = (used) => {
+    for (let i = 0; i < 26; i++) {
+      const letter = String.fromCharCode(65 + i)
+      if (!used.has(letter)) return letter
+    }
+    return String(used.size) // absurd fallback, 26+ extra piles on one issuance
+  }
+
   const handleUpdate = async () => {
     // Same race-window fix as handleSave - lock immediately, before
     // validateForm runs, not after.
@@ -1648,18 +1702,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     const ok = await validateForm({ excludeId: loadedTransaction.id })
     if (!ok) { setIsSaving(false); return }
 
-    // Reverse the OLD effect, then apply the NEW one — pile totals and
-    // authority balances must reflect only the corrected values.
-    await reverseTransactionFromPile(loadedTransaction)
-    if (loadedTransaction.aiNumber) {
-      await adjustAuthorityBalance(
-        loadedTransaction.aiNumber,
-        -(loadedTransaction.numberOfBags ?? 0),
-        -(loadedTransaction.netKilos ?? 0)
-      )
-    }
+    // Reverse the OLD combined effect (primary + every original extra
+    // allocation) before applying anything new - see reverseGroupEffect.
+    await reverseGroupEffect(loadedTransaction)
 
-    const updated = buildTransactionPayload({ id: loadedTransaction.id })
+    const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.kilos))
+
+    const updated = buildTransactionPayload({
+      id: loadedTransaction.id,
+      groupSerialNo: validExtraAllocations.length > 0 ? serialNo.trim() : null,
+    })
     await db.transactions.update(loadedTransaction.id, updated)
     await applyTransactionToPile(updated)
     await rememberCustomer({
@@ -1672,12 +1724,80 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       warehouseId: currentWarehouseId,
     })
 
+    // Reconcile the extra pile allocations against what actually
+    // existed before this edit (originalExtraAllocations): a line with
+    // a txId matching an original updates that same record in place
+    // (keeping its own serialNo, so an unchanged/lightly-edited line
+    // never gets renamed); a line with no txId is a genuinely new
+    // allocation added during this edit, and gets the next unused
+    // letter suffix; any original whose txId no longer survives among
+    // the current valid lines was removed by the user and gets deleted
+    // (its old pile/authority effect was already reversed above).
+    const usedLetters = new Set(
+      validExtraAllocations
+        .filter((a) => a.txId)
+        .map((a) => originalExtraAllocations.find((o) => o.id === a.txId)?.serialNo)
+        .filter(Boolean)
+        .map((s) => s.slice(serialNo.trim().length + 1))
+    )
+
+    let extraBagsTotal = 0
+    let extraKilosTotal = 0
+    const survivingTxIds = new Set()
+    for (const alloc of validExtraAllocations) {
+      const allocBags = alloc.bags ? parseFormattedNumber(alloc.bags) : 0
+      const allocKilos = alloc.kilos ? parseFormattedNumber(alloc.kilos) : 0
+      extraBagsTotal += allocBags
+      extraKilosTotal += allocKilos
+
+      if (alloc.txId) {
+        survivingTxIds.add(alloc.txId)
+        const orig = originalExtraAllocations.find((o) => o.id === alloc.txId)
+        const extraUpdated = {
+          ...updated,
+          id: alloc.txId,
+          serialNo: orig?.serialNo ?? `${serialNo.trim()}-${nextAvailableLetter(usedLetters)}`,
+          pileId: alloc.pileId,
+          numberOfBags: allocBags,
+          grossKilos: allocKilos,
+          netKilos: allocKilos,
+        }
+        await db.transactions.update(alloc.txId, extraUpdated)
+        await applyTransactionToPile(extraUpdated)
+      } else {
+        const letter = nextAvailableLetter(usedLetters)
+        usedLetters.add(letter)
+        const extraTransaction = {
+          ...updated,
+          id: crypto.randomUUID(),
+          serialNo: `${serialNo.trim()}-${letter}`,
+          pileId: alloc.pileId,
+          numberOfBags: allocBags,
+          grossKilos: allocKilos,
+          netKilos: allocKilos,
+        }
+        await db.transactions.add(extraTransaction)
+        await applyTransactionToPile(extraTransaction)
+      }
+    }
+
+    for (const orig of originalExtraAllocations) {
+      if (survivingTxIds.has(orig.id)) continue
+      await db.transactions.delete(orig.id)
+      queueTransactionDeletion(orig.serialNo, updated.type, currentWarehouse?.code) // fire-and-forget, same as a normal delete
+    }
+
     if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
-      await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum, netKilos)
+      await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum + extraBagsTotal, netKilos + extraKilosTotal)
     }
 
     toast.success(`${type} ${serialNo.trim()} updated`)
-    setLoadedTransaction(updated)
+    // Reloads from the freshly-saved state (including a fresh sibling
+    // fetch) rather than just setLoadedTransaction(updated) - keeps
+    // extraPileAllocations/originalExtraAllocations correctly in sync
+    // with what was actually just persisted, so a second edit in the
+    // same session reconciles against the real current state.
+    loadTransactionIntoForm(updated)
     setIsSaving(false)
     scrollToTop()
   }
@@ -1686,18 +1806,23 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setPendingDelete(false)
     setIsSaving(true)
 
-    await reverseTransactionFromPile(loadedTransaction)
-    if (loadedTransaction.aiNumber) {
-      await adjustAuthorityBalance(
-        loadedTransaction.aiNumber,
-        -(loadedTransaction.numberOfBags ?? 0),
-        -(loadedTransaction.netKilos ?? 0)
-      )
-    }
+    // Deleting a multi-pile issuance deletes the WHOLE group, not just
+    // the primary record - it's one real-world event, split across
+    // several records purely for per-pile ledger accuracy. Leaving the
+    // extras behind would orphan them (their groupSerialNo would point
+    // at a primary that no longer exists) and silently keep their
+    // share applied to both the pile totals and the authority balance,
+    // in permanent disagreement with the (correctly reversed) primary.
+    await reverseGroupEffect(loadedTransaction)
 
     await db.transactions.delete(loadedTransaction.id)
     await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
     queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
+
+    for (const orig of originalExtraAllocations) {
+      await db.transactions.delete(orig.id)
+      queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
+    }
 
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
@@ -2289,23 +2414,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <div key={i} className="mt-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-neutral-500">Additional pile {i + 1}</span>
-                    {!loadedTransaction && (
-                      <button
-                        type="button"
-                        onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
-                        aria-label="Remove pile"
-                        className="rounded-lg p-1 text-neutral-500 transition-colors hover:text-brand-crimson"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
+                      aria-label="Remove pile"
+                      className="rounded-lg p-1 text-neutral-500 transition-colors hover:text-brand-crimson"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
                   <div className="mt-1 grid grid-cols-3 gap-2">
                     <select
                       value={alloc.pileId}
                       onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, pileId: e.target.value } : r)))}
-                      disabled={Boolean(loadedTransaction)}
-                      className={`${inputClass} mt-0 ${!alloc.pileId ? '!border-brand-amber' : ''} ${loadedTransaction ? 'opacity-60' : ''}`}
+                      className={`${inputClass} mt-0 ${!alloc.pileId ? '!border-brand-amber' : ''}`}
                     >
                       <option value="">Select pile…</option>
                       {sortedPiles
@@ -2319,33 +2441,28 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       type="text" inputMode="numeric" placeholder="Bags"
                       value={alloc.bags}
                       onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r)))}
-                      readOnly={Boolean(loadedTransaction)}
-                      className={`${inputClass} mt-0 ${loadedTransaction ? 'opacity-60' : ''}`}
+                      className={`${inputClass} mt-0`}
                     />
                     <input
                       type="text" inputMode="decimal" placeholder="Net Kilos"
                       value={alloc.kilos}
                       onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, kilos: liveFormatNumber(e.target.value) } : r)))}
-                      readOnly={Boolean(loadedTransaction)}
-                      className={`${inputClass} mt-0 ${loadedTransaction ? 'opacity-60' : ''}`}
+                      className={`${inputClass} mt-0`}
                     />
                   </div>
                 </div>
               ))}
-              {!loadedTransaction && (
-                <button
-                  type="button"
-                  onClick={() => setExtraPileAllocations((rows) => [...rows, { pileId: '', bags: '', kilos: '' }])}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
-                >
-                  <Plus size={14} /> Issue from another pile
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setExtraPileAllocations((rows) => [...rows, { pileId: '', bags: '', kilos: '' }])}
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+              >
+                <Plus size={14} /> Issue from another pile
+              </button>
               {extraPileAllocations.length > 0 && (
                 <p className="mt-1.5 text-xs text-neutral-500">
-                  {loadedTransaction
-                    ? "Read-only here - editing an existing multi-pile issuance's additional piles isn't supported yet. Delete and re-enter if a correction is needed."
-                    : "Pile ID above covers its own share (with the Bags/Net Kilos fields further up) - each additional pile here adds its own separate share on top, saved as its own linked record."}
+                  Pile ID above covers its own share (with the Bags/Net Kilos fields further up) - each
+                  additional pile here adds its own separate share on top, saved as its own linked record.
                 </p>
               )}
             </div>

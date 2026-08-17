@@ -15965,3 +15965,88 @@ can't cover.
 `src/pages/Reports.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #18 merged; continued) - full edit/update support for multi-pile WSI extra allocations, fixing the authority-balance bug
+
+Per explicit request: build genuine edit/update support for a
+multi-pile issuance's extra pile allocations (previously read-only
+since the reload fix), and fix the related authority-balance bug found
+while investigating that same reload fix - `handleUpdate` only ever
+reversed/reapplied the PRIMARY record's own bags/kilos against the
+authority, silently dropping the extras' combined share from the
+authority's running issued total on every update to a multi-pile
+transaction, even one that never touched the extras at all.
+
+New `originalExtraAllocations` state - a snapshot of each real sibling
+record exactly as loaded (`{ id, serialNo, pileId, numberOfBags,
+netKilos }`), separate from `extraPileAllocations` itself (which
+mutates live as the user edits) - needed as the "what this actually
+was before" reference for reversal math and for detecting which lines
+were removed. Populated alongside `extraPileAllocations` in
+`loadTransactionIntoForm`'s existing sibling-fetch tail; both reset in
+`resetToBlankEntry`.
+
+New shared `reverseGroupEffect(primary)` helper - reverses the
+primary's own pile effect AND every original extra allocation's pile
+effect, then reverses the GROUP's combined old bags/kilos from the
+authority balance in one call (previously duplicated, inconsistent
+logic scattered across handlers). Used by both:
+
+- **`handleUpdate`**: reverses the group's old combined effect first,
+  saves the primary, then reconciles `extraPileAllocations` against
+  `originalExtraAllocations` - a line with a `txId` updates that same
+  sibling record IN PLACE (keeping its own existing serialNo, so an
+  unchanged or lightly-edited line is never renamed - avoids
+  unnecessary churn against the Sheet backup log, which matches by
+  exact serial), a line with no `txId` is genuinely new this edit and
+  gets the next unused letter suffix (`nextAvailableLetter`, skips
+  letters already held by retained siblings), and any original whose
+  `txId` no longer survives among the current valid lines was removed
+  by the user - deleted, with `queueTransactionDeletion` fired the same
+  as a normal delete. The primary's own `groupSerialNo` is set/cleared
+  based on whether any valid extra allocations remain, so a multi-pile
+  transaction can transition to single-pile (or vice versa) cleanly.
+  Applies the group's new combined bags/kilos to the authority once,
+  at the end. Finishes by calling `loadTransactionIntoForm(updated)`
+  instead of a bare `setLoadedTransaction` - re-fetches the sibling
+  list fresh, so `extraPileAllocations`/`originalExtraAllocations`
+  stay correctly in sync if the user keeps editing in the same session.
+
+- **`handleDeleteConfirmed`**: deleting a multi-pile issuance now
+  deletes the WHOLE group, not just the primary - it's one real-world
+  event split across several records purely for per-pile ledger
+  accuracy; leaving extras behind would orphan them (their
+  `groupSerialNo` pointing at a primary that no longer exists) while
+  silently keeping their share applied to both pile totals and the
+  authority balance, in permanent disagreement with the (correctly
+  reversed) primary. Each deleted extra also gets its own
+  `queueTransactionDeletion` call.
+
+Deliberately NOT touched this round, flagged as a known, closely
+related gap: `handleConfirmVoid`/`handleConfirmUnvoid` have the exact
+same "only ever handles the primary" flaw, but voiding a multi-pile
+group raises its own design question (should extras become their own
+Cancelled records, mirroring the primary, or something else?) that
+wasn't part of what was actually asked for this round - scoped out
+rather than guessed at.
+
+The extra-pile-allocation inputs in the form's own JSX are interactive
+again (the previous round's disabled/read-only lock and its "not
+supported yet" message removed) - full add/remove/edit now works
+whether creating a new multi-pile issuance or reviewing an existing
+one.
+
+Traced through several scenarios by hand before shipping, given the
+stakes (live production data, pile ledger + authority balance math):
+unchanged extras (net zero effect on both reversal and reapply),
+removing the only extra (groupSerialNo correctly clears, authority
+drops to primary-only), adding a new extra to a previously single-pile
+transaction (groupSerialNo correctly gets set, new sibling created,
+authority picks up the addition), and moving an existing extra to a
+different pile (effect correctly relocates between piles, authority
+unaffected since bags/kilos didn't change).
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes. Not yet verified against the user's real data.
