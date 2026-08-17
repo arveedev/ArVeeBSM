@@ -2509,6 +2509,158 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>MC % (Moisture Content)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={moistureContent}
+                onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
+                className={`${inputClass} ${moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>MTS — Sack Code &amp; Condition</label>
+              <select
+                value={sackSelection}
+                onChange={(e) => setSackSelection(e.target.value)}
+                className={`${inputClass} ${!sackSelection ? '!border-brand-amber' : ''}`}
+              >
+                <option value="">Select sack code…</option>
+                {sackOptions.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              {sackOptions.length === 0 && (
+                <p className="mt-1 text-xs text-neutral-500">
+                  {selectedVariety
+                    ? `No ${selectedVariety.category} sack types configured with a weight yet.`
+                    : 'Select a variety to see matching sack types.'}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {selectedPile && isIssuance && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-400">
+              Available on {selectedPile.pileName}: {fmtBags(availableBags)} bags ·{' '}
+              {fmtWeight(availableKilos, weightUnit)}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Number of Bags</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={numberOfBags}
+                onChange={(e) => setNumberOfBags(liveFormatNumber(e.target.value))}
+                className={`${inputClass} ${overBags ? 'border-brand-amber' : ''}`}
+                placeholder="0"
+              />
+              {overBags && (
+                <p className="mt-1 text-xs text-brand-amber">
+                  Exceeds available bags — allowed for some transaction types.
+                </p>
+              )}
+              {suggestedBagsToComplete != null && suggestedBagsToComplete > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setNumberOfBags(liveFormatNumber(String(suggestedBagsToComplete)))}
+                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
+                >
+                  Use {suggestedBagsToComplete.toLocaleString()} bags to complete AI balance
+                </button>
+              )}
+            </div>
+            <div>
+              <label className={labelClass}>Gross Kilos</label>
+              <ValidatedField
+                inputMode="decimal"
+                value={grossKilos}
+                onChange={(e) => setGrossKilos(liveFormatNumber(e.target.value, 3))}
+                placeholder="0.000"
+                validate={(v) => {
+                  if (v === '') return null // not yet entered - no opinion until the user actually leaves it blank on purpose
+                  const num = parseFormattedNumber(v)
+                  if (!(num > 0)) return { valid: false, message: 'Gross Kilos must be greater than 0' }
+                  return { valid: true }
+                }}
+              />
+              {suggestedGrossKilosToComplete != null && suggestedGrossKilosToComplete > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setGrossKilos(liveFormatNumber(suggestedGrossKilosToComplete.toFixed(3), 3))}
+                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
+                >
+                  Use {fmtWeight(suggestedGrossKilosToComplete, weightUnit, 'Gross')} to complete AI balance
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3">
+            <span className="text-xs text-neutral-400">Auto-compute Net Kilos</span>
+            <button
+              type="button"
+              onClick={() => setAutoComputeNet((v) => !v)}
+              aria-pressed={autoComputeNet}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+                  autoComputeNet ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div>
+            <label className={labelClass}>Net Kilos</label>
+            {autoComputeNet ? (
+              <div className={`${readOnlyClass} ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                {fmtWeight(netKilos, weightUnit)}
+              </div>
+            ) : (
+              <input
+                type="text"
+                inputMode="decimal"
+                value={manualNetKilos}
+                onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
+                className={`${inputClass} ${overKilos ? 'border-brand-crimson' : ''}`}
+                placeholder="0.000"
+              />
+            )}
+            {overKilos && (
+              <p className="mt-1 text-xs text-brand-crimson">
+                {selectedPile?.pileName ?? 'This pile'} only has {fmtWeight(availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
+              </p>
+            )}
+            {bagsNum > 0 && !overKilos && (
+              <p className="mt-1 text-xs text-neutral-500">
+                Average weight per bag: {avgWeightPerBag.toFixed(2)} kg
+              </p>
+            )}
+            {linkedDocDeductsFromAi && authorityRemainingKilos != null && (
+              <p className="mt-1 text-xs text-brand-neon">
+                AI balance remaining: {fmtWeight(authorityRemainingKilos, weightUnit, 'Net')}
+                {' '}({(authorityRemainingBags ?? Math.round(authorityRemainingKilos / 50)).toLocaleString()} bags)
+              </p>
+            )}
+          </div>
+
+          {/* Sits right after the primary pile's own Net Kilos, before
+              Age - by the time the user gets here they know whether this
+              pile alone covers the issuance, which is the natural moment
+              to decide whether another pile is needed to complete it. */}
           {type === 'WSI' && !isAccountabilityFacility && (
             <div>
               {extraPileAllocations.map((alloc, i) => {
@@ -2665,154 +2817,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               )}
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>MC % (Moisture Content)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={moistureContent}
-                onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
-                className={`${inputClass} ${moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
-                placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
-              />
-            </div>
-
-            <div>
-              <label className={labelClass}>MTS — Sack Code &amp; Condition</label>
-              <select
-                value={sackSelection}
-                onChange={(e) => setSackSelection(e.target.value)}
-                className={`${inputClass} ${!sackSelection ? '!border-brand-amber' : ''}`}
-              >
-                <option value="">Select sack code…</option>
-                {sackOptions.map((o) => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              {sackOptions.length === 0 && (
-                <p className="mt-1 text-xs text-neutral-500">
-                  {selectedVariety
-                    ? `No ${selectedVariety.category} sack types configured with a weight yet.`
-                    : 'Select a variety to see matching sack types.'}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {selectedPile && isIssuance && (
-            <div className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-400">
-              Available on {selectedPile.pileName}: {fmtBags(availableBags)} bags ·{' '}
-              {fmtWeight(availableKilos, weightUnit)}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Number of Bags</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={numberOfBags}
-                onChange={(e) => setNumberOfBags(liveFormatNumber(e.target.value))}
-                className={`${inputClass} ${overBags ? 'border-brand-amber' : ''}`}
-                placeholder="0"
-              />
-              {overBags && (
-                <p className="mt-1 text-xs text-brand-amber">
-                  Exceeds available bags — allowed for some transaction types.
-                </p>
-              )}
-              {suggestedBagsToComplete != null && suggestedBagsToComplete > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setNumberOfBags(liveFormatNumber(String(suggestedBagsToComplete)))}
-                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
-                >
-                  Use {suggestedBagsToComplete.toLocaleString()} bags to complete AI balance
-                </button>
-              )}
-            </div>
-            <div>
-              <label className={labelClass}>Gross Kilos</label>
-              <ValidatedField
-                inputMode="decimal"
-                value={grossKilos}
-                onChange={(e) => setGrossKilos(liveFormatNumber(e.target.value, 3))}
-                placeholder="0.000"
-                validate={(v) => {
-                  if (v === '') return null // not yet entered - no opinion until the user actually leaves it blank on purpose
-                  const num = parseFormattedNumber(v)
-                  if (!(num > 0)) return { valid: false, message: 'Gross Kilos must be greater than 0' }
-                  return { valid: true }
-                }}
-              />
-              {suggestedGrossKilosToComplete != null && suggestedGrossKilosToComplete > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setGrossKilos(liveFormatNumber(suggestedGrossKilosToComplete.toFixed(3), 3))}
-                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
-                >
-                  Use {fmtWeight(suggestedGrossKilosToComplete, weightUnit, 'Gross')} to complete AI balance
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3">
-            <span className="text-xs text-neutral-400">Auto-compute Net Kilos</span>
-            <button
-              type="button"
-              onClick={() => setAutoComputeNet((v) => !v)}
-              aria-pressed={autoComputeNet}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
-                  autoComputeNet ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div>
-            <label className={labelClass}>Net Kilos</label>
-            {autoComputeNet ? (
-              <div className={`${readOnlyClass} ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
-                {fmtWeight(netKilos, weightUnit)}
-              </div>
-            ) : (
-              <input
-                type="text"
-                inputMode="decimal"
-                value={manualNetKilos}
-                onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
-                className={`${inputClass} ${overKilos ? 'border-brand-crimson' : ''}`}
-                placeholder="0.000"
-              />
-            )}
-            {overKilos && (
-              <p className="mt-1 text-xs text-brand-crimson">
-                {selectedPile?.pileName ?? 'This pile'} only has {fmtWeight(availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
-              </p>
-            )}
-            {bagsNum > 0 && !overKilos && (
-              <p className="mt-1 text-xs text-neutral-500">
-                Average weight per bag: {avgWeightPerBag.toFixed(2)} kg
-              </p>
-            )}
-            {linkedDocDeductsFromAi && authorityRemainingKilos != null && (
-              <p className="mt-1 text-xs text-brand-neon">
-                AI balance remaining: {fmtWeight(authorityRemainingKilos, weightUnit, 'Net')}
-                {' '}({(authorityRemainingBags ?? Math.round(authorityRemainingKilos / 50)).toLocaleString()} bags)
-              </p>
-            )}
-          </div>
 
           <div className="grid grid-cols-2 gap-3">
             {ageUnit === 'Months + Days' ? (

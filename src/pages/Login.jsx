@@ -178,18 +178,18 @@ function Login() {
 
   return (
     <div className={`relative flex min-h-screen flex-col items-center justify-center px-6 ${(isExiting || !hasEntered) ? 'overflow-hidden' : ''}`}>
-      <p className="pointer-events-none absolute bottom-14 left-1/2 -translate-x-1/2 select-none text-xs tracking-wide text-neutral-500 opacity-20">
-        by ArVee
-      </p>
-      {/* Version label - sits below "by ArVee" with its own generous
-          bottom offset (not just a smaller font under it) so it stays
-          clear of the home-indicator/gesture-bar area on short mobile
-          viewports. Slightly more visible than "by ArVee" (opacity-35
-          vs 20) since it's meant to be legible enough to actually
-          confirm the deployed version, not purely decorative. */}
-      <p className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 select-none px-4 text-center text-[10px] tracking-wide text-neutral-500 opacity-35">
-        v{APP_VERSION}
-      </p>
+      {/* "by ArVee" and the version now sit right on top of each other
+          as one tight block, instead of two independently-positioned
+          lines spread across bottom-14 and bottom-6 - on a short
+          viewport (a small phone, or one with the on-screen keyboard
+          up) that wide a spread meant only one of the two was ever
+          actually visible at once. Both still clear of the home-
+          indicator/gesture-bar area via the block's own bottom-8
+          offset. */}
+      <div className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 flex select-none flex-col items-center gap-0.5 px-4 text-center">
+        <p className="text-xs tracking-wide text-neutral-500 opacity-20">by ArVee</p>
+        <p className="text-[10px] tracking-wide text-neutral-500 opacity-35">v{APP_VERSION}</p>
+      </div>
       <div className="w-full max-w-sm">
         <img
           src="/logo.svg"
