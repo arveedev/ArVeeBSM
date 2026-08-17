@@ -178,15 +178,19 @@ function Login() {
 
   return (
     <div className={`relative flex min-h-screen flex-col items-center justify-center px-6 ${(isExiting || !hasEntered) ? 'overflow-hidden' : ''}`}>
-      {/* "by ArVee" and the version now sit right on top of each other
-          as one tight block, instead of two independently-positioned
-          lines spread across bottom-14 and bottom-6 - on a short
-          viewport (a small phone, or one with the on-screen keyboard
-          up) that wide a spread meant only one of the two was ever
-          actually visible at once. Both still clear of the home-
-          indicator/gesture-bar area via the block's own bottom-8
-          offset. */}
-      <div className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 flex select-none flex-col items-center gap-0.5 px-4 text-center">
+      {/* "by ArVee" and the version sit as one tight block, not two
+          independently-positioned lines - on a short viewport that
+          used to mean only one of them was ever visible at once.
+          `fixed`, not `absolute`: the outer container is
+          `min-h-screen` + centered content (logo/title/PIN dots/
+          keypad), which on a real phone (safe-area insets, on-screen
+          address bar, etc.) can genuinely be taller than the visible
+          viewport - an `absolute` block pins to the BOTTOM OF THAT
+          TALLER CONTAINER, which sits below the fold and needs a
+          scroll to ever see. `fixed` pins to the viewport itself,
+          so it's always on screen regardless of how tall the content
+          above it grows. */}
+      <div className="pointer-events-none fixed bottom-8 left-1/2 z-10 -translate-x-1/2 flex select-none flex-col items-center gap-0.5 px-4 text-center">
         <p className="text-xs tracking-wide text-neutral-500 opacity-20">by ArVee</p>
         <p className="text-[10px] tracking-wide text-neutral-500 opacity-35">v{APP_VERSION}</p>
       </div>
