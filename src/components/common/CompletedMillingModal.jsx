@@ -43,9 +43,21 @@ function CompletedMillingModal({ orders, type, onSelectOrder, onClose, isAdmin =
     if (!stillHere) setRevertingId(null)
   }, [orders, revertingId])
 
-  // Only ever offered for orders completed by the MANUAL checkbox - one
-  // genuinely fulfilled via real batch/trial data (o.fulfilled) isn't
-  // "done by mistake" in any sense a toggle could undo.
+  // Only ever offered for orders completed by the MANUAL checkbox.
+  //
+  // Deliberately NOT also excluding o.fulfilled here (a previous
+  // version did, on the theory that a genuinely-fulfilled order isn't
+  // "done by mistake"). That assumed o.fulfilled is a trustworthy
+  // "actually done" signal, the same way it is for AI/SIA Authorities
+  // - but per explicit request, MO/TMO completion is manual-only now,
+  // specifically because o.fulfilled's kg/piece math only ever tracks
+  // primary stock, never By Products (entered too inconsistently for
+  // the app to verify) - it's advisory (see needsConfirmation in
+  // MillingMonitor.jsx's amber-border cue), never authoritative. It
+  // no longer drives list membership either (see isOrderCompleted in
+  // MillingMonitor.jsx), so trusting it here to BLOCK an admin's own
+  // uncheck would be inconsistent with not trusting it to complete the
+  // order in the first place.
   //
   // Deliberately NOT also excluding o.sheetStatus === 'DONE' here (a
   // previous version did) - marking an order complete via this same
@@ -60,7 +72,7 @@ function CompletedMillingModal({ orders, type, onSelectOrder, onClose, isAdmin =
   // checkbox" - no need to also trust sheetStatus, which can no longer
   // reliably distinguish "typed DONE directly on the Sheet" from "the
   // app wrote DONE because the admin already completed it here."
-  const canUncomplete = (o) => isAdmin && o.manuallyCompleted && !o.fulfilled
+  const canUncomplete = (o) => isAdmin && o.manuallyCompleted
 
   const requestUncomplete = (order, e) => {
     e.stopPropagation()
