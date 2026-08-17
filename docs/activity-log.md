@@ -15116,3 +15116,69 @@ bucket now correctly shows that one bucket's detail on expand.
 `src/pages/HomeStocks.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 26) - real sack-weight separation bug + phantom deleted-pile beginning balance bug
+
+Two separate reports investigated and fixed this round.
+
+**Home Stocks sack-weight separation was reading stale data.** User
+asked why stocks with a different sack weight weren't separated on the
+per-warehouse overview - narrowed down to Rice/Palay specifically (By
+Products stays intentionally unseparated per an earlier explicit
+request, unaffected by this). Root cause: `HomeStocks.jsx` resolved
+each pile's sack weight from `piles.mtsSackTypeId`, but that field is
+only ever set once, at pile CREATION time
+(`createPileWithBeginningBalance`) - every ordinary WSR receipt after
+that carries its OWN `mtsSackTypeId`/`mtsCondition` on the
+TRANSACTION, never written back to the pile. A Rice/Palay pile is
+locked to one variety for life but never locked to one sack weight, so
+a pile that received stock under more than one weight over its
+lifetime had that mix completely invisible to the separation logic,
+which only ever saw whichever weight the pile happened to be created
+with (if any).
+
+Fixed by adding `computePileStockBySackWeight` (`pileLedger.js`) -
+mirrors `computeHistoricalPileState`'s exact transaction-summing logic
+(same WSR/WSI/WTS signs, same reportingCutoffDate handling) but broken
+out per resolved sack weight instead of summed into one total. WTS
+transfers (which don't record a sack weight at all - a real, pre-
+existing data gap) land in an 'unspecified' bucket rather than being
+silently misattributed. `HomeStocks.jsx` now sources its per-variety
+weight breakdown from this per-pile, per-transaction computation
+instead of the stale pile-level field.
+
+**Duplicate/inflated beginning balances in the exported weekly report.**
+User reported that after this session's earlier reportingCutoffDate/
+assignedDate fixes, a warehouse's report STILL showed roughly double
+the stock a variety's live piles actually account for (a screenshot
+showed PD1s-A's report beginning balance at 12,419 bags for a period
+where the live Pile Layout showed only 6,292 bags across its two
+actual PD1s-A piles).
+
+Root cause: `Reports.jsx`'s PDF-export beginning-balance calculation
+sums every `isInitialBalance` transaction warehouse-wide, grouped by
+variety+condition+weight, with (by explicit original design) "no
+per-pile matching." Pile deletion deliberately preserves that pile's
+transactions forever (BIN cards and other historical records still
+need them) - but that means a pile created by mistake and later
+deleted still has its old seed transaction counted in EVERY future
+report's beginning balance for that variety, forever, since nothing
+checked whether the pile it belonged to still exists. This is the
+warehouse-wide-aggregate counterpart to the "PD phantom-data" bug
+already fixed for the PER-PILE `computeHistoricalPileState` earlier
+this session - a genuinely separate code path (a direct
+`db.transactions.where('warehouseId')` sum, not a per-pile query) that
+never received that same fix. Fixed by filtering
+`priorStockRaw`/`addToBeginningBal` to only transactions whose pile
+(via `pileId`, or `receivedPileId`/`issuedPileId` for the two sides of
+a WTS transfer) still exists in `db.piles` today.
+
+### Files touched
+`src/pages/HomeStocks.jsx`, `src/utils/pileLedger.js`,
+`src/pages/Reports.jsx`.
+
+`npm run build` passes. Neither fix could be verified against the
+user's actual live data in this session - the reasoning is grounded in
+the exact numbers from their screenshots, but they should re-export
+the report and re-check the Home Stocks overview against their real
+warehouse to confirm.

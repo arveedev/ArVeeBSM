@@ -547,7 +547,34 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-16 session, round 25) - fixed single-age-bucket varieties showing no detail on Home Stocks - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-17 session, round 26) - sack-weight separation bug + phantom deleted-pile beginning balance bug - NOT YET COMMITTED/PUSHED
+
+Two real bugs found and fixed. (1) Home Stocks' Rice/Palay sack-weight
+separation read `piles.mtsSackTypeId`, which only reflects whichever
+weight a pile was first CREATED with - never updated by later
+receipts, which each carry their own weight on the TRANSACTION, not
+the pile. A pile that genuinely received more than one sack weight
+over its lifetime was invisible to the separation logic. Fixed via a
+new `computePileStockBySackWeight` (`pileLedger.js`) that derives the
+real per-weight breakdown from the pile's actual transaction history
+instead. By Products stays unseparated, unchanged. (2) User reported
+the exported weekly report still showed roughly DOUBLE a variety's
+real stock after this session's earlier cutoff-date fixes (a
+screenshot: PD1s-A report beginning balance 12,419 bags vs. only 6,292
+across its two actual live piles). Root cause: `Reports.jsx`'s PDF
+beginning-balance sum counts every `isInitialBalance` transaction
+warehouse-wide with NO check that the pile it belongs to still exists
+- a pile created by mistake and later deleted (transactions
+deliberately kept forever) has its old seed balance permanently
+inflating every future report for that variety. This is the
+warehouse-wide counterpart to the "PD phantom-data" fix already
+applied to the per-pile `computeHistoricalPileState` - a genuinely
+separate code path that never got that same fix. Now filters to only
+piles that still exist. Neither fix verified against the user's actual
+live data this session - needs re-checking against their real
+warehouse.
+
+### OPEN (2026-08-16 session, round 25) - fixed single-age-bucket varieties showing no detail on Home Stocks - PUSHED
 
 Real bug: `HomeStocks.jsx`'s `VarietyCard` required MORE THAN one age
 bucket before it would render any per-bucket detail row at all (and

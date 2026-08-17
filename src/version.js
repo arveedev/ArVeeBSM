@@ -115,5 +115,23 @@
 //            all, since the detail row only ever rendered for MORE
 //            THAN one bucket - now shows the single bucket too, so the
 //            age group a variety's stock belongs to is always visible
-//            (current)
-export const APP_VERSION = '1.8-15'
+//   1.8-16 - Two real bugs. (1) Home Stocks' sack-weight separation for
+//            Rice/Palay read piles.mtsSackTypeId, which only reflects
+//            whichever weight a pile was first CREATED with and is
+//            never updated by later receipts - now computed from the
+//            pile's actual transaction history instead
+//            (computePileStockBySackWeight, pileLedger.js), so a pile
+//            that genuinely received more than one sack weight over
+//            its lifetime now separates correctly. By Products stays
+//            unseparated, unchanged, per an earlier explicit request.
+//            (2) The exported weekly report's beginning-balance figure
+//            summed EVERY isInitialBalance transaction warehouse-wide
+//            with no check that the pile it belongs to still exists -
+//            deleting a mistakenly-created pile (its transactions are
+//            deliberately kept forever) meant that phantom pile's old
+//            seed balance kept permanently inflating every future
+//            report for that variety. Reports.jsx now filters to only
+//            piles that still exist today, matching the same "pile
+//            existence" fix already applied to the per-pile
+//            computeHistoricalPileState (current)
+export const APP_VERSION = '1.8-16'

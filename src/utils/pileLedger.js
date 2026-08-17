@@ -287,6 +287,72 @@ export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOv
 }
 
 /**
+ * Like computeHistoricalPileState, but broken out by the MTS sack
+ * weight/condition recorded on each individual transaction instead of
+ * summed into one total.
+ *
+ * Why this exists: piles.mtsSackTypeId only reflects whichever weight
+ * a pile happened to be CREATED with (via createPileWithBeginningBalance)
+ * - it is never updated by later WSR receipts, which each carry their
+ * own mtsSackTypeId/mtsCondition on the TRANSACTION, not the pile. A
+ * Rice/Palay pile is locked to one variety for life, but nothing locks
+ * it to one sack weight - ordinary receipts over the pile's lifetime
+ * can genuinely use different sack weights, and the pile's own field
+ * can't reflect that mix at all. Callers that need to know what sack
+ * weight(s) a pile's CURRENT stock actually consists of (e.g. Home
+ * Stocks' per-weight separation) need this, not the stale pile field.
+ *
+ * Returns a Map keyed by the resolved numeric weight, or the string
+ * 'unspecified' for a transaction whose sack type can't be resolved
+ * (including every WTS transfer - WTSForm.jsx doesn't record which
+ * sack-weight batch a transfer's bags came from, a real data gap this
+ * can't paper over), each holding { bags, kilos }.
+ */
+export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12-31', warehouseOverride = null) => {
+  const pile = await db.piles.get(pileId)
+  const warehouse = warehouseOverride ?? (pile?.warehouseId ? await db.warehouses.get(pile.warehouseId) : null)
+  const reportingCutoffDate = warehouse?.reportingCutoffDate || null
+  const sackTypes = await db.sackTypes.toArray()
+  const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
+  const resolveWeight = (t) => sackTypeMap.get(t.mtsSackTypeId)?.weights?.[t.mtsCondition] ?? 'unspecified'
+
+  const direct = (await db.transactions
+    .where('pileId').equals(pileId)
+    .and((t) => t.status === 'Active' && t.date <= cutoffDate)
+    .toArray())
+    .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
+
+  const wtsAll = (await db.transactions
+    .where('type').equals('WTS')
+    .and((t) => t.status === 'Active' &&
+      (t.issuedPileId === pileId || t.receivedPileId === pileId) &&
+      t.date <= cutoffDate)
+    .toArray())
+    .filter((t) => !reportingCutoffDate || t.date > reportingCutoffDate)
+
+  const byWeight = new Map()
+  const add = (weight, bags, kilos) => {
+    if (!byWeight.has(weight)) byWeight.set(weight, { bags: 0, kilos: 0 })
+    const entry = byWeight.get(weight)
+    entry.bags += bags
+    entry.kilos += kilos
+  }
+
+  for (const t of direct) {
+    const sign = t.type === 'WSR' ? 1 : t.type === 'WSI' ? -1 : 0
+    if (sign === 0) continue
+    add(resolveWeight(t), (t.numberOfBags ?? 0) * sign, (t.netKilos ?? 0) * sign)
+  }
+
+  for (const t of wtsAll) {
+    if (t.issuedPileId === pileId) add('unspecified', -(t.issuedBags ?? 0), -(t.issuedNetKilos ?? 0))
+    if (t.receivedPileId === pileId) add('unspecified', t.receivedBags ?? 0, t.receivedNetKilos ?? 0)
+  }
+
+  return byWeight
+}
+
+/**
  * Recomputes a pile's live currentBags/currentKilos from its COMPLETE
  * transaction history (seed + every transaction since) and writes the
  * result to the pile record. This is the correct way to reflect an
