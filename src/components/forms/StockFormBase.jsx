@@ -2094,7 +2094,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   <select
                     value={trialNumber}
                     onChange={(e) => setTrialNumber(e.target.value)}
-                    className={`${inputClass} ${!trialNumber ? '!border-brand-amber' : ''}`}
+                    className={`${inputClass} ${!trialNumber && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
                   >
                     <option value="">Select…</option>
                     {['1', '2', '3'].map((n) => (
