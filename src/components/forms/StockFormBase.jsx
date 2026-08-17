@@ -895,6 +895,40 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const overKilos = isIssuance && availableKilos != null && netKilos > availableKilos
   const overBags = isIssuance && availableBags != null && bagsNum > availableBags
 
+  // Computes an extra pile allocation's actual storable fields from its
+  // raw form state - same MTS-tare-deduction math the primary pile's
+  // own fields already use (calculateMtsFromSackWeight/calculateNetKilos),
+  // applied per line instead of once for the whole form. Shared by
+  // performSave (new allocations), handleUpdate (reconciling existing
+  // ones), and extraAllocInfos below (render-time validation) - all
+  // three need to agree on a line's actual net kilos, never compute it
+  // separately. Declared here (not further down near the other save-
+  // time helpers, where it originally lived) specifically because
+  // extraAllocInfos calls it immediately below - a `const` doesn't
+  // hoist the way a function declaration would, so defining it after
+  // its first caller threw "Cannot access before initialization" the
+  // moment extraPileAllocations actually had a row to iterate.
+  const computeAllocFields = (alloc) => {
+    const sack = sackOptions.find((o) => o.key === alloc.sackSelection)
+    const allocBags = alloc.bags ? parseFormattedNumber(alloc.bags) : 0
+    const allocGross = alloc.grossKilos ? parseFormattedNumber(alloc.grossKilos) : 0
+    const allocMts = calculateMtsFromSackWeight(sack?.weight ?? 0, allocBags)
+    const computedKilos = calculateNetKilos(allocGross, allocMts)
+    const allocNetKilos = alloc.autoComputeNet
+      ? computedKilos
+      : (alloc.manualKilos ? parseFormattedNumber(alloc.manualKilos) : 0)
+    return {
+      numberOfBags: allocBags,
+      grossKilos: allocGross,
+      netKilos: allocNetKilos,
+      autoComputeNet: alloc.autoComputeNet,
+      mtsSackTypeId: sack?.sackTypeId ?? null,
+      mtsCondition: sack?.condition ?? null,
+      moistureContent: alloc.moistureContent === '' || alloc.moistureContent == null
+        ? null : parseFloat(parseFormattedNumber(alloc.moistureContent).toFixed(2)),
+    }
+  }
+
   // Per-line version of everything above (computed net kilos, MTS,
   // and the same "already deducted by this line's own prior save"
   // adjustment the primary pile gets) - each additional pile draws
@@ -1563,34 +1597,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       const totalBags = (primary.numberOfBags ?? 0) + originalExtraAllocations.reduce((s, o) => s + (o.numberOfBags ?? 0), 0)
       const totalKilos = (primary.netKilos ?? 0) + originalExtraAllocations.reduce((s, o) => s + (o.netKilos ?? 0), 0)
       await adjustAuthorityBalance(primary.aiNumber, -totalBags, -totalKilos)
-    }
-  }
-
-  // Computes an extra pile allocation's actual storable fields from its
-  // raw form state - same MTS-tare-deduction math the primary pile's
-  // own fields already use (calculateMtsFromSackWeight/calculateNetKilos),
-  // applied per line instead of once for the whole form. Shared by
-  // performSave (new allocations) and handleUpdate (reconciling
-  // existing ones), so the two can never compute a saved record's
-  // fields differently.
-  const computeAllocFields = (alloc) => {
-    const sack = sackOptions.find((o) => o.key === alloc.sackSelection)
-    const allocBags = alloc.bags ? parseFormattedNumber(alloc.bags) : 0
-    const allocGross = alloc.grossKilos ? parseFormattedNumber(alloc.grossKilos) : 0
-    const allocMts = calculateMtsFromSackWeight(sack?.weight ?? 0, allocBags)
-    const computedKilos = calculateNetKilos(allocGross, allocMts)
-    const allocNetKilos = alloc.autoComputeNet
-      ? computedKilos
-      : (alloc.manualKilos ? parseFormattedNumber(alloc.manualKilos) : 0)
-    return {
-      numberOfBags: allocBags,
-      grossKilos: allocGross,
-      netKilos: allocNetKilos,
-      autoComputeNet: alloc.autoComputeNet,
-      mtsSackTypeId: sack?.sackTypeId ?? null,
-      mtsCondition: sack?.condition ?? null,
-      moistureContent: alloc.moistureContent === '' || alloc.moistureContent == null
-        ? null : parseFloat(parseFormattedNumber(alloc.moistureContent).toFixed(2)),
     }
   }
 
