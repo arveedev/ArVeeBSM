@@ -115,6 +115,18 @@ const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitiv
 
 const emptyMember = () => ({ name: '', rsbsa: '', gender: 'Male' })
 
+// One multi-pile "additional pile" line - deliberately mirrors every
+// field a normal WSI transaction actually has (MC, MTS, Gross Kilos,
+// auto-compute toggle, Net Kilos), not just pileId/bags/kilos - per
+// explicit feedback that a line with only unlabeled Bags/Net Kilos
+// boxes was both missing real data (MC/MTS silently stayed null on
+// every extra pile's own saved record) and unclear which box was
+// which when reviewing one later.
+const emptyExtraAllocation = () => ({
+  pileId: '', bags: '', grossKilos: '', autoComputeNet: true, manualKilos: '',
+  moistureContent: '', sackSelection: '',
+})
+
 const blankFormState = {
   date: todayLocalISO(),
   linkedDocNo: '',
@@ -883,6 +895,30 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const overKilos = isIssuance && availableKilos != null && netKilos > availableKilos
   const overBags = isIssuance && availableBags != null && bagsNum > availableBags
 
+  // Per-line version of everything above (computed net kilos, MTS,
+  // and the same "already deducted by this line's own prior save"
+  // adjustment the primary pile gets) - each additional pile draws
+  // from its OWN pile, so its own stock limit has to be checked
+  // independently, not against whatever the primary pile has.
+  const extraAllocInfos = extraPileAllocations.map((alloc) => {
+    const allocPile = (piles ?? []).find((p) => p.pileId === alloc.pileId) ?? null
+    const fields = computeAllocFields(alloc)
+    const orig = alloc.txId ? originalExtraAllocations.find((o) => o.id === alloc.txId) : null
+    const allocAlreadyDeductedBags = orig?.numberOfBags ?? 0
+    const allocAlreadyDeductedKilos = orig?.netKilos ?? 0
+    const allocAvailableBags = allocPile ? (allocPile.currentBags ?? 0) + allocAlreadyDeductedBags : null
+    const allocAvailableKilos = allocPile ? (allocPile.currentKilos ?? 0) + allocAlreadyDeductedKilos : null
+    return {
+      pile: allocPile,
+      netKilos: fields.netKilos,
+      avgWeightPerBag: calculateAverageWeightPerBag(fields.netKilos, fields.numberOfBags),
+      availableBags: allocAvailableBags,
+      availableKilos: allocAvailableKilos,
+      overKilos: allocAvailableKilos != null && fields.netKilos > allocAvailableKilos,
+      overBags: allocAvailableBags != null && fields.numberOfBags > allocAvailableBags,
+    }
+  })
+
   // Gates the Save button - mirrors validateForm's synchronous checks
   // (serial-uniqueness is async and stays a save-time-only safety net,
   // not part of this live gate).
@@ -903,6 +939,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       && (isFillersType || (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== ''))
       && !overKilos
       && (!farmerOrgEnabled || members.every((m) => m.name.trim()))
+      // Same requirements as the primary pile's own fields, applied
+      // per additional-pile line - a line with no pile picked yet is
+      // still tolerated (silently dropped at save time, same as
+      // before), but one the user has actually started filling in
+      // must be genuinely complete, not silently missing MC/MTS the
+      // way every extra pile's saved record used to.
+      && extraPileAllocations.every((alloc, i) => {
+        if (!alloc.pileId) return true
+        return (Boolean(alloc.bags) || Boolean(alloc.grossKilos))
+          && (isFillersType || Boolean(alloc.sackSelection))
+          && (isFillersType || activeCategory === 'By Products' || (alloc.moistureContent !== '' && !isNaN(parseFormattedNumber(alloc.moistureContent))))
+          && !extraAllocInfos[i].overKilos
+      })
 
   const updateMember = (index, field, value) => {
     setMembers((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)))
@@ -1074,7 +1123,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             txId: s.id,
             pileId: s.pileId ?? '',
             bags: s.numberOfBags != null ? liveFormatNumber(String(s.numberOfBags)) : '',
-            kilos: s.netKilos != null ? liveFormatNumber(String(s.netKilos), 3) : '',
+            grossKilos: s.grossKilos != null ? liveFormatNumber(String(s.grossKilos), 3) : '',
+            autoComputeNet: s.autoComputeNet ?? true,
+            manualKilos: s.autoComputeNet === false && s.netKilos != null ? liveFormatNumber(String(s.netKilos), 3) : '',
+            moistureContent: s.moistureContent != null ? liveFormatNumber(String(s.moistureContent)) : '',
+            sackSelection: s.mtsSackTypeId && s.mtsCondition ? `${s.mtsSackTypeId}::${s.mtsCondition}` : '',
           })))
           setOriginalExtraAllocations(siblings.map((s) => ({
             id: s.id,
@@ -1513,10 +1566,38 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     }
   }
 
+  // Computes an extra pile allocation's actual storable fields from its
+  // raw form state - same MTS-tare-deduction math the primary pile's
+  // own fields already use (calculateMtsFromSackWeight/calculateNetKilos),
+  // applied per line instead of once for the whole form. Shared by
+  // performSave (new allocations) and handleUpdate (reconciling
+  // existing ones), so the two can never compute a saved record's
+  // fields differently.
+  const computeAllocFields = (alloc) => {
+    const sack = sackOptions.find((o) => o.key === alloc.sackSelection)
+    const allocBags = alloc.bags ? parseFormattedNumber(alloc.bags) : 0
+    const allocGross = alloc.grossKilos ? parseFormattedNumber(alloc.grossKilos) : 0
+    const allocMts = calculateMtsFromSackWeight(sack?.weight ?? 0, allocBags)
+    const computedKilos = calculateNetKilos(allocGross, allocMts)
+    const allocNetKilos = alloc.autoComputeNet
+      ? computedKilos
+      : (alloc.manualKilos ? parseFormattedNumber(alloc.manualKilos) : 0)
+    return {
+      numberOfBags: allocBags,
+      grossKilos: allocGross,
+      netKilos: allocNetKilos,
+      autoComputeNet: alloc.autoComputeNet,
+      mtsSackTypeId: sack?.sackTypeId ?? null,
+      mtsCondition: sack?.condition ?? null,
+      moistureContent: alloc.moistureContent === '' || alloc.moistureContent == null
+        ? null : parseFloat(parseFormattedNumber(alloc.moistureContent).toFixed(2)),
+    }
+  }
+
   const performSave = async (trial3Confirmed) => {
     setIsSaving(true)
 
-    const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.kilos))
+    const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.grossKilos || a.manualKilos))
     const transaction = {
       id: crypto.randomUUID(),
       ...buildTransactionPayload(),
@@ -1572,18 +1653,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     let extraBagsTotal = 0
     let extraKilosTotal = 0
     for (const [idx, alloc] of validExtraAllocations.entries()) {
-      const allocBags = alloc.bags ? parseFormattedNumber(alloc.bags) : 0
-      const allocKilos = alloc.kilos ? parseFormattedNumber(alloc.kilos) : 0
-      extraBagsTotal += allocBags
-      extraKilosTotal += allocKilos
+      const fields = computeAllocFields(alloc)
+      extraBagsTotal += fields.numberOfBags
+      extraKilosTotal += fields.netKilos
       const extraTransaction = {
         ...transaction,
         id: crypto.randomUUID(),
         serialNo: `${serialNo.trim()}-${String.fromCharCode(65 + idx)}`,
         pileId: alloc.pileId,
-        numberOfBags: allocBags,
-        grossKilos: allocKilos,
-        netKilos: allocKilos,
+        ...fields,
       }
       await db.transactions.add(extraTransaction)
       await applyTransactionToPile(extraTransaction)
@@ -1706,7 +1784,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // allocation) before applying anything new - see reverseGroupEffect.
     await reverseGroupEffect(loadedTransaction)
 
-    const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.kilos))
+    const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.grossKilos || a.manualKilos))
 
     const updated = buildTransactionPayload({
       id: loadedTransaction.id,
@@ -1745,10 +1823,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     let extraKilosTotal = 0
     const survivingTxIds = new Set()
     for (const alloc of validExtraAllocations) {
-      const allocBags = alloc.bags ? parseFormattedNumber(alloc.bags) : 0
-      const allocKilos = alloc.kilos ? parseFormattedNumber(alloc.kilos) : 0
-      extraBagsTotal += allocBags
-      extraKilosTotal += allocKilos
+      const fields = computeAllocFields(alloc)
+      extraBagsTotal += fields.numberOfBags
+      extraKilosTotal += fields.netKilos
 
       if (alloc.txId) {
         survivingTxIds.add(alloc.txId)
@@ -1758,9 +1835,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           id: alloc.txId,
           serialNo: orig?.serialNo ?? `${serialNo.trim()}-${nextAvailableLetter(usedLetters)}`,
           pileId: alloc.pileId,
-          numberOfBags: allocBags,
-          grossKilos: allocKilos,
-          netKilos: allocKilos,
+          ...fields,
         }
         await db.transactions.update(alloc.txId, extraUpdated)
         await applyTransactionToPile(extraUpdated)
@@ -1772,9 +1847,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           id: crypto.randomUUID(),
           serialNo: `${serialNo.trim()}-${letter}`,
           pileId: alloc.pileId,
-          numberOfBags: allocBags,
-          grossKilos: allocKilos,
-          netKilos: allocKilos,
+          ...fields,
         }
         await db.transactions.add(extraTransaction)
         await applyTransactionToPile(extraTransaction)
@@ -1842,14 +1915,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setPendingVoidAction(null)
     setIsSaving(true)
     if (loadedTransaction && loadedTransaction.status !== 'Cancelled') {
-      await reverseTransactionFromPile(loadedTransaction)
-      if (loadedTransaction.aiNumber) {
-        await adjustAuthorityBalance(
-          loadedTransaction.aiNumber,
-          -(loadedTransaction.numberOfBags ?? 0),
-          -(loadedTransaction.netKilos ?? 0)
-        )
-      }
+      // Voiding a multi-pile issuance voids the WHOLE group - same
+      // reasoning as Delete (one real-world event, several linked
+      // records purely for per-pile ledger accuracy). Each extra pile
+      // becomes its own Cancelled record too (below), rather than
+      // being deleted or left Active, so the audit trail still shows
+      // exactly what was voided on every pile originally touched - per
+      // explicit request (Option A).
+      await reverseGroupEffect(loadedTransaction)
     }
     const cancelledRecord = loadedTransaction
       ? buildCancelledPayload({ id: loadedTransaction.id })
@@ -1858,6 +1931,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       await db.transactions.update(loadedTransaction.id, cancelledRecord)
     } else {
       await db.transactions.add(cancelledRecord)
+    }
+    // originalExtraAllocations is empty when voiding a brand-new entry
+    // that was never actually loaded, so this is a no-op in that case.
+    for (const orig of originalExtraAllocations) {
+      await db.transactions.update(orig.id, { ...buildCancelledPayload(), serialNo: orig.serialNo })
     }
     await recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory)
     setIsCancelled(true)
@@ -1870,11 +1948,18 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // flag) - this is what actually makes the serial available again for
   // a fresh entry, rather than leaving behind an incomplete "Active"
   // record that would immediately fail the normal validation rules.
+  // Every extra pile's own Cancelled record (created by handleConfirmVoid
+  // above) gets deleted right along with the primary's, for the same
+  // reason deleting a multi-pile group deletes every linked record.
   const handleConfirmUnvoid = async () => {
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
     await db.transactions.delete(loadedTransaction.id)
+    for (const orig of originalExtraAllocations) {
+      await db.transactions.delete(orig.id)
+      queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
+    }
     await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
     queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
@@ -2410,10 +2495,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
           {type === 'WSI' && !isAccountabilityFacility && (
             <div>
-              {extraPileAllocations.map((alloc, i) => (
-                <div key={i} className="mt-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2">
+              {extraPileAllocations.map((alloc, i) => {
+                const info = extraAllocInfos[i]
+                return (
+                <div key={i} className="mt-2 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-neutral-500">Additional pile {i + 1}</span>
+                    <span className="text-xs font-semibold text-neutral-400">Additional pile {i + 1}</span>
                     <button
                       type="button"
                       onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
@@ -2423,7 +2510,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       <X size={14} />
                     </button>
                   </div>
-                  <div className="mt-1 grid grid-cols-3 gap-2">
+
+                  <div>
+                    <label className={labelClass}>Pile</label>
                     <select
                       value={alloc.pileId}
                       onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, pileId: e.target.value } : r)))}
@@ -2437,32 +2526,119 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                           <option key={p.pileId} value={p.pileId}>{p.pileName}</option>
                         ))}
                     </select>
-                    <input
-                      type="text" inputMode="numeric" placeholder="Bags"
-                      value={alloc.bags}
-                      onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r)))}
-                      className={`${inputClass} mt-0`}
-                    />
-                    <input
-                      type="text" inputMode="decimal" placeholder="Net Kilos"
-                      value={alloc.kilos}
-                      onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, kilos: liveFormatNumber(e.target.value) } : r)))}
-                      className={`${inputClass} mt-0`}
-                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className={labelClass}>MC % (Moisture Content)</label>
+                      <input
+                        type="text" inputMode="decimal"
+                        value={alloc.moistureContent}
+                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, moistureContent: liveFormatNumber(e.target.value) } : r)))}
+                        className={`${inputClass} mt-0 ${alloc.moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                        placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>MTS — Sack Code &amp; Condition</label>
+                      <select
+                        value={alloc.sackSelection}
+                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, sackSelection: e.target.value } : r)))}
+                        className={`${inputClass} mt-0 ${!alloc.sackSelection ? '!border-brand-amber' : ''}`}
+                      >
+                        <option value="">Select sack code…</option>
+                        {sackOptions.map((o) => (
+                          <option key={o.key} value={o.key}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {info.pile && (
+                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-neutral-400">
+                      Available on {info.pile.pileName}: {fmtBags(info.availableBags)} bags ·{' '}
+                      {fmtWeight(info.availableKilos, weightUnit)}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className={labelClass}>Number of Bags</label>
+                      <input
+                        type="text" inputMode="decimal" placeholder="0"
+                        value={alloc.bags}
+                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r)))}
+                        className={`${inputClass} mt-0 ${info.overBags ? 'border-brand-amber' : ''}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Gross Kilos</label>
+                      <input
+                        type="text" inputMode="decimal" placeholder="0.000"
+                        value={alloc.grossKilos}
+                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, grossKilos: liveFormatNumber(e.target.value, 3) } : r)))}
+                        className={`${inputClass} mt-0`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5">
+                    <span className="text-xs text-neutral-400">Auto-compute Net Kilos</span>
+                    <button
+                      type="button"
+                      onClick={() => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, autoComputeNet: !r.autoComputeNet } : r)))}
+                      aria-pressed={alloc.autoComputeNet}
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                        alloc.autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+                          alloc.autoComputeNet ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Net Kilos</label>
+                    {alloc.autoComputeNet ? (
+                      <div className={`${readOnlyClass} mt-0 ${info.overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                        {fmtWeight(info.netKilos, weightUnit)}
+                      </div>
+                    ) : (
+                      <input
+                        type="text" inputMode="decimal" placeholder="0.000"
+                        value={alloc.manualKilos}
+                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, manualKilos: liveFormatNumber(e.target.value, 3) } : r)))}
+                        className={`${inputClass} mt-0 ${info.overKilos ? 'border-brand-crimson' : ''}`}
+                      />
+                    )}
+                    {info.overKilos && (
+                      <p className="mt-1 text-xs text-brand-crimson">
+                        {info.pile?.pileName ?? 'This pile'} only has {fmtWeight(info.availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
+                      </p>
+                    )}
+                    {parseFormattedNumber(alloc.bags) > 0 && !info.overKilos && (
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Average weight per bag: {info.avgWeightPerBag.toFixed(2)} kg
+                      </p>
+                    )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
               <button
                 type="button"
-                onClick={() => setExtraPileAllocations((rows) => [...rows, { pileId: '', bags: '', kilos: '' }])}
+                onClick={() => setExtraPileAllocations((rows) => [...rows, emptyExtraAllocation()])}
                 className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
               >
                 <Plus size={14} /> Issue from another pile
               </button>
               {extraPileAllocations.length > 0 && (
                 <p className="mt-1.5 text-xs text-neutral-500">
-                  Pile ID above covers its own share (with the Bags/Net Kilos fields further up) - each
-                  additional pile here adds its own separate share on top, saved as its own linked record.
+                  The fields above cover this pile's own share, on top of the Pile ID/Bags/Net Kilos
+                  fields further up - each additional pile here is saved as its own linked record.
                 </p>
               )}
             </div>
@@ -2600,7 +2776,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             )}
             {overKilos && (
               <p className="mt-1 text-xs text-brand-crimson">
-                Cannot exceed available Net Kilos ({fmtWeight(availableKilos, weightUnit)}) — this is a hard limit.
+                {selectedPile?.pileName ?? 'This pile'} only has {fmtWeight(availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
               </p>
             )}
             {bagsNum > 0 && !overKilos && (
