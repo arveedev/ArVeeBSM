@@ -608,6 +608,35 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**Real bug fixed: multi-pile WSI issuances never reloaded their other
+piles - fixed, not yet confirmed by user.** User-reported: tapping an
+existing multi-pile transaction from Reports, or stepping back to its
+serial on the input form, only ever showed one pile. Root cause: a
+multi-pile WSI saves each additional pile as its own sibling
+transaction (same `groupSerialNo`, base serial + letter suffix), but
+`loadTransactionIntoForm` never looked those up - reopening the
+PRIMARY record (the natural entry point either way) silently dropped
+every other pile from view. Not data loss - the siblings were always
+intact in the DB, purely a reload gap. Fixed: `loadTransactionIntoForm`
+now queries siblings by `groupSerialNo` (excluding itself) and
+repopulates `extraPileAllocations` from them, fire-and-forget async,
+same pattern as the existing Sheet-backfill fetch.
+
+Also found and deliberately NOT fixed in the same pass: the extra-pile
+inputs are always editable, but `handleUpdate` has never touched
+`extraPileAllocations` at all - only the primary record saves on
+Update. With extras visible again, that's now a real footgun (edit an
+extra pile, tap Update, get an "updated" toast, edit silently
+discarded) - locked those fields read-only specifically when reviewing
+an existing transaction, with an inline note explaining why. Actually
+wiring up Update for extras is a separate follow-up - surfaced a
+related pre-existing bug along the way: `handleUpdate`'s authority
+reversal/reapply only ever accounts for the primary record's own
+bags/kilos, never the extras' combined share from the original save,
+so ANY update to a multi-pile transaction's primary (even an unrelated
+field) silently drops the extras' share from the authority's running
+issued total. Flagged to the user, not attempted blind.
+
 **Auto-compute Net Kilos never switched off automatically anymore,
 only by the user's own toggle tap - fixed, not yet confirmed by
 user.** Per explicit request. Two places in `StockFormBase.jsx`

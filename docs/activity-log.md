@@ -15768,3 +15768,51 @@ confirmed via grep, nothing to change in either.
 `src/components/common/AuthorityMonitor.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #13 merged; continued) - multi-pile WSI issuances never reloaded their other piles when reopened
+
+User reported: tapping an existing multi-pile transaction from Reports,
+or stepping back to its serial on the input form, only ever showed one
+pile - the multi-pile allocation was gone.
+
+Root cause: multi-pile issuance (WSI drawing from more than one pile)
+saves each additional pile as its own sibling transaction record
+(same `groupSerialNo`, base serial + letter suffix - see `performSave`),
+but `loadTransactionIntoForm` never looked those siblings up at all -
+it only ever applied the one record it was directly handed, so
+reopening the PRIMARY record (the natural entry point from both
+Reports and serial-stepping) silently dropped every other pile from
+view, even though the sibling records themselves were completely
+intact in the database the whole time. Not data loss, purely a
+display/reload gap.
+
+Fixed: `loadTransactionIntoForm` now checks `tx.groupSerialNo` and, if
+set, queries `db.transactions.where('groupSerialNo').equals(...)` for
+Active siblings (excluding the tx's own id), repopulating
+`extraPileAllocations` from them - fire-and-forget async tail (same
+pattern as the existing Sheet-backfill fetch further down), so it
+populates a moment after the rest of the form rather than blocking it.
+
+Also found, and deliberately did NOT try to fix in the same pass: the
+extra-pile-allocation inputs are always editable regardless of new-vs-
+loaded mode, but `handleUpdate` has NEVER touched `extraPileAllocations`
+at all - only the primary record's own fields get saved on Update. Once
+extras are visible again (this fix), that becomes a real footgun: edit
+an extra pile's bags, tap Update, get an "updated" toast, but the
+edit is silently discarded. Locked those fields to
+disabled/read-only specifically when `loadedTransaction` is set (a new
+inline message explains why), so reviewing shows the true full
+picture without implying an edit will stick. Genuinely wiring up
+Update for extras is a separate, nontrivial follow-up - it also
+surfaced a related pre-existing authority-balance bug along the way
+(handleUpdate's authority reversal/reapply only ever accounts for the
+primary record's own bags/kilos, never the extras' combined
+contribution from the original save - meaning ANY update to a multi-
+pile transaction's primary record, even an unrelated field, silently
+drops the extras' share from the authority's running issued total).
+Flagged to the user rather than attempted blind.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes.
