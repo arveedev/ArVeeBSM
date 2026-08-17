@@ -61,6 +61,21 @@ const FIELDS_TO_COMPARE = [
   'trialNumber', 'totalPiecesRaw',
 ]
 
+// Single-flight guard: startTransactionSyncWorker fires this on a 30s
+// interval AND on every 'online' event, on top of the one-off call at
+// login - a run that takes longer than 30s (a large multi-warehouse
+// admin pull on a slow connection, entirely plausible) or an 'online'
+// event landing mid-run would otherwise start a SECOND, fully
+// overlapping pass. Since preloadOneType's own-row dedup only checks
+// against a snapshot taken at the start of ITS run, two overlapping
+// passes each see the same Sheet row as "not yet imported" and both
+// add() it with a fresh random id - a confirmed, reproduced cause of
+// the duplicate local transactions the consolidated-fix migrations
+// above were mopping up after the fact. A concurrent caller now just
+// awaits whichever pass is already in flight instead of starting its
+// own.
+let inFlightPreload = null
+
 /**
  * Preloads transaction history for every warehouse the given user is
  * assigned to. Safe to call on every login - already-complete
@@ -69,6 +84,16 @@ const FIELDS_TO_COMPARE = [
  * type's batch, e.g. for a UI progress indicator.
  */
 export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
+  if (inFlightPreload) return inFlightPreload
+  inFlightPreload = runPreloadTransactionsForUser(user, { onProgress })
+  try {
+    await inFlightPreload
+  } finally {
+    inFlightPreload = null
+  }
+}
+
+const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
   if (!user) return
 
   // One-time reset - see PRELOAD_RESET_FLAG below for the full
@@ -182,8 +207,15 @@ export const preloadTransactionsForUser = async (user, { onProgress } = {}) => {
   // re-does work a device already completed individually.
   const HAS_BEEN_BACKED_UP_FIX_FLAG = 'sheet-import-has-been-backed-up-fix-v2'
   const STOCK_CONDITION_DEFAULT_FIX_FLAG = 'stock-condition-null-to-gq-fix-v1'
-  const DEDUP_MERGE_FLAG = 'transaction-dedup-merge-v4'
-  const CONSOLIDATED_FIX_FLAG = 'transaction-consolidated-fix-v5'
+  // Bumped v5 -> v6: preloadTransactionsForUser had no guard against
+  // overlapping runs (the 30s sync interval and the 'online' listener
+  // could both fire while a previous pass was still running), so this
+  // dedup kept needing to re-run on every device as fresh duplicates
+  // kept getting created after v5 already ran once. Now paired with an
+  // actual concurrency fix (inFlightPreload above) so v6 is the last
+  // time this should ever find anything to clean up.
+  const DEDUP_MERGE_FLAG = 'transaction-dedup-merge-v6'
+  const CONSOLIDATED_FIX_FLAG = 'transaction-consolidated-fix-v6'
   const stillNeedsAny = [HAS_BEEN_BACKED_UP_FIX_FLAG, STOCK_CONDITION_DEFAULT_FIX_FLAG, DEDUP_MERGE_FLAG, CONSOLIDATED_FIX_FLAG]
     .some((flag) => !localStorage.getItem(flag))
   if (stillNeedsAny) {

@@ -16157,3 +16157,86 @@ pure reordering.
 
 `npm run build` passes. Not yet confirmed by the user against the
 live deploy.
+
+## Session: 2026-08-17 (round 29) - Additional-pile layout on small screens, Reports duplicate-serial root cause, age-load fallback
+
+Four items reported together from live testing of PR #20/#21's
+multi-pile work; addressed the three that were real bugs.
+
+### 1. Additional-pile card layout on small screens
+
+The MC %/MTS row inside the "Additional pile" card used `grid-cols-2`
+- fine in the primary pile's own matching fields further down (full
+form width), but the additional-pile card is nested inside its own
+narrower bordered container, and the "MTS — Sack Code & Condition"
+label wraps to two lines there, pushing the select down out of
+alignment with the MC input beside it. Stacked this row (both fields
+full width, one above the other) instead of side-by-side, matching
+the nested container's tighter space.
+
+### 2. Duplicate rows on Reports (root cause, not a display bug)
+
+Confirmed via the user (tapping either duplicate row opens the same
+document by serial) that these are two genuinely separate local
+`db.transactions` records sharing the same (type, warehouseId,
+serialNo, cerealCategory) - not a rendering/grouping bug in
+Reports.jsx. Root cause: `preloadTransactionsForUser` (the Sheet
+backfill/incremental-sync pass) had no guard against overlapping
+runs. `startTransactionSyncWorker` fires it on a 30s interval AND on
+every `online` event, on top of the one-off call at login - a run
+slower than 30s (a large multi-warehouse admin pull on a slow
+connection) or an `online` event landing mid-run starts a second,
+fully overlapping pass. Each pass's own-row dedup only checks against
+a snapshot taken at ITS start, so two overlapping passes both see the
+same not-yet-imported Sheet row as new and both `add()` it with a
+fresh random id - two real records, same serial. (The existing
+`transaction-consolidated-fix-v5` migration was already mopping up
+duplicates from this exact class of bug after the fact, confirming
+it was a known, recurring issue whose root cause had never actually
+been patched.)
+
+Fixed with a single-flight guard: `preloadTransactionsForUser` now
+tracks its own in-flight promise (`inFlightPreload`) and any
+concurrent caller just awaits that same run instead of starting a new
+one. Also bumped the consolidated dedup migration's flags
+(`transaction-dedup-merge-v4` -> `-v6`, `transaction-consolidated-fix-v5`
+-> `-v6`) so every device runs the existing merge-dedup pass one more
+time to clean up whatever duplicates already accumulated since v5,
+now that new ones can no longer form the same way.
+
+### 3. Age not auto-filling on an existing transaction
+
+`loadTransactionIntoForm` only set `monthsValue`/`daysValue` when
+`tx.ageUnit === 'Months + Days' && tx.initialAgeValue != null` - no
+`else`, so (a) a record with `initialAgeValue` missing but a real
+`ageValue` (same total-days figure, stored either way per
+`buildTransactionPayload`) showed 0/0 instead of falling back to it,
+and (b) loading two different 'Months + Days' records in the same
+session where the second one failed that check would leave the
+FIRST record's parsed months/days stale on screen. Now always sets
+both fields on every load, falling back to `tx.ageValue` when
+`initialAgeValue` is null, and explicitly zeroing them for any other
+unit.
+
+### 4. Auto-compute toggle showing off on an existing record - not a bug
+
+Checked every place `autoComputeNet` is set (`grep`) - the only ways
+it becomes `false` are the user's own toggle and loading a stored
+`tx.autoComputeNet === false`. `googleSheetsBridge.js`'s
+`mapSheetRowToTransaction` (the Sheet-import mapper used by the
+preload backfill) deliberately sets `autoComputeNet: false` on every
+imported historical record, on purpose - it's importing a net kilos
+figure that was already officially recorded on the Sheet/paper
+document, and silently recomputing it from gross/MTS on load could
+produce a different number than the one actually on file. The
+specific record the user flagged (144 bags, 7,210.8 gross, 7,200 net
+- not what gross-minus-tare would compute) is almost certainly one of
+these imported records. New entries created directly in the app still
+always default to auto-compute enabled, per the existing fix from
+earlier this session - no code change made here.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`,
+`src/services/transactionPreload.js`.
+
+`npm run build` passes.
