@@ -547,6 +547,23 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
+### SELF-CAUGHT BUG (2026-08-17 session, round 28) - production crash on "Issue from another pile" (TDZ ReferenceError) - fixed, not yet confirmed by user
+
+PR #20 (round 27's multi-pile void/unvoid + field-parity work) shipped
+a `ReferenceError: Cannot access '_n' before initialization` crash on
+the live WSI form: clicking "Issue from another pile" threw
+immediately, caught by `[SectionErrorBoundary: WSI form]`. Root cause:
+`computeAllocFields` was declared as a `const` AFTER
+`extraAllocInfos`, which calls it - `const` isn't hoisted, so this
+throws the moment `extraPileAllocations` first gets a row (exactly
+the "Issue from another pile" repro). Invisible in `npm run build`,
+which only catches syntax errors, not this kind of runtime ordering
+bug. Fix: moved `computeAllocFields`'s definition up, directly before
+`extraAllocInfos`. Pure reordering, no behavior change.
+`src/components/forms/StockFormBase.jsx`. Build passes; PR opened and
+merged this round - needs the user to re-test "Issue from another
+pile" live.
+
 **2026-08-17 status check (user-confirmed):** the user confirmed the
 following, previously flagged as open/unverified below, are now
 actually done - kept in place for historical reasoning but should be
