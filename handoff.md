@@ -563,19 +563,30 @@ backoff. None of these needed a code change from this session - the
 user verified them directly. Round 27 below (MO/TMO sort + missing
 numbers) is the only genuinely open item as of this pass.
 
-### OPEN (2026-08-17 session, round 27) - MO/TMO pending list sort fixed; MO/TMO numbers wrongly hidden from Monitor - FIXED AND PUSHED; a second, different picker still needs a user check
+### OPEN (2026-08-17 session, round 27) - MO/TMO pending list sort fixed; MO/TMO numbers wrongly hidden from Monitor; uncheck-complete self-lockout fixed - PR #1 MERGED TO MAIN AND DEPLOYED, user has confirmed the missing-TMO fix works live; a second, different picker still needs a user check
 
 User reported two MO/TMO monitor problems: not sorted by MO/TMO number,
 and specific MO/TMO numbers that exist on the live Sheet never show up
 in the app (checked both pending and Completed), surviving both a
 Milling Operations re-sync and a Sheet Sources re-sync.
 
-**Sort - fixed and pushed.** `MillingMonitor.jsx`'s pending list
+**IMPORTANT PROCESS NOTE**: the first two fixes below initially
+appeared "not to work" when the user tested them - not because the
+fixes were wrong, but because `main` was 2 commits behind this
+session's branch and nothing had actually been merged/deployed yet.
+Confirmed via `git log origin/main` vs the branch, opened PR #1, user
+confirmed Vercel auto-deploys from `main`, merged it (squash). Lesson
+for future rounds: a user reporting "still broken" right after a fix
+should prompt checking whether the fix actually reached them before
+re-investigating the same code again.
+
+**Sort - fixed, merged, deployed.** `MillingMonitor.jsx`'s pending list
 (`filtered`) was filtered but never actually sorted - order came from
 whatever Dexie's IndexedDB cursor happened to return, not MO/TMO
-number. Now sorted via `order.number.localeCompare(..., { numeric:
-true })` (Completed's own separate newest-activity-first sort from
-round 14 is correct as designed, untouched).
+number. Sorted via `order.number.localeCompare(...)`, `numeric: true`;
+user explicitly wants descending, so `b.number.localeCompare(a.number,
+...)` (Completed's own separate newest-activity-first sort from round
+14 is correct as designed, untouched).
 
 **Missing numbers - root cause found and fixed.** User confirmed the
 missing number DID appear in the sync console log (ruling out both
@@ -596,6 +607,22 @@ on that list?"), correctly. Fixed by deleting the
 `earliestSourceDateFrom` computation and its check entirely (confirmed
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
+
+**Uncheck-complete self-lockout - fixed, not yet confirmed by user.**
+After using the admin checkbox to mark several MO/TMO complete, none
+showed an uncheck control anymore. Genuine race, not a missing
+feature: marking complete writes literal `'DONE'` to the Sheet's own
+STATUS column (`markMillingOrderDone`, by design, keeps the Sheet in
+sync). `CompletedMillingModal.jsx`'s `canUncomplete` gate used to also
+exclude `o.sheetStatus === 'DONE'`, meant to block only orders marked
+DONE independently on the Sheet - but the next sync pulls the app's
+own DONE write straight back in, so `sheetStatus` reads DONE for every
+order the admin just completed THROUGH the app, permanently hiding the
+very control that was supposed to undo it. Fixed: `canUncomplete =
+(o) => isAdmin && o.manuallyCompleted && !o.fulfilled` - drops the
+`sheetStatus` check entirely, matches the same rule already used
+correctly for AI/SIA Authorities (manually-completed + not genuinely
+fulfilled, never gated on an externally-sourced status flag).
 
 **Separate, NOT YET addressed:** user also asked why the by-products
 TMO wasn't available for entering its own receipt - that's a different
