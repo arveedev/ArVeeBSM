@@ -15292,3 +15292,50 @@ deciding whether/how to change it.
 `npm run build` passes. Not yet verified against the user's real data
 - waiting on them to re-check Monitoring for the previously-missing
 TMO.
+
+## Session: 2026-08-17 (round 27, continued again) - sort flipped to descending; found the real reason none of round 27's fixes appeared to work
+
+User reported the cutoff fix, the sort fix, AND a newly-mentioned
+"unmark complete" bug all still broken after testing. Two separate
+things going on:
+
+1. **Sort direction**: user explicitly wants MO/TMO number descending,
+   not ascending - `filtered`'s comparator flipped
+   (`b.number.localeCompare(a.number, ...)` instead of
+   `a.number.localeCompare(b.number, ...)`).
+2. **The real reason nothing looked fixed**: `git log` confirms
+   `origin/main` is still sitting at the sack-weight commit
+   (`c4e708c`) - both of this round's actual code fixes (sort +
+   cutoff-exclusion removal) exist only on this session's branch
+   (`claude/pending-tasks-jedivz`), never merged. Whatever the user is
+   actually testing (a Vercel deployment, or their own local checkout)
+   almost certainly tracks `main`, not this branch - so none of
+   today's changes could possibly have been visible to them yet,
+   independent of whether the fixes themselves are correct. Raised
+   this directly with the user rather than guessing further at
+   already-fixed-on-branch code; need to establish how their live
+   testing environment actually picks up new commits before chasing
+   any further "still broken" reports.
+
+Also investigated the newly-reported "unmark complete doesn't stick"
+issue ahead of getting a definitive answer: `docs/apps-script-full-
+replacement.js`'s `markMillingOrderDone` action already correctly
+supports clearing the STATUS cell (`statusValue = body.value !==
+undefined ? body.value : 'DONE'` - an explicit `''` clears it). Two
+live candidates, neither confirmed: (a) the same
+branch-never-merged-to-main problem above, if the ACTUAL deployed
+Apps Script also lags this repo's copy (round 12 flagged it needed a
+redeploy for exactly this "clear on revert" direction - never
+confirmed done), or (b) `CompletedMillingModal.jsx`'s `canUncomplete`
+gate (`isAdmin && !(o.fulfilled || o.sheetStatus === 'DONE')`) simply
+never rendering the uncheck control at all for this particular order,
+if it happens to already read as naturally fulfilled or Sheet-DONE -
+by design, same rule Authorities use, but could look like "not
+working" to a user expecting the control to always be there. Not
+resolved - needs the user to say whether the control is missing
+entirely vs. present-but-reverting after tap.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx` (sort direction only).
+
+`npm run build` passes.
