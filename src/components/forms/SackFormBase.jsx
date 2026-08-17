@@ -125,6 +125,7 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [deleteAnimKey, setDeleteAnimKey] = useState(0)
 
   const customerNameRef = useRef(null)
+  const dateRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
   const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
@@ -477,9 +478,14 @@ const SackFormBase = forwardRef(function SackFormBase(
     setShowAuthorityPicker(false)
   }
 
-  const scrollToCustomerName = () => {
+  // Scrolls the form back to the very top (so Serial No., the first
+  // field, is back in view) and moves focus to Date, per explicit
+  // request - called after every Save/Update/Delete. Distinct from
+  // this component's externally-exposed imperative `focus()` (still
+  // Customer Name, used when the form first opens).
+  const scrollToTop = () => {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-    customerNameRef.current?.focus()
+    dateRef.current?.focus({ preventScroll: true })
   }
 
   const loadTransactionIntoForm = (tx) => {
@@ -808,7 +814,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     const next = stepSerial(serialNo.trim(), 1)
     resetToBlankEntry(next)
     setIsSaving(false)
-    scrollToCustomerName()
+    scrollToTop()
   }
 
   const handleSave = async () => {
@@ -851,6 +857,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     toast.success(`${type} ${serialNo.trim()} updated`)
     setLoadedTransaction(updated)
     setIsSaving(false)
+    scrollToTop()
   }
 
   const handleDeleteConfirmed = async () => {
@@ -869,6 +876,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
     setIsSaving(false)
+    scrollToTop()
   }
 
   // Voiding bypasses the normal Save button - confirming immediately
@@ -1043,7 +1051,7 @@ const SackFormBase = forwardRef(function SackFormBase(
           <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
-            <CalendarDatePicker value={date} onChange={setDate} />
+            <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
           </div>
 
           <div>

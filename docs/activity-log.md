@@ -15429,3 +15429,52 @@ to `'Days'` in both places, so no separate change needed there - `1` +
 `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #4 merged; continued) - Save/Update/Delete now scroll to top and focus Date, across all three transaction forms
+
+Per explicit request: after every Save, Update, or Delete on an input
+form, scroll back to the top and focus the Date field - but Serial No.
+(the first field, directly above Date) must stay visible too.
+
+`CalendarDatePicker.jsx` only exposed `open()` via
+`useImperativeHandle` - no way to actually focus its trigger button
+from outside. Added a `triggerRef` on the button itself and a `focus`
+method (`(opts) => triggerRef.current?.focus(opts)`) to the exposed
+handle, so callers can now focus it like any other field.
+
+All three transaction forms (`StockFormBase.jsx`, `SackFormBase.jsx`,
+`WTSForm.jsx`) already scroll their own container via a
+`scrollContainerRef` - Serial No. is the very first field in each, so
+`scrollTo({ top: 0 })` alone already satisfies "serial still must be
+seen." Added a `dateRef`, wired to each form's `CalendarDatePicker`,
+and a `scrollToTop` helper (`scrollContainerRef.current?.scrollTo(...)`
++ `dateRef.current?.focus({ preventScroll: true })` - preventScroll
+stops the browser's own default focus-scroll from fighting the smooth
+scrollTo already in flight) called after every Save, Update, and
+Delete success path in all three forms.
+
+`StockFormBase.jsx` previously had a `scrollToCustomerName` doing the
+same scroll-to-top but focusing Customer Name instead, only wired up
+after Save (not Update or Delete) - renamed/repurposed to
+`scrollToTop`, targeting Date, and added to Update and Delete too.
+`customerNameRef` (now unused) removed entirely.
+
+`SackFormBase.jsx` had the same internal `scrollToCustomerName`, but
+ALSO separately uses `customerNameRef` for its own externally-exposed
+imperative `focus()` (called by the parent when the form first opens)
+- that one's untouched, still focuses Customer Name on open. Only the
+internal post-save/update/delete function was renamed/repurposed to
+`scrollToTop`, and added to Update and Delete (previously only wired
+after Save).
+
+`WTSForm.jsx` had no equivalent function at all before this - added
+`scrollToTop` from scratch and wired it into all three handlers
+(`handleSave`, `handleUpdate`, `handleDeleteConfirmed`).
+
+### Files touched
+`src/components/common/CalendarDatePicker.jsx`,
+`src/components/forms/StockFormBase.jsx`,
+`src/components/forms/SackFormBase.jsx`,
+`src/components/forms/WTSForm.jsx`.
+
+`npm run build` passes.

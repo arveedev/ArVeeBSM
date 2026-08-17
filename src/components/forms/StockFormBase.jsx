@@ -388,7 +388,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     return [...new Set(existing.map((t) => t.trialNumber).filter(Boolean))]
   }, [isTestMilling, tmoNumber, type, loadedTransaction]) ?? []
 
-  const customerNameRef = useRef(null)
+  const dateRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
   const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
@@ -1000,9 +1000,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setShowAuthorityPicker(false)
   }
 
-  const scrollToCustomerName = () => {
+  // Scrolls the form back to the very top (so Serial No., the first
+  // field, is back in view) and moves focus to Date, per explicit
+  // request - called after every Save/Update/Delete, so the user
+  // always lands somewhere predictable instead of wherever they
+  // happened to be scrolled to. preventScroll on the focus call itself
+  // avoids fighting the smooth scrollTo above with the browser's own
+  // default "scroll focused element into view" behavior.
+  const scrollToTop = () => {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-    customerNameRef.current?.focus()
+    dateRef.current?.focus({ preventScroll: true })
   }
 
   // Loads an existing transaction's full data into the form for review/
@@ -1530,7 +1537,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     const next = stepSerial(serialNo.trim(), 1)
     resetToBlankEntry(next)
     setIsSaving(false)
-    scrollToCustomerName()
+    scrollToTop()
   }
 
   const handleSave = async () => {
@@ -1608,6 +1615,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     toast.success(`${type} ${serialNo.trim()} updated`)
     setLoadedTransaction(updated)
     setIsSaving(false)
+    scrollToTop()
   }
 
   const handleDeleteConfirmed = async () => {
@@ -1632,6 +1640,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
     setIsSaving(false)
+    scrollToTop()
   }
 
   // Voiding bypasses the normal Save button entirely - confirming
@@ -1880,7 +1889,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
-            <CalendarDatePicker value={date} onChange={setDate} />
+            <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
           </div>
 
           <div>
@@ -1922,7 +1931,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           </div>
 
           <CustomerNameAutocomplete
-            ref={customerNameRef}
             value={customerName}
             onChange={setCustomerName}
             onMatch={handleCustomerMatch}
