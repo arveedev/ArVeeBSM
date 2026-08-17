@@ -449,7 +449,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
   const sortedPiles = [...(piles ?? [])]
     .filter((p) => !isCategoryScoped || p.cerealType === activeCategory)
-    .filter((p) => !pileFilterVarietyId || p.varietyId === pileFilterVarietyId)
+    // Never applied to By Products - a By Products pile's own varietyId
+    // is often blank (it isn't locked to one, per the recent change)
+    // or just one of several varieties it actually holds via multiple
+    // beginning-balance lines, so filtering by exact match against
+    // whatever authority variety happened to be selected wrongly
+    // excluded genuinely valid piles - the reported bug.
+    .filter((p) => !pileFilterVarietyId || activeCategory === 'By Products' || p.varietyId === pileFilterVarietyId)
     // A pile that's already closed/zeroed stays out of the picker for
     // a transaction dated on or after that point - but a backdated
     // entry (a correction, or catching up on a late-entered document
@@ -2181,7 +2187,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   <option value={NEW_PILE_OPTION}>+ New Pile</option>
                 </select>
               )}
-              {!isAccountabilityFacility && pileFilterVarietyId && (
+              {!isAccountabilityFacility && pileFilterVarietyId && activeCategory !== 'By Products' && (
                 <p className="mt-1 text-xs text-neutral-500">
                   Showing only piles matching the linked authority's variety.
                 </p>

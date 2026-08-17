@@ -608,6 +608,25 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**Real bug fixed: By Products Pile ID picker was silently excluding
+valid piles - fixed, not yet confirmed by user.** User-reported, framed
+as "variety doesn't reset per transaction." Actual cause:
+`StockFormBase.jsx`'s `sortedPiles` filters by `pileFilterVarietyId`
+(set from whichever AI/SIA authority's own varietyId was selected),
+requiring an exact `p.varietyId === pileFilterVarietyId` match -
+correct for Rice/Palay, but a By Products pile's own varietyId is now
+often blank (the earlier variety-optional change) or just one of
+several varieties it actually holds, so this silently excluded valid
+piles, sometimes all of them. Not literally a stale-state bug -
+`resetToBlankEntry` already clears `pileFilterVarietyId` between
+transactions - the filter just assumed a per-pile invariant that no
+longer holds for By Products. Fixed by skipping it entirely when
+`activeCategory === 'By Products'`; also hid the now-inapplicable
+"Showing only piles matching the linked authority's variety" hint in
+that case. Checked `WTSForm.jsx` (no equivalent pre-filter, always
+lists every pile) and `SackFormBase.jsx` (no Pile ID picker at all) -
+nothing to fix in either.
+
 **By Products beginning balance goes per-variety (Settings' Create Pile
 tab and BeginningBalancesPanel's edit view); NewPileDialog gets a
 genuine Age requirement - fixed, not yet confirmed by user.** Per
