@@ -15409,3 +15409,23 @@ nothing to change there.
 `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes. Not yet verified against the user's real data.
+
+## Session: 2026-08-17 (round 27, PR #3 merged; continued) - WSR Age now defaults to 1 day
+
+Per explicit request: every WSR (stock receipt) transaction should
+default its Age field to 1 day instead of starting blank.
+
+Two places needed the change, both in `StockFormBase.jsx` - the
+initial `useState(type === 'WSR' ? '1' : '')` for the very first
+render, and `resetToBlankEntry`'s own `setAgeValue(...)` (same
+conditional), since that's the function that actually seeds every
+subsequent blank entry too - typing a new serial and the post-save
+"next entry" flow both route through it. `ageUnit` already defaulted
+to `'Days'` in both places, so no separate change needed there - `1` +
+`'Days'` together already reads as "1 day." Other transaction types
+(WSI, WTS) are unaffected - still start blank as before.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes.
