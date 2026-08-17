@@ -608,6 +608,24 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**By Products pile creation no longer requires a Variety; new piles
+default Age to 1 day - fixed, not yet confirmed by user.** Per
+explicit request, in both places a pile can be created
+(`NewPileDialog.jsx`'s "+ New Pile", and `Settings.jsx`'s
+`PileBalanceSection` Create/Edit Pile panel): (1) `handleCreate` in
+both files no longer requires a variety when category is By Products
+(a By Products pile already accepts any mix of By Products varieties
+over its lifetime, per existing design) - only Rice/Palay still
+require one. Variety field UI updated to match: "(optional)" label,
+"Optional — accepts any" placeholder, amber "required" border only for
+Rice/Palay. `NewPileDialog.jsx`'s note claiming a pile's variety "can
+never be changed" was flatly wrong for By Products - now conditional.
+(2) Both files' age state now defaults to `'1'` instead of `''`
+(Settings.jsx's `resetForm`, reused after every create, updated to
+match) - same reasoning as WSR's own default-age change earlier this
+session. Editing an existing pile still loads its real stored age,
+unaffected.
+
 **Pile ID dropdown drops the variety parenthetical for By Products
 piles only - fixed, not yet confirmed by user.** Went through a
 misfire mid-session: the original "only on the By Products tab"

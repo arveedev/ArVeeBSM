@@ -153,7 +153,10 @@ function PileBalanceSection({ warehouseId }) {
   const [varietyId, setVarietyId] = useState('')
   const [bags, setBags] = useState('')
   const [kilos, setKilos] = useState('')
-  const [age, setAge] = useState('')
+  // Defaults to 1 day, per explicit request - incoming/newly-created
+  // piles almost always genuinely start at age 0-1, so this saves the
+  // vast majority of new piles a manual edit.
+  const [age, setAge] = useState('1')
   const [ageUnit, setAgeUnit] = useState('Days')
   const [condition, setCondition] = useState('GQ')
   const [purity, setPurity] = useState('')
@@ -206,7 +209,7 @@ function PileBalanceSection({ warehouseId }) {
     setVarietyId('')
     setBags('')
     setKilos('')
-    setAge('')
+    setAge('1')
     setCondition('GQ')
     setPurity('')
     setDateProcured('')
@@ -250,8 +253,11 @@ function PileBalanceSection({ warehouseId }) {
   }
 
   // Gates the Create/Update Pile button - only enabled once the
-  // required fields actually have valid values.
-  const canSavePile = Boolean(pileName.trim()) && Boolean(varietyId) && bags !== '' && kilos !== '' && age !== ''
+  // required fields actually have valid values. Variety isn't
+  // required for By Products - that pile accepts any mix of By
+  // Products varieties over its lifetime, unlike Rice/Palay, which
+  // genuinely are locked to one variety.
+  const canSavePile = Boolean(pileName.trim()) && (category === 'By Products' || Boolean(varietyId)) && bags !== '' && kilos !== '' && age !== ''
 
   // Cancel only shows once there's actually something to cancel -
   // editing an existing pile, or having started filling in a new one.
@@ -260,7 +266,7 @@ function PileBalanceSection({ warehouseId }) {
 
   const handleCreate = async () => {
     if (!pileName.trim()) { toast.error('Pile name is required'); return }
-    if (!varietyId) { toast.error('Select a variety'); return }
+    if (category !== 'By Products' && !varietyId) { toast.error('Select a variety'); return }
 
     // Re-checked fresh rather than trusting the last blur result, in
     // case the user ignored the inline warning or another pile with
@@ -439,13 +445,13 @@ function PileBalanceSection({ warehouseId }) {
             </select>
           </div>
           <div>
-            <label className={labelClass}>Variety</label>
+            <label className={labelClass}>Variety{category === 'By Products' ? ' (optional)' : ''}</label>
             <select
               value={varietyId}
               onChange={(e) => setVarietyId(e.target.value)}
-              className={`${inputClass} ${!varietyId ? '!border-brand-amber' : ''}`}
+              className={`${inputClass} ${category !== 'By Products' && !varietyId ? '!border-brand-amber' : ''}`}
             >
-              <option value="">Select…</option>
+              <option value="">{category === 'By Products' ? 'Optional — accepts any' : 'Select…'}</option>
               {categoryVarieties.map((v) => <option key={v.varietyId} value={v.varietyId}>{v.name}</option>)}
             </select>
           </div>
