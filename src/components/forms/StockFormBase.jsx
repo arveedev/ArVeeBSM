@@ -190,7 +190,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const [grossKilos, setGrossKilos] = useState('')
   const [autoComputeNet, setAutoComputeNet] = useState(true)
   const [manualNetKilos, setManualNetKilos] = useState('')
-  const [ageValue, setAgeValue] = useState('')
+  // WSR defaults to 1 day, per explicit request - incoming stock
+  // almost always genuinely arrives at age 0-1, so this saves the
+  // vast majority of WSR entries a manual edit rather than blocking
+  // save with an amber "required" empty field for a value that's
+  // nearly always the same anyway. Other types keep starting blank.
+  const [ageValue, setAgeValue] = useState(type === 'WSR' ? '1' : '')
   const [monthsValue, setMonthsValue] = useState('0')
   const [daysValue, setDaysValue] = useState('0')
   const [ageUnit, setAgeUnit] = useState('Days')
@@ -1065,7 +1070,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setGrossKilos('')
     setAutoComputeNet(true)
     setManualNetKilos('')
-    setAgeValue('')
+    setAgeValue(type === 'WSR' ? '1' : '')
     setMonthsValue('0')
     setDaysValue('0')
     setAgeUnit('Days')

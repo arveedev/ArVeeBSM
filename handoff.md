@@ -608,6 +608,16 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**WSR Age now defaults to 1 day - fixed, not yet confirmed by user.**
+Per explicit request. `StockFormBase.jsx`'s `ageValue` now initializes
+to `'1'` for WSR (was `''` for every type) - changed both the
+component's initial `useState` (first render) and `resetToBlankEntry`
+(seeds every SUBSEQUENT blank entry too - typing a new serial and the
+post-save "next entry" flow both route through it). `ageUnit` already
+defaulted to `'Days'` everywhere, so `1` + `Days` already reads "1
+day" with no separate change needed. WSI/WTS unaffected, still start
+blank.
+
 **Trial field amber "required" border wrongly shown for By Products -
 fixed, not yet confirmed by user.** `StockFormBase.jsx`'s Trial
 dropdown (Test Milling receipts) applied its amber border
