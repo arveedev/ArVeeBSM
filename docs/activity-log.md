@@ -15689,3 +15689,40 @@ data gets entered:
 `src/components/forms/NewPileDialog.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #11 merged; continued) - real bug: By Products Pile ID picker was silently excluding valid piles via a leftover authority-variety filter
+
+User reported: creating a new transaction for By Products, the Pile ID
+picker doesn't show the right piles - described as "the variety does
+not reset per transaction."
+
+Root cause: `sortedPiles` in `StockFormBase.jsx` filters by
+`pileFilterVarietyId` (set from whichever AI/SIA authority's own
+`varietyId` was selected via `handleSelectAuthority`/the prefill path)
+requiring an EXACT `p.varietyId === pileFilterVarietyId` match. That's
+correct for Rice/Palay (locked to one variety), but a By Products
+pile's own `varietyId` is now frequently blank (the recent
+variety-optional change) or just one of several varieties it actually
+holds via multiple beginning-balance lines - so selecting a By
+Products authority set a filter that excluded genuinely valid piles,
+sometimes all of them. Not actually a "doesn't reset" bug in the
+literal sense (`resetToBlankEntry` already clears
+`pileFilterVarietyId` between transactions) - the filter was working
+exactly as designed, just on an assumption (one stable varietyId per
+pile) that no longer holds for By Products.
+
+Fixed by skipping this filter entirely when `activeCategory === 'By
+Products'` - also hid the "Showing only piles matching the linked
+authority's variety" hint text in that case, since it would otherwise
+describe a filter that's no longer actually applied.
+
+Checked `WTSForm.jsx` for the same pattern - it has no equivalent
+pre-filter on its Pile dropdown at all (always lists every pile;
+`lockedVariety` there is purely a display value), so nothing to fix
+there. `SackFormBase.jsx` has no Pile ID picker (sacks are keyed by
+sack type/condition).
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes.
