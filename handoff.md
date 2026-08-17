@@ -608,15 +608,18 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
-**Pile ID dropdown no longer shows a variety parenthetical at all -
-fixed, not yet confirmed by user.** Per explicit request/clarification
-(an initial pass only dropped it for By Products piles, keeping
-`PileName (VarietyName)` for Rice/Palay - user clarified they want it
-gone everywhere, still confusing regardless). `StockFormBase.jsx`
-(WSR/WSI) and `WTSForm.jsx`'s `SidePanel` (both sides) now render just
-`{p.pileName}`, unconditionally, all categories. `SackFormBase.jsx`
-has no Pile ID picker at all (sacks are keyed by sack type/condition),
-nothing to change there.
+**Pile ID dropdown drops the variety parenthetical for By Products
+piles only - fixed, not yet confirmed by user.** Went through a
+misfire mid-session: the original "only on the By Products tab"
+request was implemented correctly first, then a follow-up comment was
+misread as "remove it everywhere" and briefly shipped that way, then
+user corrected it back - By Products only was right all along.
+Current, correct state: `StockFormBase.jsx` (WSR/WSI) and
+`WTSForm.jsx`'s `SidePanel` (both sides) render the bare pile name
+only when `p.cerealType === 'By Products'`; Rice/Palay piles keep
+`PileName (VarietyName)`, since they genuinely are locked to a single
+variety. `SackFormBase.jsx` has no Pile ID picker at all (sacks are
+keyed by sack type/condition), nothing to change there.
 
 **MO/TMO completion is manual-only now; amber border flags an
 already-looks-done pending order - fixed, not yet confirmed by user.**

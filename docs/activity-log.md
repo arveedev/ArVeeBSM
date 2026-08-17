@@ -15571,3 +15571,21 @@ nothing else needed cleanup.
 `src/components/forms/WTSForm.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #8 merged; continued) - reverted: user corrected the previous round, they DID mean By Products only
+
+Misread the previous round's "remove the variety inside the pile id
+picker" as broadening scope to every category. User corrected this
+directly - the original "only on the by products tab" instruction was
+exactly what they meant all along; the full-removal round was wrong.
+Reverted `StockFormBase.jsx` and `WTSForm.jsx`'s `SidePanel` back to
+round 27 PR #7's conditional version: bare pile name only when
+`p.cerealType === 'By Products'`, `(VarietyName)` parenthetical kept
+for Rice/Palay. Net effect across PRs #7/#8/this one is identical to
+#7 alone.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`,
+`src/components/forms/WTSForm.jsx`.
+
+`npm run build` passes.
