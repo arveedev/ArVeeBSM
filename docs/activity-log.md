@@ -15182,3 +15182,160 @@ user's actual live data in this session - the reasoning is grounded in
 the exact numbers from their screenshots, but they should re-export
 the report and re-check the Home Stocks overview against their real
 warehouse to confirm.
+
+## Session: 2026-08-17 (round 27) - MO/TMO pending list wasn't sorted (fixed); MO/TMO numbers missing from the app despite re-sync (investigated, not yet resolved)
+
+User reported two problems with the Milling Operations monitor: (1)
+the MO/TMO list isn't sorted by MO/TMO number, and (2) specific
+MO/TMO numbers that exist on the live Sheet never appear in the app,
+in either the pending or Completed list, even after tapping Sync Now
+on Milling Operations and re-syncing Sheet Sources.
+
+**Sort bug - confirmed and fixed.** `MillingMonitor.jsx`'s pending-list
+`filtered` array was built with `.filter()` only, no `.sort()` at all -
+so its order was whatever `db.millingOrders.where('type').equals(orderType)
+.toArray()` happened to return from IndexedDB's cursor, never actually
+tied to MO/TMO number. (The Completed list already has its own explicit
+newest-activity-first sort from round 14 - untouched, that one is
+correct as-is per that session's explicit request.) Fixed by sorting
+`filtered` on `order.number` via `localeCompare(..., { numeric: true })`
+so e.g. "...-9" correctly sorts before "...-10".
+
+**Missing MO/TMO numbers - investigated, root cause NOT confirmed.**
+Traced the full chain: `apps-script-full-replacement.js`'s
+`fetchMillingOrders` action -> `googleSheetsBridge.js`'s
+`runMillingOrdersSync` -> `millingOrderStatus.js`'s
+`computeMillingOrderStatuses` -> `MillingMonitor.jsx`'s pending/
+completed filters. Found no filter that would exclude a brand-new,
+never-transacted order (the `earliestSourceDateFrom` cutoff explicitly
+only excludes orders that already have local transaction history, all
+of it before the cutoff). Two candidate causes identified from reading
+the code, neither confirmed against the user's real sheet data yet:
+1. `fetchMillingOrders` drops any row where Column A is blank
+   (`.filter((row) => row[0])`). If the Sheet uses a merged cell for
+   the MO/TMO number across several rows (plausible given the code's
+   own existing comment that "one MO can involve several ricemills,
+   each with their own independent batch count" - i.e. one MO can
+   legitimately span multiple rows), `getValues()` returns the number
+   only on the merge's first row and blank on every row below it -
+   those rows would be silently dropped before ever reaching the app.
+2. Every order is keyed as `` `${type}::${number}` `` (`orderId`). If
+   the same MO/TMO number legitimately appears on more than one row
+   (again, the multi-ricemill case), `db.millingOrders.bulkPut()`
+   overwrites earlier rows sharing that key - only the last one synced
+   would survive, the rest silently gone.
+Asked the user for one concrete missing MO/TMO number, whether that
+row's number column is blank/merged in the Sheet, and whether the
+number shows up in the browser console's
+`[syncMillingOrdersFromSheets] synced N record(s):` log after Sync Now
+(present there = client-side filter bug; absent = server-side Apps
+Script parsing bug) - needed to tell the two candidates apart (or rule
+out both) before touching any code for this half of the report.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx` (sort fix only - the
+missing-numbers issue has no code change yet, investigation only).
+
+`npm run build` passes.
+
+## Session: 2026-08-17 (round 27, continued) - root cause found and fixed: the MO/TMO pre-cutoff exclusion was hiding real orders from BOTH the pending and Completed lists
+
+User pushed back hard on round 27's open investigation, correctly: the
+missing MO/TMO's own sync console log confirmed the record WAS
+successfully synced into `db.millingOrders` - ruling out both
+candidate causes logged above (merged-cell blank rows, orderId
+collisions). That meant the record existed locally but was being
+hidden by something client-side, and user's sheet rows are all one
+consistent format anyway (no merged cells), which independently ruled
+out candidate 1.
+
+Root cause: `MillingMonitor.jsx`'s `passesSharedFilters` (shared by
+both the pending-list `filtered` and `completedFiltered` arrays)
+excluded any order whose local transaction history existed but was
+*entirely* dated before the earliest configured Sheet Source's Date
+From (the user's is 2026-08-01). Since this filter gates BOTH lists,
+an order failing it disappeared from the Monitor entirely - not hidden
+from some separate total, genuinely gone from view, with no way to
+even select it to record a new transaction against it from that page.
+User's exact framing: "the pending list and completed is there for a
+reason, why does the app hide data that is supposed to be on that
+list?" - correct, and inconsistent with how the equivalent cutoff
+already works for AI/SIA Authorities elsewhere in this app: round 8's
+`activeAiAuthoritiesFor` deliberately excludes pre-cutoff authorities
+from the unwithdrawn/potential MATH only, explicitly preserving their
+visibility in AuthorityMonitor's own pending/completed lists. The
+MO/TMO version never had that same distinction - its only purpose was
+list-visibility filtering, so removing it has no other side effect.
+
+Fixed by deleting the `earliestSourceDateFrom` computation and its
+check inside `passesSharedFilters` entirely (confirmed via grep it had
+no other use in the file - `sheetSources` itself, only fetched to
+compute this value, was removed too). `passesSharedFilters` now only
+applies the Regional Authority Number dropdown filter.
+
+Flagged, not yet resolved: user also asked why the by-products TMO
+wasn't available for entering its own receipt - that's a *different*
+picker, in `StockFormBase.jsx`/`SackFormBase.jsx`'s own
+`millingOrderOptions`, which deliberately hard-filters to only the
+currently-typed Customer Name's own ricemill (`ricemillName` exact
+match, case-insensitive/trimmed) with no fallback message when it
+matches nothing - a real design decision from an earlier session ("a
+selection for one miller should never show every other miller's MOs"),
+not an oversight like the Monitor bug was. Not touched this round -
+asked the user to confirm whether the Customer Name field they typed
+actually matches the Sheet's ricemill name for that TMO before
+deciding whether/how to change it.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx`.
+
+`npm run build` passes. Not yet verified against the user's real data
+- waiting on them to re-check Monitoring for the previously-missing
+TMO.
+
+## Session: 2026-08-17 (round 27, continued again) - sort flipped to descending; found the real reason none of round 27's fixes appeared to work
+
+User reported the cutoff fix, the sort fix, AND a newly-mentioned
+"unmark complete" bug all still broken after testing. Two separate
+things going on:
+
+1. **Sort direction**: user explicitly wants MO/TMO number descending,
+   not ascending - `filtered`'s comparator flipped
+   (`b.number.localeCompare(a.number, ...)` instead of
+   `a.number.localeCompare(b.number, ...)`).
+2. **The real reason nothing looked fixed**: `git log` confirms
+   `origin/main` is still sitting at the sack-weight commit
+   (`c4e708c`) - both of this round's actual code fixes (sort +
+   cutoff-exclusion removal) exist only on this session's branch
+   (`claude/pending-tasks-jedivz`), never merged. Whatever the user is
+   actually testing (a Vercel deployment, or their own local checkout)
+   almost certainly tracks `main`, not this branch - so none of
+   today's changes could possibly have been visible to them yet,
+   independent of whether the fixes themselves are correct. Raised
+   this directly with the user rather than guessing further at
+   already-fixed-on-branch code; need to establish how their live
+   testing environment actually picks up new commits before chasing
+   any further "still broken" reports.
+
+Also investigated the newly-reported "unmark complete doesn't stick"
+issue ahead of getting a definitive answer: `docs/apps-script-full-
+replacement.js`'s `markMillingOrderDone` action already correctly
+supports clearing the STATUS cell (`statusValue = body.value !==
+undefined ? body.value : 'DONE'` - an explicit `''` clears it). Two
+live candidates, neither confirmed: (a) the same
+branch-never-merged-to-main problem above, if the ACTUAL deployed
+Apps Script also lags this repo's copy (round 12 flagged it needed a
+redeploy for exactly this "clear on revert" direction - never
+confirmed done), or (b) `CompletedMillingModal.jsx`'s `canUncomplete`
+gate (`isAdmin && !(o.fulfilled || o.sheetStatus === 'DONE')`) simply
+never rendering the uncheck control at all for this particular order,
+if it happens to already read as naturally fulfilled or Sheet-DONE -
+by design, same rule Authorities use, but could look like "not
+working" to a user expecting the control to always be there. Not
+resolved - needs the user to say whether the control is missing
+entirely vs. present-but-reverting after tap.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx` (sort direction only).
+
+`npm run build` passes.

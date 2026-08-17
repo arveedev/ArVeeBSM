@@ -631,28 +631,24 @@ function MillingMonitor({ isAdmin = false }) {
     })
   )
 
-  const sheetSources = useLiveQuery(() => db.sheetSources.toArray(), []) ?? []
-  // Earliest dateFrom across every configured source - an order is
-  // only ever excluded if it HAS recorded activity and that activity
-  // is entirely before this cutoff. An order with no transactions at
-  // all yet (brand new) is never excluded on this basis, since it is
-  // current by definition, not historical data outside the configured
-  // range.
-  const earliestSourceDateFrom = sheetSources.length > 0
-    ? sheetSources.map((s) => s.dateFrom).filter(Boolean).sort()[0]
-    : null
-
   // Sheet-marked DONE is unconditionally completed, regardless of what
   // the kg/piece-based fulfilled calculation separately says -
   // previously only fulfilled was checked here, so an order marked
   // DONE directly on the sheet but not also satisfying that math (e.g.
   // missing/mismatched recovery %) would incorrectly keep showing in
   // the pending list forever.
+  //
+  // Deliberately NOT filtering out orders whose only local activity
+  // predates the earliest configured Sheet Source's Date From - a
+  // previous version of this filter did that and it hid the order
+  // from BOTH the pending and Completed lists entirely, not just from
+  // some separate total. Any synced MO/TMO the user still needs to
+  // act on (e.g. entering a By Products receipt for an order that
+  // happens to have one old transaction) must stay visible somewhere -
+  // matches the same rule already established for AI/SIA Authorities
+  // (round 8: cutoff excludes pre-cutoff data from the inventory MATH
+  // only, never from AuthorityMonitor's own pending/completed lists).
   const passesSharedFilters = (o) => {
-    if (earliestSourceDateFrom) {
-      const allDates = [...(o.issueTx ?? []), ...(o.receiptTx ?? [])].map((t) => t.date).filter(Boolean)
-      if (allDates.length > 0 && allDates.every((d) => d < earliestSourceDateFrom)) return false
-    }
     if (regionalAuthFilter.trim() && regionalAuthByOrder.get(o.orderId) !== regionalAuthFilter.trim()) return false
     return true
   }
@@ -661,7 +657,14 @@ function MillingMonitor({ isAdmin = false }) {
   // their own modal (CompletedMillingModal below) instead of replacing
   // this list in place, matching the AI/SIA Monitor's own
   // pending-list/separate-completed-modal convention.
-  const filtered = orders.filter((o) => !isOrderCompleted(o) && passesSharedFilters(o))
+  // Sorted by MO/TMO number, descending (was previously unsorted -
+  // Dexie's cursor order on a `where('type').equals()` query is not
+  // guaranteed to match the Sheet's own row/number order), per
+  // explicit request. `numeric: true` makes "...-10" sort before
+  // "...-9" (not after, which plain string comparison would give).
+  const filtered = orders
+    .filter((o) => !isOrderCompleted(o) && passesSharedFilters(o))
+    .sort((a, b) => b.number.localeCompare(a.number, undefined, { numeric: true, sensitivity: 'base' }))
   // Newest activity first, oldest last - per explicit request, matches
   // CompletedAuthorityModal's own newest-first sort.
   const lastActivityDate = (o) => {
