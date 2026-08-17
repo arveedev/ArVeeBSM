@@ -2164,20 +2164,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   className={`${inputClass} ${!pileId ? '!border-brand-amber' : ''}`}
                 >
                   <option value="">Select pile…</option>
-                  {sortedPiles.map((p) => {
-                    const variety = sortedVarieties.find((v) => v.varietyId === p.varietyId)
-                    // A By Products pile accepts any mix of By Products
-                    // varieties over its lifetime - showing one variety
-                    // name in parentheses wrongly implied the pile was
-                    // locked to it, per explicit feedback. Rice/Palay
-                    // piles genuinely are locked to a single variety, so
-                    // they keep the parenthetical.
-                    return (
-                      <option key={p.pileId} value={p.pileId}>
-                        {p.cerealType === 'By Products' ? p.pileName : `${p.pileName} (${variety ? variety.name : p.cerealType})`}
-                      </option>
-                    )
-                  })}
+                  {sortedPiles.map((p) => (
+                    <option key={p.pileId} value={p.pileId}>
+                      {p.pileName}
+                    </option>
+                  ))}
                   <option value={NEW_PILE_OPTION}>+ New Pile</option>
                 </select>
               )}
