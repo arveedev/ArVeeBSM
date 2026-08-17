@@ -151,8 +151,11 @@ function AuthorityMonitor() {
         transactionTypeName: authority.transactionTypeName,
         orNumber: authority.orNumber ?? null,
         numberOfBags: bagsRemaining != null && bagsRemaining > 0 ? bagsRemaining : null,
+        // Auto-compute Net Kilos stays on by default in the opened
+        // form regardless (per explicit request) - netKilos here just
+        // seeds the manual-entry fallback value, ready if the user
+        // switches to manual entry themselves.
         netKilos: kilosRemaining != null && kilosRemaining > 0 ? kilosRemaining : null,
-        autoComputeNet: false,
       })
     } else {
       // A line with no allocation yet (blank Pieces cell on the sheet)

@@ -15726,3 +15726,45 @@ sack type/condition).
 `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #12 merged; continued) - Auto-compute Net Kilos never switched off automatically anymore, only by the user's own toggle tap
+
+Per explicit request: two places in `StockFormBase.jsx` (WSR/WSI)
+programmatically switched Auto-compute Net Kilos OFF without the user
+ever tapping the toggle themselves.
+
+1. `handleSelectAuthority` (the "Browse" AI picker) - when the picked
+   authority had a real remaining-kilos balance, it force-set
+   `manualNetKilos` to that exact figure AND switched auto-compute
+   off, so it stuck. Now only seeds `manualNetKilos` with that value
+   (still there and ready if the user decides to switch to manual
+   entry themselves) - auto-compute stays on.
+2. The `prefill.autoComputeNet === false` handling in the same file's
+   prefill-loading effect - its only real caller,
+   `AuthorityMonitor.jsx`'s `handleOpen` (opening a WSI from tapping a
+   pending AI), unconditionally sent `autoComputeNet: false` alongside
+   the remaining-kilos prefill. Removed from both sides - the consumer
+   check in StockFormBase.jsx (now genuinely dead, confirmed via grep
+   no other caller ever sends this) and the sender in
+   AuthorityMonitor.jsx. `prefill.netKilos` is still sent/consumed,
+   same reasoning as above.
+
+Checked every other `openTransactionForm('WSI', ...)` caller
+(`AuthoritiesInfoPanel.jsx`) - already doesn't touch autoComputeNet at
+all (uses grossKilos instead, which auto-compute derives from
+naturally) - nothing to change there. `loadTransactionIntoForm`'s own
+`setAutoComputeNet(tx.autoComputeNet ?? true)` (loading an EXISTING
+transaction for edit/review) and the Sheet-import path in
+`googleSheetsBridge.js`'s `mapSheetRowToTransaction` (also loaded via
+`loadTransactionIntoForm`) are both left untouched - deliberately,
+since those reflect a real historical document's own actual saved
+state, not a new-transaction default. `SackFormBase.jsx` has no
+Net Kilos concept at all (piece-based); `WTSForm.jsx` computes net
+kilos automatically with no manual-override toggle to begin with - both
+confirmed via grep, nothing to change in either.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`,
+`src/components/common/AuthorityMonitor.jsx`.
+
+`npm run build` passes.
