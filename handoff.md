@@ -547,6 +547,49 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
+### OPEN (2026-08-17 session, round 29) - additional-pile small-screen layout, Reports duplicate-serial root cause, age-load fallback - PUSHED, not yet confirmed by user
+
+Four items reported together while live-testing PR #20/#21's
+multi-pile work:
+
+1. **Additional-pile card MC%/MTS row on small screens** - was
+   `grid-cols-2`; the MTS label wraps to two lines in the nested
+   card's narrower width, pushing the select out of alignment with
+   the MC input. Stacked the row instead. `StockFormBase.jsx`.
+2. **Duplicate rows on Reports** - confirmed (user checked) these are
+   two genuinely separate DB records sharing the same serial, not a
+   display bug. Root cause: `preloadTransactionsForUser` had no guard
+   against overlapping runs - the 30s sync interval and the `online`
+   event listener could both fire mid-run, and two overlapping passes
+   each independently import the same not-yet-local Sheet row with a
+   fresh id. Fixed with a single-flight guard
+   (`inFlightPreload`) in `transactionPreload.js`, plus bumped the
+   existing consolidated dedup migration to v6 to clean up whatever
+   already accumulated. This is the SAME class of bug the v2/v4/v5
+   migrations were already mopping up after the fact - v6 should be
+   the last time it's needed, now that the actual race is closed.
+3. **Age not auto-filling on an existing record** - `loadTransactionIntoForm`
+   had no `else` when `tx.ageUnit === 'Months + Days'` but
+   `tx.initialAgeValue` was null, leaving Months/Days at 0 (or worse,
+   stale from a previously loaded record). Now falls back to
+   `tx.ageValue` (same total-days figure) and always resets both
+   fields on every load. `StockFormBase.jsx`.
+4. **Auto-compute toggle off on an existing record - NOT a bug.**
+   Verified every `autoComputeNet` write site - the only ways it
+   becomes false are the user's own toggle, or loading a stored
+   `false`. `googleSheetsBridge.js`'s Sheet-import mapper deliberately
+   sets `autoComputeNet: false` on every backfilled historical record,
+   on purpose, to preserve the net kilos actually on file rather than
+   silently recomputing a different number. The flagged record (144
+   bags / 7,210.8 gross / 7,200 net - not what gross-minus-tare would
+   give) is almost certainly one of these imports. New entries created
+   in-app still always default to enabled. No code change.
+
+`npm run build` passes on all of the above. Needs the user to confirm
+against the live deploy - especially #2, which won't visibly resolve
+existing duplicates until the v6 migration runs once on each device
+(automatic, on next login/sync).
+
 ### SELF-CAUGHT BUG (2026-08-17 session, round 28) - production crash on "Issue from another pile" (TDZ ReferenceError) - fixed, not yet confirmed by user
 
 PR #20 (round 27's multi-pile void/unvoid + field-parity work) shipped
