@@ -16275,3 +16275,22 @@ natural point to decide whether another pile is needed.
 `src/version.js`, `src/pages/Login.jsx`, `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 31) - "by ArVee"/version still not visible on mobile - was position:absolute, needed position:fixed
+
+Round 30's fix (combining the two lines into one block) still wasn't
+visible on a real phone. Root cause: the outer Login container is
+`min-h-screen` with centered content (logo, title, PIN dots, 4-row
+keypad) - on an actual device (safe-area insets, on-screen browser
+chrome, etc.) that content can genuinely be taller than the visible
+viewport, so the container itself grows past 100vh. The block was
+`position: absolute`, which pins to the bottom of that (now taller
+than the screen) container - below the fold, needing a scroll to
+ever reach. Changed to `position: fixed`, which pins to the actual
+viewport instead of the container, so it's always on screen
+regardless of how tall the content above it grows.
+
+### Files touched
+`src/pages/Login.jsx`.
+
+`npm run build` passes.

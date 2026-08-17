@@ -547,6 +547,18 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
+### OPEN (2026-08-17 session, round 31) - "by ArVee"/version still invisible on mobile after round 30's fix - was absolute, needed fixed - PUSHED, not yet confirmed by user
+
+Round 30 combined the two lines into one block but kept
+`position: absolute` - still not visible on a real phone, because
+Login's outer `min-h-screen` container can genuinely be taller than
+the visible viewport once real device content (safe-area insets,
+browser chrome, 4-row keypad) is accounted for, and `absolute` pins
+to the bottom of THAT container, not the screen. Switched to
+`position: fixed`, which pins to the actual viewport regardless of
+how tall the content above it grows. `src/pages/Login.jsx`. Build
+passes, not yet confirmed live.
+
 ### OPEN (2026-08-17 session, round 30) - version label caught up + moved on Login, "Issue from another pile" repositioned - PUSHED, not yet confirmed by user
 
 `APP_VERSION` (`src/version.js`) hadn't been bumped through rounds
