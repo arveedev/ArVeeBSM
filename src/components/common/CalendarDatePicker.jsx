@@ -78,9 +78,11 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
   // an outside click and closing the picker immediately, before the
   // actual selection could ever register.
   const popupRef = useRef(null)
+  const triggerRef = useRef(null)
 
   useImperativeHandle(ref, () => ({
     open: () => setIsOpen(true),
+    focus: (opts) => triggerRef.current?.focus(opts),
   }))
 
   const selected = parseIso(value)
@@ -140,6 +142,7 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((o) => !o)}
         className={`flex w-full items-center justify-between rounded-xl border bg-neutral-950 px-3 py-2 text-left text-app-text outline-none transition-all hover:border-brand-neon/50 focus:border-brand-neon ${
