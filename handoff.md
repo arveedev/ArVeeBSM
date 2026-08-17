@@ -547,7 +547,58 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-17 session, round 26) - sack-weight separation bug + phantom deleted-pile beginning balance bug - NOT YET COMMITTED/PUSHED
+**2026-08-17 status check (user-confirmed):** the user confirmed the
+following, previously flagged as open/unverified below, are now
+actually done - kept in place for historical reasoning but should be
+read as CLOSED, not open: round 26's sack-weight/report fix (verified
+against real data); the MO 151 "wrongly shows Completed" investigation
+(round 11/12); every full-screen pile-layout mobile/device
+verification across rounds 9-25 (confirmed working on an actual
+phone); both `docs/apps-script-full-replacement.js` redeploys called
+out in rounds 12 and 14 (STATUS write-back clear-on-revert, and the
+Date of Milling sort field); the Mock Data section's "no signup/
+bootstrap flow for a fresh database" gap; and the Live Google Sheets
+Integration section's adaptive (foreground/background) polling
+backoff. None of these needed a code change from this session - the
+user verified them directly. Round 27 below (MO/TMO sort + missing
+numbers) is the only genuinely open item as of this pass.
+
+### OPEN (2026-08-17 session, round 27) - MO/TMO pending list sort fixed; MO/TMO numbers missing from the app despite re-sync - STILL BEING INVESTIGATED
+
+User reported two MO/TMO monitor problems: not sorted by MO/TMO number,
+and specific MO/TMO numbers that exist on the live Sheet never show up
+in the app (checked both pending and Completed), surviving both a
+Milling Operations re-sync and a Sheet Sources re-sync.
+
+**Sort - fixed and pushed.** `MillingMonitor.jsx`'s pending list
+(`filtered`) was filtered but never actually sorted - order came from
+whatever Dexie's IndexedDB cursor happened to return, not MO/TMO
+number. Now sorted via `order.number.localeCompare(..., { numeric:
+true })` (Completed's own separate newest-activity-first sort from
+round 14 is correct as designed, untouched).
+
+**Missing numbers - not yet resolved, waiting on the user.** Traced the
+full fetch/sync chain, found no client-side filter that would exclude
+a brand-new order. Two candidate root causes from reading the code,
+neither confirmed against real sheet data:
+1. `apps-script-full-replacement.js`'s `fetchMillingOrders` drops any
+   row with a blank Column A. If the Sheet merges the MO/TMO number
+   cell across multiple rows (plausible - the code's own existing
+   comment notes one MO can span several ricemill rows, each with its
+   own batch/recovery columns), `getValues()` returns blank for every
+   row below the merge's first, silently dropping them.
+2. Orders are keyed `` `${type}::${number}` `` - if the same number
+   legitimately appears on more than one row (same multi-ricemill
+   case), `bulkPut()` overwrites earlier rows sharing that key, so
+   only the last one synced survives.
+Next step: get one concrete missing MO/TMO number from the user, check
+whether that Sheet row's number column is blank/merged, and check
+whether the number appears in the browser console's
+`[syncMillingOrdersFromSheets] synced N record(s):` log after Sync Now
+- needed to tell which candidate (or neither) is the real cause before
+writing any fix.
+
+### OPEN (2026-08-17 session, round 26) - sack-weight separation bug + phantom deleted-pile beginning balance bug - PUSHED, user has since confirmed this is fixed
 
 Two real bugs found and fixed. (1) Home Stocks' Rice/Palay sack-weight
 separation read `piles.mtsSackTypeId`, which only reflects whichever

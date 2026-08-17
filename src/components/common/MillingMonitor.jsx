@@ -661,7 +661,14 @@ function MillingMonitor({ isAdmin = false }) {
   // their own modal (CompletedMillingModal below) instead of replacing
   // this list in place, matching the AI/SIA Monitor's own
   // pending-list/separate-completed-modal convention.
-  const filtered = orders.filter((o) => !isOrderCompleted(o) && passesSharedFilters(o))
+  // Sorted by MO/TMO number (was previously unsorted - Dexie's cursor
+  // order on a `where('type').equals()` query is not guaranteed to
+  // match the Sheet's own row/number order). `numeric: true` makes
+  // "...-9" sort before "...-10" instead of after, matching how the
+  // numbers actually read.
+  const filtered = orders
+    .filter((o) => !isOrderCompleted(o) && passesSharedFilters(o))
+    .sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true, sensitivity: 'base' }))
   // Newest activity first, oldest last - per explicit request, matches
   // CompletedAuthorityModal's own newest-first sort.
   const lastActivityDate = (o) => {

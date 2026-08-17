@@ -15182,3 +15182,58 @@ user's actual live data in this session - the reasoning is grounded in
 the exact numbers from their screenshots, but they should re-export
 the report and re-check the Home Stocks overview against their real
 warehouse to confirm.
+
+## Session: 2026-08-17 (round 27) - MO/TMO pending list wasn't sorted (fixed); MO/TMO numbers missing from the app despite re-sync (investigated, not yet resolved)
+
+User reported two problems with the Milling Operations monitor: (1)
+the MO/TMO list isn't sorted by MO/TMO number, and (2) specific
+MO/TMO numbers that exist on the live Sheet never appear in the app,
+in either the pending or Completed list, even after tapping Sync Now
+on Milling Operations and re-syncing Sheet Sources.
+
+**Sort bug - confirmed and fixed.** `MillingMonitor.jsx`'s pending-list
+`filtered` array was built with `.filter()` only, no `.sort()` at all -
+so its order was whatever `db.millingOrders.where('type').equals(orderType)
+.toArray()` happened to return from IndexedDB's cursor, never actually
+tied to MO/TMO number. (The Completed list already has its own explicit
+newest-activity-first sort from round 14 - untouched, that one is
+correct as-is per that session's explicit request.) Fixed by sorting
+`filtered` on `order.number` via `localeCompare(..., { numeric: true })`
+so e.g. "...-9" correctly sorts before "...-10".
+
+**Missing MO/TMO numbers - investigated, root cause NOT confirmed.**
+Traced the full chain: `apps-script-full-replacement.js`'s
+`fetchMillingOrders` action -> `googleSheetsBridge.js`'s
+`runMillingOrdersSync` -> `millingOrderStatus.js`'s
+`computeMillingOrderStatuses` -> `MillingMonitor.jsx`'s pending/
+completed filters. Found no filter that would exclude a brand-new,
+never-transacted order (the `earliestSourceDateFrom` cutoff explicitly
+only excludes orders that already have local transaction history, all
+of it before the cutoff). Two candidate causes identified from reading
+the code, neither confirmed against the user's real sheet data yet:
+1. `fetchMillingOrders` drops any row where Column A is blank
+   (`.filter((row) => row[0])`). If the Sheet uses a merged cell for
+   the MO/TMO number across several rows (plausible given the code's
+   own existing comment that "one MO can involve several ricemills,
+   each with their own independent batch count" - i.e. one MO can
+   legitimately span multiple rows), `getValues()` returns the number
+   only on the merge's first row and blank on every row below it -
+   those rows would be silently dropped before ever reaching the app.
+2. Every order is keyed as `` `${type}::${number}` `` (`orderId`). If
+   the same MO/TMO number legitimately appears on more than one row
+   (again, the multi-ricemill case), `db.millingOrders.bulkPut()`
+   overwrites earlier rows sharing that key - only the last one synced
+   would survive, the rest silently gone.
+Asked the user for one concrete missing MO/TMO number, whether that
+row's number column is blank/merged in the Sheet, and whether the
+number shows up in the browser console's
+`[syncMillingOrdersFromSheets] synced N record(s):` log after Sync Now
+(present there = client-side filter bug; absent = server-side Apps
+Script parsing bug) - needed to tell the two candidates apart (or rule
+out both) before touching any code for this half of the report.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx` (sort fix only - the
+missing-numbers issue has no code change yet, investigation only).
+
+`npm run build` passes.
