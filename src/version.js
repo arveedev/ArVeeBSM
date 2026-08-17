@@ -134,4 +134,56 @@
 //            piles that still exist today, matching the same "pile
 //            existence" fix already applied to the per-pile
 //            computeHistoricalPileState (current)
-export const APP_VERSION = '1.8-16'
+//   1.8-17 - MO/TMO Monitor: fixed the Pending list's sort (now
+//            descending by MO/TMO number) and fixed orders that had
+//            older transactions being wrongly hidden from both the
+//            Pending and Completed lists; fixed a self-lockout when
+//            unchecking a completed MO/TMO; MO/TMO completion is now
+//            manual-only, with an amber border flagging an order
+//            that's fulfilled but not yet confirmed complete
+//   1.8-18 - Input form polish: Trial's amber "required" border no
+//            longer shows for By Products; WSR Age now defaults to 1
+//            day; Date field scrolls to top and gets focus right
+//            after Save/Update/Delete on every input form
+//   1.8-19 - By Products pile creation and picker: variety is no
+//            longer required when creating a By Products pile (new
+//            piles default to 1 day age); the By Products Pile ID
+//            picker no longer shows the variety name in parentheses
+//            (kept for every other cereal type); pile beginning
+//            balance now supports one line per variety for By
+//            Products, with Age required on the New Pile dialog;
+//            fixed the By Products Pile ID picker silently excluding
+//            valid piles when starting a new transaction
+//   1.8-20 - Auto-compute Net Kilos no longer switches off on its
+//            own anywhere in the app - only ever via the user's own
+//            toggle
+//   1.9    - Multi-pile WSI issuance: a single stock issuance can now
+//            draw from more than one pile, with full edit/update/
+//            void/unvoid reconciliation against pile stock and the
+//            authority balance, per-line field parity (MC/MTS/Gross
+//            Kilos/auto-compute/Net Kilos with labels), per-line
+//            stock validation, and Reports/PDF grouping so the extra
+//            piles combine into one row instead of showing as
+//            separate, confusing entries - a genuinely new feature
+//            domain, not a continuation of an existing thread
+//   1.9-1  - Fixed a production crash (ReferenceError) on "Issue
+//            from another pile" introduced by 1.9's initial release -
+//            a helper function was declared after the code that
+//            first called it
+//   1.9-2  - Fixed the root cause of duplicate rows appearing on
+//            Reports (the background Sheet sync had no guard against
+//            two overlapping runs, so each could import the same row
+//            twice); fixed the additional-pile card's layout on small
+//            screens; existing multi-pile records now correctly
+//            reload their recorded age instead of showing 0
+//   1.9-3  - This version label wasn't actually being kept up to date
+//            with every release, and sat far enough below "by ArVee"
+//            that a short viewport could only ever show one of the
+//            two - both now update together and sit right on top of
+//            each other. "Issue from another pile" (and the extra
+//            pile cards it reveals) moved on the WSI form to sit
+//            right after the primary pile's own Net Kilos and before
+//            Age, instead of up near the Pile ID picker - by the
+//            time the user reaches that point they already know
+//            whether the one pile covers the issuance
+export const APP_VERSION = '1.9-3'

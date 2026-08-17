@@ -547,6 +547,22 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
+### OPEN (2026-08-17 session, round 30) - version label caught up + moved on Login, "Issue from another pile" repositioned - PUSHED, not yet confirmed by user
+
+`APP_VERSION` (`src/version.js`) hadn't been bumped through rounds
+27-29 (MO/TMO Monitor fixes, By Products pile creation/picker fixes,
+always-enabled auto-compute, the whole multi-pile WSI feature and its
+follow-ups) - caught the history up through all of it and bumped to
+`1.9-3`. Login page's "by ArVee" and version text were two
+independently-positioned lines (bottom-14/bottom-6) that couldn't
+both fit on a short viewport - combined into one tight block at
+bottom-8. Moved "Issue from another pile" (and the extra pile cards
+it reveals) on the WSI form from right after Pile ID/Variety Type to
+right after the primary pile's own Net Kilos field, before Age, per
+explicit request. `src/version.js`, `src/pages/Login.jsx`,
+`src/components/forms/StockFormBase.jsx`. Build passes, not yet
+confirmed live.
+
 ### OPEN (2026-08-17 session, round 29) - additional-pile small-screen layout, Reports duplicate-serial root cause, age-load fallback - PUSHED, not yet confirmed by user
 
 Four items reported together while live-testing PR #20/#21's
