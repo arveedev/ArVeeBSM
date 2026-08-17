@@ -39,7 +39,10 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
   const [varietyId, setVarietyId] = useState('')
   const [beginBags, setBeginBags] = useState('')
   const [beginKilos, setBeginKilos] = useState('')
-  const [beginAge, setBeginAge] = useState('')
+  // Defaults to 1 day, per explicit request - incoming/newly-created
+  // piles almost always genuinely start at age 0-1, so this saves the
+  // vast majority of new piles a manual edit.
+  const [beginAge, setBeginAge] = useState('1')
   const [beginAgeUnit, setBeginAgeUnit] = useState('Days')
   const [beginCondition, setBeginCondition] = useState('GQ')
   const [mtsSelection, setMtsSelection] = useState('')
@@ -79,7 +82,11 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
       toast.error('Pile name is required')
       return
     }
-    if (!varietyId) {
+    // By Products piles accept any mix of By Products varieties over
+    // their lifetime (see the file-level comment) - only Rice/Palay,
+    // genuinely locked to one variety for life, require picking one
+    // up front.
+    if (category !== 'By Products' && !varietyId) {
       toast.error('Select a variety for this pile')
       return
     }
@@ -188,13 +195,13 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
           </div>
 
           <div>
-            <label className={labelClass}>Variety</label>
+            <label className={labelClass}>Variety{category === 'By Products' ? ' (optional)' : ''}</label>
             <select
               value={varietyId}
               onChange={(e) => setVarietyId(e.target.value)}
-              className={inputClass}
+              className={`${inputClass} ${category !== 'By Products' && !varietyId ? '!border-brand-amber' : ''}`}
             >
-              <option value="">Select variety…</option>
+              <option value="">{category === 'By Products' ? 'Optional — accepts any' : 'Select variety…'}</option>
               {categoryVarieties.map((v) => (
                 <option key={v.varietyId} value={v.varietyId}>
                   {v.name}
@@ -210,8 +217,9 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
           </div>
 
           <p className="text-xs text-neutral-500">
-            A pile's variety can never be changed once created — every bag
-            stored in it is treated as this variety.
+            {category === 'By Products'
+              ? 'A By Products pile accepts any mix of By Products varieties over its lifetime - picking one here only seeds its optional beginning balance below.'
+              : "A pile's variety can never be changed once created — every bag stored in it is treated as this variety."}
           </p>
 
           <div className="border-t border-neutral-800 pt-3">

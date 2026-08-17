@@ -15589,3 +15589,39 @@ for Rice/Palay. Net effect across PRs #7/#8/this one is identical to
 `src/components/forms/WTSForm.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #9 merged; continued) - By Products pile creation no longer requires a Variety; new piles default Age to 1 day
+
+Per explicit request, two changes across both places a pile can be
+created: `NewPileDialog.jsx` (opened from a stock form's "+ New Pile")
+and `Settings.jsx`'s `PileBalanceSection` (the standalone Create/Edit
+Pile panel).
+
+1. **Variety no longer required for By Products.** A By Products pile
+   already accepts any mix of By Products varieties over its lifetime
+   (existing design, `NewPileDialog.jsx`'s own file-level comment) -
+   but `handleCreate` in both files unconditionally blocked saving
+   with a toast error if no variety was picked, regardless of
+   category. Now only Rice/Palay require one
+   (`category !== 'By Products' && !varietyId`). Also updated the
+   Variety field's UI in both files: label gains "(optional)", the
+   blank option reads "Optional — accepts any" instead of "Select…",
+   and Settings.jsx's amber "required" border (NewPileDialog.jsx never
+   had one - added it there too, matching the rest of the dialog's own
+   convention) only shows for Rice/Palay now.
+   `NewPileDialog.jsx`'s informational note below the field ("A pile's
+   variety can never be changed once created") was flatly wrong for By
+   Products - now conditional, explaining the pile accepts any mix
+   instead.
+2. **New piles default Age to 1 day**, same reasoning as WSR's own
+   recent default-age change - both files' `age`/`beginAge` state
+   initializes to `'1'` instead of `''`, and Settings.jsx's
+   `resetForm` (re-used after every successful create, so it also
+   seeds the NEXT new pile) resets to `'1'` too, not `''`. `handleEdit`
+   still loads a pile's REAL stored `initialAgeValue` when editing an
+   existing one, unaffected by this default.
+
+### Files touched
+`src/components/forms/NewPileDialog.jsx`, `src/pages/Settings.jsx`.
+
+`npm run build` passes.
