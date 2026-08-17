@@ -1035,6 +1035,31 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // which a one-time call here could not do if varieties had not
     // yet resolved at this exact moment.
     setIsCancelled(tx.status === 'Cancelled')
+    // Multi-pile issuance: this record's OTHER pile allocations live
+    // as separate sibling records (same groupSerialNo, base serial +
+    // letter suffix - see performSave) - this was never reloaded, so
+    // reopening a multi-pile WSI from Reports or by stepping back to
+    // its serial only ever showed the one pile this specific record
+    // itself holds, silently dropping every other one from view. Fire-
+    // and-forget async tail, same pattern as the Sheet-backfill fetch
+    // further down - extraPileAllocations populates a moment after the
+    // rest of the form rather than blocking on it.
+    setExtraPileAllocations([])
+    if (tx.groupSerialNo) {
+      db.transactions
+        .where('groupSerialNo').equals(tx.groupSerialNo)
+        .and((t) => t.status === 'Active' && t.id !== tx.id)
+        .toArray()
+        .then((siblings) => {
+          if (siblings.length === 0) return
+          setExtraPileAllocations(siblings.map((s) => ({
+            pileId: s.pileId ?? '',
+            bags: s.numberOfBags != null ? liveFormatNumber(String(s.numberOfBags)) : '',
+            kilos: s.netKilos != null ? liveFormatNumber(String(s.netKilos), 3) : '',
+          })))
+        })
+        .catch(() => {}) // best-effort - the primary record's own data is already showing regardless
+    }
     setDate(tx.date ?? blankFormState.date)
     setLinkedDocNo(tx.linkedDocNo ?? tx.aiNumber ?? '')
     setCustomerName(tx.customerName ?? '')
@@ -2238,20 +2263,23 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <div key={i} className="mt-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-neutral-500">Additional pile {i + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
-                      aria-label="Remove pile"
-                      className="rounded-lg p-1 text-neutral-500 transition-colors hover:text-brand-crimson"
-                    >
-                      <X size={14} />
-                    </button>
+                    {!loadedTransaction && (
+                      <button
+                        type="button"
+                        onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
+                        aria-label="Remove pile"
+                        className="rounded-lg p-1 text-neutral-500 transition-colors hover:text-brand-crimson"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
                   </div>
                   <div className="mt-1 grid grid-cols-3 gap-2">
                     <select
                       value={alloc.pileId}
                       onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, pileId: e.target.value } : r)))}
-                      className={`${inputClass} mt-0 ${!alloc.pileId ? '!border-brand-amber' : ''}`}
+                      disabled={Boolean(loadedTransaction)}
+                      className={`${inputClass} mt-0 ${!alloc.pileId ? '!border-brand-amber' : ''} ${loadedTransaction ? 'opacity-60' : ''}`}
                     >
                       <option value="">Select pile…</option>
                       {sortedPiles
@@ -2265,28 +2293,33 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       type="text" inputMode="numeric" placeholder="Bags"
                       value={alloc.bags}
                       onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r)))}
-                      className={`${inputClass} mt-0`}
+                      readOnly={Boolean(loadedTransaction)}
+                      className={`${inputClass} mt-0 ${loadedTransaction ? 'opacity-60' : ''}`}
                     />
                     <input
                       type="text" inputMode="decimal" placeholder="Net Kilos"
                       value={alloc.kilos}
                       onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, kilos: liveFormatNumber(e.target.value) } : r)))}
-                      className={`${inputClass} mt-0`}
+                      readOnly={Boolean(loadedTransaction)}
+                      className={`${inputClass} mt-0 ${loadedTransaction ? 'opacity-60' : ''}`}
                     />
                   </div>
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={() => setExtraPileAllocations((rows) => [...rows, { pileId: '', bags: '', kilos: '' }])}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
-              >
-                <Plus size={14} /> Issue from another pile
-              </button>
+              {!loadedTransaction && (
+                <button
+                  type="button"
+                  onClick={() => setExtraPileAllocations((rows) => [...rows, { pileId: '', bags: '', kilos: '' }])}
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                >
+                  <Plus size={14} /> Issue from another pile
+                </button>
+              )}
               {extraPileAllocations.length > 0 && (
                 <p className="mt-1.5 text-xs text-neutral-500">
-                  Pile ID above covers its own share (with the Bags/Net Kilos fields further up) - each
-                  additional pile here adds its own separate share on top, saved as its own linked record.
+                  {loadedTransaction
+                    ? "Read-only here - editing an existing multi-pile issuance's additional piles isn't supported yet. Delete and re-enter if a correction is needed."
+                    : "Pile ID above covers its own share (with the Bags/Net Kilos fields further up) - each additional pile here adds its own separate share on top, saved as its own linked record."}
                 </p>
               )}
             </div>
