@@ -500,6 +500,15 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
   const progress = roundTo3(issuanceProgress + receiptProgress)
   const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
   const isCompleted = o.manuallyCompleted || o.sheetStatus === 'DONE' || o.fulfilled
+  // The kg/piece math behind o.fulfilled only ever tracks the primary
+  // stock recovery (rice) - By Products receipts are real but entered
+  // inconsistently enough that the app can't verify them, so an order
+  // reading as "fulfilled" is a signal to double-check, not proof the
+  // whole order (rice + by-products) is actually done. Completion is
+  // manual-only now (see isOrderCompleted in MillingMonitor) - this
+  // just flags, via an amber border, a pending order whose numbers
+  // already look done so the admin knows to go check and confirm it.
+  const needsConfirmation = o.fulfilled && !o.manuallyCompleted && o.sheetStatus !== 'DONE'
   // Shows checked/unchecked immediately on tap, independent of the
   // (deliberately delayed) DB write - same pattern as the AI/SIA
   // Monitor's own checkbox.
@@ -530,7 +539,9 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
       <button
         type="button"
         onClick={() => onSelect(o)}
-        className="flex flex-1 items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99]"
+        className={`flex flex-1 items-center justify-between gap-3 rounded-xl border bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99] ${
+          needsConfirmation ? 'border-brand-amber' : 'border-neutral-800'
+        }`}
       >
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-app-text">{o.number}</p>
@@ -585,7 +596,7 @@ function MillingMonitor({ isAdmin = false }) {
 
   useEffect(() => {
     if (!completingId) return
-    const stillPending = orders.some((o) => o.orderId === completingId && !(o.manuallyCompleted || o.sheetStatus === 'DONE' || o.fulfilled))
+    const stillPending = orders.some((o) => o.orderId === completingId && !(o.manuallyCompleted || o.sheetStatus === 'DONE'))
     if (!stillPending) setCompletingId(null)
   }, [orders, completingId])
 
@@ -652,7 +663,15 @@ function MillingMonitor({ isAdmin = false }) {
     if (regionalAuthFilter.trim() && regionalAuthByOrder.get(o.orderId) !== regionalAuthFilter.trim()) return false
     return true
   }
-  const isOrderCompleted = (o) => o.manuallyCompleted || o.sheetStatus === 'DONE' || o.fulfilled
+  // Completion is manual-only, per explicit request: o.fulfilled (the
+  // kg/piece recovery math) only ever tracks primary stock, never By
+  // Products - a real MO/TMO with inconsistently-entered by-products
+  // receipts can read as "fulfilled" while genuinely still open. An
+  // order this is true of shows an amber border in the pending list
+  // instead (see needsConfirmation in MillingOrderRow above) so the
+  // admin can verify and mark it complete themselves, rather than the
+  // app silently moving it to Completed on its own.
+  const isOrderCompleted = (o) => o.manuallyCompleted || o.sheetStatus === 'DONE'
   // Inline list is always pending-only now - completed orders live in
   // their own modal (CompletedMillingModal below) instead of replacing
   // this list in place, matching the AI/SIA Monitor's own
