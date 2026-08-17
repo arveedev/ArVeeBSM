@@ -704,7 +704,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     }
     if (prefill.numberOfBags != null) setNumberOfBags(liveFormatNumber(String(prefill.numberOfBags)))
     if (prefill.grossKilos != null) setGrossKilos(liveFormatNumber(String(prefill.grossKilos), 3))
-    if (prefill.autoComputeNet === false) setAutoComputeNet(false)
+    // Auto-compute Net Kilos is never switched off by a prefill - stays
+    // on by default, only the user's own toggle tap turns it off (per
+    // explicit request). prefill.netKilos still seeds manualNetKilos,
+    // ready if the user switches to manual entry themselves.
     if (prefill.netKilos != null) setManualNetKilos(liveFormatNumber(String(prefill.netKilos), 3))
     // serialNo from a report row tap — set it and trigger the existing-
     // transaction lookup so Update/Delete appears automatically.
@@ -998,8 +1001,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       : null
 
     if (bagsRemaining != null && bagsRemaining > 0) setNumberOfBags(liveFormatNumber(String(bagsRemaining)))
+    // Auto-compute Net Kilos stays on by default, per explicit request
+    // - never switched off automatically, only by the user's own tap
+    // on the toggle. Still seeds manualNetKilos with the authority's
+    // remaining balance, so it's ready and waiting if the user decides
+    // to switch to manual entry themselves.
     if (kilosRemaining != null && kilosRemaining > 0) {
-      setAutoComputeNet(false)
       setManualNetKilos(liveFormatNumber(String(kilosRemaining), 3))
     }
 

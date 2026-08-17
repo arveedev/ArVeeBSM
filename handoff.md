@@ -608,6 +608,27 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**Auto-compute Net Kilos never switched off automatically anymore,
+only by the user's own toggle tap - fixed, not yet confirmed by
+user.** Per explicit request. Two places in `StockFormBase.jsx`
+(WSR/WSI) silently switched it off without the user touching the
+toggle: (1) `handleSelectAuthority` (the "Browse" AI picker) - forced
+`manualNetKilos` to the authority's exact remaining balance AND
+switched auto-compute off; now only seeds `manualNetKilos` (ready if
+the user switches to manual entry themselves), auto-compute stays on.
+(2) The `prefill.autoComputeNet === false` handling, whose only real
+caller (`AuthorityMonitor.jsx`'s "open WSI from a pending AI") sent it
+unconditionally - removed from both the consumer (now genuinely dead)
+and the sender. `prefill`/`manualNetKilos`'s remaining-kilos seed value
+is still sent/set either way. Checked every other
+`openTransactionForm('WSI', ...)` caller (`AuthoritiesInfoPanel.jsx` -
+already doesn't touch it) and `loadTransactionIntoForm`'s own handling
+(loading an EXISTING transaction's real saved state - deliberately
+untouched, that's not a "new transaction default" question).
+`SackFormBase.jsx` has no Net Kilos concept; `WTSForm.jsx` computes it
+automatically with no manual-override toggle at all - nothing to
+change in either.
+
 **Real bug fixed: By Products Pile ID picker was silently excluding
 valid piles - fixed, not yet confirmed by user.** User-reported, framed
 as "variety doesn't reset per transaction." Actual cause:
