@@ -15941,3 +15941,27 @@ at all.
 `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #17 merged; continued) - restored the Reports.jsx grouping - user clarified their objection was to touching the PDF export, not the on-screen page
+
+User re-read `Reports.jsx` and `pdfGenerator.js` themselves and
+clarified: their earlier pushback was because they'd assumed the
+`combineMultiPileGroups` change was touching the EXPORTED PDF report -
+it wasn't, `pdfGenerator.js` was never modified, only the on-screen
+statement list. Confirmed the on-screen grouping fix (a `-A` sibling
+must not show as its own row on the Reports page) was correct all
+along and should be restored.
+
+Restored `combineMultiPileGroups` and its two call sites (stockReceipts/
+stockIssues) exactly as they were before the previous round's revert.
+Kept the separate `checkAndLoadSerial` redirect fix from that same
+round too - the two are complementary, not conflicting: the Reports
+grouping stops a `-A` row from appearing in the first place, while the
+form-side redirect is a backstop for someone typing a `-A` serial
+directly into the Serial No. field, a path Reports grouping alone
+can't cover.
+
+### Files touched
+`src/pages/Reports.jsx`.
+
+`npm run build` passes.
