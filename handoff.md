@@ -608,6 +608,25 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**MO/TMO completion is manual-only now; amber border flags an
+already-looks-done pending order - fixed, not yet confirmed by user.**
+Per explicit request. `MillingMonitor.jsx`'s `isOrderCompleted` (gates
+both the pending and Completed lists) dropped `o.fulfilled` entirely -
+now `manuallyCompleted || sheetStatus === 'DONE'` only, since
+o.fulfilled's kg/piece math only ever tracks primary stock, never By
+Products (entered too inconsistently to trust as proof the whole order
+is done). A pending order that IS fulfilled now instead gets a new
+`needsConfirmation` amber border on its row (`MillingOrderRow`) - a
+"go check this, then confirm it yourself" cue, not an automatic
+completion. `CompletedMillingModal.jsx`'s `canUncomplete` also used to
+block uncheck when o.fulfilled was true (borrowed from the Authorities
+rule, which assumes that signal IS trustworthy) - dropped, now just
+`isAdmin && manuallyCompleted`, giving the admin full control both
+directions consistently. `MillingOrderDetail`'s own separate
+`isCompleted` (drives the Expected-vs-Actual recovery card) still uses
+o.fulfilled, deliberately - unrelated to list membership, and exactly
+the info an admin needs to decide whether to confirm.
+
 **Save/Update/Delete now scroll to top + focus Date, all 3 transaction
 forms - fixed, not yet confirmed by user.** Per explicit request:
 Serial No. (first field in every form) must stay visible while Date

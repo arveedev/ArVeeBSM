@@ -15478,3 +15478,48 @@ after Save).
 `src/components/forms/WTSForm.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #5 merged; continued) - MO/TMO completion is manual-only now; amber border flags a pending order whose numbers already look done
+
+Per explicit request: an MO/TMO should only ever move to Completed via
+an explicit admin action, never automatically. But an order sitting in
+Pending that HAS finished its primary stock issues/receipts (the
+existing o.fulfilled math) should get an amber border, since By
+Products receipts are entered too inconsistently for the app to trust
+as proof the whole order is actually done - the border is a "go check
+this, then mark it complete yourself" cue, not a verdict.
+
+`MillingMonitor.jsx`'s `isOrderCompleted` (gates BOTH the pending and
+Completed arrays) dropped `|| o.fulfilled` entirely - now
+`o.manuallyCompleted || o.sheetStatus === 'DONE'` only. The
+`completingId` stillPending check (drives the mark-complete row exit
+animation) updated to match, for consistency. `MillingOrderRow` gained
+`needsConfirmation = o.fulfilled && !o.manuallyCompleted &&
+o.sheetStatus !== 'DONE'`, applied as `border-brand-amber` on the
+row's main button (was always `border-neutral-800`) - the existing
+local `isCompleted` (still includes o.fulfilled, drives the progress
+bar's neon/amber fill color and the small AlertTriangle icon) was left
+alone, so a needs-confirmation row shows both signals together: a full
+neon progress bar (the numbers do say 100%) plus an amber border
+(nobody's confirmed it yet).
+
+`CompletedMillingModal.jsx`'s `canUncomplete` also used to block
+uncheck when `o.fulfilled` was true, on the same "genuinely fulfilled
+isn't done by mistake" theory already applied to AI/SIA Authorities -
+but that theory assumed o.fulfilled is trustworthy, which this whole
+change explicitly says it isn't (by-products blind spot). Dropped
+`&& !o.fulfilled` - `canUncomplete` is now just `isAdmin &&
+o.manuallyCompleted`, giving the admin full control both directions
+consistently.
+
+`MillingOrderDetail`'s own separate local `isCompleted` (line ~150,
+drives whether the Expected-vs-Actual recovery comparison card shows)
+still includes o.fulfilled - deliberately unchanged, since that's
+exactly the information an admin needs to decide whether to confirm a
+needs-confirmation order, unrelated to list membership.
+
+### Files touched
+`src/components/common/MillingMonitor.jsx`,
+`src/components/common/CompletedMillingModal.jsx`.
+
+`npm run build` passes.
