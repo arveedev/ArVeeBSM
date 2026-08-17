@@ -44,10 +44,23 @@ function CompletedMillingModal({ orders, type, onSelectOrder, onClose, isAdmin =
   }, [orders, revertingId])
 
   // Only ever offered for orders completed by the MANUAL checkbox - one
-  // genuinely fulfilled via real batch/trial data (o.fulfilled) or
-  // marked DONE directly on the Sheet isn't "done by mistake" in any
-  // sense a toggle could undo.
-  const canUncomplete = (o) => isAdmin && !(o.fulfilled || o.sheetStatus === 'DONE')
+  // genuinely fulfilled via real batch/trial data (o.fulfilled) isn't
+  // "done by mistake" in any sense a toggle could undo.
+  //
+  // Deliberately NOT also excluding o.sheetStatus === 'DONE' here (a
+  // previous version did) - marking an order complete via this same
+  // checkbox writes 'DONE' back to the Sheet's STATUS column
+  // (markMillingOrderDone, see toggleManualComplete in
+  // MillingMonitor.jsx), so after the next sync pulls that same write
+  // back in, sheetStatus reads 'DONE' for every order the admin JUST
+  // manually completed through the app - which silently made the
+  // uncheck control disappear the moment it was used, locking out the
+  // very feature it gates. manuallyCompleted is already the correct,
+  // app-authoritative signal for "this was done via the app's own
+  // checkbox" - no need to also trust sheetStatus, which can no longer
+  // reliably distinguish "typed DONE directly on the Sheet" from "the
+  // app wrote DONE because the admin already completed it here."
+  const canUncomplete = (o) => isAdmin && o.manuallyCompleted && !o.fulfilled
 
   const requestUncomplete = (order, e) => {
     e.stopPropagation()

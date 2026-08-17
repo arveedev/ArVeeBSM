@@ -15339,3 +15339,44 @@ entirely vs. present-but-reverting after tap.
 `src/components/common/MillingMonitor.jsx` (sort direction only).
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 27, PR #1 merged into main; continued) - uncheck-complete self-lockout found and fixed
+
+PR #1 (sort fix + cutoff-exclusion removal) merged into `main` and
+deployed - user confirmed the previously-missing TMO now shows up.
+Branch restarted from the new `main` per the merged-PR workflow rule.
+
+User then reported the newly-mentioned "unmark complete" issue more
+precisely: after using the admin checkbox to mark several MO/TMO
+complete, none of them show an uncheck control in the Completed modal
+anymore.
+
+Root cause: a genuine self-defeating race, not a missing feature.
+`toggleManualComplete` (MillingMonitor.jsx) sets `manuallyCompleted:
+true` AND fire-and-forget calls `markMillingOrderDone(order.type,
+order.number)`, which writes literal `'DONE'` into the Sheet's own
+STATUS column - by design, so the Sheet stays in sync with the app.
+But `CompletedMillingModal.jsx`'s `canUncomplete` gate was `isAdmin &&
+!(o.fulfilled || o.sheetStatus === 'DONE')` - intended to block
+uncheck only for orders "marked DONE directly on the Sheet"
+(independent of the app), per the comment at the time. Once the next
+sync (every 5 min, or Sync Now) pulls that same DONE write back in,
+`sheetStatus` reads `'DONE'` for every order the admin JUST completed
+through the app itself - so the gate blocked the very orders it exists
+to allow, the moment the feature was used at all. `sheetStatus` can no
+longer distinguish "typed DONE directly on the Sheet" from "the app
+wrote DONE because of our own manual completion" - `manuallyCompleted`
+is already the correct, app-authoritative signal for the latter.
+Fixed: `canUncomplete = (o) => isAdmin && o.manuallyCompleted &&
+!o.fulfilled` - drops the `sheetStatus` check entirely. Still correctly
+blocks uncheck for orders that were NEVER manually completed through
+the app (an externally-DONE Sheet row has `manuallyCompleted: false`,
+so it's excluded either way) and for orders that are also genuinely,
+mathematically fulfilled - matches the same rule already used
+correctly for AI/SIA Authorities (`isNaturallyComplete()`, independent
+of any externally-sourced status flag).
+
+### Files touched
+`src/components/common/CompletedMillingModal.jsx`.
+
+`npm run build` passes. Not yet verified against the user's real data.
