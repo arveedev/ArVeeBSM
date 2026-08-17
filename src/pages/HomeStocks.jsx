@@ -21,6 +21,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtBags, fmtWeight, fmtNetBags, AGE_BUCKETS } from '../utils/calculations.js'
 import { computeUnwithdrawnByVariety, computeUnwithdrawnByVarietyAge } from '../utils/unwithdrawnStock.js'
+import { computePileStockBySackWeight } from '../utils/pileLedger.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
@@ -287,8 +288,6 @@ function HomeStocks({ warehouseId } = {}) {
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const varietyCategoryMap = new Map(varieties.map((v) => [v.varietyId, v.category]))
-  const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
-  const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
   const unwithdrawnMap = useLiveQuery(
     () => computeUnwithdrawnByVariety(currentWarehouseId),
     [currentWarehouseId]
@@ -302,30 +301,61 @@ function HomeStocks({ warehouseId } = {}) {
     [currentWarehouseId, varieties]
   ) ?? new Map()
 
+  // pileId -> Map(weight -> { bags, kilos }) - the ACTUAL sack weight(s)
+  // making up each pile's current stock, from its real transaction
+  // history (see computePileStockBySackWeight's own comment for why
+  // piles.mtsSackTypeId alone can't answer this: it only reflects
+  // whichever weight a pile was first CREATED with, never updated by
+  // later receipts, even though an ordinary Rice/Palay pile - locked to
+  // one variety for life, but never locked to one sack weight - can
+  // genuinely accumulate more than one weight over its lifetime.
+  const pileStockByWeight = useLiveQuery(async () => {
+    if (piles.length === 0) return new Map()
+    const warehouse = currentWarehouseId ? await db.warehouses.get(currentWarehouseId) : null
+    const entries = await Promise.all(
+      piles.map(async (p) => [p.pileId, await computePileStockBySackWeight(p.pileId, '9999-12-31', warehouse)])
+    )
+    return new Map(entries)
+  }, [piles, currentWarehouseId]) ?? new Map()
+
   const enrichedPiles = piles.map((p) => ({
     ...p,
     age: calculateCurrentAge(p.initialAgeValue ?? 0, p.dateOfReceipt, autoAgeMonitoring),
     variety: varietyMap.get(p.varietyId),
   }))
 
-  // First pass: for each variety, collect every distinct MTS weight in
-  // use across its piles - only varieties with genuinely more than one
-  // distinct weight need separating at all. A variety using a single
-  // sack condition throughout (the common case) stays as one plain-
-  // named line, exactly as before this feature existed.
+  // First pass: for each variety, collect every distinct weight actually
+  // present across its piles' REAL stock (per pileStockByWeight, not the
+  // stale pile-level field) - only varieties with genuinely more than
+  // one distinct weight need separating at all. A variety using a
+  // single sack condition throughout (the common case) stays as one
+  // plain-named line, exactly as before this feature existed. By
+  // Products is deliberately excluded, per an earlier explicit request
+  // that it always show as a single unseparated line regardless of how
+  // many distinct sack weights are technically in use - unlike
+  // Rice/Palay's, that decision wasn't reported as wrong and isn't
+  // being changed here.
   const weightsByVariety = new Map()
   for (const p of enrichedPiles) {
+    if (p.variety?.category === 'By Products') continue
     const varietyName = p.variety?.name ?? '—'
-    const mtsWeight = sackTypeMap.get(p.mtsSackTypeId)?.weights?.[p.mtsCondition]
-    if (mtsWeight == null) continue
-    if (!weightsByVariety.has(varietyName)) weightsByVariety.set(varietyName, new Set())
-    weightsByVariety.get(varietyName).add(mtsWeight)
+    const byWeight = pileStockByWeight.get(p.pileId)
+    if (!byWeight) continue
+    for (const [weight] of byWeight) {
+      if (weight === 'unspecified') continue
+      if (!weightsByVariety.has(varietyName)) weightsByVariety.set(varietyName, new Set())
+      weightsByVariety.get(varietyName).add(weight)
+    }
   }
 
   // cerealType -> displayLabel -> ageBucketLabel -> { bags, kilos }
-  // displayLabel is "varietyName (mtsWeight)" only when that variety
-  // has more than one distinct weight in use - otherwise just the
-  // plain variety name, merging everything into one line as usual.
+  // displayLabel is "varietyName (weight)" only when that variety has
+  // more than one distinct weight in use - otherwise just the plain
+  // variety name, merging everything into one line as usual. Age
+  // bucketing stays a whole-PILE property (a pile's age is one value
+  // regardless of how many sack weights are mixed within it), so each
+  // pile's per-weight portions all land in that same pile's one age
+  // bucket - only the weight split changes what's inside it.
   const stockGroups = {}
   // cerealType -> groupLabel -> varietyId, so the unwithdrawn-stock
   // lookup (keyed by varietyId) can be joined back onto each rendered
@@ -334,20 +364,23 @@ function HomeStocks({ warehouseId } = {}) {
   for (const p of enrichedPiles) {
     const cerealType = p.variety?.category ?? p.cerealType ?? 'Unknown'
     const varietyName = p.variety?.name ?? '—'
-    const mtsWeight = sackTypeMap.get(p.mtsSackTypeId)?.weights?.[p.mtsCondition]
-    const needsSeparation = cerealType !== 'By Products' && (weightsByVariety.get(varietyName)?.size ?? 0) > 1
-    const groupLabel = needsSeparation && mtsWeight != null ? `${varietyName} (${mtsWeight.toFixed(3)})` : varietyName
+    const needsSeparation = (weightsByVariety.get(varietyName)?.size ?? 0) > 1
     const buckets = AGE_BUCKETS[cerealType] ?? AGE_BUCKETS.Rice
     const bucket = buckets.find((b) => b.test(p.age)) ?? buckets[buckets.length - 1]
+    const byWeight = pileStockByWeight.get(p.pileId) ?? new Map([['unspecified', { bags: p.currentBags ?? 0, kilos: p.currentKilos ?? 0 }]])
 
-    stockGroups[cerealType] ??= {}
-    stockGroups[cerealType][groupLabel] ??= {}
-    stockGroups[cerealType][groupLabel][bucket.label] ??= { bags: 0, kilos: 0 }
-    stockGroups[cerealType][groupLabel][bucket.label].bags += p.currentBags ?? 0
-    stockGroups[cerealType][groupLabel][bucket.label].kilos += p.currentKilos ?? 0
+    for (const [weight, totals] of byWeight) {
+      const groupLabel = needsSeparation && weight !== 'unspecified' ? `${varietyName} (${weight.toFixed(3)})` : varietyName
 
-    groupVarietyId[cerealType] ??= {}
-    groupVarietyId[cerealType][groupLabel] = p.varietyId
+      stockGroups[cerealType] ??= {}
+      stockGroups[cerealType][groupLabel] ??= {}
+      stockGroups[cerealType][groupLabel][bucket.label] ??= { bags: 0, kilos: 0 }
+      stockGroups[cerealType][groupLabel][bucket.label].bags += totals.bags
+      stockGroups[cerealType][groupLabel][bucket.label].kilos += totals.kilos
+
+      groupVarietyId[cerealType] ??= {}
+      groupVarietyId[cerealType][groupLabel] = p.varietyId
+    }
   }
 
   const totalBags = piles.reduce((sum, p) => sum + (p.currentBags ?? 0), 0)

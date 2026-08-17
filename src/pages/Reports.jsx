@@ -202,6 +202,7 @@ function Reports() {
       // lookups query transactions directly and are entirely
       // unaffected by this report-only filter.
       const reportingCutoffDate = currentWarehouse?.reportingCutoffDate || null
+      const warehousePiles = await db.piles.where('warehouseId').equals(currentWarehouseId).toArray()
       // Pile-based MTS fallback for display-grouping purposes only -
       // many transactions (especially older/imported ones) have their
       // own mtsSackTypeId/mtsCondition unset even though the pile they
@@ -212,14 +213,29 @@ function Reports() {
       // balance cutoff logic above or anywhere else - purely used to
       // pick the correct weight label.
       const pileMtsById = new Map(
-        (await db.piles.where('warehouseId').equals(currentWarehouseId).toArray())
-          .map((p) => [p.pileId, { mtsSackTypeId: p.mtsSackTypeId, mtsCondition: p.mtsCondition }])
+        warehousePiles.map((p) => [p.pileId, { mtsSackTypeId: p.mtsSackTypeId, mtsCondition: p.mtsCondition }])
       )
       const resolveMtsWeight = (t) => {
         const ownSackTypeId = t.mtsSackTypeId ?? pileMtsById.get(t.pileId)?.mtsSackTypeId
         const ownCondition = t.mtsCondition ?? pileMtsById.get(t.pileId)?.mtsCondition
         return sackTypeMap.get(ownSackTypeId)?.weights?.[ownCondition] ?? null
       }
+      // Deleting a pile deliberately keeps its transactions forever (BIN
+      // cards and other historical records still need them) - but that
+      // means a beginning balance computed by summing EVERY isInitialBalance
+      // transaction warehouse-wide, with no per-pile matching, silently
+      // keeps counting a pile that was deleted (e.g. created by mistake and
+      // replaced with a corrected one) as if it still physically existed -
+      // permanently inflating every future report's beginning balance for
+      // that variety by however many bags/kilos that phantom pile's seed
+      // once held. Filtering to only piles that still exist today is the
+      // per-warehouse-aggregate equivalent of the "pile still exists" fix
+      // already applied to the per-pile computeHistoricalPileState/
+      // recalculatePileCurrentState (pileLedger.js) - this is a genuinely
+      // separate code path (a direct warehouse-wide transaction sum, not a
+      // per-pile query) that never received that same fix.
+      const existingPileIds = new Set(warehousePiles.map((p) => p.pileId))
+      const resolvePileId = (t) => (t.wtsSide ? (t.wtsSide === 'received' ? t.receivedPileId : t.issuedPileId) : t.pileId)
       const stockBeginningBals = new Map()
       const priorStockRaw = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
@@ -229,6 +245,7 @@ function Reports() {
         .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {
+        if (!existingPileIds.has(resolvePileId(t))) return
         const variety = varietyMap.get(t.varietyId)
         if (!variety) return
         const cat = variety.category
