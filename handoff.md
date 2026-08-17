@@ -608,6 +608,21 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**Save/Update/Delete now scroll to top + focus Date, all 3 transaction
+forms - fixed, not yet confirmed by user.** Per explicit request:
+Serial No. (first field in every form) must stay visible while Date
+gets focus. `CalendarDatePicker.jsx` only exposed `open()` via its
+imperative handle - added a `triggerRef` + `focus` method so it can be
+focused externally like any other field. `StockFormBase.jsx`/
+`SackFormBase.jsx` already had a `scrollToCustomerName` (scroll-to-top
++ focus Customer Name), but only wired up after Save, not Update/
+Delete - renamed to `scrollToTop`, retargeted to a new `dateRef`, and
+added to all three handlers in both files.
+`SackFormBase.jsx`'s SEPARATE externally-exposed `focus()` (still
+Customer Name, used when the form first opens) is untouched.
+`WTSForm.jsx` had no equivalent function at all - added `scrollToTop`
+from scratch, wired into Save/Update/Delete.
+
 **WSR Age now defaults to 1 day - fixed, not yet confirmed by user.**
 Per explicit request. `StockFormBase.jsx`'s `ageValue` now initializes
 to `'1'` for WSR (was `''` for every type) - changed both the

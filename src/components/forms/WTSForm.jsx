@@ -210,7 +210,16 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
 
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
+  const dateRef = useRef(null)
   const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
+
+  // Scrolls the form back to the very top (so WTS No., the first
+  // field, is back in view) and moves focus to Date, per explicit
+  // request - called after every Save/Update/Delete.
+  const scrollToTop = () => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    dateRef.current?.focus({ preventScroll: true })
+  }
 
   // Tracks whether the actual WTS No. field is currently scrolled into
   // view within the form's own scroll container - drives the sticky
@@ -536,6 +545,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     toast.success(`WTS saved — ${serialNo.trim()}`)
     resetForm(stepSerial(serialNo.trim(), 1))
     setIsSaving(false)
+    scrollToTop()
   }
 
   const handleUpdate = async () => {
@@ -548,6 +558,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     toast.success(`WTS ${serialNo.trim()} updated`)
     setLoadedTransaction(updated)
     setIsSaving(false)
+    scrollToTop()
   }
 
   const handleDeleteConfirmed = async () => {
@@ -560,6 +571,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     toast.success(`WTS ${serialNo.trim()} deleted`)
     resetForm(serialNo.trim())
     setIsSaving(false)
+    scrollToTop()
   }
 
   // Voiding bypasses the normal Save button - confirming immediately
@@ -674,7 +686,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
         <div>
           <label className={labelClass}>Date</label>
-          <CalendarDatePicker value={date} onChange={setDate} />
+          <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
         </div>
 
         <div>
