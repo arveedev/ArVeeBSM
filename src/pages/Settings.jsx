@@ -153,6 +153,21 @@ function PileBalanceSection({ warehouseId }) {
   const [varietyId, setVarietyId] = useState('')
   const [bags, setBags] = useState('')
   const [kilos, setKilos] = useState('')
+  // By Products beginning balance, one line per configured By Products
+  // variety (not a repeatable/addable list - exactly one row per
+  // variety that exists, since a By Products pile genuinely accepts a
+  // mix of all of them). Keyed by varietyId; a variety with no entry
+  // (or left blank) simply gets no seed transaction - none of these
+  // are required, per explicit request. Only relevant when
+  // category === 'By Products'; the single bags/kilos state above
+  // still drives Rice/Palay, which stay locked to one variety.
+  const [byProductBalances, setByProductBalances] = useState({})
+  const updateByProductBalance = (varietyId, field, value) => {
+    setByProductBalances((prev) => ({
+      ...prev,
+      [varietyId]: { ...(prev[varietyId] ?? { bags: '', kilos: '' }), [field]: value },
+    }))
+  }
   // Defaults to 1 day, per explicit request - incoming/newly-created
   // piles almost always genuinely start at age 0-1, so this saves the
   // vast majority of new piles a manual edit.
@@ -209,6 +224,7 @@ function PileBalanceSection({ warehouseId }) {
     setVarietyId('')
     setBags('')
     setKilos('')
+    setByProductBalances({})
     setAge('1')
     setCondition('GQ')
     setPurity('')
@@ -256,8 +272,13 @@ function PileBalanceSection({ warehouseId }) {
   // required fields actually have valid values. Variety isn't
   // required for By Products - that pile accepts any mix of By
   // Products varieties over its lifetime, unlike Rice/Palay, which
-  // genuinely are locked to one variety.
-  const canSavePile = Boolean(pileName.trim()) && (category === 'By Products' || Boolean(varietyId)) && bags !== '' && kilos !== '' && age !== ''
+  // genuinely are locked to one variety. Same for the single bags/
+  // kilos fields - By Products uses its own per-variety lines instead
+  // (byProductBalances), none of which are required either.
+  const canSavePile = Boolean(pileName.trim())
+    && (category === 'By Products' || Boolean(varietyId))
+    && (category === 'By Products' || (bags !== '' && kilos !== ''))
+    && age !== ''
 
   // Cancel only shows once there's actually something to cancel -
   // editing an existing pile, or having started filling in a new one.
@@ -283,6 +304,56 @@ function PileBalanceSection({ warehouseId }) {
     }
 
     setIsSaving(true)
+
+    if (category === 'By Products') {
+      // Bare pile first, no single seed (bags/kilos 0) - the real
+      // beginning balance comes from the per-variety lines below, each
+      // becoming its own seed transaction under this same pileId, same
+      // pattern BeginningBalancesPanel.jsx already uses for repeatable
+      // lines. currentBags/currentKilos are then re-derived from the
+      // full set via recalculatePileCurrentState rather than summed by
+      // hand here, so this can never drift from the ledger.
+      const pile = await createPileWithBeginningBalance({
+        warehouseId, pileName, category, varietyId: null,
+        bags: 0, kilos: 0,
+        age: age === '' ? 0 : parseFormattedNumber(age),
+        ageUnit, condition, purity, dateProcured, moistureContent,
+        asOfDate,
+      })
+      let lineIndex = 0
+      for (const v of categoryVarieties) {
+        const line = byProductBalances[v.varietyId]
+        const lineBags = line?.bags ? parseFormattedNumber(line.bags) : 0
+        const lineKilos = line?.kilos ? parseFormattedNumber(line.kilos) : 0
+        if (lineBags <= 0 && lineKilos <= 0) continue
+        lineIndex += 1
+        await db.transactions.add({
+          id: crypto.randomUUID(),
+          type: 'WSR',
+          serialNo: `INIT-${pile.pileId.slice(0, 8)}-${lineIndex}`,
+          status: 'Active',
+          date: pile.dateOfReceipt,
+          warehouseId,
+          pileId: pile.pileId,
+          varietyId: v.varietyId,
+          condition,
+          purity: purity?.trim() || null,
+          numberOfBags: lineBags,
+          grossKilos: lineKilos,
+          netKilos: lineKilos,
+          moistureContent: moistureContent?.trim() || null,
+          customerName: 'Beginning Balance',
+          isInitialBalance: true,
+          isSynced: true,
+        })
+      }
+      await recalculatePileCurrentState(pile.pileId)
+      toast.success(`Pile "${pile.pileName}" created`)
+      resetForm()
+      setIsSaving(false)
+      return
+    }
+
     const pile = await createPileWithBeginningBalance({
       warehouseId, pileName, category, varietyId,
       bags: bags === '' ? 0 : parseFormattedNumber(bags),
@@ -440,7 +511,7 @@ function PileBalanceSection({ warehouseId }) {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={labelClass}>Category</label>
-            <select value={category} onChange={(e) => { setCategory(e.target.value); setVarietyId('') }} className={inputClass}>
+            <select value={category} onChange={(e) => { setCategory(e.target.value); setVarietyId(''); setByProductBalances({}) }} className={inputClass}>
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -458,18 +529,54 @@ function PileBalanceSection({ warehouseId }) {
         </div>
         {!editingPileId && (
           <>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className={labelClass}>Bags</label>
-                <input type="text" inputMode="numeric" value={bags} onChange={(e) => setBags(liveFormatNumber(e.target.value))}
-                  className={`${inputClass} ${bags === '' ? '!border-brand-amber' : ''}`} placeholder="0" />
+            {category === 'By Products' ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase text-neutral-500">
+                  Beginning Balance by Variety (optional)
+                </p>
+                {categoryVarieties.length === 0 && (
+                  <p className="text-xs text-neutral-500">
+                    No By Products varieties configured yet — add one in
+                    the Admin Dashboard's Varieties tab first.
+                  </p>
+                )}
+                {categoryVarieties.map((v) => {
+                  const line = byProductBalances[v.varietyId] ?? { bags: '', kilos: '' }
+                  return (
+                    <div key={v.varietyId} className="rounded-lg border border-neutral-800 bg-neutral-950 p-2.5">
+                      <p className="text-xs font-semibold text-neutral-400">{v.name}</p>
+                      <div className="mt-1.5 grid grid-cols-2 gap-2">
+                        <div>
+                          <label className={labelClass}>Bags</label>
+                          <input type="text" inputMode="numeric" value={line.bags}
+                            onChange={(e) => updateByProductBalance(v.varietyId, 'bags', liveFormatNumber(e.target.value))}
+                            className={inputClass} placeholder="0" />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Net Kilos</label>
+                          <input type="text" inputMode="decimal" value={line.kilos}
+                            onChange={(e) => updateByProductBalance(v.varietyId, 'kilos', liveFormatNumber(e.target.value, 3))}
+                            className={inputClass} placeholder="0.000" />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-              <div>
-                <label className={labelClass}>Net Kilos</label>
-                <input type="text" inputMode="decimal" value={kilos} onChange={(e) => setKilos(liveFormatNumber(e.target.value, 3))}
-                  className={`${inputClass} ${kilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.000" />
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>Bags</label>
+                  <input type="text" inputMode="numeric" value={bags} onChange={(e) => setBags(liveFormatNumber(e.target.value))}
+                    className={`${inputClass} ${bags === '' ? '!border-brand-amber' : ''}`} placeholder="0" />
+                </div>
+                <div>
+                  <label className={labelClass}>Net Kilos</label>
+                  <input type="text" inputMode="decimal" value={kilos} onChange={(e) => setKilos(liveFormatNumber(e.target.value, 3))}
+                    className={`${inputClass} ${kilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.000" />
+                </div>
               </div>
-            </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className={labelClass}>Age</label>

@@ -608,6 +608,40 @@ on that list?"), correctly. Fixed by deleting the
 via grep it had no other use - `passesSharedFilters` now only applies
 the Regional Authority Number dropdown filter).
 
+**By Products beginning balance goes per-variety (Settings' Create Pile
+tab and BeginningBalancesPanel's edit view); NewPileDialog gets a
+genuine Age requirement - fixed, not yet confirmed by user.** Per
+explicit request, three different behaviors across the three pile-data
+surfaces:
+1. `Settings.jsx`'s Create Pile tab, By Products only: one row per
+   configured By Products variety (fixed set, not addable/removable),
+   each with its own optional Bags/Kilos (`byProductBalances` state).
+   `handleCreate`'s By Products branch creates the bare pile, then adds
+   one `isInitialBalance` seed transaction per non-empty line, then
+   `recalculatePileCurrentState` to re-derive totals from the real
+   ledger.
+2. `BeginningBalancesPanel.jsx`'s Piles tab (editing an EXISTING pile):
+   its repeatable-line UI already supported multiple seed transactions
+   per pile, but every line shared one pile-level variety - added a
+   per-line Variety `<select>`, shown only for By Products piles.
+   `emptyLine()`/`handleEdit`/`handleSave` all updated so each line's
+   own varietyId is read, edited, and actually persisted (previously
+   silently ignored, always fell back to the pile's own varietyId).
+   Also fixed `editingCategory` - was derived via
+   `varietyMap.get(pile.varietyId)?.category`, which breaks for any
+   pile with a blank varietyId (now possible for By Products) -
+   switched to `pile.cerealType` directly. This surfaced a real
+   pre-existing bug: `sackTypesForCategory` filtered by exact category
+   match, but sack types have no 'By Products' category of their own -
+   was silently showing zero sack-weight options for every By Products
+   pile. Fixed to match NewPileDialog.jsx's own existing pattern.
+3. `NewPileDialog.jsx` ("+ New Pile" from a transaction) stays simple,
+   deliberately NOT given the per-variety lines - Age is now a genuine
+   requirement there instead (amber border + blocking toast), matching
+   Pile Name; previously it silently defaulted to 0 with no
+   validation. Condition needs no check, always has a value by
+   construction.
+
 **By Products pile creation no longer requires a Variety; new piles
 default Age to 1 day - fixed, not yet confirmed by user.** Per
 explicit request, in both places a pile can be created
