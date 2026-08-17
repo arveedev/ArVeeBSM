@@ -16119,3 +16119,41 @@ unlabeled box anymore.
 `src/components/forms/StockFormBase.jsx`.
 
 `npm run build` passes. Not yet verified against the user's real data.
+
+## Session: 2026-08-17 (round 28, PR #20 merged; continued) - Fix production crash on "Issue from another pile"
+
+User reported a live production crash right after PR #20 shipped:
+`ReferenceError: Cannot access '_n' before initialization`, thrown from
+the deployed WSI form bundle the moment "Issue from another pile" was
+clicked, caught by `[SectionErrorBoundary: WSI form]`.
+
+### Root cause
+
+`extraAllocInfos` (a derived array computed early in `StockFormBase`,
+used for per-line validation/rendering) called `computeAllocFields`,
+but `computeAllocFields` was declared as a `const` much further down
+in the same function body, near `reverseGroupEffect`/`performSave`.
+`const` bindings aren't hoisted the way `function` declarations are -
+referencing one before its own declaration line has executed throws
+a TDZ `ReferenceError`, at runtime only. `npm run build` (esbuild/vite)
+doesn't catch this class of bug, only syntax errors, so it slipped
+through PR #20's build check.
+
+This also explains why it was invisible until now: `extraAllocInfos`
+maps over `extraPileAllocations`, and that array is empty until a user
+actually adds their first extra pile row via "Issue from another
+pile" - exactly the reported repro step.
+
+### Fix
+
+Moved `computeAllocFields`'s full definition up, to directly before
+`extraAllocInfos`'s own definition, so the declaration now precedes
+every call site (the one inside `extraAllocInfos`, plus the ones in
+`performSave` and `handleUpdate` further down). No behavior change -
+pure reordering.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
+
+`npm run build` passes. Not yet confirmed by the user against the
+live deploy.
