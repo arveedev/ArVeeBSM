@@ -82,6 +82,14 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
       toast.error('Pile name is required')
       return
     }
+    // Per explicit request: Pile Name, Age, and Condition are the only
+    // fields this quick-add dialog actually requires - Condition
+    // always has a value by construction (CONDITION_FLAGS buttons
+    // default to 'GQ'), so only Age needs an explicit check here.
+    if (beginAge === '') {
+      toast.error('Age is required')
+      return
+    }
     // By Products piles accept any mix of By Products varieties over
     // their lifetime (see the file-level comment) - only Rice/Palay,
     // genuinely locked to one variety for life, require picking one
@@ -224,11 +232,13 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
 
           <div className="border-t border-neutral-800 pt-3">
             <p className="text-xs font-semibold uppercase text-neutral-500">
-              Beginning Balance (optional)
+              Beginning Balance
             </p>
             <p className="mt-1 text-xs text-neutral-500">
-              Use this to seed stock already on hand at this warehouse —
-              not a receipt or issuance, just a starting point.
+              Bags/Kilos are optional - use them to seed stock already on
+              hand at this warehouse (not a receipt or issuance, just a
+              starting point). Age and Condition apply to the pile
+              either way, so Age is required even if left at zero.
             </p>
 
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -264,7 +274,7 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
                   inputMode="numeric"
                   value={beginAge}
                   onChange={(e) => setBeginAge(liveFormatNumber(e.target.value))}
-                  className={inputClass}
+                  className={`${inputClass} ${beginAge === '' ? '!border-brand-amber' : ''}`}
                   placeholder="0"
                 />
               </div>

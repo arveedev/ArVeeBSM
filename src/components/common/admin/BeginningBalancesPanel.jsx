@@ -29,11 +29,15 @@ import { CONDITION_FLAGS } from '../../forms/shared.js'
 const AGE_UNITS = ['Days', 'Months']
 
 // One beginning-balance line = one seed (isInitialBalance) transaction. A
-// pile groups by variety, not by sack weight - it can legitimately have had
-// two different real sack weights in its beginning-balance history at once,
-// so this must be a repeatable list rather than one flat value per pile.
+// Rice/Palay pile groups by variety, not by sack weight - it can legitimately
+// have had two different real sack weights in its beginning-balance history
+// at once, so this must be a repeatable list rather than one flat value per
+// pile. A By Products pile groups the OTHER way - each line is a different
+// VARIETY (it accepts a mix, unlike Rice/Palay's one-variety-for-life lock),
+// via the per-line varietyId below (only shown/editable when the pile being
+// edited is By Products - see editingCategory).
 const emptyLine = () => ({
-  txId: null, bags: '', kilos: '', condition: 'GQ', dateReceived: todayLocalISO(),
+  txId: null, varietyId: '', bags: '', kilos: '', condition: 'GQ', dateReceived: todayLocalISO(),
   purity: '', moistureContent: '', mtsSackTypeId: '', mtsCondition: '',
 })
 
@@ -63,9 +67,19 @@ function PilesBeginningBalances({ warehouseId }) {
   // fall back to for transactions with no MTS of their own.
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const editingPile = piles.find((p) => p.pileId === editingPileId)
-  const editingCategory = varietyMap.get(editingPile?.varietyId)?.category
+  // The pile's own cerealType, not a varietyId->category lookup - a By
+  // Products pile can legitimately have a blank/null varietyId (it
+  // isn't locked to one), which would make that lookup fail to
+  // resolve 'By Products' at all.
+  const editingCategory = editingPile?.cerealType
+  const editingCategoryVarieties = varieties
+    .filter((v) => v.category === editingCategory)
+    .sort((a, b) => byAlpha(a.name, b.name))
+  // Sack types don't have their own 'By Products' category (they're
+  // Rice/Palay tare-weight definitions, reused for By Products sacking) -
+  // matches NewPileDialog.jsx's own mtsOptions handling of the same case.
   const sackTypesForCategory = sackTypes
-    .filter((s) => s.category === editingCategory)
+    .filter((s) => editingCategory === 'By Products' || s.category === editingCategory)
     .sort((a, b) => byAlpha(a.code, b.code))
 
   const resetForm = () => {
@@ -86,6 +100,7 @@ function PilesBeginningBalances({ warehouseId }) {
     setLines(seeds.length
       ? seeds.map((s) => ({
           txId: s.id,
+          varietyId: s.varietyId ?? '',
           bags: liveFormatNumber(String(s.numberOfBags ?? 0)),
           kilos: liveFormatNumber(String(s.netKilos ?? 0), 3),
           condition: s.condition ?? 'GQ',
@@ -172,14 +187,20 @@ function PilesBeginningBalances({ warehouseId }) {
         mtsCondition: line.mtsSackTypeId ? (line.mtsCondition || null) : null,
       }
 
+      // line.varietyId only ever has a real value for a By Products
+      // pile (the per-line picker below is the only thing that sets
+      // it) - falls back to the pile's own varietyId for Rice/Palay,
+      // which stay locked to one variety regardless of line.
+      const lineVarietyId = line.varietyId || pile?.varietyId || null
+
       if (line.txId) {
         survivingTxIds.add(line.txId)
-        await db.transactions.update(line.txId, { date: line.dateReceived, numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos, ...seedFields })
+        await db.transactions.update(line.txId, { date: line.dateReceived, varietyId: lineVarietyId, numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos, ...seedFields })
       } else if (newBags > 0 || newKilos > 0) {
         await db.transactions.add({
           id: crypto.randomUUID(), type: 'WSR', serialNo: `INIT-${editingPileId.slice(0, 8)}-${i + 1}`,
           status: 'Active', date: line.dateReceived, warehouseId,
-          pileId: editingPileId, varietyId: pile?.varietyId ?? null,
+          pileId: editingPileId, varietyId: lineVarietyId,
           numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos,
           customerName: 'Beginning Balance',
           isInitialBalance: true, isSynced: false,
@@ -314,6 +335,21 @@ function PilesBeginningBalances({ warehouseId }) {
                   </button>
                 )}
               </div>
+              {editingCategory === 'By Products' && (
+                <div>
+                  <label className={labelClass}>Variety</label>
+                  <select
+                    value={line.varietyId}
+                    onChange={(e) => updateLine(i, 'varietyId', e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Unspecified — mix of By Products</option>
+                    {editingCategoryVarieties.map((v) => (
+                      <option key={v.varietyId} value={v.varietyId}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className={labelClass}>Bags</label>
