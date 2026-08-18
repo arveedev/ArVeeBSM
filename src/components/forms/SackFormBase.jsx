@@ -650,6 +650,10 @@ const SackFormBase = forwardRef(function SackFormBase(
     linkedDocNo: null,
     siaNumber: null,
     aiNumber: null,
+    // A cancelled record has nothing left to complete - matches the
+    // same reasoning googleSheetsBridge.js's importer already uses
+    // (needsCompletion: !isCancelled).
+    needsCompletion: false,
     isSynced: false,
     ...overrides,
   })
@@ -673,6 +677,17 @@ const SackFormBase = forwardRef(function SackFormBase(
     batchNumber: isMilling ? batchNumber.trim() || null : null,
     tmoNumber: isTestMilling ? tmoNumber.trim() || null : null,
     trialNumber: isTestMilling ? trialNumber || null : null,
+    // A record imported from historical Sheet data starts with
+    // needsCompletion: true (see googleSheetsBridge.js) precisely so
+    // the "pulled from historical Sheet data" banner shows until the
+    // sack breakdown is actually filled in. buildTransactionPayload
+    // never cleared it on save/update, so once true it stayed true
+    // forever, even after the user filled in and saved the real
+    // breakdown - the banner kept reappearing on every later visit to
+    // an already-completed record. validateForm already requires at
+    // least one real sack line before a save reaches this payload, so
+    // it's always correct to clear the flag here.
+    needsCompletion: false,
     isSynced: false,
     ...overrides,
   })
@@ -811,8 +826,16 @@ const SackFormBase = forwardRef(function SackFormBase(
 
     toast.success(`${type} saved — ${serialNo.trim()}`)
 
+    // Same check-before-blanking as handleStepForward - without it,
+    // advancing straight to the next serial after a save shows it as
+    // a blank new entry even when that serial already has real data
+    // (local or historical Sheet), letting the user unknowingly start
+    // overwriting/duplicating it instead of being loaded into
+    // Update/Delete like every other way of reaching an existing
+    // serial does.
     const next = stepSerial(serialNo.trim(), 1)
-    resetToBlankEntry(next)
+    const loaded = await checkAndLoadSerial(next)
+    if (!loaded && latestRequestedSerial.current === next) resetToBlankEntry(next)
     setIsSaving(false)
     scrollToTop()
   }
