@@ -186,4 +186,25 @@
 //            Age, instead of up near the Pile ID picker - by the
 //            time the user reaches that point they already know
 //            whether the one pile covers the issuance
-export const APP_VERSION = '1.9-3'
+//   1.9-4  - Round 1.9-3's Login fix still wasn't visible on a real
+//            phone - it was position: absolute, which pins to the
+//            bottom of the login container itself, and that
+//            container can genuinely be taller than the visible
+//            viewport on a real device. Switched to position: fixed,
+//            which pins to the actual viewport instead
+//   1.9-5  - Three real bugs on the input forms (WSR/WSI/ESR/ESI).
+//            (1) A record imported from historical Sheet data starts
+//            flagged needsCompletion: true so its "pulled from
+//            historical Sheet data" banner shows - saving/updating it
+//            never cleared that flag, so the banner kept reappearing
+//            forever even after the real data was filled in and
+//            saved. (2) Auto-advancing to the next serial right after
+//            a save showed it as a blank new entry unconditionally,
+//            even when that serial already had real data (local or
+//            historical Sheet) - now checks first, same as manually
+//            stepping forward already did. (3) Selecting an authority
+//            from the in-form AI/SIA picker never carried its OR
+//            Number into the OR # field for non-Milling transaction
+//            types (SALES in particular) - only opening the form via
+//            a Monitor-page prefill did
+export const APP_VERSION = '1.9-5'

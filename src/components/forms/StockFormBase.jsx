@@ -1069,7 +1069,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // OR# column intentionally holds the pile name (e.g. "Pile 1",
     // "Pile 2B") rather than an actual OR number - this is where the
     // app should READ that pile assignment from and auto-select it,
-    // not a misplaced field to relocate.
+    // not a misplaced field to relocate. Every other transaction type
+    // (SALES in particular, the only one where the OR # field actually
+    // renders) has a genuine OR number there instead - the prefill
+    // path (opening the form from the Monitor) already writes it into
+    // the OR # field, but picking an authority from THIS form's own
+    // AuthorityPickerModal never did, leaving OR # blank whenever the
+    // AI was attached this way instead.
     const authorityOrNumber = authority.orNumber != null ? String(authority.orNumber).trim() : ''
     if (
       (isMillingTypeName(authority.transactionTypeName) || isTestMillingTypeName(authority.transactionTypeName))
@@ -1082,6 +1088,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         setPileId(matchedPile.pileId)
         applyPileDefaults(matchedPile.pileId)
       }
+    } else if (authorityOrNumber) {
+      setOrNumber(authorityOrNumber)
     }
 
     const kilosRemaining = authority.totalAllocationKilos != null
@@ -1467,6 +1475,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     farmerRsbsa: null,
     farmerGender: null,
     farmerCoops: null,
+    // A cancelled record has nothing left to complete - matches the
+    // same reasoning googleSheetsBridge.js's importer already uses
+    // (needsCompletion: !isCancelled).
+    needsCompletion: false,
     isSynced: false,
     ...overrides,
   })
@@ -1506,6 +1518,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     batchNumber: isMilling ? batchNumber.trim() || null : null,
     tmoNumber: isTestMilling ? tmoNumber.trim() || null : null,
     trialNumber: isTestMilling ? trialNumber || null : null,
+    // See buildCancelledPayload's matching comment above - a record
+    // imported from historical Sheet data starts with
+    // needsCompletion: true so the "pulled from historical Sheet
+    // data" banner shows until the real data is filled in; this
+    // payload never cleared it on save/update, so it stayed true
+    // forever even after the user filled in and saved the real data,
+    // and the banner kept reappearing on every later visit.
+    needsCompletion: false,
     isSynced: false,
     ...overrides,
   })
@@ -1732,8 +1752,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
     toast.success(`${type} saved — ${serialNo.trim()}`)
 
+    // Same check-before-blanking as handleStepForward - without it,
+    // advancing straight to the next serial after a save shows it as
+    // a blank new entry even when that serial already has real data
+    // (local or historical Sheet), letting the user unknowingly start
+    // overwriting/duplicating it instead of being loaded into
+    // Update/Delete like every other way of reaching an existing
+    // serial does.
     const next = stepSerial(serialNo.trim(), 1)
-    resetToBlankEntry(next)
+    const loaded = await checkAndLoadSerial(next)
+    if (!loaded && latestRequestedSerial.current === next) resetToBlankEntry(next)
     setIsSaving(false)
     scrollToTop()
   }

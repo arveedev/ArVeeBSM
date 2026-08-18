@@ -547,6 +547,33 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
+### OPEN (2026-08-17 session, round 32) - needsCompletion never cleared on save, unchecked auto-advance after save, OR # not filling from the AI picker - PUSHED, not yet confirmed by user
+
+Three real bugs from a live ESR editing session:
+1. **needsCompletion never cleared.** A historical-Sheet-imported
+   record's `needsCompletion: true` flag (drives the amber "pulled
+   from historical Sheet data" banner) was never cleared by either
+   input form's save/update path - stayed true forever even after the
+   real data was filled in and saved, so the banner kept reappearing.
+   Both `StockFormBase.jsx` and `SackFormBase.jsx` now clear it on
+   every active save, and set it false on cancel too.
+2. **Auto-advance after Save skipped the existing-record check.**
+   `performSave`'s post-save jump to the next serial called
+   `resetToBlankEntry` unconditionally, unlike `handleStepForward`
+   which already checks first - landing on a serial that already had
+   real data (local or historical Sheet) showed it as blank, inviting
+   an accidental overwrite/duplicate. Both forms now check first.
+3. **OR # not auto-filling from the in-form AI picker.**
+   `handleSelectAuthority` had no `else` branch for non-Milling
+   authorities (SALES in particular) - only the Monitor-page prefill
+   path filled OR #, not picking an authority directly in the form.
+   Added the missing branch.
+
+`src/components/forms/StockFormBase.jsx`,
+`src/components/forms/SackFormBase.jsx`, `src/version.js` (bumped to
+`1.9-5`, also caught up a missed `1.9-4` entry). Build passes, not
+yet confirmed live.
+
 ### OPEN (2026-08-17 session, round 31) - "by ArVee"/version still invisible on mobile after round 30's fix - was absolute, needed fixed - PUSHED, not yet confirmed by user
 
 Round 30 combined the two lines into one block but kept

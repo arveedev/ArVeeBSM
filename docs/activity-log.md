@@ -16294,3 +16294,56 @@ regardless of how tall the content above it grows.
 `src/pages/Login.jsx`.
 
 `npm run build` passes.
+
+## Session: 2026-08-17 (round 32) - needsCompletion never cleared on save, unchecked auto-advance after save, OR # not filling from the AI picker
+
+Three real bugs, all reported together from a live ESR editing
+session (entering missing historical serials out of order, then
+finding the "historical Sheet data" banner still showing after an
+update, plus OR # not filling in when attaching an AI).
+
+### 1. needsCompletion never cleared on save/update
+
+A record pulled from historical Sheet data is imported with
+`needsCompletion: true` (`googleSheetsBridge.js`), which drives the
+amber "pulled from historical Sheet data" banner. Neither
+`StockFormBase.jsx` nor `SackFormBase.jsx`'s `buildTransactionPayload`/
+`buildCancelledPayload` ever set this field, so once `true` it stayed
+`true` forever - even after the user filled in the real data and
+saved. The banner kept reappearing on every later visit to an
+already-completed record. Both forms now explicitly clear it
+(`false`) on every active save and set it `false` on cancel too
+(a cancelled record has nothing left to complete, same reasoning the
+importer already uses).
+
+### 2. Auto-advance after Save skipped the existing-record check
+
+Saving a new entry advances the serial field to the next number for
+the next entry - `handleStepForward`/its Sack equivalent already
+check whether that next serial has existing data first (loading it
+for Update/Delete if so), but `performSave`'s own post-save
+auto-advance in both forms unconditionally called
+`resetToBlankEntry(next)` with no check at all. Landing on a serial
+that already had real (local or historical Sheet) data showed it as
+a blank new entry, silently inviting an overwrite/duplicate. Now runs
+the same `checkAndLoadSerial` check first, exactly like manually
+stepping forward already did.
+
+### 3. OR # not auto-filling from the in-form authority picker
+
+`handleSelectAuthority` (StockFormBase.jsx, WSR/WSI Sales-type OR #
+field) already had special handling for Milling/Test Milling
+authorities (reading the Sheet's OR# column as a pile name), but had
+no `else` branch at all for every other transaction type - selecting
+an authority through this form's own AI/SIA picker never carried its
+real OR Number into the OR # field. Only opening the form via a
+Monitor-page prefill navigation did (a separate effect already
+handled that path). Added the missing `else` branch.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`,
+`src/components/forms/SackFormBase.jsx`, `src/version.js`.
+
+`npm run build` passes. `APP_VERSION` bumped to `1.9-5` (also caught
+up the missed `1.9-4` entry for the earlier Login position:fixed fix
+that had shipped without a version bump).
