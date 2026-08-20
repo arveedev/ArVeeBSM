@@ -21,6 +21,7 @@
 
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { customerNameWithMillingRef } from './calculations.js'
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -478,7 +479,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
       t.transactionTypeName ?? '',
       t.serialNo ?? '',
       isIssues ? (t.aiNumber ?? '') : (t.linkedDocNo ?? ''),
-      t.status === 'Cancelled' ? 'CANCELLED' : (t.customerName ?? ''),
+      t.status === 'Cancelled' ? 'CANCELLED' : customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber),
       t.varietyName ?? '',
       ...(isByProducts ? [] : [t.moistureContent != null ? Number(t.moistureContent).toFixed(1) : '-']),
       fmtBags(t.numberOfBags),
@@ -723,7 +724,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
         i === 0 ? (t.transactionTypeName ?? '') : '',
         i === 0 ? (t.serialNo ?? '') : '',
         i === 0 ? (isIssues ? (t.siaNumber ?? t.linkedDocNo ?? '') : (t.linkedDocNo ?? '')) : '',
-        i === 0 ? (t.status === 'Cancelled' ? 'CANCELLED' : (t.customerName ?? '')) : '',
+        i === 0 ? (t.status === 'Cancelled' ? 'CANCELLED' : customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber)) : '',
         sackTypeMap.get(l?.sackTypeId)?.code ?? (i === 0 ? sackCodes : ''),
         sackTypeMap.get(l?.sackTypeId) ? (l?.condition === 'BN' ? 'BN' : l?.condition === 'SH' ? 'SH' : l?.condition ?? '') : '',
         pcs > 0 ? pcs.toLocaleString('en-PH') : '-',

@@ -547,7 +547,25 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-17 session, round 36) - CRITICAL: fixed the actual cause of reappearing duplicate transactions with blank Pile ID/MC/MTS - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-17 session, round 37) - batch/trial number on Milling reports + admin-settable miller nicknames - NOT YET COMMITTED/PUSHED
+
+Two features: (1) Milling/Test Milling/Remilling/Test Re-Milling
+transactions now show batch/trial number beside the customer name on
+Reports and the exported statement PDF (`customerNameWithMillingRef`,
+`calculations.js`). (2) New `customerAliases` table (dexie.js v30,
+mirrors `warehouseAliases` exactly) lets an admin map a short AI/SIA
+nickname ("Dens RM") to a customer's real name ("Dens Marketing
+Corp"), resolved at authority sync-in (`googleSheetsBridge.js`) and at
+manual typing (`customerDirectory.js`'s `findCustomerByName`) - both
+of which cover every downstream display/export/sheet-write with no
+separate change needed elsewhere, since they all just read whatever's
+already stored. Managed from the existing Customers admin panel (new
+"Nicknames" field). **Flagged risk**: a new Dexie table has caused
+Dexie Cloud sync-wide 422 errors before in this app's history
+(`millingOrders` et al.) until explicitly excluded from sync - watch
+for that after this deploys. Not confirmed by the user yet.
+
+### OPEN (2026-08-17 session, round 36) - CRITICAL: fixed the actual cause of reappearing duplicate transactions with blank Pile ID/MC/MTS - PUSHED, CONFIRMED WORKING
 
 Root cause: `checkAndLoadSerial`'s local lookup is scoped by
 `cerealCategory` for WSR/WSI - a record whose category was ever

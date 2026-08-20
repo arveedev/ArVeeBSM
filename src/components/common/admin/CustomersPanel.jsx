@@ -29,9 +29,17 @@ function CustomersPanel() {
   const [rsbsa, setRsbsa] = useState('')
   const [gender, setGender] = useState('')
   const [address, setAddress] = useState('')
+  const [nicknames, setNicknames] = useState('')
   const [pendingDelete, setPendingDelete] = useState(null)
 
   const customers = useLiveQuery(() => db.customers.toArray(), [])
+  const allAliases = useLiveQuery(() => db.customerAliases.toArray(), []) ?? []
+
+  const nicknamesByCustomer = new Map()
+  for (const a of allAliases) {
+    if (!nicknamesByCustomer.has(a.customerId)) nicknamesByCustomer.set(a.customerId, [])
+    nicknamesByCustomer.get(a.customerId).push(a.displayLabel)
+  }
 
   const resetForm = () => {
     setEditingId(null)
@@ -39,6 +47,7 @@ function CustomersPanel() {
     setRsbsa('')
     setGender('')
     setAddress('')
+    setNicknames('')
   }
 
   const handleEdit = (customer) => {
@@ -47,6 +56,7 @@ function CustomersPanel() {
     setRsbsa(customer.rsbsa ?? '')
     setGender(customer.gender ?? '')
     setAddress(customer.address ?? '')
+    setNicknames((nicknamesByCustomer.get(customer.customerId) ?? []).join(', '))
   }
 
   const handleSave = async () => {
@@ -69,6 +79,26 @@ function CustomersPanel() {
       return
     }
 
+    // Nicknames must be globally unique - the same short name can't map
+    // to two different customers, or the AI/SIA sync would have no way
+    // to know which one a sheet row actually means. Same exact rule and
+    // reasoning as WarehousesPanel's own alias uniqueness check.
+    const rawNicknames = nicknames.split(',').map((n) => n.trim()).filter(Boolean)
+    const seenNormalized = new Map()
+    for (const raw of rawNicknames) {
+      seenNormalized.set(normalizeCustomerName(raw), raw)
+    }
+    const cleanedNicknames = [...seenNormalized.entries()].map(([normalized, displayLabel]) => ({ normalized, displayLabel }))
+
+    for (const { normalized, displayLabel } of cleanedNicknames) {
+      const nicknameOwner = await db.customerAliases.get(normalized)
+      if (nicknameOwner && nicknameOwner.customerId !== editingId) {
+        const owner = (customers ?? []).find((c) => c.customerId === nicknameOwner.customerId)
+        toast.error(`Nickname "${displayLabel}" is already used by ${owner?.name ?? 'another customer'}`)
+        return
+      }
+    }
+
     await db.customers.update(editingId, {
       name: name.trim(),
       normalizedName,
@@ -76,6 +106,19 @@ function CustomersPanel() {
       gender: gender.trim() || null,
       address: address.trim() || null,
     })
+
+    // Replace this customer's nicknames wholesale - same simpler-and-
+    // safer-than-diffing approach as WarehousesPanel.
+    const existingForThisCustomer = await db.customerAliases.where('customerId').equals(editingId).toArray()
+    await db.customerAliases.bulkDelete(existingForThisCustomer.map((a) => a.alias))
+    if (cleanedNicknames.length > 0) {
+      await db.customerAliases.bulkAdd(cleanedNicknames.map(({ normalized, displayLabel }) => ({
+        alias: normalized,
+        displayLabel,
+        customerId: editingId,
+      })))
+    }
+
     toast.success('Customer updated')
     resetForm()
   }
@@ -84,6 +127,8 @@ function CustomersPanel() {
     const customerId = pendingDelete
     setPendingDelete(null)
     await db.customers.delete(customerId)
+    const orphanedAliases = await db.customerAliases.where('customerId').equals(customerId).toArray()
+    await db.customerAliases.bulkDelete(orphanedAliases.map((a) => a.alias))
     if (editingId === customerId) resetForm()
     toast.success('Customer deleted')
   }
@@ -114,6 +159,21 @@ function CustomersPanel() {
           <div>
             <label className={labelClass}>Address (optional)</label>
             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Nicknames (optional, comma-separated)</label>
+            <input
+              type="text"
+              value={nicknames}
+              onChange={(e) => setNicknames(e.target.value)}
+              className={inputClass}
+              placeholder="Dens RM"
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              A short name used on the AI/SIA sheet that isn't this customer's real name - e.g. "Dens RM"
+              for "{name.trim() || 'Dens Marketing Corp'}". Synced AI/SIA data, input forms, reports, and
+              exports will all show the real name above instead.
+            </p>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>
@@ -148,6 +208,11 @@ function CustomersPanel() {
             <div>
               <p className="font-medium text-app-text">{c.name}</p>
               {c.address && <p className="text-xs text-neutral-500">{c.address}</p>}
+              {(nicknamesByCustomer.get(c.customerId)?.length ?? 0) > 0 && (
+                <p className="text-xs text-brand-neon">
+                  aka {nicknamesByCustomer.get(c.customerId).join(', ')}
+                </p>
+              )}
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={() => handleEdit(c)} aria-label="Edit" className={editIconClass}>

@@ -29,6 +29,50 @@ export const normalizeCustomerName = (name = '') =>
 
 const VARIOUS_FARMERS_NAME = 'various farmers'
 
+/**
+ * Miller/customer nicknames - same exact shape and purpose as
+ * warehouseAliases (see WarehousesPanel.jsx/dexie.js), for the case
+ * where the AI/SIA sheet uses a short nickname ("Dens RM") that isn't
+ * the customer's real/full name ("Dens Marketing Corp"). Resolving at
+ * the sync boundary (see googleSheetsBridge.js's authority sync) and
+ * here, in the customer-name field's own auto-fill, covers every
+ * downstream use with no separate change needed anywhere else -
+ * reports, exports, and the backup-sheet writes all just read whatever
+ * ends up stored as the transaction's customerName, which is already
+ * the real name by the time it's saved.
+ */
+
+/** Fetches every alias as a normalized-alias -> real-name Map, for
+ * batch resolution (e.g. an authority sync processing many rows) -
+ * one query instead of one per row. */
+export const buildCustomerAliasMap = async () => {
+  const [aliases, customers] = await Promise.all([
+    db.customerAliases.toArray(),
+    db.customers.toArray(),
+  ])
+  const customerById = new Map(customers.map((c) => [c.customerId, c]))
+  const map = new Map()
+  for (const a of aliases) {
+    const real = customerById.get(a.customerId)
+    if (real) map.set(a.alias, real.name)
+  }
+  return map
+}
+
+/** Resolves a single typed/incoming name to its real name if it
+ * matches a known alias, otherwise returns the name unchanged
+ * (trimmed). For one-off lookups (e.g. the customer name field as the
+ * user types) - use buildCustomerAliasMap instead when resolving many
+ * names in a loop. */
+export const resolveCustomerAlias = async (name) => {
+  const trimmed = (name ?? '').trim()
+  if (!trimmed) return trimmed
+  const alias = await db.customerAliases.get(normalizeCustomerName(trimmed))
+  if (!alias) return trimmed
+  const real = await db.customers.get(alias.customerId)
+  return real?.name ?? trimmed
+}
+
 /** Resolves the address to actually use for a given warehouse. Only
  * "Various Farmers" ever has a per-warehouse override - and for this
  * one name specifically, there is no shared fallback address at all:
@@ -224,10 +268,22 @@ export const searchMpoUsers = async (query) => {
  * that specific warehouse - but only actually differs for "Various
  * Farmers" (see resolveAddress above); every other customer's address
  * is the same regardless of warehouse.
+ *
+ * Checks a known nickname/alias FIRST - typing "Dens RM" resolves
+ * straight to whatever customer "Dens Marketing Corp" actually is,
+ * same as if the real name had been typed directly. Falls through to
+ * the plain name lookup when nothing matches an alias.
  */
 export const findCustomerByName = async (name, warehouseId = null) => {
   const normalizedName = normalizeCustomerName(name)
   if (!normalizedName) return null
+
+  const alias = await db.customerAliases.get(normalizedName)
+  if (alias) {
+    const aliased = await db.customers.get(alias.customerId)
+    if (aliased) return { ...aliased, address: resolveAddress(aliased, warehouseId) }
+  }
+
   const customer = await db.customers.where('normalizedName').equals(normalizedName).first()
   if (!customer) return null
   return { ...customer, address: resolveAddress(customer, warehouseId) }

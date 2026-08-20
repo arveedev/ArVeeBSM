@@ -485,15 +485,35 @@ const runAuthoritiesSync = async () => {
   if (sources.length === 0) return { ok: false, reason: 'not_configured' }
 
   try {
-    const [warehouses, aliases, varieties, sackTypes] = await Promise.all([
+    const [warehouses, aliases, varieties, sackTypes, customerAliases, customers] = await Promise.all([
       db.warehouses.toArray(),
       db.warehouseAliases.toArray(),
       db.varietyTypes.toArray(),
       db.sackTypes.toArray(),
+      db.customerAliases.toArray(),
+      db.customers.toArray(),
     ])
     const warehouseByAlias = new Map(aliases.map((a) => [a.alias, a.warehouseId]))
     const varietyByCode = new Map(varieties.map((v) => [v.name, v.varietyId]))
     const sackTypeByCode = new Map(sackTypes.map((s) => [s.code, s.sackTypeId]))
+    // Miller/customer nickname resolution - "Dens RM" (the sheet's own
+    // short name) -> "Dens Marketing Corp" (the real name), so an
+    // authority's customerName is already the real name from the
+    // moment it syncs in, and everything downstream (form auto-fill,
+    // reports, exports, backup-sheet writes) is automatically correct
+    // with no separate translation needed anywhere else. Built once per
+    // sync run (not per row) - same pattern as warehouseByAlias above.
+    const customerById = new Map(customers.map((c) => [c.customerId, c]))
+    const customerNameByAlias = new Map()
+    for (const a of customerAliases) {
+      const real = customerById.get(a.customerId)
+      if (real) customerNameByAlias.set(a.alias, real.name)
+    }
+    const resolveCustomerName = (raw) => {
+      const trimmed = String(raw ?? '').trim()
+      if (!trimmed) return trimmed
+      return customerNameByAlias.get(trimmed.toLowerCase().replace(/\s+/g, ' ')) ?? trimmed
+    }
 
     let aiCount = 0
     let siaCount = 0
@@ -528,7 +548,7 @@ const runAuthoritiesSync = async () => {
           condition: null,
           date: aiDate,
           assignedWarehouse: warehouseByAlias.get(normalizeWarehouseAlias(row['ISSUING WHSE'])) ?? null,
-          customerName: String(row['NAME OF CUSTOMER'] ?? '').trim(),
+          customerName: resolveCustomerName(row['NAME OF CUSTOMER']),
           varietyId: varietyByCode.get(String(row['VARIETY CODE'] ?? '').trim()) ?? null,
           transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
           regionalAuthorityNumber: row['Regional Authority Number'] ?? null,
@@ -615,7 +635,7 @@ const runAuthoritiesSync = async () => {
           pieces,
           date: siaDate,
           assignedWarehouse: warehouseByAlias.get(normalizeWarehouseAlias(row['ISSUED FROM'])) ?? null,
-          customerName: String(row['CUSTOMER'] ?? '').trim(),
+          customerName: resolveCustomerName(row['CUSTOMER']),
           transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
           regionalAuthorityNumber: row['Regional Authority Number'] ?? null,
           remarks: row['REMARKS'] ?? null,

@@ -272,5 +272,21 @@
 //            migration (v6 -> v7) to clean up duplicates this already
 //            created on affected devices, using the same proven
 //            field-level merge already in place from earlier rounds
-//            (current)
-export const APP_VERSION = '1.9-9'
+//   1.9-10 - Two features. (1) Milling/Test Milling/Remilling/Test
+//            Re-Milling transactions now show their batch or trial
+//            number beside the customer name on the Reports page and
+//            the exported weekly stock/sack statement PDFs, e.g. "Dens
+//            Marketing Corp, Batch 3" - a shared
+//            customerNameWithMillingRef helper (calculations.js) keeps
+//            both surfaces consistent. (2) Admin-settable miller/
+//            customer nicknames (new customerAliases table, mirroring
+//            warehouseAliases exactly) - e.g. "Dens RM" on the AI/SIA
+//            sheet resolves to the customer's real name "Dens Marketing
+//            Corp" the moment authority data syncs in, so every
+//            downstream use (input-form auto-fill, displayed/exported
+//            reports, and what gets written back to the backup sheets)
+//            is automatically correct with no separate translation
+//            needed anywhere else. Manually typing a known nickname
+//            directly into the Customer Name field also resolves it.
+//            Managed from the existing Customers admin panel (current)
+export const APP_VERSION = '1.9-10'

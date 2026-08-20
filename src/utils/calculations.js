@@ -311,6 +311,22 @@ export const isProcurementTypeName = (name) => (name ?? '').trim().toUpperCase()
 
 export const isSalesTypeName = (name) => (name ?? '').trim().toUpperCase() === 'SALES'
 
+/**
+ * "Dens Marketing Corp, Batch 3" / "Dens Marketing Corp, Trial 2" -
+ * appends the batch or trial number for Milling/Re-Milling and Test
+ * Milling/Test Re-Milling transactions specifically, so a statement or
+ * exported report shows which run a given row belongs to instead of
+ * the same bare customer name repeated across every batch/trial of the
+ * same miller. No suffix for any other transaction type, or when the
+ * transaction genuinely has no batch/trial number recorded.
+ */
+export const customerNameWithMillingRef = (customerName, transactionTypeName, batchNumber, trialNumber) => {
+  const name = customerName ?? ''
+  if (isMillingTypeName(transactionTypeName) && batchNumber) return `${name}, Batch ${batchNumber}`
+  if (isTestMillingTypeName(transactionTypeName) && trialNumber) return `${name}, Trial ${trialNumber}`
+  return name
+}
+
 // Home, Admin Home, Reports, and exported PDFs.
 
 /** Formats a whole-number bag/piece count with comma separators. 7581 → "7,581" */

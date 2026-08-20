@@ -765,6 +765,21 @@ db.version(29).stores({
   millingOrders: 'orderId, type, number, status, manuallyCompleted',
 })
 
+// customerAliases: same exact shape/purpose as warehouseAliases above,
+// for Ricemill/miller customer names - the AI/SIA sheet sometimes uses
+// a short nickname ("Dens RM") that isn't the customer's real/full
+// name ("Dens Marketing Corp"). An admin-managed alias lets the app
+// translate the nickname to the real name once, at the moment
+// authority data syncs in from the sheet - every downstream use (input
+// form auto-fill from that authority, displayed/exported reports, and
+// what gets written back to the backup sheets) reads whatever ends up
+// stored on the transaction, so translating at that one entry point is
+// enough to keep everything consistent, exactly like warehouseAliases
+// already does for warehouse names.
+db.version(30).stores({
+  customerAliases: 'alias, customerId',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

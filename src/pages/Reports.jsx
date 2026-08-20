@@ -24,7 +24,7 @@ import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { generateNfaReport } from '../utils/pdfGenerator.js'
-import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, todayLocalISO } from '../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, todayLocalISO, customerNameWithMillingRef } from '../utils/calculations.js'
 import { splitStockTransactions } from '../utils/wtsAdapter.js'
 import DailySummaryCard from '../components/cards/DailySummaryCard.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
@@ -539,7 +539,9 @@ function Reports() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="mt-0.5 truncate text-sm font-medium text-app-text">{t.customerName}</p>
+                                <p className="mt-0.5 truncate text-sm font-medium text-app-text">
+                                  {customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber)}
+                                </p>
                                 <p className="text-xs text-neutral-500">{t.transactionTypeName} · {t.condition}</p>
                               </div>
                               <div className="shrink-0 text-right">
@@ -585,7 +587,9 @@ function Reports() {
                                   </span>
                                 )}
                               </div>
-                              <p className="mt-0.5 truncate text-sm font-medium text-app-text">{t.customerName}</p>
+                              <p className="mt-0.5 truncate text-sm font-medium text-app-text">
+                                {customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber)}
+                              </p>
                               <div className="flex flex-wrap gap-1.5 mt-0.5">
                                 {(t.enrichedSackLines ?? []).map((l, i) => (
                                   <span key={i} className="text-xs text-neutral-500">
