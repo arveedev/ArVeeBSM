@@ -16592,3 +16592,65 @@ by this bug before the fix landed.
 this session - the dedup migration will run automatically on their next
 load; they should re-check the Reports page and the previously-blank
 edit form afterward.
+
+## Session: 2026-08-17 (round 31) - batch/trial number on Milling reports + admin-settable miller nicknames
+
+Two features requested together.
+
+**Batch/trial number beside customer name.** For Milling/Re-Milling
+(batch number) and Test Milling/Test Re-Milling (trial number)
+transactions, the customer name on the Reports page and the exported
+weekly statement PDF now shows e.g. "Dens Marketing Corp, Batch 3"
+instead of a bare name repeated identically across every batch/trial of
+the same miller. New `customerNameWithMillingRef(customerName,
+transactionTypeName, batchNumber, trialNumber)` in `calculations.js`,
+built on the already-existing `isMillingTypeName`/`isTestMillingTypeName`
+helpers - wired into both `Reports.jsx`'s on-screen stock/sack rows and
+`pdfGenerator.js`'s exported statement rows (stock + sacks), so both
+surfaces stay consistent from one shared function.
+
+**Admin-settable miller/customer nicknames.** The AI/SIA sheet
+sometimes uses a short nickname ("Dens RM") that isn't the customer's
+real/full name ("Dens Marketing Corp"). New `customerAliases` table
+(dexie.js v30) - identical shape and purpose to the existing
+`warehouseAliases` table, admin-managed from the existing Customers
+panel (a new "Nicknames" field, comma-separated, mirroring
+`WarehousesPanel.jsx`'s alias-editing UI exactly, including the
+same global-uniqueness check). Resolved at two points, which together
+cover every downstream use with no separate translation needed
+anywhere else:
+- **Sync-in**: `googleSheetsBridge.js`'s AI/SIA authority sync
+  translates `NAME OF CUSTOMER`/`CUSTOMER` to the real name the moment
+  it syncs (a `customerNameByAlias` map built once per sync run, same
+  pattern as the existing `warehouseByAlias` map) - so an authority's
+  own `customerName` is already correct, and picking it in the AI/SIA
+  picker auto-fills the real name automatically.
+- **Manual typing**: `customerDirectory.js`'s `findCustomerByName` now
+  checks a known alias first before falling through to the plain
+  name lookup, so typing the nickname directly into the Customer Name
+  field also resolves to the real customer record.
+
+Since reports, exports, and the backup-sheet writes all just read
+whatever ends up stored as the transaction's `customerName`, and that's
+already the real name by the time it's saved (via either resolution
+point above), no separate change was needed in Reports.jsx,
+pdfGenerator.js, or googleSheetsBridge.js's outbound transaction-backup
+push for this feature specifically.
+
+**Known risk, flagged for the user to watch for**: `customerAliases` is
+a new table added via a normal `db.version(30).stores()` bump, matching
+exactly how `warehouseAliases` was added and syncs fine today - but
+this app's own history includes at least one prior case
+(`millingOrders` et al.) where a new local table wasn't automatically
+recognized by Dexie Cloud's server-side schema, causing sync-wide 422
+errors until the table was added to `unsyncedTables`. If sync errors
+appear after this deploys, that's the first thing to check.
+
+### Files touched
+`src/utils/calculations.js`, `src/pages/Reports.jsx`,
+`src/utils/pdfGenerator.js`, `src/db/dexie.js`,
+`src/utils/customerDirectory.js`, `src/services/googleSheetsBridge.js`,
+`src/components/common/admin/CustomersPanel.jsx`.
+
+`npm run build` passes. Not exercised against live AI/SIA sync data or
+Dexie Cloud sync in this session.
