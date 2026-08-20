@@ -16415,3 +16415,71 @@ syntax is valid (it can't be executed/tested outside the actual Apps
 Script runtime, which has no local equivalent - LockService/
 SpreadsheetApp are Apps-Script-only globals). Not verified against the
 user's actual production Sheets - needs a live retest after redeploy.
+
+## Session: 2026-08-17 (round 28) - date-aware serial number suggestion and navigation
+
+User confirmed the critical Apps Script duplicate-row fix (round 27) has
+been redeployed to production. Also provided two additional Apps Script
+utility functions on request (`removeDuplicateBackupRows`,
+`removeBlankRowsFromBackupSheets` - not tracked in this repo, since they
+live in the user's own separately-maintained combined Apps Script file,
+not `docs/apps-script-full-replacement.js`), plus explained why the
+duplicate cleanup left visible gap rows (a leftover artifact of the OLD
+race condition's `preformatSerialColumnAsText` call inflating
+`getLastRow()` via formatting-only writes that never got real data -
+the round 27 lock fix already prevents this recurring).
+
+Then returned to the previously-planned fix: `suggestNextSerial` and the
+Next/Previous serial navigation were both purely magnitude-based
+(numerically highest serial ever recorded), with no concept of which
+document series was actually in current use. Two real, reported
+symptoms: (1) a booklet starting at a LOWER number than an older,
+already-recorded booklet never got suggested as "next" - the app kept
+suggesting the older, numerically-higher booklet's next serial every
+session, forcing a manual retype. (2) Stepping forward past the last
+document of an exhausted booklet (same warehouse, same day, a new
+booklet starting at a different number) guessed `serial + 1`, found
+nothing, and dead-ended on a blank entry instead of loading the real
+next document from the new booklet.
+
+Root fix: added `compareByRecency` (`serialNumber.js`) - orders two
+transactions by document `date` first, then by a new `createdAt`
+timestamp (real save time, set only at creation) for same-date
+disambiguation, falling back to the serial's own numeric value only for
+historical data that predates this and has no `createdAt`. Rewired:
+
+- `suggestNextSerial` now finds the most RECENT transaction by this
+  rule (not the highest-numbered) and suggests one past it.
+- `recordSerialUsed` now always overwrites its fast cache with
+  whatever was just saved (previously only updated when numerically
+  higher - the exact reason an old booklet kept winning forever), and
+  stores `date`/`createdAt` alongside for the comparison above.
+- `recalculateSerialCounter` (runs after a delete) uses the same
+  recency rule when picking what's left to track.
+- New `findAdjacentTransaction(type, warehouseId, serialNo,
+  cerealCategory, direction)` walks the pool's REAL sorted sequence to
+  find the actual next/previous existing document - replacing the
+  numeric ±1 guess-and-lookup for Next/Previous navigation. Falls back
+  to today's existing plain-nudge behavior only when no transaction is
+  currently loaded (a blank in-progress entry has nothing to walk
+  from) or at the true edge of history.
+- `StockFormBase.jsx`, `SackFormBase.jsx`, `WTSForm.jsx`: each new
+  transaction now gets `createdAt: Date.now()` at creation (untouched
+  by edits), `handleStepForward`/`handleStepBack` now use
+  `findAdjacentTransaction` while a document is loaded, and the
+  post-save auto-advance now calls `suggestNextSerial` instead of a
+  blind `stepSerial(current, 1)`.
+
+Traced through both reported scenarios by hand against the new logic
+(a lower-numbered but more-recently-dated booklet correctly wins
+suggestion; a same-day series switch correctly suggests past the new
+booklet's own last serial, not the old one's) - see this session's
+plan file for the full walkthrough.
+
+### Files touched
+`src/utils/serialNumber.js`, `src/components/forms/StockFormBase.jsx`,
+`src/components/forms/SackFormBase.jsx`, `src/components/forms/WTSForm.jsx`.
+
+`npm run build` passes. Not exercised against the user's live data in
+this session (no automated test suite touches this file) - the
+suggested manual verification steps are in the plan.

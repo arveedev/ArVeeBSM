@@ -34,7 +34,7 @@ import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
-import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter } from '../../utils/serialNumber.js'
+import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter, findAdjacentTransaction } from '../../utils/serialNumber.js'
 import {
   liveFormatNumber,
   parseFormattedNumber,
@@ -367,8 +367,19 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (!loaded && value.trim() && latestRequestedSerial.current === value) resetForm(value)
   }
 
+  // Walking real document history (findAdjacentTransaction) only makes
+  // sense while an actual existing document is loaded - a blank
+  // in-progress serial has no "adjacent" record to walk from, so plain
+  // ±1 nudging (unchanged) is still the right behavior there. See
+  // StockFormBase.jsx's matching handlers for the full reasoning.
   const handleStepBack = async () => {
-    const prev = stepSerial(serialNo.trim(), -1)
+    let prev
+    if (loadedTransaction) {
+      const adjacent = await findAdjacentTransaction('WTS', currentWarehouseId, serialNo.trim(), null, -1)
+      prev = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), -1)
+    } else {
+      prev = stepSerial(serialNo.trim(), -1)
+    }
     setSerialNo(prev)
     setNavFlash('back')
     setTimeout(() => setNavFlash(null), 750)
@@ -376,7 +387,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   }
 
   const handleStepForward = async () => {
-    const next = stepSerial(serialNo.trim(), 1)
+    let next
+    if (loadedTransaction) {
+      const adjacent = await findAdjacentTransaction('WTS', currentWarehouseId, serialNo.trim(), null, 1)
+      next = adjacent ? adjacent.serialNo : await suggestNextSerial('WTS', currentWarehouseId)
+    } else {
+      next = stepSerial(serialNo.trim(), 1)
+    }
     setSerialNo(next)
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
@@ -547,12 +564,19 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const handleSave = async () => {
     if (!(await validate())) return
     setIsSaving(true)
-    const tx = { id: crypto.randomUUID(), ...buildPayload() }
+    // createdAt set ONLY here (create) - never touched by the update
+    // path. See serialNumber.js's compareByRecency for why this
+    // exists - `date` alone can't disambiguate two series used on the
+    // same calendar day.
+    const tx = { id: crypto.randomUUID(), ...buildPayload(), createdAt: Date.now() }
     await db.transactions.add(tx)
-    await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim())
+    await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim(), null, { date: tx.date, createdAt: tx.createdAt })
     await applyWtsToPiles(tx)
     toast.success(`WTS saved — ${serialNo.trim()}`)
-    resetForm(stepSerial(serialNo.trim(), 1))
+    // suggestNextSerial (date-aware, per the just-recorded save above)
+    // instead of a blind ±1 - see StockFormBase.jsx's matching change
+    // for the full reasoning.
+    resetForm(await suggestNextSerial('WTS', currentWarehouseId))
     setIsSaving(false)
     scrollToTop()
   }
