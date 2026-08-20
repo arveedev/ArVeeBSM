@@ -16687,3 +16687,61 @@ had no such restriction - a free-typed field, unaffected.
 `src/components/forms/StockFormBase.jsx`, `src/components/forms/SackFormBase.jsx`.
 
 `npm run build` passes.
+
+## Round 33: Daily Inventory + Age Monitoring Sheets reports (v2 scripts, not yet deployed)
+
+Per the user's own two Apps Script files (`inventory script.txt`,
+`age script.txt`) plus reference JSON exports of their existing output
+(`inventory monthly.txt`, `inventory summary.txt`), reviewed both scripts
+end-to-end and wrote fixed v2 rewrites addressing every gap found:
+
+- **Daily Inventory** (`docs/daily-inventory-report-script.js`): admin-only
+  (Config!B3 email allowlist) + `LockService` around the sync; strict
+  variety-category mapping (no more letter-guessing fallback, unmapped
+  varieties reported instead of silently misfiled); beginning-balance
+  carry-forward now keyed via a hidden STATE sheet instead of positionally
+  re-scanning a rendered sheet's own headers; month-skip logic now based on
+  explicit render-state tracking instead of "does a sheet with this name
+  exist" (a renamed/deleted month sheet no longer silently reseeds from a
+  stale SETUP baseline); source rows (DATA_ENTRY/AI) deduplicated by
+  document number + warehouse before aggregating, with duplicates found
+  reported to the admin rather than silently double-counted. Includes an
+  installable daily time-based trigger (`installDailyTrigger`/
+  `removeDailyTrigger`) so the new spreadsheet auto-updates without manual
+  intervention. SUMMARY/MONTHLY renderers carried over unchanged - they
+  already matched the user's reference JSON structure.
+
+- **Age Monitoring** (`docs/age-monitoring-report-script.js` +
+  `docs/age-submission-form.html`): admin-only report generation + locked;
+  same source-row dedup as above; FIFO age subtraction now returns and
+  reports any shortfall instead of silently under-subtracting when an
+  issuance is larger than the recorded stock in its age bucket (surfaced as
+  a "Data Discrepancies" block on the report). Structural change: added a
+  QA_AGE_SUBMISSIONS table + a QA-facing submission form (not admin-gated -
+  QA needs to be able to use it) so QA's monthly physically-observed age
+  per warehouse/variety becomes the age anchor going forward instead of a
+  pure elapsed-time-since-receipt projection that only ever drifted further
+  from reality. SETUP is now pure config (variety->category map only) - no
+  more manually-maintained baseline balances to keep in sync.
+
+Both are **new, separate spreadsheets** per the user's explicit
+requirement - neither script writes a single cell to the existing
+production spreadsheet, both only read from it via `openByUrl`. This lets
+the user run both alongside their existing working sheets as a tally
+comparison before fully cutting over.
+
+Unrelated code bundled in the user's original `age script.txt` (MO/TMO
+generation, market price monitoring, unpaid-procurement monitoring,
+warehouse setup) was explicitly out of scope per the user's own
+clarification and was dropped entirely from the v2 rewrite.
+
+### Files added
+`docs/daily-inventory-report-script.js`, `docs/age-monitoring-report-script.js`,
+`docs/age-submission-form.html`, `docs/sheets-reports-setup.md`.
+
+**NOT YET DEPLOYED** - these are standalone Apps Script files meant to be
+pasted into two new Google Spreadsheets the user creates themselves
+(step-by-step instructions in `docs/sheets-reports-setup.md`); nothing in
+this repo's own build/deploy pipeline references them. Both new files
+syntax-checked clean via `node --check`. Not yet confirmed working by the
+user against real data.

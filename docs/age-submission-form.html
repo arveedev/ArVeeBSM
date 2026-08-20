@@ -1,0 +1,86 @@
+<!--
+  Add this as an HTML file named "AgeSubmissionForm" in the Age
+  Monitoring spreadsheet's Apps Script project (Extensions > Apps
+  Script > Files > + > HTML), matching the filename showAgeSubmissionForm()
+  loads via HtmlService.createHtmlOutputFromFile('AgeSubmissionForm')
+  in age-monitoring-report-script.js.
+
+  QA fills this in once per warehouse/variety per month; submitting
+  again for the same warehouse/variety within the same month overwrites
+  that month's entry instead of appending a duplicate (see
+  recordAgeSubmission in the script).
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; }
+    label { display: block; margin-top: 12px; font-weight: bold; font-size: 13px; }
+    input, select { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; font-size: 14px; }
+    button { margin-top: 20px; padding: 10px 16px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    button:disabled { background: #999; cursor: not-allowed; }
+    #status { margin-top: 12px; font-size: 13px; }
+    #status.error { color: #b71c1c; }
+    #status.success { color: #2e7d32; }
+    .hint { font-size: 12px; color: #666; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <h3>Submit Monthly Stock Age</h3>
+  <p class="hint">Enter the physically observed age (in months) for one warehouse + variety. This becomes the anchor the Age Monitoring report projects from until your next submission.</p>
+
+  <label for="warehouse">Warehouse</label>
+  <input type="text" id="warehouse" placeholder="e.g. BSI B" />
+
+  <label for="variety">Variety</label>
+  <input type="text" id="variety" placeholder="e.g. WD1" />
+
+  <label for="ageMonths">Observed Age (months, decimals OK)</label>
+  <input type="number" id="ageMonths" step="0.1" min="0" placeholder="e.g. 2.5" />
+
+  <button id="submitBtn" onclick="submitForm()">Submit</button>
+  <div id="status"></div>
+
+  <script>
+    function submitForm() {
+      const warehouse = document.getElementById('warehouse').value.trim();
+      const variety = document.getElementById('variety').value.trim();
+      const ageMonths = document.getElementById('ageMonths').value;
+      const status = document.getElementById('status');
+      const btn = document.getElementById('submitBtn');
+
+      if (!warehouse || !variety || ageMonths === '') {
+        status.textContent = 'All fields are required.';
+        status.className = 'error';
+        return;
+      }
+
+      btn.disabled = true;
+      status.textContent = 'Saving...';
+      status.className = '';
+
+      google.script.run
+        .withSuccessHandler((result) => {
+          btn.disabled = false;
+          if (result.status === 'success') {
+            status.textContent = 'Saved. You can submit another warehouse/variety, or close this window.';
+            status.className = 'success';
+            document.getElementById('warehouse').value = '';
+            document.getElementById('variety').value = '';
+            document.getElementById('ageMonths').value = '';
+          } else {
+            status.textContent = result.message || 'Something went wrong.';
+            status.className = 'error';
+          }
+        })
+        .withFailureHandler((err) => {
+          btn.disabled = false;
+          status.textContent = 'Error: ' + err.message;
+          status.className = 'error';
+        })
+        .recordAgeSubmission({ warehouse, variety, ageMonths });
+    }
+  </script>
+</body>
+</html>

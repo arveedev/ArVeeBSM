@@ -27,6 +27,24 @@ glow-stutter fix, awaiting the user's choice of approach) - read those
 first, they are the most current state. Rest of this file not otherwise
 re-verified this pass.
 
+2026-08-21 addendum: NEW, separate track of work outside the main app -
+Daily Inventory + Age Monitoring Google Sheets reports. Not app code, not
+part of the Dexie schema or build. Two new standalone Apps Script files
+(`docs/daily-inventory-report-script.js`, `docs/age-monitoring-report-script.js`),
+an HTML form (`docs/age-submission-form.html`), and setup instructions
+(`docs/sheets-reports-setup.md`) - full detail in docs/activity-log.md
+Round 33. These are gap-fixed rewrites of the user's own two existing
+Apps Script files (never before in this repo), meant to be pasted into
+TWO NEW Google Spreadsheets the user creates themselves - neither writes
+to the existing production spreadsheet, both only read from it. NOT YET
+DEPLOYED - user has not yet created the spreadsheets or pasted the code
+in, so none of this is confirmed working against real data yet. If a
+future session continues this: the user still needs to (1) create both
+spreadsheets, (2) follow docs/sheets-reports-setup.md, (3) confirm the
+Daily Inventory tallies match their existing working spreadsheet, (4)
+start submitting QA monthly ages so Age Monitoring's projection has a
+real anchor to correct against.
+
 2026-08-15 addendum #2 (continuation session): another new top-of-section
 entry for Piles popup edge-clamping, the form pop-animation/timing fix
 (now also applied to Admin Dashboard), the BottomNav pill edge-clipping
