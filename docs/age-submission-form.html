@@ -42,6 +42,9 @@
   <label for="netBags">Net Bags (optional - include if you also recounted the pile)</label>
   <input type="number" id="netBags" step="0.01" min="0" placeholder="e.g. 500" />
 
+  <label for="asOfDate">As Of Date (optional - defaults to today; set this if you're recording an observation from an earlier date)</label>
+  <input type="date" id="asOfDate" />
+
   <button id="submitBtn" onclick="submitForm()">Submit</button>
   <div id="status"></div>
 
@@ -51,11 +54,12 @@
       const variety = document.getElementById('variety').value.trim();
       const ageMonths = document.getElementById('ageMonths').value;
       const netBags = document.getElementById('netBags').value;
+      const asOfDate = document.getElementById('asOfDate').value;
       const status = document.getElementById('status');
       const btn = document.getElementById('submitBtn');
 
       if (!warehouse || !variety || ageMonths === '') {
-        status.textContent = 'Warehouse, Variety, and Age are required. Net Bags is optional.';
+        status.textContent = 'Warehouse, Variety, and Age are required. Net Bags and As Of Date are optional.';
         status.className = 'error';
         return;
       }
@@ -74,6 +78,7 @@
             document.getElementById('variety').value = '';
             document.getElementById('ageMonths').value = '';
             document.getElementById('netBags').value = '';
+            document.getElementById('asOfDate').value = '';
           } else {
             status.textContent = result.message || 'Something went wrong.';
             status.className = 'error';
@@ -84,7 +89,7 @@
           status.textContent = 'Error: ' + err.message;
           status.className = 'error';
         })
-        .recordAgeSubmission({ warehouse, variety, ageMonths, netBags });
+        .recordAgeSubmission({ warehouse, variety, ageMonths, netBags, asOfDate: asOfDate || null });
     }
   </script>
 </body>

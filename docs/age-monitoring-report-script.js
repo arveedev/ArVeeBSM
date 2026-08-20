@@ -70,6 +70,19 @@ const CONFIG = {
   PALAY_VARIETIES: ["pds", "pdm", "pd1-a", "pd2-a", "pw"],
 };
 
+// By-products are excluded entirely - not part of age monitoring (same
+// exclusion list the Daily Inventory script already uses).
+const EXCLUDED_VARIETIES = new Set(["DKA", "DKB", "DKC", "BIN"]);
+
+// A row whose age-group code isn't one of these is data we can't safely
+// act on (blank, or garbage like a customer name that landed in the
+// wrong column) - skipped entirely, not reported as a shortfall.
+const VALID_AGE_GROUPS = new Set(["0-3", ">3", "0-6", "6.1-12", ">12"]);
+
+// Not a real warehouse - an internal routing/transfer label, not a place
+// that holds physical stock. Excluded from both receipts and issuances.
+const EXCLUDED_WAREHOUSES = new Set(["NFAO RM"]);
+
 const SETUP_SHEET_NAME = "SETUP";
 const QA_SUBMISSIONS_SHEET_NAME = "QA_AGE_SUBMISSIONS";
 
@@ -187,21 +200,25 @@ function showBulkAgeImportForm() {
  * manages the QA form fields later.
  */
 /**
- * Upserts one warehouse/variety's age submission for the CURRENT month -
- * overwrites that month's row if one already exists (rather than
- * appending a duplicate), so the sheet doesn't accumulate repeat
- * corrections within the same month. Shared by the single-row form
- * (recordAgeSubmission) and the bulk seed import (recordAgeSubmissionsBulk).
+ * Upserts one warehouse/variety's age submission for `recordDate`'s
+ * month - overwrites that month's row if one already exists (rather
+ * than appending a duplicate), so the sheet doesn't accumulate repeat
+ * corrections within the same month. `recordDate` is BOTH the stored
+ * Submission Date value AND what "same month" is matched against - so a
+ * historical backfill given an explicit as-of date correctly lands in
+ * (and can be re-imported to overwrite) that date's own month, not
+ * today's. Shared by the single-row form (recordAgeSubmission) and the
+ * bulk seed import (recordAgeSubmissionsBulk).
  */
-function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, now, submittedBy) {
-  const currentMonthKey = Utilities.formatDate(now, "GMT+8", "yyyy-MM");
+function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, recordDate, submittedBy) {
+  const targetMonthKey = Utilities.formatDate(recordDate, "GMT+8", "yyyy-MM");
   let targetRow = -1;
   for (let i = 1; i < values.length; i++) {
     const rowWh = String(values[i][0] || "").trim();
     const rowVar = String(values[i][1] || "").trim();
     const rowDate = values[i][4] instanceof Date ? values[i][4] : new Date(values[i][4]);
     const rowMonthKey = isNaN(rowDate.getTime()) ? "" : Utilities.formatDate(rowDate, "GMT+8", "yyyy-MM");
-    if (rowWh === warehouse && rowVar === variety && rowMonthKey === currentMonthKey) {
+    if (rowWh === warehouse && rowVar === variety && rowMonthKey === targetMonthKey) {
       targetRow = i + 1;
       break;
     }
@@ -209,7 +226,7 @@ function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, ne
 
   // netBags is optional - a monthly age correction doesn't always come
   // with a fresh bag recount, only the initial/periodic stock count does.
-  const rowData = [warehouse, variety, ageMonths, netBags === null || isNaN(netBags) ? "" : netBags, now, submittedBy];
+  const rowData = [warehouse, variety, ageMonths, netBags === null || isNaN(netBags) ? "" : netBags, recordDate, submittedBy];
   if (targetRow > 0) {
     qaSheet.getRange(targetRow, 1, 1, 6).setValues([rowData]);
     values[targetRow - 1] = rowData; // keep the in-memory snapshot correct for subsequent calls in the same bulk batch
@@ -233,8 +250,13 @@ function recordAgeSubmission(payload) {
       return { status: "error", message: "Warehouse, Variety, and a numeric Age are required." };
     }
 
+    // Defaults to today (routine monthly correction) - pass asOfDate to
+    // backdate a historical observation instead.
+    const recordDate = payload.asOfDate ? new Date(payload.asOfDate) : new Date();
+    if (isNaN(recordDate.getTime())) return { status: "error", message: "As Of Date is not a valid date." };
+
     const values = qaSheet.getDataRange().getValues();
-    upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, new Date(), Session.getEffectiveUser().getEmail() || "unknown");
+    upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, recordDate, Session.getEffectiveUser().getEmail() || "unknown");
     return { status: "success" };
   } catch (e) {
     return { status: "error", message: e.toString() };
@@ -247,18 +269,25 @@ function recordAgeSubmission(payload) {
  * the very first report is anchored to real observed data instead of
  * defaulting to pure elapsed-time-since-receipt for every combination
  * until QA happens to submit each one individually. `rows` is an array
- * of { warehouse, variety, ageMonths }, e.g. parsed from a pasted
- * "Warehouse, Variety, Age" block in the bulk-import form.
+ * of { warehouse, variety, ageMonths, netBags }, e.g. parsed from a
+ * pasted "Warehouse, Variety, Age, Net Bags" block in the bulk-import
+ * form. `asOfDate` (optional, one shared date for the whole batch) lets
+ * a historical snapshot be recorded with its TRUE observation date
+ * instead of today - important because Daily Inventory and this report's
+ * own baseline-seeding only trust a submission dated on/before their
+ * configured start date; defaults to today if omitted.
  */
-function recordAgeSubmissionsBulk(rows) {
+function recordAgeSubmissionsBulk(rows, asOfDate) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const qaSheet = ss.getSheetByName(QA_SUBMISSIONS_SHEET_NAME);
     if (!qaSheet) return { status: "error", message: "Run Initialize Setup Sheet first." };
     if (!Array.isArray(rows) || rows.length === 0) return { status: "error", message: "No rows to import." };
 
+    const recordDate = asOfDate ? new Date(asOfDate) : new Date();
+    if (isNaN(recordDate.getTime())) return { status: "error", message: "As Of Date is not a valid date." };
+
     const values = qaSheet.getDataRange().getValues();
-    const now = new Date();
     const submittedBy = Session.getEffectiveUser().getEmail() || "unknown";
     let imported = 0;
     const skipped = [];
@@ -272,7 +301,7 @@ function recordAgeSubmissionsBulk(rows) {
         skipped.push(`Row ${idx + 1}: "${r.warehouse}" / "${r.variety}" / "${r.ageMonths}"`);
         return;
       }
-      upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, now, submittedBy);
+      upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, recordDate, submittedBy);
       imported++;
     });
 
@@ -490,12 +519,37 @@ function runReportCore_() {
     }
 
     const varietyTypeMap = readVarietyCategoryMap_(ss);
+    // Two separate cutoffs, same distinction Daily Inventory makes:
+    //  - latestSubmissions (as-of endDate/now): anchors the age of an
+    //    ACTUAL receipt row that already exists in DATA_ENTRY.
+    //  - baselineSubmissions (as-of startDate): SEEDS inventory that
+    //    existed before startDate and therefore has no DATA_ENTRY receipt
+    //    row inside the [startDate, endDate] window at all - without
+    //    this, any issuance against pre-startDate stock looks like "no
+    //    recorded stock," which is what was producing most of the FIFO
+    //    shortfall noise. Only qualifies with a real Net Bags value.
     const latestSubmissions = readLatestSubmissions_(ss, endDate);
+    const baselineSubmissions = readLatestSubmissions_(ss, startDate);
 
     const msPerMonth = 30.44 * 24 * 60 * 60 * 1000;
     let inventory = {};
     const duplicateRows = [];
     const fifoShortfalls = [];
+    const isExcludedVariety = (v) => !v || EXCLUDED_VARIETIES.has(v.toString().trim().toUpperCase());
+    const isExcludedWarehouse = (wh) => EXCLUDED_WAREHOUSES.has(String(wh || "").trim().toUpperCase());
+
+    // Phase 0: seed baseline inventory from QA submissions dated on/before
+    // startDate, projected forward to endDate the same way a receipt's
+    // age is projected - see the block comment above.
+    Object.keys(baselineSubmissions).forEach((key) => {
+      const entry = baselineSubmissions[key];
+      if (entry.netBags === null || entry.netBags === 0) return;
+      const [wh, variety] = key.split('|');
+      if (isExcludedVariety(variety) || isExcludedWarehouse(wh)) return;
+      const elapsedSinceSubmission = (endDate.getTime() - entry.submissionDate.getTime()) / msPerMonth;
+      const ageMonths = entry.ageMonths + elapsedSinceSubmission;
+      updateInv(inventory, wh, variety, ageMonths, entry.netBags);
+    });
 
     const recHeaders = getSheetHeaders_(recSheet);
     const issHeaders = getSheetHeaders_(issSheet);
@@ -514,6 +568,7 @@ function runReportCore_() {
       const wh = row[recDedup.cols.warehouseCol], variety = row[recDedup.cols.varietyCol];
       const bags = parseFloat(row[recDedup.cols.netBagsCol]) || 0;
       if (!wh || !variety || bags === 0) return;
+      if (isExcludedVariety(variety) || isExcludedWarehouse(wh)) return;
 
       const subKey = `${String(wh).trim()}|${String(variety).trim().toLowerCase()}`;
       let ageMonths;
@@ -544,8 +599,12 @@ function runReportCore_() {
 
       const wh = row[issDedup.cols.warehouseCol];
       const varCode = String(row[issDedup.cols.varietyCol]).toLowerCase();
+      if (isExcludedVariety(varCode) || isExcludedWarehouse(wh)) return;
+
+      const ageGroupCode = String(row[issDedup.cols.ageGroupCol] || "").trim();
+      if (!VALID_AGE_GROUPS.has(ageGroupCode)) return; // blank, or bad data in that column - can't safely act on it
+
       const bags = parseFloat(row[issDedup.cols.kilosCol]) / 50;
-      const ageGroupCode = String(row[issDedup.cols.ageGroupCol]);
 
       if (inventory[wh] && inventory[wh][varCode]) {
         const shortfall = applyFIFO(inventory[wh][varCode], bags, ageGroupCode, isRice(varCode));

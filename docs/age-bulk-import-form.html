@@ -11,6 +11,21 @@
   starts from real observed data instead of every combination defaulting
   to a pure elapsed-time-since-receipt guess until someone happens to
   submit it individually via the single-row form later.
+
+  IMPORTANT: set "As Of Date" to the data's TRUE observation date, not
+  today. Both this report's own baseline-seeding and Daily Inventory's
+  starting balances only trust a submission dated on/before their
+  configured Config!B2 start date - a historical backfill imported
+  without a correct As Of Date gets stamped "today," which likely won't
+  qualify and will just silently sit unused. If you already ran this
+  form before this field existed, its rows are dated whatever day you
+  clicked Import - either delete those rows from QA_AGE_SUBMISSIONS and
+  re-import with the correct As Of Date, or manually fix the
+  "Submission Date" column for those rows directly in the sheet (faster
+  than re-importing.) Don't just re-import with the correct date without
+  removing the old rows first - they'd land in a different month and
+  sit alongside the old ones, and readLatestSubmissions_ picks whichever
+  is dated LATER, so the wrong "today"-dated rows would keep winning.
 -->
 <!DOCTYPE html>
 <html>
@@ -41,6 +56,12 @@
     you have it, rather than entering it again on the other spreadsheet.
   </p>
 
+  <label for="asOfDate">As Of Date (when this data was actually observed - defaults to today if left blank)</label>
+  <input type="date" id="asOfDate" />
+  <p class="hint">
+    Set this to the TRUE date the data reflects, not the date you're pasting it in - e.g. if this is a physical count from July 31, enter July 31 here even if you're importing it three weeks later. Both Daily Inventory's starting balances and this report's own baseline-seeding only trust a submission dated on/before their configured start date, so a historical backfill needs its real date to be usable.
+  </p>
+
   <label for="bulkInput">Paste QA's current known ages (and bag counts, if known)</label>
   <textarea id="bulkInput" placeholder="BSI B, WD1, 2.5, 500&#10;TAB GID, PDm, 8"></textarea>
 
@@ -61,6 +82,7 @@
 
     function submitBulk() {
       const text = document.getElementById('bulkInput').value;
+      const asOfDate = document.getElementById('asOfDate').value; // '' if left blank - script defaults to today
       const status = document.getElementById('status');
       const btn = document.getElementById('submitBtn');
       const rows = parseLines(text);
@@ -95,7 +117,7 @@
           status.textContent = 'Error: ' + err.message;
           status.className = 'error';
         })
-        .recordAgeSubmissionsBulk(rows);
+        .recordAgeSubmissionsBulk(rows, asOfDate || null);
     }
   </script>
 </body>

@@ -16988,3 +16988,66 @@ Monitoring spreadsheet:
 
 Both scripts re-verified with `node --check`. Still not deployed/confirmed
 against real data.
+
+## Round 41: Age Monitoring exclusions, NFAO RM, invalid age-groups, and the real FIFO-shortfall root cause
+
+User ran their first real Age Monitoring report and pasted the actual
+alert output - dozens of FIFO shortfall lines, most "no recorded stock at
+all." Three explicit requests plus one root-cause fix:
+
+1. **By-products excluded** - added `EXCLUDED_VARIETIES = new Set(["DKA","DKB","DKC","BIN"])`
+   (matching the Inventory script's existing list) and applied it to both
+   the receipts and issuances loops in `runReportCore_`.
+2. **Invalid age-group rows skipped, not reported as shortfalls** - added
+   `VALID_AGE_GROUPS = new Set(["0-3",">3","0-6","6.1-12",">12"])`; an
+   issuance whose Age Group column is blank or garbage (the user's sample
+   included one literally containing a customer name, "AGUNDAY - TATO")
+   is now skipped entirely before FIFO is attempted, instead of producing
+   a nonsensical shortfall line.
+3. **NFAO RM excluded** - added `EXCLUDED_WAREHOUSES = new Set(["NFAO RM"])`,
+   applied to both loops. Not a real warehouse (an internal routing
+   label), which is exactly why every issuance "through" it showed "no
+   recorded stock" - it never legitimately holds inventory.
+4. **Root cause of most remaining shortfalls, found while investigating**:
+   Age Monitoring's Config!B2 start date WAS already being respected as a
+   date filter (confirmed, not a bug) - but nothing ever SEEDED a
+   baseline for stock that existed before that start date, so any
+   issuance against pre-start-date stock looked like "no recorded stock"
+   even though the stock genuinely exists. Added a new "Phase 0" in
+   `runReportCore_`: for every QA_AGE_SUBMISSIONS entry with a Net Bags
+   value dated on/before Config!B2, `updateInv` seeds that quantity into
+   the inventory model (age projected forward to endDate, same formula
+   already used to anchor receipt ages) before receipts/issuances are
+   processed - mirroring Daily Inventory's own starting-balance concept
+   exactly. Uses a second `readLatestSubmissions_(ss, startDate)` call
+   (distinct from the existing `readLatestSubmissions_(ss, endDate)` used
+   for receipt-age anchoring).
+5. **Discovered while fixing #4**: the user's just-completed bulk import
+   (23 rows from a July 31 report) got stamped with TODAY as its
+   submission date, since no way existed to backdate it - meaning none of
+   it would qualify for the new startDate-gated baseline seeding. Added
+   an optional "As Of Date" to both `recordAgeSubmission` and
+   `recordAgeSubmissionsBulk` (`upsertAgeSubmission_` reworked to use a
+   caller-supplied `recordDate` for BOTH the stored value and the
+   month-matching key, instead of always `new Date()`). Added the field
+   to both HTML forms. Documented the correction procedure (delete the
+   wrongly-dated rows before re-importing with the correct date - simply
+   re-importing without deleting first would leave both the correct and
+   incorrect rows present, and `readLatestSubmissions_` picks whichever
+   is dated LATER, so the wrong "today"-dated rows would keep winning).
+
+Also confirmed (no code change needed) and explained to the user: Daily
+Inventory's warehouse columns are rebuilt fresh every sync from whatever
+warehouse+variety+age combinations actually have activity or a starting
+balance (`activeKeysSet` in `parseAndFilterData`) - an inactive warehouse
+simply has no column until its first real transaction, at which point it
+appears automatically on the next sync with no risk to other warehouses'
+data (columns are string-keyed, never positional, and each month sheet is
+rendered independently).
+
+### Files touched
+`docs/age-monitoring-report-script.js`, `docs/age-submission-form.html`,
+`docs/age-bulk-import-form.html`.
+
+Re-verified with `node --check`. Not yet re-run by the user with these
+fixes.
