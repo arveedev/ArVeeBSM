@@ -1455,19 +1455,29 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   }
 
   const handleStepForward = async () => {
-    // Same reasoning as handleStepBack: only walk real history
+    // Same reasoning as handleStepBack: only walk real LOCAL history
     // (findAdjacentTransaction, which can jump straight across a
     // series boundary to whatever document actually comes next - e.g.
     // from #2000 in an exhausted booklet to #5751 in the one that
     // replaced it, even same-day) while an actual document is loaded.
-    // At the true end of history in this direction, fall back to the
-    // correct NEXT-IN-SEQUENCE suggestion (suggestNextSerial) rather
-    // than a blind ±1 guess off whatever's currently displayed - e.g.
-    // stepping forward off #5751 correctly lands on #5752, not #2001.
+    //
+    // findAdjacentTransaction only knows about transactions already
+    // synced to THIS device - when it finds nothing, that does NOT
+    // necessarily mean there's no next document at all, only that
+    // there's no next document locally yet. checkAndLoadSerial below
+    // still checks the Sheet directly for whatever serial we land on,
+    // so falling back to the plain numeric-neighbor guess here (not
+    // straight to suggestNextSerial) preserves that Sheet lookup for
+    // real historical/imported data this device hasn't preloaded -
+    // going straight to suggestNextSerial instead (an earlier version
+    // of this fix) skipped that lookup entirely and made forward
+    // navigation dead-end on data that genuinely existed, just not
+    // locally yet.
+    const wasLoaded = Boolean(loadedTransaction)
     let nextSerial
-    if (loadedTransaction) {
+    if (wasLoaded) {
       const adjacent = await findAdjacentTransaction(type, currentWarehouseId, serialNo.trim(), activeCategory, 1)
-      nextSerial = adjacent ? adjacent.serialNo : await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
+      nextSerial = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), 1)
     } else {
       nextSerial = stepSerial(serialNo.trim(), 1)
     }
@@ -1475,7 +1485,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
-    if (!loaded && latestRequestedSerial.current === nextSerial) resetToBlankEntry(nextSerial)
+    if (loaded || latestRequestedSerial.current !== nextSerial) return
+    if (wasLoaded) {
+      // Genuinely nothing next, locally OR on the Sheet - suggest the
+      // real next-in-sequence serial (date-aware) instead of leaving
+      // the numeric guess sitting in the field, which might belong to
+      // no real series at all.
+      const suggested = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
+      if (latestRequestedSerial.current !== nextSerial) return
+      setSerialNo(suggested)
+      resetToBlankEntry(suggested)
+    } else {
+      resetToBlankEntry(nextSerial)
+    }
   }
 
   const initialAgeDays = ageUnit === 'Months + Days'
@@ -1602,7 +1624,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       toast.error('Name is required')
       return false
     }
-    if (!pileId) {
+    if (!isFillersType && !pileId) {
       toast.error('Select a Pile ID')
       return false
     }
@@ -1614,7 +1636,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       toast.error('Select a Condition')
       return false
     }
-    if (activeCategory !== 'By Products' && (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent)))) {
+    // isFillersType exempted here to match canSave's own exemption
+    // above - previously this check had no such exemption at all, so a
+    // FILLERS transaction with the Save button correctly enabled (per
+    // canSave) still got rejected the instant it was actually clicked.
+    if (!isFillersType && activeCategory !== 'By Products' && (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent)))) {
       toast.error('Moisture Content (MC %) is required')
       return false
     }
@@ -2599,8 +2625,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 inputMode="decimal"
                 value={moistureContent}
                 onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
-                className={`${inputClass} ${moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
-                placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
+                className={`${inputClass} ${moistureContent === '' && !isFillersType && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                placeholder={isFillersType || activeCategory === 'By Products' ? 'Optional' : '13.90'}
               />
             </div>
 
@@ -2791,7 +2817,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                         type="text" inputMode="decimal"
                         value={alloc.moistureContent}
                         onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, moistureContent: liveFormatNumber(e.target.value) } : r)))}
-                        className={`${inputClass} mt-0 ${alloc.moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                        className={`${inputClass} mt-0 ${alloc.moistureContent === '' && !isFillersType && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
                         placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
                       />
                     </div>

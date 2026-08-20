@@ -387,10 +387,18 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   }
 
   const handleStepForward = async () => {
+    // findAdjacentTransaction only knows about transactions already
+    // synced to THIS device - falling back straight to
+    // suggestNextSerial when it finds nothing skips the Sheet lookup
+    // checkAndLoadSerial below still does for real historical/imported
+    // data this device hasn't preloaded, dead-ending forward
+    // navigation on data that genuinely exists, just not locally yet.
+    // See StockFormBase.jsx's matching handler for the full reasoning.
+    const wasLoaded = Boolean(loadedTransaction)
     let next
-    if (loadedTransaction) {
+    if (wasLoaded) {
       const adjacent = await findAdjacentTransaction('WTS', currentWarehouseId, serialNo.trim(), null, 1)
-      next = adjacent ? adjacent.serialNo : await suggestNextSerial('WTS', currentWarehouseId)
+      next = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), 1)
     } else {
       next = stepSerial(serialNo.trim(), 1)
     }
@@ -398,7 +406,15 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(next)
-    if (!loaded && latestRequestedSerial.current === next) resetForm(next)
+    if (loaded || latestRequestedSerial.current !== next) return
+    if (wasLoaded) {
+      const suggested = await suggestNextSerial('WTS', currentWarehouseId)
+      if (latestRequestedSerial.current !== next) return
+      setSerialNo(suggested)
+      resetForm(suggested)
+    } else {
+      resetForm(next)
+    }
   }
 
   const buildCancelledPayload = (overrides = {}) => ({

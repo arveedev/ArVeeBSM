@@ -243,5 +243,18 @@
 //            back to numeric magnitude only for historical data that
 //            predates this) - a new createdAt timestamp on every newly
 //            created transaction resolves same-day series boundaries
-//            that date alone can't (current)
-export const APP_VERSION = '1.9-7'
+//            that date alone can't
+//   1.9-8  - Fixed a real regression from 1.9-7: forward serial
+//            navigation could get stuck even though data existed
+//            beyond it. findAdjacentTransaction only knows about
+//            transactions already synced to THIS device - falling back
+//            straight to suggestNextSerial when it found nothing
+//            skipped the Sheet lookup checkAndLoadSerial still does for
+//            real historical/imported data not yet preloaded locally,
+//            silently dead-ending forward navigation on data that
+//            genuinely existed. Backward navigation was unaffected
+//            (its fallback already preserved the numeric-guess+Sheet-
+//            lookup path). Forward now tries that same numeric-guess
+//            fallback first, only reaching suggestNextSerial if nothing
+//            is found locally OR on the Sheet (current)
+export const APP_VERSION = '1.9-8'

@@ -652,10 +652,18 @@ const SackFormBase = forwardRef(function SackFormBase(
   }
 
   const handleStepForward = async () => {
+    // findAdjacentTransaction only knows about transactions already
+    // synced to THIS device - falling back straight to
+    // suggestNextSerial when it finds nothing skips the Sheet lookup
+    // checkAndLoadSerial below still does for real historical/imported
+    // data this device hasn't preloaded, dead-ending forward
+    // navigation on data that genuinely exists, just not locally yet.
+    // See StockFormBase.jsx's matching handler for the full reasoning.
+    const wasLoaded = Boolean(loadedTransaction)
     let nextSerial
-    if (loadedTransaction) {
+    if (wasLoaded) {
       const adjacent = await findAdjacentTransaction(type, currentWarehouseId, serialNo.trim(), null, 1)
-      nextSerial = adjacent ? adjacent.serialNo : await suggestNextSerial(type, currentWarehouseId)
+      nextSerial = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), 1)
     } else {
       nextSerial = stepSerial(serialNo.trim(), 1)
     }
@@ -663,7 +671,15 @@ const SackFormBase = forwardRef(function SackFormBase(
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
-    if (!loaded && latestRequestedSerial.current === nextSerial) resetToBlankEntry(nextSerial)
+    if (loaded || latestRequestedSerial.current !== nextSerial) return
+    if (wasLoaded) {
+      const suggested = await suggestNextSerial(type, currentWarehouseId)
+      if (latestRequestedSerial.current !== nextSerial) return
+      setSerialNo(suggested)
+      resetToBlankEntry(suggested)
+    } else {
+      resetToBlankEntry(nextSerial)
+    }
   }
 
   const buildCancelledPayload = (overrides = {}) => ({

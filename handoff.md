@@ -547,7 +547,26 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-17 session, round 34) - date-aware serial number suggestion and navigation - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-17 session, round 35) - fixed round 34's own forward-navigation regression - NOT YET COMMITTED/PUSHED
+
+User tested round 34 and found forward serial-stepping could get stuck
+on data that genuinely existed (and, described differently, reported
+August transactions appearing "missing" - same root cause, not actual
+data loss - verified `resetToBlankEntry` is pure UI state with zero
+delete calls). Root cause: `findAdjacentTransaction` only knows about
+transactions already synced to THIS device; round 34's
+`handleStepForward` jumped straight to `suggestNextSerial` (a blank
+"create new" suggestion) when it found nothing locally, skipping the
+Sheet lookup `checkAndLoadSerial` still does - dead-ending on real
+historical data that just hadn't locally preloaded yet. Backward
+stepping was unaffected (its fallback already preserved that Sheet
+lookup). Fixed: forward now tries the plain numeric-guess fallback
+first (restoring the Sheet lookup), only reaching `suggestNextSerial`
+if nothing is found locally OR on the Sheet. User advised to check
+Reports (unaffected by this bug) to confirm their data before doing
+anything else - not yet confirmed.
+
+### OPEN (2026-08-17 session, round 34) - date-aware serial number suggestion and navigation - PUSHED
 
 Two real, reported bugs, both stemming from serial suggestion/
 navigation being purely numeric-magnitude-based with no concept of
