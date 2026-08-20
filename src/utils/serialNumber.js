@@ -346,13 +346,28 @@ export const findTransactionBySerial = async (type, warehouseId, serialNo, cerea
  * behavior in that case, exactly as they already do today.
  */
 export const findAdjacentTransaction = async (type, warehouseId, serialNo, cerealCategory = null, direction = 1) => {
-  const current = await findTransactionBySerial(type, warehouseId, serialNo, cerealCategory)
+  // Falls back to an uncategorized lookup if the category-scoped one
+  // finds nothing - a record whose own cerealCategory is mismatched or
+  // missing would otherwise make this function unable to find "current"
+  // at all, silently returning null and sending the caller down its
+  // numeric-guess fallback path on every single step instead of ever
+  // walking the real sequence. Confirmed as a real, reproduced cause of
+  // navigation getting stuck.
+  const current = (await findTransactionBySerial(type, warehouseId, serialNo, cerealCategory))
+    ?? (cerealCategory != null ? await findTransactionBySerial(type, warehouseId, serialNo, null) : null)
   if (!current) return null
 
+  // Pool is intentionally NOT category-filtered when `current` itself
+  // turned out to have a different category than requested (the
+  // fallback above) - excluding it from its own pool would make the
+  // index lookup below fail again for the same reason. Once a caller's
+  // own checkAndLoadSerial-equivalent self-heals the mismatch, this
+  // reverts to the normal category-scoped pool automatically.
+  const effectiveCategory = current.cerealCategory === cerealCategory ? cerealCategory : null
   const pool = await db.transactions
     .where('[type+warehouseId+serialNo]')
     .between([type, warehouseId, Dexie.minKey], [type, warehouseId, Dexie.maxKey])
-    .and((tx) => cerealCategory == null || tx.cerealCategory === cerealCategory)
+    .and((tx) => effectiveCategory == null || tx.cerealCategory === effectiveCategory)
     .toArray()
 
   const sorted = pool.slice().sort(compareByRecency)

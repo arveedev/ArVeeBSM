@@ -207,15 +207,22 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
   // re-does work a device already completed individually.
   const HAS_BEEN_BACKED_UP_FIX_FLAG = 'sheet-import-has-been-backed-up-fix-v2'
   const STOCK_CONDITION_DEFAULT_FIX_FLAG = 'stock-condition-null-to-gq-fix-v1'
-  // Bumped v5 -> v6: preloadTransactionsForUser had no guard against
-  // overlapping runs (the 30s sync interval and the 'online' listener
-  // could both fire while a previous pass was still running), so this
-  // dedup kept needing to re-run on every device as fresh duplicates
-  // kept getting created after v5 already ran once. Now paired with an
-  // actual concurrency fix (inFlightPreload above) so v6 is the last
-  // time this should ever find anything to clean up.
-  const DEDUP_MERGE_FLAG = 'transaction-dedup-merge-v6'
-  const CONSOLIDATED_FIX_FLAG = 'transaction-consolidated-fix-v6'
+  // Bumped v6 -> v7: checkAndLoadSerial's Sheet-import fallback
+  // (StockFormBase.jsx) had no protection at all against a local
+  // record already existing under a MISMATCHED cerealCategory value -
+  // its own local lookup was category-scoped with no fallback, so a
+  // record like that was invisible to it and got duplicated fresh from
+  // the Sheet on every visit (the Sheet has no Pile ID/MC/MTS columns
+  // at all, so every such duplicate arrived stripped of exactly those
+  // fields - the confirmed, reproduced cause of "my pile info
+  // disappeared and there's a duplicate"). That gap is now closed
+  // (checkAndLoadSerial and findAdjacentTransaction both fall back to
+  // an uncategorized lookup before ever creating a new record), but
+  // devices that already got hit by it still have the duplicates
+  // sitting in local storage - v7 re-runs the same proven merge to
+  // clean those up too.
+  const DEDUP_MERGE_FLAG = 'transaction-dedup-merge-v7'
+  const CONSOLIDATED_FIX_FLAG = 'transaction-consolidated-fix-v7'
   const stillNeedsAny = [HAS_BEEN_BACKED_UP_FIX_FLAG, STOCK_CONDITION_DEFAULT_FIX_FLAG, DEDUP_MERGE_FLAG, CONSOLIDATED_FIX_FLAG]
     .some((flag) => !localStorage.getItem(flag))
   if (stillNeedsAny) {
@@ -279,13 +286,13 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
       if (toUpdate.length > 0) await db.transactions.bulkPut(toUpdate)
       if (toDeleteIds.length > 0) await db.transactions.bulkDelete(toDeleteIds)
 
-      console.log(`transaction-consolidated-fix-v5: updated ${toUpdate.length} record(s), merged/removed ${toDeleteIds.length} duplicate(s) across ${mergeCount} group(s), out of ${allTx.length} total local transactions`)
+      console.log(`transaction-consolidated-fix-v7: updated ${toUpdate.length} record(s), merged/removed ${toDeleteIds.length} duplicate(s) across ${mergeCount} group(s), out of ${allTx.length} total local transactions`)
       localStorage.setItem(HAS_BEEN_BACKED_UP_FIX_FLAG, 'done')
       localStorage.setItem(STOCK_CONDITION_DEFAULT_FIX_FLAG, 'done')
       localStorage.setItem(DEDUP_MERGE_FLAG, 'done')
       localStorage.setItem(CONSOLIDATED_FIX_FLAG, 'done')
     } catch (error) {
-      console.error('transaction-consolidated-fix-v5 failed, will retry next load:', error)
+      console.error('transaction-consolidated-fix-v7 failed, will retry next load:', error)
     }
   }
 

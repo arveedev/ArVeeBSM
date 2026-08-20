@@ -256,5 +256,21 @@
 //            (its fallback already preserved the numeric-guess+Sheet-
 //            lookup path). Forward now tries that same numeric-guess
 //            fallback first, only reaching suggestNextSerial if nothing
-//            is found locally OR on the Sheet (current)
-export const APP_VERSION = '1.9-8'
+//            is found locally OR on the Sheet
+//   1.9-9  - CRITICAL: found and fixed the actual cause of duplicate
+//            transactions reappearing with blank Pile ID/MC/MTS.
+//            checkAndLoadSerial's local lookup is scoped by
+//            cerealCategory - a record whose category was ever
+//            mismatched or missing was invisible to it forever, a false
+//            "not found locally" that led straight into importing a
+//            SECOND copy from the Sheet (which has no Pile ID/MC/MTS
+//            columns at all, so every such duplicate arrived stripped
+//            of exactly those fields). Both checkAndLoadSerial and
+//            findAdjacentTransaction now fall back to an uncategorized
+//            lookup before ever creating a new record, self-healing the
+//            mismatch in place. Also bumped the existing dedup-merge
+//            migration (v6 -> v7) to clean up duplicates this already
+//            created on affected devices, using the same proven
+//            field-level merge already in place from earlier rounds
+//            (current)
+export const APP_VERSION = '1.9-9'

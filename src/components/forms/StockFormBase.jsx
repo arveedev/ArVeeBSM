@@ -1343,15 +1343,44 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         return true
       }
 
-      // Not found locally - that alone doesn't mean it never existed,
-      // UNLESS this (warehouse, type) has already been fully preloaded,
-      // in which case local data is already comprehensive and "not
-      // found" is a definitive answer - skip the slow Sheet lookup
-      // entirely in that case. This concern becomes largely moot once
-      // serial-typing navigation is removed from the create form (see
-      // that change) - editing only happens via Reports from then on,
-      // which already has the transaction in hand locally, with no
-      // lookup of this kind ever needed for that path.
+      // Not found under the category-scoped lookup above - before
+      // assuming it genuinely doesn't exist anywhere locally and
+      // possibly importing a SECOND, incomplete copy from the Sheet,
+      // check once more without the category filter. A record can end
+      // up with a mismatched or missing cerealCategory (e.g. imported
+      // through a path that never set it correctly) and would
+      // otherwise be permanently invisible to every category-scoped
+      // lookup - a false "not found locally" that led straight into
+      // creating a genuine duplicate: a second local record, sourced
+      // from the Sheet (which has no Pile ID/MC/MTS columns at all),
+      // sitting alongside the real, complete one. Confirmed as the
+      // actual cause of duplicates reappearing with blank Pile
+      // ID/MC/MTS after a user had already fully encoded the real
+      // transaction. Self-heals the mismatch in place once found, so
+      // this can't recur for the same record.
+      if (!skipCategoryFilter) {
+        const uncategorized = await findTransactionBySerial(type, currentWarehouseId, serial, null)
+        if (latestRequestedSerial.current !== serial) return false
+        if (uncategorized) {
+          if (uncategorized.cerealCategory !== activeCategory) {
+            await db.transactions.update(uncategorized.id, { cerealCategory: activeCategory })
+            uncategorized.cerealCategory = activeCategory
+          }
+          if (latestRequestedSerial.current !== serial) return false
+          loadTransactionIntoForm(uncategorized)
+          return true
+        }
+      }
+
+      // Not found locally at all - that alone doesn't mean it never
+      // existed, UNLESS this (warehouse, type) has already been fully
+      // preloaded, in which case local data is already comprehensive
+      // and "not found" is a definitive answer - skip the slow Sheet
+      // lookup entirely in that case. This concern becomes largely
+      // moot once serial-typing navigation is removed from the create
+      // form (see that change) - editing only happens via Reports from
+      // then on, which already has the transaction in hand locally,
+      // with no lookup of this kind ever needed for that path.
       const preloaded = await isPreloadComplete(currentWarehouseId, type)
       const sheetResult = preloaded
         ? { ok: true, row: null }

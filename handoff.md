@@ -547,7 +547,25 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-17 session, round 35) - fixed round 34's own forward-navigation regression - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-17 session, round 36) - CRITICAL: fixed the actual cause of reappearing duplicate transactions with blank Pile ID/MC/MTS - NOT YET COMMITTED/PUSHED
+
+Root cause: `checkAndLoadSerial`'s local lookup is scoped by
+`cerealCategory` for WSR/WSI - a record whose category was ever
+mismatched or missing became permanently invisible to it, a false "not
+found locally" that led into importing a SECOND copy from the Sheet.
+The Sheet's backup schema has no Pile ID/MC/MTS columns at all, so
+every such duplicate arrives missing exactly those fields - matching
+what the user saw exactly (a duplicate WSR with blank Pile
+ID/MC/MTS, edit form loading the blank copy). `findAdjacentTransaction`
+had the same vulnerability on its own "current" lookup - plausibly why
+navigation got stuck in the first place. Both now fall back to an
+uncategorized lookup before concluding "not found," self-healing the
+mismatch in place. Bumped `transactionPreload.js`'s dedup-merge
+migration (v6 -> v7) to clean up duplicates already created by this on
+affected devices. Not yet confirmed by the user - the migration runs
+automatically on next load.
+
+### OPEN (2026-08-17 session, round 35) - fixed round 34's own forward-navigation regression - PUSHED
 
 User tested round 34 and found forward serial-stepping could get stuck
 on data that genuinely existed (and, described differently, reported
