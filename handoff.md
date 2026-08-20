@@ -547,7 +547,34 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-17 session, round 33) - CRITICAL: Google Sheets backup duplicate-row bug fixed - NOT YET COMMITTED/PUSHED, NEEDS APPS SCRIPT REDEPLOY
+### OPEN (2026-08-17 session, round 34) - date-aware serial number suggestion and navigation - NOT YET COMMITTED/PUSHED
+
+Two real, reported bugs, both stemming from serial suggestion/
+navigation being purely numeric-magnitude-based with no concept of
+which document booklet was actually in current use: (1) a new booklet
+starting at a LOWER number than an already-recorded older booklet
+never got suggested as "next" - the older, numerically-higher booklet
+kept winning every session, forcing a manual retype. (2) Stepping
+forward past the last document of an exhausted booklet (new booklet
+starting at a different number, same day) guessed `serial + 1`, found
+nothing, and dead-ended instead of loading the real next document.
+
+Fixed via a new `compareByRecency` rule in `serialNumber.js` (document
+`date` first, then a new `createdAt` timestamp for same-day
+disambiguation, falling back to numeric magnitude only for pre-fix
+historical data with no `createdAt`) - rewired `suggestNextSerial`,
+`recordSerialUsed` (now always overwrites its cache with the
+just-saved serial, not only when numerically higher), and
+`recalculateSerialCounter` to use it, and added
+`findAdjacentTransaction` to walk the REAL sorted sequence for
+Next/Previous navigation instead of guessing ±1. All three transaction
+forms (`StockFormBase.jsx`, `SackFormBase.jsx`, `WTSForm.jsx`) now
+stamp `createdAt: Date.now()` on new transactions and use the new
+logic for stepping/post-save advance. Traced both reported scenarios
+by hand against the new logic to confirm correctness (see the
+session's plan file). Not exercised against live data this session.
+
+### OPEN (2026-08-17 session, round 33) - CRITICAL: Google Sheets backup duplicate-row bug fixed - PUSHED, CONFIRMED REDEPLOYED BY USER
 
 User reported a severe data-integrity regression: backup Sheets
 accumulating 3-12+ duplicate rows per transaction, plus sync lag and

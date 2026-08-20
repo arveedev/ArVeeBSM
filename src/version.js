@@ -226,5 +226,22 @@
 //            trigger, explaining the reported sync lag. REQUIRES REDEPLOYING
 //            the updated docs/apps-script-full-replacement.js to the live
 //            Apps Script Web App - editing this repo file alone does not
-//            fix the live backup sheet (current)
-export const APP_VERSION = '1.9-6'
+//            fix the live backup sheet - CONFIRMED REDEPLOYED
+//   1.9-7  - Serial number suggestion/navigation is now date-aware
+//            instead of purely magnitude-based. suggestNextSerial
+//            previously suggested one higher than the highest-numbered
+//            serial EVER recorded, regardless of which booklet was
+//            actually in current use - so a new booklet starting lower
+//            than an older one's numbers never got suggested, forcing a
+//            manual retype every session. Next/Previous navigation had
+//            the matching problem: stepping past the last document of an
+//            exhausted booklet guessed serial±1, found nothing, and
+//            dead-ended instead of jumping to the real next document in
+//            a differently-numbered booklet. Both now follow actual
+//            chronological usage order (compareByRecency: document date,
+//            then real save time for same-day series changes, falling
+//            back to numeric magnitude only for historical data that
+//            predates this) - a new createdAt timestamp on every newly
+//            created transaction resolves same-day series boundaries
+//            that date alone can't (current)
+export const APP_VERSION = '1.9-7'

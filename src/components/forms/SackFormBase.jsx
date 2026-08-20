@@ -37,6 +37,7 @@ import {
   findTransactionBySerial,
   recordSerialUsed,
   recalculateSerialCounter,
+  findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer } from '../../utils/customerDirectory.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
@@ -608,12 +609,34 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (typedNumber < floorSerialNumber) setShowFloorWarning(true)
   }
 
+  // Below the floor guard, shared by handleStepBack's two paths (a
+  // real prior document found vs. the true edge of history) - factored
+  // out since both need the exact same check.
+  const blockedByFloor = (candidateSerial) => {
+    if (isAdmin || floorSerialNumber == null) return false
+    const candidateNumber = parseInt(candidateSerial.replace(/\D/g, ''), 10)
+    if (Number.isNaN(candidateNumber)) return false
+    if (candidateNumber >= floorSerialNumber) return false
+    toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
+    return true
+  }
+
+  // Walking real document history (findAdjacentTransaction) only makes
+  // sense while an actual existing document is loaded - see
+  // StockFormBase.jsx's matching handlers for the full reasoning.
   const handleStepBack = async () => {
-    const prevSerial = stepSerial(serialNo.trim(), -1)
-    const prevNumber = parseInt(prevSerial.replace(/\D/g, ''), 10)
-    if (!isAdmin && floorSerialNumber != null && !Number.isNaN(prevNumber) && prevNumber < floorSerialNumber) {
-      toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
-      return
+    let prevSerial
+    if (loadedTransaction) {
+      const adjacent = await findAdjacentTransaction(type, currentWarehouseId, serialNo.trim(), null, -1)
+      if (adjacent) {
+        prevSerial = adjacent.serialNo
+      } else {
+        prevSerial = stepSerial(serialNo.trim(), -1)
+        if (blockedByFloor(prevSerial)) return
+      }
+    } else {
+      prevSerial = stepSerial(serialNo.trim(), -1)
+      if (blockedByFloor(prevSerial)) return
     }
     setSerialNo(prevSerial)
     setNavFlash('back')
@@ -629,7 +652,13 @@ const SackFormBase = forwardRef(function SackFormBase(
   }
 
   const handleStepForward = async () => {
-    const nextSerial = stepSerial(serialNo.trim(), 1)
+    let nextSerial
+    if (loadedTransaction) {
+      const adjacent = await findAdjacentTransaction(type, currentWarehouseId, serialNo.trim(), null, 1)
+      nextSerial = adjacent ? adjacent.serialNo : await suggestNextSerial(type, currentWarehouseId)
+    } else {
+      nextSerial = stepSerial(serialNo.trim(), 1)
+    }
     setSerialNo(nextSerial)
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
@@ -757,7 +786,12 @@ const SackFormBase = forwardRef(function SackFormBase(
   const performSave = async (trial3Confirmed) => {
     setIsSaving(true)
 
-    const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload() }
+    // createdAt (real save-time timestamp) set ONLY here (create) -
+    // never touched by the edit/update path, which preserves whatever
+    // this was first set to. See serialNumber.js's compareByRecency for
+    // why this exists - `date` alone can't disambiguate two series used
+    // on the same calendar day.
+    const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload(), createdAt: Date.now() }
     await db.transactions.add(transaction)
 
     // Sheet-side duplicate-serial check, moved out of the blocking
@@ -776,7 +810,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     }
 
     await Promise.all([
-      recordSerialUsed(type, currentWarehouseId, serialNo.trim()),
+      recordSerialUsed(type, currentWarehouseId, serialNo.trim(), null, { date: transaction.date, createdAt: transaction.createdAt }),
       rememberCustomer({
         name: customerName.trim(),
         address: customerAddress.trim() || null,
@@ -826,14 +860,16 @@ const SackFormBase = forwardRef(function SackFormBase(
 
     toast.success(`${type} saved — ${serialNo.trim()}`)
 
-    // Same check-before-blanking as handleStepForward - without it,
-    // advancing straight to the next serial after a save shows it as
-    // a blank new entry even when that serial already has real data
-    // (local or historical Sheet), letting the user unknowingly start
-    // overwriting/duplicating it instead of being loaded into
-    // Update/Delete like every other way of reaching an existing
-    // serial does.
-    const next = stepSerial(serialNo.trim(), 1)
+    // Uses suggestNextSerial (date-aware, per the just-recorded save
+    // above) instead of a blind ±1 - see StockFormBase.jsx's matching
+    // change for the full reasoning. Same check-before-blanking as
+    // handleStepForward besides that - without it, advancing to the
+    // next serial after a save shows it as a blank new entry even when
+    // that serial already has real data (local or historical Sheet),
+    // letting the user unknowingly start overwriting/duplicating it
+    // instead of being loaded into Update/Delete like every other way
+    // of reaching an existing serial does.
+    const next = await suggestNextSerial(type, currentWarehouseId)
     const loaded = await checkAndLoadSerial(next)
     if (!loaded && latestRequestedSerial.current === next) resetToBlankEntry(next)
     setIsSaving(false)

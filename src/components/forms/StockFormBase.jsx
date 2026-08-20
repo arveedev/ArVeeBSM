@@ -73,6 +73,7 @@ import {
   findTransactionBySerial,
   recordSerialUsed,
   recalculateSerialCounter,
+  findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
@@ -1407,12 +1408,38 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     if (typedNumber < floorSerialNumber) setShowFloorWarning(true)
   }
 
+  // Below the floor guard, shared by handleStepBack's two paths (a
+  // real prior document found vs. the true edge of history) - factored
+  // out since both need the exact same check.
+  const blockedByFloor = (candidateSerial) => {
+    if (isAdmin || floorSerialNumber == null) return false
+    const candidateNumber = parseInt(candidateSerial.replace(/\D/g, ''), 10)
+    if (Number.isNaN(candidateNumber)) return false
+    if (candidateNumber >= floorSerialNumber) return false
+    toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
+    return true
+  }
+
   const handleStepBack = async () => {
-    const prevSerial = stepSerial(serialNo.trim(), -1)
-    const prevNumber = parseInt(prevSerial.replace(/\D/g, ''), 10)
-    if (!isAdmin && floorSerialNumber != null && !Number.isNaN(prevNumber) && prevNumber < floorSerialNumber) {
-      toast.error(`No ${type} records exist before #${floorSerialNumber} for this warehouse`)
-      return
+    // Walking real document history (findAdjacentTransaction) only
+    // makes sense while an actual existing document is loaded - a
+    // blank in-progress serial has no "adjacent" record to walk from,
+    // so plain ±1 nudging (unchanged) is still the right behavior
+    // there.
+    let prevSerial
+    if (loadedTransaction) {
+      const adjacent = await findAdjacentTransaction(type, currentWarehouseId, serialNo.trim(), activeCategory, -1)
+      if (adjacent) {
+        prevSerial = adjacent.serialNo
+      } else {
+        // True edge of history in this direction - same guessed-serial
+        // floor-warning behavior as before.
+        prevSerial = stepSerial(serialNo.trim(), -1)
+        if (blockedByFloor(prevSerial)) return
+      }
+    } else {
+      prevSerial = stepSerial(serialNo.trim(), -1)
+      if (blockedByFloor(prevSerial)) return
     }
     setSerialNo(prevSerial)
     setNavFlash('back')
@@ -1428,7 +1455,22 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   }
 
   const handleStepForward = async () => {
-    const nextSerial = stepSerial(serialNo.trim(), 1)
+    // Same reasoning as handleStepBack: only walk real history
+    // (findAdjacentTransaction, which can jump straight across a
+    // series boundary to whatever document actually comes next - e.g.
+    // from #2000 in an exhausted booklet to #5751 in the one that
+    // replaced it, even same-day) while an actual document is loaded.
+    // At the true end of history in this direction, fall back to the
+    // correct NEXT-IN-SEQUENCE suggestion (suggestNextSerial) rather
+    // than a blind ±1 guess off whatever's currently displayed - e.g.
+    // stepping forward off #5751 correctly lands on #5752, not #2001.
+    let nextSerial
+    if (loadedTransaction) {
+      const adjacent = await findAdjacentTransaction(type, currentWarehouseId, serialNo.trim(), activeCategory, 1)
+      nextSerial = adjacent ? adjacent.serialNo : await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
+    } else {
+      nextSerial = stepSerial(serialNo.trim(), 1)
+    }
     setSerialNo(nextSerial)
     setNavFlash('forward')
     setTimeout(() => setNavFlash(null), 750)
@@ -1637,6 +1679,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     const transaction = {
       id: crypto.randomUUID(),
       ...buildTransactionPayload(),
+      // Real save-time timestamp, set ONLY here (create) - never
+      // touched by the edit/update path, which preserves whatever this
+      // was first set to. Used purely to order same-date transactions
+      // for serial suggestion/navigation (see serialNumber.js's
+      // compareByRecency) - `date` alone can't tell apart two series
+      // used on the same calendar day.
+      createdAt: Date.now(),
       ...(validExtraAllocations.length > 0 ? { groupSerialNo: serialNo.trim() } : {}),
     }
 
@@ -1663,7 +1712,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // before "saved" appears. The Sheet sync itself already happens
     // entirely separately, in the background, unaffected either way.
     await Promise.all([
-      recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory),
+      recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory, { date: transaction.date, createdAt: transaction.createdAt }),
       applyTransactionToPile(transaction),
       rememberCustomer({
         name: customerName.trim(),
@@ -1752,14 +1801,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
     toast.success(`${type} saved — ${serialNo.trim()}`)
 
-    // Same check-before-blanking as handleStepForward - without it,
-    // advancing straight to the next serial after a save shows it as
-    // a blank new entry even when that serial already has real data
-    // (local or historical Sheet), letting the user unknowingly start
-    // overwriting/duplicating it instead of being loaded into
-    // Update/Delete like every other way of reaching an existing
-    // serial does.
-    const next = stepSerial(serialNo.trim(), 1)
+    // Uses suggestNextSerial (date-aware, per the just-recorded save
+    // above) instead of a blind ±1 off whatever was just typed - a
+    // plain increment would suggest e.g. #2001 after saving #2000, even
+    // when #2000 was the last document of an exhausted booklet and the
+    // CURRENT series actually continues from a completely different
+    // number. Same check-before-blanking as handleStepForward besides
+    // that - without it, advancing to the next serial after a save
+    // shows it as a blank new entry even when that serial already has
+    // real data (local or historical Sheet), letting the user
+    // unknowingly start overwriting/duplicating it instead of being
+    // loaded into Update/Delete like every other way of reaching an
+    // existing serial does.
+    const next = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
     const loaded = await checkAndLoadSerial(next)
     if (!loaded && latestRequestedSerial.current === next) resetToBlankEntry(next)
     setIsSaving(false)

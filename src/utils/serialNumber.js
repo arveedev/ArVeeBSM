@@ -52,6 +52,40 @@ const SERIAL_PATTERN = /^(.*?)(\d+)$/
 const counterKey = (warehouseId, type, cerealCategory) => [warehouseId, type, cerealCategory ?? 'ALL']
 
 /**
+ * Compares two transactions (or transaction-shaped objects with a
+ * `date`, optional `createdAt`, and `serialNo`) by how recently they
+ * were actually USED, not by serial magnitude. Returns positive if `a`
+ * is more recent than `b`, negative if `b` is more recent, 0 if tied.
+ *
+ * Rules, in order:
+ *   1. Later `date` (the document's own date, YYYY-MM-DD string) wins -
+ *      this is what "which series is currently active" really means: a
+ *      booklet started on a later date is the current one, regardless
+ *      of whether its numbers happen to be lower than an older
+ *      booklet's.
+ *   2. Same `date`: later `createdAt` (real save-time, epoch ms) wins -
+ *      resolves same-day series changes (a booklet running out and a
+ *      new one starting later the same day) that `date` alone can't
+ *      distinguish.
+ *   3. `createdAt` missing on either side (pre-fix historical data):
+ *      falls back to comparing the serial's own numeric value - this
+ *      preserves today's existing (imperfect, but familiar) behavior
+ *      for old data, rather than guessing at an order that was never
+ *      recorded.
+ */
+export const compareByRecency = (a, b) => {
+  if (a.date !== b.date) return a.date > b.date ? 1 : -1
+  if (a.createdAt != null && b.createdAt != null && a.createdAt !== b.createdAt) {
+    return a.createdAt > b.createdAt ? 1 : -1
+  }
+  const aParsed = parseSerial(a.serialNo)
+  const bParsed = parseSerial(b.serialNo)
+  const aNum = aParsed?.number ?? -Infinity
+  const bNum = bParsed?.number ?? -Infinity
+  return aNum - bNum
+}
+
+/**
  * Split a serial into its non-numeric prefix and trailing numeric run.
  * "B11766626" -> { prefix: "B", number: 11766626, digits: 8 }
  * "1729564"   -> { prefix: "", number: 1729564, digits: 7 }
@@ -85,19 +119,28 @@ export const stepSerial = (serial, delta) => {
 /**
  * Records that a serial was just used for this (type, warehouse[,
  * category]) - called right after a transaction is successfully saved.
- * Updates the fast serialCounters tracker only if this serial's number
- * is higher than what's currently tracked (never moves the counter
- * backwards, e.g. if an old, lower-numbered document gets edited/
- * re-saved).
+ * Always overwrites the tracker with THIS serial, regardless of
+ * whether its number is higher or lower than what was previously
+ * tracked - the just-saved transaction is, by definition, the most
+ * recently used one for this pool. (Previously this only updated the
+ * tracker when the new number was numerically higher, which is exactly
+ * why re-opening the app kept suggesting an old, higher-numbered
+ * booklet's next serial instead of the lower-numbered booklet actually
+ * in current use.)
+ *
+ * `date`/`createdAt` (from the saved transaction itself, when the
+ * caller has them - both optional) are stored alongside so
+ * suggestNextSerial can compare this tracked entry against a live scan
+ * using the same chronological-recency rule (compareByRecency) instead
+ * of blindly trusting whichever call happened most recently, which
+ * matters for cross-device correctness (a different device's more
+ * recent save, synced in later via Dexie Cloud, should still win).
  */
-export const recordSerialUsed = async (type, warehouseId, serialNo, cerealCategory = null) => {
+export const recordSerialUsed = async (type, warehouseId, serialNo, cerealCategory = null, meta = {}) => {
   const parsed = parseSerial(serialNo)
   if (!parsed || !warehouseId) return
 
   const key = counterKey(warehouseId, type, cerealCategory)
-  const existing = await db.serialCounterCache.get(key)
-  if (existing && existing.number >= parsed.number) return
-
   await db.serialCounterCache.put({
     warehouseId,
     type,
@@ -105,6 +148,8 @@ export const recordSerialUsed = async (type, warehouseId, serialNo, cerealCatego
     prefix: parsed.prefix,
     digits: parsed.digits,
     number: parsed.number,
+    date: meta.date ?? null,
+    createdAt: meta.createdAt ?? null,
     updatedAt: new Date().toISOString(),
   })
 }
@@ -131,11 +176,16 @@ export const recalculateSerialCounter = async (type, warehouseId, cerealCategory
     .and((tx) => tx.warehouseId === warehouseId && (cerealCategory == null || tx.cerealCategory === cerealCategory))
     .toArray()
 
+  // Keeps the most RECENT remaining transaction (by compareByRecency -
+  // date, then createdAt, then numeric magnitude as the historical-data
+  // fallback), not the numerically highest, so the tracker still points
+  // at the actual current series after a deletion rather than jumping
+  // back to whichever booklet happens to have the biggest numbers.
   let best = null
   for (const tx of remaining) {
     const parsed = parseSerial(tx.serialNo)
     if (!parsed) continue
-    if (!best || parsed.number > best.number) best = parsed
+    if (!best || compareByRecency(tx, best.tx) > 0) best = { ...parsed, tx }
   }
 
   const key = counterKey(warehouseId, type, cerealCategory)
@@ -151,16 +201,29 @@ export const recalculateSerialCounter = async (type, warehouseId, cerealCategory
     prefix: best.prefix,
     digits: best.digits,
     number: best.number,
+    date: best.tx.date ?? null,
+    createdAt: best.tx.createdAt ?? null,
     updatedAt: new Date().toISOString(),
   })
 }
 
 /**
  * Suggests a starting serial for a new document of this (type,
- * warehouse[, category]): one higher than the highest known serial in
- * that pool. Falls back to `fallback` (default "1") if no prior
- * documents exist for this pool — every warehouse's series (and, for
- * WSR/WSI, every cereal category within it) starts fresh from 1.
+ * warehouse[, category]): one higher than the serial of whichever
+ * transaction in that pool was actually used most RECENTLY - by
+ * compareByRecency (document date, then real save time, then numeric
+ * magnitude only as the fallback for historical data predating this)
+ * - not the numerically highest serial ever recorded. Falls back to
+ * `fallback` (default "1") if no prior documents exist for this pool —
+ * every warehouse's series (and, for WSR/WSI, every cereal category
+ * within it) starts fresh from 1.
+ *
+ * This is what makes the suggestion follow whichever booklet is
+ * actually in current use: a booklet that started on a later date (or
+ * later the same day) always wins here, even if an older booklet's
+ * numbers happen to be numerically higher - previously, an older but
+ * numerically-higher booklet kept winning forever, forcing a manual
+ * retype every session.
  *
  * Checks the fast serialCounters tracker first (an explicit record kept
  * up to date via recordSerialUsed on every save - see the file header
@@ -168,9 +231,10 @@ export const recalculateSerialCounter = async (type, warehouseId, cerealCategory
  * device's local transaction history alone isn't a reliable source if
  * a different device was used for the same warehouse, or if local
  * storage was ever cleared). Still reconciles against a full scan of
- * local transaction history as a safety net, taking whichever of
- * the two is actually higher - so the tracker can never cause the
- * suggestion to go backwards even if it's ever missing or stale.
+ * local transaction history as a safety net, taking whichever of the
+ * two is actually more recent by the same rule - so the tracker can
+ * never cause the suggestion to regress even if it's ever missing or
+ * stale.
  */
 export const suggestNextSerial = async (type, warehouseId, fallback = '1', cerealCategory = null) => {
   if (!warehouseId) return fallback
@@ -189,11 +253,13 @@ export const suggestNextSerial = async (type, warehouseId, fallback = '1', cerea
     .and((tx) => cerealCategory == null || tx.cerealCategory === cerealCategory)
     .toArray()
 
-  let best = tracked ? { prefix: tracked.prefix, number: tracked.number, digits: tracked.digits } : null
+  let best = tracked
+    ? { prefix: tracked.prefix, number: tracked.number, digits: tracked.digits, date: tracked.date, createdAt: tracked.createdAt, serialNo: formatSerial(tracked) }
+    : null
   for (const tx of existing) {
     const parsed = parseSerial(tx.serialNo)
     if (!parsed) continue
-    if (!best || parsed.number > best.number) best = parsed
+    if (!best || compareByRecency(tx, best) > 0) best = { ...parsed, date: tx.date, createdAt: tx.createdAt, serialNo: tx.serialNo }
   }
 
   if (!best) return fallback
@@ -256,4 +322,43 @@ export const findTransactionBySerial = async (type, warehouseId, serialNo, cerea
     .and((tx) => tx.warehouseId === warehouseId && tx.serialNo === serialNo
       && (cerealCategory == null || tx.cerealCategory === cerealCategory))
     .first()
+}
+
+/**
+ * Finds the real, actually-existing transaction immediately after
+ * (`direction: 1`) or before (`direction: -1`) the given serial in this
+ * pool's true chronological usage order (compareByRecency), for paging
+ * through real document history with the Next/Previous steppers.
+ *
+ * This replaces guessing `serialNo ± 1` and looking for an exact match,
+ * which dead-ends the instant a series boundary is crossed - e.g.
+ * stepping past #2000 (the last document of an exhausted booklet)
+ * previously guessed a nonexistent #2001 and gave up, instead of
+ * landing on the real next document (#5751 in a booklet that started
+ * later that same day). Walking the actual sorted sequence instead
+ * means it doesn't matter whether the next real document's number is
+ * higher, lower, or from a completely different range - only that it
+ * comes right after this one in real usage order.
+ *
+ * Returns `null` if `serialNo` itself isn't found, or if it's already
+ * at the true edge of history in the requested direction - callers
+ * should fall back to their normal blank-new-entry / floor-warning
+ * behavior in that case, exactly as they already do today.
+ */
+export const findAdjacentTransaction = async (type, warehouseId, serialNo, cerealCategory = null, direction = 1) => {
+  const current = await findTransactionBySerial(type, warehouseId, serialNo, cerealCategory)
+  if (!current) return null
+
+  const pool = await db.transactions
+    .where('[type+warehouseId+serialNo]')
+    .between([type, warehouseId, Dexie.minKey], [type, warehouseId, Dexie.maxKey])
+    .and((tx) => cerealCategory == null || tx.cerealCategory === cerealCategory)
+    .toArray()
+
+  const sorted = pool.slice().sort(compareByRecency)
+  const index = sorted.findIndex((tx) => tx.id === current.id)
+  if (index === -1) return null
+
+  const adjacent = sorted[index + direction]
+  return adjacent ?? null
 }
