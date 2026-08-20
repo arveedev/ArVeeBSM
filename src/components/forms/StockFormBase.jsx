@@ -400,15 +400,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     })
   }, [isMilling, isTestMilling]) ?? []
 
-  const takenTrialNumbers = useLiveQuery(async () => {
-    if (!isTestMilling || !tmoNumber.trim()) return []
-    const existing = await db.transactions
-      .where('tmoNumber').equals(tmoNumber.trim())
-      .and((t) => t.status === 'Active' && t.type === type && (!loadedTransaction || t.id !== loadedTransaction.id))
-      .toArray()
-    return [...new Set(existing.map((t) => t.trialNumber).filter(Boolean))]
-  }, [isTestMilling, tmoNumber, type, loadedTransaction]) ?? []
-
   const dateRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
@@ -2531,6 +2522,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 </div>
                 <div>
                   <label className={labelClass}>Trial</label>
+                  {/* Every trial number is always selectable, never
+                      disabled/marked "used" - a Trial can legitimately
+                      span more than one transaction under the same TMO
+                      (per variety, one combined receipt for all three
+                      trials, or any mix of the above), so nothing here
+                      should ever block reusing a number just because
+                      another transaction already used it. */}
                   <select
                     value={trialNumber}
                     onChange={(e) => setTrialNumber(e.target.value)}
@@ -2538,9 +2536,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   >
                     <option value="">Select…</option>
                     {['1', '2', '3'].map((n) => (
-                      <option key={n} value={n} disabled={takenTrialNumbers.includes(n) && n !== trialNumber}>
-                        Trial {n}{takenTrialNumbers.includes(n) && n !== trialNumber ? ' (used)' : ''}
-                      </option>
+                      <option key={n} value={n}>Trial {n}</option>
                     ))}
                   </select>
                 </div>

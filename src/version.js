@@ -288,5 +288,18 @@
 //            is automatically correct with no separate translation
 //            needed anywhere else. Manually typing a known nickname
 //            directly into the Customer Name field also resolves it.
-//            Managed from the existing Customers admin panel (current)
-export const APP_VERSION = '1.9-10'
+//            Managed from the existing Customers admin panel
+//   1.9-11 - Trial number selection on Test Milling/Test Re-Milling
+//            transactions (WSR/WSI/ESR) no longer disables/marks
+//            "used" a number already selected on another transaction
+//            under the same TMO. Per explicit request: a single trial
+//            number legitimately spans more than one transaction (one
+//            combined receipt covering all three trials, one per
+//            trial, or - especially on By Products - one separate
+//            transaction per variety/sack type all under the same
+//            trial) - removed the takenTrialNumbers restriction
+//            entirely rather than trying to guess which reuse patterns
+//            should be allowed. Batch numbers (Milling/Re-Milling) were
+//            already a free-typed field with no such restriction
+//            (current)
+export const APP_VERSION = '1.9-11'
