@@ -16483,3 +16483,66 @@ plan file for the full walkthrough.
 `npm run build` passes. Not exercised against the user's live data in
 this session (no automated test suite touches this file) - the
 suggested manual verification steps are in the plan.
+
+## Session: 2026-08-17 (round 29) - fixed a real navigation regression from round 28: forward stepping could dead-end on data that genuinely existed
+
+User tested round 28's date-aware navigation and found forward stepping
+could get "stuck" - refusing to advance even though real data existed
+beyond the current serial. Also reported (same root cause, described
+differently) August transactions they'd fully encoded appearing to have
+"gone missing."
+
+Root cause, confirmed by reading the code: `findAdjacentTransaction`
+(new in round 28) only queries this DEVICE's local `db.transactions` -
+it has no way to know about a transaction that exists on the Google
+Sheet (or another device) but hasn't been locally preloaded yet. The
+OLD forward-stepping code, when a local guess-and-lookup came up empty,
+still fell through to `checkAndLoadSerial`'s existing Sheet-lookup
+(`fetchTransactionBySerial`), which would find and import genuinely
+real historical data. Round 28's `handleStepForward` skipped that
+entirely - when `findAdjacentTransaction` found nothing LOCALLY, it
+jumped straight to `suggestNextSerial` (a "create new" suggestion) and
+called `resetToBlankEntry`, wiping the form to a blank new-entry view.
+Nothing was ever deleted (`resetToBlankEntry` is pure UI state -
+verified it contains zero `db.transactions.delete` calls, unlike every
+real delete path in this file), but a real, fully-encoded transaction
+that just hadn't synced locally yet appeared to have vanished.
+
+Backward stepping was unaffected - its own "nothing found locally"
+fallback already preserved the numeric-guess + Sheet-lookup path,
+which is exactly why the user reported "going back seems to be fine."
+
+Fixed: `handleStepForward` (all three forms) now falls back to the
+plain numeric-neighbor guess (not straight to `suggestNextSerial`) when
+`findAdjacentTransaction` finds nothing locally, letting the existing
+`checkAndLoadSerial` Sheet lookup run exactly as it always did. Only
+if THAT also comes up empty - genuinely nothing next, locally or on
+the Sheet - does it fall through to `suggestNextSerial` for a real
+next-in-sequence suggestion.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`,
+`src/components/forms/SackFormBase.jsx`, `src/components/forms/WTSForm.jsx`.
+
+`npm run build` passes. Not verified against the user's actual data in
+this session - they were advised to check the Reports page (a
+completely separate, date-based query path, unaffected by this bug) to
+confirm their August data is intact before doing anything else.
+
+## Session: 2026-08-17 (round 29, continued) - FILLERS transaction type: MC no longer wrongly required
+
+While mid-way through a separate request, also fixed a real
+inconsistency in `StockFormBase.jsx`: the Save button's enable/disable
+logic (`canSave`) already correctly exempted FILLERS transactions from
+needing Moisture Content (and a Pile ID), but the actual submit-time
+`validateForm` function never learned about `isFillersType` at all - so
+a FILLERS transaction with the Save button correctly enabled could
+still get rejected the instant it was clicked, with "Moisture Content
+(MC %) is required". Added the missing `isFillersType` exemption to
+both the Pile ID and Moisture Content checks in `validateForm`, and to
+the matching amber "required" border/placeholder hints on both the
+main MC field and the extra-pile-allocation MC field, so the UI no
+longer visually implies MC is required for FILLERS either.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`.
