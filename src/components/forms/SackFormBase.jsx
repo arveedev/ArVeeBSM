@@ -155,30 +155,15 @@ const SackFormBase = forwardRef(function SackFormBase(
 
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
 
-  // Needed here, ahead of takenTrialNumbers below (the earliest
+  // Needed here, ahead of linkedMillingOrder below (the earliest
   // consumer in this file) - a useLiveQuery callback runs IMMEDIATELY
   // on mount, so referencing isMilling/isTestMilling before their
   // declaration point would throw a temporal-dead-zone
-  // ReferenceError on every single render. (An earlier fix moved this
-  // ahead of linkedMillingOrder only, missing that takenTrialNumbers
-  // sits even earlier in the file.)
+  // ReferenceError on every single render.
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
   const selectedTransactionType = (transactionTypes ?? []).find((t) => t.transactionTypeId === transactionTypeId)
   const isMilling = isMillingTypeName(selectedTransactionType?.name)
   const isTestMilling = isTestMillingTypeName(selectedTransactionType?.name)
-
-  // Which trial numbers (1/2/3) already exist for this TMO, across
-  // EVERY warehouse, tracked independently per document type (ESI vs
-  // ESR each need their own complete set of 3) - same approach as the
-  // stock side.
-  const takenTrialNumbers = useLiveQuery(async () => {
-    if (!isTestMilling || !tmoNumber.trim()) return []
-    const existing = await db.transactions
-      .where('tmoNumber').equals(tmoNumber.trim())
-      .and((t) => t.status === 'Active' && t.type === type && (!loadedTransaction || t.id !== loadedTransaction.id))
-      .toArray()
-    return [...new Set(existing.map((t) => t.trialNumber).filter(Boolean))]
-  }, [isTestMilling, tmoNumber, type, loadedTransaction]) ?? []
 
   // Available MO/TMO numbers from the synced reference data, with
   // fulfillment computed - same logic as the stock side, just matched
@@ -1311,6 +1296,13 @@ const SackFormBase = forwardRef(function SackFormBase(
                 {type === 'ESR' && (
                   <div>
                     <label className={labelClass}>Trial</label>
+                    {/* Every trial number is always selectable, never
+                        disabled/marked "used" - a By Products TMO trial
+                        very commonly spans MULTIPLE separate
+                        transactions under the same trial number (one
+                        per variety/sack type), so nothing here should
+                        ever block reusing a number just because another
+                        transaction already used it. */}
                     <select
                       value={trialNumber}
                       onChange={(e) => setTrialNumber(e.target.value)}
@@ -1318,9 +1310,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                     >
                       <option value="">Select…</option>
                       {['1', '2', '3'].map((n) => (
-                        <option key={n} value={n} disabled={takenTrialNumbers.includes(n) && n !== trialNumber}>
-                          Trial {n}{takenTrialNumbers.includes(n) && n !== trialNumber ? ' (used)' : ''}
-                        </option>
+                        <option key={n} value={n}>Trial {n}</option>
                       ))}
                     </select>
                   </div>

@@ -16654,3 +16654,36 @@ appear after this deploys, that's the first thing to check.
 
 `npm run build` passes. Not exercised against live AI/SIA sync data or
 Dexie Cloud sync in this session.
+
+## Session: 2026-08-17 (round 32) - trial number reuse no longer restricted across transactions
+
+User explicitly requested: batch/trial numbers on Milling Operations
+(Milling/Test Milling/Remilling/Test Re-Milling) transactions must be
+freely reusable across every variety type - a rice receipt can be one
+combined transaction for all three trials or one per trial, palay the
+same, and By Products should never be limited at all since a single
+trial commonly spans one separate transaction per by-product
+variety/sack type.
+
+Found the actual restriction: both `StockFormBase.jsx` (WSR/WSI) and
+`SackFormBase.jsx` (ESR) computed a `takenTrialNumbers` set - every
+Active transaction of the same type sharing the same TMO number, across
+every warehouse and every variety/sack type - and disabled/marked
+"(used)" any trial number dropdown option already in that set. This
+directly blocked exactly the reuse patterns the user described: once
+any transaction used "Trial 1," no other transaction under the same TMO
+could also use "Trial 1," regardless of variety.
+
+Removed the restriction entirely rather than trying to scope it
+narrowly (e.g. per-variety) - the user's description covers reuse
+patterns that vary too much (single combined transaction vs. per-trial
+vs. per-variety-per-trial) for any one narrower rule to correctly allow
+every legitimate case without also blocking some of them. Every trial
+number is now always selectable on both forms; `takenTrialNumbers`
+removed as now-fully-unused. Batch numbers (Milling/Re-Milling) already
+had no such restriction - a free-typed field, unaffected.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`, `src/components/forms/SackFormBase.jsx`.
+
+`npm run build` passes.

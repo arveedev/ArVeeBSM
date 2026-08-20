@@ -547,7 +547,21 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
-### OPEN (2026-08-17 session, round 37) - batch/trial number on Milling reports + admin-settable miller nicknames - NOT YET COMMITTED/PUSHED
+### OPEN (2026-08-17 session, round 38) - trial number reuse no longer restricted - NOT YET COMMITTED/PUSHED
+
+User explicitly wants batch/trial numbers freely reusable across every
+variety on Milling Operations transactions (one combined receipt for
+all trials, one per trial, or - especially By Products - one separate
+transaction per variety/sack type all under the same trial). Found and
+removed the actual restriction: `takenTrialNumbers` in both
+`StockFormBase.jsx` and `SackFormBase.jsx` disabled/marked "(used)" any
+trial number already used by ANY other transaction under the same TMO,
+across every warehouse/variety. Removed entirely (not narrowed) since
+the described reuse patterns vary too much for one narrower rule to
+allow every legitimate case. Batch numbers were already unrestricted
+(free-typed field).
+
+### OPEN (2026-08-17 session, round 37) - batch/trial number on Milling reports + admin-settable miller nicknames - PUSHED
 
 Two features: (1) Milling/Test Milling/Remilling/Test Re-Milling
 transactions now show batch/trial number beside the customer name on
