@@ -16546,3 +16546,49 @@ longer visually implies MC is required for FILLERS either.
 
 ### Files touched
 `src/components/forms/StockFormBase.jsx`.
+
+## Session: 2026-08-17 (round 30) - CRITICAL: found the actual cause of reappearing duplicate transactions with blank Pile ID/MC/MTS
+
+User reported duplicates were back after round 29's navigation fix - a
+transaction (e.g. WSR #11760156) showing TWICE in Reports, one copy
+with the real, fully-encoded data (Pile ID, MC%, MTS Sack, Gross
+Kilos) and one copy with all of those blank, and the edit form loading
+the blank copy (Pile ID showing "Select pile..." for a transaction
+that clearly belongs to a real pile per its own BIN card history).
+
+Root cause, confirmed by reading the code: `checkAndLoadSerial`'s local
+lookup (`findTransactionBySerial`) is scoped by `cerealCategory` for
+WSR/WSI. If a record's own `cerealCategory` field is ever mismatched or
+missing - entirely plausible given this exact class of data-hygiene
+issue has recurred multiple times before in this codebase (see the
+extensive existing migration history in `transactionPreload.js`) - it
+becomes permanently invisible to every category-scoped lookup. That's
+a false "not found locally," which sent `checkAndLoadSerial` straight
+into its Sheet-import fallback - creating a SECOND local record from
+the Sheet row. Since the Sheet's backup schema has no Pile ID, MC, or
+MTS Sack Type columns at all (confirmed against `createBackupSheets`'
+header list), every such duplicate arrives permanently missing exactly
+those fields - matching precisely what the user saw. `findAdjacentTransaction`
+had the identical vulnerability on its own "current" lookup, which is
+also very plausibly why navigation got stuck in the first place (an
+already-mismatched loaded record made it unable to find itself at all).
+
+Fixed both: `checkAndLoadSerial` (StockFormBase.jsx) and
+`findAdjacentTransaction` (serialNumber.js) now fall back to an
+uncategorized lookup before ever concluding "not found locally," and
+self-heal the mismatched `cerealCategory` in place the moment they find
+it - closing the actual hole that let this keep happening. Also bumped
+`transactionPreload.js`'s existing dedup-merge migration flag (v6 ->
+v7) so every device re-runs the same already-proven field-level merge
+(favors the non-Sheet-imported record, merges in any field the survivor
+was missing, deletes the rest) to clean up duplicates already created
+by this bug before the fix landed.
+
+### Files touched
+`src/components/forms/StockFormBase.jsx`, `src/utils/serialNumber.js`,
+`src/services/transactionPreload.js`.
+
+`npm run build` passes. Not verified against the user's actual data in
+this session - the dedup migration will run automatically on their next
+load; they should re-check the Reports page and the previously-blank
+edit form afterward.
