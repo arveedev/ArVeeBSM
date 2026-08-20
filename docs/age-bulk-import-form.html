@@ -31,15 +31,18 @@
 <body>
   <h3>Bulk Import Latest Known Ages</h3>
   <p class="hint">
-    One warehouse+variety+age per line, comma-separated:<br>
-    <code>Warehouse, Variety, Age in months</code><br>
+    One warehouse+variety+age(+bags) per line, comma-separated:<br>
+    <code>Warehouse, Variety, Age in months, Net Bags (optional)</code><br>
     Example:<br>
-    <code>BSI B, WD1, 2.5</code><br>
-    <code>TAB GID, PDm, 8</code>
+    <code>BSI B, WD1, 2.5, 500</code><br>
+    <code>TAB GID, PDm, 8</code> (bags omitted is fine)<br>
+    This same data feeds the Daily Inventory spreadsheet's starting
+    balances too, via Config!B6 there - include Net Bags here whenever
+    you have it, rather than entering it again on the other spreadsheet.
   </p>
 
-  <label for="bulkInput">Paste QA's current known ages</label>
-  <textarea id="bulkInput" placeholder="BSI B, WD1, 2.5&#10;TAB GID, PDm, 8"></textarea>
+  <label for="bulkInput">Paste QA's current known ages (and bag counts, if known)</label>
+  <textarea id="bulkInput" placeholder="BSI B, WD1, 2.5, 500&#10;TAB GID, PDm, 8"></textarea>
 
   <button id="submitBtn" onclick="submitBulk()">Import All</button>
   <div id="status"></div>
@@ -52,7 +55,7 @@
         .filter(Boolean)
         .map((line) => {
           const parts = line.split(',').map((p) => p.trim());
-          return { warehouse: parts[0] || '', variety: parts[1] || '', ageMonths: parts[2] || '' };
+          return { warehouse: parts[0] || '', variety: parts[1] || '', ageMonths: parts[2] || '', netBags: parts[3] || '' };
         });
     }
 

@@ -127,11 +127,11 @@ function initializeSetupSheet() {
 
   const qaSheet = ss.getSheetByName(QA_SUBMISSIONS_SHEET_NAME) || ss.insertSheet(QA_SUBMISSIONS_SHEET_NAME);
   if (qaSheet.getLastRow() === 0) {
-    qaSheet.getRange(1, 1, 1, 5).setValues([["Warehouse", "Variety", "Submitted Age (months)", "Submission Date", "Submitted By"]])
+    qaSheet.getRange(1, 1, 1, 6).setValues([["Warehouse", "Variety", "Age (months)", "Net Bags (optional)", "Submission Date", "Submitted By"]])
       .setFontWeight("bold").setBackground("#cfe2f3");
   }
 
-  SpreadsheetApp.getUi().alert('Setup ready. Fill in every variety your warehouses use under SETUP (Category is now a dropdown), then use "Bulk Import Latest Known Ages" once, and "Submit Monthly Ages" each month after.');
+  SpreadsheetApp.getUi().alert('Setup ready. Fill in every variety your warehouses use under SETUP (Category is now a dropdown), then use "Bulk Import Latest Known Ages" once, and "Submit Monthly Ages" each month after. This spreadsheet is now the SHARED source for variety mapping and QA stock counts - the Daily Inventory spreadsheet reads both directly from here via Config!B6, nothing needs to be re-entered there.');
 }
 
 /** Returns { varietyUpper: "rice"|"palay" } from the SETUP sheet. */
@@ -193,13 +193,13 @@ function showBulkAgeImportForm() {
  * corrections within the same month. Shared by the single-row form
  * (recordAgeSubmission) and the bulk seed import (recordAgeSubmissionsBulk).
  */
-function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, now, submittedBy) {
+function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, now, submittedBy) {
   const currentMonthKey = Utilities.formatDate(now, "GMT+8", "yyyy-MM");
   let targetRow = -1;
   for (let i = 1; i < values.length; i++) {
     const rowWh = String(values[i][0] || "").trim();
     const rowVar = String(values[i][1] || "").trim();
-    const rowDate = values[i][3] instanceof Date ? values[i][3] : new Date(values[i][3]);
+    const rowDate = values[i][4] instanceof Date ? values[i][4] : new Date(values[i][4]);
     const rowMonthKey = isNaN(rowDate.getTime()) ? "" : Utilities.formatDate(rowDate, "GMT+8", "yyyy-MM");
     if (rowWh === warehouse && rowVar === variety && rowMonthKey === currentMonthKey) {
       targetRow = i + 1;
@@ -207,9 +207,11 @@ function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, no
     }
   }
 
-  const rowData = [warehouse, variety, ageMonths, now, submittedBy];
+  // netBags is optional - a monthly age correction doesn't always come
+  // with a fresh bag recount, only the initial/periodic stock count does.
+  const rowData = [warehouse, variety, ageMonths, netBags === null || isNaN(netBags) ? "" : netBags, now, submittedBy];
   if (targetRow > 0) {
-    qaSheet.getRange(targetRow, 1, 1, 5).setValues([rowData]);
+    qaSheet.getRange(targetRow, 1, 1, 6).setValues([rowData]);
     values[targetRow - 1] = rowData; // keep the in-memory snapshot correct for subsequent calls in the same bulk batch
   } else {
     qaSheet.appendRow(rowData);
@@ -226,12 +228,13 @@ function recordAgeSubmission(payload) {
     const warehouse = String(payload.warehouse || "").trim();
     const variety = String(payload.variety || "").trim();
     const ageMonths = parseFloat(payload.ageMonths);
+    const netBags = payload.netBags === undefined || payload.netBags === "" ? null : parseFloat(payload.netBags);
     if (!warehouse || !variety || isNaN(ageMonths)) {
       return { status: "error", message: "Warehouse, Variety, and a numeric Age are required." };
     }
 
     const values = qaSheet.getDataRange().getValues();
-    upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, new Date(), Session.getEffectiveUser().getEmail() || "unknown");
+    upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, new Date(), Session.getEffectiveUser().getEmail() || "unknown");
     return { status: "success" };
   } catch (e) {
     return { status: "error", message: e.toString() };
@@ -264,11 +267,12 @@ function recordAgeSubmissionsBulk(rows) {
       const warehouse = String(r.warehouse || "").trim();
       const variety = String(r.variety || "").trim();
       const ageMonths = parseFloat(r.ageMonths);
+      const netBags = r.netBags === undefined || r.netBags === "" ? null : parseFloat(r.netBags);
       if (!warehouse || !variety || isNaN(ageMonths)) {
         skipped.push(`Row ${idx + 1}: "${r.warehouse}" / "${r.variety}" / "${r.ageMonths}"`);
         return;
       }
-      upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, now, submittedBy);
+      upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, now, submittedBy);
       imported++;
     });
 
@@ -280,7 +284,9 @@ function recordAgeSubmissionsBulk(rows) {
 
 /**
  * Returns, per warehouse|variety key, the MOST RECENT submission on or
- * before `asOfDate` — { key: { ageMonths, submissionDate } }.
+ * before `asOfDate` — { key: { ageMonths, netBags, submissionDate } }.
+ * netBags is null when that submission didn't include a bag count (a
+ * monthly age-only correction, not a full recount).
  */
 function readLatestSubmissions_(ss, asOfDate) {
   const qaSheet = ss.getSheetByName(QA_SUBMISSIONS_SHEET_NAME);
@@ -289,14 +295,15 @@ function readLatestSubmissions_(ss, asOfDate) {
 
   const values = qaSheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
-    const [wh, variety, ageMonths, submissionDateRaw] = values[i];
+    const [wh, variety, ageMonths, netBagsRaw, submissionDateRaw] = values[i];
     if (!wh || !variety) continue;
     const submissionDate = submissionDateRaw instanceof Date ? submissionDateRaw : new Date(submissionDateRaw);
     if (isNaN(submissionDate.getTime()) || submissionDate > asOfDate) continue;
 
     const key = `${String(wh).trim()}|${String(variety).trim().toLowerCase()}`;
     if (!latest[key] || submissionDate > latest[key].submissionDate) {
-      latest[key] = { ageMonths: parseFloat(ageMonths) || 0, submissionDate };
+      const netBags = netBagsRaw === "" || netBagsRaw === undefined || netBagsRaw === null ? null : Number(netBagsRaw);
+      latest[key] = { ageMonths: parseFloat(ageMonths) || 0, netBags: isNaN(netBags) ? null : netBags, submissionDate };
     }
   }
   return latest;

@@ -28,7 +28,7 @@
 </head>
 <body>
   <h3>Submit Monthly Stock Age</h3>
-  <p class="hint">Enter the physically observed age (in months) for one warehouse + variety. This becomes the anchor the Age Monitoring report projects from until your next submission.</p>
+  <p class="hint">Enter the physically observed age (in months) for one warehouse + variety. This becomes the anchor the Age Monitoring report projects from until your next submission. This same data is also what the Daily Inventory spreadsheet uses for its starting balances - no need to enter it anywhere else.</p>
 
   <label for="warehouse">Warehouse</label>
   <input type="text" id="warehouse" placeholder="e.g. BSI B" />
@@ -39,6 +39,9 @@
   <label for="ageMonths">Observed Age (months, decimals OK)</label>
   <input type="number" id="ageMonths" step="0.1" min="0" placeholder="e.g. 2.5" />
 
+  <label for="netBags">Net Bags (optional - include if you also recounted the pile)</label>
+  <input type="number" id="netBags" step="0.01" min="0" placeholder="e.g. 500" />
+
   <button id="submitBtn" onclick="submitForm()">Submit</button>
   <div id="status"></div>
 
@@ -47,11 +50,12 @@
       const warehouse = document.getElementById('warehouse').value.trim();
       const variety = document.getElementById('variety').value.trim();
       const ageMonths = document.getElementById('ageMonths').value;
+      const netBags = document.getElementById('netBags').value;
       const status = document.getElementById('status');
       const btn = document.getElementById('submitBtn');
 
       if (!warehouse || !variety || ageMonths === '') {
-        status.textContent = 'All fields are required.';
+        status.textContent = 'Warehouse, Variety, and Age are required. Net Bags is optional.';
         status.className = 'error';
         return;
       }
@@ -69,6 +73,7 @@
             document.getElementById('warehouse').value = '';
             document.getElementById('variety').value = '';
             document.getElementById('ageMonths').value = '';
+            document.getElementById('netBags').value = '';
           } else {
             status.textContent = result.message || 'Something went wrong.';
             status.className = 'error';
@@ -79,7 +84,7 @@
           status.textContent = 'Error: ' + err.message;
           status.className = 'error';
         })
-        .recordAgeSubmission({ warehouse, variety, ageMonths });
+        .recordAgeSubmission({ warehouse, variety, ageMonths, netBags });
     }
   </script>
 </body>

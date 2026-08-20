@@ -16940,3 +16940,51 @@ Two user questions in one message:
 
 Both scripts re-verified with `node --check`. Not yet deployed/confirmed
 by the user.
+
+## Round 40: Unified QA data - one shared source instead of two SETUP sheets
+
+User pushed further on Round 37's local-SETUP work: "the daily inventory
+and age monitoring are sharing the same data regarding age, variety,
+category, warehouse, net bags... instead of encoding twice, they should
+share." Confirmed mid-message that Category and Variety should be shared
+too, not just the starting-balance numbers.
+
+Restructured so there is exactly ONE place QA data is entered - the Age
+Monitoring spreadsheet:
+
+- **Age Monitoring's QA_AGE_SUBMISSIONS** gained a "Net Bags (optional)"
+  column (between Age and Submission Date), so a single QA submission can
+  now serve BOTH purposes: an age anchor for Age Monitoring's own report,
+  AND a starting-balance source for Daily Inventory. `upsertAgeSubmission_`,
+  `recordAgeSubmission`, `recordAgeSubmissionsBulk`, `readLatestSubmissions_`
+  all updated for the new column and the optional-bags case (a monthly
+  age-only correction doesn't need a fresh recount). Both HTML forms
+  (single-row and bulk) gained a Net Bags field/CSV column.
+
+- **Daily Inventory lost its local SETUP sheet entirely** -
+  `initializeSetupSheet`, `readVarietyCategoryMap_`, `readStartingBalances_`,
+  and the SETUP menu item are all gone. Replaced with `readSharedQaData_`,
+  which opens the Age Monitoring spreadsheet (new required `Config!B6`)
+  and reads its SETUP (variety map) and QA_AGE_SUBMISSIONS sheets
+  directly - the same cross-spreadsheet pattern already used for the
+  production AI/DATA_ENTRY reads. Only QA_AGE_SUBMISSIONS rows that (a)
+  include a Net Bags value and (b) are dated on/before Daily Inventory's
+  own Config!B2 start date qualify as a starting balance - a
+  future-dated submission would double-count against receipts already
+  in DATA_ENTRY for that period. Each qualifying row's age is projected
+  forward from its own submission date to Daily Inventory's start date
+  before being bucketed, same elapsed-time logic Age Monitoring itself
+  uses. No qualifying submission for a warehouse+variety just means a
+  starting balance of 0 - nothing fabricated.
+
+- docs/sheets-reports-setup.md rewritten: Age Monitoring must now be set
+  up FIRST (Daily Inventory depends on it), with the shared-data model
+  explained in a new dedicated section.
+
+### Files touched
+`docs/daily-inventory-report-script.js`, `docs/age-monitoring-report-script.js`,
+`docs/age-submission-form.html`, `docs/age-bulk-import-form.html`,
+`docs/sheets-reports-setup.md`.
+
+Both scripts re-verified with `node --check`. Still not deployed/confirmed
+against real data.

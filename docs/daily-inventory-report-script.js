@@ -20,13 +20,18 @@
  *           firings cost almost nothing against the daily quota. Leave
  *           both blank to run around the clock instead. Manual "Update
  *           Now" clicks always work regardless of this window.
- * 3. Run "⛳ Initialize Setup Sheet" once - creates this spreadsheet's
- *    OWN local SETUP sheet (variety->category map + optional one-time
- *    starting balances). Fill in every variety your warehouses use
- *    before the first sync. This SETUP sheet is fully self-contained -
- *    it does NOT read from the production spreadsheet's
- *    SETUP_AGE_MONITORING sheet at all (that dependency has been removed
- *    entirely; each new report spreadsheet now owns its own config).
+ *      B6 = URL of the Age Monitoring spreadsheet (the second new
+ *           spreadsheet from docs/age-monitoring-report-script.js).
+ *           REQUIRED - this script has NO local SETUP sheet of its own.
+ *           Variety->category mapping AND one-time starting balances
+ *           both come from QA, and QA only enters that data once, in the
+ *           Age Monitoring spreadsheet's own SETUP + QA_AGE_SUBMISSIONS
+ *           sheets - this script reads both of those directly instead of
+ *           asking for the same data a second time.
+ * 3. In the Age Monitoring spreadsheet, run "⛳ Initialize Setup Sheet"
+ *    and fill in every variety's Palay/Rice category, then use "Bulk
+ *    Import Latest Known Ages" (including Net Bags where known) so this
+ *    spreadsheet has real starting balances to read on its first sync.
  * 4. Run "Install Auto-Update (every 5 min)" from the menu once
  *    (authorizes the trigger). After that, this spreadsheet updates
  *    itself every 5 minutes with no further action needed - see the
@@ -114,8 +119,6 @@ function getCachedDateInfo(dateObj) {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('🌾 GSR Daily Inventory')
-    .addItem('⛳ Initialize Setup Sheet', 'initializeSetupSheet')
-    .addSeparator()
     .addItem('🚀 Update Now', 'syncGSRDataManual')
     .addSeparator()
     .addItem('⏰ Install Auto-Update (every 5 min)', 'installDailyTrigger')
@@ -123,97 +126,87 @@ function onOpen() {
     .addToUi();
 }
 
-const SETUP_SHEET_NAME = "SETUP";
-
 /**
- * This spreadsheet's OWN local variety->category map + optional one-time
- * starting balances - fully self-contained, no dependency on the
- * production spreadsheet's SETUP_AGE_MONITORING sheet at all (that sheet
- * is being phased out in favor of each new report spreadsheet owning its
- * own config). Add every variety code your warehouses use so nothing
- * ends up unmapped. The starting-balance block is only ever consulted
- * for the very first sync of a brand-new warehouse+variety+age
- * combination that has no prior month recorded in the hidden STATE
- * sheet yet - after that, STATE is always the source of truth and this
- * block is never re-read for that combination.
+ * This spreadsheet has NO local SETUP of its own anymore. Variety
+ * category mapping AND starting-balance/age data both come from QA, so
+ * they live in exactly one place - the Age Monitoring spreadsheet's own
+ * SETUP + QA_AGE_SUBMISSIONS sheets (Config!B6 there) - and this script
+ * reads both directly, the same way it already reads AI/DATA_ENTRY from
+ * the production spreadsheet. Nothing needs to be entered twice.
+ *
+ * Reads:
+ *   - Age Monitoring's SETUP sheet -> { variety: "rice"|"palay" }
+ *   - Age Monitoring's QA_AGE_SUBMISSIONS sheet -> one-time starting
+ *     balances, keyed "warehouse|variety|age". Only submissions dated ON
+ *     OR BEFORE this sync's startDate qualify (a submission dated AFTER
+ *     startDate would double-count against receipts already flowing
+ *     through DATA_ENTRY for that same period) and only rows that
+ *     actually included a Net Bags value are used. Each qualifying
+ *     submission's age is projected forward from its own submission date
+ *     to startDate (same elapsed-time logic Age Monitoring itself uses),
+ *     so the age bucket reflects "as of startDate," not "as of whenever
+ *     QA happened to submit it."
  */
-function initializeSetupSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let setupSheet = ss.getSheetByName(SETUP_SHEET_NAME) || ss.insertSheet(SETUP_SHEET_NAME);
-  if (setupSheet.getLastRow() > 0) {
-    SpreadsheetApp.getUi().alert('SETUP already exists - not overwriting your entries. Add rows to it directly.');
-    return;
+function readSharedQaData_(configSheet, startDate) {
+  const ageMonitoringUrl = configSheet.getRange("B6").getValue();
+  if (!ageMonitoringUrl || ageMonitoringUrl.toString().trim() === "") {
+    return { error: "Age Monitoring spreadsheet URL is missing in Config B6. This is required - variety mapping and starting balances now come from there instead of a local SETUP sheet." };
   }
 
-  const headers = [
-    ["VARIETY → CATEGORY MAP — add every variety code you use", "", "", "", "", "", "", ""],
-    ["Variety", "Category (Palay or Rice)", "", "", "", "", "", ""],
-    ["WD1", "Rice", "", "", "", "", "", ""],
-    ["PD1-A", "Palay", "", "", "", "", "", ""],
-    ["", "", "", "", "", "", "", ""],
-    ["ONE-TIME STARTING BALANCES — only used the very first time a warehouse+variety+age combination is seen; ignored forever after that (STATE takes over)", "", "", "", "", "", "", ""],
-    ["", "", "Warehouse", "Category (Palay/Rice)", "Variety", "Age (months)", "Net Bags", ""],
-  ];
-  setupSheet.getRange(1, 1, headers.length, 8).setValues(headers);
-  setupSheet.getRange("A1:H1").merge().setFontWeight("bold").setBackground("#d9ead3");
-  setupSheet.getRange("A2:B2").setFontWeight("bold").setBackground("#f3f3f3");
-  setupSheet.getRange("A6:H6").merge().setFontWeight("bold").setBackground("#cfe2f3").setWrap(true);
-  setupSheet.getRange("C7:G7").setFontWeight("bold").setBackground("#f3f3f3");
-  setupSheet.autoResizeColumns(1, 8);
-
-  // Category dropdowns in both blocks (typo protection - a misspelled
-  // "Rice"/"Palay" would otherwise silently fail to map and only show up
-  // as a vague "unmapped variety" warning later).
-  const categoryRule = SpreadsheetApp.newDataValidation().requireValueInList(["Palay", "Rice"], true).setAllowInvalid(false).build();
-  setupSheet.getRange("B3:B200").setDataValidation(categoryRule);
-  setupSheet.getRange("D8:D200").setDataValidation(categoryRule);
-
-  // Starting-balances block's Variety column pulls from whatever
-  // varieties are already listed in the variety-map block above it, so
-  // the two blocks can't drift out of sync with each other.
-  const varietyRule = SpreadsheetApp.newDataValidation().requireValueInRange(setupSheet.getRange("A3:A200"), true).setAllowInvalid(true).build();
-  setupSheet.getRange("E8:E200").setDataValidation(varietyRule);
-
-  SpreadsheetApp.getUi().alert('SETUP ready. Fill in every variety your warehouses use (Category is now a dropdown), and (optionally) starting balances, before the first "Update Now".');
-}
-
-/** Returns { varietyUpper: "rice"|"palay" } from this spreadsheet's own local SETUP sheet. */
-function readVarietyCategoryMap_(ss) {
-  const setupSheet = ss.getSheetByName(SETUP_SHEET_NAME);
-  const map = {};
-  if (!setupSheet) return map;
-  const values = setupSheet.getDataRange().getValues();
-  for (let i = 2; i < values.length; i++) {
-    const variety = String(values[i][0] || "").trim();
-    const cat = String(values[i][1] || "").trim().toLowerCase();
-    if (!variety) continue;
-    if (variety.toUpperCase().includes("STARTING BALANCES")) break; // reached the second block
-    if (cat === "rice" || cat === "palay") map[variety] = cat;
+  let qaSs;
+  try {
+    qaSs = SpreadsheetApp.openByUrl(ageMonitoringUrl);
+  } catch (e) {
+    return { error: `Could not open the Age Monitoring spreadsheet from Config B6: ${e.toString()}` };
   }
-  return map;
-}
 
-/** Returns { "warehouse|variety|age": netBags } from this spreadsheet's own local SETUP sheet's starting-balances block. */
-function readStartingBalances_(ss) {
-  const setupSheet = ss.getSheetByName(SETUP_SHEET_NAME);
-  const balances = {};
-  if (!setupSheet) return balances;
-  const values = setupSheet.getDataRange().getValues();
-  let inBalancesBlock = false;
-  for (let i = 0; i < values.length; i++) {
-    const row = values[i];
-    if (String(row[0] || "").toUpperCase().includes("STARTING BALANCES")) { inBalancesBlock = true; continue; }
-    if (!inBalancesBlock) continue;
-    if (String(row[2] || "").trim() === "Warehouse") continue; // that block's own header row
-    const wh = row[2], type = row[3], variety = row[4], ageVal = row[5];
-    const netBags = Number(row[6]) || 0;
-    if (wh && variety && netBags !== 0) {
-      const age = getAgeGroupFromType(type, ageVal);
-      const key = `${wh}|${variety}|${age}`;
-      balances[key] = (balances[key] || 0) + netBags;
+  const setupSheet = qaSs.getSheetByName("SETUP");
+  const qaSheet = qaSs.getSheetByName("QA_AGE_SUBMISSIONS");
+  if (!setupSheet || !qaSheet) {
+    const missing = [!setupSheet && "SETUP", !qaSheet && "QA_AGE_SUBMISSIONS"].filter(Boolean).join(", ");
+    return { error: `Required sheet(s) not found in the Age Monitoring spreadsheet: ${missing}. Run "Initialize Setup Sheet" there first.` };
+  }
+
+  const varietyTypeMap = {};
+  const setupValues = setupSheet.getDataRange().getValues();
+  for (let i = 2; i < setupValues.length; i++) {
+    const variety = String(setupValues[i][0] || "").trim();
+    const cat = String(setupValues[i][1] || "").trim().toLowerCase();
+    if (variety && (cat === "rice" || cat === "palay")) varietyTypeMap[variety] = cat;
+  }
+
+  const msPerMonth = 30.44 * 24 * 60 * 60 * 1000;
+  const startingBalances = {};
+  const qaValues = qaSheet.getDataRange().getValues();
+  // Track the latest qualifying (<= startDate) submission per warehouse|variety.
+  const latestByKey = {};
+  for (let i = 1; i < qaValues.length; i++) {
+    const [wh, variety, ageMonthsRaw, netBagsRaw, submissionDateRaw] = qaValues[i];
+    if (!wh || !variety) continue;
+    const netBags = netBagsRaw === "" || netBagsRaw === undefined || netBagsRaw === null ? null : Number(netBagsRaw);
+    if (netBags === null || isNaN(netBags) || netBags === 0) continue; // age-only correction, nothing to seed a balance with
+
+    const submissionDate = submissionDateRaw instanceof Date ? submissionDateRaw : new Date(submissionDateRaw);
+    if (isNaN(submissionDate.getTime()) || submissionDate > startDate) continue; // see function doc - future-dated submissions are excluded
+
+    const key = `${String(wh).trim()}|${String(variety).trim()}`;
+    if (!latestByKey[key] || submissionDate > latestByKey[key].submissionDate) {
+      latestByKey[key] = { ageMonths: parseFloat(ageMonthsRaw) || 0, netBags, submissionDate };
     }
   }
-  return balances;
+
+  Object.keys(latestByKey).forEach((key) => {
+    const [wh, variety] = key.split('|');
+    const entry = latestByKey[key];
+    const elapsedSinceSubmission = (startDate.getTime() - entry.submissionDate.getTime()) / msPerMonth;
+    const ageAtStartDate = entry.ageMonths + elapsedSinceSubmission;
+    const category = varietyTypeMap[variety]; // "rice"/"palay"/undefined
+    const ageGroup = getAgeGroupFromType(category || "", ageAtStartDate);
+    const balanceKey = `${wh}|${variety}|${ageGroup}`;
+    startingBalances[balanceKey] = (startingBalances[balanceKey] || 0) + entry.netBags;
+  });
+
+  return { varietyTypeMap, startingBalances };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -350,7 +343,6 @@ function syncGSRDataManual() {
   );
 }
 
-/** Called by the time-based trigger — no UI available, so log instead of alert. */
 /**
  * Reads Config!B4/B5 as an "active hours" window (24-hour, GMT+8) - e.g.
  * B4=8, B5=18 means only actually sync between 8:00 AM and 5:59 PM.
@@ -393,7 +385,7 @@ function buildSummaryMessage_(result) {
     msg += `Skipped ${result.monthsToSkip.length} existing month sheet(s): ${result.monthsToSkip.join(", ")}.\n`;
   }
   if (result.unmappedVarieties.length > 0) {
-    msg += `\n⚠️ Unmapped varieties (add to this spreadsheet's own SETUP sheet): ${result.unmappedVarieties.join(", ")}.\n`;
+    msg += `\n⚠️ Unmapped varieties (add to the Age Monitoring spreadsheet's SETUP sheet - it's shared by both): ${result.unmappedVarieties.join(", ")}.\n`;
   }
   if (result.duplicateRows.length > 0) {
     msg += `\n⚠️ Duplicate source rows ignored (same document # + warehouse seen more than once):\n${result.duplicateRows.join("\n")}\n`;
@@ -434,8 +426,9 @@ function runSyncCore_() {
       return { error: "Start date in Config B2 is missing or invalid." };
     }
 
-    const setupSheet = ss.getSheetByName(SETUP_SHEET_NAME);
-    if (!setupSheet) return { error: 'Run "Initialize Setup Sheet" first.' };
+    const sharedQaData = readSharedQaData_(configSheet, startDate);
+    if (sharedQaData.error) return { error: sharedQaData.error };
+    const { varietyTypeMap, startingBalances } = sharedQaData;
 
     const sourceSs = SpreadsheetApp.openByUrl(sourceUrl);
     const aiSheet = sourceSs.getSheetByName("AI");
@@ -450,8 +443,6 @@ function runSyncCore_() {
 
     const deData = getDateFilteredRows(deSheet, resolveColumnIndex_(deHeaders, ["Date"], 1) + 1, startDate);
     const aiData = getDateFilteredRows(aiSheet, resolveColumnIndexByPrefix_(aiHeaders, ["DATE"], 0) + 1, startDate);
-    const varietyTypeMap = readVarietyCategoryMap_(ss);
-    const startingBalances = readStartingBalances_(ss);
 
     const parsed = parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, varietyTypeMap, startingBalances);
 

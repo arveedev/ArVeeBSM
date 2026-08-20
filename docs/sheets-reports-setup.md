@@ -5,14 +5,58 @@ production spreadsheet (DATA_ENTRY/AI/backup sheets) — both only read from
 it. This is exactly what lets you compare their tallies against your
 existing working data as a sanity check.
 
-Both spreadsheets now own their own, fully self-contained config — neither
-one reads from the production spreadsheet's `SETUP_AGE_MONITORING` sheet at
-all anymore.
+**Set up Age Monitoring first** — Daily Inventory now depends on it. QA's
+variety→category map and stock counts (warehouse + variety + age + net
+bags) are entered exactly once, in the Age Monitoring spreadsheet, and
+Daily Inventory reads that same data directly instead of asking for any of
+it again. Neither spreadsheet reads from the production spreadsheet's
+`SETUP_AGE_MONITORING` sheet anymore.
 
-## 1. Daily Inventory spreadsheet
+## 1. Age Monitoring spreadsheet (set this up first)
 
-1. Create a new blank Google Sheet. Name it something like **"Daily
-   Inventory (v2)"**.
+1. Create a new blank Google Sheet. Name it **"Age Monitoring (v2)"**.
+2. Extensions > Apps Script. Paste in
+   [`age-monitoring-report-script.js`](age-monitoring-report-script.js).
+3. Add a new HTML file (Files > + > HTML) named exactly **AgeSubmissionForm**
+   and paste in the body of
+   [`age-submission-form.html`](age-submission-form.html) (skip the leading
+   HTML comment block — that part is just setup notes for you, not for the
+   file itself).
+4. Add a second HTML file named exactly **BulkAgeImportForm** and paste in
+   the body of
+   [`age-bulk-import-form.html`](age-bulk-import-form.html) (same — skip
+   the leading comment block).
+5. Add a **Config** tab with:
+   - `B1` = URL of your existing production spreadsheet
+   - `B2` = monitoring start date (e.g. `2026-05-01`)
+   - `B3` = comma-separated admin emails allowed to generate the report
+6. Reload — a **⏳ Age Monitoring** menu appears. Click **⛳ Initialize Setup
+   Sheet** once — creates **SETUP** (variety→category map — a real
+   Palay/Rice dropdown, fill in every variety code your warehouses use)
+   and **QA_AGE_SUBMISSIONS**.
+7. **Before generating the first report**, click **📋 Bulk Import Latest
+   Known Ages** and paste in QA's CURRENT, already-known age reading for
+   every warehouse+variety — **and its bag count wherever you know it**
+   (one per line: `Warehouse, Variety, Age in months, Net Bags`). This is
+   the step that makes the very first report start from QA's real,
+   already-known data instead of every combination defaulting to a pure
+   elapsed-time-since-receipt guess — do this once as part of setup, not
+   as an ongoing monthly task. **This same data is what Daily Inventory
+   reads for its starting balances** — the more Net Bags values you
+   include here, the less you'll need to enter manually over there.
+8. Each month after that, QA (or anyone — not admin-gated) opens **📝
+   Submit Monthly Ages** to correct individual warehouse/variety
+   readings as they're physically re-checked (Net Bags is optional there
+   — only fill it in if you also recounted the pile that month).
+9. An admin clicks **✅ Generate/Update Report** whenever an updated report
+   is wanted. This is intentionally manual, not on a daily trigger — age
+   only meaningfully changes once QA submits new numbers, so there's
+   nothing new to compute in between submissions.
+
+## 2. Daily Inventory spreadsheet
+
+1. Create a second new blank Google Sheet. Name it **"Daily Inventory
+   (v2)"**.
 2. Extensions > Apps Script. Delete the default `Code.gs` content and paste
    in [`daily-inventory-report-script.js`](daily-inventory-report-script.js).
 3. Back in the spreadsheet, add a tab named exactly **Config** with:
@@ -23,17 +67,16 @@ all anymore.
      (e.g. `arvee.dev.apps@gmail.com`)
    - `B4`, `B5` = optional active-hours window for the auto-trigger, e.g.
      `8` and `18` to only actually sync between 8 AM and 6 PM (GMT+8) —
-     leave both blank to run around the clock instead. See step 7 below.
+     leave both blank to run around the clock instead. See step 6 below.
+   - `B6` = the URL of the Age Monitoring spreadsheet from Part 1 above.
+     **Required** — this spreadsheet has no SETUP sheet of its own
+     anymore; variety mapping and starting balances both come from there.
 4. Reload the spreadsheet — a **🌾 GSR Daily Inventory** menu appears.
-5. Click **⛳ Initialize Setup Sheet** once. This creates this spreadsheet's
-   own **SETUP** tab — fill in every variety code your warehouses use
-   (Palay/Rice), and optionally a one-time starting balance per
-   warehouse+variety+age if you're not starting from zero. This SETUP tab
-   is completely local to this spreadsheet.
-6. Click **🚀 Update Now**. Approve the authorization prompt (it needs
-   permission to read the other spreadsheet). This creates the month
-   sheets, **SUMMARY**, and **MONTHLY** tabs.
-7. Click **⏰ Install Auto-Update (every 5 min)** once. From then on it
+5. Click **🚀 Update Now**. Approve the authorization prompt (it now needs
+   permission to read TWO other spreadsheets — the production one and the
+   Age Monitoring one). This creates the month sheets, **SUMMARY**, and
+   **MONTHLY** tabs.
+6. Click **⏰ Install Auto-Update (every 5 min)** once. From then on it
    updates itself automatically every 5 minutes — no further action
    needed.
 
@@ -53,61 +96,28 @@ all anymore.
    `installDailyTrigger()` rather than losing updates to the quota.
    Manual **🚀 Update Now** clicks always work regardless of the active-
    hours window.
-8. Compare its numbers against your existing working spreadsheet's
+7. Compare its numbers against your existing working spreadsheet's
    equivalent tallies. They should match; if they don't, the alert dialog
-   from step 6/7 will already have told you why (unmapped variety, a
+   from step 5/6 will already have told you why (unmapped variety, a
    duplicate source row, or a month whose sheet went missing).
-
-## 2. Age Monitoring spreadsheet
-
-1. Create a second new blank Google Sheet. Name it **"Age Monitoring
-   (v2)"**.
-2. Extensions > Apps Script. Paste in
-   [`age-monitoring-report-script.js`](age-monitoring-report-script.js).
-3. Add a new HTML file (Files > + > HTML) named exactly **AgeSubmissionForm**
-   and paste in the body of
-   [`age-submission-form.html`](age-submission-form.html) (skip the leading
-   HTML comment block — that part is just setup notes for you, not for the
-   file itself).
-4. Add a second HTML file named exactly **BulkAgeImportForm** and paste in
-   the body of
-   [`age-bulk-import-form.html`](age-bulk-import-form.html) (same — skip
-   the leading comment block).
-5. Add a **Config** tab, same as above: `B1` = production spreadsheet URL,
-   `B2` = monitoring start date, `B3` = admin emails.
-6. Reload — a **⏳ Age Monitoring** menu appears. Click **⛳ Initialize Setup
-   Sheet** once — creates **SETUP** (variety→category map, fill in every
-   variety code your warehouses use) and **QA_AGE_SUBMISSIONS**.
-7. **Before generating the first report**, click **📋 Bulk Import Latest
-   Known Ages** and paste in QA's CURRENT, already-known age reading for
-   every warehouse+variety you have (one per line: `Warehouse, Variety, Age
-   in months`). This is the step that makes the very first report start
-   from QA's real, already-known data instead of every combination
-   defaulting to a pure elapsed-time-since-receipt guess — do this once as
-   part of setup, not as an ongoing monthly task.
-8. Each month after that, QA (or anyone — not admin-gated) opens **📝
-   Submit Monthly Ages** to correct individual warehouse/variety readings
-   as they're physically re-checked.
-9. An admin clicks **✅ Generate/Update Report** whenever an updated report
-   is wanted. This is intentionally manual, not on a daily trigger — age
-   only meaningfully changes once QA submits new numbers, so there's
-   nothing new to compute in between submissions.
 
 ## What's admin-gated vs. not
 
 - **Daily Inventory**: only admins (Config!B3) can click "Update Now" or
-  install/remove the daily trigger. The trigger itself, once installed by
-  an admin, keeps running under that admin's authorization automatically.
+  install/remove the auto-update trigger. The trigger itself, once
+  installed by an admin, keeps running under that admin's authorization
+  automatically.
 - **Age Monitoring**: only admins can click "Generate/Update Report" —
   matches your requirement that report *generation* is admin-only. QA's
-  age *submission* (single or bulk) is deliberately left open to QA staff,
-  since gating that too would defeat the point of QA being able to update
-  it.
+  stock-count *submission* (single or bulk) is deliberately left open to
+  QA staff, since gating that too would defeat the point of QA being able
+  to update it — and since Daily Inventory now reads that same data, an
+  admin never has to touch it either.
 
 ## About column lookup
 
-Both scripts resolve every source column by **header name**, not position,
-using real confirmed headers from both sheets:
+Both scripts resolve every production-sheet column by **header name**,
+not position, using real confirmed headers from both sheets:
 
 - `DATA_ENTRY`: Timestamp, Date, Transaction, Variety, Bags, Net Kilos,
   Warehouse Name, Customer Name, Province, Net Bags, WH Code, WSR #,
@@ -127,28 +137,37 @@ verify against the sheet" so a value coincidence (e.g. two separate
 authorities issued the same day for the same amount) can never be
 silently deleted.
 
-## About the two SETUP sheets
+## About the shared QA data (one entry point, not two)
 
-Each new spreadsheet has its own **SETUP** tab, fully local, no
-dependency on the production spreadsheet's `SETUP_AGE_MONITORING`:
+There is now exactly **one place** variety categories and stock counts get
+entered: the Age Monitoring spreadsheet's **SETUP** and
+**QA_AGE_SUBMISSIONS** sheets. Daily Inventory reads both directly
+(`Config!B6`), the same cross-spreadsheet pattern both scripts already use
+to read your production `AI`/`DATA_ENTRY` sheets — nothing gets typed
+twice.
 
-- **Daily Inventory's SETUP**: variety→category map (required for every
-  variety you use), plus an optional one-time starting-balance block —
-  only ever consulted for the very first sync of a brand-new
-  warehouse+variety+age combination; after that the hidden STATE sheet is
-  always the source of truth and SETUP's starting balances are never
-  re-read for that combination.
-- **Age Monitoring's SETUP**: variety→category map only. Actual ages come
-  from QA_AGE_SUBMISSIONS (seeded via bulk import, corrected monthly via
-  the single-row form), never from a hand-maintained balance number.
+- **SETUP** (Age Monitoring spreadsheet): variety→category map, a real
+  Palay/Rice dropdown. Used by both reports.
+- **QA_AGE_SUBMISSIONS** (Age Monitoring spreadsheet): Warehouse, Variety,
+  Age (months), Net Bags (optional), Submission Date, Submitted By.
+  - Age Monitoring uses every row's Age as the anchor it projects forward
+    from.
+  - Daily Inventory only uses rows that (a) include a Net Bags value and
+    (b) are dated ON OR BEFORE its own `Config!B2` start date — a
+    submission dated after that would double-count against receipts
+    already flowing through `DATA_ENTRY` for that same period. Its age
+    at Daily Inventory's start date is projected forward from the
+    submission's own date, the same elapsed-time logic Age Monitoring
+    itself uses. If a warehouse+variety has no qualifying submission, its
+    starting balance is simply 0 — nothing is guessed or fabricated.
 
 ## If something looks wrong
 
-Every run's alert dialog (or, for the automated daily trigger, the Apps
+Every run's alert dialog (or, for the automated auto-trigger, the Apps
 Script execution log under **Executions** in the left sidebar) explicitly
 lists:
-- unmapped varieties (add them to that spreadsheet's own SETUP tab before
-  the numbers can be trusted)
+- unmapped varieties (add them to the Age Monitoring spreadsheet's SETUP
+  tab — it's shared by both reports — before the numbers can be trusted)
 - duplicate source rows that were found and removed, or flagged for
   manual verification when no trustworthy reference number was available
 - for Age Monitoring, FIFO shortfalls — an issuance larger than the
