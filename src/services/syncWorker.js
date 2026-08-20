@@ -215,9 +215,25 @@ export const registerImmediateSyncOnSave = () => {
   })
 }
 
+// Backup-queue safety net: previously this worker had NO periodic retry
+// at all - only "on initial load", "on reconnect", and (via
+// registerImmediateSyncOnSave) "right after a create/update". A push that
+// failed for any transient reason (a dropped connection, an Apps Script
+// cold-start timeout, momentarily hitting Google's per-user quota) had
+// nothing left to retry it until the user's next save or the browser's
+// next online event - which, if they stayed continuously online and idle
+// for a while, might not happen for a long time. This is the confirmed
+// explanation for the reported sync lag (edits sitting unsynced for
+// several minutes with no new activity to trigger a retry). 30s matches
+// the existing TRANSACTION_SYNC_INTERVAL_MS pull-side cadence.
+const BACKUP_QUEUE_RETRY_INTERVAL_MS = 30 * 1000
+
 /**
  * Attach a listener so the sync queue is processed automatically whenever
- * connectivity is restored, and once on initial load if already online.
+ * connectivity is restored, once on initial load if already online, and
+ * on a fixed interval as a safety net (see BACKUP_QUEUE_RETRY_INTERVAL_MS
+ * above) so a failed push always gets retried within a bounded time even
+ * with no other trigger.
  *
  * @param {(result: {synced: number, failed: number}) => void} [onSyncComplete]
  *   Optional callback invoked with the result of each sync pass (e.g. to
@@ -231,12 +247,16 @@ export const startSyncWorker = (onSyncComplete) => {
   }
 
   window.addEventListener('online', runSync)
+  const intervalId = setInterval(runSync, BACKUP_QUEUE_RETRY_INTERVAL_MS)
 
   if (navigator.onLine) {
     runSync()
   }
 
-  return () => window.removeEventListener('online', runSync)
+  return () => {
+    window.removeEventListener('online', runSync)
+    clearInterval(intervalId)
+  }
 }
 
 const AUTHORITY_SYNC_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes

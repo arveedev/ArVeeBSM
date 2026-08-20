@@ -16347,3 +16347,71 @@ handled that path). Added the missing `else` branch.
 `npm run build` passes. `APP_VERSION` bumped to `1.9-5` (also caught
 up the missed `1.9-4` entry for the earlier Login position:fixed fix
 that had shipped without a version bump).
+
+## Session: 2026-08-17 (round 27) - CRITICAL: fixed multiplying duplicate rows in the Google Sheets backup
+
+User reported a severe data-integrity regression: the backup Google Sheets
+were accumulating 3, sometimes 12+ duplicate rows per transaction, sync
+was lagging (last successful sync 4:16pm vs. a 4:24pm save), and some
+entries were going missing/delayed too - actively corrupting reports and
+warehouse data.
+
+Root cause, confirmed in `docs/apps-script-full-replacement.js`'s
+`doPost` handler: the `appendTransaction` action did a blind,
+unconditional `sheet.appendRow(newRow)` with NO check anywhere - client
+or server - for whether a row for that exact serial number already
+existed on the sheet, and no lock protected `doPost` against concurrent
+invocations. This meant every one of the following already-existing,
+otherwise-reasonable behaviors turned into a duplicate-row generator
+with nothing to stop it:
+- Any retry after a lost/timed-out response (the client's own
+  `postToSheetsWithRetry` already retries on failure - previously each
+  retry blindly appended again).
+- A WTS transaction's two-sided append (`Promise.all` of a
+  received-side and issued-side call) where one side failed and the
+  other succeeded - the whole push gets retried, and the side that
+  already succeeded appended AGAIN on every retry.
+- Two devices/tabs both reading the same `isSynced: false` transaction
+  (via Dexie Cloud) and both racing to push it before either's local
+  `isSynced: true` flag update had propagated.
+
+Fixed in two places:
+
+1. **`appendTransaction` is now idempotent.** Before appending, it looks
+   up an existing row by the same serial column
+   (`findRowIndexByMatch`, already used by `updateTransaction`) and
+   overwrites that row in place instead of appending again if found -
+   calling this action any number of times with the same serial now
+   converges to exactly one row, never a duplicate.
+2. **The whole `doPost` is now wrapped in `LockService.getScriptLock()`**
+   (30s wait, released in `finally`) - serializes every write request
+   against every other one, so two near-simultaneous requests can never
+   both read the "row doesn't exist yet" state and both decide to
+   append.
+
+Also fixed the reported sync lag: `startSyncWorker` (`syncWorker.js`)
+previously had NO periodic retry at all for the outbound push queue -
+only "on initial load," "on reconnect," and "right after a
+create/update" (`registerImmediateSyncOnSave`). A push that failed for
+any transient reason had nothing left to retry it until the user's
+next save or the browser's next online event, which - if the device
+stayed continuously online and idle - could be a long time. Added a
+30-second periodic safety-net retry, matching the existing
+`TRANSACTION_SYNC_INTERVAL_MS` pull-side cadence.
+
+**This fix requires action beyond this repo**: the Apps Script changes
+live in `docs/apps-script-full-replacement.js`, which is a reference
+copy - editing it here does NOT change the live, deployed Apps Script
+Web App the production backup sheets actually talk to. The user needs
+to copy this file's updated content into the real Apps Script project
+(Extensions > Apps Script) and redeploy, or the duplication will
+continue in production regardless of this commit.
+
+### Files touched
+`docs/apps-script-full-replacement.js`, `src/services/syncWorker.js`.
+
+`npm run build` passes; `node --check` confirms the Apps Script file's
+syntax is valid (it can't be executed/tested outside the actual Apps
+Script runtime, which has no local equivalent - LockService/
+SpreadsheetApp are Apps-Script-only globals). Not verified against the
+user's actual production Sheets - needs a live retest after redeploy.

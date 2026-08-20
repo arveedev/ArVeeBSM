@@ -547,6 +547,31 @@ re-reading the actual discussion.
 
 ## In Progress / Not Yet Done
 
+### OPEN (2026-08-17 session, round 33) - CRITICAL: Google Sheets backup duplicate-row bug fixed - NOT YET COMMITTED/PUSHED, NEEDS APPS SCRIPT REDEPLOY
+
+User reported a severe data-integrity regression: backup Sheets
+accumulating 3-12+ duplicate rows per transaction, plus sync lag and
+missing/delayed entries. Root cause: Apps Script's `appendTransaction`
+(`doPost` in `docs/apps-script-full-replacement.js`) did a blind,
+unconditional `appendRow` with no check for an existing row with that
+serial, and no lock protected concurrent requests - so any retry (lost
+response, WTS two-sided partial failure, two devices racing the same
+not-yet-synced transaction) wrote another duplicate row forever.
+Fixed: `appendTransaction` now overwrites an existing row for that
+serial instead of re-appending (idempotent), and the whole `doPost` is
+wrapped in `LockService.getScriptLock()` so concurrent requests can't
+race each other. Also added a 30s periodic safety-net retry to the
+client push queue (`syncWorker.js`'s `startSyncWorker`), which
+previously had no periodic retry at all - only on save/reconnect -
+explaining the reported lag.
+
+**ACTION REQUIRED BEYOND THIS REPO**: `docs/apps-script-full-replacement.js`
+is a reference copy - this fix does NOT take effect in production until
+the user copies its updated content into the real Apps Script project
+(Extensions > Apps Script in the spreadsheet) and redeploys the Web
+App. Flag this prominently every time this file is touched until
+confirmed redeployed.
+
 ### OPEN (2026-08-17 session, round 32) - needsCompletion never cleared on save, unchecked auto-advance after save, OR # not filling from the AI picker - PUSHED, not yet confirmed by user
 
 Three real bugs from a live ESR editing session:
