@@ -482,18 +482,35 @@ function dedupDataEntryRows_(rows, headers) {
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
+
     const warehouse = String(row[warehouseCol] || "").trim();
     const wsr = String(row[wsrCol] || "").trim();
     const wsi = String(row[wsiCol] || "").trim();
     const docNumber = wsr || wsi;
-    const key = docNumber
-      ? `${docNumber}::${warehouse}`
-      : `${row[dateCol]}::${warehouse}::${row[varietyCol]}::${row[netBagsCol]}`;
+    const dateVal = row[dateCol], varietyVal = row[varietyCol], netBagsVal = row[netBagsCol];
 
-    if (!key.trim() || key === "::") { kept.push(row); continue; }
-    if (seen.has(key)) { duplicates.push(`${docNumber || key} (${warehouse})`); continue; }
-    seen.set(key, true);
+    if (docNumber) {
+      // A real WSR#/WSI# match IS a trustworthy duplicate signal - safe to remove.
+      const key = `${docNumber}::${warehouse}`;
+      if (seen.has(key)) { duplicates.push(`${docNumber} (${warehouse})`); continue; }
+      seen.set(key, true);
+      kept.push(row);
+      continue;
+    }
+
+    // No document number on this row at all - either a genuinely blank
+    // row (skip silently) or a value-only composite match, which - same
+    // reasoning as dedupAiRows_ - is NOT trustworthy enough to remove.
+    const isBlankRow = !dateVal && !warehouse && !varietyVal && !netBagsVal;
     kept.push(row);
+    if (isBlankRow) continue;
+
+    const compositeKey = `${dateVal}::${warehouse}::${varietyVal}::${netBagsVal}`;
+    if (seen.has(compositeKey)) {
+      duplicates.push(`${compositeKey} (${warehouse}) - no WSR#/WSI# on this row, verify against the sheet, NOT auto-removed`);
+    } else {
+      seen.set(compositeKey, true);
+    }
   }
   return { rows: kept, duplicates, cols: { warehouseCol, wsrCol, wsiCol, dateCol, varietyCol, netBagsCol } };
 }
@@ -505,6 +522,18 @@ function dedupDataEntryRows_(rows, headers) {
  * positional assumptions. Confirm/adjust the candidate name lists below
  * once you can paste a sample AI row the same way you did for
  * DATA_ENTRY - see docs/sheets-reports-setup.md.
+ *
+ * IMPORTANT: without a confirmed real AI reference/document number,
+ * matching on date+warehouse+variety+kilos VALUES can't tell a true
+ * duplicate row apart from two genuinely separate authorities that
+ * happen to share the same date/warehouse/variety/amount (e.g. several
+ * equal-sized tranches issued the same day). Silently dropping those
+ * would delete real data - worse than leaving an occasional real
+ * duplicate in. So this NEVER removes a row: every row is always kept
+ * and counted; a repeated key is only reported as "possible duplicate,
+ * please verify" for a human to check against the actual sheet. Once a
+ * real AI document-number column is confirmed, this should switch to
+ * genuine removal the same way dedupDataEntryRows_ already does.
  */
 function dedupAiRows_(rows, headers) {
   const dateCol = resolveColumnIndex_(headers, ["Date"], 0);
@@ -514,20 +543,26 @@ function dedupAiRows_(rows, headers) {
 
   const seen = new Map();
   const kept = [null];
-  const duplicates = [];
+  const possibleDuplicates = [];
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
-    const warehouse = String(row[warehouseCol] || "").trim();
-    // No single confirmed doc-number column for AI yet - composite key.
-    const key = `${row[dateCol]}::${warehouse}::${row[varietyCol]}::${row[kilosCol]}`;
-    if (!key.trim() || key === "::") { kept.push(row); continue; }
-    if (seen.has(key)) { duplicates.push(`${key} (${warehouse})`); continue; }
-    seen.set(key, true);
-    kept.push(row);
+
+    const dateVal = row[dateCol], warehouse = String(row[warehouseCol] || "").trim();
+    const varietyVal = row[varietyCol], kilosVal = row[kilosCol];
+    const isBlankRow = !dateVal && !warehouse && !varietyVal && !kilosVal;
+    kept.push(row); // AI rows are ALWAYS kept - see note above
+    if (isBlankRow) continue; // nothing to flag on a genuinely blank row
+
+    const key = `${dateVal}::${warehouse}::${varietyVal}::${kilosVal}`;
+    if (seen.has(key)) {
+      possibleDuplicates.push(`${key} (${warehouse}) - verify against the sheet, NOT auto-removed`);
+    } else {
+      seen.set(key, true);
+    }
   }
-  return { rows: kept, duplicates, cols: { dateCol, warehouseCol, varietyCol, kilosCol } };
+  return { rows: kept, duplicates: possibleDuplicates, cols: { dateCol, warehouseCol, varietyCol, kilosCol } };
 }
 
 function parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiHeaders) {

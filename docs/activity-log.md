@@ -16773,3 +16773,46 @@ explicitly in docs/sheets-reports-setup.md.
 
 Both scripts re-verified with `node --check`. Still not deployed/confirmed
 against real data.
+
+## Round 35: Fixed a dedup design flaw that could silently drop real data
+
+User ran the actual sync and pasted the real alert output. Two problems
+surfaced in the "duplicate source rows" list:
+
+1. A wall of `AI: :::::: ()` entries - a real bug. The blank-key guard
+   only matched the old 2-field key format ("::"), never updated for the
+   new 4-field composite key (6 colons when all four fields are blank),
+   so every blank trailing row in the AI sheet was being compared against
+   every other blank row and flagged. Fixed: blank rows are now detected
+   by checking each field individually, not by matching the joined string
+   against a hardcoded pattern, and are skipped from dedup consideration
+   entirely (harmless, not even logged).
+
+2. More seriously: `BSI B / PD1-A / 30000 kilos` was flagged as a
+   duplicate 4 times, meaning the composite value-key (date+warehouse+
+   variety+kilos) matched 5 rows total. Without a confirmed real AI
+   reference/document-number column, this composite key cannot
+   distinguish an actual duplicate row from several genuinely separate
+   authorities that happen to share the same date/warehouse/variety/
+   amount (e.g. equal-sized tranches issued the same day) - and the
+   dedup was SILENTLY REMOVING every match past the first, which could
+   delete real data. Given the user's explicit standing priority
+   ("an unwritten/missing data is worse than a duplicated data"), this
+   is the wrong failure mode to risk by default.
+
+Fixed in both scripts: AI-side composite-key matches are now
+report-only - every row is always kept and counted, a repeat key is
+only listed as "possible duplicate, verify against the sheet, NOT
+auto-removed" for a human to check. DATA_ENTRY dedup keeps real removal
+ONLY when a row has an actual WSR#/WSI# document number (a trustworthy
+signal); when a DATA_ENTRY row has no document number at all, it now
+gets the same report-only treatment as AI instead of being silently
+dropped on a value match.
+
+### Files touched
+`docs/daily-inventory-report-script.js`, `docs/age-monitoring-report-script.js`.
+
+Both re-verified with `node --check`. Still pending: a confirmed sample
+AI row (like the DATA_ENTRY one already provided) so the AI side can
+move from composite-key flagging to real header-based dedup with actual
+removal, once a genuine reference-number column is identified.
