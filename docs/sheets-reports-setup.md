@@ -62,16 +62,26 @@ existing working data as a sanity check.
 
 ## About column lookup
 
-Both scripts resolve `DATA_ENTRY` columns by **header name** (Timestamp,
-Date, Transaction, Variety, Bags, Net Kilos, Warehouse Name, Customer Name,
-Province, Net Bags, WH Code, WSR #, WSI #, AGE, Age Unit, Last Modified —
-confirmed from a real row), not by position, so reordering/adding columns
-there won't silently break anything. The `AI` sheet's exact header names
-haven't been confirmed the same way yet — the scripts fall back to the
-original script's positional assumptions for it. If you can paste a sample
-AI row (same way you did for DATA_ENTRY) before the first real run, both
-scripts' `dedupAiRows_`/AI column resolution can be switched to name-based
-lookup too, closing the same gap on that side.
+Both scripts resolve every column by **header name**, not position, using
+real confirmed headers from both sheets:
+
+- `DATA_ENTRY`: Timestamp, Date, Transaction, Variety, Bags, Net Kilos,
+  Warehouse Name, Customer Name, Province, Net Bags, WH Code, WSR #,
+  WSI #, AGE, Age Unit, Last Modified.
+- `AI`: DATE (2026) — note the year is embedded in this header and will
+  change every January; both scripts match it by prefix ("DATE...") so
+  this doesn't need updating each year — AI #, NAME OF CUSTOMER, ISSUING
+  WHSE, VARIETY CODE, BAG, NET KG, TRANSACTION, AUTHORITY, OR No., Note1,
+  Note2, Age Group, Last Modified.
+
+`AI #` and `WSR #`/`WSI #` are real unique reference numbers, so matches
+on those are genuinely trustworthy and get actually removed as
+duplicates. Any row that somehow has none of those (shouldn't normally
+happen) falls back to a value-based composite key, which is NOT trusted
+enough to auto-remove — it's only ever reported as "possible duplicate,
+verify against the sheet" so a value coincidence (e.g. two separate
+authorities issued the same day for the same amount) can never be
+silently deleted.
 
 ## If something looks wrong
 

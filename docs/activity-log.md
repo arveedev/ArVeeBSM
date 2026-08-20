@@ -16816,3 +16816,30 @@ Both re-verified with `node --check`. Still pending: a confirmed sample
 AI row (like the DATA_ENTRY one already provided) so the AI side can
 move from composite-key flagging to real header-based dedup with actual
 removal, once a genuine reference-number column is identified.
+
+## Round 36: Confirmed real AI headers — AI # now a trustworthy dedup key
+
+User pasted real sample AI rows. Confirmed header order: DATE (2026) [year
+embedded in the header, changes every January], AI #, NAME OF CUSTOMER,
+ISSUING WHSE, VARIETY CODE, BAG, NET KG, TRANSACTION, AUTHORITY, OR No.,
+Note1, Note2, Age Group, Last Modified - matching every one of v1's
+original positional assumptions (warehouse@3, variety@4, kilos@6,
+type@7, age group@12), so nothing was actually miscounted there, but
+more importantly this revealed a real unique reference number ("AI #")
+that Round 35's report-only AI dedup didn't have access to.
+
+Switched AI dedup back to genuine removal keyed on "AI #" (matching the
+same trust level as DATA_ENTRY's WSR#/WSI#) instead of the conservative
+value-composite report-only fallback from Round 35 - that fallback is now
+reserved only for the edge case of a row with no AI # at all. Added
+resolveColumnIndexByPrefix_ to handle the AI sheet's year-embedded date
+header without needing a code change every January.
+
+### Files touched
+`docs/daily-inventory-report-script.js`, `docs/age-monitoring-report-script.js`,
+`docs/sheets-reports-setup.md`.
+
+Both re-verified with `node --check`. Still not deployed/confirmed
+against real data end-to-end (user has run the inventory sync once so
+far, prompting Round 35's fix; hasn't yet re-run with this round's
+changes).

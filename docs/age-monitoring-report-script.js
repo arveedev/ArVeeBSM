@@ -254,6 +254,15 @@ function resolveColumnIndex_(headers, candidateNames, fallbackIndex) {
   return fallbackIndex;
 }
 
+/** Like resolveColumnIndex_, but matches a header that STARTS WITH one of the given prefixes - for a year-embedded header like the AI sheet's confirmed "DATE (2026)". */
+function resolveColumnIndexByPrefix_(headers, prefixes, fallbackIndex) {
+  for (const prefix of prefixes) {
+    const idx = headers.findIndex((h) => h.toUpperCase().startsWith(prefix.toUpperCase()));
+    if (idx !== -1) return idx;
+  }
+  return fallbackIndex;
+}
+
 /** DATA_ENTRY dedup — WSR # first, else WSI #, per row (a TRANSFER row can carry both). */
 function dedupDataEntryRows_(rows, headers) {
   const warehouseCol = resolveColumnIndex_(headers, ["Warehouse Name"], 6);
@@ -302,43 +311,54 @@ function dedupDataEntryRows_(rows, headers) {
 }
 
 /**
- * AI dedup — composite key (AI headers not yet confirmed; adjust
- * candidates once you have a sample row). Without a real AI reference
- * number, a value-only match can't be distinguished from two genuinely
- * separate authorities that happen to share date/warehouse/variety/
- * amount - so this NEVER removes a row, only flags a repeat for manual
- * verification. See the longer note on dedupAiRows_ in
- * daily-inventory-report-script.js.
+ * AI dedup — confirmed real headers (from a sample row): DATE (2026)
+ * [year embedded, see resolveColumnIndexByPrefix_], AI #, NAME OF
+ * CUSTOMER, ISSUING WHSE, VARIETY CODE, BAG, NET KG, TRANSACTION,
+ * AUTHORITY, OR No., Note1, Note2, Age Group, Last Modified. "AI #" is a
+ * real unique reference number, so this dedups the same safe way
+ * DATA_ENTRY's WSR#/WSI# already does (real removal on a match). Any row
+ * with no AI # falls back to the conservative value-composite
+ * report-only check.
  */
 function dedupAiRows_(rows, headers) {
-  const dateCol = resolveColumnIndex_(headers, ["Date"], 0);
-  const warehouseCol = resolveColumnIndex_(headers, ["Warehouse Name", "Warehouse"], 3);
-  const varietyCol = resolveColumnIndex_(headers, ["Variety"], 4);
-  const kilosCol = resolveColumnIndex_(headers, ["Net Kilos", "Kilos"], 6);
+  const dateCol = resolveColumnIndexByPrefix_(headers, ["DATE"], 0);
+  const aiNumberCol = resolveColumnIndex_(headers, ["AI #"], -1);
+  const warehouseCol = resolveColumnIndex_(headers, ["ISSUING WHSE", "Warehouse Name", "Warehouse"], 3);
+  const varietyCol = resolveColumnIndex_(headers, ["VARIETY CODE", "Variety"], 4);
+  const kilosCol = resolveColumnIndex_(headers, ["NET KG", "Net Kilos", "Kilos"], 6);
   const ageGroupCol = resolveColumnIndex_(headers, ["Age Group", "AGE"], 12);
-  const typeCol = resolveColumnIndex_(headers, ["Transaction", "Type"], 7);
+  const typeCol = resolveColumnIndex_(headers, ["TRANSACTION", "Transaction", "Type"], 7);
 
   const seen = new Map();
   const kept = [null];
-  const possibleDuplicates = [];
+  const duplicates = [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
 
-    const dateVal = row[dateCol], warehouse = String(row[warehouseCol] || "").trim();
-    const varietyVal = row[varietyCol], kilosVal = row[kilosCol];
+    const warehouse = String(row[warehouseCol] || "").trim();
+    const aiNumber = aiNumberCol !== -1 ? String(row[aiNumberCol] || "").trim() : "";
+    const dateVal = row[dateCol], varietyVal = row[varietyCol], kilosVal = row[kilosCol];
+
+    if (aiNumber) {
+      if (seen.has(aiNumber)) { duplicates.push(`AI #${aiNumber} (${warehouse})`); continue; }
+      seen.set(aiNumber, true);
+      kept.push(row);
+      continue;
+    }
+
     const isBlankRow = !dateVal && !warehouse && !varietyVal && !kilosVal;
-    kept.push(row); // AI rows are ALWAYS kept
+    kept.push(row);
     if (isBlankRow) continue;
 
-    const key = `${dateVal}::${warehouse}::${varietyVal}::${kilosVal}`;
-    if (seen.has(key)) {
-      possibleDuplicates.push(`${key} (${warehouse}) - verify against the sheet, NOT auto-removed`);
+    const compositeKey = `${dateVal}::${warehouse}::${varietyVal}::${kilosVal}`;
+    if (seen.has(compositeKey)) {
+      duplicates.push(`${compositeKey} (${warehouse}) - no AI # on this row, verify against the sheet, NOT auto-removed`);
     } else {
-      seen.set(key, true);
+      seen.set(compositeKey, true);
     }
   }
-  return { rows: kept, duplicates: possibleDuplicates, cols: { dateCol, warehouseCol, varietyCol, kilosCol, ageGroupCol, typeCol } };
+  return { rows: kept, duplicates, cols: { dateCol, aiNumberCol, warehouseCol, varietyCol, kilosCol, ageGroupCol, typeCol } };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

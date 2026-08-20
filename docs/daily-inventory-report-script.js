@@ -296,7 +296,7 @@ function runSyncCore_() {
     const aiHeaders = getSheetHeaders_(aiSheet);
 
     const deData = getDateFilteredRows(deSheet, resolveColumnIndex_(deHeaders, ["Date"], 1) + 1, startDate);
-    const aiData = getDateFilteredRows(aiSheet, resolveColumnIndex_(aiHeaders, ["Date"], 0) + 1, startDate);
+    const aiData = getDateFilteredRows(aiSheet, resolveColumnIndexByPrefix_(aiHeaders, ["DATE"], 0) + 1, startDate);
     const setupData = setupSheet.getDataRange().getValues();
 
     const parsed = parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiHeaders);
@@ -458,6 +458,21 @@ function resolveColumnIndex_(headers, candidateNames, fallbackIndex) {
 }
 
 /**
+ * Like resolveColumnIndex_, but matches a header that STARTS WITH one of
+ * the given prefixes - for headers that embed the year, e.g. the AI
+ * sheet's confirmed "DATE (2026)" (will read "DATE (2027)" next year,
+ * "DATE (2028)" the year after, etc. - an exact-name match would break
+ * every January without this).
+ */
+function resolveColumnIndexByPrefix_(headers, prefixes, fallbackIndex) {
+  for (const prefix of prefixes) {
+    const idx = headers.findIndex((h) => h.toUpperCase().startsWith(prefix.toUpperCase()));
+    if (idx !== -1) return idx;
+  }
+  return fallbackIndex;
+}
+
+/**
  * DATA_ENTRY dedup — keyed by column NAME, not position (confirmed real
  * headers: Timestamp, Date, Transaction, Variety, Bags, Net Kilos,
  * Warehouse Name, Customer Name, Province, Net Bags, WH Code, WSR #,
@@ -516,53 +531,57 @@ function dedupDataEntryRows_(rows, headers) {
 }
 
 /**
- * AI sheet dedup — the exact AI header names haven't been confirmed yet
- * (only a DATA_ENTRY sample was provided), so this resolves by name
- * where candidates are given and otherwise falls back to v1's original
- * positional assumptions. Confirm/adjust the candidate name lists below
- * once you can paste a sample AI row the same way you did for
- * DATA_ENTRY - see docs/sheets-reports-setup.md.
- *
- * IMPORTANT: without a confirmed real AI reference/document number,
- * matching on date+warehouse+variety+kilos VALUES can't tell a true
- * duplicate row apart from two genuinely separate authorities that
- * happen to share the same date/warehouse/variety/amount (e.g. several
- * equal-sized tranches issued the same day). Silently dropping those
- * would delete real data - worse than leaving an occasional real
- * duplicate in. So this NEVER removes a row: every row is always kept
- * and counted; a repeated key is only reported as "possible duplicate,
- * please verify" for a human to check against the actual sheet. Once a
- * real AI document-number column is confirmed, this should switch to
- * genuine removal the same way dedupDataEntryRows_ already does.
+ * AI sheet dedup — confirmed real headers (from a sample row): DATE
+ * (2026) [year embedded, see resolveColumnIndexByPrefix_], AI #, NAME OF
+ * CUSTOMER, ISSUING WHSE, VARIETY CODE, BAG, NET KG, TRANSACTION,
+ * AUTHORITY, OR No., Note1, Note2, Age Group, Last Modified. "AI #" is a
+ * real unique reference number - a genuinely trustworthy key, so AI rows
+ * now dedup the same safe way DATA_ENTRY's WSR#/WSI# already does (real
+ * removal on a match). Any row that somehow has no AI # at all falls
+ * back to the conservative value-composite report-only check, same
+ * reasoning as dedupDataEntryRows_'s no-document-number branch.
  */
 function dedupAiRows_(rows, headers) {
-  const dateCol = resolveColumnIndex_(headers, ["Date"], 0);
-  const warehouseCol = resolveColumnIndex_(headers, ["Warehouse Name", "Warehouse"], 3);
-  const varietyCol = resolveColumnIndex_(headers, ["Variety"], 4);
-  const kilosCol = resolveColumnIndex_(headers, ["Net Kilos", "Kilos"], 6);
+  const dateCol = resolveColumnIndexByPrefix_(headers, ["DATE"], 0);
+  const aiNumberCol = resolveColumnIndex_(headers, ["AI #"], -1);
+  const warehouseCol = resolveColumnIndex_(headers, ["ISSUING WHSE", "Warehouse Name", "Warehouse"], 3);
+  const varietyCol = resolveColumnIndex_(headers, ["VARIETY CODE", "Variety"], 4);
+  const kilosCol = resolveColumnIndex_(headers, ["NET KG", "Net Kilos", "Kilos"], 6);
 
   const seen = new Map();
   const kept = [null];
-  const possibleDuplicates = [];
+  const duplicates = [];
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
 
-    const dateVal = row[dateCol], warehouse = String(row[warehouseCol] || "").trim();
-    const varietyVal = row[varietyCol], kilosVal = row[kilosCol];
-    const isBlankRow = !dateVal && !warehouse && !varietyVal && !kilosVal;
-    kept.push(row); // AI rows are ALWAYS kept - see note above
-    if (isBlankRow) continue; // nothing to flag on a genuinely blank row
+    const warehouse = String(row[warehouseCol] || "").trim();
+    const aiNumber = aiNumberCol !== -1 ? String(row[aiNumberCol] || "").trim() : "";
+    const dateVal = row[dateCol], varietyVal = row[varietyCol], kilosVal = row[kilosCol];
 
-    const key = `${dateVal}::${warehouse}::${varietyVal}::${kilosVal}`;
-    if (seen.has(key)) {
-      possibleDuplicates.push(`${key} (${warehouse}) - verify against the sheet, NOT auto-removed`);
+    if (aiNumber) {
+      // AI # is a real unique reference number - safe to actually remove.
+      if (seen.has(aiNumber)) { duplicates.push(`AI #${aiNumber} (${warehouse})`); continue; }
+      seen.set(aiNumber, true);
+      kept.push(row);
+      continue;
+    }
+
+    // No AI # on this row (shouldn't normally happen) - blank row, or a
+    // value-only match that isn't trustworthy enough to remove.
+    const isBlankRow = !dateVal && !warehouse && !varietyVal && !kilosVal;
+    kept.push(row);
+    if (isBlankRow) continue;
+
+    const compositeKey = `${dateVal}::${warehouse}::${varietyVal}::${kilosVal}`;
+    if (seen.has(compositeKey)) {
+      duplicates.push(`${compositeKey} (${warehouse}) - no AI # on this row, verify against the sheet, NOT auto-removed`);
     } else {
-      seen.set(key, true);
+      seen.set(compositeKey, true);
     }
   }
-  return { rows: kept, duplicates: possibleDuplicates, cols: { dateCol, warehouseCol, varietyCol, kilosCol } };
+  return { rows: kept, duplicates, cols: { dateCol, aiNumberCol, warehouseCol, varietyCol, kilosCol } };
 }
 
 function parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiHeaders) {
@@ -586,7 +605,7 @@ function parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiH
   const aiWarehouseCol = aiDedup.cols.warehouseCol;
   const aiVarietyCol = aiDedup.cols.varietyCol;
   const aiKilosCol = aiDedup.cols.kilosCol;
-  const aiTypeCol = resolveColumnIndex_(aiHeaders, ["Transaction", "Type"], 7);
+  const aiTypeCol = resolveColumnIndex_(aiHeaders, ["TRANSACTION", "Transaction", "Type"], 7);
   const aiAgeGroupCol = resolveColumnIndex_(aiHeaders, ["Age Group", "AGE"], 12);
 
   let allVarieties = new Set();
