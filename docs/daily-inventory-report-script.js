@@ -292,11 +292,14 @@ function runSyncCore_() {
       return { error: `Required sheets not found in source spreadsheet: ${missing}` };
     }
 
-    const deData = getDateFilteredRows(deSheet, 2, startDate);
-    const aiData = getDateFilteredRows(aiSheet, 1, startDate);
+    const deHeaders = getSheetHeaders_(deSheet);
+    const aiHeaders = getSheetHeaders_(aiSheet);
+
+    const deData = getDateFilteredRows(deSheet, resolveColumnIndex_(deHeaders, ["Date"], 1) + 1, startDate);
+    const aiData = getDateFilteredRows(aiSheet, resolveColumnIndex_(aiHeaders, ["Date"], 0) + 1, startDate);
     const setupData = setupSheet.getDataRange().getValues();
 
-    const parsed = parseAndFilterData(aiData, deData, setupData, startDate);
+    const parsed = parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiHeaders);
 
     if (parsed.columns.length === 0) {
       return { error: "No valid transactions or balances found for the selected period." };
@@ -438,46 +441,118 @@ function getDateFilteredRows(sheet, dateCol1Based, startDate) {
 // DATA PARSING (with source-row dedup + strict variety mapping)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Column indices (0-based) that hold each sheet's unique document number.
-// Adjust these if your DATA_ENTRY/AI column layout differs.
-const DE_DOC_NUMBER_COL = 11; // WSR # / WSI # column in DATA_ENTRY backup
-const AI_DOC_NUMBER_COL = 0;  // AI row has no single doc-number column in this layout;
-                               // fall back to a composite key (date+warehouse+variety+bags) below.
+/** Row 1 headers as trimmed strings, in column order (0-based). */
+function getSheetHeaders_(sheet) {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return [];
+  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || "").trim());
+}
 
-function dedupRows_(rows, startIdx, docNumberCol, warehouseCol, dateCol, varietyCol, bagsCol) {
+/** First matching column index for any of candidateNames, or fallbackIndex if none found. */
+function resolveColumnIndex_(headers, candidateNames, fallbackIndex) {
+  for (const name of candidateNames) {
+    const idx = headers.indexOf(name);
+    if (idx !== -1) return idx;
+  }
+  return fallbackIndex;
+}
+
+/**
+ * DATA_ENTRY dedup — keyed by column NAME, not position (confirmed real
+ * headers: Timestamp, Date, Transaction, Variety, Bags, Net Kilos,
+ * Warehouse Name, Customer Name, Province, Net Bags, WH Code, WSR #,
+ * WSI #, AGE, Age Unit, Last Modified). A row's own document number is
+ * whichever of WSR #/WSI # is actually populated for THAT row - a
+ * TRANSFER row can carry both (see the sample the user provided), so
+ * this checks WSR # first, then WSI #, per row rather than committing
+ * to a single column for every row.
+ */
+function dedupDataEntryRows_(rows, headers) {
+  const warehouseCol = resolveColumnIndex_(headers, ["Warehouse Name"], 6);
+  const wsrCol = resolveColumnIndex_(headers, ["WSR #"], 11);
+  const wsiCol = resolveColumnIndex_(headers, ["WSI #"], 12);
+  const dateCol = resolveColumnIndex_(headers, ["Date"], 1);
+  const varietyCol = resolveColumnIndex_(headers, ["Variety"], 3);
+  const netBagsCol = resolveColumnIndex_(headers, ["Net Bags"], 9);
+
   const seen = new Map();
   const kept = [null];
   const duplicates = [];
 
-  for (let i = startIdx; i < rows.length; i++) {
+  for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
-    const docNumber = docNumberCol != null ? String(row[docNumberCol] || "").trim() : "";
     const warehouse = String(row[warehouseCol] || "").trim();
+    const wsr = String(row[wsrCol] || "").trim();
+    const wsi = String(row[wsiCol] || "").trim();
+    const docNumber = wsr || wsi;
     const key = docNumber
       ? `${docNumber}::${warehouse}`
-      : `${row[dateCol]}::${warehouse}::${row[varietyCol]}::${row[bagsCol]}`; // composite fallback
+      : `${row[dateCol]}::${warehouse}::${row[varietyCol]}::${row[netBagsCol]}`;
 
-    if (!key.trim() || key === "::") { kept.push(row); continue; } // nothing to key on - keep, can't dedup safely
-
-    if (seen.has(key)) {
-      duplicates.push(`${docNumber || key} (${warehouse})`);
-      continue; // skip the duplicate, keep the first occurrence only
-    }
+    if (!key.trim() || key === "::") { kept.push(row); continue; }
+    if (seen.has(key)) { duplicates.push(`${docNumber || key} (${warehouse})`); continue; }
     seen.set(key, true);
     kept.push(row);
   }
-  return { rows: kept, duplicates };
+  return { rows: kept, duplicates, cols: { warehouseCol, wsrCol, wsiCol, dateCol, varietyCol, netBagsCol } };
 }
 
-function parseAndFilterData(aiData, deData, setupData, startDate) {
+/**
+ * AI sheet dedup — the exact AI header names haven't been confirmed yet
+ * (only a DATA_ENTRY sample was provided), so this resolves by name
+ * where candidates are given and otherwise falls back to v1's original
+ * positional assumptions. Confirm/adjust the candidate name lists below
+ * once you can paste a sample AI row the same way you did for
+ * DATA_ENTRY - see docs/sheets-reports-setup.md.
+ */
+function dedupAiRows_(rows, headers) {
+  const dateCol = resolveColumnIndex_(headers, ["Date"], 0);
+  const warehouseCol = resolveColumnIndex_(headers, ["Warehouse Name", "Warehouse"], 3);
+  const varietyCol = resolveColumnIndex_(headers, ["Variety"], 4);
+  const kilosCol = resolveColumnIndex_(headers, ["Net Kilos", "Kilos"], 6);
+
+  const seen = new Map();
+  const kept = [null];
+  const duplicates = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const warehouse = String(row[warehouseCol] || "").trim();
+    // No single confirmed doc-number column for AI yet - composite key.
+    const key = `${row[dateCol]}::${warehouse}::${row[varietyCol]}::${row[kilosCol]}`;
+    if (!key.trim() || key === "::") { kept.push(row); continue; }
+    if (seen.has(key)) { duplicates.push(`${key} (${warehouse})`); continue; }
+    seen.set(key, true);
+    kept.push(row);
+  }
+  return { rows: kept, duplicates, cols: { dateCol, warehouseCol, varietyCol, kilosCol } };
+}
+
+function parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiHeaders) {
   const isExcluded = v => !v || EXCLUDED_VARIETIES.has(v.toString().trim().toUpperCase());
 
-  const deDedup = dedupRows_(deData, 1, DE_DOC_NUMBER_COL, 6, 1, 3, 9);
-  const aiDedup = dedupRows_(aiData, 1, null, 3, 0, 4, 6);
+  const deDedup = dedupDataEntryRows_(deData, deHeaders);
+  const aiDedup = dedupAiRows_(aiData, aiHeaders);
   deData = deDedup.rows;
   aiData = aiDedup.rows;
   const duplicateRows = [...deDedup.duplicates.map(d => `DATA_ENTRY: ${d}`), ...aiDedup.duplicates.map(d => `AI: ${d}`)];
+
+  // Resolve the remaining column names once, by header, for use below.
+  const deVarietyCol = deDedup.cols.varietyCol;
+  const deDateCol = deDedup.cols.dateCol;
+  const deNetBagsCol = deDedup.cols.netBagsCol;
+  const deWarehouseCol = deDedup.cols.warehouseCol;
+  const deTransactionCol = resolveColumnIndex_(deHeaders, ["Transaction"], 2);
+  const deAgeCol = resolveColumnIndex_(deHeaders, ["AGE"], 13); // NOT "Age Unit" (a text label like "Days") - that was v1's bug
+
+  const aiDateCol = aiDedup.cols.dateCol;
+  const aiWarehouseCol = aiDedup.cols.warehouseCol;
+  const aiVarietyCol = aiDedup.cols.varietyCol;
+  const aiKilosCol = aiDedup.cols.kilosCol;
+  const aiTypeCol = resolveColumnIndex_(aiHeaders, ["Transaction", "Type"], 7);
+  const aiAgeGroupCol = resolveColumnIndex_(aiHeaders, ["Age Group", "AGE"], 12);
 
   let allVarieties = new Set();
   let varietyTypeMap = {};
@@ -494,12 +569,12 @@ function parseAndFilterData(aiData, deData, setupData, startDate) {
   }
   if (deData && deData.length > 1) {
     for (let i = 1; i < deData.length; i++) {
-      if (deData[i][3]) allVarieties.add(deData[i][3].toString().trim());
+      if (deData[i] && deData[i][deVarietyCol]) allVarieties.add(deData[i][deVarietyCol].toString().trim());
     }
   }
   if (aiData && aiData.length > 1) {
     for (let i = 1; i < aiData.length; i++) {
-      if (aiData[i][4]) allVarieties.add(aiData[i][4].toString().trim());
+      if (aiData[i] && aiData[i][aiVarietyCol]) allVarieties.add(aiData[i][aiVarietyCol].toString().trim());
     }
   }
 
@@ -532,12 +607,12 @@ function parseAndFilterData(aiData, deData, setupData, startDate) {
 
   for (let i = 1; i < deData.length; i++) {
     const row = deData[i];
-    if (!row || !row[1]) continue;
-    const date = row[1] instanceof Date ? row[1] : new Date(row[1]);
+    if (!row || !row[deDateCol]) continue;
+    const date = row[deDateCol] instanceof Date ? row[deDateCol] : new Date(row[deDateCol]);
     if (isNaN(date.getTime()) || date < startDate) continue;
 
-    const variety = row[3];
-    const netBags = Number(row[9]) || 0;
+    const variety = row[deVarietyCol];
+    const netBags = Number(row[deNetBagsCol]) || 0;
     if (netBags === 0 || isExcluded(variety)) continue;
 
     const dateInfo = getCachedDateInfo(date);
@@ -545,10 +620,12 @@ function parseAndFilterData(aiData, deData, setupData, startDate) {
     if (!monthDates[m] || date < monthDates[m]) monthDates[m] = new Date(date);
 
     initDay(m, d);
-    const age = getAgeGroupFromVariety(variety, row[14], varietyTypeMap);
-    const destinationWh = row[6] ? row[6].toString().trim() : "";
+    // deAgeCol resolves to the real "AGE" column (numeric months/days),
+    // NOT "Age Unit" (a text label like "Days") - v1 read the wrong one.
+    const age = getAgeGroupFromVariety(variety, row[deAgeCol], varietyTypeMap);
+    const destinationWh = row[deWarehouseCol] ? row[deWarehouseCol].toString().trim() : "";
     const key = `${destinationWh}|${variety}|${age}`;
-    const type = (row[2] || "RECEIPT").toString().toUpperCase().trim();
+    const type = (row[deTransactionCol] || "RECEIPT").toString().toUpperCase().trim();
 
     if (!months[m][d].add[type]) months[m][d].add[type] = {};
     months[m][d].add[type][key] = (months[m][d].add[type][key] || 0) + netBags;
@@ -556,15 +633,15 @@ function parseAndFilterData(aiData, deData, setupData, startDate) {
 
   for (let i = 1; i < aiData.length; i++) {
     const row = aiData[i];
-    if (!row || !row[0]) continue;
-    const date = row[0] instanceof Date ? row[0] : new Date(row[0]);
+    if (!row || !row[aiDateCol]) continue;
+    const date = row[aiDateCol] instanceof Date ? row[aiDateCol] : new Date(row[aiDateCol]);
     if (isNaN(date.getTime()) || date < startDate) continue;
 
-    const variety = row[4];
-    const netBags = (Number(row[6]) || 0) / 50;
+    const variety = row[aiVarietyCol];
+    const netBags = (Number(row[aiKilosCol]) || 0) / 50;
     if (netBags === 0 || isExcluded(variety)) continue;
 
-    const age = row[12];
+    const age = row[aiAgeGroupCol];
     if (age === undefined || age === null || age.toString().trim() === "") continue;
 
     const dateInfo = getCachedDateInfo(date);
@@ -572,10 +649,10 @@ function parseAndFilterData(aiData, deData, setupData, startDate) {
     if (!monthDates[m] || date < monthDates[m]) monthDates[m] = new Date(date);
 
     initDay(m, d);
-    const sourceWh = (row[3] || "").toString().trim();
+    const sourceWh = (row[aiWarehouseCol] || "").toString().trim();
     const sourceWhUpper = sourceWh.toUpperCase();
     const key = `${sourceWh}|${variety}|${age}`;
-    const type = (row[7] || "ISSUE").toString().toUpperCase().trim();
+    const type = (row[aiTypeCol] || "ISSUE").toString().toUpperCase().trim();
 
     if (sourceWhUpper === "PHF" && type.includes("TRANSFER")) {
       const addType = "MECHANICAL DRYING";

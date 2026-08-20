@@ -73,9 +73,6 @@ const CONFIG = {
 const SETUP_SHEET_NAME = "SETUP";
 const QA_SUBMISSIONS_SHEET_NAME = "QA_AGE_SUBMISSIONS";
 
-// Column indices (0-based), matching v1's layout — adjust if yours differs.
-const DE_DOC_NUMBER_COL = 11;
-
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('⏳ Age Monitoring')
     .addItem('⛳ Initialize Setup Sheet', 'initializeSetupSheet')
@@ -236,25 +233,78 @@ function readLatestSubmissions_(ss, asOfDate) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SOURCE-ROW DEDUPLICATION (same approach as the Inventory script)
+// SOURCE-ROW DEDUPLICATION — keyed by column NAME, not position, same
+// approach (and same confirmed DATA_ENTRY headers) as the Inventory
+// script. See dedupDataEntryRows_/dedupAiRows_ in
+// daily-inventory-report-script.js for the header names this resolves.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function dedupRows_(rows, docNumberCol, warehouseCol, dateCol, varietyCol, bagsCol) {
+/** Row 1 headers as trimmed strings, in column order (0-based). */
+function getSheetHeaders_(sheet) {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return [];
+  return sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || "").trim());
+}
+
+function resolveColumnIndex_(headers, candidateNames, fallbackIndex) {
+  for (const name of candidateNames) {
+    const idx = headers.indexOf(name);
+    if (idx !== -1) return idx;
+  }
+  return fallbackIndex;
+}
+
+/** DATA_ENTRY dedup — WSR # first, else WSI #, per row (a TRANSFER row can carry both). */
+function dedupDataEntryRows_(rows, headers) {
+  const warehouseCol = resolveColumnIndex_(headers, ["Warehouse Name"], 6);
+  const wsrCol = resolveColumnIndex_(headers, ["WSR #"], 11);
+  const wsiCol = resolveColumnIndex_(headers, ["WSI #"], 12);
+  const dateCol = resolveColumnIndex_(headers, ["Date"], 1);
+  const varietyCol = resolveColumnIndex_(headers, ["Variety"], 3);
+  const netBagsCol = resolveColumnIndex_(headers, ["Net Bags"], 9);
+
   const seen = new Map();
-  const kept = [];
+  const kept = [null];
   const duplicates = [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
-    const docNumber = docNumberCol != null ? String(row[docNumberCol] || "").trim() : "";
     const warehouse = String(row[warehouseCol] || "").trim();
-    const key = docNumber ? `${docNumber}::${warehouse}` : `${row[dateCol]}::${warehouse}::${row[varietyCol]}::${row[bagsCol]}`;
+    const wsr = String(row[wsrCol] || "").trim();
+    const wsi = String(row[wsiCol] || "").trim();
+    const docNumber = wsr || wsi;
+    const key = docNumber ? `${docNumber}::${warehouse}` : `${row[dateCol]}::${warehouse}::${row[varietyCol]}::${row[netBagsCol]}`;
     if (!key.trim() || key === "::") { kept.push(row); continue; }
     if (seen.has(key)) { duplicates.push(`${docNumber || key} (${warehouse})`); continue; }
     seen.set(key, true);
     kept.push(row);
   }
-  return { rows: kept, duplicates };
+  return { rows: kept, duplicates, cols: { warehouseCol, dateCol, varietyCol, netBagsCol } };
+}
+
+/** AI dedup — composite key (AI headers not yet confirmed; adjust candidates once you have a sample row). */
+function dedupAiRows_(rows, headers) {
+  const dateCol = resolveColumnIndex_(headers, ["Date"], 0);
+  const warehouseCol = resolveColumnIndex_(headers, ["Warehouse Name", "Warehouse"], 3);
+  const varietyCol = resolveColumnIndex_(headers, ["Variety"], 4);
+  const kilosCol = resolveColumnIndex_(headers, ["Net Kilos", "Kilos"], 6);
+  const ageGroupCol = resolveColumnIndex_(headers, ["Age Group", "AGE"], 12);
+  const typeCol = resolveColumnIndex_(headers, ["Transaction", "Type"], 7);
+
+  const seen = new Map();
+  const kept = [null];
+  const duplicates = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const warehouse = String(row[warehouseCol] || "").trim();
+    const key = `${row[dateCol]}::${warehouse}::${row[varietyCol]}::${row[kilosCol]}`;
+    if (!key.trim() || key === "::") { kept.push(row); continue; }
+    if (seen.has(key)) { duplicates.push(`${key} (${warehouse})`); continue; }
+    seen.set(key, true);
+    kept.push(row);
+  }
+  return { rows: kept, duplicates, cols: { dateCol, warehouseCol, varietyCol, kilosCol, ageGroupCol, typeCol } };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -316,17 +366,22 @@ function runReportCore_() {
     const duplicateRows = [];
     const fifoShortfalls = [];
 
+    const recHeaders = getSheetHeaders_(recSheet);
+    const issHeaders = getSheetHeaders_(issSheet);
+
     // 1. Receipts, deduped, age anchored to QA submission when one exists
     const recRaw = recSheet.getDataRange().getValues();
-    const recDedup = dedupRows_(recRaw, DE_DOC_NUMBER_COL, 6, 1, 3, 9);
+    const recDedup = dedupDataEntryRows_(recRaw, recHeaders);
     duplicateRows.push(...recDedup.duplicates.map((d) => `${CONFIG.SHEET_RECEIPTS}: ${d}`));
+    const recAgeCol = resolveColumnIndex_(recHeaders, ["AGE"], 13); // NOT "Age Unit" - a text label like "Days"
 
     recDedup.rows.forEach((row) => {
-      const rDate = new Date(row[1]);
+      if (!row) return;
+      const rDate = new Date(row[recDedup.cols.dateCol]);
       if (isNaN(rDate.getTime()) || rDate < startDate || rDate > endDate) return;
 
-      const wh = row[6], variety = row[3];
-      const bags = parseFloat(row[9]) || 0;
+      const wh = row[recDedup.cols.warehouseCol], variety = row[recDedup.cols.varietyCol];
+      const bags = parseFloat(row[recDedup.cols.netBagsCol]) || 0;
       if (!wh || !variety || bags === 0) return;
 
       const subKey = `${String(wh).trim()}|${String(variety).trim().toLowerCase()}`;
@@ -335,7 +390,7 @@ function runReportCore_() {
         const elapsedSinceSubmission = (endDate.getTime() - latestSubmissions[subKey].submissionDate.getTime()) / msPerMonth;
         ageMonths = latestSubmissions[subKey].ageMonths + elapsedSinceSubmission;
       } else {
-        const transferAgeOverride = parseFloat(row[14]);
+        const transferAgeOverride = parseFloat(row[recAgeCol]);
         if (!isNaN(transferAgeOverride) && transferAgeOverride > 0) {
           ageMonths = transferAgeOverride + (endDate.getTime() - rDate.getTime()) / msPerMonth;
         } else {
@@ -347,18 +402,19 @@ function runReportCore_() {
 
     // 2. Issuances (FIFO against the AI sheet's own age-group column), deduped
     const issRaw = issSheet.getDataRange().getValues();
-    const issDedup = dedupRows_(issRaw, null, 3, 0, 4, 6);
+    const issDedup = dedupAiRows_(issRaw, issHeaders);
     duplicateRows.push(...issDedup.duplicates.map((d) => `${CONFIG.SHEET_ISSUES}: ${d}`));
 
     issDedup.rows.forEach((row) => {
-      if (row[6] === "" || parseFloat(row[6]) <= 0) return;
-      const iDate = new Date(row[0]);
+      if (!row) return;
+      if (row[issDedup.cols.kilosCol] === "" || parseFloat(row[issDedup.cols.kilosCol]) <= 0) return;
+      const iDate = new Date(row[issDedup.cols.dateCol]);
       if (isNaN(iDate.getTime()) || iDate < startDate || iDate > endDate) return;
 
-      const wh = row[3];
-      const varCode = String(row[4]).toLowerCase();
-      const bags = parseFloat(row[6]) / 50;
-      const ageGroupCode = String(row[12]);
+      const wh = row[issDedup.cols.warehouseCol];
+      const varCode = String(row[issDedup.cols.varietyCol]).toLowerCase();
+      const bags = parseFloat(row[issDedup.cols.kilosCol]) / 50;
+      const ageGroupCode = String(row[issDedup.cols.ageGroupCol]);
 
       if (inventory[wh] && inventory[wh][varCode]) {
         const shortfall = applyFIFO(inventory[wh][varCode], bags, ageGroupCode, isRice(varCode));

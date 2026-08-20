@@ -16745,3 +16745,31 @@ pasted into two new Google Spreadsheets the user creates themselves
 this repo's own build/deploy pipeline references them. Both new files
 syntax-checked clean via `node --check`. Not yet confirmed working by the
 user against real data.
+
+## Round 34: Header-name-based column lookup for the Sheets reports (fixes a real age bug found from a real sample row)
+
+User pasted a real `DATA_ENTRY` row and asked whether dedup should key off
+column headers instead of hardcoded indices - yes, and doing so surfaced a
+real bug already present in both v1 scripts and my initial v2 copies:
+`row[14]` was being read as the numeric age, but column 14 is actually
+"Age Unit" (text, e.g. "Days") - the real numeric "AGE" column is index 13.
+Every receipt's age was silently defaulting to 0 (youngest bucket) because
+`Number("Days")` is `NaN`.
+
+Fixed in both scripts: added `getSheetHeaders_`/`resolveColumnIndex_`
+helpers, rewrote DATA_ENTRY dedup (`dedupDataEntryRows_`) to key on
+whichever of WSR #/WSI # is populated per row (confirmed via the sample -
+a TRANSFER row can carry both), and switched every DATA_ENTRY column
+reference (date, variety, net bags, warehouse, transaction type, age) from
+hardcoded indices to header-name lookup with the confirmed real names.
+AI sheet columns also switched to the same resolution mechanism, but its
+exact header names aren't confirmed yet (no sample AI row provided) - falls
+back to v1's original positional assumptions until a sample is given: noted
+explicitly in docs/sheets-reports-setup.md.
+
+### Files touched
+`docs/daily-inventory-report-script.js`, `docs/age-monitoring-report-script.js`,
+`docs/sheets-reports-setup.md`.
+
+Both scripts re-verified with `node --check`. Still not deployed/confirmed
+against real data.

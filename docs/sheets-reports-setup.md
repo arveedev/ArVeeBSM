@@ -60,6 +60,19 @@ existing working data as a sanity check.
   monthly age *submission* is deliberately left open to QA staff, since
   gating that too would defeat the point of QA being able to update it.
 
+## About column lookup
+
+Both scripts resolve `DATA_ENTRY` columns by **header name** (Timestamp,
+Date, Transaction, Variety, Bags, Net Kilos, Warehouse Name, Customer Name,
+Province, Net Bags, WH Code, WSR #, WSI #, AGE, Age Unit, Last Modified —
+confirmed from a real row), not by position, so reordering/adding columns
+there won't silently break anything. The `AI` sheet's exact header names
+haven't been confirmed the same way yet — the scripts fall back to the
+original script's positional assumptions for it. If you can paste a sample
+AI row (same way you did for DATA_ENTRY) before the first real run, both
+scripts' `dedupAiRows_`/AI column resolution can be switched to name-based
+lookup too, closing the same gap on that side.
+
 ## If something looks wrong
 
 Every run's alert dialog (or, for the automated daily trigger, the Apps
