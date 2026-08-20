@@ -9,11 +9,19 @@
  *    never writes a single cell there.
  * 2. In this new spreadsheet, add a "Config" sheet with:
  *      B1 = URL of the existing production spreadsheet (the one with
- *           AI / DATA_ENTRY / SETUP_AGE_MONITORING)
+ *           AI / DATA_ENTRY - this script only reads those two sheets
+ *           from it, nothing else)
  *      B2 = the date to start accounting from (e.g. 2026-05-01)
  *      B3 = comma-separated list of admin emails allowed to run/trigger
  *           a sync (e.g. "arvee.dev.apps@gmail.com, other.admin@x.com")
- * 3. Run "Install Daily Auto-Update" from the menu once (authorizes the
+ * 3. Run "⛳ Initialize Setup Sheet" once - creates this spreadsheet's
+ *    OWN local SETUP sheet (variety->category map + optional one-time
+ *    starting balances). Fill in every variety your warehouses use
+ *    before the first sync. This SETUP sheet is fully self-contained -
+ *    it does NOT read from the production spreadsheet's
+ *    SETUP_AGE_MONITORING sheet at all (that dependency has been removed
+ *    entirely; each new report spreadsheet now owns its own config).
+ * 4. Run "Install Daily Auto-Update" from the menu once (authorizes the
  *    trigger). After that, this spreadsheet updates itself every day
  *    with no further action needed.
  *
@@ -98,11 +106,93 @@ function getCachedDateInfo(dateObj) {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('🌾 GSR Daily Inventory')
+    .addItem('⛳ Initialize Setup Sheet', 'initializeSetupSheet')
+    .addSeparator()
     .addItem('🚀 Update Now', 'syncGSRDataManual')
     .addSeparator()
     .addItem('⏰ Install Daily Auto-Update', 'installDailyTrigger')
     .addItem('🛑 Remove Daily Auto-Update', 'removeDailyTrigger')
     .addToUi();
+}
+
+const SETUP_SHEET_NAME = "SETUP";
+
+/**
+ * This spreadsheet's OWN local variety->category map + optional one-time
+ * starting balances - fully self-contained, no dependency on the
+ * production spreadsheet's SETUP_AGE_MONITORING sheet at all (that sheet
+ * is being phased out in favor of each new report spreadsheet owning its
+ * own config). Add every variety code your warehouses use so nothing
+ * ends up unmapped. The starting-balance block is only ever consulted
+ * for the very first sync of a brand-new warehouse+variety+age
+ * combination that has no prior month recorded in the hidden STATE
+ * sheet yet - after that, STATE is always the source of truth and this
+ * block is never re-read for that combination.
+ */
+function initializeSetupSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let setupSheet = ss.getSheetByName(SETUP_SHEET_NAME) || ss.insertSheet(SETUP_SHEET_NAME);
+  if (setupSheet.getLastRow() > 0) {
+    SpreadsheetApp.getUi().alert('SETUP already exists - not overwriting your entries. Add rows to it directly.');
+    return;
+  }
+
+  const headers = [
+    ["VARIETY → CATEGORY MAP — add every variety code you use", "", "", "", "", "", "", ""],
+    ["Variety", "Category (Palay or Rice)", "", "", "", "", "", ""],
+    ["WD1", "Rice", "", "", "", "", "", ""],
+    ["PD1-A", "Palay", "", "", "", "", "", ""],
+    ["", "", "", "", "", "", "", ""],
+    ["ONE-TIME STARTING BALANCES — only used the very first time a warehouse+variety+age combination is seen; ignored forever after that (STATE takes over)", "", "", "", "", "", "", ""],
+    ["", "", "Warehouse", "Category (Palay/Rice)", "Variety", "Age (months)", "Net Bags", ""],
+  ];
+  setupSheet.getRange(1, 1, headers.length, 8).setValues(headers);
+  setupSheet.getRange("A1:H1").merge().setFontWeight("bold").setBackground("#d9ead3");
+  setupSheet.getRange("A2:B2").setFontWeight("bold").setBackground("#f3f3f3");
+  setupSheet.getRange("A6:H6").merge().setFontWeight("bold").setBackground("#cfe2f3").setWrap(true);
+  setupSheet.getRange("C7:G7").setFontWeight("bold").setBackground("#f3f3f3");
+  setupSheet.autoResizeColumns(1, 8);
+
+  SpreadsheetApp.getUi().alert('SETUP ready. Fill in every variety your warehouses use, and (optionally) starting balances, before the first "Update Now".');
+}
+
+/** Returns { varietyUpper: "rice"|"palay" } from this spreadsheet's own local SETUP sheet. */
+function readVarietyCategoryMap_(ss) {
+  const setupSheet = ss.getSheetByName(SETUP_SHEET_NAME);
+  const map = {};
+  if (!setupSheet) return map;
+  const values = setupSheet.getDataRange().getValues();
+  for (let i = 2; i < values.length; i++) {
+    const variety = String(values[i][0] || "").trim();
+    const cat = String(values[i][1] || "").trim().toLowerCase();
+    if (!variety) continue;
+    if (variety.toUpperCase().includes("STARTING BALANCES")) break; // reached the second block
+    if (cat === "rice" || cat === "palay") map[variety] = cat;
+  }
+  return map;
+}
+
+/** Returns { "warehouse|variety|age": netBags } from this spreadsheet's own local SETUP sheet's starting-balances block. */
+function readStartingBalances_(ss) {
+  const setupSheet = ss.getSheetByName(SETUP_SHEET_NAME);
+  const balances = {};
+  if (!setupSheet) return balances;
+  const values = setupSheet.getDataRange().getValues();
+  let inBalancesBlock = false;
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+    if (String(row[0] || "").toUpperCase().includes("STARTING BALANCES")) { inBalancesBlock = true; continue; }
+    if (!inBalancesBlock) continue;
+    if (String(row[2] || "").trim() === "Warehouse") continue; // that block's own header row
+    const wh = row[2], type = row[3], variety = row[4], ageVal = row[5];
+    const netBags = Number(row[6]) || 0;
+    if (wh && variety && netBags !== 0) {
+      const age = getAgeGroupFromType(type, ageVal);
+      const key = `${wh}|${variety}|${age}`;
+      balances[key] = (balances[key] || 0) + netBags;
+    }
+  }
+  return balances;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -242,7 +332,7 @@ function buildSummaryMessage_(result) {
     msg += `Skipped ${result.monthsToSkip.length} existing month sheet(s): ${result.monthsToSkip.join(", ")}.\n`;
   }
   if (result.unmappedVarieties.length > 0) {
-    msg += `\n⚠️ Unmapped varieties (add to SETUP_AGE_MONITORING): ${result.unmappedVarieties.join(", ")}.\n`;
+    msg += `\n⚠️ Unmapped varieties (add to this spreadsheet's own SETUP sheet): ${result.unmappedVarieties.join(", ")}.\n`;
   }
   if (result.duplicateRows.length > 0) {
     msg += `\n⚠️ Duplicate source rows ignored (same document # + warehouse seen more than once):\n${result.duplicateRows.join("\n")}\n`;
@@ -283,12 +373,14 @@ function runSyncCore_() {
       return { error: "Start date in Config B2 is missing or invalid." };
     }
 
+    const setupSheet = ss.getSheetByName(SETUP_SHEET_NAME);
+    if (!setupSheet) return { error: 'Run "Initialize Setup Sheet" first.' };
+
     const sourceSs = SpreadsheetApp.openByUrl(sourceUrl);
     const aiSheet = sourceSs.getSheetByName("AI");
     const deSheet = sourceSs.getSheetByName("DATA_ENTRY");
-    const setupSheet = sourceSs.getSheetByName("SETUP_AGE_MONITORING");
-    if (!aiSheet || !deSheet || !setupSheet) {
-      const missing = [!aiSheet && "AI", !deSheet && "DATA_ENTRY", !setupSheet && "SETUP_AGE_MONITORING"].filter(Boolean).join(", ");
+    if (!aiSheet || !deSheet) {
+      const missing = [!aiSheet && "AI", !deSheet && "DATA_ENTRY"].filter(Boolean).join(", ");
       return { error: `Required sheets not found in source spreadsheet: ${missing}` };
     }
 
@@ -297,9 +389,10 @@ function runSyncCore_() {
 
     const deData = getDateFilteredRows(deSheet, resolveColumnIndex_(deHeaders, ["Date"], 1) + 1, startDate);
     const aiData = getDateFilteredRows(aiSheet, resolveColumnIndexByPrefix_(aiHeaders, ["DATE"], 0) + 1, startDate);
-    const setupData = setupSheet.getDataRange().getValues();
+    const varietyTypeMap = readVarietyCategoryMap_(ss);
+    const startingBalances = readStartingBalances_(ss);
 
-    const parsed = parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiHeaders);
+    const parsed = parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, varietyTypeMap, startingBalances);
 
     if (parsed.columns.length === 0) {
       return { error: "No valid transactions or balances found for the selected period." };
@@ -584,7 +677,7 @@ function dedupAiRows_(rows, headers) {
   return { rows: kept, duplicates, cols: { dateCol, aiNumberCol, warehouseCol, varietyCol, kilosCol } };
 }
 
-function parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiHeaders) {
+function parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, varietyTypeMap, startingBalances) {
   const isExcluded = v => !v || EXCLUDED_VARIETIES.has(v.toString().trim().toUpperCase());
 
   const deDedup = dedupDataEntryRows_(deData, deHeaders);
@@ -608,19 +701,8 @@ function parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiH
   const aiTypeCol = resolveColumnIndex_(aiHeaders, ["TRANSACTION", "Transaction", "Type"], 7);
   const aiAgeGroupCol = resolveColumnIndex_(aiHeaders, ["Age Group", "AGE"], 12);
 
-  let allVarieties = new Set();
-  let varietyTypeMap = {};
+  let allVarieties = new Set(Object.keys(varietyTypeMap));
 
-  if (setupData && setupData.length > 1) {
-    for (let i = 1; i < setupData.length; i++) {
-      const row = setupData[i];
-      if (row[5]) {
-        const v = row[5].toString().trim();
-        allVarieties.add(v);
-        if (row[4]) varietyTypeMap[v] = row[4].toString().toLowerCase();
-      }
-    }
-  }
   if (deData && deData.length > 1) {
     for (let i = 1; i < deData.length; i++) {
       if (deData[i] && deData[i][deVarietyCol]) allVarieties.add(deData[i][deVarietyCol].toString().trim());
@@ -640,17 +722,7 @@ function parseAndFilterData(aiData, deData, setupData, startDate, deHeaders, aiH
     }
   });
 
-  let balances = {};
-  for (let i = 1; i < setupData.length; i++) {
-    const row = setupData[i];
-    const wh = row[3], type = row[4], variety = row[5], ageVal = row[6];
-    const netBags = Number(row[7]) || 0;
-    if (wh && variety && netBags !== 0 && !isExcluded(variety)) {
-      const age = getAgeGroupFromType(type, ageVal);
-      const key = `${wh}|${variety}|${age}`;
-      balances[key] = (balances[key] || 0) + netBags;
-    }
-  }
+  const balances = Object.assign({}, startingBalances); // this spreadsheet's own local SETUP, not the production sheet
 
   let months = {};
   let monthDates = {};

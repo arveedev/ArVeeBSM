@@ -1,0 +1,99 @@
+<!--
+  Add this as an HTML file named "BulkAgeImportForm" in the Age
+  Monitoring spreadsheet's Apps Script project, matching the filename
+  showBulkAgeImportForm() loads via
+  HtmlService.createHtmlOutputFromFile('BulkAgeImportForm') in
+  age-monitoring-report-script.js.
+
+  Run this ONCE right after "Initialize Setup Sheet", before the first
+  "Generate/Update Report" - it seeds QA's CURRENT, already-known age
+  reading for every warehouse+variety at once, so the first report
+  starts from real observed data instead of every combination defaulting
+  to a pure elapsed-time-since-receipt guess until someone happens to
+  submit it individually via the single-row form later.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; }
+    label { display: block; margin-top: 12px; font-weight: bold; font-size: 13px; }
+    textarea { width: 100%; height: 220px; padding: 8px; margin-top: 4px; box-sizing: border-box; font-family: monospace; font-size: 13px; }
+    button { margin-top: 16px; padding: 10px 16px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    button:disabled { background: #999; cursor: not-allowed; }
+    #status { margin-top: 12px; font-size: 13px; white-space: pre-wrap; }
+    #status.error { color: #b71c1c; }
+    #status.success { color: #2e7d32; }
+    .hint { font-size: 12px; color: #666; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <h3>Bulk Import Latest Known Ages</h3>
+  <p class="hint">
+    One warehouse+variety+age per line, comma-separated:<br>
+    <code>Warehouse, Variety, Age in months</code><br>
+    Example:<br>
+    <code>BSI B, WD1, 2.5</code><br>
+    <code>TAB GID, PDm, 8</code>
+  </p>
+
+  <label for="bulkInput">Paste QA's current known ages</label>
+  <textarea id="bulkInput" placeholder="BSI B, WD1, 2.5&#10;TAB GID, PDm, 8"></textarea>
+
+  <button id="submitBtn" onclick="submitBulk()">Import All</button>
+  <div id="status"></div>
+
+  <script>
+    function parseLines(text) {
+      return text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const parts = line.split(',').map((p) => p.trim());
+          return { warehouse: parts[0] || '', variety: parts[1] || '', ageMonths: parts[2] || '' };
+        });
+    }
+
+    function submitBulk() {
+      const text = document.getElementById('bulkInput').value;
+      const status = document.getElementById('status');
+      const btn = document.getElementById('submitBtn');
+      const rows = parseLines(text);
+
+      if (rows.length === 0) {
+        status.textContent = 'Paste at least one line first.';
+        status.className = 'error';
+        return;
+      }
+
+      btn.disabled = true;
+      status.textContent = 'Importing ' + rows.length + ' row(s)...';
+      status.className = '';
+
+      google.script.run
+        .withSuccessHandler((result) => {
+          btn.disabled = false;
+          if (result.status === 'success') {
+            let msg = 'Imported ' + result.imported + ' row(s).';
+            if (result.skipped && result.skipped.length > 0) {
+              msg += '\n\nSkipped (missing/invalid fields):\n' + result.skipped.join('\n');
+            }
+            status.textContent = msg;
+            status.className = 'success';
+          } else {
+            status.textContent = result.message || 'Something went wrong.';
+            status.className = 'error';
+          }
+        })
+        .withFailureHandler((err) => {
+          btn.disabled = false;
+          status.textContent = 'Error: ' + err.message;
+          status.className = 'error';
+        })
+        .recordAgeSubmissionsBulk(rows);
+    }
+  </script>
+</body>
+</html>

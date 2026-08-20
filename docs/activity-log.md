@@ -16843,3 +16843,44 @@ Both re-verified with `node --check`. Still not deployed/confirmed
 against real data end-to-end (user has run the inventory sync once so
 far, prompting Round 35's fix; hasn't yet re-run with this round's
 changes).
+
+## Round 37: Daily Inventory gets its own local SETUP; Age Monitoring gets a bulk QA-age seed
+
+User caught an inconsistency: Daily Inventory was still reading the
+production spreadsheet's SETUP_AGE_MONITORING sheet for its variety
+mapping/starting balances, even though the whole point of the new
+spreadsheets is to stop depending on that sheet. Also flagged that Age
+Monitoring's QA_AGE_SUBMISSIONS only fills in going forward - it never
+seeds from QA's CURRENT already-known readings, so the first report would
+default every warehouse/variety to a pure elapsed-time guess.
+
+Fixed both:
+
+- **Daily Inventory**: added its own local SETUP sheet (variety->category
+  map + an optional one-time starting-balance block, mirroring the
+  structure Age Monitoring's SETUP already had). `initializeSetupSheet`
+  menu item added. `runSyncCore_`/`parseAndFilterData` no longer read or
+  require SETUP_AGE_MONITORING from the production spreadsheet at all -
+  the required-sheets check now only checks for AI and DATA_ENTRY there.
+  `readVarietyCategoryMap_`/`readStartingBalances_` read the local SETUP
+  instead.
+
+- **Age Monitoring**: added `recordAgeSubmissionsBulk` + a new
+  `BulkAgeImportForm` HTML modal (`docs/age-bulk-import-form.html`) with
+  a paste-many-lines textarea ("Warehouse, Variety, Age" per line),
+  wired to a new "📋 Bulk Import Latest Known Ages" menu item. Documented
+  as a one-time setup step (right after Initialize Setup Sheet, before
+  the first report) so the first report anchors to QA's real current
+  knowledge instead of guessing. Refactored the single-row upsert logic
+  into a shared `upsertAgeSubmission_` helper used by both the form and
+  the bulk path.
+
+### Files touched
+`docs/daily-inventory-report-script.js`, `docs/age-monitoring-report-script.js`,
+`docs/sheets-reports-setup.md`.
+
+### Files added
+`docs/age-bulk-import-form.html`.
+
+Both scripts re-verified with `node --check`. Still not deployed/confirmed
+against real data end-to-end.

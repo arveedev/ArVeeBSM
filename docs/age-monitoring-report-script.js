@@ -77,6 +77,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('⏳ Age Monitoring')
     .addItem('⛳ Initialize Setup Sheet', 'initializeSetupSheet')
     .addItem('📝 Submit Monthly Ages (QA)', 'showAgeSubmissionForm')
+    .addItem('📋 Bulk Import Latest Known Ages (initial seed)', 'showBulkAgeImportForm')
     .addSeparator()
     .addItem('✅ Generate/Update Report', 'generateMonitoringReportManual')
     .addToUi();
@@ -154,6 +155,22 @@ function showAgeSubmissionForm() {
 }
 
 /**
+ * NOTE: this project also needs an HTML file named "BulkAgeImportForm"
+ * (Extensions > Apps Script > + > HTML) - see
+ * docs/age-bulk-import-form.html. Run this ONCE right after Initialize
+ * Setup Sheet, before the first report generation, so QA's most recent
+ * already-known ages become the starting anchor instead of every
+ * warehouse/variety defaulting to a pure elapsed-time guess until
+ * someone happens to submit it individually later.
+ */
+function showBulkAgeImportForm() {
+  const html = HtmlService.createHtmlOutputFromFile('BulkAgeImportForm')
+    .setWidth(650)
+    .setHeight(550);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Bulk Import Latest Known Ages');
+}
+
+/**
  * NOTE: this project also needs an HTML file named "AgeSubmissionForm"
  * (Extensions > Apps Script > + > HTML) with a simple form: Warehouse
  * (dropdown or free text), Variety, Age in months, and a Submit button
@@ -164,6 +181,37 @@ function showAgeSubmissionForm() {
  * string here, since this one is meant to be edited/extended by whoever
  * manages the QA form fields later.
  */
+/**
+ * Upserts one warehouse/variety's age submission for the CURRENT month -
+ * overwrites that month's row if one already exists (rather than
+ * appending a duplicate), so the sheet doesn't accumulate repeat
+ * corrections within the same month. Shared by the single-row form
+ * (recordAgeSubmission) and the bulk seed import (recordAgeSubmissionsBulk).
+ */
+function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, now, submittedBy) {
+  const currentMonthKey = Utilities.formatDate(now, "GMT+8", "yyyy-MM");
+  let targetRow = -1;
+  for (let i = 1; i < values.length; i++) {
+    const rowWh = String(values[i][0] || "").trim();
+    const rowVar = String(values[i][1] || "").trim();
+    const rowDate = values[i][3] instanceof Date ? values[i][3] : new Date(values[i][3]);
+    const rowMonthKey = isNaN(rowDate.getTime()) ? "" : Utilities.formatDate(rowDate, "GMT+8", "yyyy-MM");
+    if (rowWh === warehouse && rowVar === variety && rowMonthKey === currentMonthKey) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  const rowData = [warehouse, variety, ageMonths, now, submittedBy];
+  if (targetRow > 0) {
+    qaSheet.getRange(targetRow, 1, 1, 5).setValues([rowData]);
+    values[targetRow - 1] = rowData; // keep the in-memory snapshot correct for subsequent calls in the same bulk batch
+  } else {
+    qaSheet.appendRow(rowData);
+    values.push(rowData);
+  }
+}
+
 function recordAgeSubmission(payload) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -177,32 +225,49 @@ function recordAgeSubmission(payload) {
       return { status: "error", message: "Warehouse, Variety, and a numeric Age are required." };
     }
 
-    // Overwrite this warehouse/variety's most recent submission for the
-    // CURRENT month rather than appending a duplicate row for the same
-    // month — keeps the sheet from accumulating repeat corrections.
+    const values = qaSheet.getDataRange().getValues();
+    upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, new Date(), Session.getEffectiveUser().getEmail() || "unknown");
+    return { status: "success" };
+  } catch (e) {
+    return { status: "error", message: e.toString() };
+  }
+}
+
+/**
+ * Seeds/updates MANY warehouse+variety age readings at once - meant for
+ * bringing in QA's most recent ALREADY-KNOWN ages right after setup, so
+ * the very first report is anchored to real observed data instead of
+ * defaulting to pure elapsed-time-since-receipt for every combination
+ * until QA happens to submit each one individually. `rows` is an array
+ * of { warehouse, variety, ageMonths }, e.g. parsed from a pasted
+ * "Warehouse, Variety, Age" block in the bulk-import form.
+ */
+function recordAgeSubmissionsBulk(rows) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const qaSheet = ss.getSheetByName(QA_SUBMISSIONS_SHEET_NAME);
+    if (!qaSheet) return { status: "error", message: "Run Initialize Setup Sheet first." };
+    if (!Array.isArray(rows) || rows.length === 0) return { status: "error", message: "No rows to import." };
+
     const values = qaSheet.getDataRange().getValues();
     const now = new Date();
-    const currentMonthKey = Utilities.formatDate(now, "GMT+8", "yyyy-MM");
-    let targetRow = -1;
-    for (let i = 1; i < values.length; i++) {
-      const rowWh = String(values[i][0] || "").trim();
-      const rowVar = String(values[i][1] || "").trim();
-      const rowDate = values[i][3] instanceof Date ? values[i][3] : new Date(values[i][3]);
-      const rowMonthKey = isNaN(rowDate.getTime()) ? "" : Utilities.formatDate(rowDate, "GMT+8", "yyyy-MM");
-      if (rowWh === warehouse && rowVar === variety && rowMonthKey === currentMonthKey) {
-        targetRow = i + 1;
-        break;
+    const submittedBy = Session.getEffectiveUser().getEmail() || "unknown";
+    let imported = 0;
+    const skipped = [];
+
+    rows.forEach((r, idx) => {
+      const warehouse = String(r.warehouse || "").trim();
+      const variety = String(r.variety || "").trim();
+      const ageMonths = parseFloat(r.ageMonths);
+      if (!warehouse || !variety || isNaN(ageMonths)) {
+        skipped.push(`Row ${idx + 1}: "${r.warehouse}" / "${r.variety}" / "${r.ageMonths}"`);
+        return;
       }
-    }
+      upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, now, submittedBy);
+      imported++;
+    });
 
-    const rowData = [warehouse, variety, ageMonths, now, Session.getEffectiveUser().getEmail() || "unknown"];
-    if (targetRow > 0) {
-      qaSheet.getRange(targetRow, 1, 1, 5).setValues([rowData]);
-    } else {
-      qaSheet.appendRow(rowData);
-    }
-
-    return { status: "success" };
+    return { status: "success", imported, skipped };
   } catch (e) {
     return { status: "error", message: e.toString() };
   }
