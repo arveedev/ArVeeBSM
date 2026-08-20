@@ -120,13 +120,18 @@ function initializeSetupSheet() {
   setupSheet.getRange("A2:B2").setFontWeight("bold").setBackground("#f3f3f3");
   setupSheet.autoResizeColumns(1, 2);
 
+  // Category dropdown - typo protection (a misspelled "Rice"/"Palay"
+  // would otherwise silently fail to map).
+  const categoryRule = SpreadsheetApp.newDataValidation().requireValueInList(["Palay", "Rice"], true).setAllowInvalid(false).build();
+  setupSheet.getRange("B3:B200").setDataValidation(categoryRule);
+
   const qaSheet = ss.getSheetByName(QA_SUBMISSIONS_SHEET_NAME) || ss.insertSheet(QA_SUBMISSIONS_SHEET_NAME);
   if (qaSheet.getLastRow() === 0) {
     qaSheet.getRange(1, 1, 1, 5).setValues([["Warehouse", "Variety", "Submitted Age (months)", "Submission Date", "Submitted By"]])
       .setFontWeight("bold").setBackground("#cfe2f3");
   }
 
-  SpreadsheetApp.getUi().alert('Setup ready. Fill in every variety your warehouses use under SETUP, then use "Submit Monthly Ages" each month.');
+  SpreadsheetApp.getUi().alert('Setup ready. Fill in every variety your warehouses use under SETUP (Category is now a dropdown), then use "Bulk Import Latest Known Ages" once, and "Submit Monthly Ages" each month after.');
 }
 
 /** Returns { varietyUpper: "rice"|"palay" } from the SETUP sheet. */

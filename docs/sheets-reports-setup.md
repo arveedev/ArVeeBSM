@@ -21,6 +21,9 @@ all anymore.
    - `B2` = the date to start accounting from (e.g. `2026-05-01`)
    - `B3` = comma-separated admin emails allowed to run/install the sync
      (e.g. `arvee.dev.apps@gmail.com`)
+   - `B4`, `B5` = optional active-hours window for the auto-trigger, e.g.
+     `8` and `18` to only actually sync between 8 AM and 6 PM (GMT+8) —
+     leave both blank to run around the clock instead. See step 7 below.
 4. Reload the spreadsheet — a **🌾 GSR Daily Inventory** menu appears.
 5. Click **⛳ Initialize Setup Sheet** once. This creates this spreadsheet's
    own **SETUP** tab — fill in every variety code your warehouses use
@@ -32,17 +35,24 @@ all anymore.
    sheets, **SUMMARY**, and **MONTHLY** tabs.
 7. Click **⏰ Install Auto-Update (every 5 min)** once. From then on it
    updates itself automatically every 5 minutes — no further action
-   needed. **Watch out**: consumer Google accounts get roughly 90 minutes
+   needed.
+
+   **About the quota**: consumer Google accounts get roughly 90 minutes
    of total trigger execution time per day; at 5-minute intervals that's
-   288 runs/day, so each run needs to average under ~18 seconds or the
-   quota gets exhausted and updates silently stop for the rest of that
-   day. Since every run recomputes the running total from Config!B2's
-   start date forward (not just what's new), this will get slower as the
-   season's data grows — if updates seem to have stalled, check
+   288 firings/day. If you set `Config!B4`/`B5` (e.g. `8` and `18`), the
+   trigger still fires every 5 minutes around the clock, but outside that
+   window it does nothing but check the time and return — essentially
+   free — so only the real syncs during your active hours (120 of them,
+   for an 8 AM–6 PM window) count meaningfully against the quota. Since
+   every real run recomputes the running total from `Config!B2`'s start
+   date forward (not just what's new), those runs will still get slower
+   as the season's data grows — if updates seem to have stalled, check
    **Executions** in the Apps Script editor's left sidebar first. If runs
-   are consistently slow, switch the trigger to `.everyMinutes(15)` or
-   `.everyMinutes(30)` in `installDailyTrigger()` rather than losing
-   updates to the quota.
+   are consistently slow even within your active window, switch the
+   trigger to `.everyMinutes(15)` or `.everyMinutes(30)` in
+   `installDailyTrigger()` rather than losing updates to the quota.
+   Manual **🚀 Update Now** clicks always work regardless of the active-
+   hours window.
 8. Compare its numbers against your existing working spreadsheet's
    equivalent tallies. They should match; if they don't, the alert dialog
    from step 6/7 will already have told you why (unmapped variety, a

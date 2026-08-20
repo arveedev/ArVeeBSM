@@ -16905,3 +16905,38 @@ only what's new since the last run.
 `docs/daily-inventory-report-script.js`, `docs/sheets-reports-setup.md`.
 
 Re-verified with `node --check`. Not yet deployed/confirmed by the user.
+
+## Round 39: SETUP dropdowns (Category/Variety) + active-hours window for the auto-trigger
+
+Two user questions in one message:
+
+1. "How do I use SETUP - comma-separated? shouldn't Category and Variety
+   be dropdowns?" - clarified it's one row per variety (not comma-
+   separated), and added real dropdown data validation: Category is now a
+   Palay/Rice picker (SpreadsheetApp.newDataValidation().requireValueInList,
+   setAllowInvalid(false)) in both scripts' SETUP sheets, closing the typo
+   risk where a misspelled "Rice" would silently fail to map. Daily
+   Inventory's starting-balances block additionally gets a Variety
+   dropdown sourced dynamically from its own variety-map block above it
+   (requireValueInRange), so the two blocks can't drift out of sync.
+   Warehouse wasn't made a dropdown - there's no authoritative warehouse
+   list anywhere in either new spreadsheet's own data to source it from.
+
+2. "Can the 5-minute trigger only run 8am-6pm instead of all day?" -
+   Apps Script's trigger builder has no hour-of-day gating for a
+   .everyMinutes() trigger, so instead of installing/removing triggers at
+   specific times, added a cheap runtime guard: syncGSRDataAuto() now
+   checks Config!B4/B5 (optional start/end hour, GMT+8) via
+   isWithinActiveHours_() and returns almost instantly outside that
+   window - no sheet reads, no lock, no real work - so overnight trigger
+   firings cost near-zero against the daily quota while still firing
+   every 5 minutes underneath. Manual "Update Now" is never restricted by
+   this window. Leaving B4/B5 blank preserves the previous always-on
+   behavior.
+
+### Files touched
+`docs/daily-inventory-report-script.js`, `docs/age-monitoring-report-script.js`,
+`docs/sheets-reports-setup.md`.
+
+Both scripts re-verified with `node --check`. Not yet deployed/confirmed
+by the user.

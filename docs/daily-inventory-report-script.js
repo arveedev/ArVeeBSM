@@ -14,6 +14,12 @@
  *      B2 = the date to start accounting from (e.g. 2026-05-01)
  *      B3 = comma-separated list of admin emails allowed to run/trigger
  *           a sync (e.g. "arvee.dev.apps@gmail.com, other.admin@x.com")
+ *      B4, B5 = OPTIONAL active-hours window for the 5-minute
+ *           auto-trigger (24-hour, GMT+8) - e.g. B4=8, B5=18 only
+ *           actually syncs between 8 AM and 6 PM, so overnight trigger
+ *           firings cost almost nothing against the daily quota. Leave
+ *           both blank to run around the clock instead. Manual "Update
+ *           Now" clicks always work regardless of this window.
  * 3. Run "⛳ Initialize Setup Sheet" once - creates this spreadsheet's
  *    OWN local SETUP sheet (variety->category map + optional one-time
  *    starting balances). Fill in every variety your warehouses use
@@ -155,7 +161,20 @@ function initializeSetupSheet() {
   setupSheet.getRange("C7:G7").setFontWeight("bold").setBackground("#f3f3f3");
   setupSheet.autoResizeColumns(1, 8);
 
-  SpreadsheetApp.getUi().alert('SETUP ready. Fill in every variety your warehouses use, and (optionally) starting balances, before the first "Update Now".');
+  // Category dropdowns in both blocks (typo protection - a misspelled
+  // "Rice"/"Palay" would otherwise silently fail to map and only show up
+  // as a vague "unmapped variety" warning later).
+  const categoryRule = SpreadsheetApp.newDataValidation().requireValueInList(["Palay", "Rice"], true).setAllowInvalid(false).build();
+  setupSheet.getRange("B3:B200").setDataValidation(categoryRule);
+  setupSheet.getRange("D8:D200").setDataValidation(categoryRule);
+
+  // Starting-balances block's Variety column pulls from whatever
+  // varieties are already listed in the variety-map block above it, so
+  // the two blocks can't drift out of sync with each other.
+  const varietyRule = SpreadsheetApp.newDataValidation().requireValueInRange(setupSheet.getRange("A3:A200"), true).setAllowInvalid(true).build();
+  setupSheet.getRange("E8:E200").setDataValidation(varietyRule);
+
+  SpreadsheetApp.getUi().alert('SETUP ready. Fill in every variety your warehouses use (Category is now a dropdown), and (optionally) starting balances, before the first "Update Now".');
 }
 
 /** Returns { varietyUpper: "rice"|"palay" } from this spreadsheet's own local SETUP sheet. */
@@ -332,7 +351,34 @@ function syncGSRDataManual() {
 }
 
 /** Called by the time-based trigger — no UI available, so log instead of alert. */
+/**
+ * Reads Config!B4/B5 as an "active hours" window (24-hour, GMT+8) - e.g.
+ * B4=8, B5=18 means only actually sync between 8:00 AM and 5:59 PM.
+ * Outside that window this returns false almost instantly (no sheet
+ * reads, no lock, no real work), so the 5-minute trigger firing overnight
+ * costs essentially nothing against the daily quota. Leave B4/B5 blank
+ * to run around the clock instead.
+ */
+function isWithinActiveHours_(configSheet) {
+  const startHourRaw = configSheet.getRange("B4").getValue();
+  const endHourRaw = configSheet.getRange("B5").getValue();
+  if (startHourRaw === "" || endHourRaw === "") return true; // not configured - always active
+
+  const startHour = Number(startHourRaw);
+  const endHour = Number(endHourRaw);
+  if (isNaN(startHour) || isNaN(endHour)) return true;
+
+  const currentHour = Number(Utilities.formatDate(new Date(), "GMT+8", "H"));
+  return currentHour >= startHour && currentHour < endHour;
+}
+
 function syncGSRDataAuto() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName("Config");
+  if (configSheet && !isWithinActiveHours_(configSheet)) {
+    return; // outside Config!B4-B5 active window - skip without touching anything else, keeps quota cost near zero
+  }
+
   const result = runSyncCore_();
   if (result.error) {
     Logger.log("Daily auto-sync FAILED: " + result.error);
