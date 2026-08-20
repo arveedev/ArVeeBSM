@@ -207,4 +207,24 @@
 //            Number into the OR # field for non-Milling transaction
 //            types (SALES in particular) - only opening the form via
 //            a Monitor-page prefill did
-export const APP_VERSION = '1.9-5'
+//   1.9-6  - CRITICAL: fixed the Google Sheets backup writing 3, sometimes
+//            12+ duplicate rows per transaction, plus rows going
+//            missing/delayed. Root cause: the Apps Script appendTransaction
+//            action did a blind, unconditional appendRow with no check for
+//            whether a row for that serial already existed, and no lock
+//            protected it against concurrent requests - so ANY retry (a
+//            lost response, a WTS two-sided partial failure, two devices
+//            racing on the same not-yet-synced transaction) wrote another
+//            row, forever, with nothing stopping it. Made appendTransaction
+//            idempotent (overwrites an existing row for that serial instead
+//            of blindly appending) and wrapped the whole doPost in
+//            LockService so concurrent requests can't race each other's
+//            read-then-write. Also added a 30s periodic safety-net retry to
+//            the client-side push queue (syncWorker.js), which previously
+//            had no periodic retry at all - only on save or reconnect - so
+//            a failed push could sit stuck indefinitely with no other
+//            trigger, explaining the reported sync lag. REQUIRES REDEPLOYING
+//            the updated docs/apps-script-full-replacement.js to the live
+//            Apps Script Web App - editing this repo file alone does not
+//            fix the live backup sheet (current)
+export const APP_VERSION = '1.9-6'

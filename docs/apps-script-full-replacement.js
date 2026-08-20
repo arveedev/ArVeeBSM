@@ -450,7 +450,25 @@ function doGet(e) {
  *     state (no such row exists) is the same either way.
  */
 function doPost(e) {
+  // Every write action below does a read-then-write (find a row, or find
+  // there's no matching row, THEN append/update/delete) - without a lock,
+  // two requests arriving close together (two devices/tabs both pushing
+  // the same not-yet-confirmed-synced transaction, or the app's own retry
+  // logic firing again because a previous response was lost in transit)
+  // can both read the "before" state, both decide to append, and both
+  // write - producing duplicate rows with nothing to stop it. LockService
+  // serializes every doPost invocation against every other one, so the
+  // second request always sees the FIRST request's completed write
+  // before making its own decision. waitLock throws if it can't acquire
+  // the lock within the timeout, which the outer try/catch below turns
+  // into an ERROR response - the app's own postToSheetsWithRetry already
+  // retries on any non-SUCCESS response, so a request that had to wait
+  // simply retries shortly after, rather than racing.
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
   try {
+    lock.waitLock(30000);
+    lockAcquired = true;
     const body = JSON.parse(e.postData.contents);
     const sheetName = body.sheet;
 
@@ -473,6 +491,30 @@ function doPost(e) {
       // devices will later filter on.
       const lastModIndex = headers.indexOf('Last Modified');
       if (lastModIndex !== -1) newRow[lastModIndex] = new Date().toISOString();
+
+      // Idempotency guard: a row for this exact serial may already exist
+      // on this sheet - from a retried sync after a dropped/late
+      // confirmation, a race between two devices/tabs both pushing the
+      // same not-yet-flagged-synced transaction, or a WTS append where
+      // one side succeeded but the other failed and the whole push got
+      // retried. Overwriting that existing row in place (the same thing
+      // updateTransaction below does) instead of blindly appending again
+      // keeps this action idempotent - calling it any number of times
+      // with the same serial converges to exactly one row, never a
+      // duplicate. This was the actual source of the "3, sometimes 12+
+      // copies" duplication - nothing anywhere previously stopped a
+      // retried or raced append from writing another row.
+      const serialValue = body.row[body.serialColumn];
+      const existingRowIndex = (serialValue !== undefined && serialValue !== null && serialValue !== '')
+        ? findRowIndexByMatch(sheet, body.serialColumn, serialValue)
+        : -1;
+
+      if (existingRowIndex !== -1) {
+        preformatSerialColumnAsText(sheet, headers, body.serialColumn, existingRowIndex);
+        sheet.getRange(existingRowIndex, 1, 1, newRow.length).setValues([newRow]);
+        return jsonResponse({ status: 'SUCCESS', deduped: true });
+      }
+
       const newRowIndex = sheet.getLastRow() + 1;
       preformatSerialColumnAsText(sheet, headers, body.serialColumn, newRowIndex);
       sheet.appendRow(newRow);
@@ -601,6 +643,8 @@ function doPost(e) {
     return jsonResponse({ status: 'ERROR', message: 'Unknown action' });
   } catch (error) {
     return jsonResponse({ status: 'ERROR', message: error.message });
+  } finally {
+    if (lockAcquired) lock.releaseLock();
   }
 }
 
