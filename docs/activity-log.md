@@ -16884,3 +16884,24 @@ Fixed both:
 
 Both scripts re-verified with `node --check`. Still not deployed/confirmed
 against real data end-to-end.
+
+## Round 38: Daily Inventory auto-update interval changed to every 5 minutes
+
+User wants the auto-update at least every 5 minutes instead of once daily.
+Switched `installDailyTrigger`'s time-based trigger from `.everyDays(1).atHour(2)`
+to `.everyMinutes(5)` - Apps Script's minimum minutes-based granularity.
+
+Flagged (in the script's own comment, the install-confirmation alert, and
+docs/sheets-reports-setup.md) a real constraint this creates: consumer
+Google accounts get ~90 minutes of TOTAL trigger execution time per day.
+At 5-minute intervals that's 288 runs/day, so each run needs to average
+under ~18 seconds or the daily quota gets exhausted and updates silently
+stop firing for the rest of that day - worth watching via Apps Script's
+Executions log as the season's data grows, since every run recomputes the
+full running total from the configured start date forward rather than
+only what's new since the last run.
+
+### Files touched
+`docs/daily-inventory-report-script.js`, `docs/sheets-reports-setup.md`.
+
+Re-verified with `node --check`. Not yet deployed/confirmed by the user.

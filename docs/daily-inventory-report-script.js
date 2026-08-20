@@ -21,9 +21,11 @@
  *    it does NOT read from the production spreadsheet's
  *    SETUP_AGE_MONITORING sheet at all (that dependency has been removed
  *    entirely; each new report spreadsheet now owns its own config).
- * 4. Run "Install Daily Auto-Update" from the menu once (authorizes the
- *    trigger). After that, this spreadsheet updates itself every day
- *    with no further action needed.
+ * 4. Run "Install Auto-Update (every 5 min)" from the menu once
+ *    (authorizes the trigger). After that, this spreadsheet updates
+ *    itself every 5 minutes with no further action needed - see the
+ *    quota warning on installDailyTrigger() below before relying on this
+ *    once the season's data grows large.
  *
  * WHAT CHANGED FROM v1 (see docs/inventory-and-age-monitoring-review.md
  * for the full writeup of what each of these fixes and why):
@@ -110,8 +112,8 @@ function onOpen() {
     .addSeparator()
     .addItem('🚀 Update Now', 'syncGSRDataManual')
     .addSeparator()
-    .addItem('⏰ Install Daily Auto-Update', 'installDailyTrigger')
-    .addItem('🛑 Remove Daily Auto-Update', 'removeDailyTrigger')
+    .addItem('⏰ Install Auto-Update (every 5 min)', 'installDailyTrigger')
+    .addItem('🛑 Remove Auto-Update', 'removeDailyTrigger')
     .addToUi();
 }
 
@@ -272,23 +274,36 @@ function writeMonthState_(ss, monthName, balancesByKey) {
 // TRIGGER MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Runs every 5 minutes (Apps Script's minimum granularity for a
+ * minutes-based trigger). IMPORTANT constraint to watch: consumer Google
+ * accounts get roughly 90 minutes of TOTAL trigger execution time per
+ * day - at 5-minute intervals that's 288 runs/day, so each run needs to
+ * average under ~18 seconds or the quota gets exhausted and updates
+ * silently stop firing for the rest of that day (check Apps Script's
+ * "Executions" log if updates seem to have stalled). Since every run
+ * recomputes the running total from Config!B2's start date forward (not
+ * just new rows since the last run), this will get slower as the
+ * season's data grows - if runs start taking noticeably longer, switch
+ * to .everyMinutes(15) or .everyMinutes(30) below rather than letting the
+ * daily quota silently cut updates off.
+ */
 function installDailyTrigger() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const configSheet = ss.getSheetByName("Config");
   if (!configSheet || !isCallerAdmin_(configSheet)) {
-    ui.alert("Not authorized", "Only an admin listed in Config!B3 can install the daily trigger.", ui.ButtonSet.OK);
+    ui.alert("Not authorized", "Only an admin listed in Config!B3 can install the auto-update trigger.", ui.ButtonSet.OK);
     return;
   }
 
   removeDailyTrigger(); // avoid stacking duplicate triggers on repeated installs
   ScriptApp.newTrigger('syncGSRDataAuto')
     .timeBased()
-    .everyDays(1)
-    .atHour(2) // 2 AM — after the day's transactions are expected to be done
+    .everyMinutes(5)
     .create();
 
-  ui.alert("Installed", "Daily Inventory will now auto-update every day at ~2 AM.", ui.ButtonSet.OK);
+  ui.alert("Installed", "Daily Inventory will now auto-update every 5 minutes. If runs ever start taking a long time as data grows, check Executions in the Apps Script editor - the daily trigger-time quota can silently stop updates if runs get too slow.", ui.ButtonSet.OK);
 }
 
 function removeDailyTrigger() {

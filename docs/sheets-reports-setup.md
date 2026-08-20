@@ -30,8 +30,19 @@ all anymore.
 6. Click **🚀 Update Now**. Approve the authorization prompt (it needs
    permission to read the other spreadsheet). This creates the month
    sheets, **SUMMARY**, and **MONTHLY** tabs.
-7. Click **⏰ Install Daily Auto-Update** once. From then on it updates
-   itself automatically every day around 2 AM — no further action needed.
+7. Click **⏰ Install Auto-Update (every 5 min)** once. From then on it
+   updates itself automatically every 5 minutes — no further action
+   needed. **Watch out**: consumer Google accounts get roughly 90 minutes
+   of total trigger execution time per day; at 5-minute intervals that's
+   288 runs/day, so each run needs to average under ~18 seconds or the
+   quota gets exhausted and updates silently stop for the rest of that
+   day. Since every run recomputes the running total from Config!B2's
+   start date forward (not just what's new), this will get slower as the
+   season's data grows — if updates seem to have stalled, check
+   **Executions** in the Apps Script editor's left sidebar first. If runs
+   are consistently slow, switch the trigger to `.everyMinutes(15)` or
+   `.everyMinutes(30)` in `installDailyTrigger()` rather than losing
+   updates to the quota.
 8. Compare its numbers against your existing working spreadsheet's
    equivalent tallies. They should match; if they don't, the alert dialog
    from step 6/7 will already have told you why (unmapped variety, a
