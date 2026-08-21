@@ -5,10 +5,12 @@
   loads via HtmlService.createHtmlOutputFromFile('AgeSubmissionForm')
   in age-monitoring-report-script.js.
 
-  QA fills this in once per warehouse/variety per month; submitting
-  again for the same warehouse/variety within the same month overwrites
-  that month's entry instead of appending a duplicate (see
-  recordAgeSubmission in the script).
+  QA fills this in once per warehouse/variety/AGE BRACKET per month;
+  submitting again for the same warehouse/variety/bracket within the
+  same month overwrites that entry instead of appending a duplicate. A
+  warehouse+variety with stock in several age brackets (common - see
+  a real QUASAR report) needs one submission PER bracket, not one
+  overall - matches recordAgeSubmission's key in the script.
 -->
 <!DOCTYPE html>
 <html>
@@ -24,11 +26,12 @@
     #status.error { color: #b71c1c; }
     #status.success { color: #2e7d32; }
     .hint { font-size: 12px; color: #666; margin-top: 2px; }
+    #bagsPreview { font-size: 12px; color: #1976d2; margin-top: 4px; }
   </style>
 </head>
 <body>
-  <h3>Submit Monthly Stock Age</h3>
-  <p class="hint">Enter the physically observed age (in months) for one warehouse + variety. This becomes the anchor the Age Monitoring report projects from until your next submission. This same data is also what the Daily Inventory spreadsheet uses for its starting balances - no need to enter it anywhere else.</p>
+  <h3>Submit Stock Age (QA)</h3>
+  <p class="hint">One warehouse + variety + age bracket per submission - if the same warehouse/variety has stock in several brackets, submit each one separately. This becomes the starting-inventory baseline both the Age Monitoring report and the Daily Inventory spreadsheet read from - no need to enter it anywhere else.</p>
 
   <label for="warehouse">Warehouse</label>
   <input type="text" id="warehouse" placeholder="e.g. BSI B" />
@@ -36,11 +39,15 @@
   <label for="variety">Variety</label>
   <input type="text" id="variety" placeholder="e.g. WD1" />
 
-  <label for="ageMonths">Observed Age (months, decimals OK)</label>
-  <input type="number" id="ageMonths" step="0.1" min="0" placeholder="e.g. 2.5" />
+  <label for="ageBracket">Age Bracket</label>
+  <select id="ageBracket"><option value="">Loading...</option></select>
 
-  <label for="netBags">Net Bags (optional - include if you also recounted the pile)</label>
-  <input type="number" id="netBags" step="0.01" min="0" placeholder="e.g. 500" />
+  <label for="netKilos">Net Kilos (enter this OR Net Bags below, not both)</label>
+  <input type="number" id="netKilos" step="0.01" min="0" placeholder="e.g. 12500" oninput="previewBags()" />
+
+  <label for="netBags">Net Bags (auto-computed from Net Kilos if you filled that in instead)</label>
+  <input type="number" id="netBags" step="0.01" min="0" placeholder="e.g. 250" oninput="previewBags()" />
+  <div id="bagsPreview"></div>
 
   <label for="asOfDate">As Of Date (optional - defaults to today; set this if you're recording an observation from an earlier date)</label>
   <input type="date" id="asOfDate" />
@@ -49,17 +56,34 @@
   <div id="status"></div>
 
   <script>
+    google.script.run.withSuccessHandler((labels) => {
+      const select = document.getElementById('ageBracket');
+      select.innerHTML = '<option value="">Select...</option>' + labels.map((l) => `<option value="${l}">${l}</option>`).join('');
+    }).getAgeBracketLabels();
+
+    function previewBags() {
+      const kilos = parseFloat(document.getElementById('netKilos').value);
+      const bagsField = document.getElementById('netBags');
+      const preview = document.getElementById('bagsPreview');
+      if (!isNaN(kilos) && kilos > 0) {
+        preview.textContent = 'Net Bags will be computed as ' + (kilos / 50).toFixed(2) + ' (kilos ÷ 50)';
+      } else {
+        preview.textContent = '';
+      }
+    }
+
     function submitForm() {
       const warehouse = document.getElementById('warehouse').value.trim();
       const variety = document.getElementById('variety').value.trim();
-      const ageMonths = document.getElementById('ageMonths').value;
+      const ageBracket = document.getElementById('ageBracket').value;
+      const netKilos = document.getElementById('netKilos').value;
       const netBags = document.getElementById('netBags').value;
       const asOfDate = document.getElementById('asOfDate').value;
       const status = document.getElementById('status');
       const btn = document.getElementById('submitBtn');
 
-      if (!warehouse || !variety || ageMonths === '') {
-        status.textContent = 'Warehouse, Variety, and Age are required. Net Bags and As Of Date are optional.';
+      if (!warehouse || !variety || !ageBracket || (!netKilos && !netBags)) {
+        status.textContent = 'Warehouse, Variety, Age Bracket, and either Net Kilos or Net Bags are required.';
         status.className = 'error';
         return;
       }
@@ -72,13 +96,15 @@
         .withSuccessHandler((result) => {
           btn.disabled = false;
           if (result.status === 'success') {
-            status.textContent = 'Saved. You can submit another warehouse/variety, or close this window.';
+            status.textContent = 'Saved. You can submit another warehouse/variety/bracket, or close this window.';
             status.className = 'success';
             document.getElementById('warehouse').value = '';
             document.getElementById('variety').value = '';
-            document.getElementById('ageMonths').value = '';
+            document.getElementById('ageBracket').value = '';
+            document.getElementById('netKilos').value = '';
             document.getElementById('netBags').value = '';
             document.getElementById('asOfDate').value = '';
+            document.getElementById('bagsPreview').textContent = '';
           } else {
             status.textContent = result.message || 'Something went wrong.';
             status.className = 'error';
@@ -89,7 +115,7 @@
           status.textContent = 'Error: ' + err.message;
           status.className = 'error';
         })
-        .recordAgeSubmission({ warehouse, variety, ageMonths, netBags, asOfDate: asOfDate || null });
+        .recordAgeSubmission({ warehouse, variety, ageBracket, netKilos, netBags, asOfDate: asOfDate || null });
     }
   </script>
 </body>

@@ -150,6 +150,21 @@ function onOpen() {
 }
 
 /**
+ * Fine-grained monthly age brackets matching how QA's own QUASAR report
+ * labels ages ("0-1.0", "1.1-2.0", "2.1-3.0", ... ) - see the identical
+ * copy of this in age-monitoring-report-script.js for the full
+ * rationale. A warehouse+variety commonly has stock in several of these
+ * at once, so QA_AGE_SUBMISSIONS keys on (warehouse, variety, bracket),
+ * not just (warehouse, variety).
+ */
+function buildAgeBrackets_() {
+  const midpoints = { "0-1.0": 0.5 };
+  for (let i = 1; i <= 60; i++) midpoints[`${i}.1-${i + 1}.0`] = i + 0.55;
+  return { midpoints };
+}
+const AGE_BRACKETS = buildAgeBrackets_();
+
+/**
  * This spreadsheet has NO local SETUP of its own anymore. Variety
  * category mapping AND starting-balance/age data both come from QA, so
  * they live in exactly one place - the Age Monitoring spreadsheet's own
@@ -165,10 +180,11 @@ function onOpen() {
  *     startDate would double-count against receipts already flowing
  *     through DATA_ENTRY for that same period) and only rows that
  *     actually included a Net Bags value are used. Each qualifying
- *     submission's age is projected forward from its own submission date
- *     to startDate (same elapsed-time logic Age Monitoring itself uses),
- *     so the age bucket reflects "as of startDate," not "as of whenever
- *     QA happened to submit it."
+ *     submission's age is projected forward from its own AGE BRACKET's
+ *     midpoint, from its own submission date, to startDate (same
+ *     elapsed-time logic Age Monitoring itself uses) - a warehouse+
+ *     variety with stock in several brackets contributes one balance
+ *     entry per bracket, not just one overall.
  */
 function readSharedQaData_(configSheet, startDate) {
   const ageMonitoringUrl = configSheet.getRange("B6").getValue();
@@ -201,25 +217,28 @@ function readSharedQaData_(configSheet, startDate) {
   const msPerMonth = 30.44 * 24 * 60 * 60 * 1000;
   const startingBalances = {};
   const qaValues = qaSheet.getDataRange().getValues();
-  // Track the latest qualifying (<= startDate) submission per warehouse|variety.
+  // Track the latest qualifying (<= startDate) submission per EXACT
+  // (warehouse, variety, age bracket) - NOT collapsed to warehouse+variety,
+  // since a warehouse+variety commonly has stock in several brackets at once.
   const latestByKey = {};
   for (let i = 1; i < qaValues.length; i++) {
-    const [wh, variety, ageMonthsRaw, netBagsRaw, submissionDateRaw] = qaValues[i];
-    if (!wh || !variety) continue;
+    const [wh, variety, ageBracket, , netBagsRaw, submissionDateRaw] = qaValues[i];
+    if (!wh || !variety || !ageBracket) continue;
+    if (!AGE_BRACKETS.midpoints.hasOwnProperty(ageBracket)) continue; // shouldn't happen (dropdown-enforced there), but don't trust blindly
     const netBags = netBagsRaw === "" || netBagsRaw === undefined || netBagsRaw === null ? null : Number(netBagsRaw);
-    if (netBags === null || isNaN(netBags) || netBags === 0) continue; // age-only correction, nothing to seed a balance with
+    if (netBags === null || isNaN(netBags) || netBags <= 0) continue; // age-only correction, nothing to seed a balance with
 
     const submissionDate = submissionDateRaw instanceof Date ? submissionDateRaw : new Date(submissionDateRaw);
     if (isNaN(submissionDate.getTime()) || submissionDate > startDate) continue; // see function doc - future-dated submissions are excluded
 
-    const key = `${String(wh).trim()}|${String(variety).trim()}`;
+    const key = `${String(wh).trim()}|${String(variety).trim()}|${String(ageBracket).trim()}`;
     if (!latestByKey[key] || submissionDate > latestByKey[key].submissionDate) {
-      latestByKey[key] = { ageMonths: parseFloat(ageMonthsRaw) || 0, netBags, submissionDate };
+      latestByKey[key] = { ageMonths: AGE_BRACKETS.midpoints[ageBracket], netBags, submissionDate };
     }
   }
 
   Object.keys(latestByKey).forEach((key) => {
-    const [wh, variety] = key.split('|');
+    const [wh, variety] = key.split('|'); // ageBracket (3rd part) not needed past this point - only used to keep entries distinct above
     const entry = latestByKey[key];
     const elapsedSinceSubmission = (startDate.getTime() - entry.submissionDate.getTime()) / msPerMonth;
     const ageAtStartDate = entry.ageMonths + elapsedSinceSubmission;

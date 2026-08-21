@@ -6,26 +6,24 @@
   age-monitoring-report-script.js.
 
   Run this ONCE right after "Initialize Setup Sheet", before the first
-  "Generate/Update Report" - it seeds QA's CURRENT, already-known age
-  reading for every warehouse+variety at once, so the first report
-  starts from real observed data instead of every combination defaulting
-  to a pure elapsed-time-since-receipt guess until someone happens to
-  submit it individually via the single-row form later.
+  "Generate/Update Report" - it seeds QA's CURRENT, already-known stock
+  count for every warehouse+variety+AGE BRACKET at once, so the first
+  report starts from real observed data instead of every combination
+  defaulting to a pure elapsed-time-since-receipt guess.
+
+  Built to accept data close to how QA's own QUASAR report already
+  shows it - one row per warehouse+variety+age bracket (a warehouse+
+  variety commonly has stock in SEVERAL brackets at once), in
+  kilograms. Age bracket spacing is normalized automatically ("0 - 1.0",
+  "9.1 -   10.0", "9.1-10.0" all match the same canonical bracket), so
+  you can paste close to the report's own formatting.
 
   IMPORTANT: set "As Of Date" to the data's TRUE observation date, not
   today. Both this report's own baseline-seeding and Daily Inventory's
   starting balances only trust a submission dated on/before their
   configured Config!B2 start date - a historical backfill imported
   without a correct As Of Date gets stamped "today," which likely won't
-  qualify and will just silently sit unused. If you already ran this
-  form before this field existed, its rows are dated whatever day you
-  clicked Import - either delete those rows from QA_AGE_SUBMISSIONS and
-  re-import with the correct As Of Date, or manually fix the
-  "Submission Date" column for those rows directly in the sheet (faster
-  than re-importing.) Don't just re-import with the correct date without
-  removing the old rows first - they'd land in a different month and
-  sit alongside the old ones, and readLatestSubmissions_ picks whichever
-  is dated LATER, so the wrong "today"-dated rows would keep winning.
+  qualify and will just silently sit unused.
 -->
 <!DOCTYPE html>
 <html>
@@ -34,7 +32,7 @@
   <style>
     body { font-family: Arial, sans-serif; padding: 16px; }
     label { display: block; margin-top: 12px; font-weight: bold; font-size: 13px; }
-    textarea { width: 100%; height: 220px; padding: 8px; margin-top: 4px; box-sizing: border-box; font-family: monospace; font-size: 13px; }
+    textarea { width: 100%; height: 260px; padding: 8px; margin-top: 4px; box-sizing: border-box; font-family: monospace; font-size: 13px; }
     button { margin-top: 16px; padding: 10px 16px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
     button:disabled { background: #999; cursor: not-allowed; }
     #status { margin-top: 12px; font-size: 13px; white-space: pre-wrap; }
@@ -44,31 +42,41 @@
   </style>
 </head>
 <body>
-  <h3>Bulk Import Latest Known Ages</h3>
+  <h3>Bulk Import Latest Known Stock (QA)</h3>
   <p class="hint">
-    One warehouse+variety+age(+bags) per line, comma-separated:<br>
-    <code>Warehouse, Variety, Age in months, Net Bags (optional)</code><br>
-    Example:<br>
-    <code>BSI B, WD1, 2.5, 500</code><br>
-    <code>TAB GID, PDm, 8</code> (bags omitted is fine)<br>
+    One warehouse+variety+age-bracket per line, comma-separated:<br>
+    <code>Warehouse, Variety, Age Bracket, Net Kilos, Net Bags</code><br>
+    Fill in EITHER Net Kilos OR Net Bags per line, not both - leave the
+    other blank. Age Bracket matches the QUASAR report's own labels
+    ("0-1.0", "1.1-2.0", "9.1-10.0", ...) - spacing doesn't matter,
+    "9.1 -   10.0" and "9.1-10.0" both work.<br>
+    Example (a warehouse+variety with stock in 3 different brackets -
+    each gets its own line):<br>
+    <code>BSI LIBON, PDs, 9.1-10.0, 18646.55,</code><br>
+    <code>BSI LIBON, PDs, 10.1-11.0, ,48967.52</code><br>
+    <code>BSI LIBON, PDs, 12.1-13.0, 49018.92,</code><br>
     This same data feeds the Daily Inventory spreadsheet's starting
-    balances too, via Config!B6 there - include Net Bags here whenever
-    you have it, rather than entering it again on the other spreadsheet.
+    balances too, via Config!B6 there - nothing needs to be entered
+    twice.
   </p>
 
   <label for="asOfDate">As Of Date (when this data was actually observed - defaults to today if left blank)</label>
   <input type="date" id="asOfDate" />
   <p class="hint">
-    Set this to the TRUE date the data reflects, not the date you're pasting it in - e.g. if this is a physical count from July 31, enter July 31 here even if you're importing it three weeks later. Both Daily Inventory's starting balances and this report's own baseline-seeding only trust a submission dated on/before their configured start date, so a historical backfill needs its real date to be usable.
+    Set this to the TRUE date the data reflects, not the date you're pasting it in - e.g. if this is a physical count from July 31, enter July 31 here even if you're importing it three weeks later.
   </p>
 
-  <label for="bulkInput">Paste QA's current known ages (and bag counts, if known)</label>
-  <textarea id="bulkInput" placeholder="BSI B, WD1, 2.5, 500&#10;TAB GID, PDm, 8"></textarea>
+  <label for="bulkInput">Paste QA's current known stock</label>
+  <textarea id="bulkInput" placeholder="BSI LIBON, PDs, 9.1-10.0, 18646.55,&#10;BSI LIBON, PDs, 10.1-11.0, ,48967.52"></textarea>
 
   <button id="submitBtn" onclick="submitBulk()">Import All</button>
   <div id="status"></div>
 
   <script>
+    function normalizeAgeBracket(raw) {
+      return String(raw || '').replace(/\s+/g, ''); // "9.1 -   10.0" -> "9.1-10.0", matches the canonical dropdown labels
+    }
+
     function parseLines(text) {
       return text
         .split('\n')
@@ -76,7 +84,13 @@
         .filter(Boolean)
         .map((line) => {
           const parts = line.split(',').map((p) => p.trim());
-          return { warehouse: parts[0] || '', variety: parts[1] || '', ageMonths: parts[2] || '', netBags: parts[3] || '' };
+          return {
+            warehouse: parts[0] || '',
+            variety: parts[1] || '',
+            ageBracket: normalizeAgeBracket(parts[2]),
+            netKilos: parts[3] || '',
+            netBags: parts[4] || '',
+          };
         });
     }
 
@@ -103,7 +117,7 @@
           if (result.status === 'success') {
             let msg = 'Imported ' + result.imported + ' row(s).';
             if (result.skipped && result.skipped.length > 0) {
-              msg += '\n\nSkipped (missing/invalid fields):\n' + result.skipped.join('\n');
+              msg += '\n\nSkipped (missing/invalid fields - check Age Bracket matches a known label, and exactly one of Net Kilos/Net Bags is filled in):\n' + result.skipped.join('\n');
             }
             status.textContent = msg;
             status.className = 'success';

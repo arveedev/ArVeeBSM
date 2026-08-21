@@ -35,19 +35,26 @@ it again. Neither spreadsheet reads from the production spreadsheet's
    Palay/Rice dropdown, fill in every variety code your warehouses use)
    and **QA_AGE_SUBMISSIONS**.
 7. **Before generating the first report**, click **📋 Bulk Import Latest
-   Known Ages** and paste in QA's CURRENT, already-known age reading for
-   every warehouse+variety — **and its bag count wherever you know it**
-   (one per line: `Warehouse, Variety, Age in months, Net Bags`). This is
-   the step that makes the very first report start from QA's real,
-   already-known data instead of every combination defaulting to a pure
-   elapsed-time-since-receipt guess — do this once as part of setup, not
-   as an ongoing monthly task. **This same data is what Daily Inventory
-   reads for its starting balances** — the more Net Bags values you
-   include here, the less you'll need to enter manually over there.
+   Known Stock** and paste in QA's CURRENT, already-known stock count -
+   built to accept data close to how QA's own QUASAR report already
+   shows it: one line per `Warehouse, Variety, Age Bracket, Net Kilos,
+   Net Bags` (fill in exactly one of the last two per line). **A
+   warehouse+variety with stock in several age brackets needs one line
+   per bracket** - e.g. BSI LIBON's PDs might have separate lines for
+   `9.1-10.0`, `10.1-11.0`, and `12.1-13.0` - each is kept as its own
+   entry, never collapsed into a single number. Age Bracket spacing is
+   normalized automatically, so you can paste close to the report's own
+   formatting ("9.1 -   10.0" and "9.1-10.0" both match). Set **As Of
+   Date** to the report's real date, not today. This is the step that
+   makes the very first report start from QA's real, already-known data
+   instead of every combination defaulting to a pure elapsed-time-since-
+   receipt guess - do this once as part of setup, not as an ongoing
+   monthly task. **This same data is what Daily Inventory reads for its
+   starting balances** - nothing needs to be entered twice.
 8. Each month after that, QA (or anyone — not admin-gated) opens **📝
-   Submit Monthly Ages** to correct individual warehouse/variety
-   readings as they're physically re-checked (Net Bags is optional there
-   — only fill it in if you also recounted the pile that month).
+   Submit Stock Age** to add or correct individual warehouse/variety/age-
+   bracket readings as they're physically re-checked (one bracket per
+   submission, same as the bulk form).
 9. An admin clicks **✅ Generate/Update Report** whenever an updated report
    is wanted. This is intentionally manual, not on a daily trigger — age
    only meaningfully changes once QA submits new numbers, so there's
@@ -149,17 +156,47 @@ twice.
 - **SETUP** (Age Monitoring spreadsheet): variety→category map, a real
   Palay/Rice dropdown. Used by both reports.
 - **QA_AGE_SUBMISSIONS** (Age Monitoring spreadsheet): Warehouse, Variety,
-  Age (months), Net Bags (optional), Submission Date, Submitted By.
-  - Age Monitoring uses every row's Age as the anchor it projects forward
-    from.
-  - Daily Inventory only uses rows that (a) include a Net Bags value and
-    (b) are dated ON OR BEFORE its own `Config!B2` start date — a
+  Age Bracket, Net Kilos (optional), Net Bags, Submission Date, Submitted
+  By. A row is uniquely identified by **Warehouse + Variety + Age Bracket
+  + month** - NOT just Warehouse + Variety - because a real warehouse+
+  variety routinely has stock in several age brackets simultaneously (a
+  real QUASAR report was the reason this changed from a single Age/Net
+  Bags number per warehouse+variety). Age Bracket is a dropdown matching
+  QUASAR's own labels ("0-1.0", "1.1-2.0", ... up to 60 months out); each
+  bracket's midpoint is its representative age wherever a single number
+  is needed. Net Bags is auto-computed from Net Kilos (÷50) whenever
+  Kilos is filled in, so you can paste straight from a kilogram-based
+  report without converting by hand.
+  - Every qualifying entry (see below) seeds this report's starting-
+    inventory baseline, one entry per bracket. QA data no longer
+    overrides the age of an individual existing receipt row - with
+    multiple brackets per warehouse+variety there's no single
+    unambiguous age left to anchor one receipt to, so receipts are
+    always aged by elapsed time since their own receipt date instead.
+  - Daily Inventory only uses entries that (a) include a Net Bags value
+    and (b) are dated ON OR BEFORE its own `Config!B2` start date — a
     submission dated after that would double-count against receipts
-    already flowing through `DATA_ENTRY` for that same period. Its age
-    at Daily Inventory's start date is projected forward from the
-    submission's own date, the same elapsed-time logic Age Monitoring
-    itself uses. If a warehouse+variety has no qualifying submission, its
-    starting balance is simply 0 — nothing is guessed or fabricated.
+    already flowing through `DATA_ENTRY` for that same period. Each
+    entry's age at Daily Inventory's start date is projected forward
+    from its bracket's midpoint and its own submission date. If a
+    warehouse+variety+bracket has no qualifying submission, its
+    contribution is simply 0 — nothing is guessed or fabricated.
+
+## About UNWITHDRAWN (Daily Inventory)
+
+Between BEGINNING INVENTORY and Day 1, the start month shows one row per
+customer-type category (`UNWITHDRAWN - FTI`, `UNWITHDRAWN - LGU`,
+`UNWITHDRAWN - OTHER`) plus an `AVAILABLE BEGINNING INVENTORY` row that
+Day 1 actually starts from — authorities (`AI` rows) issued shortly
+before `Config!B2` that haven't been physically withdrawn yet (per
+`Issues Backup`) still count as committed stock, so they're deducted
+before Day 1's activity begins. Scoped to `[Config!B2 - 30 days,
+Config!B2]` specifically — no later (already covered by the normal day-
+by-day ledger) and not further back (avoids ancient/stale authorities
+piling up as noise). Categorized by a substring match on the AI row's
+customer name (`FTI`, `LGU` — also matches `BLGU` — with `OTHER` as an
+explicit catch-all so nothing is ever silently dropped). Same manual/
+auto checkbox as Beginning Inventory governs all of these rows together.
 
 ## If something looks wrong
 

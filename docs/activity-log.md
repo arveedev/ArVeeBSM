@@ -17224,3 +17224,65 @@ two-thirds (FTI 8->5, LGU 4->3, OTHER 26->10).
 `docs/daily-inventory-report-script.js`.
 
 Re-verified with `node --check` and the real-data sandbox simulation.
+
+## Round 46: Multi-age-bracket QA submissions (fixes real data loss)
+
+User showed real "Branch Office Quality Assessment Report" (QUASAR)
+screenshots from QA - revealed a serious data-loss bug, not a display
+mismatch: `upsertAgeSubmission_` matched an existing row on
+(Warehouse, Variety, Month) only, without Age in the key. Real QA data
+routinely has a single warehouse+variety spread across MANY age brackets
+at once (BSI Libon's PDs alone spanned 8+ brackets in one screenshot) -
+every submission after the first for the same warehouse+variety in the
+same month was silently overwriting the previous one instead of adding a
+new row. The system could only ever retain the LAST age bracket entered
+per warehouse+variety.
+
+Scoped the fix with the user (asked before rebuilding): no quality-
+condition breakdown (GQA/GQB/GQC/Treated/Damaged) - not needed, Daily
+Inventory/Age Monitoring only track quantity+age. Age input should match
+QUASAR's own fine-grained monthly bracket labels ("0-1.0", "1.1-2.0", ...
+up to 60 months), not a single decimal. Quantity should accept
+Kilograms (auto-computed to Net Bags, /50) OR Net Bags directly.
+
+Implemented in both scripts:
+- New `AGE_BRACKETS` (60 fine-grained monthly labels + representative
+  midpoint each), duplicated in both scripts (separate Apps Script
+  projects, no shared module).
+- `QA_AGE_SUBMISSIONS` gained an Age Bracket column (dropdown-enforced)
+  and a Net Kilos column; Net Bags is now always the computed/displayed
+  figure (`resolveNetBags_` - kilos wins if both given, else bags used
+  directly, rounded to 2 decimals).
+- Upsert key is now (Warehouse, Variety, Age Bracket, Month) - fixes the
+  data-loss bug directly. Confirmed via a sandbox simulation using real
+  screenshot values (BSI Libon/PDs across 3 brackets) that all 3 survive
+  as distinct entries instead of collapsing to one.
+- `age-monitoring-report-script.js`: `readLatestSubmissions_` replaced
+  with `readQaBaselineEntries_`, returning EVERY qualifying entry (not
+  collapsed to one per warehouse+variety). Structural simplification as
+  a consequence: QA submissions no longer override the age of an
+  individual existing receipt row (the old "anchor" mechanism) - with
+  multiple brackets per warehouse+variety there's no single unambiguous
+  age left to anchor one receipt to, so receipts are now always aged by
+  elapsed-time-since-receipt (or their own transfer-age override),
+  never a QA anchor. QA data's role is now purely "starting-inventory
+  baseline," matching Daily Inventory's model exactly.
+- `daily-inventory-report-script.js`'s `readSharedQaData_` updated to
+  the new column layout/key shape (ported the same AGE_BRACKETS map).
+- Both HTML forms rebuilt: Age Bracket dropdown (populated from a new
+  `getAgeBracketLabels()` server function), Net Kilos + Net Bags dual
+  input with live auto-compute preview. Bulk form's paste format is now
+  `Warehouse, Variety, Age Bracket, Net Kilos, Net Bags` with automatic
+  whitespace normalization on the Age Bracket field so pasting close to
+  QUASAR's own formatting ("9.1 -   10.0") still matches.
+
+### Files touched
+`docs/age-monitoring-report-script.js`, `docs/daily-inventory-report-script.js`,
+`docs/age-submission-form.html`, `docs/age-bulk-import-form.html`,
+`docs/sheets-reports-setup.md`.
+
+Re-verified with `node --check` on both scripts and a sandbox simulation
+of the full multi-bracket baseline-seeding flow using real screenshot
+values. Not yet run for real by the user - their EXISTING
+QA_AGE_SUBMISSIONS rows from prior rounds use the OLD column layout and
+will need re-entering in the new format.

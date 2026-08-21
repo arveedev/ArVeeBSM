@@ -24,18 +24,21 @@
  * 1. ADMIN-ONLY generation + locked (LockService) — same as the
  *    Inventory script, so two overlapping runs can't corrupt output.
  *
- * 2. QA MONTHLY AGE ANCHORING (the structural fix): v1 computed every
- *    stock's age purely as elapsed time since receipt, forever, with a
- *    manually-typed SETUP baseline that only ever gets more stale. v2
- *    adds a real QA_AGE_SUBMISSIONS table (warehouse, variety,
- *    submitted age in months, submission date). For any warehouse+
- *    variety with a submission, THAT is the age anchor — the report
- *    projects forward from the submission date instead of from the
- *    original receipt date. Where no submission exists yet, it falls
- *    back to the old elapsed-time-since-receipt calculation, so nothing
- *    breaks before QA's first submission — but every month a submission
- *    comes in, that variety/warehouse's drift gets corrected instead of
- *    compounding.
+ * 2. QA AS THE STARTING-INVENTORY BASELINE (the structural fix): v1
+ *    computed every stock's age purely as elapsed time since receipt,
+ *    forever, with a manually-typed SETUP baseline that only ever gets
+ *    more stale. v2 adds a real QA_AGE_SUBMISSIONS table (warehouse,
+ *    variety, AGE BRACKET, net kilos/bags, submission date) matching how
+ *    QA's own QUASAR report actually reports stock — a real warehouse+
+ *    variety commonly has bags spread across SEVERAL age brackets at
+ *    once, so each bracket gets its own row rather than being collapsed
+ *    into a single number. Every qualifying entry (dated on/before
+ *    Config!B2) seeds the starting inventory baseline, projected forward
+ *    to today the same way a receipt's age is. QA data does NOT override
+ *    the age of an individual existing receipt row — with multiple
+ *    brackets per warehouse+variety there's no single unambiguous age to
+ *    anchor one receipt to, so receipts are always aged by elapsed time
+ *    since their own receipt date instead.
  *
  * 3. FIFO SHORTFALL IS NO LONGER SILENT: v1's applyFIFO stopped when it
  *    ran out of stock in the matching age bucket, silently leaving the
@@ -82,6 +85,29 @@ const VALID_AGE_GROUPS = new Set(["0-3", ">3", "0-6", "6.1-12", ">12"]);
 // Not a real warehouse - an internal routing/transfer label, not a place
 // that holds physical stock. Excluded from both receipts and issuances.
 const EXCLUDED_WAREHOUSES = new Set(["NFAO RM"]);
+
+/**
+ * Fine-grained monthly age brackets matching how QA's own QUASAR report
+ * labels ages ("0-1.0", "1.1-2.0", "2.1-3.0", ... ), NOT the 5 coarse
+ * buckets (0-3/>3/0-6/6.1-12/>12) this report's own math uses internally.
+ * A QA submission is recorded against one of THESE fine brackets (a real
+ * warehouse+variety commonly has stock in several at once - the QUASAR
+ * report shows this constantly), and each bracket's midpoint is used as
+ * its representative age-in-months wherever a single number is needed
+ * (elapsed-time projection, coarse-bucket classification). 60 brackets =
+ * 5 years, generous headroom over anything seen in real QUASAR data.
+ */
+function buildAgeBrackets_() {
+  const labels = ["0-1.0"];
+  const midpoints = { "0-1.0": 0.5 };
+  for (let i = 1; i <= 60; i++) {
+    const label = `${i}.1-${i + 1}.0`;
+    labels.push(label);
+    midpoints[label] = i + 0.55;
+  }
+  return { labels, midpoints };
+}
+const AGE_BRACKETS = buildAgeBrackets_();
 
 const SETUP_SHEET_NAME = "SETUP";
 const QA_SUBMISSIONS_SHEET_NAME = "QA_AGE_SUBMISSIONS";
@@ -138,11 +164,18 @@ function initializeSetupSheet() {
   const categoryRule = SpreadsheetApp.newDataValidation().requireValueInList(["Palay", "Rice"], true).setAllowInvalid(false).build();
   setupSheet.getRange("B3:B200").setDataValidation(categoryRule);
 
+  // Warehouse+Variety+Age Bracket (NOT just Warehouse+Variety) is what
+  // makes a row unique per month - a real warehouse+variety commonly has
+  // stock spread across several age brackets at once (confirmed from a
+  // real QUASAR report), so each bracket needs its own row rather than
+  // overwriting the others.
   const qaSheet = ss.getSheetByName(QA_SUBMISSIONS_SHEET_NAME) || ss.insertSheet(QA_SUBMISSIONS_SHEET_NAME);
   if (qaSheet.getLastRow() === 0) {
-    qaSheet.getRange(1, 1, 1, 6).setValues([["Warehouse", "Variety", "Age (months)", "Net Bags (optional)", "Submission Date", "Submitted By"]])
+    qaSheet.getRange(1, 1, 1, 7).setValues([["Warehouse", "Variety", "Age Bracket", "Net Kilos (optional)", "Net Bags", "Submission Date", "Submitted By"]])
       .setFontWeight("bold").setBackground("#cfe2f3");
   }
+  const ageBracketRule = SpreadsheetApp.newDataValidation().requireValueInList(AGE_BRACKETS.labels, true).setAllowInvalid(false).build();
+  qaSheet.getRange("C2:C2000").setDataValidation(ageBracketRule);
 
   SpreadsheetApp.getUi().alert('Setup ready. Fill in every variety your warehouses use under SETUP (Category is now a dropdown), then use "Bulk Import Latest Known Ages" once, and "Submit Monthly Ages" each month after. This spreadsheet is now the SHARED source for variety mapping and QA stock counts - the Daily Inventory spreadsheet reads both directly from here via Config!B6, nothing needs to be re-entered there.');
 }
@@ -164,6 +197,11 @@ function readVarietyCategoryMap_(ss) {
 // ─────────────────────────────────────────────────────────────────────────────
 // QA MONTHLY AGE SUBMISSION FORM
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Called from both HTML forms to populate the Age Bracket dropdown client-side. */
+function getAgeBracketLabels() {
+  return AGE_BRACKETS.labels;
+}
 
 function showAgeSubmissionForm() {
   const html = HtmlService.createHtmlOutputFromFile('AgeSubmissionForm')
@@ -199,36 +237,51 @@ function showBulkAgeImportForm() {
  * string here, since this one is meant to be edited/extended by whoever
  * manages the QA form fields later.
  */
+/** Converts kilos to bags (÷50) or returns netBags as-is - whichever was actually supplied. Kilos wins if both are given (the more granular, QUASAR-native figure). Always rounded to 2 decimals, matching how Net Bags is displayed everywhere. */
+function resolveNetBags_(netKilos, netBags) {
+  if (netKilos !== null && !isNaN(netKilos) && netKilos > 0) return Math.round((netKilos / 50) * 100) / 100;
+  if (netBags !== null && !isNaN(netBags)) return Math.round(netBags * 100) / 100;
+  return null;
+}
+
 /**
- * Upserts one warehouse/variety's age submission for `recordDate`'s
- * month - overwrites that month's row if one already exists (rather
- * than appending a duplicate), so the sheet doesn't accumulate repeat
- * corrections within the same month. `recordDate` is BOTH the stored
- * Submission Date value AND what "same month" is matched against - so a
- * historical backfill given an explicit as-of date correctly lands in
- * (and can be re-imported to overwrite) that date's own month, not
- * today's. Shared by the single-row form (recordAgeSubmission) and the
- * bulk seed import (recordAgeSubmissionsBulk).
+ * Upserts one warehouse/variety/AGE BRACKET's submission for `recordDate`'s
+ * month - overwrites that exact (warehouse, variety, age bracket, month)
+ * row if one already exists (rather than appending a duplicate), so
+ * re-submitting a correction doesn't pile up. Age bracket is part of the
+ * match key - NOT just warehouse+variety - because a real warehouse+
+ * variety routinely has stock in several brackets simultaneously (see
+ * the QUASAR report this was built from); matching on warehouse+variety
+ * alone would silently collapse every bracket into whichever was
+ * submitted last. `recordDate` is BOTH the stored Submission Date value
+ * AND what "same month" is matched against, so a historical backfill
+ * given an explicit as-of date lands in (and can be re-imported to
+ * overwrite) that date's own month, not today's.
  */
-function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, recordDate, submittedBy) {
+function upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageBracket, netKilos, netBags, recordDate, submittedBy) {
+  const resolvedBags = resolveNetBags_(netKilos, netBags);
   const targetMonthKey = Utilities.formatDate(recordDate, "GMT+8", "yyyy-MM");
   let targetRow = -1;
   for (let i = 1; i < values.length; i++) {
     const rowWh = String(values[i][0] || "").trim();
     const rowVar = String(values[i][1] || "").trim();
-    const rowDate = values[i][4] instanceof Date ? values[i][4] : new Date(values[i][4]);
+    const rowBracket = String(values[i][2] || "").trim();
+    const rowDate = values[i][5] instanceof Date ? values[i][5] : new Date(values[i][5]);
     const rowMonthKey = isNaN(rowDate.getTime()) ? "" : Utilities.formatDate(rowDate, "GMT+8", "yyyy-MM");
-    if (rowWh === warehouse && rowVar === variety && rowMonthKey === targetMonthKey) {
+    if (rowWh === warehouse && rowVar === variety && rowBracket === ageBracket && rowMonthKey === targetMonthKey) {
       targetRow = i + 1;
       break;
     }
   }
 
-  // netBags is optional - a monthly age correction doesn't always come
-  // with a fresh bag recount, only the initial/periodic stock count does.
-  const rowData = [warehouse, variety, ageMonths, netBags === null || isNaN(netBags) ? "" : netBags, recordDate, submittedBy];
+  const rowData = [
+    warehouse, variety, ageBracket,
+    netKilos === null || isNaN(netKilos) ? "" : netKilos,
+    resolvedBags === null ? "" : resolvedBags,
+    recordDate, submittedBy,
+  ];
   if (targetRow > 0) {
-    qaSheet.getRange(targetRow, 1, 1, 6).setValues([rowData]);
+    qaSheet.getRange(targetRow, 1, 1, 7).setValues([rowData]);
     values[targetRow - 1] = rowData; // keep the in-memory snapshot correct for subsequent calls in the same bulk batch
   } else {
     qaSheet.appendRow(rowData);
@@ -244,10 +297,14 @@ function recordAgeSubmission(payload) {
 
     const warehouse = String(payload.warehouse || "").trim();
     const variety = String(payload.variety || "").trim();
-    const ageMonths = parseFloat(payload.ageMonths);
+    const ageBracket = String(payload.ageBracket || "").trim();
+    const netKilos = payload.netKilos === undefined || payload.netKilos === "" ? null : parseFloat(payload.netKilos);
     const netBags = payload.netBags === undefined || payload.netBags === "" ? null : parseFloat(payload.netBags);
-    if (!warehouse || !variety || isNaN(ageMonths)) {
-      return { status: "error", message: "Warehouse, Variety, and a numeric Age are required." };
+    if (!warehouse || !variety || !AGE_BRACKETS.midpoints.hasOwnProperty(ageBracket)) {
+      return { status: "error", message: "Warehouse, Variety, and a valid Age Bracket are required." };
+    }
+    if (resolveNetBags_(netKilos, netBags) === null) {
+      return { status: "error", message: "Enter either Net Kilos or Net Bags." };
     }
 
     // Defaults to today (routine monthly correction) - pass asOfDate to
@@ -256,7 +313,7 @@ function recordAgeSubmission(payload) {
     if (isNaN(recordDate.getTime())) return { status: "error", message: "As Of Date is not a valid date." };
 
     const values = qaSheet.getDataRange().getValues();
-    upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, recordDate, Session.getEffectiveUser().getEmail() || "unknown");
+    upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageBracket, netKilos, netBags, recordDate, Session.getEffectiveUser().getEmail() || "unknown");
     return { status: "success" };
   } catch (e) {
     return { status: "error", message: e.toString() };
@@ -264,18 +321,18 @@ function recordAgeSubmission(payload) {
 }
 
 /**
- * Seeds/updates MANY warehouse+variety age readings at once - meant for
- * bringing in QA's most recent ALREADY-KNOWN ages right after setup, so
- * the very first report is anchored to real observed data instead of
- * defaulting to pure elapsed-time-since-receipt for every combination
- * until QA happens to submit each one individually. `rows` is an array
- * of { warehouse, variety, ageMonths, netBags }, e.g. parsed from a
- * pasted "Warehouse, Variety, Age, Net Bags" block in the bulk-import
- * form. `asOfDate` (optional, one shared date for the whole batch) lets
- * a historical snapshot be recorded with its TRUE observation date
- * instead of today - important because Daily Inventory and this report's
- * own baseline-seeding only trust a submission dated on/before their
- * configured start date; defaults to today if omitted.
+ * Seeds/updates MANY warehouse+variety+age-bracket readings at once -
+ * meant for bringing in QA's most recent ALREADY-KNOWN counts right
+ * after setup (e.g. straight from a QUASAR report), so the very first
+ * report is anchored to real observed data instead of defaulting to
+ * pure elapsed-time-since-receipt for every combination. `rows` is an
+ * array of { warehouse, variety, ageBracket, netKilos, netBags } -
+ * exactly one of netKilos/netBags needs a value per row. `asOfDate`
+ * (optional, one shared date for the whole batch) lets a historical
+ * snapshot be recorded with its TRUE observation date instead of today -
+ * important because Daily Inventory and this report's own baseline-
+ * seeding only trust a submission dated on/before their configured start
+ * date; defaults to today if omitted.
  */
 function recordAgeSubmissionsBulk(rows, asOfDate) {
   try {
@@ -295,13 +352,14 @@ function recordAgeSubmissionsBulk(rows, asOfDate) {
     rows.forEach((r, idx) => {
       const warehouse = String(r.warehouse || "").trim();
       const variety = String(r.variety || "").trim();
-      const ageMonths = parseFloat(r.ageMonths);
+      const ageBracket = String(r.ageBracket || "").trim();
+      const netKilos = r.netKilos === undefined || r.netKilos === "" ? null : parseFloat(r.netKilos);
       const netBags = r.netBags === undefined || r.netBags === "" ? null : parseFloat(r.netBags);
-      if (!warehouse || !variety || isNaN(ageMonths)) {
-        skipped.push(`Row ${idx + 1}: "${r.warehouse}" / "${r.variety}" / "${r.ageMonths}"`);
+      if (!warehouse || !variety || !AGE_BRACKETS.midpoints.hasOwnProperty(ageBracket) || resolveNetBags_(netKilos, netBags) === null) {
+        skipped.push(`Row ${idx + 1}: "${r.warehouse}" / "${r.variety}" / "${r.ageBracket}" / kilos="${r.netKilos}" bags="${r.netBags}"`);
         return;
       }
-      upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageMonths, netBags, recordDate, submittedBy);
+      upsertAgeSubmission_(qaSheet, values, warehouse, variety, ageBracket, netKilos, netBags, recordDate, submittedBy);
       imported++;
     });
 
@@ -312,30 +370,46 @@ function recordAgeSubmissionsBulk(rows, asOfDate) {
 }
 
 /**
- * Returns, per warehouse|variety key, the MOST RECENT submission on or
- * before `asOfDate` — { key: { ageMonths, netBags, submissionDate } }.
- * netBags is null when that submission didn't include a bag count (a
- * monthly age-only correction, not a full recount).
+ * Returns EVERY qualifying QA entry (not collapsed to one per warehouse+
+ * variety - a warehouse+variety can legitimately have several age
+ * brackets at once), each the MOST RECENT submission for its own exact
+ * (warehouse, variety, age bracket) on or before `asOfDate` - an array of
+ * { warehouse, variety, ageBracket, ageMonths (the bracket's midpoint),
+ * netBags, submissionDate }. Used only for baseline-seeding (Phase 0 in
+ * runReportCore_) - QA submissions no longer override the age of
+ * individual existing receipt rows (see the "WHAT CHANGED" note at the
+ * top of this file), since with multiple brackets per warehouse+variety
+ * there's no single unambiguous age left to anchor a specific receipt to.
  */
-function readLatestSubmissions_(ss, asOfDate) {
+function readQaBaselineEntries_(ss, asOfDate) {
   const qaSheet = ss.getSheetByName(QA_SUBMISSIONS_SHEET_NAME);
-  const latest = {};
-  if (!qaSheet) return latest;
+  if (!qaSheet) return [];
 
+  const latestByKey = {};
   const values = qaSheet.getDataRange().getValues();
   for (let i = 1; i < values.length; i++) {
-    const [wh, variety, ageMonths, netBagsRaw, submissionDateRaw] = values[i];
-    if (!wh || !variety) continue;
+    const [wh, variety, ageBracket, , netBagsRaw, submissionDateRaw] = values[i];
+    if (!wh || !variety || !ageBracket) continue;
+    if (!AGE_BRACKETS.midpoints.hasOwnProperty(ageBracket)) continue; // shouldn't happen (dropdown-enforced), but don't trust blindly
+    const netBags = netBagsRaw === "" || netBagsRaw === undefined || netBagsRaw === null ? null : Number(netBagsRaw);
+    if (netBags === null || isNaN(netBags) || netBags <= 0) continue;
+
     const submissionDate = submissionDateRaw instanceof Date ? submissionDateRaw : new Date(submissionDateRaw);
     if (isNaN(submissionDate.getTime()) || submissionDate > asOfDate) continue;
 
-    const key = `${String(wh).trim()}|${String(variety).trim().toLowerCase()}`;
-    if (!latest[key] || submissionDate > latest[key].submissionDate) {
-      const netBags = netBagsRaw === "" || netBagsRaw === undefined || netBagsRaw === null ? null : Number(netBagsRaw);
-      latest[key] = { ageMonths: parseFloat(ageMonths) || 0, netBags: isNaN(netBags) ? null : netBags, submissionDate };
+    const key = `${String(wh).trim()}|${String(variety).trim()}|${String(ageBracket).trim()}`;
+    if (!latestByKey[key] || submissionDate > latestByKey[key].submissionDate) {
+      latestByKey[key] = {
+        warehouse: String(wh).trim(),
+        variety: String(variety).trim(),
+        ageBracket: String(ageBracket).trim(),
+        ageMonths: AGE_BRACKETS.midpoints[ageBracket],
+        netBags,
+        submissionDate,
+      };
     }
   }
-  return latest;
+  return Object.values(latestByKey);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -519,17 +593,14 @@ function runReportCore_() {
     }
 
     const varietyTypeMap = readVarietyCategoryMap_(ss);
-    // Two separate cutoffs, same distinction Daily Inventory makes:
-    //  - latestSubmissions (as-of endDate/now): anchors the age of an
-    //    ACTUAL receipt row that already exists in DATA_ENTRY.
-    //  - baselineSubmissions (as-of startDate): SEEDS inventory that
-    //    existed before startDate and therefore has no DATA_ENTRY receipt
-    //    row inside the [startDate, endDate] window at all - without
-    //    this, any issuance against pre-startDate stock looks like "no
-    //    recorded stock," which is what was producing most of the FIFO
-    //    shortfall noise. Only qualifies with a real Net Bags value.
-    const latestSubmissions = readLatestSubmissions_(ss, endDate);
-    const baselineSubmissions = readLatestSubmissions_(ss, startDate);
+    // QA submissions now ONLY seed the baseline (Phase 0 below) - they no
+    // longer override the age of an individual existing receipt row. With
+    // multiple age brackets per warehouse+variety (a real warehouse+
+    // variety commonly has several at once), there's no single
+    // unambiguous "QA's age for this variety" left to anchor one receipt
+    // to; QA's data is instead the authoritative starting-inventory count
+    // in its own right, exactly like Daily Inventory already treats it.
+    const baselineEntries = readQaBaselineEntries_(ss, startDate);
 
     const msPerMonth = 30.44 * 24 * 60 * 60 * 1000;
     let inventory = {};
@@ -538,23 +609,22 @@ function runReportCore_() {
     const isExcludedVariety = (v) => !v || EXCLUDED_VARIETIES.has(v.toString().trim().toUpperCase());
     const isExcludedWarehouse = (wh) => EXCLUDED_WAREHOUSES.has(String(wh || "").trim().toUpperCase());
 
-    // Phase 0: seed baseline inventory from QA submissions dated on/before
+    // Phase 0: seed baseline inventory from every QA entry dated on/before
     // startDate, projected forward to endDate the same way a receipt's
-    // age is projected - see the block comment above.
-    Object.keys(baselineSubmissions).forEach((key) => {
-      const entry = baselineSubmissions[key];
-      if (entry.netBags === null || entry.netBags === 0) return;
-      const [wh, variety] = key.split('|');
-      if (isExcludedVariety(variety) || isExcludedWarehouse(wh)) return;
+    // age is projected. Each age bracket is its own entry - all of them
+    // get seeded, not just one per warehouse+variety.
+    baselineEntries.forEach((entry) => {
+      if (isExcludedVariety(entry.variety) || isExcludedWarehouse(entry.warehouse)) return;
       const elapsedSinceSubmission = (endDate.getTime() - entry.submissionDate.getTime()) / msPerMonth;
       const ageMonths = entry.ageMonths + elapsedSinceSubmission;
-      updateInv(inventory, wh, variety, ageMonths, entry.netBags);
+      updateInv(inventory, entry.warehouse, entry.variety, ageMonths, entry.netBags);
     });
 
     const recHeaders = getSheetHeaders_(recSheet);
     const issHeaders = getSheetHeaders_(issSheet);
 
-    // 1. Receipts, deduped, age anchored to QA submission when one exists
+    // 1. Receipts, deduped - age is always elapsed-time-since-receipt (or
+    // the row's own transfer-age override), never a QA anchor - see note above.
     const recRaw = recSheet.getDataRange().getValues();
     const recDedup = dedupDataEntryRows_(recRaw, recHeaders);
     duplicateRows.push(...recDedup.duplicates.map((d) => `${CONFIG.SHEET_RECEIPTS}: ${d}`));
@@ -570,19 +640,10 @@ function runReportCore_() {
       if (!wh || !variety || bags === 0) return;
       if (isExcludedVariety(variety) || isExcludedWarehouse(wh)) return;
 
-      const subKey = `${String(wh).trim()}|${String(variety).trim().toLowerCase()}`;
-      let ageMonths;
-      if (latestSubmissions[subKey]) {
-        const elapsedSinceSubmission = (endDate.getTime() - latestSubmissions[subKey].submissionDate.getTime()) / msPerMonth;
-        ageMonths = latestSubmissions[subKey].ageMonths + elapsedSinceSubmission;
-      } else {
-        const transferAgeOverride = parseFloat(row[recAgeCol]);
-        if (!isNaN(transferAgeOverride) && transferAgeOverride > 0) {
-          ageMonths = transferAgeOverride + (endDate.getTime() - rDate.getTime()) / msPerMonth;
-        } else {
-          ageMonths = (endDate.getTime() - rDate.getTime()) / msPerMonth;
-        }
-      }
+      const transferAgeOverride = parseFloat(row[recAgeCol]);
+      const ageMonths = !isNaN(transferAgeOverride) && transferAgeOverride > 0
+        ? transferAgeOverride + (endDate.getTime() - rDate.getTime()) / msPerMonth
+        : (endDate.getTime() - rDate.getTime()) / msPerMonth;
       updateInv(inventory, wh, variety, ageMonths, bags);
     });
 
