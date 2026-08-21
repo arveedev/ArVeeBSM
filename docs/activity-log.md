@@ -17051,3 +17051,43 @@ rendered independently).
 
 Re-verified with `node --check`. Not yet re-run by the user with these
 fixes.
+
+## Round 42: Daily Inventory age-group validation fix + variety-naming mismatch found in QA bulk-import data
+
+User reported the Daily Inventory SUMMARY sheet's numbers don't match the
+just-imported QA baseline at all. Two separate causes:
+
+1. **Confirmed bug, fixed**: `daily-inventory-report-script.js`'s AI/
+   issuance loop only rejected a BLANK age-group value
+   (`age === "" `), never validated it against the known bucket set - the
+   same class of bug already fixed in Age Monitoring last round, just
+   never carried over to this script. Added the same
+   `VALID_AGE_GROUPS = new Set(["0-3",">3","0-6","6.1-12",">12"])` guard;
+   an issuance row with a blank or garbage age-group value (e.g. a
+   customer name that landed in the wrong column) is now skipped
+   entirely instead of creating a bogus column labeled with whatever
+   text was actually there. Explicitly does NOT apply to the ADD side
+   (DATA_ENTRY/receipts) - those always compute a real bucket via
+   `getAgeGroupFromVariety`, never read a raw age-group column, so they
+   stay included regardless, per the user's explicit instruction.
+
+2. **Root cause of the larger mismatch, not a code bug**: comparing the
+   user's QA_AGE_SUBMISSIONS screenshot against the rendered SUMMARY
+   sheet's own column headers shows the bulk-import data used variety
+   codes "PD1-A"/"PD1-B"/"PD2-A" (pulled from the user's July 31 PDF-
+   style report), while the spreadsheet's actual live August transactions
+   use "PD1s-A"/"PD1s-B"/"PD2s-A" (an "s" was inserted into the naming
+   at some point - visible from this session's very first shared JSON,
+   where August's own column headers already showed the "s" variant
+   while May-July's didn't). This is a naming mismatch from Claude's own
+   earlier data-transformation error (should have cross-checked against
+   the live column names already seen earlier in the session), not a
+   script defect - the QA baseline for those three varieties needs
+   correcting in the sheet to match current live naming.
+
+### Files touched
+`docs/daily-inventory-report-script.js`.
+
+Re-verified with `node --check`. User needs to manually correct 9 rows'
+variety codes in QA_AGE_SUBMISSIONS (PD1-A -> PD1s-A x5, PD1-B -> PD1s-B
+x2, PD2-A -> PD2s-A x2) before the numbers will reconcile.

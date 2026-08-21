@@ -100,6 +100,15 @@ const THEME = {
 };
 
 const EXCLUDED_VARIETIES = new Set(["DKA", "DKB", "DKC", "BIN"]);
+
+// A LESS-side (AI/issuance) row whose age-group code isn't one of these
+// is data we can't safely bucket (blank, or garbage that landed in the
+// wrong column - e.g. a customer name) - skipped entirely rather than
+// creating a bogus column labeled with whatever text was actually there.
+// This does NOT apply to the ADD side (DATA_ENTRY/receipts) - those
+// always get a real bucket computed from getAgeGroupFromVariety, never a
+// raw column value, so they're included regardless.
+const VALID_AGE_GROUPS = new Set(["0-3", ">3", "0-6", "6.1-12", ">12"]);
 const STATE_SHEET_NAME = "STATE (do not edit)";
 
 const dateCache = {};
@@ -819,8 +828,8 @@ function parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, var
     const netBags = (Number(row[aiKilosCol]) || 0) / 50;
     if (netBags === 0 || isExcluded(variety)) continue;
 
-    const age = row[aiAgeGroupCol];
-    if (age === undefined || age === null || age.toString().trim() === "") continue;
+    const age = String(row[aiAgeGroupCol] || "").trim();
+    if (!VALID_AGE_GROUPS.has(age)) continue; // blank, or invalid/garbage data in that column
 
     const dateInfo = getCachedDateInfo(date);
     const m = dateInfo.month, d = dateInfo.day;
