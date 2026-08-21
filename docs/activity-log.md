@@ -17091,3 +17091,51 @@ just-imported QA baseline at all. Two separate causes:
 Re-verified with `node --check`. User needs to manually correct 9 rows'
 variety codes in QA_AGE_SUBMISSIONS (PD1-A -> PD1s-A x5, PD1-B -> PD1s-B
 x2, PD2-A -> PD2s-A x2) before the numbers will reconcile.
+
+## Round 43: Found and fixed the real cause of the Daily Inventory misalignment
+
+User provided real DATA_ENTRY/AI JSON exports plus the exact QA_AGE_SUBMISSIONS
+and STATE sheet contents, letting the actual bug be isolated instead of
+guessed at. Simulated `readSharedQaData_`'s baseline-seeding logic in a
+Node sandbox against the real data - it produced EXACTLY the intended
+values, proving the baseline computation itself was correct. That
+narrowed the search to `renderGSRSheet`.
+
+**Root cause found**: `renderGSRSheet`'s "preserve manual Beginning
+Inventory entries when auto-sync is off" mechanism (added in Round 37 to
+fix the ORIGINAL v1 bug of scanning headers positionally) was itself
+still positional - it captured `preservedRow5[idx]` (a plain array,
+keyed only by column INDEX) before clearing the sheet, then reassigned
+`preservedRow5[idx]` back into the NEW render at the same index. This
+is correct only if the column SET is identical between the two runs. The
+moment the column set changes - exactly what happened when the variety
+names were corrected from PD1-A/PD1-B/PD2-A to PD1s-A/PD1s-B/PD2s-A
+between two consecutive syncs - old values silently land under whatever
+NEW column happens to occupy the same position, not the column they
+actually belonged to. This exactly explains the user's screenshots: e.g.
+ABACORP's PDm baseline (906.26) appearing under WD1's key, BSI B's
+PD1s-A baseline (35,532.64) appearing under PD2s-A's key.
+
+**Fix**: `preservedRow5` replaced with `preservedByKey`, built by reading
+the OLD sheet's header rows 2-4 (warehouse/variety/age, with the same
+merged-cell carry-forward logic the ORIGINAL v1 scanning code used) to
+reconstruct each old column's actual `warehouse|variety|age` key
+BEFORE clearing, then looking up row 5's value AT THAT KEY (not that
+index) when rendering the new column set. A genuinely new key with
+nothing manually entered yet correctly falls through to the computed
+seed value instead of accidentally inheriting an unrelated old value.
+
+This bug is not specific to the variety-rename incident - it would
+trigger any time the column set changes between two runs (a new
+warehouse's first transaction, a newly-added variety, etc.) WHILE the
+"auto-sync previous balance" checkbox happens to be unchecked for that
+month. Given it was silently corrupting real balances rather than
+erroring, this was a serious data-integrity bug independent of the
+specific naming issue that surfaced it.
+
+### Files touched
+`docs/daily-inventory-report-script.js`.
+
+Re-verified with `node --check`. Also independently verified via a Node
+simulation of the real DATA_ENTRY/AI data that the baseline-seeding logic
+itself (readSharedQaData_) was already correct and did not need changes.

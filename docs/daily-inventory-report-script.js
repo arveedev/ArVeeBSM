@@ -956,12 +956,32 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
   let isCheckboxTrue = sheetExists ? sheet.getRange("B4").getValue() === true : true;
 
   // If the sheet exists and auto-sync is OFF, preserve whatever the admin
-  // manually typed into row 5 (Beginning Inventory) by capturing it BEFORE
-  // clear() — keyed to this month's own columns, not scanned from headers.
-  let preservedRow5 = null;
+  // manually typed into row 5 (Beginning Inventory) — keyed by
+  // warehouse|variety|age (read from the OLD header rows 2-4), NOT by
+  // column position. A positional preserve (preservedRow5[idx]) breaks
+  // the moment the column SET changes between runs (a variety gets
+  // renamed/added/removed) - the old value would land under whatever
+  // NEW column happens to sit at the same index, silently misattributing
+  // real balances to the wrong warehouse/variety/age. This is exactly
+  // what happened when a variety naming fix (PD1-A -> PD1s-A) shifted
+  // the column layout between two runs.
+  let preservedByKey = null;
   if (sheetExists && !isCheckboxTrue) {
     const lastCol = sheet.getLastColumn();
-    if (lastCol >= 3) preservedRow5 = sheet.getRange(5, 3, 1, lastCol - 2).getValues()[0];
+    if (lastCol >= 3) {
+      const oldHeaderRows = sheet.getRange(2, 3, 3, lastCol - 2).getValues(); // rows 2,3,4 = warehouse, variety, age
+      const oldRow5Values = sheet.getRange(5, 3, 1, lastCol - 2).getValues()[0];
+      preservedByKey = {};
+      let lastWh = "", lastVariety = "";
+      for (let i = 0; i < oldRow5Values.length; i++) {
+        const wh = oldHeaderRows[0][i] !== "" ? String(oldHeaderRows[0][i]).trim() : lastWh;
+        const variety = oldHeaderRows[1][i] !== "" ? String(oldHeaderRows[1][i]).trim() : lastVariety;
+        const age = String(oldHeaderRows[2][i]).trim();
+        lastWh = wh; lastVariety = variety;
+        if (!wh || !variety) continue; // "VARIETY TOTALS" summary columns etc - not a real data column
+        preservedByKey[`${wh}|${variety}|${age}`] = oldRow5Values[i];
+      }
+    }
   }
 
   sheet.clear();
@@ -997,12 +1017,12 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
   columns.forEach((col, idx) => {
     const key = col.join('|');
     let finalVal;
-    if (preservedRow5 !== null) {
-      finalVal = preservedRow5[idx]; // admin's manual entry, untouched
-    } else if (isCheckboxTrue) {
-      finalVal = keyedBeginningBalances[key] || 0;
+    if (preservedByKey !== null && Object.prototype.hasOwnProperty.call(preservedByKey, key)) {
+      finalVal = preservedByKey[key]; // admin's manual entry for THIS exact key, untouched
     } else {
-      finalVal = keyedBeginningBalances[key] || 0; // no prior manual entry to preserve yet - seed from state
+      // Either auto-sync is on, or this is a brand-new key with nothing
+      // manually entered yet to preserve - seed from computed state.
+      finalVal = keyedBeginningBalances[key] || 0;
     }
     if (typeof finalVal === 'number') {
       finalVal = Math.round(finalVal * 10000) / 10000;
