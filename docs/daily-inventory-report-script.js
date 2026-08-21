@@ -246,6 +246,13 @@ function readSharedQaData_(configSheet, startDate) {
  * Returns { FTI: {key: bags}, LGU: {...}, OTHER: {...} }, or null if
  * Config!B1's spreadsheet doesn't have an AI or Issues Backup sheet.
  */
+// How far before Config!B2 to look for still-open authorities. Without a
+// lower bound, this would scan the AI sheet's ENTIRE history, pulling in
+// ancient/likely-stale authorizations that inflate the total with noise
+// that isn't meaningfully "current." Anything older than this is ignored
+// even if technically still unwithdrawn.
+const UNWITHDRAWN_LOOKBACK_DAYS = 30;
+
 function readUnwithdrawnBaseline_(configSheet, startDate) {
   const sourceUrl = configSheet.getRange("B1").getValue();
   if (!sourceUrl) return null;
@@ -256,6 +263,7 @@ function readUnwithdrawnBaseline_(configSheet, startDate) {
 
   const isExcludedVariety = (v) => !v || EXCLUDED_VARIETIES.has(v.toString().trim().toUpperCase());
   const isExcludedWarehouse = (wh) => EXCLUDED_WAREHOUSES.has(String(wh || "").trim().toUpperCase());
+  const lookbackCutoff = new Date(startDate.getTime() - UNWITHDRAWN_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
   const aiHeaders = getSheetHeaders_(aiSheet);
   const aiDateCol = resolveColumnIndexByPrefix_(aiHeaders, ["DATE"], 0);
@@ -275,7 +283,11 @@ function readUnwithdrawnBaseline_(configSheet, startDate) {
     const dateVal = row[aiDateCol];
     if (!dateVal) continue;
     const date = dateVal instanceof Date ? dateVal : new Date(dateVal);
-    if (isNaN(date.getTime()) || date > startDate) continue; // only authorities issued on/before startDate
+    // Authorities issued on/before startDate (so there's no overlap with
+    // the day-by-day ledger, which already deducts anything from
+    // startDate onward on its own calendar date) AND not older than the
+    // lookback window (so ancient stale authorities don't pile up).
+    if (isNaN(date.getTime()) || date > startDate || date < lookbackCutoff) continue;
 
     const aiNumber = String(row[aiNumberCol] || "").trim();
     const warehouse = String(row[aiWarehouseCol] || "").trim();

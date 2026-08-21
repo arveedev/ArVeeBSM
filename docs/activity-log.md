@@ -17196,3 +17196,31 @@ reported to the user, not auto-corrected.
 
 Re-verified with `node --check` and a real-data sandbox simulation. Not
 yet run for real by the user.
+
+## Round 45: UNWITHDRAWN 30-day lookback window
+
+User reported the UNWITHDRAWN total looked too large and asked for it to
+"only start on the start date of the inventory." Flagged a real conflict
+before implementing: AI rows dated on/after Config!B2 are ALREADY
+deducted on their own calendar day by the existing day-by-day ledger
+(the original "authority issued, not actual issuance" rule) - having
+UNWITHDRAWN also cover that same date range would double-count that
+stock. The actual cause of "too large" was that `readUnwithdrawnBaseline_`
+scanned the AI sheet's ENTIRE history (back to January or earlier) for
+anything still open as of startDate, pulling in ancient/stale
+authorizations as noise.
+
+Agreed fix (user confirmed "just 30 days back"): kept the upper bound at
+startDate (no overlap with the day-by-day ledger) and added a lower
+bound - `UNWITHDRAWN_LOOKBACK_DAYS = 30`. Only AI rows dated within
+[startDate - 30 days, startDate] are now considered.
+
+Re-verified against the real AI/Issues Backup data in the same sandbox
+simulation used to build the feature: candidate authorities dropped from
+241 to 87, and the per-category combo counts dropped roughly in half to
+two-thirds (FTI 8->5, LGU 4->3, OTHER 26->10).
+
+### Files touched
+`docs/daily-inventory-report-script.js`.
+
+Re-verified with `node --check` and the real-data sandbox simulation.
