@@ -78,31 +78,39 @@ it again. Neither spreadsheet reads from the production spreadsheet's
    - `B6` = the URL of the Age Monitoring spreadsheet from Part 1 above.
      **Required** — this spreadsheet has no SETUP sheet of its own
      anymore; variety mapping and starting balances both come from there.
+   - `B7` = optional update frequency in minutes — must be exactly one of
+     `1`, `5`, `10`, `15`, or `30` (Apps Script's own constraint on a
+     minutes-based trigger; anything else is ignored and it defaults to
+     `5`). Leave blank for the default. **Changing B7 only takes effect
+     the next time you click "Install Auto-Update"** — editing the cell
+     alone doesn't reach a trigger that's already installed.
 4. Reload the spreadsheet — a **🌾 GSR Daily Inventory** menu appears.
 5. Click **🚀 Update Now**. Approve the authorization prompt (it now needs
    permission to read TWO other spreadsheets — the production one and the
    Age Monitoring one). This creates the month sheets, **SUMMARY**, and
    **MONTHLY** tabs.
-6. Click **⏰ Install Auto-Update (every 5 min)** once. From then on it
-   updates itself automatically every 5 minutes — no further action
-   needed.
+6. Click **⏰ Install Auto-Update (Config!B7 interval)** once. From then
+   on it updates itself automatically at whatever interval `Config!B7`
+   specifies — no further action needed. To change the frequency later,
+   edit `Config!B7` and click this again (it reinstalls the trigger using
+   the new value; it doesn't apply on its own).
 
    **About the quota**: consumer Google accounts get roughly 90 minutes
    of total trigger execution time per day; at 5-minute intervals that's
    288 firings/day. If you set `Config!B4`/`B5` (e.g. `8` and `18`), the
-   trigger still fires every 5 minutes around the clock, but outside that
+   trigger still fires every interval around the clock, but outside that
    window it does nothing but check the time and return — essentially
    free — so only the real syncs during your active hours (120 of them,
-   for an 8 AM–6 PM window) count meaningfully against the quota. Since
-   every real run recomputes the running total from `Config!B2`'s start
-   date forward (not just what's new), those runs will still get slower
-   as the season's data grows — if updates seem to have stalled, check
-   **Executions** in the Apps Script editor's left sidebar first. If runs
-   are consistently slow even within your active window, switch the
-   trigger to `.everyMinutes(15)` or `.everyMinutes(30)` in
-   `installDailyTrigger()` rather than losing updates to the quota.
-   Manual **🚀 Update Now** clicks always work regardless of the active-
-   hours window.
+   for an 8 AM–6 PM window at the 5-minute default) count meaningfully
+   against the quota. Since every real run recomputes the running total
+   from `Config!B2`'s start date forward (not just what's new), those
+   runs will still get slower as the season's data grows — if updates
+   seem to have stalled, check **Executions** in the Apps Script editor's
+   left sidebar first. If runs are consistently slow even within your
+   active window, raise `Config!B7` to `15` or `30` and reinstall the
+   trigger rather than losing updates to the quota. Manual **🚀 Update
+   Now** clicks always work regardless of the active-hours window or
+   `Config!B7`.
 7. Compare its numbers against your existing working spreadsheet's
    equivalent tallies. They should match; if they don't, the alert dialog
    from step 5/6 will already have told you why (unmapped variety, a

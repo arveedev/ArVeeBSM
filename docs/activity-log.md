@@ -17286,3 +17286,24 @@ of the full multi-bracket baseline-seeding flow using real screenshot
 values. Not yet run for real by the user - their EXISTING
 QA_AGE_SUBMISSIONS rows from prior rounds use the OLD column layout and
 will need re-entering in the new format.
+
+## Round 47: Configurable auto-update frequency (Config!B7)
+
+User expected to be able to adjust BOTH the update frequency and the
+active hours from the Config sheet - active hours (Config!B4/B5) already
+existed, but frequency was hardcoded to `.everyMinutes(5)` in
+`installDailyTrigger()`, only changeable by editing the script itself.
+
+Added `Config!B7` (optional, one of Apps Script's own allowed values -
+1/5/10/15/30 minutes; defaults to 5 if blank or invalid) via
+`getConfiguredTriggerInterval_()`. `installDailyTrigger()` now reads it
+and installs the trigger at that interval. Menu label and header
+comments updated to stop hardcoding "every 5 min". Documented clearly
+(in the alert shown on install, and in the setup guide) that changing
+B7 only takes effect the next time "Install Auto-Update" is clicked -
+editing the cell alone doesn't reach an already-installed trigger.
+
+### Files touched
+`docs/daily-inventory-report-script.js`, `docs/sheets-reports-setup.md`.
+
+Re-verified with `node --check`.

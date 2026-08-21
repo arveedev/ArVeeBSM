@@ -14,12 +14,12 @@
  *      B2 = the date to start accounting from (e.g. 2026-05-01)
  *      B3 = comma-separated list of admin emails allowed to run/trigger
  *           a sync (e.g. "arvee.dev.apps@gmail.com, other.admin@x.com")
- *      B4, B5 = OPTIONAL active-hours window for the 5-minute
- *           auto-trigger (24-hour, GMT+8) - e.g. B4=8, B5=18 only
- *           actually syncs between 8 AM and 6 PM, so overnight trigger
- *           firings cost almost nothing against the daily quota. Leave
- *           both blank to run around the clock instead. Manual "Update
- *           Now" clicks always work regardless of this window.
+ *      B4, B5 = OPTIONAL active-hours window for the auto-trigger
+ *           (24-hour, GMT+8) - e.g. B4=8, B5=18 only actually syncs
+ *           between 8 AM and 6 PM, so overnight trigger firings cost
+ *           almost nothing against the daily quota. Leave both blank to
+ *           run around the clock instead. Manual "Update Now" clicks
+ *           always work regardless of this window.
  *      B6 = URL of the Age Monitoring spreadsheet (the second new
  *           spreadsheet from docs/age-monitoring-report-script.js).
  *           REQUIRED - this script has NO local SETUP sheet of its own.
@@ -28,13 +28,19 @@
  *           Age Monitoring spreadsheet's own SETUP + QA_AGE_SUBMISSIONS
  *           sheets - this script reads both of those directly instead of
  *           asking for the same data a second time.
+ *      B7 = OPTIONAL auto-update interval in minutes - must be one of
+ *           1, 5, 10, 15, or 30 (Apps Script's own constraint on a
+ *           minutes-based trigger; anything else is ignored and 5 is
+ *           used instead). Changing B7 only takes effect the next time
+ *           "Install Auto-Update" is run - editing the cell alone
+ *           doesn't reach an already-installed trigger.
  * 3. In the Age Monitoring spreadsheet, run "⛳ Initialize Setup Sheet"
  *    and fill in every variety's Palay/Rice category, then use "Bulk
  *    Import Latest Known Ages" (including Net Bags where known) so this
  *    spreadsheet has real starting balances to read on its first sync.
- * 4. Run "Install Auto-Update (every 5 min)" from the menu once
+ * 4. Run "Install Auto-Update (Config!B7 interval)" from the menu once
  *    (authorizes the trigger). After that, this spreadsheet updates
- *    itself every 5 minutes with no further action needed - see the
+ *    itself automatically with no further action needed - see the
  *    quota warning on installDailyTrigger() below before relying on this
  *    once the season's data grows large.
  *
@@ -144,7 +150,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('🌾 GSR Daily Inventory')
     .addItem('🚀 Update Now', 'syncGSRDataManual')
     .addSeparator()
-    .addItem('⏰ Install Auto-Update (every 5 min)', 'installDailyTrigger')
+    .addItem('⏰ Install Auto-Update (Config!B7 interval)', 'installDailyTrigger')
     .addItem('🛑 Remove Auto-Update', 'removeDailyTrigger')
     .addToUi();
 }
@@ -443,19 +449,36 @@ function writeMonthState_(ss, monthName, balancesByKey) {
 // TRIGGER MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Apps Script's ClockTriggerBuilder.everyMinutes() only accepts these
+// exact values - anything else throws at trigger-creation time.
+const VALID_TRIGGER_INTERVALS = [1, 5, 10, 15, 30];
+const DEFAULT_TRIGGER_INTERVAL = 5;
+
 /**
- * Runs every 5 minutes (Apps Script's minimum granularity for a
- * minutes-based trigger). IMPORTANT constraint to watch: consumer Google
- * accounts get roughly 90 minutes of TOTAL trigger execution time per
- * day - at 5-minute intervals that's 288 runs/day, so each run needs to
- * average under ~18 seconds or the quota gets exhausted and updates
- * silently stop firing for the rest of that day (check Apps Script's
- * "Executions" log if updates seem to have stalled). Since every run
- * recomputes the running total from Config!B2's start date forward (not
- * just new rows since the last run), this will get slower as the
- * season's data grows - if runs start taking noticeably longer, switch
- * to .everyMinutes(15) or .everyMinutes(30) below rather than letting the
- * daily quota silently cut updates off.
+ * Reads Config!B7 as the auto-update interval in minutes - must be one of
+ * VALID_TRIGGER_INTERVALS (Apps Script's own constraint). Falls back to
+ * DEFAULT_TRIGGER_INTERVAL if B7 is blank or not one of the allowed
+ * values, so an install never fails outright over a bad Config entry.
+ */
+function getConfiguredTriggerInterval_(configSheet) {
+  const raw = configSheet.getRange("B7").getValue();
+  const interval = Number(raw);
+  return VALID_TRIGGER_INTERVALS.includes(interval) ? interval : DEFAULT_TRIGGER_INTERVAL;
+}
+
+/**
+ * Runs every Config!B7 minutes (default 5 - see getConfiguredTriggerInterval_).
+ * IMPORTANT constraint to watch: consumer Google accounts get roughly 90
+ * minutes of TOTAL trigger execution time per day - at 5-minute
+ * intervals that's 288 runs/day, so each run needs to average under
+ * ~18 seconds or the quota gets exhausted and updates silently stop
+ * firing for the rest of that day (check Apps Script's "Executions" log
+ * if updates seem to have stalled). Since every run recomputes the
+ * running total from Config!B2's start date forward (not just new rows
+ * since the last run), this will get slower as the season's data grows -
+ * if runs start taking noticeably longer, raise Config!B7 to 15 or 30
+ * (then re-run this to pick up the change) rather than letting the daily
+ * quota silently cut updates off.
  */
 function installDailyTrigger() {
   const ui = SpreadsheetApp.getUi();
@@ -466,13 +489,15 @@ function installDailyTrigger() {
     return;
   }
 
+  const interval = getConfiguredTriggerInterval_(configSheet);
+
   removeDailyTrigger(); // avoid stacking duplicate triggers on repeated installs
   ScriptApp.newTrigger('syncGSRDataAuto')
     .timeBased()
-    .everyMinutes(5)
+    .everyMinutes(interval)
     .create();
 
-  ui.alert("Installed", "Daily Inventory will now auto-update every 5 minutes. If runs ever start taking a long time as data grows, check Executions in the Apps Script editor - the daily trigger-time quota can silently stop updates if runs get too slow.", ui.ButtonSet.OK);
+  ui.alert("Installed", `Daily Inventory will now auto-update every ${interval} minute(s) (Config!B7). Changed B7? Run "Install Auto-Update" again to apply it - it doesn't take effect until reinstalled. If runs ever start taking a long time as data grows, check Executions in the Apps Script editor - the daily trigger-time quota can silently stop updates if runs get too slow.`, ui.ButtonSet.OK);
 }
 
 function removeDailyTrigger() {
@@ -504,9 +529,9 @@ function syncGSRDataManual() {
  * Reads Config!B4/B5 as an "active hours" window (24-hour, GMT+8) - e.g.
  * B4=8, B5=18 means only actually sync between 8:00 AM and 5:59 PM.
  * Outside that window this returns false almost instantly (no sheet
- * reads, no lock, no real work), so the 5-minute trigger firing overnight
- * costs essentially nothing against the daily quota. Leave B4/B5 blank
- * to run around the clock instead.
+ * reads, no lock, no real work), so the trigger firing overnight (at
+ * whatever interval Config!B7 sets) costs essentially nothing against
+ * the daily quota. Leave B4/B5 blank to run around the clock instead.
  */
 function isWithinActiveHours_(configSheet) {
   const startHourRaw = configSheet.getRange("B4").getValue();
