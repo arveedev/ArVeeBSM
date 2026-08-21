@@ -17307,3 +17307,89 @@ editing the cell alone doesn't reach an already-installed trigger.
 `docs/daily-inventory-report-script.js`, `docs/sheets-reports-setup.md`.
 
 Re-verified with `node --check`.
+
+## Round 48: GSR (Grains Situationer Report) - scoping, and a schema-export tool to see real formulas/formatting
+
+User introduced a large new requirement: a consolidated GSR combining
+the web app, production spreadsheet, backup sheets, Daily Inventory, and
+Age Monitoring into one daily report. Shared 9 JSON exports of the
+CURRENT GSR spreadsheet's pages (Inventory summary, Palay/Rice inventory
+per age+variety+province, Weekly Cereal Prices, Palay Procurement +
+Milling status, 2 Procurement breakdown pages, Dispersal, 3 Distribution
+pages) plus the GSR spreadsheet's own Apps Script (menu, CPF/SDO modal,
+old hide/unhide-by-config mechanism, schema-picker tool).
+
+Given the enormous scope, this round was deliberately clarification-only
+per the user's own explicit request ("always clarify and ask"). Key
+findings/decisions from this round's back-and-forth:
+
+- **Procurement**: target is pre-configured monthly data (new config
+  needed); accomplishment = DATA_ENTRY rows with Transaction=
+  "PROCUREMENT"; farmers served = COUNT of those same rows (not distinct
+  customers); CPF balance = a new daily submission by Disbursing
+  Officers (needs a new form, same pattern as QA's age submission);
+  unpaid deliveries = compare DATA_ENTRY PROCUREMENT receipts against a
+  SEPARATE "Palay Deliveries" spreadsheet - one file per month, in
+  Drive folder `PALAY DELIVERIES/{year}/{MM PALAY DELIVERIES MONTHNAME}`
+  (folder links provided).
+- **Milling status**: keep the existing % accomplishment formula (once
+  visible - see below), drop in-process/undelivered volumes.
+- **Dispersal**: explicitly deferred/ignored for now.
+- **Distribution**: needs a configurable customer-name-substring ->
+  scheme mapping (LGU->disaster/LGU scheme, FTI->FTI P20, "Jail"->BJMP)
+  and a configurable price bulletin (varies by age bucket, e.g. 0-3=P33
+  vs >3=P29, but changes over time - needs to stay editable).
+- **Weekly Cereal Prices**: needs a real input form (Wholesale/Retail
+  RMR/WMR prevailing+low+high etc.) where submitting new data
+  automatically rolls the previous "this week" values into "last week",
+  matching the report's own This Week/Last Week columns.
+- **CPF/SDO tab and the old hide/unhide-by-_Config_ mechanism**:
+  confirmed dropped entirely, per the user's original message.
+- **Naming inconsistency** (PD1-A vs PD1s-A, seen again in this GSR
+  data too): user wants this fixed "once and for all" - a cross-cutting
+  canonical-naming initiative, not yet designed.
+- **Broken formulas** (#DIV/0! in PROC.MILL for zero-denominator rows):
+  confirmed needs fixing (not replacing the underlying logic).
+- **Dead/legacy columns/warehouses with no data**: must be HIDDEN, not
+  deleted, when auto-generated.
+- **RR1 anomaly**: pointed out to user as a likely stray/leftover
+  reference in RICE INVENTORY's WD1 section (Col_17 values 119/919/980
+  don't fit the normal per-variety pattern) - flagged for them to check
+  directly in the live sheet, not resolved.
+- **Architecture clarified by user**: NOT a persistent spreadsheet like
+  Daily Inventory/Age Monitoring - a NEW spreadsheet file created per
+  report (or per date range, e.g. "GSR AUGUST 14-16" when combined),
+  filed into Drive at `GSR/{year}/{MM MONTHNAME}/GSR MONTHNAME DAY(S)`
+  (folder links provided). Reporting lag: a GSR dated today covers
+  YESTERDAY's transactions - triggered via a menu item where an admin
+  enters the period date, and the file gets created dated the next day.
+  Eventually needs to be triggerable from the BSM App itself (admin-only).
+- **Formulas visibility blocker resolved**: the JSON exports only had
+  computed values, not formulas - user asked for a modified export tool
+  instead of hand-copying formulas. Built
+  `docs/gsr-schema-export-script.js`, replacing the user's current GSR
+  Apps Script entirely: drops the CPF/SDO modal + PROCURMENT 2 read/
+  write, drops clearToday() (no longer applicable once GSR is a new file
+  per report instead of one reused sheet), drops the entire
+  _Config_-based hide/unhide mechanism (per explicit instruction). Kept
+  and enhanced the existing schema-picker UI: `getSingleSheetSchemaFull`
+  produces the same compact per-row JSON shape as before, but a cell
+  becomes `{v, f, b}` (formula/bold) instead of a bare scalar the moment
+  it has a formula or is bold, and each sheet's export also includes
+  frozen rows/columns, merged ranges (A1 notation), and column widths -
+  everything needed to faithfully reconstruct layout/logic without
+  guessing.
+- **Build approach resolved**: build the GSR generator in code (matching
+  Daily Inventory/Age Monitoring's approach) informed by the enriched
+  schema export above, rather than copying a template spreadsheet.
+- **Build order confirmed**: Phase 1 = Inventory + Prices + Procurement
+  (config work for Distribution's scheme/price-bulletin mapping folds
+  into this same phase); Milling status once its formula is visible;
+  Dispersal deferred.
+
+### Files added
+`docs/gsr-schema-export-script.js`.
+
+Re-verified with `node --check`. Waiting on the user to run the new
+export tool against each of the 9 GSR pages and share the results before
+the actual GSR generator can be designed/built.
