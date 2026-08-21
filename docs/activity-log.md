@@ -17139,3 +17139,60 @@ specific naming issue that surfaced it.
 Re-verified with `node --check`. Also independently verified via a Node
 simulation of the real DATA_ENTRY/AI data that the baseline-seeding logic
 itself (readSharedQaData_) was already correct and did not need changes.
+
+## Round 44: UNWITHDRAWN rows on Daily Inventory (authority-issued-not-withdrawn, split by customer type)
+
+User's original very-first request in this whole feature ("account for
+authority issued not by the actual issuance, this prevents issuing more
+inventory than the warehouse have") had a piece still missing: issuances
+WITHIN the tracked period were already deducted on their own date (the
+existing LESS side), but nothing accounted for authorities issued BEFORE
+day 1 that still hadn't been physically withdrawn as of the ledger's own
+start date - stock that's committed but still physically sitting there.
+
+Clarified with the user: unwithdrawn = AI sheet's authorized amount for a
+given AI# minus Issues Backup's actual withdrawals against that same AI#
+(Issues Backup shares DATA_ENTRY's column layout plus its own AI#/WSI#
+columns - confirmed from a real sample row). Split into FTI / LGU / OTHER
+by a substring match on the AI row's NAME OF CUSTOMER (OTHER is an
+explicit catch-all so nothing with real unwithdrawn stock is ever
+silently dropped just because it isn't FTI or LGU - more categories can
+be added above OTHER later without disturbing the fallback).
+
+Implemented as new rows between BEGINNING INVENTORY and Day 1:
+- `readUnwithdrawnBaseline_(configSheet, startDate)`: reads AI+Issues
+  Backup from the production spreadsheet, restricted to rows dated on/
+  before startDate (later authorities/withdrawals already flow through
+  the normal day-by-day ledger, so no double-counting), same exclusions
+  as everywhere else (by-products, NFAO RM, invalid age-group codes),
+  dedups Issues Backup by WSI# so a duplicate withdrawal row can't
+  understate unwithdrawn stock. Only computed/applied for the START
+  month - later months already carry the effect forward via STATE.
+- `renderGSRSheet` gained one row per category with nonzero data
+  ("UNWITHDRAWN - FTI" etc.) plus a new "AVAILABLE BEGINNING INVENTORY"
+  formula row (= Beginning Inventory minus all unwithdrawn rows) that Day
+  1's Ending Inventory formula now references instead of Beginning
+  Inventory directly.
+- Manual-preservation (checkbox off) reworked from the Round 43 fix
+  (`preservedByKey`, keyed but still row-position-implicit) to
+  `preservedByLabelKey`, keyed by LABEL + warehouse|variety|age instead -
+  needed because the number of pre-Day-1 rows now varies (0-3 unwithdrawn
+  rows depending on the data), so a purely positional or single-row
+  approach would reintroduce the exact class of bug just fixed.
+- Sync summary now reports whether UNWITHDRAWN applied (with per-category
+  totals) or didn't (Issues Backup sheet not found in the production
+  spreadsheet) - nothing about this feature is silent.
+
+Verified by simulating the real logic against the user's actual AI +
+Issues Backup JSON exports in a sandbox (not just node --check) - produced
+sane, plausible per-category totals. Surfaced two apparent source-data
+issues in passing (a "PW1-B" variety code that doesn't match any known
+naming pattern, and confirmation that "LEGAZPI GID" and "LEGAZPI GID A"
+are genuinely two separate real warehouses, not a naming variant) -
+reported to the user, not auto-corrected.
+
+### Files touched
+`docs/daily-inventory-report-script.js`.
+
+Re-verified with `node --check` and a real-data sandbox simulation. Not
+yet run for real by the user.

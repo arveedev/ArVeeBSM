@@ -111,6 +111,20 @@ const EXCLUDED_VARIETIES = new Set(["DKA", "DKB", "DKC", "BIN"]);
 const VALID_AGE_GROUPS = new Set(["0-3", ">3", "0-6", "6.1-12", ">12"]);
 const STATE_SHEET_NAME = "STATE (do not edit)";
 
+// Not a real warehouse - an internal routing/transfer label. Matches the
+// exclusion already applied in age-monitoring-report-script.js.
+const EXCLUDED_WAREHOUSES = new Set(["NFAO RM"]);
+
+// UNWITHDRAWN categories, checked in order - first match wins. "OTHER" is
+// a catch-all so nothing with real unwithdrawn stock is ever silently
+// dropped just because it's not FTI or LGU; more categories can be added
+// above OTHER later without disturbing this fallback.
+const UNWITHDRAWN_CATEGORIES = [
+  { name: "FTI", match: (customerName) => customerName.toUpperCase().includes("FTI") },
+  { name: "LGU", match: (customerName) => customerName.toUpperCase().includes("LGU") }, // also matches "BLGU" - refine later if that needs its own bucket
+  { name: "OTHER", match: () => true },
+];
+
 const dateCache = {};
 const colLetterCache = {};
 
@@ -216,6 +230,109 @@ function readSharedQaData_(configSheet, startDate) {
   });
 
   return { varietyTypeMap, startingBalances };
+}
+
+/**
+ * "Unwithdrawn" baseline: authorities (AI rows) issued on/before startDate
+ * whose bags haven't been physically withdrawn yet as of startDate - the
+ * gap between the AI row's authorized amount and Issues Backup's actual
+ * withdrawals against that same AI#. This is the "account for authority
+ * issued, not actual issuance" rule applied specifically to the very
+ * start of the tracked period - issuances WITHIN the period already get
+ * deducted on their own date via the normal LESS side, so this only
+ * covers what was already committed before Day 1 even began. Grouped by
+ * customer-name category (UNWITHDRAWN_CATEGORIES).
+ *
+ * Returns { FTI: {key: bags}, LGU: {...}, OTHER: {...} }, or null if
+ * Config!B1's spreadsheet doesn't have an AI or Issues Backup sheet.
+ */
+function readUnwithdrawnBaseline_(configSheet, startDate) {
+  const sourceUrl = configSheet.getRange("B1").getValue();
+  if (!sourceUrl) return null;
+  const sourceSs = SpreadsheetApp.openByUrl(sourceUrl);
+  const aiSheet = sourceSs.getSheetByName("AI");
+  const issuesSheet = sourceSs.getSheetByName("Issues Backup");
+  if (!aiSheet || !issuesSheet) return null;
+
+  const isExcludedVariety = (v) => !v || EXCLUDED_VARIETIES.has(v.toString().trim().toUpperCase());
+  const isExcludedWarehouse = (wh) => EXCLUDED_WAREHOUSES.has(String(wh || "").trim().toUpperCase());
+
+  const aiHeaders = getSheetHeaders_(aiSheet);
+  const aiDateCol = resolveColumnIndexByPrefix_(aiHeaders, ["DATE"], 0);
+  const aiNumberCol = resolveColumnIndex_(aiHeaders, ["AI #"], 1);
+  const aiCustomerCol = resolveColumnIndex_(aiHeaders, ["NAME OF CUSTOMER"], 2);
+  const aiWarehouseCol = resolveColumnIndex_(aiHeaders, ["ISSUING WHSE"], 3);
+  const aiVarietyCol = resolveColumnIndex_(aiHeaders, ["VARIETY CODE"], 4);
+  const aiKilosCol = resolveColumnIndex_(aiHeaders, ["NET KG"], 6);
+  const aiAgeGroupCol = resolveColumnIndex_(aiHeaders, ["Age Group"], 12);
+
+  // Per AI#: the authorized amount plus enough context to bucket/categorize it.
+  const authorized = {};
+  const aiValues = aiSheet.getDataRange().getValues();
+  for (let i = 1; i < aiValues.length; i++) {
+    const row = aiValues[i];
+    if (!row) continue;
+    const dateVal = row[aiDateCol];
+    if (!dateVal) continue;
+    const date = dateVal instanceof Date ? dateVal : new Date(dateVal);
+    if (isNaN(date.getTime()) || date > startDate) continue; // only authorities issued on/before startDate
+
+    const aiNumber = String(row[aiNumberCol] || "").trim();
+    const warehouse = String(row[aiWarehouseCol] || "").trim();
+    const variety = row[aiVarietyCol];
+    if (!aiNumber || !warehouse || isExcludedVariety(variety) || isExcludedWarehouse(warehouse)) continue;
+
+    const ageGroup = String(row[aiAgeGroupCol] || "").trim();
+    if (!VALID_AGE_GROUPS.has(ageGroup)) continue;
+
+    const bags = (Number(row[aiKilosCol]) || 0) / 50;
+    if (bags <= 0) continue;
+
+    authorized[aiNumber] = { warehouse, variety, ageGroup, customerName: String(row[aiCustomerCol] || "").trim(), bags };
+  }
+
+  const issHeaders = getSheetHeaders_(issuesSheet);
+  const issDateCol = resolveColumnIndex_(issHeaders, ["Date"], 1);
+  const issNumberCol = resolveColumnIndex_(issHeaders, ["AI #"], 11);
+  const issWsiCol = resolveColumnIndex_(issHeaders, ["WSI #"], 12);
+  const issNetBagsCol = resolveColumnIndex_(issHeaders, ["Net Bags"], 9);
+
+  const withdrawnByAiNumber = {};
+  const seenWsi = new Set();
+  const issValues = issuesSheet.getDataRange().getValues();
+  for (let i = 1; i < issValues.length; i++) {
+    const row = issValues[i];
+    if (!row) continue;
+    const dateVal = row[issDateCol];
+    if (!dateVal) continue;
+    const date = dateVal instanceof Date ? dateVal : new Date(dateVal);
+    if (isNaN(date.getTime()) || date > startDate) continue; // only withdrawals that had already happened by startDate
+
+    const wsi = String(row[issWsiCol] || "").trim();
+    if (wsi) {
+      if (seenWsi.has(wsi)) continue; // duplicate WSI row - don't double-count a withdrawal
+      seenWsi.add(wsi);
+    }
+
+    const aiNumber = String(row[issNumberCol] || "").trim();
+    if (!aiNumber) continue;
+    withdrawnByAiNumber[aiNumber] = (withdrawnByAiNumber[aiNumber] || 0) + (Number(row[issNetBagsCol]) || 0);
+  }
+
+  const result = {};
+  UNWITHDRAWN_CATEGORIES.forEach(({ name }) => { result[name] = {}; });
+
+  Object.keys(authorized).forEach((aiNumber) => {
+    const a = authorized[aiNumber];
+    const remaining = a.bags - (withdrawnByAiNumber[aiNumber] || 0);
+    if (remaining <= 0.01) return; // fully withdrawn already (or over-withdrawn - not this feature's concern)
+
+    const category = UNWITHDRAWN_CATEGORIES.find((c) => c.match(a.customerName)).name;
+    const key = `${a.warehouse}|${a.variety}|${a.ageGroup}`;
+    result[category][key] = (result[category][key] || 0) + remaining;
+  });
+
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -402,6 +519,11 @@ function buildSummaryMessage_(result) {
   if (result.missingMonthSheets.length > 0) {
     msg += `\n⚠️ These months were previously rendered but their sheet is now missing, so they were re-rendered from stored state: ${result.missingMonthSheets.join(", ")}.\n`;
   }
+  if (result.unwithdrawnSummary === null) {
+    msg += `\n⚠️ UNWITHDRAWN not applied - "Issues Backup" sheet not found in the production spreadsheet, so no rows were added for it.\n`;
+  } else if (result.unwithdrawnSummary.length > 0) {
+    msg += `\nUNWITHDRAWN applied to the start month:\n${result.unwithdrawnSummary.join("\n")}\n`;
+  }
   return msg;
 }
 
@@ -496,6 +618,11 @@ function runSyncCore_() {
 
     let runningBalances = Object.assign({}, beginningBalances);
 
+    // Only relevant to the start month - authorities issued before day 1
+    // even began that still haven't been physically withdrawn. Later
+    // months' beginning balances already carry this forward via STATE.
+    const unwithdrawnByCategory = readUnwithdrawnBaseline_(configSheet, startDate);
+
     monthsToRender.forEach((monthName) => {
       const currentMonthDate = parsed.monthDates[monthName];
       const prevDay = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth(), 0);
@@ -505,7 +632,7 @@ function runSyncCore_() {
         ? savedState[priorMonthNameForThis].balances
         : (monthName === startMonthName ? beginningBalances : parsed.balances);
 
-      renderGSRSheet(ss, monthName, parsed.months[monthName], parsed.columns, parsed.uniqueVarieties, prevDateStr, monthBeginningBalances, runningBalances);
+      renderGSRSheet(ss, monthName, parsed.months[monthName], parsed.columns, parsed.uniqueVarieties, prevDateStr, monthBeginningBalances, runningBalances, monthName === startMonthName ? unwithdrawnByCategory : null);
 
       const monthDays = parsed.months[monthName];
       for (const dayKey in monthDays) {
@@ -550,6 +677,17 @@ function runSyncCore_() {
 
     SpreadsheetApp.flush();
 
+    let unwithdrawnSummary = null; // "Issues Backup" sheet not found
+    if (unwithdrawnByCategory !== null) {
+      unwithdrawnSummary = [];
+      UNWITHDRAWN_CATEGORIES.forEach(({ name }) => {
+        const byKey = unwithdrawnByCategory[name];
+        if (!byKey) return;
+        const total = Object.values(byKey).reduce((sum, v) => sum + v, 0);
+        if (total > 0.01) unwithdrawnSummary.push(`  ${name}: ${total.toFixed(2)} bags across ${Object.keys(byKey).length} warehouse/variety/age combination(s)`);
+      });
+    }
+
     return {
       renderedCount: monthsToRender.length,
       monthsToRender,
@@ -557,6 +695,7 @@ function runSyncCore_() {
       unmappedVarieties: parsed.unmappedVarieties,
       duplicateRows: parsed.duplicateRows,
       missingMonthSheets,
+      unwithdrawnSummary,
     };
   } finally {
     lock.releaseLock();
@@ -949,37 +1088,49 @@ function applyVerticalBorders(sheet, columns, maxRow, dataColCount) {
 // MONTHLY GSR SHEET RENDERER (simplified beginning-balance logic — fix #4)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevDateStr, keyedBeginningBalances, calculatedBalances) {
+function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevDateStr, keyedBeginningBalances, calculatedBalances, unwithdrawnByCategory) {
   const sheetExists = ss.getSheetByName(monthName) !== null;
   const sheet = ss.getSheetByName(monthName) || ss.insertSheet(monthName);
 
   let isCheckboxTrue = sheetExists ? sheet.getRange("B4").getValue() === true : true;
 
   // If the sheet exists and auto-sync is OFF, preserve whatever the admin
-  // manually typed into row 5 (Beginning Inventory) — keyed by
-  // warehouse|variety|age (read from the OLD header rows 2-4), NOT by
-  // column position. A positional preserve (preservedRow5[idx]) breaks
-  // the moment the column SET changes between runs (a variety gets
-  // renamed/added/removed) - the old value would land under whatever
-  // NEW column happens to sit at the same index, silently misattributing
-  // real balances to the wrong warehouse/variety/age. This is exactly
-  // what happened when a variety naming fix (PD1-A -> PD1s-A) shifted
-  // the column layout between two runs.
-  let preservedByKey = null;
+  // manually typed into the pre-Day-1 rows (BEGINNING INVENTORY, and any
+  // UNWITHDRAWN - <category> rows) — keyed by LABEL + warehouse|variety|age
+  // (read from the OLD header rows 2-4), NOT by row/column position. A
+  // positional preserve breaks the moment the column SET or the pre-Day-1
+  // row COUNT changes between runs (a variety gets renamed, or the number
+  // of unwithdrawn categories with data changes) - the old value would
+  // land under whatever new column/row happens to sit at the same index,
+  // silently misattributing a real balance. This already happened once
+  // (a variety-naming fix shifted columns between two runs) - keying by
+  // label+key instead of position closes that class of bug for good,
+  // including for the new UNWITHDRAWN rows below.
+  let preservedByLabelKey = null;
   if (sheetExists && !isCheckboxTrue) {
     const lastCol = sheet.getLastColumn();
     if (lastCol >= 3) {
       const oldHeaderRows = sheet.getRange(2, 3, 3, lastCol - 2).getValues(); // rows 2,3,4 = warehouse, variety, age
-      const oldRow5Values = sheet.getRange(5, 3, 1, lastCol - 2).getValues()[0];
-      preservedByKey = {};
       let lastWh = "", lastVariety = "";
-      for (let i = 0; i < oldRow5Values.length; i++) {
+      const keysForCol = [];
+      for (let i = 0; i < lastCol - 2; i++) {
         const wh = oldHeaderRows[0][i] !== "" ? String(oldHeaderRows[0][i]).trim() : lastWh;
         const variety = oldHeaderRows[1][i] !== "" ? String(oldHeaderRows[1][i]).trim() : lastVariety;
         const age = String(oldHeaderRows[2][i]).trim();
         lastWh = wh; lastVariety = variety;
-        if (!wh || !variety) continue; // "VARIETY TOTALS" summary columns etc - not a real data column
-        preservedByKey[`${wh}|${variety}|${age}`] = oldRow5Values[i];
+        keysForCol.push(wh && variety ? `${wh}|${variety}|${age}` : null); // null for "VARIETY TOTALS" summary columns etc
+      }
+
+      preservedByLabelKey = {};
+      let scanRow = 5;
+      const maxPreDay1Rows = 25; // generous upper bound - BEGINNING INVENTORY + AVAILABLE BEGINNING INVENTORY + any number of UNWITHDRAWN categories
+      while (scanRow < 5 + maxPreDay1Rows) {
+        const label = String(sheet.getRange(scanRow, 2).getValue() || "").trim();
+        const isPreservable = label === "BEGINNING INVENTORY" || label.indexOf("UNWITHDRAWN - ") === 0;
+        if (!isPreservable) break; // hit AVAILABLE BEGINNING INVENTORY (a formula, never preserved) or Day 1's own first row
+        const rowValues = sheet.getRange(scanRow, 3, 1, lastCol - 2).getValues()[0];
+        keysForCol.forEach((key, i) => { if (key) preservedByLabelKey[`${label}::${key}`] = rowValues[i]; });
+        scanRow++;
       }
     }
   }
@@ -1014,21 +1165,23 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
   begRow.v[1] = "BEGINNING INVENTORY";
   begRow.w[1] = "bold";
 
+  const lookupPreserved = (label, key) => {
+    if (preservedByLabelKey === null) return undefined;
+    const lk = `${label}::${key}`;
+    return Object.prototype.hasOwnProperty.call(preservedByLabelKey, lk) ? preservedByLabelKey[lk] : undefined;
+  };
+  const roundClean = (val) => {
+    if (typeof val !== 'number') return val;
+    val = Math.round(val * 10000) / 10000;
+    return (val === 0 || val === -0) ? 0 : val;
+  };
+
   columns.forEach((col, idx) => {
     const key = col.join('|');
-    let finalVal;
-    if (preservedByKey !== null && Object.prototype.hasOwnProperty.call(preservedByKey, key)) {
-      finalVal = preservedByKey[key]; // admin's manual entry for THIS exact key, untouched
-    } else {
-      // Either auto-sync is on, or this is a brand-new key with nothing
-      // manually entered yet to preserve - seed from computed state.
-      finalVal = keyedBeginningBalances[key] || 0;
-    }
-    if (typeof finalVal === 'number') {
-      finalVal = Math.round(finalVal * 10000) / 10000;
-      if (finalVal === 0 || finalVal === -0) finalVal = 0;
-    }
-    begRow.v[2 + idx] = finalVal;
+    const preserved = lookupPreserved("BEGINNING INVENTORY", key);
+    // preserved !== undefined: admin's manual entry for THIS exact key, untouched.
+    // Otherwise (auto-sync on, or a brand-new key with nothing to preserve): seed from computed state.
+    begRow.v[2 + idx] = roundClean(preserved !== undefined ? preserved : (keyedBeginningBalances[key] || 0));
   });
 
   uniqueVarieties.forEach((v, vIdx) => {
@@ -1038,7 +1191,63 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
   });
   pushRow(begRow);
 
+  // UNWITHDRAWN rows (only ever passed for the start month - see runSyncCore_):
+  // authorities issued on/before startDate whose bags haven't been
+  // physically withdrawn yet (AI sheet's authorized amount minus Issues
+  // Backup's actual withdrawals for that AI#), split by customer-name
+  // category. Each gets its own row, deducted via the AVAILABLE BEGINNING
+  // INVENTORY row that follows - Day 1 starts from THAT row, not straight
+  // from BEGINNING INVENTORY, so committed-but-not-yet-moved stock can't
+  // be issued out again.
+  const unwithdrawnRowNums = [];
   let currentRow = 6;
+  if (unwithdrawnByCategory) {
+    UNWITHDRAWN_CATEGORIES.forEach(({ name }) => {
+      const byKey = unwithdrawnByCategory[name];
+      if (!byKey || Object.keys(byKey).length === 0) return;
+
+      const label = `UNWITHDRAWN - ${name}`;
+      const row = createRow(currentRow % 2 === 0 ? THEME.alternateRow : "#ffffff", "normal", "#b71c1c");
+      row.v[1] = label; row.w[1] = "bold"; row.fc[1] = "#b71c1c";
+
+      columns.forEach((col, idx) => {
+        const key = col.join('|');
+        const preserved = lookupPreserved(label, key);
+        const val = roundClean(preserved !== undefined ? preserved : (byKey[key] || 0));
+        if (val) row.v[2 + idx] = val;
+      });
+      uniqueVarieties.forEach((v, vIdx) => {
+        const cells = [];
+        columns.forEach((col, cIdx) => { if (col[1] === v) cells.push(getColumnLetters(3 + cIdx) + currentRow); });
+        if (cells.length > 0) { row.v[2 + dataColCount + vIdx] = `=${cells.join("+")}`; row.w[2 + dataColCount + vIdx] = "bold"; }
+      });
+      pushRow(row);
+      unwithdrawnRowNums.push(currentRow);
+      currentRow++;
+    });
+  }
+
+  // AVAILABLE BEGINNING INVENTORY - a formula, never manually preserved -
+  // is what Day 1 actually starts from when any unwithdrawn rows exist.
+  let day1PrevEndRow = 5;
+  if (unwithdrawnRowNums.length > 0) {
+    const availRow = createRow(currentRow % 2 === 0 ? THEME.alternateRow : "#ffffff", "bold");
+    availRow.v[1] = "AVAILABLE BEGINNING INVENTORY";
+    for (let i = 0; i < dataColCount; i++) {
+      const colChar = getColumnLetters(3 + i);
+      const deductions = unwithdrawnRowNums.map((r) => `${colChar}${r}`).join("-");
+      availRow.v[2 + i] = `=ROUND(${colChar}5-${deductions}, 4)`;
+    }
+    uniqueVarieties.forEach((v, vIdx) => {
+      const cells = [];
+      columns.forEach((col, cIdx) => { if (col[1] === v) cells.push(getColumnLetters(3 + cIdx) + currentRow); });
+      if (cells.length > 0) availRow.v[2 + dataColCount + vIdx] = `=${cells.join("+")}`;
+    });
+    pushRow(availRow);
+    day1PrevEndRow = currentRow;
+    currentRow++;
+  }
+
   const days = Object.keys(daysData).sort((a, b) => Number(a) - Number(b));
   const dayBorderRows = [];
 
@@ -1075,7 +1284,7 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
     endRow.v[1] = "ENDING INVENTORY";
     for (let i = 0; i < dataColCount; i++) {
       const colChar = getColumnLetters(3 + i);
-      const prevEnd = dayIdx === 0 ? 5 : dayStartRow - 1;
+      const prevEnd = dayIdx === 0 ? day1PrevEndRow : dayStartRow - 1;
       const lessStart = addEnd >= dayStartRow + 1 ? addEnd + 2 : dayStartRow + 1;
       const addR = addEnd >= dayStartRow + 1 ? `SUM(${colChar}${dayStartRow + 1}:${colChar}${addEnd})` : "0";
       const lessR = lessEnd >= lessStart ? `SUM(${colChar}${lessStart}:${colChar}${lessEnd})` : "0";
