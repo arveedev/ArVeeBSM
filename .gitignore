@@ -19,6 +19,8 @@ dexie-cloud.json
 *.ndjson
 dexie-cloud-data.json/
 dexie-cloud-data.json.zip
+*backup*.json
+bsm-backup-*.json
 
 # Office-suite lock files (e.g. from opening dexie-cloud.key in a spreadsheet app)
 .~lock.*
