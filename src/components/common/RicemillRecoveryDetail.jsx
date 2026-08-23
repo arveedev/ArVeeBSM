@@ -13,6 +13,7 @@
 // of alignment against each other the moment one row's content is wider
 // than another's.
 
+import { Fragment } from 'react'
 import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
 
 // Issuance has no AI # (there's only ever one AI covering the whole
@@ -21,20 +22,23 @@ import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
 // capacity" placeholder, not a real per-row value worth its own
 // column). Receipt keeps both - each row is its own real, distinct AI
 // and variety.
-const ISSUANCE_COLUMNS = ['date', 'netBags', 'netKgs']
+//
+// Both sections still use the SAME 5-track grid (with Issuance's unused
+// AI#/Variety tracks rendered as empty, unlabeled spacers) rather than a
+// narrower 3-column grid of its own - two side-by-side tables with
+// different column counts don't read as a matched pair; Net Bags and
+// Net Kgs need to land in the same horizontal position in both.
+const ISSUANCE_COLUMNS = ['date', 'blank', 'blank', 'netBags', 'netKgs']
 const RECEIPT_COLUMNS = ['date', 'aiNumber', 'variety', 'netBags', 'netKgs']
 
 // Tailwind's build-time scanner only picks up class names it can see as
-// literal strings in the source - a runtime-concatenated
-// `grid-cols-[${...}]` would never make it into the generated CSS at
-// all, so these stay as two fully static strings, picked by column
-// count, rather than assembled from COLUMN_WIDTH at render time.
-const GRID_COLS_BY_LENGTH = {
-  3: 'grid-cols-[52px_60px_84px]',
-  5: 'grid-cols-[52px_72px_1fr_60px_84px]',
-}
+// a literal string - a runtime-concatenated `grid-cols-[${...}]` would
+// never make it into the generated CSS at all, so this stays a single
+// static string (both sections are always 5 tracks now) rather than
+// assembled from a per-column width map at render time.
+const GRID_COLS = 'grid-cols-[52px_72px_1fr_60px_84px]'
 
-const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', variety: 'Variety', netBags: 'Net Bags', netKgs: 'Net Kgs' }
+const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', variety: 'Variety', netBags: 'Net Bags', netKgs: 'Net Kgs', blank: '' }
 const RIGHT_ALIGNED = new Set(['netBags', 'netKgs'])
 
 /** "2026-07-31" -> "26-07-31" - drops the century so the column stays
@@ -59,23 +63,22 @@ function cellContent(column, entry, weightUnit) {
 
 function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, columns }) {
   if (entries.length === 0) return null
-  const gridCols = GRID_COLS_BY_LENGTH[columns.length]
   const leadColSpan = columns.length - 2 // every column except Net Bags/Net Kgs, for the "Total" label
   return (
     <div>
       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
       <div className="overflow-x-auto rounded-lg bg-neutral-950 p-2">
-        <div className={`grid ${gridCols} gap-x-2 gap-y-1.5 text-[11px] leading-tight`}>
-          {columns.map((col) => (
-            <span key={col} className={`text-[10px] font-semibold uppercase tracking-wide text-neutral-600 ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
+        <div className={`grid ${GRID_COLS} gap-x-2 gap-y-1.5 text-[11px] leading-tight`}>
+          {columns.map((col, idx) => (
+            <span key={`h-${col}-${idx}`} className={`text-[10px] font-semibold uppercase tracking-wide text-neutral-600 ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
               {COLUMN_LABEL[col]}
             </span>
           ))}
           {entries.map((entry) => (
-            <>
-              {columns.map((col) => (
+            <Fragment key={entry.authId}>
+              {columns.map((col, idx) => (
                 <span
-                  key={col}
+                  key={`${col}-${idx}`}
                   className={
                     RIGHT_ALIGNED.has(col)
                       ? `text-right tabular-nums ${col === 'netKgs' ? 'font-medium text-app-text' : 'text-neutral-400'}`
@@ -85,7 +88,7 @@ function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, co
                   {cellContent(col, entry, weightUnit)}
                 </span>
               ))}
-            </>
+            </Fragment>
           ))}
           <span className="border-t border-neutral-800 pt-1 font-semibold text-app-text" style={{ gridColumn: `span ${leadColSpan}` }}>Total</span>
           <span className="border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span>
