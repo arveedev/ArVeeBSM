@@ -301,5 +301,27 @@
 //            entirely rather than trying to guess which reuse patterns
 //            should be allowed. Batch numbers (Milling/Re-Milling) were
 //            already a free-typed field with no such restriction
-//            (current)
-export const APP_VERSION = '1.9-11'
+//   1.9-12 - NFA Ricemill Regional Authority Number tracking, several
+//            real bugs fixed together: (1) the AI/SIA sync read a
+//            "Regional Authority Number" column that doesn't exist by
+//            that name on the real sheet (the real header is
+//            "AUTHORITY") - every allocation always showed 0 used
+//            regardless of real activity; (2) "used" was computed from
+//            a WSI transaction linked to a Milling-type AI, a link the
+//            entry form has no field to create - confirmed the real,
+//            only-visible usage event is the TRANSFER-type AI's own
+//            recorded allocation instead; (3) the "palay in / rice out"
+//            recovery breakdown now shows real totals per section,
+//            sorted by date, with the AI # shown, and "palay in" is
+//            derived from a new admin-set daily milling input capacity
+//            (Net Bags/day) × how many days actually had rice-out
+//            activity, since the AI sheet only ever records one lump-
+//            sum milling authorization, not a daily log; (4) NFA
+//            Ricemill Allocations (ricemillAllocations table) was
+//            explicitly excluded from Dexie Cloud sync since it was
+//            first added, so admin-entered allocations never appeared
+//            on any other device - re-enabled sync for it specifically
+//            (its single-value primary key is sync-compatible, unlike
+//            privateMillerAllocations' compound key, which stays
+//            excluded on purpose)
+export const APP_VERSION = '1.9-12'

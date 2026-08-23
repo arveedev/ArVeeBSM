@@ -8,7 +8,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
-import { fmtWeight, liveFormatNumber, parseFormattedNumber, isTransferTypeName, isMillingTypeName, isTestMillingTypeName } from '../../../utils/calculations.js'
+import { fmtWeight, liveFormatNumber, parseFormattedNumber, isTransferTypeName } from '../../../utils/calculations.js'
 import { useSettings } from '../../../context/SettingsContext.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import RicemillRecoveryDetail from '../RicemillRecoveryDetail.jsx'
@@ -18,6 +18,7 @@ function RicemillAllocationsPanel() {
   const { weightUnit } = useSettings() ?? {}
   const [regionalAuthorityNumber, setRegionalAuthorityNumber] = useState('')
   const [totalNetKgs, setTotalNetKgs] = useState('')
+  const [millingInputCapacityBags, setMillingInputCapacityBags] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
   const [expandedNumber, setExpandedNumber] = useState(null)
@@ -52,24 +53,15 @@ function RicemillAllocationsPanel() {
     return usage
   }, []) ?? new Map()
 
-  // Recovery% detail, per Regional Authority Number - for each actual
-  // Milling/Remilling/Test Milling/Test Remilling issuance, finds the
-  // matching recovery receipt (linked via linkedDocNo, the same field
-  // fixed earlier for the Weekly Receipts report) and computes
-  // recovery% as recovered kilos over issued kilos. Separate from
-  // usageByNumber above (which tracks allocation vs total activity) -
-  // this is specifically about how much came BACK out of what went IN
-  // to the mill.
-  // Recovery detail, per Regional Authority Number - "palay in" is
-  // every MILLING/REMILLING/TEST-MILLING-type AI record's own recorded
-  // allocation; "rice out" is every TRANSFER-type AI record's own
-  // recorded allocation where the variety is categorized as Rice (per
-  // explicit confirmation: the milling transaction is the palay in, the
-  // transfer transaction with the rice cereal variety is the rice out).
-  // This is an AGGREGATE total per Regional Authority Number, not a
-  // per-batch pairing - there's no field linking one specific milling
-  // event to one specific transfer-out event, so pairing them
-  // individually would be a guess this data doesn't actually support.
+  // Recovery detail, per Regional Authority Number - "rice out" is every
+  // TRANSFER-type AI record's own recorded allocation where the variety
+  // is categorized as Rice. "Palay in" is DERIVED, not read from an
+  // actual AI record: per explicit confirmation, the mill's own
+  // configured daily input capacity (Net Bags/day, set below) is what
+  // went in for milling on every distinct date that has real rice-out
+  // activity - a real Milling-type AI record in practice is one lump-
+  // sum authorization, not a day-by-day log, so it can't answer "how
+  // much went in on this specific day" on its own.
   const recoverySummaryByNumber = useLiveQuery(async () => {
     const ricemillWarehouses = await db.warehouses.where('facilityType').equals('Ricemill').toArray()
     if (ricemillWarehouses.length === 0) return new Map()
@@ -78,44 +70,51 @@ function RicemillAllocationsPanel() {
     const authorities = await db.authorities.where('type').equals('AI').toArray()
     const varietyList = await db.varietyTypes.toArray()
     const varietyMap = new Map(varietyList.map((v) => [v.varietyId, v]))
+    const capacityByNumber = new Map(allocations.map((a) => [a.regionalAuthorityNumber, a.millingInputCapacityBags ?? 0]))
 
-    const summary = new Map()
-    const ensure = (key) => {
-      if (!summary.has(key)) summary.set(key, { issuedKilos: 0, issuedBags: 0, recoveredKilos: 0, recoveredBags: 0, millingEntries: [], transferEntries: [] })
-      return summary.get(key)
-    }
-
+    const transferEntriesByNumber = new Map()
     for (const a of authorities) {
       if (!a.regionalAuthorityNumber || !ricemillIds.has(a.assignedWarehouse)) continue
-      const kilos = a.totalAllocationKilos ?? 0
-      const bags = a.totalAllocationBags ?? 0
-      const varietyName = varietyMap.get(a.varietyId)?.name ?? ''
-      const entry = { authId: a.authId, date: a.date, aiNumber: a.aiNumber, varietyName, bags, kilos }
-
-      if (isMillingTypeName(a.transactionTypeName) || isTestMillingTypeName(a.transactionTypeName)) {
-        const s = ensure(a.regionalAuthorityNumber)
-        s.issuedKilos += kilos
-        s.issuedBags += bags
-        s.millingEntries.push(entry)
-      } else if (isTransferTypeName(a.transactionTypeName) && varietyMap.get(a.varietyId)?.category === 'Rice') {
-        const s = ensure(a.regionalAuthorityNumber)
-        s.recoveredKilos += kilos
-        s.recoveredBags += bags
-        s.transferEntries.push(entry)
-      }
+      if (!isTransferTypeName(a.transactionTypeName)) continue
+      if (varietyMap.get(a.varietyId)?.category !== 'Rice') continue
+      if (!transferEntriesByNumber.has(a.regionalAuthorityNumber)) transferEntriesByNumber.set(a.regionalAuthorityNumber, [])
+      transferEntriesByNumber.get(a.regionalAuthorityNumber).push({
+        authId: a.authId, date: a.date, aiNumber: a.aiNumber,
+        varietyName: varietyMap.get(a.varietyId)?.name ?? '',
+        bags: a.totalAllocationBags ?? 0, kilos: a.totalAllocationKilos ?? 0,
+      })
     }
 
-    for (const s of summary.values()) {
-      s.recoveryPct = s.issuedKilos > 0 ? (s.recoveredKilos / s.issuedKilos) * 100 : null
-      s.millingEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
-      s.transferEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+    const summary = new Map()
+    for (const [regionalNum, transferEntries] of transferEntriesByNumber) {
+      transferEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+      const capacityBags = capacityByNumber.get(regionalNum) ?? 0
+      const capacityKilos = capacityBags * 50 // same 50 kg/bag conversion used app-wide (AdminHome, HomeStocks)
+
+      const distinctDates = [...new Set(transferEntries.map((e) => e.date))].sort()
+      const millingEntries = distinctDates.map((date) => ({
+        authId: `derived-${regionalNum}-${date}`, date, aiNumber: null,
+        varietyName: 'Mill capacity', bags: capacityBags, kilos: capacityKilos,
+      }))
+
+      const recoveredKilos = transferEntries.reduce((sum, e) => sum + e.kilos, 0)
+      const recoveredBags = transferEntries.reduce((sum, e) => sum + e.bags, 0)
+      const issuedKilos = capacityKilos * distinctDates.length
+      const issuedBags = capacityBags * distinctDates.length
+
+      summary.set(regionalNum, {
+        issuedKilos, issuedBags, recoveredKilos, recoveredBags,
+        recoveryPct: issuedKilos > 0 ? (recoveredKilos / issuedKilos) * 100 : null,
+        millingEntries, transferEntries,
+      })
     }
     return summary
-  }, []) ?? new Map()
+  }, [allocations]) ?? new Map()
 
   const resetForm = () => {
     setRegionalAuthorityNumber('')
     setTotalNetKgs('')
+    setMillingInputCapacityBags('')
     setEditingId(null)
   }
 
@@ -123,6 +122,7 @@ function RicemillAllocationsPanel() {
     setEditingId(alloc.regionalAuthorityNumber)
     setRegionalAuthorityNumber(alloc.regionalAuthorityNumber)
     setTotalNetKgs(liveFormatNumber(String(alloc.totalNetKgs), 3))
+    setMillingInputCapacityBags(alloc.millingInputCapacityBags != null ? liveFormatNumber(String(alloc.millingInputCapacityBags), 2) : '')
   }
 
   const handleSave = async () => {
@@ -141,6 +141,7 @@ function RicemillAllocationsPanel() {
     await db.ricemillAllocations.put({
       regionalAuthorityNumber: regionalAuthorityNumber.trim(),
       totalNetKgs: parseFormattedNumber(totalNetKgs),
+      millingInputCapacityBags: millingInputCapacityBags === '' ? 0 : parseFormattedNumber(millingInputCapacityBags),
     })
     toast.success(editingId ? 'Allocation updated' : 'Allocation saved')
     resetForm()
@@ -175,6 +176,20 @@ function RicemillAllocationsPanel() {
             className={inputClass}
             placeholder="0.000"
           />
+        </div>
+        <div>
+          <label className={labelClass}>Milling Input Capacity (Net Bags/day)</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={millingInputCapacityBags}
+            onChange={(e) => setMillingInputCapacityBags(liveFormatNumber(e.target.value, 2))}
+            className={inputClass}
+            placeholder="0.00"
+          />
+          <p className="mt-1 text-[11px] text-neutral-500">
+            How many net bags go in for milling on a day this mill has rice-out (transfer) activity - the palay-in figure below is this number × how many such days actually occurred, since the AI sheet itself only ever records one lump-sum milling authorization, not a daily log.
+          </p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>

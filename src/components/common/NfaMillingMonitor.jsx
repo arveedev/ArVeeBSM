@@ -18,7 +18,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/dexie.js'
-import { fmtWeight, isTransferTypeName, isMillingTypeName, isTestMillingTypeName } from '../../utils/calculations.js'
+import { fmtWeight, isTransferTypeName } from '../../utils/calculations.js'
 import RicemillRecoveryDetail from './RicemillRecoveryDetail.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
@@ -78,16 +78,16 @@ function NfaMillingMonitor({ warehouseId } = {}) {
     return usage
   }, [warehouseId]) ?? new Map()
 
-  // Recovery detail, per Regional Authority Number - "palay in" is
-  // every MILLING/REMILLING/TEST-MILLING-type AI record's own recorded
-  // allocation; "rice out" is every TRANSFER-type AI record's own
-  // recorded allocation where the variety is categorized as Rice (per
-  // explicit confirmation: the milling transaction is the palay in, the
-  // transfer transaction with the rice cereal variety is the rice out).
-  // This is an AGGREGATE total per Regional Authority Number, not a
-  // per-batch pairing - there's no field linking one specific milling
-  // event to one specific transfer-out event, so pairing them
-  // individually would be a guess this data doesn't actually support.
+  // Recovery detail, per Regional Authority Number - "rice out" is every
+  // TRANSFER-type AI record's own recorded allocation where the variety
+  // is categorized as Rice. "Palay in" is DERIVED, not read from an
+  // actual AI record: per explicit confirmation, the mill's own
+  // configured daily input capacity (Net Bags/day, set in Settings >
+  // Miller Allocations) is what went in for milling on every distinct
+  // date that has real rice-out activity - a real Milling-type AI
+  // record in practice is one lump-sum authorization, not a day-by-day
+  // log, so it can't answer "how much went in on this specific day" on
+  // its own.
   const recoverySummaryByNumber = useLiveQuery(async () => {
     let ricemillIds
     if (warehouseId) {
@@ -102,41 +102,46 @@ function NfaMillingMonitor({ warehouseId } = {}) {
     const authorities = await db.authorities.where('type').equals('AI').toArray()
     const varietyList = await db.varietyTypes.toArray()
     const varietyMap = new Map(varietyList.map((v) => [v.varietyId, v]))
+    const capacityByNumber = new Map(allocations.map((a) => [a.regionalAuthorityNumber, a.millingInputCapacityBags ?? 0]))
 
-    const summary = new Map()
-    const ensure = (key) => {
-      if (!summary.has(key)) summary.set(key, { issuedKilos: 0, issuedBags: 0, recoveredKilos: 0, recoveredBags: 0, millingEntries: [], transferEntries: [] })
-      return summary.get(key)
-    }
-
+    const transferEntriesByNumber = new Map()
     for (const a of authorities) {
       if (!a.regionalAuthorityNumber || !ricemillIdSet.has(a.assignedWarehouse)) continue
-      const kilos = a.totalAllocationKilos ?? 0
-      const bags = a.totalAllocationBags ?? 0
-      const varietyName = varietyMap.get(a.varietyId)?.name ?? ''
-      const entry = { authId: a.authId, date: a.date, aiNumber: a.aiNumber, varietyName, bags, kilos }
-
-      if (isMillingTypeName(a.transactionTypeName) || isTestMillingTypeName(a.transactionTypeName)) {
-        const s = ensure(a.regionalAuthorityNumber)
-        s.issuedKilos += kilos
-        s.issuedBags += bags
-        s.millingEntries.push(entry)
-      } else if (isTransferTypeName(a.transactionTypeName) && varietyMap.get(a.varietyId)?.category === 'Rice') {
-        const s = ensure(a.regionalAuthorityNumber)
-        s.recoveredKilos += kilos
-        s.recoveredBags += bags
-        s.transferEntries.push(entry)
-      }
+      if (!isTransferTypeName(a.transactionTypeName)) continue
+      if (varietyMap.get(a.varietyId)?.category !== 'Rice') continue
+      if (!transferEntriesByNumber.has(a.regionalAuthorityNumber)) transferEntriesByNumber.set(a.regionalAuthorityNumber, [])
+      transferEntriesByNumber.get(a.regionalAuthorityNumber).push({
+        authId: a.authId, date: a.date, aiNumber: a.aiNumber,
+        varietyName: varietyMap.get(a.varietyId)?.name ?? '',
+        bags: a.totalAllocationBags ?? 0, kilos: a.totalAllocationKilos ?? 0,
+      })
     }
 
-    for (const s of summary.values()) {
-      s.recoveryPct = s.issuedKilos > 0 ? (s.recoveredKilos / s.issuedKilos) * 100 : null
-      // Ascending by date - oldest first, matching how a paper log reads.
-      s.millingEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
-      s.transferEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+    const summary = new Map()
+    for (const [regionalNum, transferEntries] of transferEntriesByNumber) {
+      transferEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+      const capacityBags = capacityByNumber.get(regionalNum) ?? 0
+      const capacityKilos = capacityBags * 50 // same 50 kg/bag conversion used app-wide (AdminHome, HomeStocks)
+
+      const distinctDates = [...new Set(transferEntries.map((e) => e.date))].sort()
+      const millingEntries = distinctDates.map((date) => ({
+        authId: `derived-${regionalNum}-${date}`, date, aiNumber: null,
+        varietyName: 'Mill capacity', bags: capacityBags, kilos: capacityKilos,
+      }))
+
+      const recoveredKilos = transferEntries.reduce((sum, e) => sum + e.kilos, 0)
+      const recoveredBags = transferEntries.reduce((sum, e) => sum + e.bags, 0)
+      const issuedKilos = capacityKilos * distinctDates.length
+      const issuedBags = capacityBags * distinctDates.length
+
+      summary.set(regionalNum, {
+        issuedKilos, issuedBags, recoveredKilos, recoveredBags,
+        recoveryPct: issuedKilos > 0 ? (recoveredKilos / issuedKilos) * 100 : null,
+        millingEntries, transferEntries,
+      })
     }
     return summary
-  }, [warehouseId]) ?? new Map()
+  }, [warehouseId, allocations]) ?? new Map()
 
   return (
     <div className={warehouseId ? '' : 'mt-4'}>

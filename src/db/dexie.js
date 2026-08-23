@@ -811,10 +811,23 @@ db.cloud.configure({
   // doesn't recognize is rejected (422), which was blocking sync
   // entirely. millingOrders is a pure read-only cache re-fetched
   // fresh from the Sheet on every device anyway, so excluding it is
-  // correct regardless. ricemillAllocations/privateMillerAllocations
-  // will NOT sync across devices until properly registered with the
-  // Dexie Cloud schema - each device keeps its own local copy for now.
-  unsyncedTables: ['serialCounterCache', 'preloadState', 'millingOrders', 'ricemillAllocations', 'privateMillerAllocations'],
+  // correct regardless.
+  //
+  // ricemillAllocations RE-ENABLED for sync: confirmed this admin-
+  // entered data (there is no other source for it - unlike
+  // millingOrders) was never visible across devices because of this
+  // exclusion, which is a real functional gap, not a cautious default.
+  // Its primary key ('regionalAuthorityNumber', a plain single-value
+  // string) is exactly the shape Dexie Cloud sync supports.
+  //
+  // privateMillerAllocations STAYS excluded: its primary key is a
+  // COMPOUND key ('[regionalAuthorityNumber+ricemillName]') - Dexie
+  // Cloud sync does not support multi-part primary keys, which is very
+  // likely the actual root cause of the original 422 rejection (not
+  // simply "never registered"). Re-enabling this one would need a
+  // schema migration to a single synthetic id first (with the compound
+  // pair kept as a regular index instead), not just this one-line flip.
+  unsyncedTables: ['serialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations'],
   // requireAuth MUST be false for an offline-first app. When true,
   // Dexie Cloud refuses to run ANY operation - including purely local
   // reads/writes that have nothing to do with syncing - until it has a
