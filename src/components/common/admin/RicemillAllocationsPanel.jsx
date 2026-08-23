@@ -8,9 +8,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
-import { fmtWeight, fmtBags, liveFormatNumber, parseFormattedNumber, isTransferTypeName, isMillingTypeName, isTestMillingTypeName } from '../../../utils/calculations.js'
+import { fmtWeight, liveFormatNumber, parseFormattedNumber, isTransferTypeName, isMillingTypeName, isTestMillingTypeName } from '../../../utils/calculations.js'
 import { useSettings } from '../../../context/SettingsContext.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import RicemillRecoveryDetail from '../RicemillRecoveryDetail.jsx'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, listItemClass, editIconClass, deleteIconClass, byAlpha } from './shared.js'
 
 function RicemillAllocationsPanel() {
@@ -80,29 +81,34 @@ function RicemillAllocationsPanel() {
 
     const summary = new Map()
     const ensure = (key) => {
-      if (!summary.has(key)) summary.set(key, { issuedKilos: 0, recoveredKilos: 0, millingEntries: [], transferEntries: [] })
+      if (!summary.has(key)) summary.set(key, { issuedKilos: 0, issuedBags: 0, recoveredKilos: 0, recoveredBags: 0, millingEntries: [], transferEntries: [] })
       return summary.get(key)
     }
 
     for (const a of authorities) {
       if (!a.regionalAuthorityNumber || !ricemillIds.has(a.assignedWarehouse)) continue
       const kilos = a.totalAllocationKilos ?? 0
+      const bags = a.totalAllocationBags ?? 0
       const varietyName = varietyMap.get(a.varietyId)?.name ?? ''
-      const entry = { authId: a.authId, date: a.date, varietyName, bags: a.totalAllocationBags ?? 0, kilos }
+      const entry = { authId: a.authId, date: a.date, aiNumber: a.aiNumber, varietyName, bags, kilos }
 
       if (isMillingTypeName(a.transactionTypeName) || isTestMillingTypeName(a.transactionTypeName)) {
         const s = ensure(a.regionalAuthorityNumber)
         s.issuedKilos += kilos
+        s.issuedBags += bags
         s.millingEntries.push(entry)
       } else if (isTransferTypeName(a.transactionTypeName) && varietyMap.get(a.varietyId)?.category === 'Rice') {
         const s = ensure(a.regionalAuthorityNumber)
         s.recoveredKilos += kilos
+        s.recoveredBags += bags
         s.transferEntries.push(entry)
       }
     }
 
     for (const s of summary.values()) {
       s.recoveryPct = s.issuedKilos > 0 ? (s.recoveredKilos / s.issuedKilos) * 100 : null
+      s.millingEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+      s.transferEntries.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
     }
     return summary
   }, []) ?? new Map()
@@ -208,46 +214,8 @@ function RicemillAllocationsPanel() {
                 </div>
               </div>
               {isExpanded && (
-                <div className="mt-2 space-y-2 border-t border-neutral-800 pt-2">
-                  {!recovery && (
-                    <p className="text-xs text-neutral-500">No palay-in (milling) or rice-out (transfer) activity recorded yet for this Regional Authority Number.</p>
-                  )}
-                  {recovery && (
-                    <div className="rounded-lg bg-neutral-950 p-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-500">{fmtWeight(recovery.issuedKilos, weightUnit)} palay in → {fmtWeight(recovery.recoveredKilos, weightUnit)} rice out</span>
-                        <span className={`font-semibold ${recovery.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
-                          {recovery.recoveryPct == null ? '—' : `${recovery.recoveryPct.toFixed(1)}%`}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {recovery && recovery.millingEntries.length > 0 && (
-                    <div>
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Palay in</p>
-                      <div className="space-y-1">
-                        {recovery.millingEntries.map((d) => (
-                          <div key={d.authId} className="flex items-center justify-between rounded-lg bg-neutral-950 p-2 text-xs text-neutral-400">
-                            <span>{d.date} · {d.varietyName}</span>
-                            <span className="font-medium text-app-text">{fmtBags(d.bags)} bags · {fmtWeight(d.kilos, weightUnit)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {recovery && recovery.transferEntries.length > 0 && (
-                    <div>
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Rice out</p>
-                      <div className="space-y-1">
-                        {recovery.transferEntries.map((d) => (
-                          <div key={d.authId} className="flex items-center justify-between rounded-lg bg-neutral-950 p-2 text-xs text-neutral-400">
-                            <span>{d.date} · {d.varietyName}</span>
-                            <span className="font-medium text-app-text">{fmtBags(d.bags)} bags · {fmtWeight(d.kilos, weightUnit)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                <div className="mt-2 border-t border-neutral-800 pt-2">
+                  <RicemillRecoveryDetail recovery={recovery} weightUnit={weightUnit} />
                 </div>
               )}
             </li>
