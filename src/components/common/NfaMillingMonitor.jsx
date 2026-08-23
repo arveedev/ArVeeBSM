@@ -19,7 +19,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/dexie.js'
 import { fmtWeight, isTransferTypeName } from '../../utils/calculations.js'
-import RicemillRecoveryDetail from './RicemillRecoveryDetail.jsx'
+import RicemillRecoveryDetail, { AllocationUsageSummary } from './RicemillRecoveryDetail.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
 
@@ -165,7 +165,6 @@ function NfaMillingMonitor({ warehouseId } = {}) {
         )}
         {sortedAllocations.map((a) => {
           const used = usageByNumber.get(a.regionalAuthorityNumber) ?? 0
-          const remaining = a.totalNetKgs - used
           const recovery = recoverySummaryByNumber.get(a.regionalAuthorityNumber)
           const isExpanded = expandedNumber === a.regionalAuthorityNumber
           return (
@@ -176,13 +175,7 @@ function NfaMillingMonitor({ warehouseId } = {}) {
                 className="w-full text-left"
               >
                 <p className="truncate text-sm font-medium text-app-text">{a.regionalAuthorityNumber}</p>
-                <p className="text-xs text-neutral-500">
-                  {fmtWeight(used, weightUnit)} used of {fmtWeight(a.totalNetKgs, weightUnit)}
-                  {' · '}
-                  <span className={remaining < 0 ? 'text-brand-crimson' : 'text-brand-neon'}>
-                    {fmtWeight(Math.abs(remaining), weightUnit)} {remaining < 0 ? 'over' : 'remaining'}
-                  </span>
-                </p>
+                <AllocationUsageSummary used={used} total={a.totalNetKgs} weightUnit={weightUnit} />
               </button>
               {isExpanded && (
                 <div className="mt-2 border-t border-neutral-800 pt-2">

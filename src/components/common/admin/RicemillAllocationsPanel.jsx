@@ -11,7 +11,7 @@ import { db } from '../../../db/dexie.js'
 import { fmtWeight, liveFormatNumber, parseFormattedNumber, isTransferTypeName } from '../../../utils/calculations.js'
 import { useSettings } from '../../../context/SettingsContext.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
-import RicemillRecoveryDetail from '../RicemillRecoveryDetail.jsx'
+import RicemillRecoveryDetail, { AllocationUsageSummary } from '../RicemillRecoveryDetail.jsx'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, listItemClass, editIconClass, deleteIconClass, byAlpha } from './shared.js'
 
 function RicemillAllocationsPanel() {
@@ -210,7 +210,6 @@ function RicemillAllocationsPanel() {
         {sortedAllocations.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No ricemill allocations set yet.</p>}
         {sortedAllocations.map((a) => {
           const used = usageByNumber.get(a.regionalAuthorityNumber) ?? 0
-          const remaining = a.totalNetKgs - used
           const recovery = recoverySummaryByNumber.get(a.regionalAuthorityNumber)
           const isExpanded = expandedNumber === a.regionalAuthorityNumber
           return (
@@ -222,13 +221,7 @@ function RicemillAllocationsPanel() {
                   className="min-w-0 flex-1 text-left"
                 >
                   <p className="truncate text-sm font-medium text-app-text">{a.regionalAuthorityNumber}</p>
-                  <p className="text-xs text-neutral-500">
-                    {fmtWeight(used, weightUnit)} used of {fmtWeight(a.totalNetKgs, weightUnit)}
-                    {' · '}
-                    <span className={remaining < 0 ? 'text-brand-crimson' : 'text-brand-neon'}>
-                      {fmtWeight(Math.abs(remaining), weightUnit)} {remaining < 0 ? 'over' : 'remaining'}
-                    </span>
-                  </p>
+                  <AllocationUsageSummary used={used} total={a.totalNetKgs} weightUnit={weightUnit} />
                 </button>
                 <div className="flex gap-1">
                   <button type="button" onClick={() => handleEdit(a)} aria-label="Edit" className={editIconClass}><Pencil size={20} /></button>

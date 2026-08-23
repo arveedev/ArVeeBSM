@@ -2799,7 +2799,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               {extraPileAllocations.map((alloc, i) => {
                 const info = extraAllocInfos[i]
                 return (
-                <div key={i} className="mt-2 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2.5">
+                <div key={i} className={`mt-2 space-y-2 rounded-xl border bg-neutral-900 p-2.5 transition-colors ${alloc.pileId ? 'border-brand-neon' : 'border-neutral-800'}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-neutral-400">Additional pile {i + 1}</span>
                     <button

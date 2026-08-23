@@ -15,8 +15,27 @@
 
 import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
 
-const gridColsWithAiNumber = 'grid-cols-[52px_72px_1fr_60px_84px]'
-const gridColsNoAiNumber = 'grid-cols-[52px_1fr_60px_84px]'
+// Issuance has no AI # (there's only ever one AI covering the whole
+// allocation - a per-row AI # would have nothing useful to show) and no
+// Variety column (every row is the same static "derived from mill
+// capacity" placeholder, not a real per-row value worth its own
+// column). Receipt keeps both - each row is its own real, distinct AI
+// and variety.
+const ISSUANCE_COLUMNS = ['date', 'netBags', 'netKgs']
+const RECEIPT_COLUMNS = ['date', 'aiNumber', 'variety', 'netBags', 'netKgs']
+
+// Tailwind's build-time scanner only picks up class names it can see as
+// literal strings in the source - a runtime-concatenated
+// `grid-cols-[${...}]` would never make it into the generated CSS at
+// all, so these stay as two fully static strings, picked by column
+// count, rather than assembled from COLUMN_WIDTH at render time.
+const GRID_COLS_BY_LENGTH = {
+  3: 'grid-cols-[52px_60px_84px]',
+  5: 'grid-cols-[52px_72px_1fr_60px_84px]',
+}
+
+const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', variety: 'Variety', netBags: 'Net Bags', netKgs: 'Net Kgs' }
+const RIGHT_ALIGNED = new Set(['netBags', 'netKgs'])
 
 /** "2026-07-31" -> "26-07-31" - drops the century so the column stays
  * narrow enough to never truncate; the last two digits of the year are
@@ -27,42 +46,72 @@ function shortDate(isoDate) {
   return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(2, 10) : s
 }
 
-function EntryRow({ entry, weightUnit, showAiNumber }) {
-  return (
-    <>
-      <span className="text-neutral-500">{shortDate(entry.date)}</span>
-      {showAiNumber && <span className="truncate text-neutral-500">{entry.aiNumber ?? '—'}</span>}
-      <span className="truncate text-app-text">{entry.varietyName || '—'}</span>
-      <span className="text-right tabular-nums text-neutral-400">{fmtNetBags(entry.bags)}</span>
-      <span className="text-right font-medium tabular-nums text-app-text">{fmtWeight(entry.kilos, weightUnit)}</span>
-    </>
-  )
+function cellContent(column, entry, weightUnit) {
+  switch (column) {
+    case 'date': return shortDate(entry.date)
+    case 'aiNumber': return entry.aiNumber ?? '—'
+    case 'variety': return entry.varietyName || '—'
+    case 'netBags': return fmtNetBags(entry.bags)
+    case 'netKgs': return fmtWeight(entry.kilos, weightUnit)
+    default: return ''
+  }
 }
 
-/** showAiNumber: false for Issuance - there's only ever one AI covering
- * the whole allocation, so a per-row AI # column has nothing useful to
- * show. Receipt keeps it - each row is its own real, distinct AI. */
-function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, showAiNumber }) {
+function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, columns }) {
   if (entries.length === 0) return null
-  const gridCols = showAiNumber ? gridColsWithAiNumber : gridColsNoAiNumber
+  const gridCols = GRID_COLS_BY_LENGTH[columns.length]
+  const leadColSpan = columns.length - 2 // every column except Net Bags/Net Kgs, for the "Total" label
   return (
     <div>
       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
       <div className="overflow-x-auto rounded-lg bg-neutral-950 p-2">
         <div className={`grid ${gridCols} gap-x-2 gap-y-1.5 text-[11px] leading-tight`}>
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-600">Date</span>
-          {showAiNumber && <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-600">AI #</span>}
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-600">Variety</span>
-          <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-neutral-600">Net Bags</span>
-          <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-neutral-600">Net Kgs</span>
-          {entries.map((entry) => (
-            <EntryRow key={entry.authId} entry={entry} weightUnit={weightUnit} showAiNumber={showAiNumber} />
+          {columns.map((col) => (
+            <span key={col} className={`text-[10px] font-semibold uppercase tracking-wide text-neutral-600 ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
+              {COLUMN_LABEL[col]}
+            </span>
           ))}
-          <span className={`${showAiNumber ? 'col-span-3' : 'col-span-2'} border-t border-neutral-800 pt-1 font-semibold text-app-text`}>Total</span>
+          {entries.map((entry) => (
+            <>
+              {columns.map((col) => (
+                <span
+                  key={col}
+                  className={
+                    RIGHT_ALIGNED.has(col)
+                      ? `text-right tabular-nums ${col === 'netKgs' ? 'font-medium text-app-text' : 'text-neutral-400'}`
+                      : `truncate ${col === 'variety' ? 'text-app-text' : 'text-neutral-500'}`
+                  }
+                >
+                  {cellContent(col, entry, weightUnit)}
+                </span>
+              ))}
+            </>
+          ))}
+          <span className="border-t border-neutral-800 pt-1 font-semibold text-app-text" style={{ gridColumn: `span ${leadColSpan}` }}>Total</span>
           <span className="border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span>
           <span className="border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * "Used of total" and "Remaining" as two separate lines (not crammed
+ * inline) - Remaining shown in BOTH Net Kgs and Net Bags, matching the
+ * rest of this screen's units. Shared between NfaMillingMonitor.jsx and
+ * RicemillAllocationsPanel.jsx's NFA section.
+ */
+export function AllocationUsageSummary({ used, total, weightUnit }) {
+  const remaining = total - used
+  const isOver = remaining < 0
+  const remainingAbs = Math.abs(remaining)
+  return (
+    <div className="text-xs text-neutral-500">
+      <p>{fmtWeight(used, weightUnit)} used of {fmtWeight(total, weightUnit)}</p>
+      <p className={isOver ? 'text-brand-crimson' : 'text-brand-neon'}>
+        {isOver ? 'Over' : 'Remaining'}: {fmtWeight(remainingAbs, weightUnit)} · {fmtNetBags(remainingAbs / 50)} Net Bags
+      </p>
     </div>
   )
 }
@@ -82,8 +131,8 @@ function RicemillRecoveryDetail({ recovery, weightUnit }) {
           </span>
         </div>
       </div>
-      <RecoverySection label="Issuance" entries={recovery.millingEntries} totalBags={recovery.issuedBags} totalKilos={recovery.issuedKilos} weightUnit={weightUnit} showAiNumber={false} />
-      <RecoverySection label="Receipt" entries={recovery.transferEntries} totalBags={recovery.recoveredBags} totalKilos={recovery.recoveredKilos} weightUnit={weightUnit} showAiNumber />
+      <RecoverySection label="Issuance" entries={recovery.millingEntries} totalBags={recovery.issuedBags} totalKilos={recovery.issuedKilos} weightUnit={weightUnit} columns={ISSUANCE_COLUMNS} />
+      <RecoverySection label="Receipt" entries={recovery.transferEntries} totalBags={recovery.recoveredBags} totalKilos={recovery.recoveredKilos} weightUnit={weightUnit} columns={RECEIPT_COLUMNS} />
     </div>
   )
 }
