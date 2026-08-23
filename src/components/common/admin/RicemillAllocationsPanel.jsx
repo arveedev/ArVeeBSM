@@ -8,7 +8,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
-import { fmtWeight, fmtBags, liveFormatNumber, parseFormattedNumber, isMillingTypeName, isTestMillingTypeName } from '../../../utils/calculations.js'
+import { fmtWeight, fmtBags, liveFormatNumber, parseFormattedNumber, isTransferTypeName, isMillingTypeName, isTestMillingTypeName } from '../../../utils/calculations.js'
 import { useSettings } from '../../../context/SettingsContext.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, listItemClass, editIconClass, deleteIconClass, byAlpha } from './shared.js'
@@ -24,40 +24,29 @@ function RicemillAllocationsPanel() {
   const allocations = useLiveQuery(() => db.ricemillAllocations.toArray(), []) ?? []
   const sortedAllocations = [...allocations].sort((a, b) => byAlpha(a.regionalAuthorityNumber, b.regionalAuthorityNumber))
 
-  // Actual usage - net kg moved through Ricemill-type warehouses under
-  // this Regional Authority Number, so the admin can see allocation vs
-  // actual side by side.
-  //
-  // "Used" is specifically the WSI issuance to the mill, under an AI
-  // with transaction type Milling/Remilling/Test Milling/Test
-  // Remilling - confirmed as the one step that actually draws against
-  // the Regional Authority allocation. Everything else in the full
-  // flow (MPO III receiving stock, receiving the recovery back,
-  // transferring it onward) is the same physical stock moving through
-  // custody, not additional usage of the authorization - summing
-  // every WSR/WSI together (the previous approach) would have counted
-  // the same stock multiple times across its different legs.
+  // Actual usage - the AI record's OWN recorded allocation (its
+  // BAG/NET KG), for every TRANSFER-type AI tagged with this Regional
+  // Authority Number, so the admin can see allocation vs actual side by
+  // side. Confirmed directly: the entry form has no field to attach a
+  // Regional Authority Number to a WSR/WSI transaction at all, so a
+  // TRANSFER row on the AI sheet IS the real, only-visible authorizing
+  // event for an NFA-owned Ricemill - not a linked Milling-type WSI
+  // (which in practice never occurs for this facility type). SALES-type
+  // AI rows are explicitly excluded - not part of milling operations
+  // usage.
   const usageByNumber = useLiveQuery(async () => {
     const ricemillWarehouses = await db.warehouses.where('facilityType').equals('Ricemill').toArray()
-    const ricemillIds = ricemillWarehouses.map((w) => w.warehouseId)
-    if (ricemillIds.length === 0) return new Map()
+    const ricemillIds = new Set(ricemillWarehouses.map((w) => w.warehouseId))
+    if (ricemillIds.size === 0) return new Map()
 
     const authorities = await db.authorities.where('type').equals('AI').toArray()
-    const millingAuthorities = authorities.filter((a) =>
-      a.regionalAuthorityNumber && (isMillingTypeName(a.transactionTypeName) || isTestMillingTypeName(a.transactionTypeName))
+    const transferAuthorities = authorities.filter((a) =>
+      a.regionalAuthorityNumber && isTransferTypeName(a.transactionTypeName) && ricemillIds.has(a.assignedWarehouse)
     )
-    if (millingAuthorities.length === 0) return new Map()
-    const regionalNumByAiNumber = new Map(millingAuthorities.map((a) => [a.aiNumber, a.regionalAuthorityNumber]))
-
-    const tx = await db.transactions
-      .where('warehouseId').anyOf(ricemillIds)
-      .and((t) => t.status === 'Active' && t.type === 'WSI' && regionalNumByAiNumber.has(t.aiNumber))
-      .toArray()
 
     const usage = new Map()
-    for (const t of tx) {
-      const regionalNum = regionalNumByAiNumber.get(t.aiNumber)
-      usage.set(regionalNum, (usage.get(regionalNum) ?? 0) + (t.netKilos ?? 0))
+    for (const a of transferAuthorities) {
+      usage.set(a.regionalAuthorityNumber, (usage.get(a.regionalAuthorityNumber) ?? 0) + (a.totalAllocationKilos ?? 0))
     }
     return usage
   }, []) ?? new Map()
@@ -70,49 +59,52 @@ function RicemillAllocationsPanel() {
   // usageByNumber above (which tracks allocation vs total activity) -
   // this is specifically about how much came BACK out of what went IN
   // to the mill.
-  const millingDetailsByNumber = useLiveQuery(async () => {
+  // Recovery detail, per Regional Authority Number - "palay in" is
+  // every MILLING/REMILLING/TEST-MILLING-type AI record's own recorded
+  // allocation; "rice out" is every TRANSFER-type AI record's own
+  // recorded allocation where the variety is categorized as Rice (per
+  // explicit confirmation: the milling transaction is the palay in, the
+  // transfer transaction with the rice cereal variety is the rice out).
+  // This is an AGGREGATE total per Regional Authority Number, not a
+  // per-batch pairing - there's no field linking one specific milling
+  // event to one specific transfer-out event, so pairing them
+  // individually would be a guess this data doesn't actually support.
+  const recoverySummaryByNumber = useLiveQuery(async () => {
     const ricemillWarehouses = await db.warehouses.where('facilityType').equals('Ricemill').toArray()
     if (ricemillWarehouses.length === 0) return new Map()
-    const ricemillIds = ricemillWarehouses.map((w) => w.warehouseId)
+    const ricemillIds = new Set(ricemillWarehouses.map((w) => w.warehouseId))
 
     const authorities = await db.authorities.where('type').equals('AI').toArray()
-    const millingAuthorities = authorities.filter((a) =>
-      a.regionalAuthorityNumber && (isMillingTypeName(a.transactionTypeName) || isTestMillingTypeName(a.transactionTypeName))
-    )
-    if (millingAuthorities.length === 0) return new Map()
-
-    const warehouseTx = await db.transactions
-      .where('warehouseId').anyOf(ricemillIds)
-      .and((t) => t.status === 'Active')
-      .toArray()
     const varietyList = await db.varietyTypes.toArray()
     const varietyMap = new Map(varietyList.map((v) => [v.varietyId, v]))
-    const warehouseMap = new Map(ricemillWarehouses.map((w) => [w.warehouseId, w]))
 
-    const details = new Map()
-    for (const auth of millingAuthorities) {
-      const millingTx = warehouseTx.filter((t) => t.type === 'WSI' && t.aiNumber === auth.aiNumber)
-      for (const tx of millingTx) {
-        const recoveryTx = warehouseTx.filter((t) => t.type === 'WSR' && t.linkedDocNo === auth.aiNumber)
-        const recoveredKilos = recoveryTx.reduce((sum, r) => sum + (r.netKilos ?? 0), 0)
-        const issuedKilos = tx.netKilos ?? 0
-        const recoveryPct = issuedKilos > 0 ? (recoveredKilos / issuedKilos) * 100 : null
+    const summary = new Map()
+    const ensure = (key) => {
+      if (!summary.has(key)) summary.set(key, { issuedKilos: 0, recoveredKilos: 0, millingEntries: [], transferEntries: [] })
+      return summary.get(key)
+    }
 
-        const key = auth.regionalAuthorityNumber
-        if (!details.has(key)) details.set(key, [])
-        details.get(key).push({
-          id: tx.id,
-          date: tx.date,
-          warehouseName: warehouseMap.get(tx.warehouseId)?.name ?? tx.warehouseId,
-          varietyName: varietyMap.get(tx.varietyId)?.name ?? '',
-          bags: tx.numberOfBags ?? 0,
-          issuedKilos,
-          recoveredKilos,
-          recoveryPct,
-        })
+    for (const a of authorities) {
+      if (!a.regionalAuthorityNumber || !ricemillIds.has(a.assignedWarehouse)) continue
+      const kilos = a.totalAllocationKilos ?? 0
+      const varietyName = varietyMap.get(a.varietyId)?.name ?? ''
+      const entry = { authId: a.authId, date: a.date, varietyName, bags: a.totalAllocationBags ?? 0, kilos }
+
+      if (isMillingTypeName(a.transactionTypeName) || isTestMillingTypeName(a.transactionTypeName)) {
+        const s = ensure(a.regionalAuthorityNumber)
+        s.issuedKilos += kilos
+        s.millingEntries.push(entry)
+      } else if (isTransferTypeName(a.transactionTypeName) && varietyMap.get(a.varietyId)?.category === 'Rice') {
+        const s = ensure(a.regionalAuthorityNumber)
+        s.recoveredKilos += kilos
+        s.transferEntries.push(entry)
       }
     }
-    return details
+
+    for (const s of summary.values()) {
+      s.recoveryPct = s.issuedKilos > 0 ? (s.recoveredKilos / s.issuedKilos) * 100 : null
+    }
+    return summary
   }, []) ?? new Map()
 
   const resetForm = () => {
@@ -191,7 +183,7 @@ function RicemillAllocationsPanel() {
         {sortedAllocations.map((a) => {
           const used = usageByNumber.get(a.regionalAuthorityNumber) ?? 0
           const remaining = a.totalNetKgs - used
-          const millingDetails = millingDetailsByNumber.get(a.regionalAuthorityNumber) ?? []
+          const recovery = recoverySummaryByNumber.get(a.regionalAuthorityNumber)
           const isExpanded = expandedNumber === a.regionalAuthorityNumber
           return (
             <li key={a.regionalAuthorityNumber} className={`${listItemClass} flex-col items-stretch`}>
@@ -208,7 +200,6 @@ function RicemillAllocationsPanel() {
                     <span className={remaining < 0 ? 'text-brand-crimson' : 'text-brand-neon'}>
                       {fmtWeight(Math.abs(remaining), weightUnit)} {remaining < 0 ? 'over' : 'remaining'}
                     </span>
-                    {millingDetails.length > 0 && ` · ${millingDetails.length} milling record(s)`}
                   </p>
                 </button>
                 <div className="flex gap-1">
@@ -217,24 +208,46 @@ function RicemillAllocationsPanel() {
                 </div>
               </div>
               {isExpanded && (
-                <div className="mt-2 space-y-1.5 border-t border-neutral-800 pt-2">
-                  {millingDetails.length === 0 && (
-                    <p className="text-xs text-neutral-500">No milling activity recorded yet for this Regional Authority Number.</p>
+                <div className="mt-2 space-y-2 border-t border-neutral-800 pt-2">
+                  {!recovery && (
+                    <p className="text-xs text-neutral-500">No palay-in (milling) or rice-out (transfer) activity recorded yet for this Regional Authority Number.</p>
                   )}
-                  {millingDetails.map((d) => (
-                    <div key={d.id} className="rounded-lg bg-neutral-950 p-2 text-xs">
-                      <div className="flex items-center justify-between text-neutral-400">
-                        <span>{d.date} · {d.warehouseName}</span>
-                        <span className="font-medium text-app-text">{d.varietyName}</span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between">
-                        <span className="text-neutral-500">{fmtBags(d.bags)} bags · {fmtWeight(d.issuedKilos, weightUnit)} issued → {fmtWeight(d.recoveredKilos, weightUnit)} recovered</span>
-                        <span className={`font-semibold ${d.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
-                          {d.recoveryPct == null ? '—' : `${d.recoveryPct.toFixed(1)}%`}
+                  {recovery && (
+                    <div className="rounded-lg bg-neutral-950 p-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500">{fmtWeight(recovery.issuedKilos, weightUnit)} palay in → {fmtWeight(recovery.recoveredKilos, weightUnit)} rice out</span>
+                        <span className={`font-semibold ${recovery.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
+                          {recovery.recoveryPct == null ? '—' : `${recovery.recoveryPct.toFixed(1)}%`}
                         </span>
                       </div>
                     </div>
-                  ))}
+                  )}
+                  {recovery && recovery.millingEntries.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Palay in</p>
+                      <div className="space-y-1">
+                        {recovery.millingEntries.map((d) => (
+                          <div key={d.authId} className="flex items-center justify-between rounded-lg bg-neutral-950 p-2 text-xs text-neutral-400">
+                            <span>{d.date} · {d.varietyName}</span>
+                            <span className="font-medium text-app-text">{fmtBags(d.bags)} bags · {fmtWeight(d.kilos, weightUnit)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {recovery && recovery.transferEntries.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Rice out</p>
+                      <div className="space-y-1">
+                        {recovery.transferEntries.map((d) => (
+                          <div key={d.authId} className="flex items-center justify-between rounded-lg bg-neutral-950 p-2 text-xs text-neutral-400">
+                            <span>{d.date} · {d.varietyName}</span>
+                            <span className="font-medium text-app-text">{fmtBags(d.bags)} bags · {fmtWeight(d.kilos, weightUnit)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </li>

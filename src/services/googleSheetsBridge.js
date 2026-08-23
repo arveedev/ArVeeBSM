@@ -551,7 +551,16 @@ const runAuthoritiesSync = async () => {
           customerName: resolveCustomerName(row['NAME OF CUSTOMER']),
           varietyId: varietyByCode.get(String(row['VARIETY CODE'] ?? '').trim()) ?? null,
           transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
-          regionalAuthorityNumber: row['Regional Authority Number'] ?? null,
+          // Confirmed against a live sheet screenshot: the real column
+          // header is literally "AUTHORITY", not "Regional Authority
+          // Number" - reading the documented name alone always came back
+          // undefined, meaning every synced authority's regionalAuthorityNumber
+          // stayed null regardless of what was actually on the sheet, which
+          // in turn meant NfaMillingMonitor/RicemillAllocationsPanel could
+          // never find any usage to count against an allocation (always
+          // showed 0 used, no matter how much real activity existed). Same
+          // header-drift class of bug as the "Age Group"/Note3 column above.
+          regionalAuthorityNumber: row['AUTHORITY'] ?? row['Regional Authority Number'] ?? null,
           sourceWarehouse: row['Source Warehouse'] ?? null,
           totalAllocationBags: toNumberOrNull(row['BAG']),
           totalAllocationKilos: toNumberOrNull(row['NET KG']),
@@ -637,7 +646,16 @@ const runAuthoritiesSync = async () => {
           assignedWarehouse: warehouseByAlias.get(normalizeWarehouseAlias(row['ISSUED FROM'])) ?? null,
           customerName: resolveCustomerName(row['CUSTOMER']),
           transactionTypeName: String(row['TRANSACTION'] ?? '').trim(),
-          regionalAuthorityNumber: row['Regional Authority Number'] ?? null,
+          // Confirmed against a live sheet screenshot: the real column
+          // header is literally "AUTHORITY", not "Regional Authority
+          // Number" - reading the documented name alone always came back
+          // undefined, meaning every synced authority's regionalAuthorityNumber
+          // stayed null regardless of what was actually on the sheet, which
+          // in turn meant NfaMillingMonitor/RicemillAllocationsPanel could
+          // never find any usage to count against an allocation (always
+          // showed 0 used, no matter how much real activity existed). Same
+          // header-drift class of bug as the "Age Group"/Note3 column above.
+          regionalAuthorityNumber: row['AUTHORITY'] ?? row['Regional Authority Number'] ?? null,
           remarks: row['REMARKS'] ?? null,
         })
       }

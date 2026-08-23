@@ -301,6 +301,22 @@ export const isTestMillingTypeName = (name) => {
 }
 
 /**
+ * Matches a transaction type name against "TRANSFER" - for NFA-owned
+ * Ricemills specifically, this IS the real authorizing/usage event
+ * against a Regional Authority Number allocation, confirmed directly:
+ * the entry form has no field to link a WSR/WSI transaction to a
+ * Regional Authority Number at all, so a TRANSFER-type AI authority's
+ * own recorded allocation (its BAG/NET KG) is the only place that usage
+ * is ever actually visible - not a Milling/Remilling-type AI's linked
+ * WSI, which in practice never occurs for this facility type. SALES-type
+ * AI rows are explicitly NOT part of milling operations usage.
+ */
+export const isTransferTypeName = (name) => {
+  if (!name) return false
+  return name.trim().toUpperCase() === 'TRANSFER'
+}
+
+/**
  * Same reasoning and pattern as isMillingTypeName/isTestMillingTypeName
  * above - transaction type names in the actual data are all-caps
  * (e.g. "PROCUREMENT"), which never matched a hardcoded exact-case
