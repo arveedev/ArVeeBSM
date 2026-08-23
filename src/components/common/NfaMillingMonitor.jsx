@@ -113,7 +113,14 @@ function NfaMillingMonitor({ warehouseId } = {}) {
       transferEntriesByNumber.get(a.regionalAuthorityNumber).push({
         authId: a.authId, date: a.date, aiNumber: a.aiNumber,
         varietyName: varietyMap.get(a.varietyId)?.name ?? '',
-        bags: a.totalAllocationBags ?? 0, kilos: a.totalAllocationKilos ?? 0,
+        // Net Bags is always kilos / 50 here, NOT the sheet's own raw
+        // BAG column - that's a manually counted physical bag tally
+        // that can legitimately drift from the weight-derived figure
+        // (e.g. 3,203.200 kg was recorded as "64" bags on the sheet,
+        // not the mathematically exact 64.064) - this display is
+        // specifically the derived Net Bags unit, so it must actually
+        // equal kilos / 50, confirmed directly.
+        bags: (a.totalAllocationKilos ?? 0) / 50, kilos: a.totalAllocationKilos ?? 0,
       })
     }
 
