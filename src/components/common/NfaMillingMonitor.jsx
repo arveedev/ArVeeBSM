@@ -46,37 +46,6 @@ function NfaMillingMonitor({ warehouseId } = {}) {
     .filter((a) => !warehouseId || relevantNumbersForWarehouse == null || relevantNumbersForWarehouse.has(a.regionalAuthorityNumber))
     .sort((a, b) => byAlpha(a.regionalAuthorityNumber, b.regionalAuthorityNumber))
 
-  // Same "used" definition as RicemillAllocationsPanel.jsx: the AI
-  // record's OWN recorded allocation (its BAG/NET KG), for every
-  // TRANSFER-type AI tagged with this Regional Authority Number - NOT a
-  // linked WSI transaction. Confirmed directly: the entry form has no
-  // field to attach a Regional Authority Number to a WSR/WSI
-  // transaction at all, so a TRANSFER row on the AI sheet IS the real,
-  // only-visible authorizing/usage event for an NFA-owned Ricemill.
-  // SALES-type AI rows are explicitly excluded - not part of milling
-  // operations usage.
-  const usageByNumber = useLiveQuery(async () => {
-    let ricemillIds
-    if (warehouseId) {
-      ricemillIds = [warehouseId]
-    } else {
-      const ricemillWarehouses = await db.warehouses.where('facilityType').equals('Ricemill').toArray()
-      ricemillIds = ricemillWarehouses.map((w) => w.warehouseId)
-    }
-    if (ricemillIds.length === 0) return new Map()
-    const ricemillIdSet = new Set(ricemillIds)
-
-    const authorities = await db.authorities.where('type').equals('AI').toArray()
-    const transferAuthorities = authorities.filter((a) =>
-      a.regionalAuthorityNumber && isTransferTypeName(a.transactionTypeName) && ricemillIdSet.has(a.assignedWarehouse)
-    )
-
-    const usage = new Map()
-    for (const a of transferAuthorities) {
-      usage.set(a.regionalAuthorityNumber, (usage.get(a.regionalAuthorityNumber) ?? 0) + (a.totalAllocationKilos ?? 0))
-    }
-    return usage
-  }, [warehouseId]) ?? new Map()
 
   // Recovery detail, per Regional Authority Number - "rice out" is every
   // TRANSFER-type AI record's own recorded allocation where the variety
@@ -164,8 +133,12 @@ function NfaMillingMonitor({ warehouseId } = {}) {
           </p>
         )}
         {sortedAllocations.map((a) => {
-          const used = usageByNumber.get(a.regionalAuthorityNumber) ?? 0
           const recovery = recoverySummaryByNumber.get(a.regionalAuthorityNumber)
+          // The allocation is a PALAY quota, not a rice quota - what
+          // draws it down is Issuance (palay in), not Receipt (rice
+          // out). Confirmed directly after this showed the Receipt
+          // total against the allocation, which was wrong.
+          const used = recovery?.issuedKilos ?? 0
           const isExpanded = expandedNumber === a.regionalAuthorityNumber
           return (
             <li key={a.regionalAuthorityNumber} className={`${listItemClass} flex-col items-stretch`}>
