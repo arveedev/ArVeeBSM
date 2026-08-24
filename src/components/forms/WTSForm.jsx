@@ -42,6 +42,7 @@ import {
   calculateNetKilos,
   fmtWeight,
   todayLocalISO,
+  round3,
 } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import { inputClass, labelClass, primaryButtonClass } from './shared.js'
@@ -490,7 +491,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       const pile = await db.piles.get(tx.issuedPileId)
       if (pile) {
         const newBags = Math.max(0, (pile.currentBags ?? 0) - tx.issuedBags)
-        const newKilos = Math.max(0, (pile.currentKilos ?? 0) - (tx.issuedNetKilos ?? 0))
+        const newKilos = Math.max(0, round3((pile.currentKilos ?? 0) - (tx.issuedNetKilos ?? 0)))
         await db.piles.update(pile.pileId, {
           currentBags: newBags,
           currentKilos: newKilos,
@@ -502,7 +503,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       const pile = await db.piles.get(tx.receivedPileId)
       if (pile) {
         const newBags = (pile.currentBags ?? 0) + tx.receivedBags
-        const newKilos = (pile.currentKilos ?? 0) + (tx.receivedNetKilos ?? 0)
+        const newKilos = round3((pile.currentKilos ?? 0) + (tx.receivedNetKilos ?? 0))
         await db.piles.update(pile.pileId, {
           currentBags: newBags,
           currentKilos: newKilos,
@@ -517,7 +518,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       const pile = await db.piles.get(tx.issuedPileId)
       if (pile) {
         const newBags = (pile.currentBags ?? 0) + tx.issuedBags
-        const newKilos = (pile.currentKilos ?? 0) + (tx.issuedNetKilos ?? 0)
+        const newKilos = round3((pile.currentKilos ?? 0) + (tx.issuedNetKilos ?? 0))
         await db.piles.update(pile.pileId, {
           currentBags: newBags,
           currentKilos: newKilos,
@@ -529,7 +530,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       const pile = await db.piles.get(tx.receivedPileId)
       if (pile) {
         const newBags = Math.max(0, (pile.currentBags ?? 0) - tx.receivedBags)
-        const newKilos = Math.max(0, (pile.currentKilos ?? 0) - (tx.receivedNetKilos ?? 0))
+        const newKilos = Math.max(0, round3((pile.currentKilos ?? 0) - (tx.receivedNetKilos ?? 0)))
         await db.piles.update(pile.pileId, {
           currentBags: newBags,
           currentKilos: newKilos,

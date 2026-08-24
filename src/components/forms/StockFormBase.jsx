@@ -54,6 +54,7 @@ import {
   calculateCurrentAge,
   bestAgeUnit,
   normalizeAgeToDays,
+  round3,
   liveFormatNumber,
   parseFormattedNumber,
   fmtWeight,
@@ -102,6 +103,13 @@ import {
 
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 const GENDERS = ['Male', 'Female']
+
+// A pile's stock limit is a real physical constraint, but the running
+// total it's checked against can carry a few grams of floating-point
+// drift accumulated across its whole transaction history - 10g is
+// negligible against a 50kg bag and comfortably covers the drift
+// actually observed, without masking a genuine over-limit issuance.
+const KILOS_TOLERANCE = 0.01
 
 // Display-only: strips a leading "MO No." / "TMO No." prefix (any
 // casing/spacing) for readability, since the full stored value can be
@@ -884,7 +892,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const availableKilos = selectedPile ? (selectedPile.currentKilos ?? 0) + alreadyDeductedKilos : null
 
   const isIssuance = type === 'WSI'
-  const overKilos = isIssuance && availableKilos != null && netKilos > availableKilos
+  // A tiny amount of tolerance (10g) absorbs both genuine floating-point
+  // drift in a pile's running total (accumulated addition/subtraction
+  // across its whole transaction history - confirmed directly: a pile
+  // whose true balance was 49.315 read back as 49.310) and the case
+  // being issued down to exactly the pile's own remaining stock. Same
+  // convention as calculateAuthorityStatus's OVERAGE_TOLERANCE.
+  const overKilos = isIssuance && availableKilos != null && netKilos > availableKilos + KILOS_TOLERANCE
   const overBags = isIssuance && availableBags != null && bagsNum > availableBags
 
   // Computes an extra pile allocation's actual storable fields from its
@@ -921,6 +935,29 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     }
   }
 
+  // Auto-fills an additional pile row's Gross Kilos so its computed Net
+  // Kilos exactly completes whatever the linked authority still has
+  // remaining, once the primary pile's own share and every OTHER
+  // additional pile row's own share are subtracted out. Only meaningful
+  // once real Bags/sack are entered (Gross = target Net + this row's own
+  // MTS deduction, which depends on both) and only while this row's own
+  // Auto-compute Net Kilos toggle is on - that toggle already means "let
+  // the app handle this row's math," so recomputing Gross here on every
+  // Bags/sack change is the same promise applied in the other direction.
+  // Never touches Gross Kilos if the user has that toggle off, or if
+  // there's no kilos-based authority allocation to target at all.
+  const autoFillGrossForRemaining = (rows, idx, sackKeyOverride) => {
+    if (authorityRemainingKilos == null) return rows
+    const sack = sackOptions.find((o) => o.key === (sackKeyOverride ?? rows[idx].sackSelection))
+    if (!sack) return rows
+    const otherNet = extraAllocInfos.reduce((sum, info, i) => (i === idx ? sum : sum + (info.netKilos || 0)), 0)
+    const target = Math.max(0, authorityRemainingKilos - netKilos - otherNet)
+    const bagsNum = rows[idx].bags ? parseFormattedNumber(rows[idx].bags) : 0
+    const mts = calculateMtsFromSackWeight(sack.weight ?? 0, bagsNum)
+    const desiredGross = round3(target + mts)
+    return rows.map((r, i) => (i === idx ? { ...r, grossKilos: liveFormatNumber(String(desiredGross), 3) } : r))
+  }
+
   // Per-line version of everything above (computed net kilos, MTS,
   // and the same "already deducted by this line's own prior save"
   // adjustment the primary pile gets) - each additional pile draws
@@ -940,7 +977,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       avgWeightPerBag: calculateAverageWeightPerBag(fields.netKilos, fields.numberOfBags),
       availableBags: allocAvailableBags,
       availableKilos: allocAvailableKilos,
-      overKilos: allocAvailableKilos != null && fields.netKilos > allocAvailableKilos,
+      overKilos: allocAvailableKilos != null && fields.netKilos > allocAvailableKilos + KILOS_TOLERANCE,
       overBags: allocAvailableBags != null && fields.numberOfBags > allocAvailableBags,
     }
   })
@@ -2850,7 +2887,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       <label className={labelClass}>MTS — Sack Code &amp; Condition</label>
                       <select
                         value={alloc.sackSelection}
-                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, sackSelection: e.target.value } : r)))}
+                        onChange={(e) => setExtraPileAllocations((rows) => {
+                          const updated = rows.map((r, idx) => (idx === i ? { ...r, sackSelection: e.target.value } : r))
+                          return updated[i].autoComputeNet ? autoFillGrossForRemaining(updated, i, e.target.value) : updated
+                        })}
                         className={`${inputClass} mt-0 ${!alloc.sackSelection ? '!border-brand-amber' : ''}`}
                       >
                         <option value="">Select sack code…</option>
@@ -2874,7 +2914,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       <input
                         type="text" inputMode="decimal" placeholder="0"
                         value={alloc.bags}
-                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r)))}
+                        onChange={(e) => setExtraPileAllocations((rows) => {
+                          const updated = rows.map((r, idx) => (idx === i ? { ...r, bags: liveFormatNumber(e.target.value) } : r))
+                          return updated[i].autoComputeNet ? autoFillGrossForRemaining(updated, i) : updated
+                        })}
                         className={`${inputClass} mt-0 ${info.overBags ? 'border-brand-amber' : ''}`}
                       />
                     </div>

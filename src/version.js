@@ -324,4 +324,23 @@
 //            (its single-value primary key is sync-compatible, unlike
 //            privateMillerAllocations' compound key, which stays
 //            excluded on purpose)
-export const APP_VERSION = '1.9-12'
+//   1.9-13 - Three real bugs/gaps from live field testing: (1) a pile's
+//            running Net Kilos total could drift by a few grams over its
+//            lifetime (plain JS float addition/subtraction with no
+//            rounding at each step), which could make a WSI reject an
+//            issuance for the pile's OWN exact remaining amount ("Pile
+//            only has 49.310" when it genuinely had 49.315) - every
+//            place a pile's running total gets updated now rounds to 3
+//            decimals each time, and the stock-limit comparison itself
+//            also tolerates a few grams either way. (2) The same float
+//            drift meant a pile could sit at a near-zero (not exactly
+//            zero) balance forever, never satisfying the strict
+//            equality check that hides a depleted pile from every pile
+//            picker - now tolerance-based too. (3) Adding another pile
+//            to a WSI now auto-fills that pile's Gross Kilos with
+//            whatever value exactly completes the linked authority's
+//            remaining balance (accounting for the primary pile and any
+//            other additional piles already filled in), recalculated
+//            live as Bags or sack code change - only while that pile's
+//            own Auto-compute Net Kilos toggle is on.
+export const APP_VERSION = '1.9-13'

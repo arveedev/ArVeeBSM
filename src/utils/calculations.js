@@ -2,11 +2,27 @@
 // All decimal values are rounded to 2 places to avoid floating-point drift.
 
 /**
+ * Rounds a kilos figure to the app's own 3-decimal precision (matching
+ * every kilos display everywhere). Every fresh netKilos value already
+ * gets this via calculateNetKilos below - this export exists so a
+ * RUNNING TOTAL (a pile's currentKilos, updated by repeated addition/
+ * subtraction across many transactions over its lifetime) can be
+ * rounded at each update too, not just at initial computation. Plain JS
+ * addition of two already-clean 3-decimal numbers can still produce a
+ * result with binary floating-point representation error (the same
+ * reason 0.1 + 0.2 !== 0.3 in JS) - each individual error is invisible,
+ * but they compound across a pile's transaction history into a real,
+ * user-visible drift (confirmed directly: a pile whose true balance was
+ * 49.315 reading back as 49.310 after enough transactions).
+ */
+export const round3 = (n) => parseFloat((Number(n) || 0).toFixed(3))
+
+/**
  * Net Kilos = Gross Kilos - MTS
  * (Section 4.1)
  */
 export const calculateNetKilos = (grossKilos, mts) => {
-  return parseFloat((Number(grossKilos) - Number(mts)).toFixed(3))
+  return round3(Number(grossKilos) - Number(mts))
 }
 
 /**

@@ -6,7 +6,7 @@
 // computed from gross via MTS deduction — not handled here.
 
 import { db } from '../db/dexie.js'
-import { normalizeAgeToDays, todayLocalISO } from './calculations.js'
+import { normalizeAgeToDays, todayLocalISO, round3 } from './calculations.js'
 
 const DIRECTION_BY_TYPE = {
   WSR: 1,
@@ -30,8 +30,18 @@ const DIRECTION_BY_TYPE = {
  * manual closedDate - this is silent/automatic, closedDate is a
  * deliberate user action.
  */
+// Tolerance-based, not strict === 0 - a pile that's genuinely
+// depleted can still carry a few grams of floating-point drift in its
+// running kilos total (see round3 in calculations.js), which meant it
+// could sit at e.g. 0.0000000002 forever, never satisfying a strict
+// equality check - zeroedDate never got set, and the pile kept
+// appearing in every pile picker indefinitely even though it held
+// nothing usable. Same 10g tolerance used for the pile-stock-limit
+// check in StockFormBase.jsx.
+const ZERO_TOLERANCE_KILOS = 0.01
+
 export const deriveZeroedDateUpdate = (pile, newBags, newKilos) => {
-  const isZero = newBags === 0 && newKilos === 0
+  const isZero = newBags === 0 && Math.abs(newKilos) < ZERO_TOLERANCE_KILOS
   if (isZero) return pile.zeroedDate ? {} : { zeroedDate: todayLocalISO() }
   return pile.zeroedDate ? { zeroedDate: null } : {}
 }
@@ -52,7 +62,7 @@ export const applyTransactionToPile = async (transaction) => {
   const bagsDelta = (transaction.numberOfBags ?? 0) * direction
   const kilosDelta = (transaction.netKilos ?? 0) * direction
   const newBags = Math.max(0, (pile.currentBags ?? 0) + bagsDelta)
-  const newKilos = Math.max(0, (pile.currentKilos ?? 0) + kilosDelta)
+  const newKilos = Math.max(0, round3((pile.currentKilos ?? 0) + kilosDelta))
 
   const update = {
     currentBags: newBags,
@@ -89,7 +99,7 @@ export const reverseTransactionFromPile = async (transaction) => {
   const bagsDelta = (transaction.numberOfBags ?? 0) * direction
   const kilosDelta = (transaction.netKilos ?? 0) * direction
   const newBags = Math.max(0, (pile.currentBags ?? 0) - bagsDelta)
-  const newKilos = Math.max(0, (pile.currentKilos ?? 0) - kilosDelta)
+  const newKilos = Math.max(0, round3((pile.currentKilos ?? 0) - kilosDelta))
 
   await db.piles.update(pile.pileId, {
     currentBags: newBags,
@@ -283,7 +293,7 @@ export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOv
     }
   }
 
-  return { bags, kilos }
+  return { bags, kilos: round3(kilos) }
 }
 
 /**
@@ -335,7 +345,7 @@ export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12
     if (!byWeight.has(weight)) byWeight.set(weight, { bags: 0, kilos: 0 })
     const entry = byWeight.get(weight)
     entry.bags += bags
-    entry.kilos += kilos
+    entry.kilos = round3(entry.kilos + kilos)
   }
 
   for (const t of direct) {
