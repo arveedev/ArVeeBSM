@@ -17,44 +17,53 @@ import { Fragment } from 'react'
 import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
 
 // Issuance has no AI # (there's only ever one AI covering the whole
-// allocation - a per-row AI # would have nothing useful to show) and no
-// Variety column (every row is the same static "derived from mill
-// capacity" placeholder, not a real per-row value worth its own
-// column). Receipt keeps both - each row is its own real, distinct AI
-// and variety.
+// allocation - a per-row AI # would have nothing useful to show).
+// Neither section gives Variety its own column any more - within one
+// Regional Authority Number every Receipt row is always the same
+// variety, so it's shown once, next to the "Receipt" label itself,
+// rather than repeated identically down an entire column.
 //
-// Both sections still use the SAME 5-track grid (with Issuance's unused
-// AI#/Variety tracks rendered as empty, unlabeled spacers) rather than a
-// narrower 3-column grid of its own - two side-by-side tables with
-// different column counts don't read as a matched pair; Net Bags and
-// Net Kgs need to land in the same horizontal position in both.
-const ISSUANCE_COLUMNS = ['date', 'blank', 'blank', 'netBags', 'netKgs']
-const RECEIPT_COLUMNS = ['date', 'aiNumber', 'variety', 'netBags', 'netKgs']
+// Both sections still use the SAME 4-track grid (Issuance's unused AI#
+// track rendered as an empty, unlabeled spacer) rather than a narrower
+// grid of its own - two side-by-side tables with different column
+// counts don't read as a matched pair; Net Bags and Net Kgs need to
+// land in the same horizontal position in both.
+const ISSUANCE_COLUMNS = ['date', 'blank', 'netBags', 'netKgs']
+const RECEIPT_COLUMNS = ['date', 'aiNumber', 'netBags', 'netKgs']
 
 // Tailwind's build-time scanner only picks up class names it can see as
 // a literal string - a runtime-concatenated `grid-cols-[${...}]` would
 // never make it into the generated CSS at all, so this stays a single
-// static string (both sections are always 5 tracks now) rather than
-// assembled from a per-column width map at render time.
-const GRID_COLS = 'grid-cols-[64px_84px_1fr_72px_96px] md:grid-cols-[84px_112px_1fr_96px_136px]'
+// static string (both sections are always 4 tracks now) rather than
+// assembled from a per-column width map at render time. No `1fr` track -
+// a flexible track stretched to fill whatever width its parent gave it,
+// which on a wide desktop screen was most of the page, leaving a huge
+// empty gap between Date and Net Bags. Every track is now a fixed width
+// sized to its real content, and the grid itself is `w-fit` (see below)
+// so the whole table stops stretching wider than it needs to be.
+const GRID_COLS = 'grid-cols-[92px_92px_76px_104px] md:grid-cols-[110px_110px_96px_128px]'
 
-const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', variety: 'Variety', netBags: 'Net Bags', netKgs: 'Net Kgs', blank: '' }
+const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', netBags: 'Net Bags', netKgs: 'Net Kgs', blank: '' }
 const RIGHT_ALIGNED = new Set(['netBags', 'netKgs'])
 
-/** "2026-07-31" -> "26-07-31" - drops the century so the column stays
- * narrow enough to never truncate; the last two digits of the year are
- * kept (not dropped entirely) since activity can span a year boundary. */
+/** "2026-07-31" -> "Jul 31" - a short, unambiguous form that never needs
+ * truncating regardless of column width or font size, unlike the raw
+ * digit form it replaces (which could still overflow a narrow column
+ * once the text itself got bigger). */
 function shortDate(isoDate) {
   if (!isoDate) return '—'
   const s = String(isoDate)
-  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(2, 10) : s
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(s)
+  if (!match) return s
+  const [, , month, day] = match
+  const monthName = new Date(2000, Number(month) - 1, 1).toLocaleString('en-US', { month: 'short' })
+  return `${monthName} ${Number(day)}`
 }
 
 function cellContent(column, entry, weightUnit) {
   switch (column) {
     case 'date': return shortDate(entry.date)
     case 'aiNumber': return entry.aiNumber ?? '—'
-    case 'variety': return entry.varietyName || '—'
     case 'netBags': return fmtNetBags(entry.bags)
     case 'netKgs': return fmtWeight(entry.kilos, weightUnit)
     default: return ''
@@ -64,9 +73,17 @@ function cellContent(column, entry, weightUnit) {
 function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, columns }) {
   if (entries.length === 0) return null
   const leadColSpan = columns.length - 2 // every column except Net Bags/Net Kgs, for the "Total" label
+  // Every entry within one Regional Authority Number's Receipt list is
+  // always the same variety - shown once here instead of repeated down
+  // its own column. Issuance has no real per-row variety (every entry
+  // is the same "Mill capacity" placeholder - see NfaMillingMonitor.jsx)
+  // so this only ever applies to Receipt, gated on its AI # column.
+  const varietyName = columns.includes('aiNumber') ? entries.find((e) => e.varietyName)?.varietyName : null
   return (
-    <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:text-sm">{label}</p>
+    <div className="w-fit max-w-full">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:text-sm">
+        {label}{varietyName ? ` · ${varietyName}` : ''}
+      </p>
       <div className="overflow-x-auto rounded-lg bg-neutral-950 p-2 md:p-3">
         <div className={`grid ${GRID_COLS} gap-x-3 gap-y-2 text-sm leading-tight md:text-base`}>
           {columns.map((col, idx) => (
@@ -82,7 +99,7 @@ function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, co
                   className={
                     RIGHT_ALIGNED.has(col)
                       ? `text-right tabular-nums ${col === 'netKgs' ? 'font-medium text-app-text' : 'text-neutral-400'}`
-                      : `truncate ${col === 'variety' ? 'text-app-text' : 'text-neutral-500'}`
+                      : 'whitespace-nowrap text-neutral-500'
                   }
                 >
                   {cellContent(col, entry, weightUnit)}
