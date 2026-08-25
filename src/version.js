@@ -343,4 +343,32 @@
 //            other additional piles already filled in), recalculated
 //            live as Bags or sack code change - only while that pile's
 //            own Auto-compute Net Kilos toggle is on.
-export const APP_VERSION = '1.9-13'
+//   1.9-14 - Five more field-testing reports: (1) serial Next/Previous
+//            stepping could skip a real document or jump into the wrong
+//            booklet on a day two series were both in use - root cause
+//            was every Sheet-imported record having no createdAt at all
+//            (the Sheet has no timestamp column), which made the
+//            recency comparator fall back to raw serial-number magnitude
+//            inconsistently between different pairs in the same sort -
+//            genuinely non-transitive, so V8's sort could produce a
+//            scrambled order. Comparator fixed to always use a
+//            consistent ranking, and Sheet-imported records (both new
+//            imports and everything already on-device) now get a real
+//            ordinal from the Sheet's own row order as a stand-in
+//            createdAt, preserving the true order two booklets were
+//            actually used in. (2) Statement of Weekly Receipts/Issues
+//            and the MTS Statement PDFs sorted by raw serial magnitude
+//            alone, mixing different dates/series together - now sorted
+//            date-then-series, matching in-app navigation order. (3) An
+//            extra one-time duplicate-record cleanup pass, covering
+//            duplicates created after the last such pass already marked
+//            itself done on a given device - the direct cause of both a
+//            stale "pulled from historical Sheet data" banner on a
+//            record that was really already fully encoded in-app, and a
+//            false "serial already in use" when updating one. (4) The
+//            Test Milling Trial 3 completion popup is removed - Test
+//            Milling now works exactly like regular Milling: fulfillment
+//            is informational only, and actually marking a TMO complete
+//            is manual-only via the Milling Operations monitor's own
+//            toggle.
+export const APP_VERSION = '1.9-14'

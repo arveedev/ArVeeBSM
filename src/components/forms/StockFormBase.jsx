@@ -254,7 +254,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const [deleteAnimKey, setDeleteAnimKey] = useState(0)
 
   const [isSaving, setIsSaving] = useState(false)
-  const [pendingTrial3Confirm, setPendingTrial3Confirm] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
@@ -396,14 +395,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         return { ...order, issuedKg, receivedKg, expectedKg, fulfilled }
       }
 
-      // Test Milling - fulfilled needs all 3 trials recovered (any
-      // amount > 0 on the WSR side) AND the explicit Trial 3
-      // confirmation flag.
+      // Test Milling - fulfilled once all 3 trials have SOME recovery
+      // (any amount > 0 on the WSR side). Completion itself is
+      // manual-only (see MillingMonitor's manuallyCompleted toggle) -
+      // this is just the informational signal, same as Milling's own
+      // fulfilled math just above.
       const recoveredTrials = new Set(
         forThisOrder.filter((t) => t.type === 'WSR' && (t.netKilos ?? 0) > 0).map((t) => t.trialNumber)
       )
-      const allThreeRecovered = ['1', '2', '3'].every((n) => recoveredTrials.has(n))
-      const fulfilled = allThreeRecovered && order.trial3Confirmed === true
+      const fulfilled = ['1', '2', '3'].every((n) => recoveredTrials.has(n))
       return { ...order, recoveredTrials: [...recoveredTrials], fulfilled }
     })
   }, [isMilling, isTestMilling]) ?? []
@@ -1755,7 +1755,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     }
   }
 
-  const performSave = async (trial3Confirmed) => {
+  const performSave = async () => {
     setIsSaving(true)
 
     const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.grossKilos || a.manualKilos))
@@ -1839,17 +1839,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum + extraBagsTotal, netKilos + extraKilosTotal)
     }
 
-    // The transaction saves regardless of the answer - it's a real
-    // recorded event either way. Only an explicit "Yes" here marks
-    // trial3Confirmed, which is what actually gates overall TMO
-    // fulfillment - never inferred just from 3 trial records existing.
-    if (trial3Confirmed) {
-      await db.millingOrders.where('orderId').equals(`TMO::${tmoNumber.trim()}`).modify({ trial3Confirmed: true })
-
-      // Fulfilled the moment all 3 trials have SOME recovery AND this
-      // confirmation just landed - write DONE to the sheet. Queries
-      // fresh rather than relying on the reactive list, which may not
-      // yet reflect the transaction just saved above.
+    // Test Milling: same pattern as the Milling (MO) case just below -
+    // check if this save is the one that completes recovery, and write
+    // DONE if so. No confirmation prompt: completion is manual-only via
+    // the Milling Operations monitor's own toggle (manuallyCompleted),
+    // matching how regular Milling orders already work - this fulfilled
+    // math is just the informational signal that feeds that screen, not
+    // a gate the user has to answer here.
+    if (type === 'WSR' && isTestMilling && tmoNumber.trim()) {
       const trialTx = await db.transactions
         .where('tmoNumber').equals(tmoNumber.trim())
         .and((t) => t.type === 'WSR' && t.status === 'Active' && (t.netKilos ?? 0) > 0)
@@ -1926,16 +1923,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     const ok = await validateForm()
     if (!ok) { setIsSaving(false); return }
 
-    // A Test Milling receipt for Trial 3 specifically needs an explicit
-    // confirmation before it can ever count toward TMO fulfillment -
-    // per the requirement that this is asked, not inferred.
-    if (type === 'WSR' && isTestMilling && trialNumber === '3' && netKilos > 0) {
-      setPendingTrial3Confirm(true)
-      setIsSaving(false)
-      return
-    }
-
-    await performSave(false)
+    await performSave()
   }
 
   // Finds the lowest letter suffix not already taken by a RETAINED
@@ -3164,33 +3152,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
         </div>
       </div>
-
-      {pendingTrial3Confirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-base font-semibold text-app-text">Has Trial 3 been completed?</p>
-            <p className="mt-1 text-sm text-neutral-400">
-              This TMO can only be marked fulfilled once Trial 3 is confirmed complete. If not, this receipt still saves, but the TMO stays unfulfilled.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => { setPendingTrial3Confirm(false); performSave(false) }}
-                className="flex-1 rounded-xl border border-neutral-700 py-2.5 text-sm font-medium text-neutral-300"
-              >
-                Not Yet
-              </button>
-              <button
-                type="button"
-                onClick={() => { setPendingTrial3Confirm(false); performSave(true) }}
-                className="flex-1 rounded-xl bg-brand-neon py-2.5 text-sm font-semibold text-brand-contrast"
-              >
-                Yes, Complete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         {isEditMode ? (

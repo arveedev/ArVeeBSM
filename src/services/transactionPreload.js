@@ -296,6 +296,132 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
     }
   }
 
+  // Re-runs the same proven duplicate merge as transaction-consolidated-
+  // fix-v7 above, one more time - v7 already fired and permanently
+  // marked itself done on most devices well before this specific
+  // duplicate-causing gap (see checkAndLoadSerial's uncategorized-lookup
+  // fallback) was closed, so any duplicate created between those two
+  // events is invisible to v7's one-time flag forever and sits there
+  // causing exactly the reported false "serial already in use" on
+  // update (isSerialTaken's excludeId can only ever exclude the one
+  // record actually being edited, not a sibling duplicate sharing its
+  // serial) and the "pulled from historical Sheet data" banner
+  // reappearing on a record that really was already fully encoded
+  // in-app, just under its duplicate's stale copy.
+  const DEDUP_MERGE_V8_FLAG = 'transaction-dedup-merge-v8'
+  if (!localStorage.getItem(DEDUP_MERGE_V8_FLAG)) {
+    try {
+      const allTx = await db.transactions.toArray()
+      const groups = new Map()
+      for (const tx of allTx) {
+        const key = `${tx.type}::${tx.warehouseId}::${tx.serialNo}::${tx.cerealCategory ?? ''}`
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(tx)
+      }
+      const completeness = (tx) => Object.values(tx).filter((v) => v != null && v !== '').length
+      const toDeleteIds = []
+      let mergeCount = 0
+      const toUpdate = []
+      for (const group of groups.values()) {
+        if (group.length <= 1) continue
+        mergeCount++
+        const nonImported = group.filter((tx) => tx.fromSheetImport !== true)
+        const survivorPool = nonImported.length > 0 ? nonImported : group
+        const survivor = [...survivorPool].sort((a, b) => completeness(b) - completeness(a))[0]
+        const others = group.filter((tx) => tx.id !== survivor.id)
+        for (const other of others) {
+          for (const [field, value] of Object.entries(other)) {
+            if (field === 'id') continue
+            if ((survivor[field] == null || survivor[field] === '') && value != null && value !== '') survivor[field] = value
+          }
+        }
+        toUpdate.push(survivor)
+        for (const other of others) toDeleteIds.push(other.id)
+      }
+      if (toUpdate.length > 0) await db.transactions.bulkPut(toUpdate)
+      if (toDeleteIds.length > 0) await db.transactions.bulkDelete(toDeleteIds)
+      console.log(`transaction-dedup-merge-v8: merged/removed ${toDeleteIds.length} duplicate(s) across ${mergeCount} group(s), out of ${allTx.length} total`)
+      localStorage.setItem(DEDUP_MERGE_V8_FLAG, 'done')
+    } catch (error) {
+      console.error('transaction-dedup-merge-v8 failed, will retry next load:', error)
+    }
+  }
+
+  // One-time backfill: every record ever imported from the Sheet has
+  // createdAt missing (the Sheet has no timestamp column - see
+  // mapSheetRowToTransaction), which used to be silently tolerated by
+  // compareByRecency's old per-pair fallback. That comparator is now
+  // fixed (see serialNumber.js) to always use a consistent order, but a
+  // record with NO createdAt still sorts purely by serial-number
+  // magnitude among its same-day peers - fine within a single booklet,
+  // wrong whenever two different-numbered booklets/series were both
+  // used on the same calendar day (a confirmed, reported case: Next/
+  // Previous stepping jumped across a real document instead of landing
+  // on it, or landed back in the wrong series entirely). Backfills a
+  // real ordinal from the Sheet's own row order - an append-only usage
+  // log, so row order is a genuine proxy for the order two booklets were
+  // actually used in - the same signal a fresh import now records
+  // going forward (see the ordinal logic in processGroup above).
+  const CREATED_AT_BACKFILL_FLAG = 'transaction-createdat-backfill-v1'
+  if (!localStorage.getItem(CREATED_AT_BACKFILL_FLAG)) {
+    try {
+      const missing = await db.transactions.filter((tx) => tx.createdAt == null).toArray()
+      if (missing.length === 0) {
+        localStorage.setItem(CREATED_AT_BACKFILL_FLAG, 'done')
+      } else {
+        const allWarehouses = await db.warehouses.toArray()
+        const nameByWarehouseId = new Map(allWarehouses.map((w) => [w.warehouseId, w.name]))
+        let totalPatched = 0
+        for (const type of PRELOAD_TYPES) {
+          const missingForType = missing.filter((tx) => tx.type === type)
+          if (missingForType.length === 0) continue
+          const missingBySerial = new Map(
+            missingForType.map((tx) => [`${tx.warehouseId}::${String(tx.serialNo)}`, tx])
+          )
+          const warehouseIdsNeeded = [...new Set(missingForType.map((tx) => tx.warehouseId))]
+          const warehousesNeeded = warehouseIdsNeeded
+            .map((warehouseId) => ({ warehouseId, name: nameByWarehouseId.get(warehouseId) }))
+            .filter((w) => w.name)
+          if (warehousesNeeded.length === 0) continue
+
+          const result = await fetchTransactionsBulk(type, warehousesNeeded.map((w) => w.name))
+          if (!result.ok) continue // network/offline - retried next login, flag stays unset
+          const warehouseIdByName = new Map(warehousesNeeded.map((w) => [w.name.trim(), w.warehouseId]))
+
+          const patches = []
+          for (const sourceResult of result.bySource) {
+            if (!sourceResult.ok) continue
+            const sameDayOrdinal = new Map()
+            for (const row of sourceResult.rows) {
+              const serialNo = row[SERIAL_COLUMN_BY_TYPE[type]]
+              if (!serialNo) continue
+              const rowWarehouseName = row['Warehouse Name']
+              const rowWarehouseId = warehouseIdByName.get(String(rowWarehouseName ?? '').trim())
+              if (!rowWarehouseId) continue
+
+              const rawDate = row['Date']
+              const date = typeof rawDate === 'string' && rawDate.includes('T') ? rawDate.slice(0, 10) : (rawDate ?? '')
+              const dayKey = `${rowWarehouseId}::${date}`
+              const ordinal = sameDayOrdinal.get(dayKey) ?? 0
+              sameDayOrdinal.set(dayKey, ordinal + 1)
+
+              const localTx = missingBySerial.get(`${rowWarehouseId}::${String(serialNo)}`)
+              if (localTx) patches.push({ id: localTx.id, createdAt: ordinal })
+            }
+          }
+          if (patches.length > 0) {
+            await db.transactions.bulkUpdate(patches.map((p) => ({ key: p.id, changes: { createdAt: p.createdAt } })))
+            totalPatched += patches.length
+          }
+        }
+        console.log(`transaction-createdat-backfill-v1: patched createdAt on ${totalPatched} of ${missing.length} record(s) missing it`)
+        localStorage.setItem(CREATED_AT_BACKFILL_FLAG, 'done')
+      }
+    } catch (error) {
+      console.error('transaction-createdat-backfill-v1 failed, will retry next load:', error)
+    }
+  }
+
   // Admin and Visitor both have access to every warehouse (they share
   // the same all-warehouse AdminHome view - see App.jsx), so both
   // preload everything rather than being skipped. A regular user stays
@@ -396,6 +522,15 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     for (const sourceResult of result.bySource) {
       if (!sourceResult.ok) continue
       const seenSerialsForThisSource = []
+      // The Sheet has no timestamp column, so a freshly-imported row has
+      // no real createdAt - but its ROW ORDER in the Sheet (an append-only
+      // usage log) is a real, meaningful proxy for the actual order two
+      // different booklets/series were used in on the same calendar day.
+      // Counted per (warehouse, date) so it only ever matters as a
+      // same-day tiebreaker (compareByRecency checks date first) and
+      // never collides with a live in-app save's real Date.now() value,
+      // which is always far larger than this small ordinal.
+      const sameDayOrdinal = new Map()
       for (const row of sourceResult.rows) {
         const serialNo = row[SERIAL_COLUMN_BY_TYPE[type]]
         if (!serialNo) continue
@@ -413,6 +548,13 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
         const existing = existingRecords?.get(String(serialNo))
 
         const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName, transactionTypesByName })
+
+        // Advances for every row seen (existing or new), not just fresh
+        // imports, so the ordinal always reflects this row's true position
+        // in the Sheet's own order relative to its same-day neighbors.
+        const dayKey = `${rowWarehouseId}::${imported.date}`
+        const ordinal = sameDayOrdinal.get(dayKey) ?? 0
+        sameDayOrdinal.set(dayKey, ordinal + 1)
 
         if (existing) {
           // Only writes if that local record is already isSynced:
@@ -462,6 +604,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
           continue
         }
 
+        imported.createdAt = ordinal
         await db.transactions.add(imported)
         existingRecords?.set(String(serialNo), { id: imported.id, isSynced: true })
         importedCount++

@@ -9,9 +9,10 @@
 // since a batch's issue and receipt can happen at different
 // warehouses.
 //
-// Test Milling: fulfilled only when all 3 trials have SOME recovery
-// (any amount > 0, no percentage) AND the explicit trial3Confirmed
-// flag is true - never inferred just from 3 trial records existing.
+// Test Milling: fulfilled once all 3 trials have SOME recovery (any
+// amount > 0, no percentage). Same as Milling, this is purely
+// informational - actually marking an order complete is manual-only,
+// via the monitor's own manuallyCompleted toggle.
 
 import { db } from '../db/dexie.js'
 
@@ -81,7 +82,7 @@ export const computeMillingOrderStatuses = async (orderType) => {
           .map((t) => t.trialNumber)
       )
       recoveredTrials = [...recovered]
-      fulfilled = ['1', '2', '3'].every((n) => recovered.has(n)) && order.trial3Confirmed === true
+      fulfilled = ['1', '2', '3'].every((n) => recovered.has(n))
     }
 
     return {

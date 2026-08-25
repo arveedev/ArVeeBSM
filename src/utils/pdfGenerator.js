@@ -22,6 +22,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { customerNameWithMillingRef } from './calculations.js'
+import { compareByRecency } from './serialNumber.js'
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -464,10 +465,13 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     }
   })
 
-  const sorted = [...combinedTransactions].sort((a, b) => {
-    const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
-    return n(a) - n(b)
-  })
+  // Sorted by date then by series (compareByRecency - the same real
+  // chronological/booklet-recency order navigation uses), not raw serial
+  // magnitude alone - a magnitude-only sort mixed rows from unrelated
+  // dates and series together whenever one booklet's numbers happened to
+  // be smaller than another's, producing the reported "mixed data"
+  // ordering instead of a clean date-then-series arrangement.
+  const sorted = [...combinedTransactions].sort(compareByRecency)
 
   let totBags = 0, totGross = 0, totNet = 0
   const body = sorted.map((t) => {
@@ -707,10 +711,9 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
   const body = []
   let grandTotal = 0
 
-  const sorted = [...transactions].sort((a, b) => {
-    const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
-    return n(a) - n(b)
-  })
+  // See addStockStatementPage's matching comment - date-then-series
+  // order, not raw serial magnitude alone.
+  const sorted = [...transactions].sort(compareByRecency)
 
   for (const t of sorted) {
     const lines = t.sackLines ?? []

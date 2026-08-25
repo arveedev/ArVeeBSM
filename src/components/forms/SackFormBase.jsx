@@ -93,7 +93,6 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [batchNumber, setBatchNumber] = useState('')
   const [tmoNumber, setTmoNumber] = useState('')
   const [trialNumber, setTrialNumber] = useState('')
-  const [pendingTrial3Confirm, setPendingTrial3Confirm] = useState(false)
   const [unresolvedSiaHint, setUnresolvedSiaHint] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
@@ -192,11 +191,13 @@ const SackFormBase = forwardRef(function SackFormBase(
         return { ...order, issuedPieces, receivedPieces, expectedPieces, fulfilled }
       }
 
+      // Fulfilled once all 3 trials have SOME recovery. Completion
+      // itself is manual-only (see MillingMonitor's manuallyCompleted
+      // toggle) - this is just the informational signal.
       const recoveredTrials = new Set(
         forThisOrder.filter((t) => t.type === 'ESR' && sumPieces(t) > 0).map((t) => t.trialNumber)
       )
-      const allThreeRecovered = ['1', '2', '3'].every((n) => recoveredTrials.has(n))
-      const fulfilled = allThreeRecovered && order.trial3Confirmed === true
+      const fulfilled = ['1', '2', '3'].every((n) => recoveredTrials.has(n))
       return { ...order, recoveredTrials: [...recoveredTrials], fulfilled }
     })
   }, [isMilling, isTestMilling]) ?? []
@@ -784,7 +785,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     await db.authorities.update(authority.authId, { sackLines: updatedLines })
   }
 
-  const performSave = async (trial3Confirmed) => {
+  const performSave = async () => {
     setIsSaving(true)
 
     // createdAt (real save-time timestamp) set ONLY here (create) -
@@ -823,9 +824,11 @@ const SackFormBase = forwardRef(function SackFormBase(
       await adjustSiaBalance(linkedDocNo.trim(), buildLineDeltas(sackLines, 1))
     }
 
-    if (trial3Confirmed) {
-      await db.millingOrders.where('orderId').equals(`TMO::${tmoNumber.trim()}`).modify({ trial3Confirmed: true })
-
+    // Test Milling: no confirmation prompt - completion is manual-only
+    // via the Milling Operations monitor's own toggle (manuallyCompleted).
+    // This just auto-writes DONE to the sheet once all 3 trials have
+    // some recovery, same as the ESR/MO case just below.
+    if (type === 'ESR' && isTestMilling && tmoNumber.trim()) {
       const trialTx = await db.transactions
         .where('tmoNumber').equals(tmoNumber.trim())
         .and((t) => t.type === 'ESR' && t.status === 'Active')
@@ -881,15 +884,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     const ok = await validateForm()
     if (!ok) return
 
-    if (type === 'ESR' && isTestMilling && trialNumber === '3') {
-      const totalPieces = sackLines.reduce((s, l) => s + (parseFormattedNumber(l.pieces) || 0), 0)
-      if (totalPieces > 0) {
-        setPendingTrial3Confirm(true)
-        return
-      }
-    }
-
-    await performSave(false)
+    await performSave()
   }
 
   const handleUpdate = async () => {
@@ -1266,10 +1261,10 @@ const SackFormBase = forwardRef(function SackFormBase(
                   </p>
                 )}
                 {/* Trial only applies on the receipt (ESR) side, where
-                    recovery is confirmed trial-by-trial (see
-                    trial3Confirmed below) - sacks are ISSUED per Test
-                    Milling Order as a whole, not per trial, so ESI has
-                    no Trial concept at all and must not require one. */}
+                    recovery is tracked trial-by-trial - sacks are ISSUED
+                    per Test Milling Order as a whole, not per trial, so
+                    ESI has no Trial concept at all and must not require
+                    one. */}
                 <div className={type === 'ESR' ? 'grid grid-cols-2 gap-3' : ''}>
                 <div>
                   <label className={labelClass}>TMO Number</label>
@@ -1446,32 +1441,6 @@ const SackFormBase = forwardRef(function SackFormBase(
         </div>
       </div>
 
-      {pendingTrial3Confirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-base font-semibold text-app-text">Has Trial 3 been completed?</p>
-            <p className="mt-1 text-sm text-neutral-400">
-              This TMO can only be marked fulfilled once Trial 3 is confirmed complete. If not, this receipt still saves, but the TMO stays unfulfilled.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => { setPendingTrial3Confirm(false); performSave(false) }}
-                className="flex-1 rounded-xl border border-neutral-700 py-2.5 text-sm font-medium text-neutral-300"
-              >
-                Not Yet
-              </button>
-              <button
-                type="button"
-                onClick={() => { setPendingTrial3Confirm(false); performSave(true) }}
-                className="flex-1 rounded-xl bg-brand-neon py-2.5 text-sm font-semibold text-brand-contrast"
-              >
-                Yes, Complete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         {isEditMode ? (

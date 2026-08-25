@@ -73,11 +73,23 @@ const counterKey = (warehouseId, type, cerealCategory) => [warehouseId, type, ce
  *      for old data, rather than guessing at an order that was never
  *      recorded.
  */
+// A comparator used to sort Array.prototype.sort MUST be transitive - the
+// previous version wasn't: it only consulted createdAt when BOTH sides of
+// THIS ONE pair had it, and fell back to raw serial-number magnitude
+// otherwise. With a mix of records that do and don't have createdAt (every
+// Sheet-imported record has none - see below), that produces a genuinely
+// inconsistent order depending on which pair happens to get compared
+// (A<B and B<C by magnitude, but C<A by createdAt is a real, reproduced
+// case), which V8's sort has no defined behavior for - the confirmed cause
+// of serial-navigation landing on the wrong document, sometimes even
+// jumping backwards. Fixed by using a single consistent ranking for every
+// pair: date, then createdAt (a fixed sentinel for missing, not "skip
+// this key"), then serial magnitude only as the final tiebreak.
 export const compareByRecency = (a, b) => {
   if (a.date !== b.date) return a.date > b.date ? 1 : -1
-  if (a.createdAt != null && b.createdAt != null && a.createdAt !== b.createdAt) {
-    return a.createdAt > b.createdAt ? 1 : -1
-  }
+  const aCreated = a.createdAt ?? -Infinity
+  const bCreated = b.createdAt ?? -Infinity
+  if (aCreated !== bCreated) return aCreated > bCreated ? 1 : -1
   const aParsed = parseSerial(a.serialNo)
   const bParsed = parseSerial(b.serialNo)
   const aNum = aParsed?.number ?? -Infinity
