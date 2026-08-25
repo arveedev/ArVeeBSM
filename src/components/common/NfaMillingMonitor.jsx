@@ -121,14 +121,14 @@ function NfaMillingMonitor({ warehouseId } = {}) {
 
   return (
     <div className={warehouseId ? '' : 'mt-4'}>
-      <p className="mb-2 text-xs text-neutral-500">
+      <p className="mb-2 text-sm text-neutral-500 md:text-base">
         {warehouseId
           ? 'NFA allocation vs. actual usage for this facility.'
           : 'NFA-owned Ricemill status - allocation vs. actual usage per Regional Authority Number. Set up allocations in Settings > Miller Allocations.'}
       </p>
       <ul className="space-y-1.5">
         {sortedAllocations.length === 0 && (
-          <p className="py-6 text-center text-xs text-neutral-500">
+          <p className="py-6 text-center text-sm text-neutral-500 md:text-base">
             {warehouseId ? 'No NFA allocation assigned to this facility yet.' : 'No NFA ricemill allocations set up yet.'}
           </p>
         )}
@@ -147,7 +147,7 @@ function NfaMillingMonitor({ warehouseId } = {}) {
                 onClick={() => setExpandedNumber(isExpanded ? null : a.regionalAuthorityNumber)}
                 className="w-full text-left"
               >
-                <p className="truncate text-sm font-medium text-app-text">{a.regionalAuthorityNumber}</p>
+                <p className="truncate text-base font-medium text-app-text md:text-lg">{a.regionalAuthorityNumber}</p>
                 <AllocationUsageSummary used={used} total={a.totalNetKgs} weightUnit={weightUnit} />
               </button>
               {isExpanded && (

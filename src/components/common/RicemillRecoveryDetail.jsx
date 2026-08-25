@@ -36,7 +36,7 @@ const RECEIPT_COLUMNS = ['date', 'aiNumber', 'variety', 'netBags', 'netKgs']
 // never make it into the generated CSS at all, so this stays a single
 // static string (both sections are always 5 tracks now) rather than
 // assembled from a per-column width map at render time.
-const GRID_COLS = 'grid-cols-[52px_72px_1fr_60px_84px]'
+const GRID_COLS = 'grid-cols-[64px_84px_1fr_72px_96px] md:grid-cols-[84px_112px_1fr_96px_136px]'
 
 const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', variety: 'Variety', netBags: 'Net Bags', netKgs: 'Net Kgs', blank: '' }
 const RIGHT_ALIGNED = new Set(['netBags', 'netKgs'])
@@ -66,11 +66,11 @@ function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, co
   const leadColSpan = columns.length - 2 // every column except Net Bags/Net Kgs, for the "Total" label
   return (
     <div>
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
-      <div className="overflow-x-auto rounded-lg bg-neutral-950 p-2">
-        <div className={`grid ${GRID_COLS} gap-x-2 gap-y-1.5 text-[11px] leading-tight`}>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:text-sm">{label}</p>
+      <div className="overflow-x-auto rounded-lg bg-neutral-950 p-2 md:p-3">
+        <div className={`grid ${GRID_COLS} gap-x-3 gap-y-2 text-sm leading-tight md:text-base`}>
           {columns.map((col, idx) => (
-            <span key={`h-${col}-${idx}`} className={`text-[10px] font-semibold uppercase tracking-wide text-neutral-600 ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
+            <span key={`h-${col}-${idx}`} className={`text-xs font-semibold uppercase tracking-wide text-neutral-600 md:text-sm ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
               {COLUMN_LABEL[col]}
             </span>
           ))}
@@ -110,7 +110,7 @@ export function AllocationUsageSummary({ used, total, weightUnit }) {
   const isOver = remaining < 0
   const remainingAbs = Math.abs(remaining)
   return (
-    <div className="text-xs text-neutral-500">
+    <div className="text-sm text-neutral-500 md:text-base">
       <p>{fmtWeight(used, weightUnit)} used of {fmtWeight(total, weightUnit)}</p>
       <p className={isOver ? 'text-brand-crimson' : 'text-brand-neon'}>
         {isOver ? 'Over' : 'Remaining'}: {fmtWeight(remainingAbs, weightUnit)} · {fmtNetBags(remainingAbs / 50)} Net Bags
@@ -122,11 +122,11 @@ export function AllocationUsageSummary({ used, total, weightUnit }) {
 /** recovery: { issuedKilos, issuedBags, recoveredKilos, recoveredBags, recoveryPct, millingEntries, transferEntries } | undefined */
 function RicemillRecoveryDetail({ recovery, weightUnit }) {
   if (!recovery) {
-    return <p className="text-xs text-neutral-500">No Issuance (palay in) or Receipt (rice out) activity recorded yet for this Regional Authority Number.</p>
+    return <p className="text-sm text-neutral-500 md:text-base">No Issuance (palay in) or Receipt (rice out) activity recorded yet for this Regional Authority Number.</p>
   }
   return (
     <div className="space-y-2">
-      <div className="rounded-lg bg-neutral-950 p-2 text-xs">
+      <div className="rounded-lg bg-neutral-950 p-2 text-sm md:p-3 md:text-base">
         <div className="flex items-center justify-between">
           <span className="text-neutral-500">{fmtWeight(recovery.issuedKilos, weightUnit)} issued → {fmtWeight(recovery.recoveredKilos, weightUnit)} received</span>
           <span className={`font-semibold ${recovery.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
