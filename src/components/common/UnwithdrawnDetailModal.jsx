@@ -109,6 +109,11 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
                             Age Group: {d.authority.ageGroup}
                           </p>
                         )}
+                        {d.hasBagsKilosMismatch && (
+                          <p className="mt-1 rounded bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-amber">
+                            ⚠ Bags/Kgs don't match on this AI: {fmtNetBags(d.allocatedBags)} bags typed vs {fmtNetBags(allocatedNetBags)} implied by kilos — check the Sheet record
+                          </p>
+                        )}
                       </div>
                       <div className="shrink-0 text-right">
                         {isFullyWithdrawn ? (

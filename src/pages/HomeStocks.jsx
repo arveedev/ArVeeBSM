@@ -146,7 +146,7 @@ function VarietyCard({
                       </div>
                     </div>
                     {bucketHasUnwithdrawn && (
-                      <div className="mt-1 flex items-center justify-between gap-2 pl-2">
+                      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pl-2">
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onOpenDetail({ varietyIds: [varietyId], bucketFilter: { category: cerealType, label: bucketLabel }, title: `${varietyName} — ${bucketLabel}`, subtitle: `${cerealType} · Unwithdrawn` }) }}
@@ -239,7 +239,7 @@ function CerealTotal({
           </div>
         </div>
         {displayed && (
-          <div className="mt-2 flex items-center justify-between gap-2 border-t border-neutral-800/50 pt-2">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-neutral-800/50 pt-2">
             <button
               type="button"
               onClick={() => onOpenDetail({ varietyIds: cerealVarietyIds, title: `${cerealType} — Unwithdrawn`, subtitle: 'All varieties in this category' })}

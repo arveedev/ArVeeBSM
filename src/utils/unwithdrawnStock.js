@@ -103,6 +103,26 @@ export const computeUnwithdrawnByVariety = async (warehouseId) => {
   return result
 }
 
+// An authority carries totalAllocationBags and totalAllocationKilos as
+// two SEPARATE, independently-typed fields from the Sheet - normally
+// bags x 50 = kilos, but a Sheet typo on either one can leave them
+// disagreeing on the same real authority. A small gap is completely
+// normal (real bags don't all weigh exactly 50kg), which is why every
+// "Net Bags" figure elsewhere in this app is deliberately always
+// derived from kilos rather than trusting the separately-typed bags
+// field - but a LARGE gap (more than this tolerance) stops looking like
+// ordinary bag-weight variance and starts looking like one of the two
+// fields is just wrong. Flagged rather than silently trusted either
+// way, so a user sees the two disagree and can go check the real AI
+// record instead of unknowingly relying on whichever number their
+// current Bags/Net Bags toggle happens to read from.
+const BAGS_KILOS_MISMATCH_TOLERANCE = 0.05 // 5%
+export const bagsKilosMismatch = (bags, kilos) => {
+  const bagsFromKilos = kilos / 50
+  if (bagsFromKilos <= 0) return bags > 0
+  return Math.abs(bags - bagsFromKilos) / bagsFromKilos > BAGS_KILOS_MISMATCH_TOLERANCE
+}
+
 // Per-authority breakdown (allocated/withdrawn/unwithdrawn, plus every
 // WSI/WTS document that contributed to "withdrawn") for one or more
 // varieties in one warehouse - the drill-down behind an "unwithdrawn"
@@ -135,6 +155,7 @@ export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter
       withdrawnKilos,
       unwithdrawnBags,
       unwithdrawnKilos,
+      hasBagsKilosMismatch: bagsKilosMismatch(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0),
       withdrawals: [...withdrawals].sort((x, y) => (x.date < y.date ? -1 : 1)),
     })
   }

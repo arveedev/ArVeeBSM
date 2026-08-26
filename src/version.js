@@ -371,4 +371,14 @@
 //            is informational only, and actually marking a TMO complete
 //            is manual-only via the Milling Operations monitor's own
 //            toggle.
-export const APP_VERSION = '1.9-14'
+//   1.9-15 - Unwithdrawn-stock display fixes on the Warehouse Inventory
+//            screen: (1) the "Potential" figure could run off the right
+//            edge of its card in Net Bags mode instead of wrapping.
+//            (2) An AI authority's typed bags count and its kilos
+//            figure can disagree with each other on the same real Sheet
+//            record (they're two separately-typed fields) - previously
+//            silent, now flagged directly on that authority's card in
+//            the unwithdrawn drill-down when the two differ by more
+//            than 5%, showing both numbers so it's obvious which
+//            authority needs checking against the Sheet.
+export const APP_VERSION = '1.9-15'
