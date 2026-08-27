@@ -106,6 +106,18 @@ const THEME = {
   numberFormat: "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)"
 };
 
+// Net Bags is always shown to exactly 2 decimals, with a comma thousands
+// separator (e.g. 1,234.50) - used wherever a net-bags figure is written
+// into plain text (a cell note can't rely on THEME.numberFormat, which
+// only applies to real numeric cells, not text).
+const formatNetBags = (n) => {
+  const num = Number(n) || 0;
+  const fixed = Math.abs(num).toFixed(2);
+  const [intPart, decPart] = fixed.split(".");
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${num < 0 ? "-" : ""}${withCommas}.${decPart}`;
+};
+
 const EXCLUDED_VARIETIES = new Set(["DKA", "DKB", "DKC", "BIN"]);
 
 // A LESS-side (AI/issuance) row whose age-group code isn't one of these
@@ -1337,10 +1349,10 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
 
   days.forEach((day, dayIdx) => {
     const dayStartRow = currentRow;
-    // One line per contributing transaction: "CustomerName — 12.50 net bags".
+    // One line per contributing transaction: "CustomerName — 1,234.50 net bags".
     const formatCellNote = (entries) => {
       if (!entries || entries.length === 0) return "";
-      return entries.map(e => `${e.customerName} — ${roundClean(e.netBags)} net bags`).join("\n");
+      return entries.map(e => `${e.customerName} — ${formatNetBags(e.netBags)} net bags`).join("\n");
     };
     const renderSection = (dataMap, detailMap, label, labelColor, valColor) => {
       const keys = Object.keys(dataMap);
