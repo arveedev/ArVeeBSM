@@ -97,6 +97,7 @@
 
 const THEME = {
   font: "Twentieth Century",
+  fontSize: 12, // was left at the Sheet's default (10pt) - too small to read comfortably
   primaryGreen: "#c8e6c9",
   secondaryBlue: "#1976d2",
   headerText: "#000000",
@@ -165,7 +166,7 @@ function onOpen() {
  */
 function buildAgeBrackets_() {
   const midpoints = { "0-1.0": 0.5 };
-  for (let i = 1; i <= 60; i++) midpoints[`${i}.1-${i + 1}.0`] = i + 0.55;
+  for (let i = 1; i <= 36; i++) midpoints[`${i}.1-${i + 1}.0`] = i + 0.55; // capped at 3 years - must stay in sync with age-monitoring-report-script.js and the GSR scripts
   return { midpoints };
 }
 const AGE_BRACKETS = buildAgeBrackets_();
@@ -838,6 +839,7 @@ function dedupDataEntryRows_(rows, headers) {
   const dateCol = resolveColumnIndex_(headers, ["Date"], 1);
   const varietyCol = resolveColumnIndex_(headers, ["Variety"], 3);
   const netBagsCol = resolveColumnIndex_(headers, ["Net Bags"], 9);
+  const customerCol = resolveColumnIndex_(headers, ["Customer Name"], 7);
 
   const seen = new Map();
   const kept = [null];
@@ -876,7 +878,7 @@ function dedupDataEntryRows_(rows, headers) {
       seen.set(compositeKey, true);
     }
   }
-  return { rows: kept, duplicates, cols: { warehouseCol, wsrCol, wsiCol, dateCol, varietyCol, netBagsCol } };
+  return { rows: kept, duplicates, cols: { warehouseCol, wsrCol, wsiCol, dateCol, varietyCol, netBagsCol, customerCol } };
 }
 
 /**
@@ -896,6 +898,7 @@ function dedupAiRows_(rows, headers) {
   const warehouseCol = resolveColumnIndex_(headers, ["ISSUING WHSE", "Warehouse Name", "Warehouse"], 3);
   const varietyCol = resolveColumnIndex_(headers, ["VARIETY CODE", "Variety"], 4);
   const kilosCol = resolveColumnIndex_(headers, ["NET KG", "Net Kilos", "Kilos"], 6);
+  const customerCol = resolveColumnIndex_(headers, ["NAME OF CUSTOMER"], 2);
 
   const seen = new Map();
   const kept = [null];
@@ -930,7 +933,7 @@ function dedupAiRows_(rows, headers) {
       seen.set(compositeKey, true);
     }
   }
-  return { rows: kept, duplicates, cols: { dateCol, aiNumberCol, warehouseCol, varietyCol, kilosCol } };
+  return { rows: kept, duplicates, cols: { dateCol, aiNumberCol, warehouseCol, varietyCol, kilosCol, customerCol } };
 }
 
 function parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, varietyTypeMap, startingBalances) {
@@ -947,6 +950,7 @@ function parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, var
   const deDateCol = deDedup.cols.dateCol;
   const deNetBagsCol = deDedup.cols.netBagsCol;
   const deWarehouseCol = deDedup.cols.warehouseCol;
+  const deCustomerCol = deDedup.cols.customerCol;
   const deTransactionCol = resolveColumnIndex_(deHeaders, ["Transaction"], 2);
   const deAgeCol = resolveColumnIndex_(deHeaders, ["AGE"], 13); // NOT "Age Unit" (a text label like "Days") - that was v1's bug
 
@@ -954,6 +958,7 @@ function parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, var
   const aiWarehouseCol = aiDedup.cols.warehouseCol;
   const aiVarietyCol = aiDedup.cols.varietyCol;
   const aiKilosCol = aiDedup.cols.kilosCol;
+  const aiCustomerCol = aiDedup.cols.customerCol;
   const aiTypeCol = resolveColumnIndex_(aiHeaders, ["TRANSACTION", "Transaction", "Type"], 7);
   const aiAgeGroupCol = resolveColumnIndex_(aiHeaders, ["Age Group", "AGE"], 12);
 
@@ -984,7 +989,19 @@ function parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, var
   let monthDates = {};
   const initDay = (m, d) => {
     if (!months[m]) months[m] = {};
-    if (!months[m][d]) months[m][d] = { add: {}, less: {} };
+    if (!months[m][d]) months[m][d] = { add: {}, less: {}, addDetail: {}, lessDetail: {} };
+  };
+  // Per-transaction detail (customer name + net bags) alongside the
+  // numeric totals above - kept as a SEPARATE parallel structure rather
+  // than folded into add/less themselves, since those numbers are used
+  // directly in running-balance arithmetic elsewhere (runningBalances[k]
+  // += addMap[k]) - changing their shape to an object would mean
+  // touching every one of those call sites for no benefit. This is only
+  // ever read by renderGSRSheet, to attach a cell note.
+  const pushDetail = (detailRoot, type, key, customerName, netBags) => {
+    if (!detailRoot[type]) detailRoot[type] = {};
+    if (!detailRoot[type][key]) detailRoot[type][key] = [];
+    detailRoot[type][key].push({ customerName: customerName || "(no name)", netBags });
   };
 
   for (let i = 1; i < deData.length; i++) {
@@ -1011,6 +1028,7 @@ function parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, var
 
     if (!months[m][d].add[type]) months[m][d].add[type] = {};
     months[m][d].add[type][key] = (months[m][d].add[type][key] || 0) + netBags;
+    pushDetail(months[m][d].addDetail, type, key, row[deCustomerCol], netBags);
   }
 
   for (let i = 1; i < aiData.length; i++) {
@@ -1036,18 +1054,22 @@ function parseAndFilterData(aiData, deData, startDate, deHeaders, aiHeaders, var
     const key = `${sourceWh}|${variety}|${age}`;
     const type = (row[aiTypeCol] || "ISSUE").toString().toUpperCase().trim();
 
+    const aiCustomerName = row[aiCustomerCol];
     if (sourceWhUpper === "PHF" && type.includes("TRANSFER")) {
       const addType = "MECHANICAL DRYING";
       if (!months[m][d].add[addType]) months[m][d].add[addType] = {};
       months[m][d].add[addType][key] = (months[m][d].add[addType][key] || 0) + netBags;
+      pushDetail(months[m][d].addDetail, addType, key, aiCustomerName, netBags);
     }
     if (sourceWhUpper === "NFAO RM") {
       if (!months[m][d].add[type]) months[m][d].add[type] = {};
       months[m][d].add[type][key] = (months[m][d].add[type][key] || 0) + netBags;
+      pushDetail(months[m][d].addDetail, type, key, aiCustomerName, netBags);
     }
 
     if (!months[m][d].less[type]) months[m][d].less[type] = {};
     months[m][d].less[type][key] = (months[m][d].less[type][key] || 0) + netBags;
+    pushDetail(months[m][d].lessDetail, type, key, aiCustomerName, netBags);
   }
 
   const activeKeysSet = new Set(Object.keys(balances));
@@ -1204,14 +1226,20 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
   const allColors = [];
   const allWeights = [];
   const allFontColors = [];
+  // One cell note per ADD/LESS data cell, listing every contributing
+  // transaction's customer name + net bags - kept out of the visible
+  // grid entirely (shown only on hover/tap) so the dense day-by-day
+  // table itself stays exactly as compact as before.
+  const allNotes = [];
 
   const createRow = (bgColor = "#ffffff", weight = "normal", fontColor = "#000000") => ({
     v: new Array(totalColCount).fill(""),
     c: new Array(totalColCount).fill(bgColor),
     w: new Array(totalColCount).fill(weight),
-    fc: new Array(totalColCount).fill(fontColor)
+    fc: new Array(totalColCount).fill(fontColor),
+    n: new Array(totalColCount).fill("")
   });
-  const pushRow = ({ v, c, w, fc }) => { allValues.push(v); allColors.push(c); allWeights.push(w); allFontColors.push(fc); };
+  const pushRow = ({ v, c, w, fc, n }) => { allValues.push(v); allColors.push(c); allWeights.push(w); allFontColors.push(fc); allNotes.push(n); };
 
   pushRow(createRow());
   [h1, h2, h3].forEach(arr => { const r = createRow(THEME.primaryGreen, "bold", THEME.headerText); r.v = arr; pushRow(r); });
@@ -1309,7 +1337,12 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
 
   days.forEach((day, dayIdx) => {
     const dayStartRow = currentRow;
-    const renderSection = (dataMap, label, labelColor, valColor) => {
+    // One line per contributing transaction: "CustomerName — 12.50 net bags".
+    const formatCellNote = (entries) => {
+      if (!entries || entries.length === 0) return "";
+      return entries.map(e => `${e.customerName} — ${roundClean(e.netBags)} net bags`).join("\n");
+    };
+    const renderSection = (dataMap, detailMap, label, labelColor, valColor) => {
       const keys = Object.keys(dataMap);
       if (keys.length === 0) return currentRow - 1;
       const lblRow = createRow(currentRow % 2 === 0 ? THEME.alternateRow : "#ffffff");
@@ -1320,7 +1353,12 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
       keys.forEach(type => {
         const r = createRow(currentRow % 2 === 0 ? THEME.alternateRow : "#ffffff", "normal", valColor);
         r.v[1] = type; r.w[1] = "bold"; r.fc[1] = "#000000";
-        columns.forEach((col, idx) => { const val = dataMap[type][col.join('|')]; if (val) r.v[2 + idx] = val; });
+        columns.forEach((col, idx) => {
+          const key = col.join('|');
+          const val = dataMap[type][key];
+          if (val) r.v[2 + idx] = val;
+          r.n[2 + idx] = formatCellNote(detailMap[type] && detailMap[type][key]);
+        });
         uniqueVarieties.forEach((v, vIdx) => {
           const cells = [];
           columns.forEach((col, cIdx) => { if (col[1] === v) cells.push(getColumnLetters(3 + cIdx) + currentRow); });
@@ -1331,9 +1369,9 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
       return currentRow - 1;
     };
 
-    const addEnd = renderSection(daysData[day].add, "ADD:", THEME.secondaryBlue, THEME.secondaryBlue);
+    const addEnd = renderSection(daysData[day].add, daysData[day].addDetail, "ADD:", THEME.secondaryBlue, THEME.secondaryBlue);
     const skipAdd = addEnd < dayStartRow;
-    const lessEnd = renderSection(daysData[day].less, "LESS:", "#b71c1c", "#b71c1c");
+    const lessEnd = renderSection(daysData[day].less, daysData[day].lessDetail, "LESS:", "#b71c1c", "#b71c1c");
     if (skipAdd && lessEnd >= dayStartRow) allValues[dayStartRow - 1][0] = `${monthName} ${day}`;
 
     const endRow = createRow(currentRow % 2 === 0 ? THEME.alternateRow : "#ffffff", "bold");
@@ -1364,6 +1402,8 @@ function renderGSRSheet(ss, monthName, daysData, columns, uniqueVarieties, prevD
     range.setFontWeights(allWeights);
     range.setFontColors(allFontColors);
     range.setFontFamily(THEME.font);
+    range.setFontSize(THEME.fontSize);
+    range.setNotes(allNotes);
   }
 
   sheet.getRange("B4").insertCheckboxes();
@@ -1521,6 +1561,7 @@ function renderSummarySheet(ss, endingBalances, varietyTypeMap) {
   const range = sheet.getRange(1, 1, numRows, totalCols);
   range.setValues(allValues);
   range.setFontFamily("Twentieth Century");
+  range.setFontSize(THEME.fontSize);
 
   const colorArray = [], styleArray = [];
   for (let rIdx = 0; rIdx < allValues.length; rIdx++) {
@@ -1774,6 +1815,7 @@ function renderMonthlySheet(ss, allMonthsEndingBalances, varietyTypeMap, sortedM
   const range = sheet.getRange(1, 1, allValues.length, totalCols);
   range.setValues(allValues);
   range.setFontFamily("Twentieth Century");
+  range.setFontSize(THEME.fontSize);
 
   const colorArray = allValues.map((row, rIdx) =>
     cols.map(c => {
