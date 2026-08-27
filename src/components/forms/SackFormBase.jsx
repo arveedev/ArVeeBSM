@@ -311,7 +311,13 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (!currentWarehouseId) return
     let cancelled = false
     suggestNextSerial(type, currentWarehouseId).then((serial) => {
-      if (!cancelled) setSerialNo(serial)
+      if (cancelled) return
+      setSerialNo(serial)
+      // See StockFormBase.jsx's matching comment - a suggested serial
+      // that turns out to already have real data would otherwise show
+      // as a silent, wrongly-blank new entry until the user happened to
+      // navigate away and back.
+      checkAndLoadSerial(serial)
     })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -291,7 +291,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (!currentWarehouseId) return
     let cancelled = false
     suggestNextSerial('WTS', currentWarehouseId).then((s) => {
-      if (!cancelled) setSerialNo(s)
+      if (cancelled) return
+      setSerialNo(s)
+      // See StockFormBase.jsx's matching comment - a suggested serial
+      // that turns out to already have real data would otherwise show
+      // as a silent, wrongly-blank new entry until the user happened to
+      // navigate away and back.
+      checkAndLoadSerial(s)
     })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps

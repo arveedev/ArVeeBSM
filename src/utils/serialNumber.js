@@ -73,25 +73,42 @@ const counterKey = (warehouseId, type, cerealCategory) => [warehouseId, type, ce
  *      for old data, rather than guessing at an order that was never
  *      recorded.
  */
-// A comparator used to sort Array.prototype.sort MUST be transitive - the
-// previous version wasn't: it only consulted createdAt when BOTH sides of
+// A comparator used to sort Array.prototype.sort MUST be transitive - an
+// earlier version wasn't: it only consulted createdAt when BOTH sides of
 // THIS ONE pair had it, and fell back to raw serial-number magnitude
 // otherwise. With a mix of records that do and don't have createdAt (every
-// Sheet-imported record has none - see below), that produces a genuinely
-// inconsistent order depending on which pair happens to get compared
-// (A<B and B<C by magnitude, but C<A by createdAt is a real, reproduced
-// case), which V8's sort has no defined behavior for - the confirmed cause
-// of serial-navigation landing on the wrong document, sometimes even
-// jumping backwards. Fixed by using a single consistent ranking for every
-// pair: date, then createdAt (a fixed sentinel for missing, not "skip
-// this key"), then serial magnitude only as the final tiebreak.
+// Sheet-imported record has none), that produces a genuinely inconsistent
+// order depending on which pair happens to get compared, which V8's sort
+// has no defined behavior for. Fixed by always using createdAt (a fixed
+// sentinel for missing, not "skip this key") ACROSS different booklets.
+//
+// But createdAt is "when this record was typed into the app", which is
+// NOT the same thing as "the document's real position in its own
+// booklet" - confirmed, reproduced case: a user skips two undelivered
+// document numbers, encodes the one after them, and only later goes back
+// and fills the two gaps in once the paperwork arrives. Those two later
+// entries get a NEWER createdAt than the one already encoded ahead of
+// them, even though their own printed numbers put them BEFORE it in the
+// same booklet - sorting this booklet by createdAt alone put them in
+// entry order, not document order, which made Next/Previous oscillate
+// between documents and made suggestNextSerial suggest a number that
+// already existed. A single booklet (same non-numeric prefix) is always
+// used in strict numeric order in real life, so within one booklet the
+// document's own printed number is the authoritative sequence,
+// regardless of which order it was actually typed into the app - only
+// once two DIFFERENT booklets are being reconciled against each other
+// (no numeric relationship between them means anything) does real entry
+// order via createdAt become the right signal to fall back on.
 export const compareByRecency = (a, b) => {
   if (a.date !== b.date) return a.date > b.date ? 1 : -1
+  const aParsed = parseSerial(a.serialNo)
+  const bParsed = parseSerial(b.serialNo)
+  if (aParsed && bParsed && aParsed.prefix === bParsed.prefix) {
+    return aParsed.number - bParsed.number
+  }
   const aCreated = a.createdAt ?? -Infinity
   const bCreated = b.createdAt ?? -Infinity
   if (aCreated !== bCreated) return aCreated > bCreated ? 1 : -1
-  const aParsed = parseSerial(a.serialNo)
-  const bParsed = parseSerial(b.serialNo)
   const aNum = aParsed?.number ?? -Infinity
   const bNum = bParsed?.number ?? -Infinity
   return aNum - bNum

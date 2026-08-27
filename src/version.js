@@ -381,4 +381,21 @@
 //            the unwithdrawn drill-down when the two differ by more
 //            than 5%, showing both numbers so it's obvious which
 //            authority needs checking against the Sheet.
-export const APP_VERSION = '1.9-15'
+//   1.9-16 - Serial navigation: backfilling a skipped document number
+//            (encoding it AFTER a later document, once its paperwork
+//            finally arrives) made Next/Previous oscillate between the
+//            two and made the auto-suggested next serial land on a
+//            number that already existed - confirmed, reproduced case.
+//            Root cause: the recency comparator sorted same-booklet
+//            documents by when they were TYPED INTO THE APP, not by
+//            their own printed number - correct for reconciling two
+//            genuinely different booklets active the same day, wrong
+//            for catching up on one booklet's own gaps out of order.
+//            Same booklet (same non-numeric prefix) now always sorts by
+//            its own printed number; only different-prefix documents on
+//            the same day fall back to real entry order. Every form's
+//            initial serial suggestion on load also now double-checks
+//            itself the same way Next/Previous already does, so a wrong
+//            suggestion self-corrects immediately instead of only on
+//            the next manual visit to that serial.
+export const APP_VERSION = '1.9-16'

@@ -607,7 +607,18 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     if (!currentWarehouseId) return
     let cancelled = false
     suggestNextSerial(type, currentWarehouseId, '1', activeCategory).then((serial) => {
-      if (!cancelled) setSerialNo(serial)
+      if (cancelled) return
+      setSerialNo(serial)
+      // suggestNextSerial's contract is "one past the highest known
+      // serial", which should always be genuinely blank - but it's only
+      // as good as the recency signal it's built on, and a suggestion
+      // that turns out to already have real data would otherwise show
+      // as a silent, wrongly-blank new entry (confirmed, reported case)
+      // until the user happened to navigate away and back. Verifying it
+      // here, the same way every other way of landing on a serial does,
+      // means a wrong suggestion self-corrects immediately instead of
+      // only on the next manual visit.
+      checkAndLoadSerial(serial)
     })
     return () => {
       cancelled = true
