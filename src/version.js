@@ -462,4 +462,11 @@
 //            needs the real bad transaction found and fixed by hand) -
 //            it only guarantees the screen can no longer show an
 //            impossible negative or a wildly inflated number either way.
-export const APP_VERSION = '1.9-21'
+//   1.9-22 - The "Bags/Kgs don't match" warning added in 1.9-20 was
+//            firing on FILLERS/REBAGGING/BAGGING/RECLASSIFICATION
+//            authorities - confirmed directly: those genuinely record
+//            bags with zero matching kilos on purpose (repacking bags
+//            is a real bag-count change that doesn't move any rice), so
+//            a mismatch there was never a data error. No longer flagged
+//            for these transaction types.
+export const APP_VERSION = '1.9-22'

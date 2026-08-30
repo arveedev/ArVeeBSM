@@ -333,6 +333,21 @@ export const isTransferTypeName = (name) => {
 }
 
 /**
+ * FILLERS/REBAGGING/BAGGING/RECLASSIFICATION - repacking-style
+ * transaction types where the bag count is a real, deliberate change
+ * (bags genuinely leaving/entering a pile - confirmed directly) that
+ * doesn't move any kilos, since it's repackaging existing stock rather
+ * than receiving or issuing rice. A bags-without-matching-kilos figure
+ * is expected and correct for these types, not a data-entry error -
+ * callers checking for a bags/kilos mismatch should skip these.
+ */
+export const isBagRepackingTypeName = (name) => {
+  if (!name) return false
+  const normalized = name.trim().toUpperCase()
+  return normalized === 'FILLERS' || normalized === 'REBAGGING' || normalized === 'BAGGING' || normalized === 'RECLASSIFICATION'
+}
+
+/**
  * Same reasoning and pattern as isMillingTypeName/isTestMillingTypeName
  * above - transaction type names in the actual data are all-caps
  * (e.g. "PROCUREMENT"), which never matched a hardcoded exact-case

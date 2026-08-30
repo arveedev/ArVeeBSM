@@ -12,7 +12,7 @@
 // a different unit that doesn't roll into a bags/kilos "net bags" figure.
 
 import { db } from '../db/dexie.js'
-import { isAuthorityComplete, AGE_BUCKETS } from './calculations.js'
+import { isAuthorityComplete, AGE_BUCKETS, isBagRepackingTypeName } from './calculations.js'
 
 export const UNSPECIFIED_AGE = 'Unspecified Age'
 
@@ -117,7 +117,13 @@ export const computeUnwithdrawnByVariety = async (warehouseId) => {
 // record instead of unknowingly relying on whichever number their
 // current Bags/Net Bags toggle happens to read from.
 const BAGS_KILOS_MISMATCH_TOLERANCE = 0.05 // 5%
-export const bagsKilosMismatch = (bags, kilos) => {
+// transactionTypeName is optional (older/other callers may not have it) -
+// a FILLERS/REBAGGING/BAGGING/RECLASSIFICATION authority is EXPECTED to
+// carry bags with zero (or near-zero) matching kilos, confirmed directly
+// - repacking bags is a real bag-count change that doesn't move kilos,
+// not a data-entry error, so it's never flagged.
+export const bagsKilosMismatch = (bags, kilos, transactionTypeName = null) => {
+  if (isBagRepackingTypeName(transactionTypeName)) return false
   const bagsFromKilos = kilos / 50
   if (bagsFromKilos <= 0) return bags > 0
   return Math.abs(bags - bagsFromKilos) / bagsFromKilos > BAGS_KILOS_MISMATCH_TOLERANCE
@@ -155,7 +161,7 @@ export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter
       withdrawnKilos,
       unwithdrawnBags,
       unwithdrawnKilos,
-      hasBagsKilosMismatch: bagsKilosMismatch(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0),
+      hasBagsKilosMismatch: bagsKilosMismatch(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0, a.transactionTypeName),
       withdrawals: [...withdrawals].sort((x, y) => (x.date < y.date ? -1 : 1)),
     })
   }
