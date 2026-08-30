@@ -469,4 +469,20 @@
 //            is a real bag-count change that doesn't move any rice), so
 //            a mismatch there was never a data error. No longer flagged
 //            for these transaction types.
-export const APP_VERSION = '1.9-22'
+//   1.9-23 - Found via a live data comparison (Pile List vs a direct
+//            console query) after two earlier wrong guesses: a CLOSED
+//            pile's real transaction history was still leaking into
+//            Home Stocks' Overview screen. closePile() zeroes a pile's
+//            balance "regardless of its sign or size" specifically so
+//            nothing further needs reconciling from that point on, but
+//            Home Stocks' age-bucket breakdown recomputes each pile's
+//            stock fresh from its full raw history every time and had
+//            no idea the pile was ever closed - so a closed pile's real
+//            (possibly messy) pre-closure total kept showing up there,
+//            even though Pile List correctly showed 0. Both recompute
+//            functions (computeHistoricalPileState,
+//            computePileStockBySackWeight) now respect closedDate: on
+//            or after it, they return zero immediately without
+//            touching that pile's history at all; a backdated "as of"
+//            report from before the close date is unaffected.
+export const APP_VERSION = '1.9-23'

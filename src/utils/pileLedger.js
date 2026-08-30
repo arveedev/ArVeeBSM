@@ -259,6 +259,23 @@ export const createPileWithBeginningBalance = async ({
  */
 export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOverride = null) => {
   const pile = await db.piles.get(pileId)
+
+  // closePile() deliberately zeroes a pile's balance "regardless of its
+  // sign or size" as of its closedDate, precisely so nothing further
+  // needs reconciling in that pile's history from that point on -
+  // confirmed, reported case: a closed pile's real transaction history
+  // still leaked into Home Stocks' Overview screen (a genuinely messy
+  // pre-closure total), even though Pile List correctly showed 0/0,
+  // because this function ignored closedDate entirely and recomputed
+  // fresh from that same history every time regardless. On or after the
+  // close date, every caller should see exactly what Pile List already
+  // shows: zero. Before the close date (a backdated "as of" report,
+  // still legitimate), the pile's real history at that earlier point
+  // still matters and is computed normally.
+  if (pile?.closedDate && cutoffDate >= pile.closedDate) {
+    return { bags: 0, kilos: 0 }
+  }
+
   const warehouse = warehouseOverride ?? (pile?.warehouseId ? await db.warehouses.get(pile.warehouseId) : null)
   const reportingCutoffDate = warehouse?.reportingCutoffDate || null
 
@@ -341,6 +358,15 @@ export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOv
  */
 export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12-31', warehouseOverride = null) => {
   const pile = await db.piles.get(pileId)
+
+  // See computeHistoricalPileState's matching comment - a closed pile
+  // reads as genuinely empty from its closedDate on, same as Pile List
+  // already shows, rather than leaking its real (possibly messy)
+  // pre-closure transaction history back in via a fresh recompute.
+  if (pile?.closedDate && cutoffDate >= pile.closedDate) {
+    return new Map()
+  }
+
   const warehouse = warehouseOverride ?? (pile?.warehouseId ? await db.warehouses.get(pile.warehouseId) : null)
   const reportingCutoffDate = warehouse?.reportingCutoffDate || null
   const sackTypes = await db.sackTypes.toArray()
