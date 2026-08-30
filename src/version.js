@@ -485,4 +485,9 @@
 //            or after it, they return zero immediately without
 //            touching that pile's history at all; a backdated "as of"
 //            report from before the close date is unaffected.
-export const APP_VERSION = '1.9-23'
+//   1.9-24 - Closing a pile now lets the user pick the close date,
+//            instead of always stamping today - per explicit request, a
+//            pile that actually finished a few days ago should be able
+//            to report its real close date. Available both from the
+//            Pile Layout screen and Admin's Beginning Balances panel.
+export const APP_VERSION = '1.9-24'

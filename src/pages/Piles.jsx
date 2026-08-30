@@ -321,6 +321,11 @@ function Piles() {
   // own piles here). Distinct from pendingDelete (which removes the BOX
   // itself, not the pile).
   const [pendingClose, setPendingClose] = useState(null)
+  // The close date is editable, not always today - per explicit request,
+  // a pile that actually finished a few days ago should be able to
+  // report its real close date rather than whatever day someone
+  // happened to get around to marking it closed.
+  const [closeDate, setCloseDate] = useState(todayLocalISO())
 
   // drawing: null (idle) | { start: {row,col}, current: {row,col} }
   const [drawing, setDrawing] = useState(null)
@@ -796,7 +801,7 @@ function Piles() {
   // so the popup just needs to close along with it.
   const handleCloseConfirmed = async () => {
     const { pileName, pileId } = pendingClose
-    await closePile(pileId)
+    await closePile(pileId, closeDate)
     toast.success(`Pile "${pileName}" closed`)
     setPendingClose(null)
     setEditingBoxId(null)
@@ -1607,7 +1612,7 @@ function Piles() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPendingClose({ pileId: pile.pileId, pileName: pile.pileName })}
+                      onClick={() => { setCloseDate(todayLocalISO()); setPendingClose({ pileId: pile.pileId, pileName: pile.pileName }) }}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-crimson/40 py-2 text-xs font-medium text-brand-crimson transition-all active:scale-95"
                     >
                       Close Pile
@@ -1715,7 +1720,12 @@ function Piles() {
         onConfirm={handleCloseConfirmed}
         onCancel={() => setPendingClose(null)}
         rotate={isFullScreen && isPortrait}
-      />
+      >
+        <div className="text-left">
+          <label className={labelClass}>Close Date</label>
+          <CalendarDatePicker value={closeDate} label="Close Date" onChange={setCloseDate} />
+        </div>
+      </ConfirmDialog>
       </div>
       )}
     </div>

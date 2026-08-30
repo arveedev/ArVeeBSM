@@ -51,6 +51,10 @@ function PilesBeginningBalances({ warehouseId }) {
   const [isSaving, setIsSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
   const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
+  // Editable, not always today - per explicit request, a pile that
+  // actually finished a few days ago should be able to report its real
+  // close date. Only relevant while closing, not re-opening.
+  const [closeDate, setCloseDate] = useState(todayLocalISO())
   const [openMenuPileId, setOpenMenuPileId] = useState(null)
   const formRef = useRef(null)
 
@@ -256,6 +260,7 @@ function PilesBeginningBalances({ warehouseId }) {
 
   const confirmCloseToggle = (pile) => {
     setOpenMenuPileId(null)
+    setCloseDate(todayLocalISO())
     setPendingCloseToggle({ ...pile, willClose: !pile.closedDate })
   }
 
@@ -266,7 +271,7 @@ function PilesBeginningBalances({ warehouseId }) {
       await reopenPile(pile.pileId)
       toast.success(`Pile "${pile.pileName}" re-opened`)
     } else {
-      await closePile(pile.pileId)
+      await closePile(pile.pileId, closeDate)
       toast.success(`Pile "${pile.pileName}" closed`)
     }
   }
@@ -502,7 +507,14 @@ function PilesBeginningBalances({ warehouseId }) {
         confirmLabel={pendingCloseToggle?.willClose ? 'Close' : 'Re-open'}
         onConfirm={handleCloseToggleConfirmed}
         onCancel={() => setPendingCloseToggle(null)}
-      />
+      >
+        {pendingCloseToggle?.willClose && (
+          <div className="text-left">
+            <label className={labelClass}>Close Date</label>
+            <CalendarDatePicker value={closeDate} label="Close Date" onChange={setCloseDate} />
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

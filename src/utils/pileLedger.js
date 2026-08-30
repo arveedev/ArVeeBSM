@@ -458,18 +458,23 @@ export const recalculatePileCurrentState = async (pileId) => {
 /**
  * Closes a pile - a long-running pile's ledger can otherwise grow
  * indefinitely, so this marks it as done (depleted, or closed for any
- * other reason) with today's date, and zeroes out whatever balance
- * remains at that point regardless of its sign or size. No reason or
- * note is required - just the ability to close it. The BIN Card
- * generator reads pile.closedDate to render this as the ledger's final
- * entry, showing exactly what was zeroed out. Also immediately vacates
- * whichever layout box currently links to this pile (no one-day grace
- * period - unlike the automatic zero-detection path, this is a
- * deliberate, confirmed user action).
+ * other reason) and zeroes out whatever balance remains at that point
+ * regardless of its sign or size. No reason or note is required - just
+ * the ability to close it. The BIN Card generator reads pile.closedDate
+ * to render this as the ledger's final entry, showing exactly what was
+ * zeroed out. Also immediately vacates whichever layout box currently
+ * links to this pile (no one-day grace period - unlike the automatic
+ * zero-detection path, this is a deliberate, confirmed user action).
+ *
+ * closedDate defaults to today but is caller-supplied - per explicit
+ * request, closing isn't always same-day (a pile that was actually
+ * finished a few days ago, only now getting marked closed, should
+ * still report its real close date - everything that reads closedDate,
+ * including the entry-form pile picker's date-aware exclusion and the
+ * fresh-recompute functions above, keys off this value directly).
  */
-export const closePile = async (pileId) => {
+export const closePile = async (pileId, closedDate = todayLocalISO()) => {
   const { bags, kilos } = await recalculatePileCurrentState(pileId)
-  const closedDate = todayLocalISO()
   await db.piles.update(pileId, {
     closedDate,
     currentBags: 0,
