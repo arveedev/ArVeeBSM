@@ -7,6 +7,16 @@ import { hashPin } from '../utils/pinHash.js'
 
 export const db = new Dexie('BSMDatabase', { addons: [dexieCloud] })
 
+// Exposed for read-only diagnostics from the browser console (F12 ->
+// Console) - lets a user or developer run a direct query against their
+// own local data to help pin down a reported discrepancy, without
+// needing a purpose-built admin screen for every one-off question.
+// Doesn't add any new access - a browser's own DevTools Application tab
+// can already inspect this same IndexedDB database directly regardless.
+if (typeof window !== 'undefined') {
+  window.__DEBUG_DB__ = db
+}
+
 db.version(1).stores({
   users: 'uid, accessCode, role, assignedWarehouse',
   piles: 'pileId, warehouseId, pileName, cerealType',
