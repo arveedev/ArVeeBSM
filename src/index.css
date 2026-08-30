@@ -48,6 +48,15 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: clip;
+  /* Every digit app-wide renders at a fixed width (Inter supports this
+     natively) instead of each digit's own natural, slightly different
+     width - only affects 0-9 characters, so ordinary text is completely
+     unaffected. Set once here rather than tagging every number
+     individually: a running total, a live-updating figure, or two
+     numbers stacked in a column no longer visibly shifts/wobbles as its
+     digits change, and lets numbers align cleanly wherever they're
+     stacked (tables, receipt/report line items) without extra markup. */
+  font-variant-numeric: tabular-nums;
 }
 
 /* Every native <select> app-wide (19+ files share the same inputClass/

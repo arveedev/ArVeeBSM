@@ -420,4 +420,10 @@
 //            BIN Card, instead of needing Admin access to Beginning
 //            Balances just to mark a pile done. Re-opening a closed
 //            pile stays in Admin (a rarer, correction-style action).
-export const APP_VERSION = '1.9-18'
+//   1.9-19 - Every digit app-wide now renders at a fixed width
+//            (font-variant-numeric: tabular-nums, set once globally on
+//            body) instead of each digit's own natural width - numbers
+//            no longer visibly shift/wobble as they update, and align
+//            cleanly wherever they're stacked in a column. Only affects
+//            0-9 characters, so ordinary text is untouched.
+export const APP_VERSION = '1.9-19'
