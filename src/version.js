@@ -426,4 +426,22 @@
 //            no longer visibly shift/wobble as they update, and align
 //            cleanly wherever they're stacked in a column. Only affects
 //            0-9 characters, so ordinary text is untouched.
-export const APP_VERSION = '1.9-19'
+//   1.9-20 - Home Stocks' Overview screen could show an impossible
+//            negative bags count in a variety's age-bucket breakdown
+//            (confirmed, reported case: a pile with 1 real bag on hand
+//            showed as -13 in its age bucket). Root cause: Home Stocks
+//            recomputes each pile's stock fresh from its full raw
+//            transaction history rather than trusting the pile's own
+//            already-correct running total, and that fresh recompute
+//            had no floor - unlike every other pile-total computation
+//            in the app, which was already fixed to never go negative.
+//            Both remaining unclamped spots (computeHistoricalPileState,
+//            computePileStockBySackWeight) now floor at zero too. This
+//            fixes the impossible negative display; the underlying
+//            mismatch between a pile's running total and its full
+//            transaction history (a transaction whose Number of Bags
+//            doesn't match its Net Kgs, or a stray transaction that
+//            never went through the normal apply-to-pile path) is a
+//            data issue in that specific pile's history that still
+//            needs finding by hand.
+export const APP_VERSION = '1.9-20'

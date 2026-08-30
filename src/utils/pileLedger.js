@@ -303,7 +303,18 @@ export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOv
     }
   }
 
-  return { bags, kilos: round3(kilos) }
+  // Floored the same way every other pile-total computation in this
+  // file already is (applyTransactionToPile, reverseTransactionFromPile,
+  // recalculatePileCurrentState) - there's no such thing as negative
+  // physical stock. A negative raw sum here means something upstream is
+  // wrong (a stray/duplicate transaction attached to this pile that
+  // never went through the normal apply-to-pile path, or a genuinely
+  // mismatched numberOfBags on some transaction) - that underlying
+  // problem still needs finding and fixing in the data itself, but this
+  // was the one remaining spot that could still surface an impossible
+  // negative number directly in the UI (confirmed, reported case: Home
+  // Stocks' age-bucket breakdown showing a pile's bags as negative).
+  return { bags: Math.max(0, bags), kilos: Math.max(0, round3(kilos)) }
 }
 
 /**
@@ -367,6 +378,19 @@ export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12
   for (const t of wtsAll) {
     if (t.issuedPileId === pileId) add('unspecified', -(t.issuedBags ?? 0), -(t.issuedNetKilos ?? 0))
     if (t.receivedPileId === pileId) add('unspecified', t.receivedBags ?? 0, t.receivedNetKilos ?? 0)
+  }
+
+  // Floored per weight-bucket, same reasoning as computeHistoricalPileState
+  // just above - a negative bucket here (confirmed, reported case: Home
+  // Stocks' age-bucket breakdown showing a pile's bags as negative) means
+  // a transaction attached to this pile has a numberOfBags that doesn't
+  // actually match its netKilos, or a stray/duplicate transaction never
+  // went through the normal apply-to-pile path - a real data problem
+  // worth finding, but this stops it from ever surfacing as an
+  // impossible negative number in the UI.
+  for (const entry of byWeight.values()) {
+    entry.bags = Math.max(0, entry.bags)
+    entry.kilos = Math.max(0, entry.kilos)
   }
 
   return byWeight
