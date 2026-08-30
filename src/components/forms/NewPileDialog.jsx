@@ -56,9 +56,10 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
     const trimmed = pileName.trim()
     if (!trimmed) { setNameCheckStatus('idle'); return }
     setNameCheckStatus('checking')
+    // A closed pile's name is vacant - it never blocks reuse.
     const existing = await db.piles
       .where('warehouseId').equals(warehouseId)
-      .and((p) => p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
+      .and((p) => !p.closedDate && p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
       .first()
     setNameCheckStatus(existing ? 'duplicate' : 'ok')
   }
@@ -103,9 +104,10 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
     // case the user ignored the inline warning or another pile with
     // the same name got created elsewhere in the meantime.
     const trimmed = pileName.trim()
+    // Closed piles don't block reuse of their name - see checkPileNameDuplicate.
     const duplicate = await db.piles
       .where('warehouseId').equals(warehouseId)
-      .and((p) => p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
+      .and((p) => !p.closedDate && p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
       .first()
     if (duplicate) {
       toast.error(`A pile named "${trimmed}" already exists in this warehouse`)

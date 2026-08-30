@@ -398,4 +398,18 @@
 //            itself the same way Next/Previous already does, so a wrong
 //            suggestion self-corrects immediately instead of only on
 //            the next manual visit to that serial.
-export const APP_VERSION = '1.9-16'
+//   1.9-17 - Pile depletion fixes: (1) a pile could end up with a
+//            genuinely negative running total (not just float drift) -
+//            e.g. after an admin edits a beginning balance down below
+//            what's already been issued against it - and stayed fully
+//            selectable forever, since the auto-close check only ever
+//            caught near-exactly-zero values, never negative ones.
+//            Any zero-or-negative total now counts as depleted, and the
+//            stored total itself is floored at zero (there's no such
+//            thing as negative physical stock). Once flagged, the
+//            existing entry-form filtering (already date-aware, unaffected)
+//            correctly hides it going forward. (2) A closed pile's name
+//            couldn't be reused for a new pile - every duplicate-name
+//            check treated a closed pile the same as an open one. A
+//            closed pile's name is now vacant, same as its layout box.
+export const APP_VERSION = '1.9-17'

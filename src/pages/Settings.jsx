@@ -193,9 +193,11 @@ function PileBalanceSection({ warehouseId }) {
     const trimmed = pileName.trim()
     if (!trimmed) { setNameCheckStatus('idle'); return }
     setNameCheckStatus('checking')
+    // A closed pile's name is vacant, same as its layout box - it never
+    // blocks reuse. Only a still-OPEN pile with the same name does.
     const existing = await db.piles
       .where('warehouseId').equals(warehouseId)
-      .and((p) => p.pileId !== editingPileId && p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
+      .and((p) => p.pileId !== editingPileId && !p.closedDate && p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
       .first()
     setNameCheckStatus(existing ? 'duplicate' : 'ok')
   }
@@ -293,9 +295,10 @@ function PileBalanceSection({ warehouseId }) {
     // case the user ignored the inline warning or another pile with
     // the same name got created elsewhere in the meantime.
     const trimmedCreateName = pileName.trim()
+    // Closed piles don't block reuse of their name - see checkPileNameDuplicate.
     const createDuplicate = await db.piles
       .where('warehouseId').equals(warehouseId)
-      .and((p) => p.pileName.trim().toLowerCase() === trimmedCreateName.toLowerCase())
+      .and((p) => !p.closedDate && p.pileName.trim().toLowerCase() === trimmedCreateName.toLowerCase())
       .first()
     if (createDuplicate) {
       toast.error(`A pile named "${trimmedCreateName}" already exists in this warehouse`)
@@ -379,9 +382,10 @@ function PileBalanceSection({ warehouseId }) {
     // Re-checked fresh, excluding the pile being edited itself so
     // saving an unchanged (or reverted) name never falsely flags.
     const trimmedUpdateName = pileName.trim()
+    // Closed piles don't block reuse of their name - see checkPileNameDuplicate.
     const updateDuplicate = await db.piles
       .where('warehouseId').equals(warehouseId)
-      .and((p) => p.pileId !== editingPileId && p.pileName.trim().toLowerCase() === trimmedUpdateName.toLowerCase())
+      .and((p) => p.pileId !== editingPileId && !p.closedDate && p.pileName.trim().toLowerCase() === trimmedUpdateName.toLowerCase())
       .first()
     if (updateDuplicate) {
       toast.error(`A pile named "${trimmedUpdateName}" already exists in this warehouse`)

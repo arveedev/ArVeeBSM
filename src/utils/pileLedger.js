@@ -40,8 +40,18 @@ const DIRECTION_BY_TYPE = {
 // check in StockFormBase.jsx.
 const ZERO_TOLERANCE_KILOS = 0.01
 
+// <= not === / Math.abs(...) < - a pile can end up with a genuinely
+// NEGATIVE running total (not just tiny float drift) via the full-
+// recompute path (recalculatePileCurrentState, e.g. after an admin
+// edits a beginning balance down below what's already been issued
+// against it) - confirmed, reported case where a meaningfully negative
+// balance (well beyond drift-sized) still showed as a normal, fully
+// selectable pile forever, since a negative number never satisfied the
+// old near-zero-only check. There is no such thing as negative
+// physical stock - zero or less all mean "nothing available", so
+// anything at or below the tolerance line now counts as zeroed too.
 export const deriveZeroedDateUpdate = (pile, newBags, newKilos) => {
-  const isZero = newBags === 0 && Math.abs(newKilos) < ZERO_TOLERANCE_KILOS
+  const isZero = newBags <= 0 && newKilos <= ZERO_TOLERANCE_KILOS
   if (isZero) return pile.zeroedDate ? {} : { zeroedDate: todayLocalISO() }
   return pile.zeroedDate ? { zeroedDate: null } : {}
 }
@@ -376,12 +386,22 @@ export const recalculatePileCurrentState = async (pileId) => {
   const farFuture = '9999-12-31'
   const pile = await db.piles.get(pileId)
   const { bags, kilos } = await computeHistoricalPileState(pileId, farFuture)
+  // Unlike the incremental apply/reverse functions above, this sums the
+  // ENTIRE history fresh with no floor - a genuine over-issuance
+  // somewhere in that history (or a beginning balance edited down below
+  // what's already been issued against it) can leave this net negative.
+  // There's no such thing as negative physical stock, so this clamps
+  // the STORED total the same way every other pile-update path already
+  // does - deriveZeroedDateUpdate below still sees the real unclamped
+  // numbers, so a negative total is correctly flagged as zeroed too.
+  const clampedBags = Math.max(0, bags)
+  const clampedKilos = Math.max(0, kilos)
   await db.piles.update(pileId, {
-    currentBags: bags,
-    currentKilos: kilos,
+    currentBags: clampedBags,
+    currentKilos: clampedKilos,
     ...deriveZeroedDateUpdate(pile, bags, kilos),
   })
-  return { bags, kilos }
+  return { bags: clampedBags, kilos: clampedKilos }
 }
 
 /**
