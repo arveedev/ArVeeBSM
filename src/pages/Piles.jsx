@@ -31,7 +31,7 @@ import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateC
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
-import { computeHistoricalPileState, vacateBoxForPile } from '../utils/pileLedger.js'
+import { computeHistoricalPileState, vacateBoxForPile, closePile } from '../utils/pileLedger.js'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
@@ -314,6 +314,13 @@ function Piles() {
   const [isExporting, setIsExporting] = useState(false)
 
   const [pendingDelete, setPendingDelete] = useState(null)
+  // Closing a pile, from the box detail popup - every user with access
+  // to this layout can do this directly (per explicit request: this
+  // shouldn't require going to Admin Settings just to mark a pile
+  // depleted/done, since every user is the one actually watching their
+  // own piles here). Distinct from pendingDelete (which removes the BOX
+  // itself, not the pile).
+  const [pendingClose, setPendingClose] = useState(null)
 
   // drawing: null (idle) | { start: {row,col}, current: {row,col} }
   const [drawing, setDrawing] = useState(null)
@@ -783,6 +790,16 @@ function Piles() {
     toast.success('Box removed')
     setPendingDelete(null)
     cancelDrawing()
+  }
+
+  // closePile already vacates this pile's box itself (see pileLedger.js),
+  // so the popup just needs to close along with it.
+  const handleCloseConfirmed = async () => {
+    const { pileName, pileId } = pendingClose
+    await closePile(pileId)
+    toast.success(`Pile "${pileName}" closed`)
+    setPendingClose(null)
+    setEditingBoxId(null)
   }
 
   const handleLongPressStart = (boxId) => {
@@ -1430,7 +1447,7 @@ function Piles() {
             document.body at the same z-[60]), so the two overlapped
             instead of the confirmation cleanly replacing the detail
             view. */}
-        {editingBoxId && !assignForm && !moving && !pendingDelete && (() => {
+        {editingBoxId && !assignForm && !moving && !pendingDelete && !pendingClose && (() => {
           const box = effectiveBoxes.find((b) => b.id === editingBoxId)
           if (!box) return null
           const pile = box.pileId ? pileMap.get(box.pileId) : null
@@ -1580,13 +1597,22 @@ function Piles() {
                   )}
                 </div>
                 {!isVacant && (
-                  <button
-                    type="button"
-                    onClick={() => handleExportPileBinCard(pile)}
-                    className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
-                  >
-                    Export BIN Card
-                  </button>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleExportPileBinCard(pile)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                    >
+                      Export BIN Card
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingClose({ pileId: pile.pileId, pileName: pile.pileName })}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-crimson/40 py-2 text-xs font-medium text-brand-crimson transition-all active:scale-95"
+                    >
+                      Close Pile
+                    </button>
+                  </div>
                 )}
               </div>
             </div>,
@@ -1678,6 +1704,16 @@ function Piles() {
         description="This cannot be undone."
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(null)}
+        rotate={isFullScreen && isPortrait}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingClose)}
+        title={`Close pile "${pendingClose?.pileName}"?`}
+        description="This zeroes out its remaining balance and vacates this layout box immediately. Its full history stays exportable as a BIN Card. Re-opening a closed pile is done from Settings > Beginning Balances (Admin)."
+        confirmLabel="Close"
+        onConfirm={handleCloseConfirmed}
+        onCancel={() => setPendingClose(null)}
         rotate={isFullScreen && isPortrait}
       />
       </div>

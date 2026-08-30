@@ -412,4 +412,12 @@
 //            couldn't be reused for a new pile - every duplicate-name
 //            check treated a closed pile the same as an open one. A
 //            closed pile's name is now vacant, same as its layout box.
-export const APP_VERSION = '1.9-17'
+//   1.9-18 - "Close Pile" moved from an Admin-only Settings panel into
+//            the Pile Layout screen itself, per explicit request - every
+//            user managing their own warehouse's layout can now close a
+//            depleted/done pile directly from that pile's own detail
+//            popup (tap a pile -> Close Pile), right alongside Export
+//            BIN Card, instead of needing Admin access to Beginning
+//            Balances just to mark a pile done. Re-opening a closed
+//            pile stays in Admin (a rarer, correction-style action).
+export const APP_VERSION = '1.9-18'
