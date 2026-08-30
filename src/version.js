@@ -444,4 +444,22 @@
 //            never went through the normal apply-to-pile path) is a
 //            data issue in that specific pile's history that still
 //            needs finding by hand.
-export const APP_VERSION = '1.9-20'
+//   1.9-21 - Reverts the per-weight-bucket clamp added in 1.9-20's
+//            computePileStockBySackWeight fix - confirmed, reported
+//            regression: it made totals wildly WORSE (a real ~14 bags
+//            rendered as 3,326), not better. A single pile's own
+//            transactions can legitimately resolve to different weight
+//            buckets over its life, so one bucket going negative while
+//            another is correspondingly positive is a real, NEEDED
+//            offset - the pile's true total only comes out right once
+//            every bucket is summed together. Clamping each bucket
+//            BEFORE that sum discarded the offset instead of preserving
+//            it. The "no impossible negative number" fix is now applied
+//            only at the very last step - the actual displayed text on
+//            Home Stocks - never to any number still being summed into
+//            something else, so nothing upstream can be corrupted by it
+//            again. This does not make the total CORRECT (that still
+//            needs the real bad transaction found and fixed by hand) -
+//            it only guarantees the screen can no longer show an
+//            impossible negative or a wildly inflated number either way.
+export const APP_VERSION = '1.9-21'

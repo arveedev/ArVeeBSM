@@ -380,19 +380,20 @@ export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12
     if (t.receivedPileId === pileId) add('unspecified', t.receivedBags ?? 0, t.receivedNetKilos ?? 0)
   }
 
-  // Floored per weight-bucket, same reasoning as computeHistoricalPileState
-  // just above - a negative bucket here (confirmed, reported case: Home
-  // Stocks' age-bucket breakdown showing a pile's bags as negative) means
-  // a transaction attached to this pile has a numberOfBags that doesn't
-  // actually match its netKilos, or a stray/duplicate transaction never
-  // went through the normal apply-to-pile path - a real data problem
-  // worth finding, but this stops it from ever surfacing as an
-  // impossible negative number in the UI.
-  for (const entry of byWeight.values()) {
-    entry.bags = Math.max(0, entry.bags)
-    entry.kilos = Math.max(0, entry.kilos)
-  }
-
+  // NOT floored per weight-bucket - reverted, see version.js. A single
+  // pile's transactions can genuinely resolve to different weight
+  // buckets over its life (e.g. a receipt under one sack weight,
+  // matched later by an issuance whose mtsSackTypeId/mtsCondition
+  // resolves differently), so one bucket going negative while another
+  // is correspondingly positive is a REAL, NEEDED offset between the
+  // two - the pile's true total is only correct once every bucket is
+  // summed together. Clamping each bucket independently before that sum
+  // happens discards the offset instead of preserving it, which
+  // inflated every affected variety's total instead of correcting it
+  // (confirmed, reported case - a real total of ~14 bags rendered as
+  // 3,326 after this clamp was added). Whatever's actually behind a
+  // negative bucket (see computeHistoricalPileState's clamp for the
+  // reasoning) needs fixing at the source data, not by editing the sum.
   return byWeight
 }
 

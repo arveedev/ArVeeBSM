@@ -109,9 +109,9 @@ function VarietyCard({
           <span className="truncate text-sm font-semibold text-app-text">{varietyName}</span>
           <div className="text-right">
             <p className="whitespace-nowrap text-sm font-semibold text-app-text">
-              {showNetBags ? `${fmtNetBags(varietyKilos / 50)} net bags` : `${fmtBags(varietyBags)} bags`}
+              {showNetBags ? `${fmtNetBags(Math.max(0, varietyKilos) / 50)} net bags` : `${fmtBags(Math.max(0, varietyBags))} bags`}
             </p>
-            <p className="whitespace-nowrap text-sm font-semibold text-app-text">{fmtWeight(varietyKilos, weightUnit, 'Net')}</p>
+            <p className="whitespace-nowrap text-sm font-semibold text-app-text">{fmtWeight(Math.max(0, varietyKilos), weightUnit, 'Net')}</p>
           </div>
         </div>
       </div>
@@ -140,9 +140,9 @@ function VarietyCard({
                       <span className="truncate pl-2 text-xs text-neutral-400">{bucketLabel}</span>
                       <div className="text-right">
                         <p className="whitespace-nowrap text-xs text-neutral-300">
-                          {showNetBags ? `${fmtNetBags(totals.kilos / 50)} net bags` : `${fmtBags(totals.bags)} bags`}
+                          {showNetBags ? `${fmtNetBags(Math.max(0, totals.kilos) / 50)} net bags` : `${fmtBags(Math.max(0, totals.bags))} bags`}
                         </p>
-                        <p className="whitespace-nowrap text-xs text-neutral-300">{fmtWeight(totals.kilos, weightUnit, 'Net')}</p>
+                        <p className="whitespace-nowrap text-xs text-neutral-300">{fmtWeight(Math.max(0, totals.kilos), weightUnit, 'Net')}</p>
                       </div>
                     </div>
                     {bucketHasUnwithdrawn && (
@@ -233,9 +233,9 @@ function CerealTotal({
           <span className={`truncate text-sm font-bold ${color}`}>Total ({cerealType})</span>
           <div className="text-right">
             <p className={`whitespace-nowrap text-base font-bold ${color}`}>
-              {showNetBags ? `${fmtNetBags(cerealKilos / 50)} net bags` : `${fmtBags(cerealBags)} bags`}
+              {showNetBags ? `${fmtNetBags(Math.max(0, cerealKilos) / 50)} net bags` : `${fmtBags(Math.max(0, cerealBags))} bags`}
             </p>
-            <p className={`whitespace-nowrap text-base font-bold ${color}`}>{fmtWeight(cerealKilos, weightUnit, 'Net')}</p>
+            <p className={`whitespace-nowrap text-base font-bold ${color}`}>{fmtWeight(Math.max(0, cerealKilos), weightUnit, 'Net')}</p>
           </div>
         </div>
         {displayed && (
