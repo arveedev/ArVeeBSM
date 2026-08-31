@@ -219,7 +219,12 @@ function PileBalanceSection({ warehouseId }) {
 
   const categoryVarieties = varieties.filter((v) => v.category === category).sort((a, b) => byAlpha(a.name, b.name))
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
-  const sortedPiles = [...piles].sort((a, b) => byAlpha(a.pileName, b.pileName))
+  // Closed piles are excluded here - per explicit request, this list is
+  // for renaming/editing piles still in use, and would otherwise only
+  // ever grow longer over time as more piles get closed. Closing and
+  // re-opening a pile already live elsewhere (Piles.jsx, Beginning
+  // Balances), where a closed pile IS still shown.
+  const sortedPiles = [...piles].filter((p) => !p.closedDate).sort((a, b) => byAlpha(a.pileName, b.pileName))
 
   const resetForm = () => {
     setPileName('')
@@ -691,10 +696,7 @@ function PileBalanceSection({ warehouseId }) {
         {sortedPiles.map((p) => (
           <li key={p.pileId} className={`${listItemClass} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-app-text">
-                {p.pileName}
-                {p.closedDate && <span className="ml-1 rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-semibold text-neutral-400">CLOSED</span>}
-              </p>
+              <p className="truncate text-sm font-medium text-app-text">{p.pileName}</p>
               <p className="text-xs text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
             </div>
             <button type="button" onClick={() => handleEdit(p)} aria-label="Edit pile name/details" className={editIconClass}>

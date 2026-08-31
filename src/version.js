@@ -496,4 +496,8 @@
 //            button ever wired up to trigger it. Per explicit request,
 //            renaming lives only here, not on Piles.jsx or Beginning
 //            Balances - Close/Delete stay where they already were.
-export const APP_VERSION = '1.9-25'
+//   1.9-26 - Settings' pile-rename list no longer shows closed piles -
+//            per explicit request, that list would otherwise only grow
+//            longer forever as more piles get closed. A closed pile
+//            still shows on Piles.jsx and Beginning Balances.
+export const APP_VERSION = '1.9-26'
