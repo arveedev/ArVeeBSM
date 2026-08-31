@@ -490,4 +490,10 @@
 //            pile that actually finished a few days ago should be able
 //            to report its real close date. Available both from the
 //            Pile Layout screen and Admin's Beginning Balances panel.
-export const APP_VERSION = '1.9-24'
+//   1.9-25 - Settings' Create Pile section can now edit an existing
+//            pile's name (and variety/purity/dates) - the underlying
+//            edit logic already existed but had no pile list or Edit
+//            button ever wired up to trigger it. Per explicit request,
+//            renaming lives only here, not on Piles.jsx or Beginning
+//            Balances - Close/Delete stay where they already were.
+export const APP_VERSION = '1.9-25'

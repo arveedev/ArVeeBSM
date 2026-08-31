@@ -14,7 +14,7 @@ import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { fmtBags, fmtWeight, todayLocalISO, liveFormatNumber, parseFormattedNumber } from '../utils/calculations.js'
 import { createPileWithBeginningBalance, recalculatePileCurrentState, closePile, reopenPile } from '../utils/pileLedger.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
-import { inputClass, labelClass, primaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
+import { inputClass, labelClass, primaryButtonClass, byAlpha, listItemClass, editIconClass } from '../components/common/admin/shared.js'
 import { CONDITION_FLAGS } from '../components/forms/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
@@ -678,6 +678,31 @@ function PileBalanceSection({ warehouseId }) {
           <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
         )}
       </div>
+
+      {/* Renaming an existing pile (or fixing its variety/purity/dates)
+          is only ever exposed here, not on Piles.jsx or the admin
+          Beginning Balances panel - those cover the pile's balance and
+          layout placement, not its identity. Edit only - Close/Delete
+          already live in Piles.jsx and Beginning Balances respectively,
+          and duplicating destructive actions here (a plain, non-admin-
+          gated page) isn't the goal of this list. */}
+      <ul className="mt-3 space-y-1.5">
+        {sortedPiles.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
+        {sortedPiles.map((p) => (
+          <li key={p.pileId} className={`${listItemClass} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-app-text">
+                {p.pileName}
+                {p.closedDate && <span className="ml-1 rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-semibold text-neutral-400">CLOSED</span>}
+              </p>
+              <p className="text-xs text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
+            </div>
+            <button type="button" onClick={() => handleEdit(p)} aria-label="Edit pile name/details" className={editIconClass}>
+              <Pencil size={20} />
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
