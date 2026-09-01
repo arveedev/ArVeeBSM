@@ -80,7 +80,7 @@ import { applyTransactionToPile, reverseTransactionFromPile, getOrCreateAccounta
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { rememberCustomer, resolveRolePrefixedPerson } from '../../utils/customerDirectory.js'
+import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import SerialNumberField from './SerialNumberField.jsx'
 import ValidatedField from './ValidatedField.jsx'
@@ -409,6 +409,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   }, [isMilling, isTestMilling]) ?? []
 
   const dateRef = useRef(null)
+  const customerNameRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
   const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
@@ -1092,7 +1093,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // reload above), resolves the real person and fills their address
     // in exactly like a manual WS pick would.
     resolveRolePrefixedPerson(authority.customerName, currentWarehouseId).then((match) => {
-      if (match?.address) setCustomerAddress(match.address)
+      if (match?.address) {
+        setCustomerAddress(match.address)
+      } else if (isRolePrefixedName(authority.customerName)) {
+        // Assigned to more than one warehouse and the current one
+        // didn't disambiguate it - per explicit feedback, guessing an
+        // address here would be wrong. Opens the same suggestion list
+        // a manual "WS" type would show, so the user picks the right
+        // one themselves instead of getting a silently blank/wrong
+        // address.
+        customerNameRef.current?.openSuggestions()
+      }
     })
     if (authority.varietyId) {
       // If a pile is already selected and belongs to a different
@@ -2403,6 +2414,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           </div>
 
           <CustomerNameAutocomplete
+            ref={customerNameRef}
             value={customerName}
             onChange={setCustomerName}
             onMatch={handleCustomerMatch}

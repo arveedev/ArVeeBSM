@@ -597,4 +597,12 @@
 //               name. Now resolves and fills the address the same way,
 //               on every form with an Authority picker (WSR/WSI/ESR/
 //               ESI).
-export const APP_VERSION = '1.9-31'
+//   1.9-32 - Follow-up per explicit feedback: 1.9-31's authority-pick
+//            address auto-fill could silently guess wrong for a WS/MPO
+//            person assigned to more than one warehouse. Now only
+//            auto-fills when there's exactly one real match (or the
+//            current warehouse itself narrows it to one) - otherwise
+//            it opens the same suggestion dropdown a manual "WS" type
+//            shows, so the user picks the right warehouse/address
+//            themselves instead of getting a guessed one.
+export const APP_VERSION = '1.9-32'

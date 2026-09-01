@@ -309,11 +309,26 @@ export const resolveRolePrefixedPerson = async (name, preferredWarehouseId = nul
     (c) => c.name.trim().toLowerCase() === trimmed.toLowerCase()
   )
   if (candidates.length === 0) return null
+  if (candidates.length === 1) return { name: candidates[0].name, address: candidates[0].address }
+
+  // More than one candidate means this person is assigned to more than
+  // one warehouse - per explicit feedback, guessing which address to
+  // use here would be wrong, the same way it would be wrong for
+  // CustomerNameAutocomplete's own dropdown to silently pick one. Only
+  // resolve automatically when the current warehouse itself narrows it
+  // down to exactly one; otherwise return null so the caller can prompt
+  // the user to pick manually (the same suggestion list a manual "WS"
+  // type would show), rather than attaching a possibly-wrong address.
   const preferred = preferredWarehouseId
     ? candidates.find((c) => c.customerId.endsWith(`-${preferredWarehouseId}`))
     : null
-  const chosen = preferred ?? candidates[0]
-  return { name: chosen.name, address: chosen.address }
+  return preferred ? { name: preferred.name, address: preferred.address } : null
+}
+
+/** True if `name` starts with a recognized WS/Acting WS/MPO III/Acting MPO III prefix. */
+export const isRolePrefixedName = (name) => {
+  const trimmed = (name ?? '').trim()
+  return WS_PREFIX_PATTERN.test(trimmed) || MPO_PREFIX_PATTERN.test(trimmed)
 }
 
 /**

@@ -39,6 +39,15 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
 
   useImperativeHandle(ref, () => ({
     focus: () => inputRef.current?.focus(),
+    // Opens the suggestion dropdown programmatically - used when a
+    // value was set from OUTSIDE this field (e.g. picking an AI/SIA
+    // authority whose customerName is a WS/MPO reference assigned to
+    // more than one warehouse) and the caller needs the user to
+    // manually disambiguate which one, the same list a manual "WS"
+    // type would show. The effect above already computed `suggestions`
+    // for the current `value` regardless of whether this is called -
+    // this only reveals them.
+    openSuggestions: () => setShowSuggestions(true),
   }))
 
   useEffect(() => {

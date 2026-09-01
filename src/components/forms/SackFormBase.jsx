@@ -39,7 +39,7 @@ import {
   recalculateSerialCounter,
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
-import { rememberCustomer, resolveRolePrefixedPerson } from '../../utils/customerDirectory.js'
+import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -445,7 +445,14 @@ const SackFormBase = forwardRef(function SackFormBase(
     // MPO III-prefixed authority customerName never got its address
     // auto-filled when picked here, unlike typing "WS" manually.
     resolveRolePrefixedPerson(authority.customerName, currentWarehouseId).then((match) => {
-      if (match?.address) setCustomerAddress(match.address)
+      if (match?.address) {
+        setCustomerAddress(match.address)
+      } else if (isRolePrefixedName(authority.customerName)) {
+        // See StockFormBase.jsx's identical spot - assigned to more
+        // than one warehouse, let the user disambiguate manually
+        // instead of guessing.
+        customerNameRef.current?.openSuggestions()
+      }
     })
     if (authority.transactionTypeName) {
       const match = (transactionTypes ?? []).find((t) => t.name === authority.transactionTypeName)
