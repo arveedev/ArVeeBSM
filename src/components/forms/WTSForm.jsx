@@ -262,6 +262,22 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
   const txTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
 
+  // WTS is an internal warehouse document, signed off by whoever
+  // actually supervises that warehouse - NOT necessarily whoever is
+  // logged in and doing the encoding (an assistant, another supervisor
+  // covering, etc). Same lookup Piles.jsx's own BIN Card export already
+  // uses to find the real assigned supervisor for a warehouse. Falls
+  // back to the logged-in user's own name only if no supervisor is
+  // assigned yet, so this never shows blank.
+  const supervisorName = useLiveQuery(async () => {
+    if (!currentWarehouseId) return null
+    const supervisors = await db.users
+      .where('role').anyOf(['Warehouse Supervisor', 'Acting Warehouse Supervisor'])
+      .and((u) => (u.assignedWarehouses ?? []).includes(currentWarehouseId))
+      .toArray()
+    return supervisors[0]?.name ?? null
+  }, [currentWarehouseId])
+
   // A pile that's already closed/zeroed stays out of the picker for a
   // transfer dated on or after that point - a backdated entry against
   // its still-active period remains selectable.
@@ -447,7 +463,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     status: 'Cancelled',
     date,
     warehouseId: currentWarehouseId,
-    createdByName: user?.name ?? null,
+    createdByName: supervisorName ?? user?.name ?? null,
     aiNumber: null,
     transactionTypeId: null,
     moistureContent: null,
@@ -483,11 +499,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       status: 'Active',
       date,
       warehouseId: currentWarehouseId,
-      // WTS has no real "customer" - it's an internal transfer, so
-      // whoever is logged in and saving it stands in for it on reports
-      // (see wtsAdapter.js's normalizeWtsSide), same as who signs the
-      // real paper form.
-      createdByName: user?.name ?? null,
+      // WTS has no real "customer" - it's an internal transfer, so the
+      // warehouse's actual assigned supervisor stands in for it on
+      // reports (see wtsAdapter.js's normalizeWtsSide), same as who
+      // really signs the paper form. Falls back to the logged-in user
+      // only if this warehouse has no supervisor configured yet.
+      createdByName: supervisorName ?? user?.name ?? null,
       aiNumber: aiNumber.trim() || null,
       transactionTypeId: transactionTypeId || null,
       moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
@@ -608,8 +625,16 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   }
 
   const handleSave = async () => {
-    if (!(await validate())) return
+    // Locks IMMEDIATELY, before validate() even runs - not after. A
+    // second rapid tap (a real, confirmed mobile pattern - see
+    // StockFormBase.jsx's identical fix) could otherwise pass validate()
+    // in parallel with the first tap, BOTH seeing the typed serial as
+    // still free (isSerialTaken hasn't been written yet by either), and
+    // create two real WTS records sharing the same serial number - the
+    // exact "duplicate WTS" reported.
+    if (isSaving) return
     setIsSaving(true)
+    if (!(await validate())) { setIsSaving(false); return }
     // createdAt set ONLY here (create) - never touched by the update
     // path. See serialNumber.js's compareByRecency for why this
     // exists - `date` alone can't disambiguate two series used on the
@@ -628,8 +653,10 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   }
 
   const handleUpdate = async () => {
-    if (!(await validate(loadedTransaction.id))) return
+    // Same race-window fix as handleSave.
+    if (isSaving) return
     setIsSaving(true)
+    if (!(await validate(loadedTransaction.id))) { setIsSaving(false); return }
     await reverseWtsFromPiles(loadedTransaction)
     const updated = buildPayload({ id: loadedTransaction.id })
     await db.transactions.update(loadedTransaction.id, updated)

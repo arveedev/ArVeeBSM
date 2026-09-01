@@ -538,4 +538,24 @@
 //               serial kept resurfacing as "next" even right after
 //               saving a real, correctly-numbered document. Fixed at
 //               the comparison itself (serialNumber.js).
-export const APP_VERSION = '1.9-28'
+//   1.9-29 - Two follow-up WTS fixes from the same report:
+//            1. The "Warehouse Transfer" name fix in 1.9-28 used
+//               whoever was logged in and saving - per explicit
+//               correction, WTS records now look up the actual
+//               Warehouse Supervisor (or Acting Warehouse Supervisor)
+//               assigned to that warehouse instead (same lookup
+//               Piles.jsx's own BIN Card export already uses), only
+//               falling back to the logged-in user if no supervisor is
+//               configured for that warehouse yet.
+//            2. Root-caused the real duplicate WTS records behind the
+//               "duplicated entry in both Receipts and Issues" report:
+//               unlike every other transaction form, WTS's own Save/
+//               Update ran its async uniqueness check BEFORE locking
+//               the button, leaving the exact race window a rapid
+//               double-tap needs to pass validation twice in parallel
+//               and create two real records sharing one serial number -
+//               already fixed everywhere else, just never carried over
+//               to WTS. Locks immediately now, same as every other
+//               form. Does not clean up duplicates already created
+//               before this fix - those still need a manual Delete.
+export const APP_VERSION = '1.9-29'
