@@ -344,7 +344,11 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     setOpenedFromReports(false)
     setIsCancelled(false)
     setSerialNo(nextSerial)
-    setDate(todayLocalISO())
+    // Deliberately does NOT reset date back to today - per explicit
+    // request, keeps whatever date the user picked across saves/
+    // navigation within one encoding session (same fix as
+    // StockFormBase.jsx). Only goes back to today when the form is
+    // actually closed and reopened (fresh mount).
     setAiNumber('')
     setTransactionTypeId('')
     setMoistureContent('')

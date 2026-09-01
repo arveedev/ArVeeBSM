@@ -1272,7 +1272,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setExtraPileAllocations([])
     setOriginalExtraAllocations([])
     setSerialNo(nextSerial)
-    setDate(blankFormState.date)
+    // Deliberately does NOT reset date back to today here - per explicit
+    // request, a user encoding a batch of transactions for one specific
+    // date (often backdated) shouldn't have to reselect that date after
+    // every single save/navigation. date only starts at today via
+    // blankFormState's initial useState value, which only applies on a
+    // fresh mount (the form fully unmounts on close - see App.jsx's
+    // useDelayedUnmount), so it naturally goes back to today the next
+    // time the form is actually opened.
     setLinkedDocNo('')
     setLinkedAuthorityDate(null)
     setCustomerName('')

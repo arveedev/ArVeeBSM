@@ -509,7 +509,10 @@ const SackFormBase = forwardRef(function SackFormBase(
     setOpenedFromReports(false)
     setIsCancelled(false)
     setSerialNo(nextSerial)
-    setDate(todayLocalISO())
+    // Deliberately does NOT reset date back to today - same fix as
+    // StockFormBase.jsx: keeps whatever date the user picked across
+    // saves/navigation within one encoding session, only resetting to
+    // today when the form is actually closed and reopened.
     setLinkedDocNo('')
     setLinkedAuthorityDate(null)
     setCustomerName('')

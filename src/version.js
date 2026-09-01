@@ -500,4 +500,13 @@
 //            per explicit request, that list would otherwise only grow
 //            longer forever as more piles get closed. A closed pile
 //            still shows on Piles.jsx and Beginning Balances.
-export const APP_VERSION = '1.9-26'
+//   1.9-27 - Encoding a batch of transactions for one date no longer
+//            requires reselecting that date after every save. The
+//            transaction date field used to silently snap back to
+//            today every time the form advanced to the next entry -
+//            per explicit request, it now stays on whatever date the
+//            user picked for the rest of that encoding session, only
+//            resetting to today when the form is actually closed and
+//            reopened. Fixed in every transaction form (WSR/WSI/ESI/
+//            ESR via StockFormBase, sack forms via SackFormBase, WTS).
+export const APP_VERSION = '1.9-27'
