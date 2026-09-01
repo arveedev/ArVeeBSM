@@ -582,4 +582,19 @@
 //            retroactively fix the specific sheet rows this already
 //            happened to before this fix - those still need a manual
 //            cleanup (see chat for the exact records affected).
-export const APP_VERSION = '1.9-30'
+//   1.9-31 - Two WS/MPO name fixes, per explicit request:
+//            1. WTS's supervisor-credited name (added in 1.9-28/29) now
+//               always carries the "WS "/"Acting WS "/"MPO III "/
+//               "Acting MPO III " prefix, same convention used
+//               everywhere else a Warehouse Supervisor or MPO III user
+//               is credited - previously it showed the bare name with
+//               no prefix at all. Also now falls back to an assigned
+//               MPO III/Acting MPO III user if no WS is assigned.
+//            2. Picking an AI/SIA authority whose own customerName is a
+//               WS/MPO reference (an inter-warehouse transfer) never
+//               auto-filled the address, unlike manually typing "WS"
+//               and picking a suggestion - it only ever set the bare
+//               name. Now resolves and fills the address the same way,
+//               on every form with an Authority picker (WSR/WSI/ESR/
+//               ESI).
+export const APP_VERSION = '1.9-31'

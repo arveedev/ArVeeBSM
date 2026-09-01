@@ -80,7 +80,7 @@ import { applyTransactionToPile, reverseTransactionFromPile, getOrCreateAccounta
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { rememberCustomer } from '../../utils/customerDirectory.js'
+import { rememberCustomer, resolveRolePrefixedPerson } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import SerialNumberField from './SerialNumberField.jsx'
 import ValidatedField from './ValidatedField.jsx'
@@ -1083,6 +1083,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setLinkedDocNo(authority.aiNumber ?? '')
     setLinkedAuthorityDate(authority.date ?? null)
     setCustomerName(authority.customerName ?? '')
+    // An authority's customerName can itself be a "WS Name"/"Acting WS
+    // Name"/"MPO III Name" reference (an inter-warehouse transfer's
+    // "customer" is really that other warehouse's supervisor) - picking
+    // it here never went through CustomerNameAutocomplete's own
+    // type-"WS"-and-select flow, so address always stayed blank. Fire-
+    // and-forget async tail (same pattern as the extraPileAllocations
+    // reload above), resolves the real person and fills their address
+    // in exactly like a manual WS pick would.
+    resolveRolePrefixedPerson(authority.customerName, currentWarehouseId).then((match) => {
+      if (match?.address) setCustomerAddress(match.address)
+    })
     if (authority.varietyId) {
       // If a pile is already selected and belongs to a different
       // variety than this AI, it's no longer valid for this

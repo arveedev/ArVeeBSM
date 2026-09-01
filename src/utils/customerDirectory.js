@@ -27,6 +27,22 @@ const withWarehouseLabel = (w) => (w.address ? `${stripWarehouseCodePrefix(w.nam
 export const normalizeCustomerName = (name = '') =>
   name.trim().toLowerCase().replace(/\s+/g, ' ')
 
+// Shared role -> display-name-prefix rule, so every place that credits
+// a Warehouse Supervisor/MPO III user (the WS/Acting WS/MPO III/Acting
+// MPO III suggestions below, and WTSForm.jsx's own supervisor lookup)
+// formats the same way - per explicit request, the prefix must always
+// show, not just inside this autocomplete's own suggestion list.
+const ROLE_PREFIX = {
+  'Warehouse Supervisor': 'WS',
+  'Acting Warehouse Supervisor': 'Acting WS',
+  'MPO III': 'MPO III',
+  'Acting MPO III': 'Acting MPO III',
+}
+export const formatRolePrefixedName = (user) => {
+  const prefix = ROLE_PREFIX[user?.role]
+  return prefix ? `${prefix} ${user.name}` : (user?.name ?? '')
+}
+
 const VARIOUS_FARMERS_NAME = 'various farmers'
 
 /**
@@ -149,8 +165,6 @@ export const searchWarehouseSupervisors = async (query) => {
 
   const suggestions = []
   for (const u of matches) {
-    const prefixLabel = u.role === 'Acting Warehouse Supervisor' ? 'Acting WS' : 'WS'
-
     const assignedWarehouses = (u.assignedWarehouses ?? [])
       .map((id) => warehouseMap.get(id))
       .filter(Boolean)
@@ -160,7 +174,7 @@ export const searchWarehouseSupervisors = async (query) => {
       // with no address to auto-fill.
       suggestions.push({
         customerId: `ws-suggestion-${u.uid}`,
-        name: `${prefixLabel} ${u.name}`,
+        name: formatRolePrefixedName(u),
         address: null,
         isWarehouseSupervisorSuggestion: true,
       })
@@ -172,7 +186,7 @@ export const searchWarehouseSupervisors = async (query) => {
     for (const w of sortedAssigned) {
       suggestions.push({
         customerId: `ws-suggestion-${u.uid}-${w.warehouseId}`,
-        name: `${prefixLabel} ${u.name}`,
+        name: formatRolePrefixedName(u),
         warehouseLabel: `${w.code} — ${w.name}`,
         address: withWarehouseLabel(w),
         isWarehouseSupervisorSuggestion: true,
@@ -230,7 +244,14 @@ export const searchMpoUsers = async (query) => {
 
   const suggestions = []
   for (const u of matches) {
-    const prefixLabel = u.role === 'Acting MPO III' ? 'Acting MPO III' : 'MPO III'
+    // A user found here purely via facility assignment (not an actual
+    // MPO III/Acting MPO III role) still gets labeled by position, same
+    // as this always did - formatRolePrefixedName only knows real role
+    // names, so it's given a synthetic override for that case rather
+    // than falling back to a bare, unlabeled name.
+    const displayName = formatRolePrefixedName(
+      ROLE_PREFIX[u.role] ? u : { ...u, role: 'MPO III' }
+    )
 
     const assignedWarehouses = (u.assignedWarehouses ?? [])
       .map((id) => warehouseMap.get(id))
@@ -239,7 +260,7 @@ export const searchMpoUsers = async (query) => {
     if (assignedWarehouses.length === 0) {
       suggestions.push({
         customerId: `mpo-suggestion-${u.uid}`,
-        name: `${prefixLabel} ${u.name}`,
+        name: displayName,
         address: null,
         isWarehouseSupervisorSuggestion: true,
       })
@@ -250,7 +271,7 @@ export const searchMpoUsers = async (query) => {
     for (const w of sortedAssigned) {
       suggestions.push({
         customerId: `mpo-suggestion-${u.uid}-${w.warehouseId}`,
-        name: `${prefixLabel} ${u.name}`,
+        name: displayName,
         warehouseLabel: `${w.code} — ${w.name}`,
         address: withWarehouseLabel(w),
         isWarehouseSupervisorSuggestion: true,
@@ -259,6 +280,40 @@ export const searchMpoUsers = async (query) => {
   }
 
   return suggestions
+}
+
+/**
+ * Resolves a full WS/Acting WS/MPO III/Acting MPO III - prefixed name
+ * (e.g. an AI authority's own customerName, picked up wholesale via
+ * AuthorityPickerModal) back to the real person's address - the same
+ * auto-fill CustomerNameAutocomplete already does when a user manually
+ * types "WS" and picks a suggestion from the dropdown, but selecting an
+ * authority never went through that flow at all, so it only ever set
+ * the name and left address blank. Reuses searchWarehouseSupervisors/
+ * searchMpoUsers directly (exact string match against their own
+ * generated suggestion `name`) rather than re-implementing the
+ * role/facility matching rules a second time.
+ *
+ * preferredWarehouseId disambiguates a person assigned to more than one
+ * warehouse (picks their address for that assignment specifically);
+ * falls back to their first assignment if omitted or not found.
+ */
+export const resolveRolePrefixedPerson = async (name, preferredWarehouseId = null) => {
+  const trimmed = (name ?? '').trim()
+  if (!trimmed) return null
+  const [wsMatches, mpoMatches] = await Promise.all([
+    searchWarehouseSupervisors(trimmed),
+    searchMpoUsers(trimmed),
+  ])
+  const candidates = [...wsMatches, ...mpoMatches].filter(
+    (c) => c.name.trim().toLowerCase() === trimmed.toLowerCase()
+  )
+  if (candidates.length === 0) return null
+  const preferred = preferredWarehouseId
+    ? candidates.find((c) => c.customerId.endsWith(`-${preferredWarehouseId}`))
+    : null
+  const chosen = preferred ?? candidates[0]
+  return { name: chosen.name, address: chosen.address }
 }
 
 /**

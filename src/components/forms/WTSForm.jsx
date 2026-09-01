@@ -30,6 +30,7 @@ import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { db } from '../../db/dexie.js'
+import { formatRolePrefixedName } from '../../utils/customerDirectory.js'
 import { deriveZeroedDateUpdate } from '../../utils/pileLedger.js'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
@@ -266,16 +267,24 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   // actually supervises that warehouse - NOT necessarily whoever is
   // logged in and doing the encoding (an assistant, another supervisor
   // covering, etc). Same lookup Piles.jsx's own BIN Card export already
-  // uses to find the real assigned supervisor for a warehouse. Falls
-  // back to the logged-in user's own name only if no supervisor is
-  // assigned yet, so this never shows blank.
+  // uses to find the real assigned supervisor for a warehouse, falling
+  // back to an MPO III/Acting MPO III assignment (per explicit request
+  // - some warehouses' "supervisor" role is really an MPO position).
+  // Name is prefixed "WS "/"Acting WS "/"MPO III "/"Acting MPO III " -
+  // same convention as every other place that credits one of these
+  // users (see customerDirectory.js's formatRolePrefixedName) - per
+  // explicit request this must always show, not just inside the
+  // Customer Name autocomplete's own suggestion list. Falls back to the
+  // logged-in user's own (unprefixed) name only if no supervisor or MPO
+  // is assigned yet, so this never shows blank.
   const supervisorName = useLiveQuery(async () => {
     if (!currentWarehouseId) return null
     const supervisors = await db.users
-      .where('role').anyOf(['Warehouse Supervisor', 'Acting Warehouse Supervisor'])
+      .where('role').anyOf(['Warehouse Supervisor', 'Acting Warehouse Supervisor', 'MPO III', 'Acting MPO III'])
       .and((u) => (u.assignedWarehouses ?? []).includes(currentWarehouseId))
       .toArray()
-    return supervisors[0]?.name ?? null
+    const supervisor = supervisors.find((u) => u.role.includes('Warehouse Supervisor')) ?? supervisors[0]
+    return supervisor ? formatRolePrefixedName(supervisor) : null
   }, [currentWarehouseId])
 
   // A pile that's already closed/zeroed stays out of the picker for a
