@@ -47,7 +47,7 @@
 // count. This was the primary cause of a very slow first preload.
 
 import { db } from '../db/dexie.js'
-import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix, markRowsSeen } from './googleSheetsBridge.js'
+import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix, markRowsSeen, isWtsBackupSerial } from './googleSheetsBridge.js'
 import { recordSerialUsed } from '../utils/serialNumber.js'
 
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
@@ -394,7 +394,7 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
             const sameDayOrdinal = new Map()
             for (const row of sourceResult.rows) {
               const serialNo = row[SERIAL_COLUMN_BY_TYPE[type]]
-              if (!serialNo) continue
+              if (!serialNo || isWtsBackupSerial(String(serialNo))) continue
               const rowWarehouseName = row['Warehouse Name']
               const rowWarehouseId = warehouseIdByName.get(String(rowWarehouseName ?? '').trim())
               if (!rowWarehouseId) continue
@@ -534,6 +534,13 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
       for (const row of sourceResult.rows) {
         const serialNo = row[SERIAL_COLUMN_BY_TYPE[type]]
         if (!serialNo) continue
+        // WTS writes its own two rows into these SAME receipts/issues
+        // sheets, for a human reviewing the sheet directly - see
+        // googleSheetsBridge.js's wtsBackupSerial. Those aren't real
+        // WSR/WSI documents and must never be imported as one - a real
+        // WTS produced two bogus local WSR + two bogus WSI transactions
+        // this way before this guard existed (confirmed via live data).
+        if (isWtsBackupSerial(String(serialNo))) continue
 
         const rowWarehouseName = row['Warehouse Name']
         const rowWarehouseId = warehouseIdByName.get(String(rowWarehouseName ?? '').trim())

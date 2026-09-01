@@ -558,4 +558,28 @@
 //               to WTS. Locks immediately now, same as every other
 //               form. Does not clean up duplicates already created
 //               before this fix - those still need a manual Delete.
-export const APP_VERSION = '1.9-29'
+//   1.9-30 - Found the REAL cause of the "duplicated entry in both
+//            Receipts and Issues" report, via a live data check: it
+//            was never duplicate records or a rendering bug. WTS
+//            deliberately writes its own backup rows into the SAME
+//            Google Sheets WSR and WSI use (so a WTS's contribution is
+//            visible on both real statements, matching the paper
+//            document) - but it was writing the bare WTS serial number
+//            into those sheets' own WSR #/WSI # identifying column. WTS
+//            keeps a fully independent number series from WSR/WSI, so
+//            it can land on the same number a real WSR or WSI already
+//            uses - and once it did, any serial lookup or full sync for
+//            that WSR/WSI number matched the WTS's row instead (or as
+//            well), importing it as a phantom local WSR/WSI transaction
+//            with no pile, no customer, no real save time. Confirmed
+//            live: one real WTS had produced two bogus WSR rows and two
+//            bogus WSI rows this way. Fixed by prefixing what WTS
+//            writes to that column (still fully traceable back to the
+//            exact WTS by a human reading the sheet) so it can never
+//            collide with a real WSR/WSI serial again, and by having
+//            every import path (single-serial lookup and full preload)
+//            explicitly skip rows carrying that prefix. Does not
+//            retroactively fix the specific sheet rows this already
+//            happened to before this fix - those still need a manual
+//            cleanup (see chat for the exact records affected).
+export const APP_VERSION = '1.9-30'

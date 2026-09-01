@@ -837,17 +837,38 @@ const buildBackupRow = (transaction, context) => {
   }
 }
 
+// A REAL, confirmed bug from writing the bare WTS serial number into the
+// WSR/WSI sheets' own identifying column (see buildWtsBackupRows below):
+// WTS keeps a completely independent serial series from WSR/WSI, so a
+// WTS document can easily land on the same number a real WSR or WSI
+// document also uses. Whenever that happened, a genuine serial lookup
+// for that WSR/WSI number (fetchTransactionBySerial, or a full bulk
+// preload) matched the WTS's row sitting in that same sheet instead -
+// or in addition - and imported it as a phantom local WSR/WSI
+// transaction (no pile, no customer, no createdAt, since none of that
+// exists on a WTS-shaped row). Confirmed via live data: a single real
+// WTS produced two bogus WSR rows and two bogus WSI rows this way.
+// Prefixing the value written to WSR #/WSI # keeps it fully readable to
+// a human cross-referencing the sheet (still shows the exact WTS serial
+// it came from) while guaranteeing it can never exactly match a real,
+// bare WSR/WSI serial number again - both fetchTransactionBySerial's
+// exact-match lookup and transactionPreload.js's bulk import key off
+// this same exact string.
+const WTS_BACKUP_SERIAL_PREFIX = 'WTS-'
+export const wtsBackupSerial = (serialNo) => `${WTS_BACKUP_SERIAL_PREFIX}${serialNo}`
+export const isWtsBackupSerial = (value) => typeof value === 'string' && value.startsWith(WTS_BACKUP_SERIAL_PREFIX)
+
 /**
  * WTS (Warehouse Transfer Slip) is an in-warehouse transfer, not a
  * receipt or issuance from an outside party - but per explicit request,
  * it still needs to be recorded on both the receipts and issues Sheets
- * (using the WTS serial number as the identifying value in both, not a
- * separate WSR/WSI serial), since those are the two sheets the app
- * already syncs to and searches for historical lookups. Returns two
- * separate row objects - receivedRow shaped like a WSR row (goes to
- * the receipts sheet), issuedRow shaped like a WSI row (goes to the
- * issues sheet) - rather than one row like buildBackupRow, since WTS
- * genuinely needs both.
+ * (identified by its own WTS serial number, prefixed - see
+ * wtsBackupSerial above - not a separate WSR/WSI serial), since those
+ * are the two sheets the app already syncs to and searches for
+ * historical lookups. Returns two separate row objects - receivedRow
+ * shaped like a WSR row (goes to the receipts sheet), issuedRow shaped
+ * like a WSI row (goes to the issues sheet) - rather than one row like
+ * buildBackupRow, since WTS genuinely needs both.
  */
 const buildWtsBackupRows = (transaction, context) => {
   const { warehouseCode, provinceCode, transactionTypeName } = context
@@ -866,7 +887,7 @@ const buildWtsBackupRows = (transaction, context) => {
     Province: provinceCode ?? '',
     'Net Bags': transaction.receivedBags != null ? transaction.receivedNetKilos / 50 : null,
     'WH Code': warehouseCode ?? null,
-    'WSR #': transaction.serialNo,
+    'WSR #': wtsBackupSerial(transaction.serialNo),
     'WSI #': null,
     'Batch No': null,
     AGE: null,
@@ -885,7 +906,7 @@ const buildWtsBackupRows = (transaction, context) => {
     'Net Bags': transaction.issuedBags != null ? transaction.issuedNetKilos / 50 : null,
     'WH Code': warehouseCode ?? null,
     'AI #': transaction.aiNumber ?? null,
-    'WSI #': transaction.serialNo,
+    'WSI #': wtsBackupSerial(transaction.serialNo),
     AGE: null,
   }
 
@@ -1027,11 +1048,11 @@ export const updateTransactionBackup = async (transaction, context = {}) => {
     const [receivedResult, issuedResult] = await Promise.all([
       postToSheetsWithRetry(source.webAppUrl, {
         action: 'updateTransaction', sheet: source.receiptsSheetName,
-        matchColumn: 'WSR #', matchValue: transaction.serialNo, row: receivedRow,
+        matchColumn: 'WSR #', matchValue: wtsBackupSerial(transaction.serialNo), row: receivedRow,
       }),
       postToSheetsWithRetry(source.webAppUrl, {
         action: 'updateTransaction', sheet: source.issuesSheetName,
-        matchColumn: 'WSI #', matchValue: transaction.serialNo, row: issuedRow,
+        matchColumn: 'WSI #', matchValue: wtsBackupSerial(transaction.serialNo), row: issuedRow,
       }),
     ])
     return (receivedResult.ok && issuedResult.ok)
@@ -1094,11 +1115,11 @@ export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => 
     const [receivedResult, issuedResult] = await Promise.all([
       postToSheetsWithRetry(source.webAppUrl, {
         action: 'deleteTransaction', sheet: source.receiptsSheetName,
-        matchColumn: 'WSR #', matchValue: serialNo, warehouseCode: warehouseCode ?? null,
+        matchColumn: 'WSR #', matchValue: wtsBackupSerial(serialNo), warehouseCode: warehouseCode ?? null,
       }),
       postToSheetsWithRetry(source.webAppUrl, {
         action: 'deleteTransaction', sheet: source.issuesSheetName,
-        matchColumn: 'WSI #', matchValue: serialNo, warehouseCode: warehouseCode ?? null,
+        matchColumn: 'WSI #', matchValue: wtsBackupSerial(serialNo), warehouseCode: warehouseCode ?? null,
       }),
     ])
     return (receivedResult.ok && issuedResult.ok)
