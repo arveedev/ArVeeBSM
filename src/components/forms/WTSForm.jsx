@@ -28,11 +28,13 @@ import { ChevronLeft, ChevronRight, X, AlertTriangle } from 'lucide-react'
 import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { db } from '../../db/dexie.js'
 import { deriveZeroedDateUpdate } from '../../utils/pileLedger.js'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
+import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter, findAdjacentTransaction } from '../../utils/serialNumber.js'
 import {
@@ -185,10 +187,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
 
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
+  const { user } = useAuth()
 
   const [serialNo, setSerialNo] = useState('')
   const [date, setDate] = useState(todayLocalISO())
   const [aiNumber, setAiNumber] = useState('')
+  const [showAuthorityPicker, setShowAuthorityPicker] = useState(false)
   const [transactionTypeId, setTransactionTypeId] = useState('')
   const [moistureContent, setMoistureContent] = useState('')
   const [issuedSide, setIssuedSide] = useState(emptySide())
@@ -428,12 +432,22 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     }
   }
 
+  const handleSelectAuthority = (authority) => {
+    setAiNumber(authority.aiNumber ?? '')
+    setShowAuthorityPicker(false)
+    if (authority.transactionTypeName) {
+      const match = sortedTxTypes.find((t) => t.name === authority.transactionTypeName)
+      if (match) setTransactionTypeId(match.transactionTypeId)
+    }
+  }
+
   const buildCancelledPayload = (overrides = {}) => ({
     type: 'WTS',
     serialNo: serialNo.trim(),
     status: 'Cancelled',
     date,
     warehouseId: currentWarehouseId,
+    createdByName: user?.name ?? null,
     aiNumber: null,
     transactionTypeId: null,
     moistureContent: null,
@@ -469,6 +483,11 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       status: 'Active',
       date,
       warehouseId: currentWarehouseId,
+      // WTS has no real "customer" - it's an internal transfer, so
+      // whoever is logged in and saving it stands in for it on reports
+      // (see wtsAdapter.js's normalizeWtsSide), same as who signs the
+      // real paper form.
+      createdByName: user?.name ?? null,
       aiNumber: aiNumber.trim() || null,
       transactionTypeId: transactionTypeId || null,
       moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
@@ -751,8 +770,17 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
 
         <div>
           <label className={labelClass}>AI No.</label>
-          <input type="text" value={aiNumber} onChange={(e) => setAiNumber(e.target.value)}
-            className={`${inputClass} ${!aiNumber.trim() ? '!border-brand-amber' : ''}`} placeholder="26219637" />
+          <div className="flex gap-2">
+            <input type="text" value={aiNumber} onChange={(e) => setAiNumber(e.target.value)}
+              className={`${inputClass} ${!aiNumber.trim() ? '!border-brand-amber' : ''}`} placeholder="26219637" />
+            <button
+              type="button"
+              onClick={() => setShowAuthorityPicker(true)}
+              className="shrink-0 rounded-xl border border-brand-neon/40 px-3 text-xs font-medium text-brand-neon"
+            >
+              Browse
+            </button>
+          </div>
         </div>
 
         <div>
@@ -838,6 +866,15 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
           </div>
         )}
       </div>
+
+      {showAuthorityPicker && currentWarehouseId && (
+        <AuthorityPickerModal
+          type="AI"
+          warehouseId={currentWarehouseId}
+          onSelect={handleSelectAuthority}
+          onClose={() => setShowAuthorityPicker(false)}
+        />
+      )}
 
       <ConfirmDialog
         open={pendingDelete}

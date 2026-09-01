@@ -100,7 +100,25 @@ const counterKey = (warehouseId, type, cerealCategory) => [warehouseId, type, ce
 // (no numeric relationship between them means anything) does real entry
 // order via createdAt become the right signal to fall back on.
 export const compareByRecency = (a, b) => {
-  if (a.date !== b.date) return a.date > b.date ? 1 : -1
+  // A missing/blank date (a real, confirmed shape of old imported
+  // records) must always lose to any record with a real date, in BOTH
+  // argument orders. The naive `a.date > b.date` below relied on plain
+  // string comparison, which only kicks in when BOTH sides are
+  // strings - if either side is undefined/null, JS instead compares
+  // via Number(), and Number(undefined) is NaN, so `NaN > anything` is
+  // always false no matter which side was actually the real date. That
+  // made an undated record "unbeatable" once it became the running
+  // `best` (nothing dated could ever register as more recent than it),
+  // which is exactly what let a stale, dateless legacy record keep
+  // winning suggestNextSerial/findAdjacentTransaction over a freshly
+  // saved, properly dated one. Coercing to '' first guarantees both
+  // sides are always real strings, so this is always a plain
+  // lexicographic string compare - and '' sorts before every real
+  // "YYYY-MM-DD" date, so a missing date is now reliably treated as
+  // the oldest possible, regardless of which argument it's passed as.
+  const aDate = a.date || ''
+  const bDate = b.date || ''
+  if (aDate !== bDate) return aDate > bDate ? 1 : -1
   const aParsed = parseSerial(a.serialNo)
   const bParsed = parseSerial(b.serialNo)
   if (aParsed && bParsed && aParsed.prefix === bParsed.prefix) {

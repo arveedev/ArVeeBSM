@@ -509,4 +509,33 @@
 //            resetting to today when the form is actually closed and
 //            reopened. Fixed in every transaction form (WSR/WSI/ESI/
 //            ESR via StockFormBase, sack forms via SackFormBase, WTS).
-export const APP_VERSION = '1.9-27'
+//   1.9-28 - Four WTS (Warehouse Transfer) bugs found via a real report
+//            and a live encoding session:
+//            1. The weekly stock report showed a WTS's SACK condition
+//               (BN/SH/US - only meant for the tare-weight lookup) as
+//               if it were the stock's own condition, creating a bogus
+//               extra "BN" row with numbers that double-counted against
+//               the real GQ row. Reports now use WTS's own Stock
+//               Condition field (Good/Part Damaged/Damaged) instead,
+//               mapped to the same GQ/PD/TD scale every other form uses.
+//            2. WTS had no real "customer" field, so every receipt/
+//               issue list and report always showed the placeholder
+//               "Warehouse Transfer" instead of a real name. Now stores
+//               and shows whoever was logged in and saved it, the same
+//               way the exported PDF already credits the current user
+//               as "Certified Correct".
+//            3. WTS's AI No. field was a bare text box - the only
+//               transaction form without a Browse button into the
+//               pending-AI picker every other issuance-side form has.
+//               Added.
+//            4. The real bug behind "the wrong series shows up on a
+//               completely different form": suggestNextSerial/
+//               findAdjacentTransaction sort transactions by recency
+//               (date, then save time), and an old imported record with
+//               a missing date could never lose that comparison against
+//               a real, freshly-dated one - once such a record won,
+//               nothing could ever out-rank it again, so a stale legacy
+//               serial kept resurfacing as "next" even right after
+//               saving a real, correctly-numbered document. Fixed at
+//               the comparison itself (serialNumber.js).
+export const APP_VERSION = '1.9-28'

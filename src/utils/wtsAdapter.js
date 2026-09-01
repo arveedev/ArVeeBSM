@@ -11,14 +11,33 @@
 // the issued side belongs with WSI (issues), since that mirrors how the
 // real NFA paper documents show WTS on both statements.
 
+// WTS carries TWO different, unrelated "condition" concepts per side:
+// `issuedCondition`/`receivedCondition` (BN/SH/US) is the SACK's own
+// condition - only used to look up the right tare weight for the net
+// kilos calculation, same as every other form's MTS deduction. Every
+// report/statement, on the other hand, expects the STOCK condition
+// (GQ/TRD/INF/PD/TD - see shared.js's CONDITION_FLAGS), which is a
+// completely different scale. Reusing the sack condition there is what
+// made a plain BN sack show up as its own separate, wrong "BN" row on
+// the weekly stock report instead of merging into the real GQ row -
+// this maps WTS's own Stock Condition field (issuedStockCondition/
+// receivedStockCondition, already collected on the form) to that scale
+// instead.
+const STOCK_CONDITION_TO_FLAG = { Good: 'GQ', 'Part Damaged': 'PD', Damaged: 'TD' }
+
 export const normalizeWtsSide = (tx, side) => ({
   ...tx,
   varietyId: tx[`${side}VarietyId`] ?? null,
   numberOfBags: tx[`${side}Bags`] ?? null,
   grossKilos: tx[`${side}GrossKilos`] ?? null,
   netKilos: tx[`${side}NetKilos`] ?? null,
-  condition: tx[`${side}Condition`] ?? null,
-  customerName: tx.customerName ?? 'Warehouse Transfer',
+  condition: STOCK_CONDITION_TO_FLAG[tx[`${side}StockCondition`]] ?? 'GQ',
+  // WTS is an internal transfer with no real "customer" - customerName
+  // here is really "who prepared/handled this document". Falls back to
+  // createdByName (the logged-in user at save time, see WTSForm.jsx),
+  // and only to the generic label for older records saved before that
+  // field existed.
+  customerName: tx.createdByName || tx.customerName || 'Warehouse Transfer',
   wtsSide: side,
 })
 
