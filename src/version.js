@@ -605,4 +605,16 @@
 //            it opens the same suggestion dropdown a manual "WS" type
 //            shows, so the user picks the right warehouse/address
 //            themselves instead of getting a guessed one.
-export const APP_VERSION = '1.9-32'
+//   1.9-33 - Fixed why WS/MPO matching kept missing real people, per
+//            explicit example: the real Authority sheet data often
+//            abbreviates the first name ("WS V. Balaoro", "Acting WS F.
+//            Reason") instead of spelling it out ("Vevencio Balaoro",
+//            "Florante Reason") - a plain substring search can never
+//            match that shorthand. Matching now also recognizes a
+//            fully-typed "V. Balaoro"/"V Balaoro" form word-for-word
+//            against the real name (each word either exact or a
+//            single-letter initial), on top of the existing live
+//            substring search - fixes this both for picking an
+//            authority (1.9-31/32) and for manually typing "WS"/"MPO"
+//            in the Customer Name field.
+export const APP_VERSION = '1.9-33'

@@ -146,6 +146,30 @@ export const searchCustomers = async (query, limit = 6, warehouseId = null) => {
  * Returns [] if the typed text doesn't start with a recognized prefix, or
  * once a name has been typed past the prefix with no matching supervisor.
  */
+// True if `fragment` (already trimmed+lowercased) plausibly refers to
+// `fullName` (already lowercased) - either a live substring search
+// (user is still typing "bal" toward "Balaoro") or a fully-typed,
+// abbreviated "V. Balaoro"/"V Balaoro" form matched word-for-word
+// against the real name, each word either exact or a single-letter
+// initial of the corresponding real word. The real Authority sheet
+// data confirmed uses this exact shorthand ("WS V. Balaoro", "Acting
+// WS F. Reason") for the full names ("Vevencio Balaoro", "Florante
+// Reason") on record here - a plain substring test can never match
+// that, since "v" isn't a substring prefix of "vevencio" once "balaoro"
+// comes right after it in the same fragment.
+const nameMatchesFragment = (fullName, fragment) => {
+  if (!fragment) return true
+  if (fullName.includes(fragment)) return true
+  const fullWords = fullName.split(/\s+/).filter(Boolean)
+  const fragWords = fragment.split(/\s+/).filter(Boolean)
+  if (fragWords.length === 0 || fragWords.length !== fullWords.length) return false
+  return fragWords.every((fw, i) => {
+    const cleaned = fw.replace(/\.$/, '')
+    const target = fullWords[i]
+    return target === cleaned || (cleaned.length === 1 && target.startsWith(cleaned))
+  })
+}
+
 const WS_PREFIX_PATTERN = /^(acting\s+)?ws\s*(.*)$/i
 
 export const searchWarehouseSupervisors = async (query) => {
@@ -159,7 +183,7 @@ export const searchWarehouseSupervisors = async (query) => {
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
 
   const fragment = nameFragment.trim().toLowerCase()
-  const matches = users.filter((u) => !fragment || u.name.toLowerCase().includes(fragment))
+  const matches = users.filter((u) => nameMatchesFragment(u.name.toLowerCase(), fragment))
 
   matches.sort((a, b) => a.name.localeCompare(b.name))
 
@@ -234,7 +258,7 @@ export const searchMpoUsers = async (query) => {
   const allUsers = await db.users.toArray()
   const fragment = nameFragment.trim().toLowerCase()
   const matches = allUsers.filter((u) => {
-    if (fragment && !u.name.toLowerCase().includes(fragment)) return false
+    if (!nameMatchesFragment(u.name.toLowerCase(), fragment)) return false
     const isMpoRole = u.role === 'MPO III' || u.role === 'Acting MPO III'
     const isAtAccountabilityFacility = (u.assignedWarehouses ?? []).some((id) => accountabilityFacilityIds.has(id))
     return isMpoRole || isAtAccountabilityFacility
@@ -290,9 +314,13 @@ export const searchMpoUsers = async (query) => {
  * types "WS" and picks a suggestion from the dropdown, but selecting an
  * authority never went through that flow at all, so it only ever set
  * the name and left address blank. Reuses searchWarehouseSupervisors/
- * searchMpoUsers directly (exact string match against their own
- * generated suggestion `name`) rather than re-implementing the
- * role/facility matching rules a second time.
+ * searchMpoUsers directly rather than re-implementing the role/facility
+ * matching rules a second time - trusts their own results as-is (via
+ * nameMatchesFragment) rather than re-checking for an exact string
+ * match against the full name, since a real AI/SIA authority's
+ * customerName is very often an abbreviated form ("WS V. Balaoro" for
+ * "Vevencio Balaoro", confirmed against real Authority sheet data) that
+ * would never equal the full generated suggestion string.
  *
  * preferredWarehouseId disambiguates a person assigned to more than one
  * warehouse (picks their address for that assignment specifically);
@@ -305,9 +333,7 @@ export const resolveRolePrefixedPerson = async (name, preferredWarehouseId = nul
     searchWarehouseSupervisors(trimmed),
     searchMpoUsers(trimmed),
   ])
-  const candidates = [...wsMatches, ...mpoMatches].filter(
-    (c) => c.name.trim().toLowerCase() === trimmed.toLowerCase()
-  )
+  const candidates = [...wsMatches, ...mpoMatches]
   if (candidates.length === 0) return null
   if (candidates.length === 1) return { name: candidates[0].name, address: candidates[0].address }
 
