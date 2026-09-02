@@ -1092,16 +1092,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // and-forget async tail (same pattern as the extraPileAllocations
     // reload above), resolves the real person and fills their address
     // in exactly like a manual WS pick would.
-    resolveRolePrefixedPerson(authority.customerName, currentWarehouseId).then((match) => {
+    resolveRolePrefixedPerson(authority.customerName).then((match) => {
       if (match?.address) {
         setCustomerAddress(match.address)
       } else if (isRolePrefixedName(authority.customerName)) {
-        // Assigned to more than one warehouse and the current one
-        // didn't disambiguate it - per explicit feedback, guessing an
-        // address here would be wrong. Opens the same suggestion list
-        // a manual "WS" type would show, so the user picks the right
-        // one themselves instead of getting a silently blank/wrong
-        // address.
+        // Assigned to more than one warehouse - per explicit feedback,
+        // NEVER guess which one, even when the currently selected
+        // warehouse happens to match one of them. Opens the same
+        // suggestion list a manual "WS" type would show, so the user
+        // consciously picks the right one themselves.
         customerNameRef.current?.openSuggestions()
       }
     })

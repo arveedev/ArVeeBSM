@@ -346,11 +346,16 @@ export const searchMpoUsers = async (query) => {
  * "Vevencio Balaoro", confirmed against real Authority sheet data) that
  * would never equal the full generated suggestion string.
  *
- * preferredWarehouseId disambiguates a person assigned to more than one
- * warehouse (picks their address for that assignment specifically);
- * falls back to their first assignment if omitted or not found.
+ * Only ever auto-resolves when there's exactly ONE real candidate -
+ * per explicit feedback, even the current warehouse happening to match
+ * one of a multi-warehouse person's assignments must NOT be treated as
+ * an implicit pick. The user needs to consciously confirm which
+ * warehouse this specific transaction is actually for (the same reason
+ * CustomerNameAutocomplete's own dropdown never auto-picks one either),
+ * so any ambiguity always returns null and lets the caller prompt for a
+ * manual pick instead of silently assuming.
  */
-export const resolveRolePrefixedPerson = async (name, preferredWarehouseId = null) => {
+export const resolveRolePrefixedPerson = async (name) => {
   const trimmed = (name ?? '').trim()
   if (!trimmed) return null
   const [wsMatches, mpoMatches] = await Promise.all([
@@ -358,21 +363,8 @@ export const resolveRolePrefixedPerson = async (name, preferredWarehouseId = nul
     searchMpoUsers(trimmed),
   ])
   const candidates = [...wsMatches, ...mpoMatches]
-  if (candidates.length === 0) return null
-  if (candidates.length === 1) return { name: candidates[0].name, address: candidates[0].address }
-
-  // More than one candidate means this person is assigned to more than
-  // one warehouse - per explicit feedback, guessing which address to
-  // use here would be wrong, the same way it would be wrong for
-  // CustomerNameAutocomplete's own dropdown to silently pick one. Only
-  // resolve automatically when the current warehouse itself narrows it
-  // down to exactly one; otherwise return null so the caller can prompt
-  // the user to pick manually (the same suggestion list a manual "WS"
-  // type would show), rather than attaching a possibly-wrong address.
-  const preferred = preferredWarehouseId
-    ? candidates.find((c) => c.customerId.endsWith(`-${preferredWarehouseId}`))
-    : null
-  return preferred ? { name: preferred.name, address: preferred.address } : null
+  if (candidates.length !== 1) return null
+  return { name: candidates[0].name, address: candidates[0].address }
 }
 
 /** True if `name` starts with a recognized WS/Acting WS/MPO III/Acting MPO III prefix. */

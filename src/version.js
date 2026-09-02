@@ -628,4 +628,12 @@
 //            (authoritative, no guessing) before the word/initials
 //            match, for both authority picking and manual "WS"/"MPO"
 //            typing.
-export const APP_VERSION = '1.9-34'
+//   1.9-35 - Fixed a real over-eager guess in 1.9-31/32: picking an
+//            authority for a WS/MPO person assigned to more than one
+//            warehouse silently auto-filled the address whenever the
+//            currently selected warehouse happened to be one of their
+//            assignments, without ever asking. Per explicit feedback,
+//            this must never be assumed - it now always opens the
+//            suggestion list for the user to pick from whenever there's
+//            more than one real candidate, full stop.
+export const APP_VERSION = '1.9-35'
