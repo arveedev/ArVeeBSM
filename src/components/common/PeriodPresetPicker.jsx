@@ -34,12 +34,32 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
   // showing no pill at all in that case rather than a stale one.
   const activeIndex = ranges.findIndex((preset) => preset.from === currentFrom && preset.to === currentTo)
 
+  // Navigating months previously only changed the header/button labels
+  // to the new month - the actual selected From/To (and everything
+  // computed from it below) silently stayed on the OLD month, a real,
+  // confirmed mismatch (e.g. viewing "September" with Aug 1-7 still
+  // active). Carries the selection forward instead: when the current
+  // selection matches one of THIS month's own presets, automatically
+  // re-applies that same preset slot in the newly-navigated month too,
+  // so the header, buttons, and actual content all move together. A
+  // genuinely custom (non-preset) selection is left alone, same as
+  // before - there's no sensible "same slot" to carry forward for that.
+  const handleNav = (direction) => {
+    setMonthNavDirection(direction)
+    const newOffset = monthOffset + (direction === 'back' ? -1 : 1)
+    setMonthOffset(newOffset)
+    if (activeIndex !== -1) {
+      const preset = getPeriodPresetRanges(newOffset).ranges[activeIndex]
+      if (preset) onSelectRange(preset.from, preset.to)
+    }
+  }
+
   return (
     <div className="mt-2">
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() => { setMonthNavDirection('back'); setMonthOffset((m) => m - 1) }}
+          onClick={() => handleNav('back')}
           aria-label="Previous month"
           className="rounded-lg border border-neutral-800 bg-neutral-900 px-8 py-2 text-lg text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
         >
@@ -53,7 +73,7 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
         </span>
         <button
           type="button"
-          onClick={() => { setMonthNavDirection('forward'); setMonthOffset((m) => m + 1) }}
+          onClick={() => handleNav('forward')}
           aria-label="Next month"
           className="rounded-lg border border-neutral-800 bg-neutral-900 px-8 py-2 text-lg text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
         >

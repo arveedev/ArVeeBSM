@@ -784,4 +784,13 @@
 //            when one exists (Summary); Stock Statement/Pile Layout,
 //            whose period starts genuinely blank, keep the original
 //            guess unchanged.
-export const APP_VERSION = '1.9-44'
+//   1.9-45 - Fixed a follow-up to 1.9-44: navigating months with the
+//            ‹/› arrows only changed the header/quick-pick button
+//            labels to the new month - the actual selected From/To
+//            (and everything computed from it, like Summary's whole
+//            card) silently stayed on the OLD month. Now, when the
+//            current selection matches one of the shown presets (e.g.
+//            "1-7"), navigating months carries that same slot forward
+//            into the new month too, so the header, buttons, and
+//            content all move together instead of drifting apart.
+export const APP_VERSION = '1.9-45'
