@@ -6,8 +6,25 @@
 import { useState } from 'react'
 import { getPeriodPresetRanges, getDefaultPresetMonthOffset } from '../../utils/calculations.js'
 
+// The "first few days of a new month -> show the previous month"
+// heuristic (getDefaultPresetMonthOffset) only makes sense when there's
+// no real selection yet to go by (e.g. Stock Statement's period starts
+// genuinely blank). When a currentFrom is already set - e.g. Summary's
+// own period defaults straight to today - the month nav must match
+// THAT, not run its own separate guess: on Sep 3, Summary's own From/To
+// already default to Sep 3, but the heuristic alone would still open on
+// August, a real, confirmed mismatch where the header/quick-pick
+// buttons showed a different month than the actual active selection.
+const monthOffsetFor = (currentFrom) => {
+  if (!currentFrom) return getDefaultPresetMonthOffset()
+  const [y, m] = currentFrom.split('-').map(Number)
+  if (!y || !m) return getDefaultPresetMonthOffset()
+  const now = new Date()
+  return (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth())
+}
+
 function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
-  const [monthOffset, setMonthOffset] = useState(getDefaultPresetMonthOffset)
+  const [monthOffset, setMonthOffset] = useState(() => monthOffsetFor(currentFrom))
   const [monthNavDirection, setMonthNavDirection] = useState(null)
   const { monthLabel, ranges } = getPeriodPresetRanges(monthOffset)
 

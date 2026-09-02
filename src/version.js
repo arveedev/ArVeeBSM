@@ -773,4 +773,15 @@
 //            added to the already-deployed Apps Script itself (confirmed
 //            it currently has none), which can't be safely verified
 //            end-to-end from here without risking what already works.
-export const APP_VERSION = '1.9-43'
+//   1.9-44 - Fixed Reports > Summary's period picker opening on the
+//            wrong month - e.g. on Sep 3, From/To already correctly
+//            defaulted to today (Sep 3), but the month header and
+//            quick-pick buttons (1-7/8-15/etc.) below it still opened
+//            on August, since they ran their own separate "first few
+//            days of a new month -> show last month" guess with no
+//            idea an actual date was already selected. Now opens on
+//            whatever month the real starting selection is already in
+//            when one exists (Summary); Stock Statement/Pile Layout,
+//            whose period starts genuinely blank, keep the original
+//            guess unchanged.
+export const APP_VERSION = '1.9-44'
