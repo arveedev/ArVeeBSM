@@ -191,14 +191,28 @@ const fetchAuthorityRows = async (source, type) => {
  * its own comment for why they need different merge logic (an array of
  * sack lines, not a single value).
  */
-const upsertAuthority = async (incoming) => {
+// cacheByAiNumber (optional): a Map of aiNumber -> matching records,
+// pre-fetched ONCE for the whole sync run (see runAuthoritiesSync)
+// instead of this function running its own `where('aiNumber')` query
+// for every single incoming Sheet row - a real, confirmed N+1 cost at
+// the scale of a few hundred rows, repeated every 5 minutes. Kept in
+// sync as each row is processed (the cache entry is overwritten with
+// the just-written result) so a LATER row in this same pass still
+// correctly sees whatever an EARLIER row in this pass just wrote -
+// this matters because multiple Sheet rows sharing one AI number in a
+// single sync is exactly the "duplicate row" case the dedup logic
+// below exists to catch. Falls back to a live query when no cache is
+// passed, so this function still works correctly on its own.
+const upsertAuthority = async (incoming, cacheByAiNumber = null) => {
   // Every record sharing this AI number - previously only the first
   // matching record was ever updated, silently leaving any OTHER
   // matching records (e.g. from a Sheet edit that created a second row
   // instead of updating the first) as permanent stale duplicates. Now
   // matches upsertSiaAuthority's approach: pick one canonical record,
   // update it, and clean up the rest.
-  const allMatching = await db.authorities.where('aiNumber').equals(incoming.aiNumber).and((a) => a.type === 'AI').toArray()
+  const allMatching = cacheByAiNumber
+    ? (cacheByAiNumber.get(incoming.aiNumber) ?? [])
+    : await db.authorities.where('aiNumber').equals(incoming.aiNumber).and((a) => a.type === 'AI').toArray()
   // Prefer whichever record has actual issued progress as canonical -
   // that's the one genuinely in use, not an accidental duplicate that
   // was never touched.
@@ -210,7 +224,15 @@ const upsertAuthority = async (incoming) => {
     await db.authorities.bulkDelete(staleDuplicateIds)
   }
 
+  let final
   if (existing) {
+    final = {
+      ...existing,
+      ...incoming,
+      totalIssuedBags: existing.totalIssuedBags ?? 0,
+      totalIssuedKilos: existing.totalIssuedKilos ?? 0,
+      manuallyCompleted: existing.manuallyCompleted ?? false,
+    }
     await db.authorities.update(existing.authId, {
       ...incoming,
       totalIssuedBags: existing.totalIssuedBags ?? 0,
@@ -218,15 +240,18 @@ const upsertAuthority = async (incoming) => {
       manuallyCompleted: existing.manuallyCompleted ?? false,
     })
   } else {
-    await db.authorities.add({
+    final = {
       authId: crypto.randomUUID(),
       ...incoming,
       totalIssuedBags: 0,
       totalIssuedKilos: 0,
       status: 'Pending',
       manuallyCompleted: false,
-    })
+    }
+    await db.authorities.add(final)
   }
+
+  if (cacheByAiNumber) cacheByAiNumber.set(incoming.aiNumber, [final])
 }
 
 /**
@@ -241,14 +266,18 @@ const upsertAuthority = async (incoming) => {
  * data (e.g. removed from the sheet) is dropped; a genuinely new line
  * starts at 0 issued.
  */
-const upsertSiaAuthority = async (incoming) => {
+// cacheBySiaNumber (optional): same batching purpose as upsertAuthority's
+// cacheByAiNumber above - see its comment for the full reasoning.
+const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null) => {
   // Every record sharing this SIA number - under the previous
   // architecture (one record per sack-type+condition combination) there
   // could be several. Only one becomes the canonical record below; any
   // others are leftover duplicates from that old design and are deleted
   // entirely, since they predate the sackLines field and would
   // otherwise sit forever showing no sack type and 0 pieces.
-  const allMatching = await db.authorities.where('siaNumber').equals(incoming.siaNumber).and((a) => a.type === 'SIA').toArray()
+  const allMatching = cacheBySiaNumber
+    ? (cacheBySiaNumber.get(incoming.siaNumber) ?? [])
+    : await db.authorities.where('siaNumber').equals(incoming.siaNumber).and((a) => a.type === 'SIA').toArray()
 
   // Prefer an existing record that already has a sackLines array (i.e.
   // one already migrated to the new shape) as the canonical one to
@@ -269,7 +298,18 @@ const upsertSiaAuthority = async (incoming) => {
     await db.authorities.bulkDelete(staleDuplicateIds)
   }
 
+  let final
   if (existing) {
+    final = {
+      ...existing,
+      date: incoming.date,
+      assignedWarehouse: incoming.assignedWarehouse,
+      customerName: incoming.customerName,
+      transactionTypeName: incoming.transactionTypeName,
+      remarks: incoming.remarks,
+      sackLines: mergedLines,
+      sourceId: incoming.sourceId,
+    }
     await db.authorities.update(existing.authId, {
       date: incoming.date,
       assignedWarehouse: incoming.assignedWarehouse,
@@ -280,7 +320,7 @@ const upsertSiaAuthority = async (incoming) => {
       sourceId: incoming.sourceId,
     })
   } else {
-    await db.authorities.add({
+    final = {
       authId: crypto.randomUUID(),
       type: 'SIA',
       siaNumber: incoming.siaNumber,
@@ -293,8 +333,11 @@ const upsertSiaAuthority = async (incoming) => {
       sackLines: mergedLines,
       sourceId: incoming.sourceId,
       manuallyCompleted: false,
-    })
+    }
+    await db.authorities.add(final)
   }
+
+  if (cacheBySiaNumber) cacheBySiaNumber.set(incoming.siaNumber, [final])
 }
 
 let syncInProgress = false
@@ -496,6 +539,26 @@ const runAuthoritiesSync = async () => {
     const warehouseByAlias = new Map(aliases.map((a) => [a.alias, a.warehouseId]))
     const varietyByCode = new Map(varieties.map((v) => [v.name, v.varietyId]))
     const sackTypeByCode = new Map(sackTypes.map((s) => [s.code, s.sackTypeId]))
+
+    // Pre-fetched ONCE for this whole sync run, not per incoming row -
+    // see upsertAuthority/upsertSiaAuthority's own comments for why
+    // this replaces what used to be a separate `where(...)` query for
+    // every single row (a real N+1 cost at the scale of a few hundred
+    // rows, repeated every 5 minutes).
+    const [existingAiAuthorities, existingSiaAuthorities] = await Promise.all([
+      db.authorities.where('type').equals('AI').toArray(),
+      db.authorities.where('type').equals('SIA').toArray(),
+    ])
+    const aiCache = new Map()
+    for (const a of existingAiAuthorities) {
+      if (!aiCache.has(a.aiNumber)) aiCache.set(a.aiNumber, [])
+      aiCache.get(a.aiNumber).push(a)
+    }
+    const siaCache = new Map()
+    for (const a of existingSiaAuthorities) {
+      if (!siaCache.has(a.siaNumber)) siaCache.set(a.siaNumber, [])
+      siaCache.get(a.siaNumber).push(a)
+    }
     // Miller/customer nickname resolution - "Dens RM" (the sheet's own
     // short name) -> "Dens Marketing Corp" (the real name), so an
     // authority's customerName is already the real name from the
@@ -578,7 +641,7 @@ const runAuthoritiesSync = async () => {
           note1: row['Note1'] ?? null,
           note2: row['Note2'] ?? null,
           sourceId: source.id,
-        })
+        }, aiCache)
         aiCount += 1
       }
 
@@ -686,7 +749,7 @@ const runAuthoritiesSync = async () => {
             totalAllocationBags: g.pieces,
           })),
           sourceId: source.id,
-        })
+        }, siaCache)
         siaCount += 1
       }
 

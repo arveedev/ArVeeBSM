@@ -13,7 +13,7 @@
 // from the database query and previously caused buckets to appear out
 // of sequence (e.g. "6.1-12 months" before "0-6 months").
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronDown } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
@@ -25,6 +25,34 @@ import { computePileStockBySackWeight } from '../utils/pileLedger.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
+
+// One useLiveQuery per pile, each its own independent Dexie
+// subscription - React's Rules of Hooks don't allow a hook call per
+// loop iteration inside one shared component, so this is its own
+// component instance per pile (same reasoning as VarietyCard's own
+// comment below). This is what actually completes the #6 performance
+// fix: with each pile's recompute genuinely independent, saving a
+// transaction against Pile A only re-triggers PILE A's own subscription
+// (Dexie's fine-grained tracking watches the exact pileId-keyed
+// transaction range this reads) - every other pile's already-computed
+// entry is untouched, instead of the whole batched Promise.all
+// (previously one shared query covering every pile at once) re-running
+// for all of them just because one changed. Renders nothing itself -
+// reports its result up to the parent via onData, keyed by pileId.
+function PileWeightSubscriber({ pileId, warehouseCutoffDate, sackTypes, onData }) {
+  // computePileStockBySackWeight combines this warehouse-level cutoff
+  // with the global Data Start Date override itself internally - only
+  // the raw per-warehouse value needs to be passed down here, not a
+  // pre-combined one.
+  const byWeight = useLiveQuery(
+    () => computePileStockBySackWeight(pileId, '9999-12-31', { reportingCutoffDate: warehouseCutoffDate }, sackTypes),
+    [pileId, warehouseCutoffDate, sackTypes]
+  )
+  useEffect(() => {
+    if (byWeight) onData(pileId, byWeight)
+  }, [pileId, byWeight, onData])
+  return null
+}
 
 function SummaryCard({ label, value, sub = false }) {
   return (
@@ -309,33 +337,38 @@ function HomeStocks({ warehouseId } = {}) {
   // later receipts, even though an ordinary Rice/Palay pile - locked to
   // one variety for life, but never locked to one sack weight - can
   // genuinely accumulate more than one weight over its lifetime.
-  // Keyed on the STABLE set of pile IDs, not the `piles` array itself -
-  // `piles` is a fresh array reference every time ANY row in db.piles
-  // changes (even just one pile's age, name, or zeroedDate, unrelated
-  // to this warehouse-wide recompute), which previously tore down and
-  // rebuilt this entire subscription - re-running the full per-pile
-  // Promise.all below for EVERY pile - on every such unrelated write,
-  // not just when a pile's real stock changed. A warehouse with many
-  // piles and years of history visibly lagged on every single save
-  // anywhere in it (confirmed via code audit). This still re-runs for
-  // every pile when a genuine new transaction is saved (Dexie's own
-  // live-query tracking watches the whole batched query as one unit,
-  // not per-pile) - that part needs each pile split into its own
-  // independent subscription to fully fix, a larger restructuring not
-  // done here - but this removes every OTHER unrelated cause of the
-  // same full re-run.
-  const pileIdsKey = piles.map((p) => p.pileId).sort().join(',')
-  const pileStockByWeight = useLiveQuery(async () => {
-    if (piles.length === 0) return new Map()
-    const [warehouse, sackTypes] = await Promise.all([
-      currentWarehouseId ? db.warehouses.get(currentWarehouseId) : null,
-      db.sackTypes.toArray(),
-    ])
-    const entries = await Promise.all(
-      piles.map(async (p) => [p.pileId, await computePileStockBySackWeight(p.pileId, '9999-12-31', warehouse, sackTypes)])
-    )
-    return new Map(entries)
-  }, [pileIdsKey, currentWarehouseId]) ?? new Map()
+  //
+  // Populated by one PileWeightSubscriber instance PER PILE (rendered
+  // below), each an independent Dexie subscription, merged into this
+  // single state Map via onData - completes the #6 performance fix: a
+  // save against one pile now only re-triggers that pile's own entry
+  // here, leaving every other pile's already-computed entry untouched,
+  // instead of one shared query recomputing every pile in the
+  // warehouse whenever any single one of them changed.
+  const [pileStockByWeight, setPileStockByWeight] = useState(new Map())
+  const handlePileWeightData = useCallback((pileId, byWeight) => {
+    setPileStockByWeight((prev) => {
+      const existing = prev.get(pileId)
+      // Bail out of the state update entirely when the new Map is
+      // equivalent to what's already stored - React treats a new Map
+      // reference as a genuine change regardless of content, which
+      // would otherwise re-render on every subscriber's initial mount
+      // even for piles whose figures didn't actually move.
+      if (existing && existing.size === byWeight.size
+        && [...byWeight].every(([w, v]) => existing.get(w)?.bags === v.bags && existing.get(w)?.kilos === v.kilos)) {
+        return prev
+      }
+      const next = new Map(prev)
+      next.set(pileId, byWeight)
+      return next
+    })
+  }, [])
+
+  const warehouseForCutoff = useLiveQuery(
+    () => currentWarehouseId ? db.warehouses.get(currentWarehouseId) : null,
+    [currentWarehouseId]
+  )
+  const pileWeightSackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
 
   const enrichedPiles = piles.map((p) => ({
     ...p,
@@ -437,6 +470,18 @@ function HomeStocks({ warehouseId } = {}) {
 
   return (
     <>
+    {/* Renders nothing visible - each mounts its own independent
+        per-pile Dexie subscription (see PileWeightSubscriber's own
+        comment above) and reports into pileStockByWeight via onData. */}
+    {piles.map((p) => (
+      <PileWeightSubscriber
+        key={p.pileId}
+        pileId={p.pileId}
+        warehouseCutoffDate={warehouseForCutoff?.reportingCutoffDate}
+        sackTypes={pileWeightSackTypes}
+        onData={handlePileWeightData}
+      />
+    ))}
     <div className="relative mt-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <div className="absolute right-4 top-4">
         <PillToggle

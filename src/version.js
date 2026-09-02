@@ -747,4 +747,30 @@
 //            compute one automatically. Does NOT affect Sheet preload/
 //            import or manual serial-number lookup/navigation in the
 //            transaction forms - those still see full history.
-export const APP_VERSION = '1.9-42'
+//   1.9-43 - Two follow-up performance fixes, per explicit request to
+//            finish #6 and #7 from the earlier audit where safely
+//            possible:
+//            1. Home Stocks' per-pile stock-by-weight recompute now
+//               runs as one genuinely independent Dexie subscription
+//               PER PILE (PileWeightSubscriber), instead of one single
+//               query covering every pile in the warehouse at once. A
+//               save against one pile now only re-triggers that pile's
+//               own subscription - every other pile's already-computed
+//               figures are left alone, instead of the whole warehouse
+//               recomputing on every single save anywhere in it.
+//            2. The AI/SIA Sheet sync (runs every 5 minutes) no longer
+//               does its own separate "does this authority already
+//               exist?" database query for every single incoming row -
+//               the existing AI/SIA authorities are now fetched ONCE
+//               per sync run and kept as an in-memory lookup, updated
+//               as each row is processed so a later row still correctly
+//               sees what an earlier row in the same run just wrote
+//               (needed for the existing duplicate-row cleanup logic to
+//               keep working correctly). Same end result, same
+//               dedup/merge behavior, far fewer database reads.
+//            The MO/TMO full-refetch-every-cycle issue is intentionally
+//            NOT touched - fixing it correctly needs delta-fetch support
+//            added to the already-deployed Apps Script itself (confirmed
+//            it currently has none), which can't be safely verified
+//            end-to-end from here without risking what already works.
+export const APP_VERSION = '1.9-43'
