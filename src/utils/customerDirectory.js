@@ -89,6 +89,20 @@ export const resolveCustomerAlias = async (name) => {
   return real?.name ?? trimmed
 }
 
+/**
+ * userAliases - same exact shape/purpose as customerAliases above, but
+ * for Warehouse Supervisor/Acting WS/MPO III/Acting MPO III users (see
+ * dexie.js's v31 migration). Managed in Settings > Users, per user.
+ */
+
+/** Resolves an already-normalized alias fragment (the text typed/found
+ * after the "WS"/"Acting WS"/"MPO III"/"Acting MPO III" prefix) to a
+ * uid if a matching alias is on record, else null. */
+export const resolveUserAlias = async (fragment) => {
+  const alias = await db.userAliases.get(normalizeCustomerName(fragment))
+  return alias?.uid ?? null
+}
+
 /** Resolves the address to actually use for a given warehouse. Only
  * "Various Farmers" ever has a per-warehouse override - and for this
  * one name specifically, there is no shared fallback address at all:
@@ -183,7 +197,14 @@ export const searchWarehouseSupervisors = async (query) => {
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
 
   const fragment = nameFragment.trim().toLowerCase()
-  const matches = users.filter((u) => nameMatchesFragment(u.name.toLowerCase(), fragment))
+  // An admin-managed alias (see userAliases, UsersPanel.jsx) is
+  // authoritative and unambiguous - checked first so it wins over the
+  // general word/initials guess below, which can't handle every real
+  // name shape (a middle name/initial, for one).
+  const aliasHit = fragment ? await resolveUserAlias(fragment) : null
+  const matches = aliasHit
+    ? users.filter((u) => u.uid === aliasHit)
+    : users.filter((u) => nameMatchesFragment(u.name.toLowerCase(), fragment))
 
   matches.sort((a, b) => a.name.localeCompare(b.name))
 
@@ -257,12 +278,15 @@ export const searchMpoUsers = async (query) => {
 
   const allUsers = await db.users.toArray()
   const fragment = nameFragment.trim().toLowerCase()
-  const matches = allUsers.filter((u) => {
-    if (!nameMatchesFragment(u.name.toLowerCase(), fragment)) return false
-    const isMpoRole = u.role === 'MPO III' || u.role === 'Acting MPO III'
-    const isAtAccountabilityFacility = (u.assignedWarehouses ?? []).some((id) => accountabilityFacilityIds.has(id))
-    return isMpoRole || isAtAccountabilityFacility
-  })
+  const aliasHit = fragment ? await resolveUserAlias(fragment) : null
+  const matches = aliasHit
+    ? allUsers.filter((u) => u.uid === aliasHit)
+    : allUsers.filter((u) => {
+      if (!nameMatchesFragment(u.name.toLowerCase(), fragment)) return false
+      const isMpoRole = u.role === 'MPO III' || u.role === 'Acting MPO III'
+      const isAtAccountabilityFacility = (u.assignedWarehouses ?? []).some((id) => accountabilityFacilityIds.has(id))
+      return isMpoRole || isAtAccountabilityFacility
+    })
 
   matches.sort((a, b) => a.name.localeCompare(b.name))
 

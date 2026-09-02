@@ -617,4 +617,15 @@
 //            substring search - fixes this both for picking an
 //            authority (1.9-31/32) and for manually typing "WS"/"MPO"
 //            in the Customer Name field.
-export const APP_VERSION = '1.9-33'
+//   1.9-34 - 1.9-33's initials guess still can't handle every real
+//            name (a middle name/initial breaks the word-count-must-
+//            match rule) - per explicit suggestion, added a proper
+//            admin-managed alias instead, the same mechanism customer
+//            nicknames already use for this exact problem. Settings >
+//            Users now has a "Sheet Aliases" field for Warehouse
+//            Supervisor/Acting WS/MPO III/Acting MPO III users - e.g.
+//            "V. Balaoro" for "Vevencio Balaoro" - checked first
+//            (authoritative, no guessing) before the word/initials
+//            match, for both authority picking and manual "WS"/"MPO"
+//            typing.
+export const APP_VERSION = '1.9-34'

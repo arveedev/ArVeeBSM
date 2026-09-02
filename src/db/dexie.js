@@ -790,6 +790,19 @@ db.version(30).stores({
   customerAliases: 'alias, customerId',
 })
 
+// userAliases: same exact shape/purpose as customerAliases above, but
+// for Warehouse Supervisor/Acting WS/MPO III/Acting MPO III users - the
+// real AI/SIA sheet data very often abbreviates their first name ("WS
+// V. Balaoro", "Acting WS F. Reason") rather than spelling it out
+// ("Vevencio Balaoro", "Florante Reason"), and a compound/middle name
+// makes that unguessable by any general word-matching rule (confirmed:
+// even an initials-aware match still needs the exact same word count on
+// both sides). An admin-managed alias sidesteps guessing entirely,
+// mapping the exact shorthand straight to the real user.
+db.version(31).stores({
+  userAliases: 'alias, uid',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the
