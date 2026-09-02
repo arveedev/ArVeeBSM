@@ -304,23 +304,6 @@ function AdminMonitoring() {
                 ? 'text-brand-neon'
                 : 'text-app-text'
 
-          // Progress bar basis: whichever unit this authority is
-          // actually defined in - kilos when set, bags/pieces
-          // otherwise (an authority can be bags-only, kilos-only, or
-          // both; kilos wins when both exist since it's the more
-          // granular of the two). Clamped to [0, 100] so an
-          // over-issued authority's bar still reads as full rather
-          // than overflowing its own track.
-          const progressAllocation = a.totalAllocationKilos ?? totalAllocBags
-          const progressIssued = a.totalAllocationKilos != null ? (a.totalIssuedKilos ?? 0) : (totalIssuedBags ?? 0)
-          const progressPercent = progressAllocation ? Math.min(100, Math.max(0, (progressIssued / progressAllocation) * 100)) : 0
-          const progressBarFillClass =
-            status === 'Over-Issued'
-              ? 'bg-brand-crimson'
-              : status === 'Complete'
-                ? 'bg-brand-neon'
-                : 'bg-brand-neon/60'
-
           // Shows checked immediately on tap, independent of the
           // (deliberately delayed) DB write - same as
           // AuthorityMonitor.jsx's own pending list.
@@ -400,15 +383,6 @@ function AdminMonitoring() {
                     )}
                   </div>
                 </div>
-
-                {progressAllocation != null && (
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
-                    <div
-                      className={`h-full rounded-full transition-all ${progressBarFillClass}`}
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                )}
               </button>
             </li>
           )

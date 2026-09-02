@@ -668,4 +668,11 @@
 //               shows a progress bar under its numbers, filled to
 //               issued/allocated - full green when complete, dimmer
 //               green while in progress, red if over-issued.
-export const APP_VERSION = '1.9-38'
+//   1.9-39 - 1.9-38 put the progress bar in the wrong place, per
+//            explicit correction - moved off the AI/SIA authority cards
+//            entirely and onto the NFA tab's Regional Authority Number
+//            cards instead (NfaMillingMonitor.jsx / Admin Dashboard's
+//            Miller Allocations panel - both share AllocationUsageSummary
+//            in RicemillRecoveryDetail.jsx, so one change covers both),
+//            filled to used/total.
+export const APP_VERSION = '1.9-39'

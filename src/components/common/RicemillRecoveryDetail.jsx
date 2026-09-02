@@ -126,12 +126,20 @@ export function AllocationUsageSummary({ used, total, weightUnit }) {
   const remaining = total - used
   const isOver = remaining < 0
   const remainingAbs = Math.abs(remaining)
+  // Clamped to [0, 100] so an over-used allocation's bar still reads
+  // as a full track rather than overflowing it - the "Over" line right
+  // below already carries the actual overage amount.
+  const usedPercent = total > 0 ? Math.min(100, Math.max(0, (used / total) * 100)) : 0
+  const barFillClass = isOver ? 'bg-brand-crimson' : usedPercent >= 100 ? 'bg-brand-neon' : 'bg-brand-neon/60'
   return (
     <div className="text-sm text-neutral-500 md:text-base">
       <p>{fmtWeight(used, weightUnit)} used of {fmtWeight(total, weightUnit)}</p>
       <p className={isOver ? 'text-brand-crimson' : 'text-brand-neon'}>
         {isOver ? 'Over' : 'Remaining'}: {fmtWeight(remainingAbs, weightUnit)} · {fmtNetBags(remainingAbs / 50)} Net Bags
       </p>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+        <div className={`h-full rounded-full transition-all ${barFillClass}`} style={{ width: `${usedPercent}%` }} />
+      </div>
     </div>
   )
 }
