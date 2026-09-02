@@ -675,4 +675,34 @@
 //            Miller Allocations panel - both share AllocationUsageSummary
 //            in RicemillRecoveryDetail.jsx, so one change covers both),
 //            filled to used/total.
-export const APP_VERSION = '1.9-39'
+//   1.9-40 - Data-integrity fixes from a full 3-agent code audit
+//            (sync/backup, reports/pages, forms/pile ledger):
+//            1. ESR/ESI (SackFormBase) was missing the double-tap save
+//               lock WSR/WSI/WTS already got - fixed the same way.
+//            2. Updating an existing WSR/WSI could silently save with
+//               a missing AI link, sack type, age, or an incomplete
+//               extra-pile line - the Update button only checked "is
+//               something saving," not the full canSave rule set a NEW
+//               entry is held to. Now gated the same way Save is.
+//            3. Every save/update/delete across all three forms now
+//               groups its transaction-record write together with its
+//               pile/authority/SIA balance effect in one atomic Dexie
+//               transaction - previously these were separate,
+//               independently-committed writes, so the app closing or
+//               losing power mid-save could leave the transaction
+//               record and the real stock level permanently
+//               disagreeing, with no automatic fix.
+//            4. The incremental pile-balance math (apply/reverse, both
+//               StockFormBase/pileLedger.js and WTSForm.jsx) used to
+//               silently clamp a transiently negative running total to
+//               zero and discard the shortfall - a real risk with
+//               backfilled/reordered entries. It now falls back to a
+//               full recompute from actual history in that specific
+//               case only, so nothing is silently lost, without paying
+//               that cost on every normal save.
+//            5. Delete/Void/Unvoid confirmations across all three forms
+//               now lock the same way Save does (both in the handler
+//               and by disabling ConfirmDialog's own confirm button),
+//               closing the same rapid-double-tap window Save was
+//               already fixed for.
+export const APP_VERSION = '1.9-40'

@@ -19,7 +19,7 @@ import { createPortal } from 'react-dom'
 // Must match the transition duration used on the box below.
 const BOX_ANIMATION_MS = 220
 
-function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon, rotate = false, children }) {
+function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon, rotate = false, children, confirmDisabled = false }) {
   const [shouldRender, setShouldRender] = useState(open)
   const [hasEntered, setHasEntered] = useState(false)
 
@@ -102,7 +102,8 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-1 rounded-xl bg-brand-crimson px-3 py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 hover:shadow-[0_0_16px_rgba(239,68,68,0.45)] active:scale-95"
+            disabled={confirmDisabled}
+            className="flex-1 rounded-xl bg-brand-crimson px-3 py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 hover:shadow-[0_0_16px_rgba(239,68,68,0.45)] active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
           >
             {confirmLabel}
           </button>

@@ -31,7 +31,7 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { db } from '../../db/dexie.js'
 import { formatRolePrefixedName } from '../../utils/customerDirectory.js'
-import { deriveZeroedDateUpdate } from '../../utils/pileLedger.js'
+import { deriveZeroedDateUpdate, recalculatePileCurrentState } from '../../utils/pileLedger.js'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
@@ -545,13 +545,23 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (tx.issuedPileId && tx.issuedBags != null) {
       const pile = await db.piles.get(tx.issuedPileId)
       if (pile) {
-        const newBags = Math.max(0, (pile.currentBags ?? 0) - tx.issuedBags)
-        const newKilos = Math.max(0, round3((pile.currentKilos ?? 0) - (tx.issuedNetKilos ?? 0)))
-        await db.piles.update(pile.pileId, {
-          currentBags: newBags,
-          currentKilos: newKilos,
-          ...deriveZeroedDateUpdate(pile, newBags, newKilos),
-        })
+        const rawBags = (pile.currentBags ?? 0) - tx.issuedBags
+        const rawKilos = round3((pile.currentKilos ?? 0) - (tx.issuedNetKilos ?? 0))
+        // See pileLedger.js's applyTransactionToPile for the full
+        // reasoning - a transiently negative result means this WTS was
+        // applied out of the pile's true chronological order, so the
+        // running delta can no longer be trusted; fall back to a full
+        // recompute from real history instead of silently discarding
+        // the shortfall.
+        if (rawBags < 0 || rawKilos < 0) {
+          await recalculatePileCurrentState(pile.pileId)
+        } else {
+          await db.piles.update(pile.pileId, {
+            currentBags: rawBags,
+            currentKilos: rawKilos,
+            ...deriveZeroedDateUpdate(pile, rawBags, rawKilos),
+          })
+        }
       }
     }
     if (tx.receivedPileId && tx.receivedBags != null) {
@@ -584,13 +594,18 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (tx.receivedPileId && tx.receivedBags != null) {
       const pile = await db.piles.get(tx.receivedPileId)
       if (pile) {
-        const newBags = Math.max(0, (pile.currentBags ?? 0) - tx.receivedBags)
-        const newKilos = Math.max(0, round3((pile.currentKilos ?? 0) - (tx.receivedNetKilos ?? 0)))
-        await db.piles.update(pile.pileId, {
-          currentBags: newBags,
-          currentKilos: newKilos,
-          ...deriveZeroedDateUpdate(pile, newBags, newKilos),
-        })
+        const rawBags = (pile.currentBags ?? 0) - tx.receivedBags
+        const rawKilos = round3((pile.currentKilos ?? 0) - (tx.receivedNetKilos ?? 0))
+        // See applyWtsToPiles above for the full reasoning.
+        if (rawBags < 0 || rawKilos < 0) {
+          await recalculatePileCurrentState(pile.pileId)
+        } else {
+          await db.piles.update(pile.pileId, {
+            currentBags: rawBags,
+            currentKilos: rawKilos,
+            ...deriveZeroedDateUpdate(pile, rawBags, rawKilos),
+          })
+        }
       }
     }
   }
@@ -649,9 +664,15 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // exists - `date` alone can't disambiguate two series used on the
     // same calendar day.
     const tx = { id: crypto.randomUUID(), ...buildPayload(), createdAt: Date.now() }
-    await db.transactions.add(tx)
-    await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim(), null, { date: tx.date, createdAt: tx.createdAt })
-    await applyWtsToPiles(tx)
+    // Grouped into one atomic Dexie transaction - see StockFormBase.jsx's
+    // identical fix for the full reasoning (partial-write risk between
+    // the transaction record and its effect on BOTH piles if the app
+    // closed/lost power midway through the two-sided write).
+    await db.transaction('rw', db.tables, async () => {
+      await db.transactions.add(tx)
+      await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim(), null, { date: tx.date, createdAt: tx.createdAt })
+      await applyWtsToPiles(tx)
+    })
     toast.success(`WTS saved — ${serialNo.trim()}`)
     // suggestNextSerial (date-aware, per the just-recorded save above)
     // instead of a blind ±1 - see StockFormBase.jsx's matching change
@@ -666,10 +687,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (isSaving) return
     setIsSaving(true)
     if (!(await validate(loadedTransaction.id))) { setIsSaving(false); return }
-    await reverseWtsFromPiles(loadedTransaction)
     const updated = buildPayload({ id: loadedTransaction.id })
-    await db.transactions.update(loadedTransaction.id, updated)
-    await applyWtsToPiles(updated)
+    // Grouped into one atomic Dexie transaction - see handleSave above.
+    await db.transaction('rw', db.tables, async () => {
+      await reverseWtsFromPiles(loadedTransaction)
+      await db.transactions.update(loadedTransaction.id, updated)
+      await applyWtsToPiles(updated)
+    })
     toast.success(`WTS ${serialNo.trim()} updated`)
     setLoadedTransaction(updated)
     setIsSaving(false)
@@ -677,12 +701,16 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   }
 
   const handleDeleteConfirmed = async () => {
+    if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
-    await reverseWtsFromPiles(loadedTransaction)
-    await db.transactions.delete(loadedTransaction.id)
-    await recalculateSerialCounter('WTS', currentWarehouseId)
-    queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
+    // Grouped into one atomic Dexie transaction - see handleSave above.
+    await db.transaction('rw', db.tables, async () => {
+      await reverseWtsFromPiles(loadedTransaction)
+      await db.transactions.delete(loadedTransaction.id)
+      await recalculateSerialCounter('WTS', currentWarehouseId)
+      queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
+    })
     toast.success(`WTS ${serialNo.trim()} deleted`)
     resetForm(serialNo.trim())
     setIsSaving(false)
@@ -694,6 +722,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   // being voided, both sides' prior pile effects are reversed first,
   // since it no longer represents a real transfer.
   const handleConfirmVoid = async () => {
+    if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
     if (loadedTransaction && loadedTransaction.status !== 'Cancelled') {
@@ -717,6 +746,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   // Un-voiding deletes the Cancelled record entirely, making the
   // serial genuinely available again.
   const handleConfirmUnvoid = async () => {
+    if (isSaving) return
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
@@ -926,6 +956,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         description="This reverses its effect on both piles' totals. This cannot be undone."
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
+        confirmDisabled={isSaving}
       />
 
       <ConfirmDialog
@@ -936,6 +967,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         confirmLabel="Void"
         onConfirm={handleConfirmVoid}
         onCancel={() => setPendingVoidAction(null)}
+        confirmDisabled={isSaving}
       />
 
       <ConfirmDialog
@@ -947,6 +979,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         cancelLabel="No"
         onConfirm={handleConfirmUnvoid}
         onCancel={() => setPendingVoidAction(null)}
+        confirmDisabled={isSaving}
       />
     </div>
   )

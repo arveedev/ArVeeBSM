@@ -1820,7 +1820,67 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       ...(validExtraAllocations.length > 0 ? { groupSerialNo: serialNo.trim() } : {}),
     }
 
-    await db.transactions.add(transaction)
+    // Everything below - the transaction record, its effect on the
+    // pile(s), the authority balance, and the serial-counter/customer-
+    // directory bookkeeping - is grouped into one atomic Dexie
+    // transaction (db.tables covers every table any nested call could
+    // touch, including applyTransactionToPile's own full-recompute
+    // fallback). Per the audit finding, these were previously separate,
+    // independently-committed writes: if the app closed or lost power
+    // midway, the transaction record and the pile's real stock level
+    // could permanently disagree with no automatic fix.
+    let extraBagsTotal = 0
+    let extraKilosTotal = 0
+    await db.transaction('rw', db.tables, async () => {
+      await db.transactions.add(transaction)
+
+      // These three don't depend on each other's results - running
+      // them concurrently reduces the total local save latency the
+      // user actually waits through, since this determines how long it
+      // takes before "saved" appears.
+      await Promise.all([
+        recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory, { date: transaction.date, createdAt: transaction.createdAt }),
+        applyTransactionToPile(transaction),
+        rememberCustomer({
+          name: customerName.trim(),
+          address: customerAddress.trim() || null,
+          rsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
+          gender: isProcurement ? farmerGender || null : null,
+          isFarmerOrg: farmerOrgEnabled,
+          farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
+          warehouseId: currentWarehouseId,
+        }),
+      ])
+
+      // Multi-pile issuance: each additional pile allocation becomes
+      // its own separate, linked transaction record - same date/
+      // customer/AI/type as the primary one, but its own pileId and
+      // bags/kilos portion, with the base serial suffixed (A, B, C...)
+      // to stay unique, and the same groupSerialNo (inherited via the
+      // spread below) linking it back to the primary record - not part
+      // of the core schema (still one pileId per transaction record),
+      // but reports now recognize and combine these into a single row
+      // via groupSerialNo, while the pile ledger and Sheet sync still
+      // see them as the ordinary, independent records they actually are.
+      for (const [idx, alloc] of validExtraAllocations.entries()) {
+        const fields = computeAllocFields(alloc)
+        extraBagsTotal += fields.numberOfBags
+        extraKilosTotal += fields.netKilos
+        const extraTransaction = {
+          ...transaction,
+          id: crypto.randomUUID(),
+          serialNo: `${serialNo.trim()}-${String.fromCharCode(65 + idx)}`,
+          pileId: alloc.pileId,
+          ...fields,
+        }
+        await db.transactions.add(extraTransaction)
+        await applyTransactionToPile(extraTransaction)
+      }
+
+      if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
+        await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum + extraBagsTotal, netKilos + extraKilosTotal)
+      }
+    })
 
     // Sheet-side duplicate-serial check, moved out of the blocking
     // validateForm path (where it used to make every new save wait on
@@ -1829,62 +1889,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // succeeded - a genuine cross-device collision is rare enough that
     // catching it a few seconds later with a warning toast is an
     // acceptable trade for not freezing the UI on every single save.
+    // Deliberately outside the atomic block above - a network call, not
+    // a Dexie operation, and not needed for the save's own consistency.
     if (navigator.onLine) {
       fetchTransactionBySerial(type, currentWarehouse?.name, transaction.serialNo).then((sheetCheck) => {
         if (sheetCheck.ok && sheetCheck.row) {
           toast.error(`Serial ${transaction.serialNo} may already exist on the Sheet — please verify before syncing`, { duration: 8000 })
         }
       })
-    }
-
-    // These three don't depend on each other's results - running them
-    // concurrently reduces the total local save latency the user
-    // actually waits through, since this determines how long it takes
-    // before "saved" appears. The Sheet sync itself already happens
-    // entirely separately, in the background, unaffected either way.
-    await Promise.all([
-      recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory, { date: transaction.date, createdAt: transaction.createdAt }),
-      applyTransactionToPile(transaction),
-      rememberCustomer({
-        name: customerName.trim(),
-        address: customerAddress.trim() || null,
-        rsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
-        gender: isProcurement ? farmerGender || null : null,
-        isFarmerOrg: farmerOrgEnabled,
-        farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
-        warehouseId: currentWarehouseId,
-      }),
-    ])
-
-    // Multi-pile issuance: each additional pile allocation becomes its
-    // own separate, linked transaction record - same date/customer/AI/
-    // type as the primary one, but its own pileId and bags/kilos
-    // portion, with the base serial suffixed (A, B, C...) to stay
-    // unique, and the same groupSerialNo (inherited via the spread
-    // below) linking it back to the primary record - not part of the
-    // core schema (still one pileId per transaction record), but
-    // reports now recognize and combine these into a single row via
-    // groupSerialNo, while the pile ledger and Sheet sync still see
-    // them as the ordinary, independent records they actually are.
-    let extraBagsTotal = 0
-    let extraKilosTotal = 0
-    for (const [idx, alloc] of validExtraAllocations.entries()) {
-      const fields = computeAllocFields(alloc)
-      extraBagsTotal += fields.numberOfBags
-      extraKilosTotal += fields.netKilos
-      const extraTransaction = {
-        ...transaction,
-        id: crypto.randomUUID(),
-        serialNo: `${serialNo.trim()}-${String.fromCharCode(65 + idx)}`,
-        pileId: alloc.pileId,
-        ...fields,
-      }
-      await db.transactions.add(extraTransaction)
-      await applyTransactionToPile(extraTransaction)
-    }
-
-    if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
-      await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum + extraBagsTotal, netKilos + extraKilosTotal)
     }
 
     // Test Milling: same pattern as the Milling (MO) case just below -
@@ -1997,89 +2009,102 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     const ok = await validateForm({ excludeId: loadedTransaction.id })
     if (!ok) { setIsSaving(false); return }
 
-    // Reverse the OLD combined effect (primary + every original extra
-    // allocation) before applying anything new - see reverseGroupEffect.
-    await reverseGroupEffect(loadedTransaction)
-
     const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.grossKilos || a.manualKilos))
-
     const updated = buildTransactionPayload({
       id: loadedTransaction.id,
       groupSerialNo: validExtraAllocations.length > 0 ? serialNo.trim() : null,
     })
-    await db.transactions.update(loadedTransaction.id, updated)
-    await applyTransactionToPile(updated)
-    await rememberCustomer({
-      name: customerName.trim(),
-      address: customerAddress.trim() || null,
-      rsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
-      gender: isProcurement ? farmerGender || null : null,
-      isFarmerOrg: farmerOrgEnabled,
-      farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
-      warehouseId: currentWarehouseId,
-    })
-
-    // Reconcile the extra pile allocations against what actually
-    // existed before this edit (originalExtraAllocations): a line with
-    // a txId matching an original updates that same record in place
-    // (keeping its own serialNo, so an unchanged/lightly-edited line
-    // never gets renamed); a line with no txId is a genuinely new
-    // allocation added during this edit, and gets the next unused
-    // letter suffix; any original whose txId no longer survives among
-    // the current valid lines was removed by the user and gets deleted
-    // (its old pile/authority effect was already reversed above).
-    const usedLetters = new Set(
-      validExtraAllocations
-        .filter((a) => a.txId)
-        .map((a) => originalExtraAllocations.find((o) => o.id === a.txId)?.serialNo)
-        .filter(Boolean)
-        .map((s) => s.slice(serialNo.trim().length + 1))
-    )
 
     let extraBagsTotal = 0
     let extraKilosTotal = 0
     const survivingTxIds = new Set()
-    for (const alloc of validExtraAllocations) {
-      const fields = computeAllocFields(alloc)
-      extraBagsTotal += fields.numberOfBags
-      extraKilosTotal += fields.netKilos
 
-      if (alloc.txId) {
-        survivingTxIds.add(alloc.txId)
-        const orig = originalExtraAllocations.find((o) => o.id === alloc.txId)
-        const extraUpdated = {
-          ...updated,
-          id: alloc.txId,
-          serialNo: orig?.serialNo ?? `${serialNo.trim()}-${nextAvailableLetter(usedLetters)}`,
-          pileId: alloc.pileId,
-          ...fields,
+    // Everything below - reversing the old effect, writing the updated
+    // record(s), the pile balance change(s), and the authority balance
+    // change - is grouped into one atomic Dexie transaction (db.tables
+    // covers every table any nested call could touch, including
+    // applyTransactionToPile's own full-recompute fallback). Per the
+    // audit finding, these were previously separate, independently-
+    // committed writes: if the app closed or lost power midway, the
+    // transaction record and the pile's real stock level could
+    // permanently disagree with no automatic fix.
+    await db.transaction('rw', db.tables, async () => {
+      // Reverse the OLD combined effect (primary + every original extra
+      // allocation) before applying anything new - see reverseGroupEffect.
+      await reverseGroupEffect(loadedTransaction)
+
+      await db.transactions.update(loadedTransaction.id, updated)
+      await applyTransactionToPile(updated)
+      await rememberCustomer({
+        name: customerName.trim(),
+        address: customerAddress.trim() || null,
+        rsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
+        gender: isProcurement ? farmerGender || null : null,
+        isFarmerOrg: farmerOrgEnabled,
+        farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
+        warehouseId: currentWarehouseId,
+      })
+
+      // Reconcile the extra pile allocations against what actually
+      // existed before this edit (originalExtraAllocations): a line
+      // with a txId matching an original updates that same record in
+      // place (keeping its own serialNo, so an unchanged/lightly-
+      // edited line never gets renamed); a line with no txId is a
+      // genuinely new allocation added during this edit, and gets the
+      // next unused letter suffix; any original whose txId no longer
+      // survives among the current valid lines was removed by the user
+      // and gets deleted (its old pile/authority effect was already
+      // reversed above).
+      const usedLetters = new Set(
+        validExtraAllocations
+          .filter((a) => a.txId)
+          .map((a) => originalExtraAllocations.find((o) => o.id === a.txId)?.serialNo)
+          .filter(Boolean)
+          .map((s) => s.slice(serialNo.trim().length + 1))
+      )
+
+      for (const alloc of validExtraAllocations) {
+        const fields = computeAllocFields(alloc)
+        extraBagsTotal += fields.numberOfBags
+        extraKilosTotal += fields.netKilos
+
+        if (alloc.txId) {
+          survivingTxIds.add(alloc.txId)
+          const orig = originalExtraAllocations.find((o) => o.id === alloc.txId)
+          const extraUpdated = {
+            ...updated,
+            id: alloc.txId,
+            serialNo: orig?.serialNo ?? `${serialNo.trim()}-${nextAvailableLetter(usedLetters)}`,
+            pileId: alloc.pileId,
+            ...fields,
+          }
+          await db.transactions.update(alloc.txId, extraUpdated)
+          await applyTransactionToPile(extraUpdated)
+        } else {
+          const letter = nextAvailableLetter(usedLetters)
+          usedLetters.add(letter)
+          const extraTransaction = {
+            ...updated,
+            id: crypto.randomUUID(),
+            serialNo: `${serialNo.trim()}-${letter}`,
+            pileId: alloc.pileId,
+            ...fields,
+          }
+          await db.transactions.add(extraTransaction)
+          await applyTransactionToPile(extraTransaction)
         }
-        await db.transactions.update(alloc.txId, extraUpdated)
-        await applyTransactionToPile(extraUpdated)
-      } else {
-        const letter = nextAvailableLetter(usedLetters)
-        usedLetters.add(letter)
-        const extraTransaction = {
-          ...updated,
-          id: crypto.randomUUID(),
-          serialNo: `${serialNo.trim()}-${letter}`,
-          pileId: alloc.pileId,
-          ...fields,
-        }
-        await db.transactions.add(extraTransaction)
-        await applyTransactionToPile(extraTransaction)
       }
-    }
 
-    for (const orig of originalExtraAllocations) {
-      if (survivingTxIds.has(orig.id)) continue
-      await db.transactions.delete(orig.id)
-      queueTransactionDeletion(orig.serialNo, updated.type, currentWarehouse?.code) // fire-and-forget, same as a normal delete
-    }
+      for (const orig of originalExtraAllocations) {
+        if (survivingTxIds.has(orig.id)) continue
+        await db.transactions.delete(orig.id)
+        queueTransactionDeletion(orig.serialNo, updated.type, currentWarehouse?.code) // fire-and-forget, same as a normal delete
+      }
 
-    if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
-      await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum + extraBagsTotal, netKilos + extraKilosTotal)
-    }
+      if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
+        await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum + extraBagsTotal, netKilos + extraKilosTotal)
+      }
+    })
 
     toast.success(`${type} ${serialNo.trim()} updated`)
     // Reloads from the freshly-saved state (including a fresh sibling
@@ -2093,6 +2118,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   }
 
   const handleDeleteConfirmed = async () => {
+    if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
 
@@ -2103,16 +2129,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // at a primary that no longer exists) and silently keep their
     // share applied to both the pile totals and the authority balance,
     // in permanent disagreement with the (correctly reversed) primary.
-    await reverseGroupEffect(loadedTransaction)
+    // Grouped into one atomic transaction, same reasoning as
+    // performSave/handleUpdate above.
+    await db.transaction('rw', db.tables, async () => {
+      await reverseGroupEffect(loadedTransaction)
 
-    await db.transactions.delete(loadedTransaction.id)
-    await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
-    queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
+      await db.transactions.delete(loadedTransaction.id)
+      await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
+      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
 
-    for (const orig of originalExtraAllocations) {
-      await db.transactions.delete(orig.id)
-      queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
-    }
+      for (const orig of originalExtraAllocations) {
+        await db.transactions.delete(orig.id)
+        queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
+      }
+    })
 
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
@@ -2129,6 +2159,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // prior pile/authority effects are reversed first, since it no
   // longer represents a real movement.
   const handleConfirmVoid = async () => {
+    if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
     if (loadedTransaction && loadedTransaction.status !== 'Cancelled') {
@@ -2169,6 +2200,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // above) gets deleted right along with the primary's, for the same
   // reason deleting a multi-pile group deletes every linked record.
   const handleConfirmUnvoid = async () => {
+    if (isSaving) return
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
@@ -3217,10 +3249,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         {isEditMode ? (
+          <div>
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={handleUpdate}
+              onClick={() => {
+                // Same canSave gate the Save button already has - per
+                // the audit finding this was missing entirely, an
+                // editing session could silently persist with a
+                // missing AI link, sack type, age, or an incomplete
+                // extra-pile allocation line that a NEW entry would
+                // have been blocked from saving in the first place.
+                if (!canSave) { setShowSaveHint(true); return }
+                handleUpdate()
+              }}
               disabled={isSaving}
               className="relative flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
@@ -3234,6 +3276,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             >
               <DeleteButtonLabel incrementKey={deleteAnimKey} />
             </button>
+          </div>
+          {showSaveHint && !canSave && (
+            <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
+          )}
           </div>
         ) : (
           <div>
@@ -3282,6 +3328,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         description="This reverses its effect on the pile and any linked AI/SIA balance, and frees this serial number. This cannot be undone."
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
+        confirmDisabled={isSaving}
       />
 
       <ConfirmDialog
@@ -3292,6 +3339,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         confirmLabel="Void"
         onConfirm={handleConfirmVoid}
         onCancel={() => setPendingVoidAction(null)}
+        confirmDisabled={isSaving}
       />
 
       <ConfirmDialog
@@ -3303,6 +3351,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         cancelLabel="No"
         onConfirm={handleConfirmUnvoid}
         onCancel={() => setPendingVoidAction(null)}
+        confirmDisabled={isSaving}
       />
 
       <ConfirmDialog

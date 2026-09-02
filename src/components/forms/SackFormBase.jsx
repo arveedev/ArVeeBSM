@@ -816,34 +816,36 @@ const SackFormBase = forwardRef(function SackFormBase(
     // why this exists - `date` alone can't disambiguate two series used
     // on the same calendar day.
     const transaction = { id: crypto.randomUUID(), ...buildTransactionPayload(), createdAt: Date.now() }
-    await db.transactions.add(transaction)
 
-    // Sheet-side duplicate-serial check, moved out of the blocking
-    // validateForm path (where it used to make every new save wait on
-    // a full Apps Script round-trip before the record even hit local
-    // IndexedDB) and run here instead, after the local save already
-    // succeeded - a genuine cross-device collision is rare enough that
-    // catching it a few seconds later with a warning toast is an
-    // acceptable trade for not freezing the UI on every single save.
+    // Grouped into one atomic Dexie transaction - see StockFormBase.jsx's
+    // identical fix for the full reasoning (partial-write risk between
+    // the transaction record and its SIA balance effect if the app
+    // closed/lost power midway).
+    await db.transaction('rw', db.tables, async () => {
+      await db.transactions.add(transaction)
+
+      await Promise.all([
+        recordSerialUsed(type, currentWarehouseId, serialNo.trim(), null, { date: transaction.date, createdAt: transaction.createdAt }),
+        rememberCustomer({
+          name: customerName.trim(),
+          address: customerAddress.trim() || null,
+          warehouseId: currentWarehouseId,
+        }),
+      ])
+
+      if (type === 'ESI' && linkedDocNo.trim()) {
+        await adjustSiaBalance(linkedDocNo.trim(), buildLineDeltas(sackLines, 1))
+      }
+    })
+
+    // Sheet-side duplicate-serial check - deliberately outside the
+    // atomic block above (a network call, not a Dexie operation).
     if (navigator.onLine) {
       fetchTransactionBySerial(type, currentWarehouse?.name, transaction.serialNo).then((sheetCheck) => {
         if (sheetCheck.ok && sheetCheck.row) {
           toast.error(`Serial ${transaction.serialNo} may already exist on the Sheet — please verify before syncing`, { duration: 8000 })
         }
       })
-    }
-
-    await Promise.all([
-      recordSerialUsed(type, currentWarehouseId, serialNo.trim(), null, { date: transaction.date, createdAt: transaction.createdAt }),
-      rememberCustomer({
-        name: customerName.trim(),
-        address: customerAddress.trim() || null,
-        warehouseId: currentWarehouseId,
-      }),
-    ])
-
-    if (type === 'ESI' && linkedDocNo.trim()) {
-      await adjustSiaBalance(linkedDocNo.trim(), buildLineDeltas(sackLines, 1))
     }
 
     // Test Milling: no confirmation prompt - completion is manual-only
@@ -903,33 +905,48 @@ const SackFormBase = forwardRef(function SackFormBase(
   }
 
   const handleSave = async () => {
+    // Locks IMMEDIATELY, before validateForm() even runs - not after.
+    // A rapid double-tap (a real, confirmed mobile pattern - see
+    // StockFormBase.jsx/WTSForm.jsx's identical fix) could otherwise
+    // pass validateForm() in parallel with the first tap, both seeing
+    // the typed serial as still free (isSerialTaken hasn't been
+    // written by either yet), and create two real records sharing one
+    // serial.
+    if (isSaving) return
+    setIsSaving(true)
     const ok = await validateForm()
-    if (!ok) return
+    if (!ok) { setIsSaving(false); return }
 
     await performSave()
   }
 
   const handleUpdate = async () => {
-    const ok = await validateForm({ excludeId: loadedTransaction.id })
-    if (!ok) return
-
+    // Same race-window fix as handleSave.
+    if (isSaving) return
     setIsSaving(true)
-
-    if (loadedTransaction.siaNumber) {
-      await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
-    }
+    const ok = await validateForm({ excludeId: loadedTransaction.id })
+    if (!ok) { setIsSaving(false); return }
 
     const updated = buildTransactionPayload({ id: loadedTransaction.id })
-    await db.transactions.update(loadedTransaction.id, updated)
-    await rememberCustomer({
-      name: customerName.trim(),
-      address: customerAddress.trim() || null,
-      warehouseId: currentWarehouseId,
-    })
 
-    if (type === 'ESI' && linkedDocNo.trim()) {
-      await adjustSiaBalance(linkedDocNo.trim(), buildLineDeltas(sackLines, 1))
-    }
+    // Grouped into one atomic Dexie transaction - see StockFormBase.jsx's
+    // identical fix for the full reasoning.
+    await db.transaction('rw', db.tables, async () => {
+      if (loadedTransaction.siaNumber) {
+        await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
+      }
+
+      await db.transactions.update(loadedTransaction.id, updated)
+      await rememberCustomer({
+        name: customerName.trim(),
+        address: customerAddress.trim() || null,
+        warehouseId: currentWarehouseId,
+      })
+
+      if (type === 'ESI' && linkedDocNo.trim()) {
+        await adjustSiaBalance(linkedDocNo.trim(), buildLineDeltas(sackLines, 1))
+      }
+    })
 
     toast.success(`${type} ${serialNo.trim()} updated`)
     setLoadedTransaction(updated)
@@ -938,16 +955,21 @@ const SackFormBase = forwardRef(function SackFormBase(
   }
 
   const handleDeleteConfirmed = async () => {
+    if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
 
-    if (loadedTransaction.siaNumber) {
-      await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
-    }
+    // Grouped into one atomic Dexie transaction - see StockFormBase.jsx's
+    // identical fix for the full reasoning.
+    await db.transaction('rw', db.tables, async () => {
+      if (loadedTransaction.siaNumber) {
+        await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
+      }
 
-    await db.transactions.delete(loadedTransaction.id)
-    await recalculateSerialCounter(type, currentWarehouseId)
-    queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
+      await db.transactions.delete(loadedTransaction.id)
+      await recalculateSerialCounter(type, currentWarehouseId)
+      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
+    })
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
     const freedSerial = serialNo.trim()
@@ -962,6 +984,7 @@ const SackFormBase = forwardRef(function SackFormBase(
   // link, that balance is reversed first, since it no longer
   // represents a real issuance.
   const handleConfirmVoid = async () => {
+    if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
     if (loadedTransaction && loadedTransaction.status !== 'Cancelled' && loadedTransaction.siaNumber) {
@@ -986,6 +1009,7 @@ const SackFormBase = forwardRef(function SackFormBase(
   // serial genuinely available again rather than leaving behind an
   // incomplete "Active" record that would fail validation.
   const handleConfirmUnvoid = async () => {
+    if (isSaving) return
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
@@ -1520,6 +1544,7 @@ const SackFormBase = forwardRef(function SackFormBase(
         description="This reverses any linked SIA balance and frees this serial number. This cannot be undone."
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
+        confirmDisabled={isSaving}
       />
 
       <ConfirmDialog
@@ -1530,6 +1555,7 @@ const SackFormBase = forwardRef(function SackFormBase(
         confirmLabel="Void"
         onConfirm={handleConfirmVoid}
         onCancel={() => setPendingVoidAction(null)}
+        confirmDisabled={isSaving}
       />
 
       <ConfirmDialog
@@ -1541,6 +1567,7 @@ const SackFormBase = forwardRef(function SackFormBase(
         cancelLabel="No"
         onConfirm={handleConfirmUnvoid}
         onCancel={() => setPendingVoidAction(null)}
+        confirmDisabled={isSaving}
       />
 
       <ConfirmDialog

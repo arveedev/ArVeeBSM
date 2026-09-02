@@ -71,14 +71,8 @@ export const applyTransactionToPile = async (transaction) => {
 
   const bagsDelta = (transaction.numberOfBags ?? 0) * direction
   const kilosDelta = (transaction.netKilos ?? 0) * direction
-  const newBags = Math.max(0, (pile.currentBags ?? 0) + bagsDelta)
-  const newKilos = Math.max(0, round3((pile.currentKilos ?? 0) + kilosDelta))
-
-  const update = {
-    currentBags: newBags,
-    currentKilos: newKilos,
-    ...deriveZeroedDateUpdate(pile, newBags, newKilos),
-  }
+  const rawBags = (pile.currentBags ?? 0) + bagsDelta
+  const rawKilos = round3((pile.currentKilos ?? 0) + kilosDelta)
 
   // A receipt's entered age was previously stored only on the
   // transaction itself, never applied to the pile - meaning it had no
@@ -86,12 +80,36 @@ export const applyTransactionToPile = async (transaction) => {
   // when the user genuinely entered an age (ageValue is null when left
   // blank), so leaving it blank correctly preserves the pile's existing
   // age instead of silently resetting it to 0.
+  const ageUpdate = {}
   if (transaction.type === 'WSR' && transaction.ageValue != null) {
-    update.initialAgeValue = transaction.initialAgeValue ?? 0
-    update.dateOfReceipt = transaction.date ?? pile.dateOfReceipt
+    ageUpdate.initialAgeValue = transaction.initialAgeValue ?? 0
+    ageUpdate.dateOfReceipt = transaction.date ?? pile.dateOfReceipt
   }
 
-  await db.piles.update(pile.pileId, update)
+  // A transiently negative running total here means this transaction
+  // was applied out of the pile's true chronological order (a
+  // backfilled entry, or a receipt saved after the issuance that
+  // depended on it) - real, confirmed scenario. The fast math above
+  // only tracks a running delta off whatever currentBags/currentKilos
+  // already was, so once that assumption breaks it has no way to
+  // recover the true total - silently clamping to 0 here (the old
+  // behavior) discarded the shortfall permanently instead of carrying
+  // it forward, letting the live balance drift from what a full
+  // recompute would show. Falls back to a full recompute from actual
+  // history ONLY in this case, not on every save, so the common case
+  // stays exactly as fast as before.
+  if (rawBags < 0 || rawKilos < 0) {
+    await recalculatePileCurrentState(pile.pileId)
+    if (Object.keys(ageUpdate).length > 0) await db.piles.update(pile.pileId, ageUpdate)
+    return
+  }
+
+  await db.piles.update(pile.pileId, {
+    currentBags: rawBags,
+    currentKilos: rawKilos,
+    ...deriveZeroedDateUpdate(pile, rawBags, rawKilos),
+    ...ageUpdate,
+  })
 }
 
 /**
@@ -108,13 +126,22 @@ export const reverseTransactionFromPile = async (transaction) => {
 
   const bagsDelta = (transaction.numberOfBags ?? 0) * direction
   const kilosDelta = (transaction.netKilos ?? 0) * direction
-  const newBags = Math.max(0, (pile.currentBags ?? 0) - bagsDelta)
-  const newKilos = Math.max(0, round3((pile.currentKilos ?? 0) - kilosDelta))
+  const rawBags = (pile.currentBags ?? 0) - bagsDelta
+  const rawKilos = round3((pile.currentKilos ?? 0) - kilosDelta)
+
+  // See applyTransactionToPile's identical guard above for the full
+  // reasoning - a transiently negative result here means the running
+  // total can no longer be trusted, so fall back to a full recompute
+  // from real history rather than silently clamping and discarding it.
+  if (rawBags < 0 || rawKilos < 0) {
+    await recalculatePileCurrentState(pile.pileId)
+    return
+  }
 
   await db.piles.update(pile.pileId, {
-    currentBags: newBags,
-    currentKilos: newKilos,
-    ...deriveZeroedDateUpdate(pile, newBags, newKilos),
+    currentBags: rawBags,
+    currentKilos: rawKilos,
+    ...deriveZeroedDateUpdate(pile, rawBags, rawKilos),
   })
 }
 
