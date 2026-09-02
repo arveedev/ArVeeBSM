@@ -762,7 +762,15 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         )}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4 space-y-3">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 pb-28 pt-4 space-y-3"
+        // See StockFormBase.jsx's identical spot - removes the
+        // duplicate scrollbar that shows through AuthorityPickerModal's
+        // backdrop from this form's own still-scrollable container
+        // sitting behind it.
+        style={showAuthorityPicker ? { overflow: 'hidden' } : undefined}
+      >
         <AnimatedBanner show={isEditMode} className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
           Reviewing WTS {loadedTransaction?.serialNo} — Update or Delete below.
         </AnimatedBanner>

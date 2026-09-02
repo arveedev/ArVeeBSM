@@ -1062,7 +1062,15 @@ const SackFormBase = forwardRef(function SackFormBase(
         )}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 pb-28 pt-4"
+        // See StockFormBase.jsx's identical spot - removes the
+        // duplicate scrollbar that shows through AuthorityPickerModal's
+        // backdrop from this form's own still-scrollable container
+        // sitting behind it.
+        style={showAuthorityPicker ? { overflow: 'hidden' } : undefined}
+      >
         <div className="space-y-3">
           <AnimatedBanner show={isAdmin && Boolean(loadedTransaction?.needsCompletion)} className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
             This record was pulled from historical Sheet data. The sack breakdown by type/condition was not tracked there

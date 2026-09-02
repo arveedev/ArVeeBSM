@@ -1009,7 +1009,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       && (isFillersType || Boolean(selectedPile) || Boolean(varietyId))
       && (Boolean(numberOfBags) || Boolean(grossKilos))
       && (isFillersType || Boolean(sackSelection))
-      && (isFillersType || activeCategory === 'By Products' || (moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))))
+      // MC is required for Rice/Palay regardless of transaction type -
+      // per explicit correction, FILLERS does NOT exempt it the way it
+      // exempts pile/sack/age. Only By Products is genuinely optional.
+      && (activeCategory === 'By Products' || (moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))))
       && (!linkedDocDeductsFromAi || Boolean(linkedDocNo.trim()))
       && (isFillersType || (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== ''))
       && !overKilos
@@ -1024,7 +1027,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         if (!alloc.pileId) return true
         return (Boolean(alloc.bags) || Boolean(alloc.grossKilos))
           && (isFillersType || Boolean(alloc.sackSelection))
-          && (isFillersType || activeCategory === 'By Products' || (alloc.moistureContent !== '' && !isNaN(parseFormattedNumber(alloc.moistureContent))))
+          // See the primary MC check above - not exempted by FILLERS.
+          && (activeCategory === 'By Products' || (alloc.moistureContent !== '' && !isNaN(parseFormattedNumber(alloc.moistureContent))))
           && !extraAllocInfos[i].overKilos
       })
 
@@ -1732,11 +1736,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       toast.error('Select a Condition')
       return false
     }
-    // isFillersType exempted here to match canSave's own exemption
-    // above - previously this check had no such exemption at all, so a
-    // FILLERS transaction with the Save button correctly enabled (per
-    // canSave) still got rejected the instant it was actually clicked.
-    if (!isFillersType && activeCategory !== 'By Products' && (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent)))) {
+    // MC is required for Rice/Palay regardless of transaction type -
+    // per explicit correction, NOT exempted for FILLERS the way
+    // pile/sack/age are - only By Products is genuinely optional.
+    if (activeCategory !== 'By Products' && (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent)))) {
       toast.error('Moisture Content (MC %) is required')
       return false
     }
@@ -2301,7 +2304,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         )}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-28 pt-4">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 pb-28 pt-4"
+        // AuthorityPickerModal/NewPileDialog are fixed full-screen
+        // overlays on top of this form, but this form's OWN scroll
+        // container is a real, independently-scrollable element
+        // sitting right behind them - its native scrollbar rendered
+        // regardless, right next to (and visually indistinguishable
+        // from) the modal's own list scrollbar. Locking this container
+        // while either is open removes that duplicate scrollbar - an
+        // inline style, not a Tailwind class, so it reliably wins over
+        // overflow-y-auto regardless of Tailwind's own class ordering.
+        style={(showAuthorityPicker || showNewPileDialog) ? { overflow: 'hidden' } : undefined}
+      >
         <div className="space-y-3">
           <AnimatedBanner show={isAdmin && Boolean(loadedTransaction?.needsCompletion)} className="rounded-xl border-2 border-brand-amber bg-brand-amber/10 px-3 py-2 text-sm font-medium text-brand-amber">
             This record was pulled from historical Sheet data. Pile and MTS Sack were not tracked there and need to be filled in below before further changes can be saved.
@@ -2715,8 +2731,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 inputMode="decimal"
                 value={moistureContent}
                 onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
-                className={`${inputClass} ${moistureContent === '' && !isFillersType && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
-                placeholder={isFillersType || activeCategory === 'By Products' ? 'Optional' : '13.90'}
+                className={`${inputClass} ${moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
               />
             </div>
 
@@ -2907,7 +2923,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                         type="text" inputMode="decimal"
                         value={alloc.moistureContent}
                         onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, moistureContent: liveFormatNumber(e.target.value) } : r)))}
-                        className={`${inputClass} mt-0 ${alloc.moistureContent === '' && !isFillersType && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                        className={`${inputClass} mt-0 ${alloc.moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
                         placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
                       />
                     </div>

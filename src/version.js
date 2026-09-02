@@ -636,4 +636,17 @@
 //            this must never be assumed - it now always opens the
 //            suggestion list for the user to pick from whenever there's
 //            more than one real candidate, full stop.
-export const APP_VERSION = '1.9-35'
+//   1.9-36 - Fixed a double-scrollbar showing whenever the Authority
+//            picker (or New Pile dialog) is open on WSR/WSI/ESR/ESI/
+//            WTS - the form itself is still a real, independently
+//            scrollable element sitting behind that fixed overlay, so
+//            its own native scrollbar kept rendering right next to the
+//            picker's own list scrollbar. Locked while either is open.
+//   1.9-37 - MC (Moisture Content) was silently optional on any FILLERS
+//            transaction, even for Rice/Palay - per explicit
+//            correction, FILLERS was never meant to exempt MC the way
+//            it exempts pile/sack/age (a rebagging operation still has
+//            a real moisture reading); only By Products genuinely has
+//            no MC concept. MC is now required for Rice/Palay
+//            regardless of transaction type.
+export const APP_VERSION = '1.9-37'
