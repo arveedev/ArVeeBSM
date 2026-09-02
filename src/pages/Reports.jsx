@@ -24,7 +24,7 @@ import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { generateNfaReport } from '../utils/pdfGenerator.js'
-import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, todayLocalISO, customerNameWithMillingRef } from '../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, todayLocalISO, customerNameWithMillingRef, effectiveCutoffDate } from '../utils/calculations.js'
 import { splitStockTransactions } from '../utils/wtsAdapter.js'
 import DailySummaryCard from '../components/cards/DailySummaryCard.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
@@ -237,7 +237,8 @@ function Reports() {
       // reports display; serial-number checks and other form-level
       // lookups query transactions directly and are entirely
       // unaffected by this report-only filter.
-      const reportingCutoffDate = currentWarehouse?.reportingCutoffDate || null
+      const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
+      const reportingCutoffDate = effectiveCutoffDate(currentWarehouse?.reportingCutoffDate, globalDataStartDate)
       const warehousePiles = await db.piles.where('warehouseId').equals(currentWarehouseId).toArray()
       // Pile-based MTS fallback for display-grouping purposes only -
       // many transactions (especially older/imported ones) have their

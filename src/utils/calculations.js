@@ -18,6 +18,27 @@
 export const round3 = (n) => parseFloat((Number(n) || 0).toFixed(3))
 
 /**
+ * Combines a warehouse's own individually-set "Reports Start Date"
+ * (reportingCutoffDate) with the global Data Start Date override
+ * (Admin Dashboard > System > Data Start Date, stored on the
+ * reportConfig 'global' record) into the single effective cutoff every
+ * reportingCutoffDate-aware computation should actually use. Whichever
+ * of the two is LATER wins (the more restrictive one), so a warehouse
+ * can still set an even later cutoff of its own on top of the global
+ * one, but never an earlier one that would defeat it. Both are plain
+ * "YYYY-MM-DD" strings (or null/empty) - lexicographic comparison is
+ * correct for that format, same as every other date comparison already
+ * used throughout this app.
+ */
+export const effectiveCutoffDate = (perWarehouseCutoff, globalDataStartDate) => {
+  const a = perWarehouseCutoff || null
+  const b = globalDataStartDate || null
+  if (!a) return b
+  if (!b) return a
+  return a > b ? a : b
+}
+
+/**
  * Net Kilos = Gross Kilos - MTS
  * (Section 4.1)
  */

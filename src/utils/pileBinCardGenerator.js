@@ -7,7 +7,7 @@
 
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { fmtBags, fmtKilos } from './calculations.js'
+import { fmtBags, fmtKilos, effectiveCutoffDate } from './calculations.js'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 
 const BLACK = [0, 0, 0]
@@ -121,7 +121,7 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
   return rows
 }
 
-export const generatePileBinCard = ({ warehouse, branch, pile, variety, transactions, transactionTypeMap }) => {
+export const generatePileBinCard = ({ warehouse, branch, pile, variety, transactions, transactionTypeMap, globalDataStartDate = null }) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
@@ -168,7 +168,7 @@ export const generatePileBinCard = ({ warehouse, branch, pile, variety, transact
   doc.text(variety?.name ?? '', margin + labelW, y)
   y += 7
 
-  const rows = buildLedgerRows(pile, transactions, transactionTypeMap, warehouse?.reportingCutoffDate || null)
+  const rows = buildLedgerRows(pile, transactions, transactionTypeMap, effectiveCutoffDate(warehouse?.reportingCutoffDate, globalDataStartDate))
 
   const body = rows.map((r) => [
     fmtDate(r.date),

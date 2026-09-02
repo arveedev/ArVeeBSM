@@ -840,11 +840,13 @@ function Piles() {
         .toArray()
       const transactionTypes = await db.transactionTypes.toArray()
       const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
+      const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
 
       const doc = generatePileBinCard({
         warehouse: currentWarehouse, branch, pile, variety,
         transactions: [...allPileTransactions, ...wtsTransfers],
         transactionTypeMap,
+        globalDataStartDate,
       })
       doc.save(`${(pile.pileName || 'Pile').replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
       // Was missing entirely - a silent success looked identical to a

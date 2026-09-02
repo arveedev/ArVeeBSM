@@ -15,7 +15,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight } from 'lucide-react'
 import { db } from '../db/dexie.js'
-import { fmtBags } from '../utils/calculations.js'
+import { fmtBags, effectiveCutoffDate } from '../utils/calculations.js'
 import { SACK_CONDITIONS } from '../components/common/admin/shared.js'
 import { Section, Empty } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
@@ -38,7 +38,10 @@ function AdminHomeSacks({ onWarehouseSelect }) {
   const sortedProvinces = [...provinces].sort((a, b) => a.code.localeCompare(b.code))
   const sortedWarehouses = [...warehouses].sort((a, b) => a.name.localeCompare(b.name))
   const sortedSackTypes = [...sackTypes].sort((a, b) => a.code.localeCompare(b.code))
-  const warehouseCutoffById = new Map(warehouses.map((w) => [w.warehouseId, w.reportingCutoffDate || null]))
+  const globalConfig = useLiveQuery(() => db.reportConfig.get('global'), [])
+  const warehouseCutoffById = new Map(
+    warehouses.map((w) => [w.warehouseId, effectiveCutoffDate(w.reportingCutoffDate, globalConfig?.dataStartDate)])
+  )
 
   // pieces[warehouseId][sackTypeId][condition] = net pieces on hand
   const pieces = {}

@@ -12,7 +12,7 @@
 // a different unit that doesn't roll into a bags/kilos "net bags" figure.
 
 import { db } from '../db/dexie.js'
-import { isAuthorityComplete, AGE_BUCKETS, isBagRepackingTypeName } from './calculations.js'
+import { isAuthorityComplete, AGE_BUCKETS, isBagRepackingTypeName, effectiveCutoffDate } from './calculations.js'
 
 export const UNSPECIFIED_AGE = 'Unspecified Age'
 
@@ -74,8 +74,8 @@ const withdrawalsForAuthority = async (aiNumber) => {
 // isn't once that stock's own pre-cutoff history stops being counted.
 const activeAiAuthoritiesFor = async (warehouseId, varietyIds) => {
   const varietySet = varietyIds ? new Set(varietyIds) : null
-  const warehouse = await db.warehouses.get(warehouseId)
-  const reportingCutoffDate = warehouse?.reportingCutoffDate || null
+  const [warehouse, globalConfig] = await Promise.all([db.warehouses.get(warehouseId), db.reportConfig.get('global')])
+  const reportingCutoffDate = effectiveCutoffDate(warehouse?.reportingCutoffDate, globalConfig?.dataStartDate)
   return db.authorities
     .where('assignedWarehouse').equals(warehouseId)
     .and((a) => a.type === 'AI' && Boolean(a.varietyId) && !isAuthorityComplete(a)

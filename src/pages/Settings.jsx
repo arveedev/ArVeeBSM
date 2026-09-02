@@ -451,11 +451,13 @@ function PileBalanceSection({ warehouseId }) {
       .toArray()
     const transactionTypes = await db.transactionTypes.toArray()
     const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
+    const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
 
     const doc = generatePileBinCard({
       warehouse, branch, pile, variety,
       transactions: [...allPileTransactions, ...wtsTransfers],
       transactionTypeMap,
+      globalDataStartDate,
     })
     doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
   }

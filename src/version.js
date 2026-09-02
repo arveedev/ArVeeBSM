@@ -730,4 +730,21 @@
 //               it, so an older transaction's own frozen cerealCategory
 //               could silently land under the wrong cereal-type section
 //               in reports after a reclassification.
-export const APP_VERSION = '1.9-41'
+//   1.9-42 - New: Data Start Date (Admin Dashboard > System) - a single
+//            global override date that applies everywhere every
+//            warehouse's own individual "Reports Start Date" already
+//            does, at once, instead of setting it warehouse by
+//            warehouse. Everything dated before it stops showing in
+//            Reports (statements + beginning balance), Home Stocks,
+//            Pile List/Layout, BIN Card export, and Unwithdrawn/
+//            potential-inventory math - built entirely on the same,
+//            already-proven reportingCutoffDate mechanism (whichever of
+//            the per-warehouse date and this global one is later wins),
+//            not a new filter. A pile's real total on/after the
+//            override date still comes from whatever beginning balance
+//            is entered for it in Settings > Beginning Balances, same
+//            as reportingCutoffDate already required - this does not
+//            compute one automatically. Does NOT affect Sheet preload/
+//            import or manual serial-number lookup/navigation in the
+//            transaction forms - those still see full history.
+export const APP_VERSION = '1.9-42'

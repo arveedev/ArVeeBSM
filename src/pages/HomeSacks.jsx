@@ -6,7 +6,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { db } from '../db/dexie.js'
-import { fmtBags } from '../utils/calculations.js'
+import { fmtBags, effectiveCutoffDate } from '../utils/calculations.js'
 import { SACK_CONDITIONS } from '../components/common/admin/shared.js'
 
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
@@ -22,7 +22,8 @@ function HomeSacks({ warehouseId } = {}) {
     () => currentWarehouseId ? db.warehouses.get(currentWarehouseId) : null,
     [currentWarehouseId]
   )
-  const reportingCutoffDate = currentWarehouse?.reportingCutoffDate || null
+  const globalConfig = useLiveQuery(() => db.reportConfig.get('global'), [])
+  const reportingCutoffDate = effectiveCutoffDate(currentWarehouse?.reportingCutoffDate, globalConfig?.dataStartDate)
 
   const sackTx = useLiveQuery(
     () => currentWarehouseId

@@ -6,7 +6,12 @@
 // computed from gross via MTS deduction — not handled here.
 
 import { db } from '../db/dexie.js'
-import { normalizeAgeToDays, todayLocalISO, round3 } from './calculations.js'
+import { normalizeAgeToDays, todayLocalISO, round3, effectiveCutoffDate } from './calculations.js'
+
+// Cheap primary-key lookup (not a table scan) - fine to call once per
+// function invocation, even in a per-pile loop, unlike sackTypes'
+// full-table fetch (see sackTypesOverride above/below).
+const getGlobalDataStartDate = async () => (await db.reportConfig.get('global'))?.dataStartDate || null
 
 const DIRECTION_BY_TYPE = {
   WSR: 1,
@@ -304,7 +309,7 @@ export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOv
   }
 
   const warehouse = warehouseOverride ?? (pile?.warehouseId ? await db.warehouses.get(pile.warehouseId) : null)
-  const reportingCutoffDate = warehouse?.reportingCutoffDate || null
+  const reportingCutoffDate = effectiveCutoffDate(warehouse?.reportingCutoffDate, await getGlobalDataStartDate())
 
   // Unlike the report-summary context (where isInitialBalance
   // intentionally bypasses date filtering, since it represents that
@@ -395,7 +400,7 @@ export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12
   }
 
   const warehouse = warehouseOverride ?? (pile?.warehouseId ? await db.warehouses.get(pile.warehouseId) : null)
-  const reportingCutoffDate = warehouse?.reportingCutoffDate || null
+  const reportingCutoffDate = effectiveCutoffDate(warehouse?.reportingCutoffDate, await getGlobalDataStartDate())
   // Pass sackTypesOverride when calling this in a loop over many piles
   // (e.g. HomeStocks.jsx/Piles.jsx) - sack types are a small, shared,
   // warehouse-wide admin list, not per-pile data, so re-fetching the

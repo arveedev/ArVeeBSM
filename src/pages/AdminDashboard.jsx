@@ -24,6 +24,7 @@ import VisitorAccessPanel from '../components/common/admin/VisitorAccessPanel.js
 import TransactionTypesPanel from '../components/common/admin/TransactionTypesPanel.jsx'
 import SheetSourcesPanel from '../components/common/admin/SheetSourcesPanel.jsx'
 import BackupPanel from '../components/common/admin/BackupPanel.jsx'
+import DataStartDatePanel from '../components/common/admin/DataStartDatePanel.jsx'
 
 const GROUPS = [
   {
@@ -62,6 +63,7 @@ const GROUPS = [
       { id: 'signatories', label: 'Signatories', Panel: SignatoriesPanel },
       { id: 'visitor', label: 'Visitor Access', Panel: VisitorAccessPanel },
       { id: 'sheets', label: 'Sheet Sources', Panel: SheetSourcesPanel },
+      { id: 'dataStartDate', label: 'Data Start Date', Panel: DataStartDatePanel },
       { id: 'backup', label: 'Backup', Panel: BackupPanel },
     ],
   },
