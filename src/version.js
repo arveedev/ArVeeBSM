@@ -705,4 +705,29 @@
 //               and by disabling ConfirmDialog's own confirm button),
 //               closing the same rapid-double-tap window Save was
 //               already fixed for.
-export const APP_VERSION = '1.9-40'
+//   1.9-41 - Performance + one more data-integrity fix from the audit:
+//            1. Home Stocks' and Piles' per-pile stock recompute
+//               (computePileStockBySackWeight/computeHistoricalPileState,
+//               looped over every pile in the warehouse) was keyed on
+//               the `piles` array itself, which is a fresh reference on
+//               ANY pile field change anywhere in the warehouse (an age
+//               edit, a metadata save, even the new self-heal fallback
+//               from the fix above) - tearing down and re-running the
+//               full per-pile recompute for EVERY pile in the warehouse
+//               on every such write, not just when a pile's real stock
+//               changed. Now keyed on the stable set of pile IDs
+//               instead, so unrelated pile writes no longer trigger it.
+//               (A genuine new transaction still recomputes every pile,
+//               since they're batched into one query - fully isolating
+//               that needs each pile split into its own subscription, a
+//               larger restructuring not done here.)
+//            2. computePileStockBySackWeight re-fetched the entire
+//               sackTypes table on every single pile in that same loop -
+//               now fetched once and passed in.
+//            3. Changing a variety's category in Settings now cascades
+//               the new category onto every existing transaction for
+//               that variety - previously only new transactions used
+//               it, so an older transaction's own frozen cerealCategory
+//               could silently land under the wrong cereal-type section
+//               in reports after a reclassification.
+export const APP_VERSION = '1.9-41'

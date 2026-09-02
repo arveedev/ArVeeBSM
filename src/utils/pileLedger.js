@@ -383,7 +383,7 @@ export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOv
  * sack-weight batch a transfer's bags came from, a real data gap this
  * can't paper over), each holding { bags, kilos }.
  */
-export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12-31', warehouseOverride = null) => {
+export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12-31', warehouseOverride = null, sackTypesOverride = null) => {
   const pile = await db.piles.get(pileId)
 
   // See computeHistoricalPileState's matching comment - a closed pile
@@ -396,7 +396,12 @@ export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12
 
   const warehouse = warehouseOverride ?? (pile?.warehouseId ? await db.warehouses.get(pile.warehouseId) : null)
   const reportingCutoffDate = warehouse?.reportingCutoffDate || null
-  const sackTypes = await db.sackTypes.toArray()
+  // Pass sackTypesOverride when calling this in a loop over many piles
+  // (e.g. HomeStocks.jsx/Piles.jsx) - sack types are a small, shared,
+  // warehouse-wide admin list, not per-pile data, so re-fetching the
+  // whole table on every single pile in that loop was pure redundant
+  // IndexedDB work multiplied by pile count on every recompute.
+  const sackTypes = sackTypesOverride ?? (await db.sackTypes.toArray())
   const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
   const resolveWeight = (t) => sackTypeMap.get(t.mtsSackTypeId)?.weights?.[t.mtsCondition] ?? 'unspecified'
 

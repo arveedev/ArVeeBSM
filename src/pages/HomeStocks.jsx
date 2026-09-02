@@ -309,14 +309,33 @@ function HomeStocks({ warehouseId } = {}) {
   // later receipts, even though an ordinary Rice/Palay pile - locked to
   // one variety for life, but never locked to one sack weight - can
   // genuinely accumulate more than one weight over its lifetime.
+  // Keyed on the STABLE set of pile IDs, not the `piles` array itself -
+  // `piles` is a fresh array reference every time ANY row in db.piles
+  // changes (even just one pile's age, name, or zeroedDate, unrelated
+  // to this warehouse-wide recompute), which previously tore down and
+  // rebuilt this entire subscription - re-running the full per-pile
+  // Promise.all below for EVERY pile - on every such unrelated write,
+  // not just when a pile's real stock changed. A warehouse with many
+  // piles and years of history visibly lagged on every single save
+  // anywhere in it (confirmed via code audit). This still re-runs for
+  // every pile when a genuine new transaction is saved (Dexie's own
+  // live-query tracking watches the whole batched query as one unit,
+  // not per-pile) - that part needs each pile split into its own
+  // independent subscription to fully fix, a larger restructuring not
+  // done here - but this removes every OTHER unrelated cause of the
+  // same full re-run.
+  const pileIdsKey = piles.map((p) => p.pileId).sort().join(',')
   const pileStockByWeight = useLiveQuery(async () => {
     if (piles.length === 0) return new Map()
-    const warehouse = currentWarehouseId ? await db.warehouses.get(currentWarehouseId) : null
+    const [warehouse, sackTypes] = await Promise.all([
+      currentWarehouseId ? db.warehouses.get(currentWarehouseId) : null,
+      db.sackTypes.toArray(),
+    ])
     const entries = await Promise.all(
-      piles.map(async (p) => [p.pileId, await computePileStockBySackWeight(p.pileId, '9999-12-31', warehouse)])
+      piles.map(async (p) => [p.pileId, await computePileStockBySackWeight(p.pileId, '9999-12-31', warehouse, sackTypes)])
     )
     return new Map(entries)
-  }, [piles, currentWarehouseId]) ?? new Map()
+  }, [pileIdsKey, currentWarehouseId]) ?? new Map()
 
   const enrichedPiles = piles.map((p) => ({
     ...p,

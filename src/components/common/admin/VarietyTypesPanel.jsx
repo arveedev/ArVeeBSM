@@ -46,7 +46,31 @@ function VarietyTypesPanel() {
     }
 
     if (editingId) {
+      const existing = varieties?.find((v) => v.varietyId === editingId)
+      const categoryChanged = existing && existing.category !== category
       await db.varietyTypes.update(editingId, { category, name: name.trim() })
+      if (categoryChanged) {
+        // Every transaction stores its OWN cerealCategory at save time
+        // (deliberately - so this edit doesn't rewrite what a report
+        // showed for a period that's already closed out) - but that
+        // means reports, which group by each transaction's own
+        // cerealCategory, would silently split this variety's activity
+        // across two different cereal-type sections from this point
+        // forward: older transactions still under the old category,
+        // newer ones under the new one, with the same variety name
+        // appearing to "vanish" from one section and inflate another.
+        // Cascading the new category onto every EXISTING transaction
+        // for this variety keeps its whole history consistent with
+        // what the variety is now - a deliberate reclassification of
+        // past records, not a data-entry change to what actually
+        // happened (bags/kilos/dates are untouched).
+        const affected = await db.transactions.where('varietyId').equals(editingId).toArray()
+        if (affected.length > 0) {
+          await db.transactions.bulkUpdate(
+            affected.map((t) => ({ key: t.id, changes: { cerealCategory: category } }))
+          )
+        }
+      }
       toast.success('Variety updated')
     } else {
       await db.varietyTypes.add({

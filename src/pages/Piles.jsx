@@ -425,13 +425,20 @@ function Piles() {
   // identical (today's) figures, since piles.currentBags/currentKilos
   // always reflect the present moment regardless of what the user is
   // actually asking to see.
+  // Keyed on the stable set of pile IDs, not the `piles` array itself -
+  // same fix as HomeStocks.jsx's identical pattern (see its comment for
+  // the full reasoning) - `piles` is a fresh reference on any unrelated
+  // pile field change, which previously tore down and rebuilt this
+  // whole per-pile recompute on every such write, not just when a
+  // pile's real stock changed.
+  const pileIdsKeyForHistory = piles.map((p) => p.pileId).sort().join(',')
   const historicalMap = useLiveQuery(async () => {
     if (!periodTo || piles.length === 0) return null
     const entries = await Promise.all(
       piles.map(async (p) => [p.pileId, await computeHistoricalPileState(p.pileId, periodTo)])
     )
     return new Map(entries)
-  }, [periodTo, piles]) ?? null
+  }, [periodTo, pileIdsKeyForHistory]) ?? null
 
   const effectivePiles = historicalMap
     ? piles.map((p) => {
