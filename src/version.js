@@ -649,4 +649,23 @@
 //            a real moisture reading); only By Products genuinely has
 //            no MC concept. MC is now required for Rice/Palay
 //            regardless of transaction type.
-export const APP_VERSION = '1.9-37'
+//   1.9-38 - Three changes:
+//            1. 1.9-37 was wrong, per explicit correction - FILLERS and
+//               REBAGGING genuinely don't have a real MC reading (both
+//               move existing bags around, not a fresh receipt/issue).
+//               MC is now optional on every bag-repacking type
+//               (FILLERS/REBAGGING/BAGGING/RECLASSIFICATION) again, on
+//               top of By Products - not just FILLERS like before 1.9-37.
+//            2. Home's Pile List: weight now reads "306,209.060 Net kg"
+//               instead of "Net 306,209.060 kg" (matching the number-
+//               first convention used everywhere else in the app), net
+//               bags moved to their own line below the bags count
+//               instead of crammed onto the same line, and each pile's
+//               variety is now a colored badge (Rice/Palay/By Products
+//               each get their own color, same scheme used elsewhere)
+//               instead of small gray text easy to skim past.
+//            3. Admin/Visitor Monitoring: each AI/SIA authority card now
+//               shows a progress bar under its numbers, filled to
+//               issued/allocated - full green when complete, dimmer
+//               green while in progress, red if over-issued.
+export const APP_VERSION = '1.9-38'

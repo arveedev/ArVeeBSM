@@ -65,6 +65,7 @@ import {
   isAuthorityComplete,
   isProcurementTypeName,
   isSalesTypeName,
+  isBagRepackingTypeName,
 } from '../../utils/calculations.js'
 import {
   suggestNextSerial,
@@ -998,6 +999,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // (serial-uniqueness is async and stays a save-time-only safety net,
   // not part of this live gate).
   const isFillersType = selectedTransactionType?.name?.trim().toUpperCase() === 'FILLERS'
+  // Bag-repacking types (FILLERS, REBAGGING, BAGGING, RECLASSIFICATION)
+  // move existing bags around rather than representing a real quality-
+  // inspection event - confirmed per explicit correction that MC
+  // genuinely doesn't apply to any of these, not just FILLERS.
+  const isMcExemptType = isBagRepackingTypeName(selectedTransactionType?.name)
 
   const canSave = isCancelled
     ? Boolean(currentWarehouseId) && Boolean(serialNo.trim())
@@ -1009,10 +1015,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       && (isFillersType || Boolean(selectedPile) || Boolean(varietyId))
       && (Boolean(numberOfBags) || Boolean(grossKilos))
       && (isFillersType || Boolean(sackSelection))
-      // MC is required for Rice/Palay regardless of transaction type -
-      // per explicit correction, FILLERS does NOT exempt it the way it
-      // exempts pile/sack/age. Only By Products is genuinely optional.
-      && (activeCategory === 'By Products' || (moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))))
+      // MC is required for Rice/Palay, except on bag-repacking types
+      // (see isMcExemptType above) and By Products, neither of which
+      // have a real MC concept.
+      && (isMcExemptType || activeCategory === 'By Products' || (moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))))
       && (!linkedDocDeductsFromAi || Boolean(linkedDocNo.trim()))
       && (isFillersType || (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== ''))
       && !overKilos
@@ -1027,8 +1033,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         if (!alloc.pileId) return true
         return (Boolean(alloc.bags) || Boolean(alloc.grossKilos))
           && (isFillersType || Boolean(alloc.sackSelection))
-          // See the primary MC check above - not exempted by FILLERS.
-          && (activeCategory === 'By Products' || (alloc.moistureContent !== '' && !isNaN(parseFormattedNumber(alloc.moistureContent))))
+          // See the primary MC check above.
+          && (isMcExemptType || activeCategory === 'By Products' || (alloc.moistureContent !== '' && !isNaN(parseFormattedNumber(alloc.moistureContent))))
           && !extraAllocInfos[i].overKilos
       })
 
@@ -1736,10 +1742,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       toast.error('Select a Condition')
       return false
     }
-    // MC is required for Rice/Palay regardless of transaction type -
-    // per explicit correction, NOT exempted for FILLERS the way
-    // pile/sack/age are - only By Products is genuinely optional.
-    if (activeCategory !== 'By Products' && (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent)))) {
+    // MC is required for Rice/Palay, except on bag-repacking types
+    // (FILLERS/REBAGGING/BAGGING/RECLASSIFICATION) and By Products,
+    // neither of which have a real MC concept.
+    if (!isMcExemptType && activeCategory !== 'By Products' && (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent)))) {
       toast.error('Moisture Content (MC %) is required')
       return false
     }
@@ -2731,8 +2737,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 inputMode="decimal"
                 value={moistureContent}
                 onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
-                className={`${inputClass} ${moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
-                placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
+                className={`${inputClass} ${moistureContent === '' && !isMcExemptType && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                placeholder={isMcExemptType || activeCategory === 'By Products' ? 'Optional' : '13.90'}
               />
             </div>
 
@@ -2923,8 +2929,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                         type="text" inputMode="decimal"
                         value={alloc.moistureContent}
                         onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, moistureContent: liveFormatNumber(e.target.value) } : r)))}
-                        className={`${inputClass} mt-0 ${alloc.moistureContent === '' && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
-                        placeholder={activeCategory === 'By Products' ? 'Optional' : '13.90'}
+                        className={`${inputClass} mt-0 ${alloc.moistureContent === '' && !isMcExemptType && activeCategory !== 'By Products' ? '!border-brand-amber' : ''}`}
+                        placeholder={isMcExemptType || activeCategory === 'By Products' ? 'Optional' : '13.90'}
                       />
                     </div>
                     <div>

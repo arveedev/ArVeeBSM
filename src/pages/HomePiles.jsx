@@ -14,6 +14,17 @@ import EditPileAgeDialog from '../components/common/EditPileAgeDialog.jsx'
 
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
 
+// Same category colors used elsewhere (AuthorityPickerModal's own
+// categoryColor) - applied here as a filled badge instead of plain
+// text so a pile's variety is actually noticeable at a glance, not
+// just small gray text easy to skim past.
+const varietyBadgeClass = (category) => {
+  if (category === 'Rice') return 'bg-blue-500/15 text-blue-400'
+  if (category === 'Palay') return 'bg-brand-neon/15 text-brand-neon'
+  if (category === 'By Products') return 'bg-brand-byproduct/15 text-brand-byproduct'
+  return 'bg-neutral-800 text-neutral-300'
+}
+
 function HomePiles() {
   const { autoAgeMonitoring, weightUnit } = useSettings() ?? {}
   const { currentWarehouseId } = useWarehouse() ?? {}
@@ -64,10 +75,14 @@ function HomePiles() {
                     <button
                       type="button"
                       onClick={() => setOpenMenuPileId(p.pileId)}
-                      className="flex-1 text-left text-sm font-medium text-app-text transition-opacity active:opacity-70"
+                      className="flex flex-1 items-center gap-2 text-left text-sm font-medium text-app-text transition-opacity active:opacity-70"
                     >
                       {p.pileName}
-                      {p.variety && <span className="ml-2 text-xs text-neutral-500">{p.variety.name}</span>}
+                      {p.variety && (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${varietyBadgeClass(p.variety.category)}`}>
+                          {p.variety.name}
+                        </span>
+                      )}
                     </button>
                     <button
                       type="button"
@@ -77,13 +92,13 @@ function HomePiles() {
                       {fmtAge(p.age)} old
                     </button>
                   </div>
-                  <div className="mt-1 flex items-center justify-between">
-                    <span className="text-base font-semibold text-app-text">
-                      {fmtBags(p.currentBags ?? 0)} bags
-                      <span className="ml-1.5 text-xs font-normal text-neutral-500">({fmtNetBags(netBags)} net bags)</span>
-                    </span>
+                  <div className="mt-2 flex items-end justify-between">
+                    <div>
+                      <p className="text-base font-semibold text-app-text">{fmtBags(p.currentBags ?? 0)} bags</p>
+                      <p className="text-xs text-neutral-500">{fmtNetBags(netBags)} net bags</p>
+                    </div>
                     <div className="text-right">
-                      <p className="whitespace-nowrap text-xs text-neutral-400">Net {fmtWeight(p.currentKilos ?? 0, weightUnit)}</p>
+                      <p className="whitespace-nowrap text-xs text-neutral-400">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
                       <p className="whitespace-nowrap text-xs text-neutral-500">avg {avgWeight.toFixed(2)}</p>
                     </div>
                   </div>
