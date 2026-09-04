@@ -793,4 +793,16 @@
 //            "1-7"), navigating months carries that same slot forward
 //            into the new month too, so the header, buttons, and
 //            content all move together instead of drifting apart.
-export const APP_VERSION = '1.9-45'
+//   1.9-46 - Fixed a real duplicate-record bug: if local device storage
+//            ever got cleared/reset (browser storage eviction, cache
+//            clear, reinstall) and someone looked up an old serial
+//            number before that record had finished re-syncing down
+//            from the cloud, the app would import a second, blank
+//            (Pile/MTS-less) copy straight from the Sheet backup -
+//            leaving two records with the exact same serial, one
+//            complete and one perpetually stuck asking to be
+//            completed, and blocking Update with a false "already
+//            used" error. Serial lookups now recognize when both
+//            copies exist, treat the complete one as canonical, and
+//            quietly delete the leftover blank copy.
+export const APP_VERSION = '1.9-46'

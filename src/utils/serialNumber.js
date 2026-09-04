@@ -363,12 +363,34 @@ export const getMatchingTransaction = async (type, warehouseId, serialNo, exclud
  */
 export const findTransactionBySerial = async (type, warehouseId, serialNo, cerealCategory = null) => {
   if (!serialNo || !warehouseId) return null
-  return db.transactions
+  const matches = await db.transactions
     .where('type')
     .equals(type)
     .and((tx) => tx.warehouseId === warehouseId && tx.serialNo === serialNo
       && (cerealCategory == null || tx.cerealCategory === cerealCategory))
-    .first()
+    .toArray()
+  if (matches.length <= 1) return matches[0] ?? null
+
+  // Genuine duplicates for the exact same (type, warehouse, serial[,
+  // category]) key should be impossible - isSerialTaken blocks it on
+  // every form save path - but a bare Sheet-import placeholder (see
+  // checkAndLoadSerial's "not found locally" fallback, which imports
+  // straight from the Sheet without going through that check) can
+  // still slip in during the gap between a real record being saved on
+  // one device and that same record's own Dexie Cloud sync reaching
+  // this one: a lookup that ran in that gap found nothing locally yet
+  // and imported a second, incomplete copy from the Sheet. Once both
+  // copies are visible here, treat the real one (has a Pile ID, not
+  // still marked needsCompletion) as canonical, quietly delete the
+  // leftover placeholder(s), and return the real one - self-healing
+  // the same way the cerealCategory-mismatch case elsewhere does.
+  const isPlaceholder = (tx) => tx.fromSheetImport && tx.needsCompletion && !tx.pileId
+  const real = matches.find((tx) => !isPlaceholder(tx)) ?? matches[0]
+  const placeholders = matches.filter((tx) => tx.id !== real.id && isPlaceholder(tx))
+  if (placeholders.length > 0) {
+    db.transactions.bulkDelete(placeholders.map((tx) => tx.id)).catch(() => {})
+  }
+  return real
 }
 
 /**
