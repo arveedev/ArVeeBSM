@@ -817,4 +817,8 @@
 //            "Still syncing your data - please wait a moment" instead -
 //            closing the specific race 1.9-46 could only clean up after
 //            the fact, so it now can't happen in the first place.
-export const APP_VERSION = '1.9-47'
+//   1.9-48 - The header sync icon now actually moves: spins while data
+//            is loading in, and settles into a plain cloud with a small
+//            green checkmark badge once caught up, instead of only
+//            changing color on an otherwise-static icon.
+export const APP_VERSION = '1.9-48'

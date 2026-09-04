@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useObservable } from 'dexie-react-hooks'
-import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, RefreshCw } from 'lucide-react'
+import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, RefreshCw, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { usePageHeader } from '../../context/PageHeaderContext.jsx'
@@ -81,7 +81,13 @@ function AppHeader({ hidden = false }) {
   const isSyncing = syncPhase === 'initial' || syncPhase === 'pulling' || syncPhase === 'not-in-sync'
   const isSyncError = syncPhase === 'error' || cloudSyncState?.status === 'error'
   const isOffline = syncPhase === 'offline' || cloudSyncState?.status === 'disconnected'
-  const SyncIcon = isSyncError ? CloudOff : isOffline ? CloudOff : isSyncing ? RefreshCw : Cloud
+  const isCaughtUp = !isSyncing && !isSyncError && !isOffline
+  // A spinning refresh icon while data is actively loading in reads as
+  // motion, not just a color change; once caught up it settles back to
+  // a plain cloud with a small green checkmark badge - a clearer, more
+  // literal "yes, done" than a static icon just changing tint, per
+  // explicit request.
+  const SyncIcon = isSyncError || isOffline ? CloudOff : isSyncing ? RefreshCw : Cloud
   const syncIconClass = isSyncError
     ? 'text-brand-crimson'
     : isOffline
@@ -144,9 +150,16 @@ function AppHeader({ hidden = false }) {
               type="button"
               onClick={handleSyncIconTap}
               aria-label="Sync status"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 transition-all active:scale-90"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 transition-all active:scale-90"
             >
               <SyncIcon size={18} className={syncIconClass} />
+              {isCaughtUp && (
+                <CheckCircle2
+                  size={13}
+                  strokeWidth={2.5}
+                  className="absolute -bottom-0.5 -right-0.5 rounded-full bg-neutral-900 text-brand-neon"
+                />
+              )}
             </button>
 
             {/* KG/MT weight unit toggle - shows both labels at once with
