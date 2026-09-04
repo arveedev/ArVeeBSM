@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useObservable } from 'dexie-react-hooks'
-import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { usePageHeader } from '../../context/PageHeaderContext.jsx'
@@ -88,17 +88,26 @@ function AppHeader({ hidden = false }) {
   // showed a perfectly static badge instead, which read as broken.
   const isSyncing = !isSyncError && !isOffline && syncPhase != null && syncPhase !== 'in-sync'
   const isCaughtUp = !isSyncing && !isSyncError && !isOffline
-  // Fast pulse = actively moving data right now; slow, steady pulse =
-  // healthy and settled, not just a static icon - a resting heartbeat
-  // rather than "nothing is happening," per explicit request.
-  const SyncIcon = isSyncError || isOffline ? CloudOff : isSyncing ? RefreshCw : Cloud
+  // Icon and badge glyphs stay solid/static - a badge scaling or
+  // fading in place read as a connection dropping, not activity. The
+  // motion instead comes from a ring that expands outward from the
+  // corner dot and fades (Tailwind's "ping" keyframes: scale up +
+  // opacity to 0), the same sonar-ping pattern used for "live" status
+  // dots elsewhere - fast (0.6s) while actively syncing, slow (2.5s)
+  // once caught up.
+  const SyncIcon = isSyncError || isOffline ? CloudOff : Cloud
   const syncIconClass = isSyncError
     ? 'text-brand-crimson'
     : isOffline
       ? 'text-neutral-500'
       : isSyncing
-        ? 'text-brand-amber animate-[pulse_0.6s_ease-in-out_infinite]'
-        : 'text-brand-neon animate-[pulse_2.5s_ease-in-out_infinite]'
+        ? 'text-brand-amber'
+        : 'text-brand-neon'
+  const rippleColorClass = isSyncing ? 'bg-brand-amber' : 'bg-brand-neon'
+  const rippleSpeedClass = isSyncing
+    ? 'animate-[ping_0.8s_cubic-bezier(0,0,0.2,1)_infinite]'
+    : 'animate-[ping_2.5s_cubic-bezier(0,0,0.2,1)_infinite]'
+  const showRipple = !isSyncError && !isOffline
   const handleSyncIconTap = () => {
     toast(SYNC_LABELS[syncPhase] ?? 'Checking sync status…', { icon: '☁️', duration: 4000 })
   }
@@ -145,12 +154,17 @@ function AppHeader({ hidden = false }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {/* Sync status - tap for a plain-language explanation. Fast
-                amber pulse while actively loading/pushing data (the one
+            {/* Sync status - tap for a plain-language explanation. The
+                icon and corner dot both stay solid/static (an icon that
+                scales or fades in place reads as a dropped connection,
+                not activity); a ring instead expands outward from the
+                dot and fades - the standard "live" sonar-ping pattern -
+                fast amber while actively loading/pushing data (the one
                 window where opening a form on an old serial risks the
-                duplicate-record race described in its own fix), a slow
-                steady green pulse with a checkmark badge once caught
-                up, gray offline, red (static) on a real error. */}
+                duplicate-record race described in its own fix), slow
+                steady green once caught up (with a checkmark on the dot
+                instead of a plain circle). No ripple, gray/red static,
+                offline or on a real error. */}
             <button
               type="button"
               onClick={handleSyncIconTap}
@@ -158,12 +172,13 @@ function AppHeader({ hidden = false }) {
               className="relative flex h-11 w-11 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 transition-all active:scale-90"
             >
               <SyncIcon size={18} className={syncIconClass} />
-              {isCaughtUp && (
-                <CheckCircle2
-                  size={13}
-                  strokeWidth={2.5}
-                  className="absolute -bottom-0.5 -right-0.5 animate-[pulse_2.5s_ease-in-out_infinite] rounded-full bg-neutral-900 text-brand-neon"
-                />
+              {showRipple && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
+                  <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${rippleColorClass} ${rippleSpeedClass}`} />
+                  <span className={`relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-neutral-900 ${rippleColorClass}`}>
+                    {isCaughtUp && <CheckCircle2 size={11} strokeWidth={3} className="text-neutral-950" />}
+                  </span>
+                </span>
               )}
             </button>
 

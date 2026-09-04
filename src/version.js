@@ -832,4 +832,11 @@
 //            (0.6s) while actively syncing, slow and steady (2.5s) once
 //            caught up - a resting heartbeat instead of a dead icon,
 //            not just two static colors.
-export const APP_VERSION = '1.9-49'
+//   1.9-50 - The badge's own pulse (scaling/fading in place) read as a
+//            dropped connection, not activity - per feedback, replaced
+//            with a proper outward ripple: the icon and the corner dot
+//            both stay solid, and a ring expands out from the dot and
+//            fades, the standard "live" sonar-ping look. Fast (0.8s)
+//            amber ripple while actively syncing, slow (2.5s) green
+//            ripple with a checkmark on the dot once caught up.
+export const APP_VERSION = '1.9-50'
