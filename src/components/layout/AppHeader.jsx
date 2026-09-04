@@ -27,7 +27,7 @@ const SYNC_LABELS = {
   initial: 'Loading your data from the cloud…',
   pulling: 'Loading your data from the cloud…',
   'not-in-sync': 'Loading your data from the cloud…',
-  pushing: 'Up to date — saving your latest changes…',
+  pushing: 'Syncing your changes…',
   'in-sync': 'Up to date',
   offline: 'Offline — working from local data only',
   error: 'Sync error — some data may be out of date',
@@ -78,23 +78,27 @@ function AppHeader({ hidden = false }) {
   // state visible everywhere, all the time, not just buried in Settings.
   const cloudSyncState = useObservable(db.cloud.syncState)
   const syncPhase = cloudSyncState?.phase
-  const isSyncing = syncPhase === 'initial' || syncPhase === 'pulling' || syncPhase === 'not-in-sync'
   const isSyncError = syncPhase === 'error' || cloudSyncState?.status === 'error'
   const isOffline = syncPhase === 'offline' || cloudSyncState?.status === 'disconnected'
+  // Matches Settings.jsx's own "Syncing..." definition: anything other
+  // than 'in-sync' while connected counts as active syncing, including
+  // 'pushing' (uploading local changes) - previously only 'initial' /
+  // 'pulling' / 'not-in-sync' animated, so a real push-in-progress (the
+  // exact moment users were seeing a "syncing" notification elsewhere)
+  // showed a perfectly static badge instead, which read as broken.
+  const isSyncing = !isSyncError && !isOffline && syncPhase != null && syncPhase !== 'in-sync'
   const isCaughtUp = !isSyncing && !isSyncError && !isOffline
-  // A spinning refresh icon while data is actively loading in reads as
-  // motion, not just a color change; once caught up it settles back to
-  // a plain cloud with a small green checkmark badge - a clearer, more
-  // literal "yes, done" than a static icon just changing tint, per
-  // explicit request.
+  // Fast pulse = actively moving data right now; slow, steady pulse =
+  // healthy and settled, not just a static icon - a resting heartbeat
+  // rather than "nothing is happening," per explicit request.
   const SyncIcon = isSyncError || isOffline ? CloudOff : isSyncing ? RefreshCw : Cloud
   const syncIconClass = isSyncError
     ? 'text-brand-crimson'
     : isOffline
       ? 'text-neutral-500'
       : isSyncing
-        ? 'text-brand-amber animate-spin'
-        : 'text-brand-neon'
+        ? 'text-brand-amber animate-[pulse_0.6s_ease-in-out_infinite]'
+        : 'text-brand-neon animate-[pulse_2.5s_ease-in-out_infinite]'
   const handleSyncIconTap = () => {
     toast(SYNC_LABELS[syncPhase] ?? 'Checking sync status…', { icon: '☁️', duration: 4000 })
   }
@@ -141,11 +145,12 @@ function AppHeader({ hidden = false }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {/* Sync status - tap for a plain-language explanation. Spins
-                amber while still loading data down from the cloud (the
-                one window where opening a form on an old serial risks
-                the duplicate-record race described in its own fix), solid
-                green once caught up, gray offline, red on a real error. */}
+            {/* Sync status - tap for a plain-language explanation. Fast
+                amber pulse while actively loading/pushing data (the one
+                window where opening a form on an old serial risks the
+                duplicate-record race described in its own fix), a slow
+                steady green pulse with a checkmark badge once caught
+                up, gray offline, red (static) on a real error. */}
             <button
               type="button"
               onClick={handleSyncIconTap}
@@ -157,7 +162,7 @@ function AppHeader({ hidden = false }) {
                 <CheckCircle2
                   size={13}
                   strokeWidth={2.5}
-                  className="absolute -bottom-0.5 -right-0.5 rounded-full bg-neutral-900 text-brand-neon"
+                  className="absolute -bottom-0.5 -right-0.5 animate-[pulse_2.5s_ease-in-out_infinite] rounded-full bg-neutral-900 text-brand-neon"
                 />
               )}
             </button>

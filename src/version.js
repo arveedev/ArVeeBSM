@@ -821,4 +821,15 @@
 //            is loading in, and settles into a plain cloud with a small
 //            green checkmark badge once caught up, instead of only
 //            changing color on an otherwise-static icon.
-export const APP_VERSION = '1.9-48'
+//   1.9-49 - Two follow-ups to the sync icon, per feedback that it was
+//            still confusing: (1) "pushing" (uploading your own recent
+//            changes) now counts as actively syncing too, matching what
+//            Settings' own sync card already called "Syncing..." -
+//            previously that specific moment showed a static checkmark
+//            with no motion at all, which read as broken since a
+//            syncing notification was visibly happening elsewhere at
+//            the same time. (2) Replaced the spin with a pulse: fast
+//            (0.6s) while actively syncing, slow and steady (2.5s) once
+//            caught up - a resting heartbeat instead of a dead icon,
+//            not just two static colors.
+export const APP_VERSION = '1.9-49'
