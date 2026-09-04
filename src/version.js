@@ -839,4 +839,9 @@
 //            fades, the standard "live" sonar-ping look. Fast (0.8s)
 //            amber ripple while actively syncing, slow (2.5s) green
 //            ripple with a checkmark on the dot once caught up.
-export const APP_VERSION = '1.9-50'
+//   1.9-51 - Per feedback, moved the checkmark inside the cloud icon
+//            itself (instead of a separate corner dot) and made the
+//            ripple ring expand around the whole icon rather than just
+//            that dot - reads as one unified "cloud" indicator instead
+//            of an icon plus a small badge glued to its corner.
+export const APP_VERSION = '1.9-51'

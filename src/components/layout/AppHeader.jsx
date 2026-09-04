@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useObservable } from 'dexie-react-hooks'
-import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, CheckCircle2 } from 'lucide-react'
+import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, Check } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { usePageHeader } from '../../context/PageHeaderContext.jsx'
@@ -88,12 +88,13 @@ function AppHeader({ hidden = false }) {
   // showed a perfectly static badge instead, which read as broken.
   const isSyncing = !isSyncError && !isOffline && syncPhase != null && syncPhase !== 'in-sync'
   const isCaughtUp = !isSyncing && !isSyncError && !isOffline
-  // Icon and badge glyphs stay solid/static - a badge scaling or
-  // fading in place read as a connection dropping, not activity. The
-  // motion instead comes from a ring that expands outward from the
-  // corner dot and fades (Tailwind's "ping" keyframes: scale up +
+  // The icon itself (cloud, with a checkmark drawn inside it once
+  // caught up) stays perfectly solid/static - scaling or fading it in
+  // place read as a connection dropping, not activity. The motion
+  // instead comes from a ring that expands outward from around the
+  // WHOLE icon and fades (Tailwind's "ping" keyframes: scale up +
   // opacity to 0), the same sonar-ping pattern used for "live" status
-  // dots elsewhere - fast (0.6s) while actively syncing, slow (2.5s)
+  // dots elsewhere - fast (0.8s) while actively syncing, slow (2.5s)
   // once caught up.
   const SyncIcon = isSyncError || isOffline ? CloudOff : Cloud
   const syncIconClass = isSyncError
@@ -103,7 +104,7 @@ function AppHeader({ hidden = false }) {
       : isSyncing
         ? 'text-brand-amber'
         : 'text-brand-neon'
-  const rippleColorClass = isSyncing ? 'bg-brand-amber' : 'bg-brand-neon'
+  const rippleColorClass = isSyncing ? 'border-brand-amber' : 'border-brand-neon'
   const rippleSpeedClass = isSyncing
     ? 'animate-[ping_0.8s_cubic-bezier(0,0,0.2,1)_infinite]'
     : 'animate-[ping_2.5s_cubic-bezier(0,0,0.2,1)_infinite]'
@@ -155,31 +156,36 @@ function AppHeader({ hidden = false }) {
 
           <div className="flex shrink-0 items-center gap-2">
             {/* Sync status - tap for a plain-language explanation. The
-                icon and corner dot both stay solid/static (an icon that
-                scales or fades in place reads as a dropped connection,
-                not activity); a ring instead expands outward from the
-                dot and fades - the standard "live" sonar-ping pattern -
-                fast amber while actively loading/pushing data (the one
-                window where opening a form on an old serial risks the
+                icon itself stays solid/static (scaling or fading it in
+                place reads as a dropped connection, not activity) - a
+                checkmark is drawn INSIDE the cloud once caught up, and
+                a ring expands outward around the whole icon and fades,
+                the standard "live" sonar-ping pattern. Fast amber ring
+                while actively loading/pushing data (the one window
+                where opening a form on an old serial risks the
                 duplicate-record race described in its own fix), slow
-                steady green once caught up (with a checkmark on the dot
-                instead of a plain circle). No ripple, gray/red static,
-                offline or on a real error. */}
+                steady green ring once caught up. No ring, gray/red
+                static icon, offline or on a real error. */}
             <button
               type="button"
               onClick={handleSyncIconTap}
               aria-label="Sync status"
               className="relative flex h-11 w-11 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 transition-all active:scale-90"
             >
-              <SyncIcon size={18} className={syncIconClass} />
               {showRipple && (
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
-                  <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${rippleColorClass} ${rippleSpeedClass}`} />
-                  <span className={`relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-neutral-900 ${rippleColorClass}`}>
-                    {isCaughtUp && <CheckCircle2 size={11} strokeWidth={3} className="text-neutral-950" />}
-                  </span>
-                </span>
+                <span className={`pointer-events-none absolute h-8 w-8 rounded-full border-2 ${rippleColorClass} ${rippleSpeedClass}`} />
               )}
+              <span className="relative inline-flex h-5 w-5 items-center justify-center">
+                <SyncIcon size={20} className={syncIconClass} />
+                {isCaughtUp && (
+                  <Check
+                    size={10}
+                    strokeWidth={3.5}
+                    className="absolute text-brand-neon"
+                    style={{ top: '58%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                  />
+                )}
+              </span>
             </button>
 
             {/* KG/MT weight unit toggle - shows both labels at once with
