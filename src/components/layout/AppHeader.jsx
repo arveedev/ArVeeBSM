@@ -10,11 +10,28 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Moon, Sun, LogOut, AlertTriangle } from 'lucide-react'
+import { useObservable } from 'dexie-react-hooks'
+import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { usePageHeader } from '../../context/PageHeaderContext.jsx'
+import toast from 'react-hot-toast'
+import { db } from '../../db/dexie.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
+
+// Same phases treated as "caught up" in isCloudSyncCaughtUp (dexie.js) -
+// kept as a separate, purely-display copy here rather than importing
+// that helper, since this only needs the phase label/color, never the
+// gating decision itself.
+const SYNC_LABELS = {
+  initial: 'Loading your data from the cloud…',
+  pulling: 'Loading your data from the cloud…',
+  'not-in-sync': 'Loading your data from the cloud…',
+  pushing: 'Up to date — saving your latest changes…',
+  'in-sync': 'Up to date',
+  offline: 'Offline — working from local data only',
+  error: 'Sync error — some data may be out of date',
+}
 
 // Must match the fade transition duration used on the overlay below.
 const LOGOUT_FADE_MS = 500
@@ -53,6 +70,28 @@ function AppHeader({ hidden = false }) {
 
   const isLight = theme === 'light'
   const isMt = weightUnit === 'mt'
+
+  // Whether local data is still catching up with the cloud - the same
+  // question users asked directly ("how would they know if loading up
+  // is done??") when a stale-local-data race left a duplicate record
+  // behind. Rather than expecting anyone to guess, this makes the
+  // state visible everywhere, all the time, not just buried in Settings.
+  const cloudSyncState = useObservable(db.cloud.syncState)
+  const syncPhase = cloudSyncState?.phase
+  const isSyncing = syncPhase === 'initial' || syncPhase === 'pulling' || syncPhase === 'not-in-sync'
+  const isSyncError = syncPhase === 'error' || cloudSyncState?.status === 'error'
+  const isOffline = syncPhase === 'offline' || cloudSyncState?.status === 'disconnected'
+  const SyncIcon = isSyncError ? CloudOff : isOffline ? CloudOff : isSyncing ? RefreshCw : Cloud
+  const syncIconClass = isSyncError
+    ? 'text-brand-crimson'
+    : isOffline
+      ? 'text-neutral-500'
+      : isSyncing
+        ? 'text-brand-amber animate-spin'
+        : 'text-brand-neon'
+  const handleSyncIconTap = () => {
+    toast(SYNC_LABELS[syncPhase] ?? 'Checking sync status…', { icon: '☁️', duration: 4000 })
+  }
 
   const handleLogoutConfirmed = () => {
     setConfirmingLogout(false)
@@ -96,6 +135,20 @@ function AppHeader({ hidden = false }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            {/* Sync status - tap for a plain-language explanation. Spins
+                amber while still loading data down from the cloud (the
+                one window where opening a form on an old serial risks
+                the duplicate-record race described in its own fix), solid
+                green once caught up, gray offline, red on a real error. */}
+            <button
+              type="button"
+              onClick={handleSyncIconTap}
+              aria-label="Sync status"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 transition-all active:scale-90"
+            >
+              <SyncIcon size={18} className={syncIconClass} />
+            </button>
+
             {/* KG/MT weight unit toggle - shows both labels at once with
                 the active one highlighted, so the current state is
                 unambiguous at a glance rather than relying on a single icon. */}

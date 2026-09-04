@@ -805,4 +805,16 @@
 //            used" error. Serial lookups now recognize when both
 //            copies exist, treat the complete one as canonical, and
 //            quietly delete the leftover blank copy.
-export const APP_VERSION = '1.9-46'
+//   1.9-47 - Two follow-ups to 1.9-46, since "wait for it to load" isn't
+//            useful advice if there's no way to tell when that's done:
+//            (1) a sync status icon now sits in the header on every
+//            screen (tap it for a plain-language status) - solid green
+//            once your data is fully caught up with the cloud, spinning
+//            amber while it's still loading in, gray offline, red on a
+//            real error. (2) WSR/WSI and Sack forms now refuse to import
+//            a blank Sheet-backup placeholder for a serial at all while
+//            this device's own sync is still catching up, showing
+//            "Still syncing your data - please wait a moment" instead -
+//            closing the specific race 1.9-46 could only clean up after
+//            the fact, so it now can't happen in the first place.
+export const APP_VERSION = '1.9-47'

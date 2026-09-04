@@ -28,7 +28,7 @@ import toast from 'react-hot-toast'
 import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
-import { db } from '../../db/dexie.js'
+import { db, isCloudSyncCaughtUp } from '../../db/dexie.js'
 import {
   suggestNextSerial,
   isSerialTaken,
@@ -583,6 +583,14 @@ const SackFormBase = forwardRef(function SackFormBase(
         : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
       if (latestRequestedSerial.current !== serial) return false
       if (sheetResult.ok && sheetResult.row) {
+        // See StockFormBase.jsx's identical guard - refuses to import a
+        // blank placeholder copy while this device's own pull-down from
+        // the cloud might still be catching up, which is what let a
+        // real duplicate-record bug through.
+        if (!isCloudSyncCaughtUp()) {
+          toast.error('Still syncing your data - please wait a moment and try this serial again.', { duration: 6000 })
+          return false
+        }
         const transactionTypesByName = new Map((transactionTypes ?? []).map((t) => [t.name.trim().toLowerCase(), t.transactionTypeId]))
         const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId, transactionTypesByName })
         await db.transactions.add(imported)

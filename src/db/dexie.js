@@ -900,6 +900,26 @@ db.cloud.login().catch(() => {
 db.cloud.syncState.subscribe((state) => {
   console.log('[DEXIE-CLOUD-DIAGNOSTIC] syncState:', JSON.stringify(state))
 })
+// Whether this device's local copy has actually caught up with the
+// cloud - used to gate the one risky operation that must never run
+// against a stale/incomplete local database: importing a placeholder
+// copy of a transaction from the Sheet backup when a serial lookup
+// finds nothing locally (StockFormBase/SackFormBase's checkAndLoadSerial).
+// If local storage was ever cleared/reset, there's a real window where
+// the initial pull-down from the cloud hasn't reached a given record
+// yet - a lookup that runs in that window would otherwise wrongly
+// conclude the record doesn't exist and import a second, blank copy
+// alongside the real one once it finishes syncing in. 'pushing' and
+// 'in-sync' both mean the initial pull has already completed (only
+// outbound work remains, if any); 'initial'/'pulling'/'not-in-sync'
+// mean it hasn't. No configured cloud connection (phase undefined) or
+// genuinely offline both count as caught-up, since there's nothing
+// further to wait for in either case.
+export const isCloudSyncCaughtUp = () => {
+  const phase = db.cloud.syncState.value?.phase
+  return phase == null || phase === 'in-sync' || phase === 'pushing' || phase === 'offline'
+}
+
 db.cloud.currentUser.subscribe((user) => {
   console.log('[DEXIE-CLOUD-DIAGNOSTIC] currentUser:', JSON.stringify(user))
   // THE SINGLE MOST DIRECT CHECK for whether every device is sharing

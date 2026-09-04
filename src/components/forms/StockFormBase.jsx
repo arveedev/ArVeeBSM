@@ -46,7 +46,7 @@ import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../comm
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
-import { db } from '../../db/dexie.js'
+import { db, isCloudSyncCaughtUp } from '../../db/dexie.js'
 import {
   calculateNetKilos,
   calculateMtsFromSackWeight,
@@ -1464,6 +1464,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
       if (latestRequestedSerial.current !== serial) return false // superseded - discard
       if (sheetResult.ok && sheetResult.row) {
+        // This device's local pull-down from the cloud may not have
+        // caught up yet (e.g. right after local storage was cleared or
+        // reset) - importing a blank placeholder copy from the Sheet
+        // right now risks sitting alongside the real, complete record
+        // once IT finishes syncing in moments later, leaving two
+        // records under the same serial (confirmed as a real, reported
+        // case). Refuse to import while that's still a possibility -
+        // the user just needs to wait a moment for their own data to
+        // finish loading, not guess at that from nothing.
+        if (!isCloudSyncCaughtUp()) {
+          toast.error('Still syncing your data - please wait a moment and try this serial again.', { duration: 6000 })
+          return false
+        }
         const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
         const transactionTypesByName = new Map((transactionTypes ?? []).map((t) => [t.name.trim().toLowerCase(), t.transactionTypeId]))
         const imported = mapSheetRowToTransaction(type, sheetResult.row, {
