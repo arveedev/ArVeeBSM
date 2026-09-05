@@ -458,6 +458,47 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
   }
 }
 
+/**
+ * Closes a race distinct from the WTS-backup-serial one above: this
+ * function's own local-data snapshot (existingByWarehouse, taken once
+ * up front) can miss a save that completes - and gets backed up to the
+ * Sheet - in the moments between that snapshot and this same preload
+ * cycle's own Sheet fetch. When that happens, the row it just fetched
+ * looks like a genuinely new one, and gets imported as a second, blank
+ * placeholder copy of the record someone just finished saving, all on
+ * one device, no multi-device timing required (confirmed live: WSR #1
+ * ended up duplicated seconds after being saved, on the same session).
+ * Reuses the exact same "real record wins over a blank Sheet-import
+ * placeholder" rule as findTransactionBySerial's own self-heal
+ * (serialNumber.js), scoped to just the warehouses this cycle touched.
+ */
+const dedupeStaleSheetPlaceholders = async (type, warehouseIds) => {
+  if (warehouseIds.length === 0) return
+  const rows = await db.transactions
+    .where('type').equals(type)
+    .and((tx) => warehouseIds.includes(tx.warehouseId))
+    .toArray()
+  const groups = new Map()
+  for (const tx of rows) {
+    const key = `${tx.warehouseId}::${tx.serialNo}::${tx.cerealCategory ?? ''}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(tx)
+  }
+  const isPlaceholder = (tx) => tx.fromSheetImport && tx.needsCompletion && !tx.pileId
+  const idsToDelete = []
+  for (const group of groups.values()) {
+    if (group.length <= 1) continue
+    const real = group.find((tx) => !isPlaceholder(tx)) ?? group[0]
+    for (const tx of group) {
+      if (tx.id !== real.id && isPlaceholder(tx)) idsToDelete.push(tx.id)
+    }
+  }
+  if (idsToDelete.length > 0) {
+    await db.transactions.bulkDelete(idsToDelete)
+    console.log(`preloadOneType(${type}): self-healed ${idsToDelete.length} duplicate Sheet-import placeholder(s) left by a same-device save/preload race`)
+  }
+}
+
 const preloadOneType = async (type, warehouses, warehouseIdByName) => {
   // Split into two groups: warehouses that have never completed a
   // preload for this type (need everything), and warehouses that
@@ -656,6 +697,8 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
       console.error(`preloadOneType: ${i === 0 ? 'full-pull' : 'incremental'} group failed for ${type}:`, result.reason)
     }
   })
+
+  await dedupeStaleSheetPlaceholders(type, warehouseIds)
 
   for (const [warehouseId, { serialNo }] of highestImportedByWarehouse) {
     await recordSerialUsed(type, warehouseId, serialNo)

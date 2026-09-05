@@ -844,4 +844,15 @@
 //            ripple ring expand around the whole icon rather than just
 //            that dot - reads as one unified "cloud" indicator instead
 //            of an icon plus a small badge glued to its corner.
-export const APP_VERSION = '1.9-51'
+//   1.9-52 - Found and fixed a new duplicate-record race during live
+//            testing (distinct from 1.9-46's): the background bulk
+//            preload takes a snapshot of local data before fetching the
+//            Sheet, and a save that finishes - and backs up to the
+//            Sheet - in that same window was invisible to the snapshot,
+//            so the preload imported it a second time as a blank
+//            placeholder. Confirmed live: a freshly-saved WSR was
+//            duplicated within seconds, on one device, no multi-device
+//            timing needed. Preload now self-heals any such duplicate
+//            it created, using the same "real record wins over a blank
+//            Sheet placeholder" rule as 1.9-46's fix.
+export const APP_VERSION = '1.9-52'
