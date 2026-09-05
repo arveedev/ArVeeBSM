@@ -151,6 +151,56 @@ export const reverseTransactionFromPile = async (transaction) => {
 }
 
 /**
+ * Applies the NET effect of editing a transaction's bags/kilos on ONE
+ * pile (the pileId did not change between the old and new values - see
+ * the caller for the separate reverse-from-old-pile/apply-to-new-pile
+ * path when it did). Computes a single combined delta instead of
+ * reversing the old effect and applying the new one as two separate
+ * pile writes - real, confirmed bug: those two writes can't be safely
+ * ordered around the transaction row's own DB update. The row needs to
+ * still show the OLD values for a reverse-triggered recompute to
+ * correctly exclude this transaction's old contribution, but the NEW
+ * values for an apply-triggered one to correctly include the new one -
+ * an impossible single truth for the row to hold at both steps' fallback
+ * moments, whichever order the two writes ran in. Confirmed as the
+ * same-shaped bug as the void/delete ordering fix elsewhere in this
+ * session, just one step removed: reversing the old effect while the
+ * row is still Active with its old (unmodified) values lets a fallback
+ * recompute correctly re-count that old contribution, and the
+ * following apply-the-new-effect call then adds the new contribution
+ * on top of it - a silent double-count, not just a stuck-unchanged
+ * value.
+ *
+ * Call this AFTER writing the transaction record's new values to the
+ * DB - if the combined delta needs a full recompute, it will already
+ * see this record's correct final values, so there's nothing left to
+ * double-count regardless of which single call handles it.
+ */
+export const reapplyTransactionToPile = async (type, pileId, oldBags, oldKilos, newBags, newKilos) => {
+  const direction = DIRECTION_BY_TYPE[type]
+  if (!direction || !pileId) return
+
+  const pile = await db.piles.get(pileId)
+  if (!pile) return
+
+  const bagsDelta = ((newBags ?? 0) - (oldBags ?? 0)) * direction
+  const kilosDelta = ((newKilos ?? 0) - (oldKilos ?? 0)) * direction
+  const rawBags = (pile.currentBags ?? 0) + bagsDelta
+  const rawKilos = round3((pile.currentKilos ?? 0) + kilosDelta)
+
+  if (rawBags < 0 || rawKilos < 0) {
+    await recalculatePileCurrentState(pile.pileId)
+    return
+  }
+
+  await db.piles.update(pile.pileId, {
+    currentBags: rawBags,
+    currentKilos: rawKilos,
+    ...deriveZeroedDateUpdate(pile, rawBags, rawKilos),
+  })
+}
+
+/**
  * Finds or creates the single accountability pile for a given
  * warehouse+variety combination - used by Ricemill/Mechanical Dryer
  * facilities to hold stock passing through MPO III's own

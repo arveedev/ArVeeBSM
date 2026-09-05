@@ -970,13 +970,17 @@ const SackFormBase = forwardRef(function SackFormBase(
     // Grouped into one atomic Dexie transaction - see StockFormBase.jsx's
     // identical fix for the full reasoning.
     await db.transaction('rw', db.tables, async () => {
-      if (loadedTransaction.siaNumber) {
-        await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
-      }
-
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter(type, currentWarehouseId)
       queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
+
+      // A Cancelled (already-voided) record's SIA balance was already
+      // reversed at void time - reversing it again here would double-
+      // reverse it. Real, confirmed gap in the sibling forms: Void
+      // already guards this exact case, Delete never did.
+      if (loadedTransaction.status !== 'Cancelled' && loadedTransaction.siaNumber) {
+        await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
+      }
     })
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
@@ -995,16 +999,25 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
-    if (loadedTransaction && loadedTransaction.status !== 'Cancelled' && loadedTransaction.siaNumber) {
-      await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
-    }
+    const wasActive = Boolean(loadedTransaction) && loadedTransaction.status !== 'Cancelled'
     const cancelledRecord = loadedTransaction
       ? buildCancelledPayload({ id: loadedTransaction.id })
       : { id: crypto.randomUUID(), ...buildCancelledPayload() }
+    // DB write happens BEFORE the SIA-balance reversal - matches the
+    // same ordering fix in StockFormBase.jsx/WTSForm.jsx's void
+    // handlers (adjustSiaBalance itself doesn't currently depend on
+    // live transaction status, but keeping the same shape here means a
+    // future change to adjustSiaBalance that DOES add such a dependency
+    // - e.g. recomputing from transaction history like the pile
+    // functions already do - can't silently reintroduce that exact bug
+    // here the way it would if this stayed the odd one out).
     if (loadedTransaction) {
       await db.transactions.update(loadedTransaction.id, cancelledRecord)
     } else {
       await db.transactions.add(cancelledRecord)
+    }
+    if (wasActive && loadedTransaction.siaNumber) {
+      await adjustSiaBalance(loadedTransaction.siaNumber, buildLineDeltas(loadedTransaction.sackLines, -1))
     }
     await recordSerialUsed(type, currentWarehouseId, serialNo.trim())
     setIsCancelled(true)
@@ -1021,9 +1034,13 @@ const SackFormBase = forwardRef(function SackFormBase(
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
-    await db.transactions.delete(loadedTransaction.id)
-    await recalculateSerialCounter(type, currentWarehouseId)
-    queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
+    // Grouped into one atomic Dexie transaction, same reasoning as
+    // handleDeleteConfirmed's identical wrapping.
+    await db.transaction('rw', db.tables, async () => {
+      await db.transactions.delete(loadedTransaction.id)
+      await recalculateSerialCounter(type, currentWarehouseId)
+      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
+    })
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)

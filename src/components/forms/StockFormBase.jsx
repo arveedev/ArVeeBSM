@@ -77,7 +77,7 @@ import {
   recalculateSerialCounter,
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
-import { applyTransactionToPile, reverseTransactionFromPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
+import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionToPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
 import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -2042,12 +2042,38 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // transaction record and the pile's real stock level could
     // permanently disagree with no automatic fix.
     await db.transaction('rw', db.tables, async () => {
-      // Reverse the OLD combined effect (primary + every original extra
-      // allocation) before applying anything new - see reverseGroupEffect.
-      await reverseGroupEffect(loadedTransaction)
-
+      // Write the record's new values FIRST, then reconcile the pile
+      // effect - not reverse-old-then-apply-new against a row that's
+      // still showing OLD values when the reversal runs. That ordering
+      // (the original shape here) can silently double-count: if
+      // reversing the old effect ever needs pileLedger.js's negative-
+      // clamp fallback (a full recompute from real transaction
+      // history), that recompute reads this row LIVE from the DB - if
+      // it's still Active with its old, unmodified values at that
+      // moment, the recompute re-counts the old contribution correctly
+      // "for now", and then applying the new effect on top adds the
+      // new contribution too, double-counting this one edit. Same bug
+      // class as the void/delete ordering fix elsewhere in this file,
+      // one step removed. When the pile didn't change, reapplyTransactionToPile
+      // computes one net delta instead of two separate writes, so
+      // there's nothing left to double-count regardless of order.
       await db.transactions.update(loadedTransaction.id, updated)
-      await applyTransactionToPile(updated)
+      if (loadedTransaction.pileId && loadedTransaction.pileId === updated.pileId) {
+        await reapplyTransactionToPile(
+          updated.type, updated.pileId,
+          loadedTransaction.numberOfBags, loadedTransaction.netKilos,
+          updated.numberOfBags, updated.netKilos
+        )
+      } else {
+        // Pile actually changed - these are two independent pile
+        // records, so there's no shared-row double-count risk between
+        // them; a recompute for the OLD pile naturally excludes this
+        // row the instant its pileId is updated above (it's queried by
+        // pileId), and a recompute for the NEW pile naturally includes
+        // it with its new values.
+        if (loadedTransaction.pileId) await reverseTransactionFromPile(loadedTransaction)
+        await applyTransactionToPile(updated)
+      }
       await rememberCustomer({
         name: customerName.trim(),
         address: customerAddress.trim() || null,
@@ -2092,7 +2118,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             ...fields,
           }
           await db.transactions.update(alloc.txId, extraUpdated)
-          await applyTransactionToPile(extraUpdated)
+          // Same net-delta reasoning as the primary record above - an
+          // edited-in-place extra allocation needs its old contribution
+          // reversed and new one applied without a stale-status window
+          // in between.
+          if (orig?.pileId && orig.pileId === alloc.pileId) {
+            await reapplyTransactionToPile(
+              extraUpdated.type, alloc.pileId,
+              orig.numberOfBags, orig.netKilos,
+              fields.numberOfBags, fields.netKilos
+            )
+          } else {
+            if (orig?.pileId) await reverseTransactionFromPile({ type: 'WSI', pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
+            await applyTransactionToPile(extraUpdated)
+          }
         } else {
           const letter = nextAvailableLetter(usedLetters)
           usedLetters.add(letter)
@@ -2111,9 +2150,28 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       for (const orig of originalExtraAllocations) {
         if (survivingTxIds.has(orig.id)) continue
         await db.transactions.delete(orig.id)
+        await reverseTransactionFromPile({ type: 'WSI', pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
         queueTransactionDeletion(orig.serialNo, updated.type, currentWarehouse?.code) // fire-and-forget, same as a normal delete
       }
 
+      // Reverse the OLD authority contribution (primary's own old
+      // share + every original extra allocation's old share) before
+      // applying the new one - adjustAuthorityBalance is a plain delta
+      // add against the authority's current row (no DB-status-dependent
+      // recompute like the pile functions have), so unlike the pile
+      // fix above, these two calls can safely run in either order
+      // relative to the transaction writes - but both must still
+      // happen, which reverseGroupEffect used to cover and no longer
+      // does now that it's no longer called here.
+      if (loadedTransaction.aiNumber) {
+        const oldExtraBagsTotal = originalExtraAllocations.reduce((s, o) => s + (o.numberOfBags ?? 0), 0)
+        const oldExtraKilosTotal = originalExtraAllocations.reduce((s, o) => s + (o.netKilos ?? 0), 0)
+        await adjustAuthorityBalance(
+          loadedTransaction.aiNumber,
+          -((loadedTransaction.numberOfBags ?? 0) + oldExtraBagsTotal),
+          -((loadedTransaction.netKilos ?? 0) + oldExtraKilosTotal)
+        )
+      }
       if (linkedDocDeductsFromAi && linkedDocNo.trim()) {
         await adjustAuthorityBalance(linkedDocNo.trim(), bagsNum + extraBagsTotal, netKilos + extraKilosTotal)
       }
@@ -2160,7 +2218,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
       }
 
-      await reverseGroupEffect(loadedTransaction)
+      // A Cancelled (already-voided) record's pile/authority effect was
+      // already reversed at void time - reversing it again here would
+      // double-reverse the balance (subtract a second time from a pile
+      // that already correctly excludes it). Real, confirmed gap: Void
+      // already guards this exact case (wasActive), Delete never did.
+      if (loadedTransaction.status !== 'Cancelled') {
+        await reverseGroupEffect(loadedTransaction)
+      }
     })
 
     toast.success(`${type} ${serialNo.trim()} deleted`)
@@ -2234,13 +2299,21 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
-    await db.transactions.delete(loadedTransaction.id)
-    for (const orig of originalExtraAllocations) {
-      await db.transactions.delete(orig.id)
-      queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
-    }
-    await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
-    queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
+    // Grouped into one atomic Dexie transaction, same reasoning as
+    // handleDeleteConfirmed's identical wrapping - a multi-pile group's
+    // Cancelled records are one real-world un-void, not several
+    // independent deletes; an interruption partway through would
+    // otherwise leave some extras deleted and others stuck as orphaned
+    // Cancelled records pointing at a primary that's already gone.
+    await db.transaction('rw', db.tables, async () => {
+      await db.transactions.delete(loadedTransaction.id)
+      for (const orig of originalExtraAllocations) {
+        await db.transactions.delete(orig.id)
+        queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
+      }
+      await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
+      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
+    })
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)

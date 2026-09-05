@@ -610,6 +610,92 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     }
   }
 
+  // Applies the NET effect of editing a WTS's bags/kilos on ONE side
+  // (issued or received) of one pile - reused below for both sides.
+  // Computes a single combined delta instead of reversing the old
+  // effect and applying the new one as two separate writes: real,
+  // confirmed bug (same shape as pileLedger.js's reapplyTransactionToPile,
+  // see its own comment for the full reasoning) - those two writes
+  // can't be safely ordered around the transaction row's own DB update,
+  // since the row needs to show OLD values for a reverse-triggered
+  // recompute and NEW values for an apply-triggered one at the same
+  // time. `direction` is +1 for a receiving pile (adds), -1 for an
+  // issuing pile (subtracts). Call this AFTER writing the WTS record's
+  // new values to the DB.
+  const reapplyWtsSideToPile = async (pileId, direction, oldBags, oldKilos, newBags, newKilos) => {
+    if (!pileId) return
+    const pile = await db.piles.get(pileId)
+    if (!pile) return
+    const bagsDelta = ((newBags ?? 0) - (oldBags ?? 0)) * direction
+    const kilosDelta = ((newKilos ?? 0) - (oldKilos ?? 0)) * direction
+    const rawBags = (pile.currentBags ?? 0) + bagsDelta
+    const rawKilos = round3((pile.currentKilos ?? 0) + kilosDelta)
+    if (rawBags < 0 || rawKilos < 0) {
+      await recalculatePileCurrentState(pile.pileId)
+      return
+    }
+    await db.piles.update(pile.pileId, {
+      currentBags: rawBags,
+      currentKilos: rawKilos,
+      ...deriveZeroedDateUpdate(pile, rawBags, rawKilos),
+    })
+  }
+
+  // Applies a single side's full amount as an addition (received-style)
+  // to one pile - used below only for the pile-changed case, where the
+  // old and new piles are different records so there's no shared-row
+  // staleness risk (see reapplyWtsToPiles's own comment).
+  const applyWtsSideToPile = async (pileId, direction, bags, kilos) => {
+    if (!pileId || bags == null) return
+    const pile = await db.piles.get(pileId)
+    if (!pile) return
+    if (direction > 0) {
+      const newBags = (pile.currentBags ?? 0) + bags
+      const newKilos = round3((pile.currentKilos ?? 0) + (kilos ?? 0))
+      await db.piles.update(pile.pileId, { currentBags: newBags, currentKilos: newKilos, ...deriveZeroedDateUpdate(pile, newBags, newKilos) })
+    } else {
+      const rawBags = (pile.currentBags ?? 0) - bags
+      const rawKilos = round3((pile.currentKilos ?? 0) - (kilos ?? 0))
+      if (rawBags < 0 || rawKilos < 0) {
+        await recalculatePileCurrentState(pile.pileId)
+      } else {
+        await db.piles.update(pile.pileId, { currentBags: rawBags, currentKilos: rawKilos, ...deriveZeroedDateUpdate(pile, rawBags, rawKilos) })
+      }
+    }
+  }
+
+  // Reverses a single side's full amount from one pile (the inverse of
+  // applyWtsSideToPile) - used below only for the pile-changed case.
+  const reverseWtsSideFromPile = async (pileId, direction, bags, kilos) => {
+    if (!pileId || bags == null) return
+    // Reversing an issue (direction -1) ADDS back; reversing a receipt
+    // (direction +1) SUBTRACTS - the inverse of applyWtsSideToPile's
+    // own direction meaning.
+    await applyWtsSideToPile(pileId, -direction, bags, kilos)
+  }
+
+  // Reconciles both sides of an edit at once - for each side, if the
+  // pile didn't change, uses the net-delta reapply above; if it did
+  // change, reverses from the old pile and applies to the new one
+  // (safe: two independent pile records, and a recompute for the old
+  // pile naturally excludes this row the instant its pileId is updated,
+  // since it's queried by pileId - see pileLedger.js's identical
+  // reasoning). Call AFTER writing the WTS record's new values to the DB.
+  const reapplyWtsToPiles = async (oldTx, newTx) => {
+    if (oldTx.issuedPileId && oldTx.issuedPileId === newTx.issuedPileId) {
+      await reapplyWtsSideToPile(newTx.issuedPileId, -1, oldTx.issuedBags, oldTx.issuedNetKilos, newTx.issuedBags, newTx.issuedNetKilos)
+    } else {
+      await reverseWtsSideFromPile(oldTx.issuedPileId, -1, oldTx.issuedBags, oldTx.issuedNetKilos)
+      await applyWtsSideToPile(newTx.issuedPileId, -1, newTx.issuedBags, newTx.issuedNetKilos)
+    }
+    if (oldTx.receivedPileId && oldTx.receivedPileId === newTx.receivedPileId) {
+      await reapplyWtsSideToPile(newTx.receivedPileId, 1, oldTx.receivedBags, oldTx.receivedNetKilos, newTx.receivedBags, newTx.receivedNetKilos)
+    } else {
+      await reverseWtsSideFromPile(oldTx.receivedPileId, 1, oldTx.receivedBags, oldTx.receivedNetKilos)
+      await applyWtsSideToPile(newTx.receivedPileId, 1, newTx.receivedBags, newTx.receivedNetKilos)
+    }
+  }
+
   // A WTS document with only one side filled is not valid — it must show
   // both an issue and a receipt, matching the real paper form.
   const sideIsComplete = (side) =>
@@ -689,10 +775,16 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (!(await validate(loadedTransaction.id))) { setIsSaving(false); return }
     const updated = buildPayload({ id: loadedTransaction.id })
     // Grouped into one atomic Dexie transaction - see handleSave above.
+    // Write the record's new values FIRST, then reconcile both piles'
+    // effect via reapplyWtsToPiles - not reverse-old-then-apply-new
+    // against a row still showing old values, which can silently
+    // double-count if the reversal needs the negative-clamp recompute
+    // fallback (see reapplyWtsToPiles's own comment for the full
+    // reasoning - same bug class as the void/delete ordering fix
+    // elsewhere in this session, one step removed).
     await db.transaction('rw', db.tables, async () => {
-      await reverseWtsFromPiles(loadedTransaction)
       await db.transactions.update(loadedTransaction.id, updated)
-      await applyWtsToPiles(updated)
+      await reapplyWtsToPiles(loadedTransaction, updated)
     })
     toast.success(`WTS ${serialNo.trim()} updated`)
     setLoadedTransaction(updated)
@@ -716,7 +808,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter('WTS', currentWarehouseId)
       queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
-      await reverseWtsFromPiles(loadedTransaction)
+      // A Cancelled (already-voided) record's pile effect was already
+      // reversed at void time - reversing it again here would double-
+      // reverse both piles. Real, confirmed gap: Void already guards
+      // this exact case (wasActive), Delete never did.
+      if (loadedTransaction.status !== 'Cancelled') {
+        await reverseWtsFromPiles(loadedTransaction)
+      }
     })
     toast.success(`WTS ${serialNo.trim()} deleted`)
     resetForm(serialNo.trim())
@@ -760,9 +858,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
-    await db.transactions.delete(loadedTransaction.id)
-    await recalculateSerialCounter('WTS', currentWarehouseId)
-    queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
+    // Grouped into one atomic Dexie transaction, same reasoning as
+    // handleDeleteConfirmed's identical wrapping.
+    await db.transaction('rw', db.tables, async () => {
+      await db.transactions.delete(loadedTransaction.id)
+      await recalculateSerialCounter('WTS', currentWarehouseId)
+      queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
+    })
     toast.success(`WTS ${serialNo.trim()} is no longer cancelled — available again`)
     resetForm(serialNo.trim())
     setIsSaving(false)

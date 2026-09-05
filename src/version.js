@@ -868,4 +868,24 @@
 //            in both forms that touch pile stock (WSR/WSI, WTS) by
 //            writing the cancel/delete first, then reversing the pile
 //            effect - ESR/ESI never touch pile stock, so unaffected.
-export const APP_VERSION = '1.9-53'
+//   1.9-54 - A deep code review (not live testing) found the SAME
+//            reversal-ordering bug from 1.9-53 in three more places it
+//            had been missed: (1) Update on a WSR/WSI/WTS has the
+//            identical issue - editing a document could silently
+//            double-count its old amount if the pile needed a full
+//            recompute mid-edit. Fixed with a new "apply the net
+//            change in one step" approach instead of reverse-then-
+//            apply, so there's nothing left to double-count either way.
+//            (2) Delete never checked whether a document was already
+//            voided before reversing its effect - deleting an already-
+//            voided WSR/WSI/WTS/ESI subtracted its pile or authority
+//            balance a SECOND time. Now skipped when already Cancelled,
+//            matching what Void already did correctly. (3) Un-voiding a
+//            multi-pile issuance wasn't wrapped as one all-or-nothing
+//            save, so an interruption partway through could leave some
+//            of its piles un-voided and others stuck. Also fixed a
+//            separate bug in the background Sheet sync: its duplicate-
+//            record check didn't account for Rice and Palay keeping
+//            separate serial numbers, so a warehouse with the same
+//            number in both could cross-contaminate their data on sync.
+export const APP_VERSION = '1.9-54'

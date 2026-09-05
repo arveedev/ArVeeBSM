@@ -530,9 +530,18 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     .where('type').equals(type)
     .and((tx) => warehouseIds.includes(tx.warehouseId))
     .toArray()
+  // Keyed by serial AND cerealCategory, not serial alone - WSR/WSI
+  // deliberately keep separate Rice/Palay series per warehouse (see
+  // serialNumber.js's own header comment: the same number can
+  // legitimately exist in both), so a serial-only key here would let a
+  // warehouse's Rice "WSR #50" and Palay "WSR #50" overwrite each other
+  // in this map, and then have an incoming Sheet row for one silently
+  // matched against - and merged into - the other's local record. ESR/
+  // ESI/WTS have no cerealCategory dimension, so their rows all key on
+  // `''`, unaffected.
   const existingByWarehouse = new Map(warehouseIds.map((id) => [id, new Map()]))
   for (const tx of localTx) {
-    existingByWarehouse.get(tx.warehouseId)?.set(String(tx.serialNo), tx)
+    existingByWarehouse.get(tx.warehouseId)?.set(`${tx.serialNo}::${tx.cerealCategory ?? ''}`, tx)
   }
 
   const highestImportedByWarehouse = new Map()
@@ -592,10 +601,9 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
 
         seenSerialsForThisSource.push(String(serialNo))
 
-        const existingRecords = existingByWarehouse.get(rowWarehouseId)
-        const existing = existingRecords?.get(String(serialNo))
-
         const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName, transactionTypesByName })
+        const existingRecords = existingByWarehouse.get(rowWarehouseId)
+        const existing = existingRecords?.get(`${serialNo}::${imported.cerealCategory ?? ''}`)
 
         // Advances for every row seen (existing or new), not just fresh
         // imports, so the ordinal always reflects this row's true position
@@ -654,7 +662,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
 
         imported.createdAt = ordinal
         await db.transactions.add(imported)
-        existingRecords?.set(String(serialNo), { id: imported.id, isSynced: true })
+        existingRecords?.set(`${serialNo}::${imported.cerealCategory ?? ''}`, { id: imported.id, isSynced: true })
         importedCount++
 
         const num = parseInt(String(serialNo).replace(/\D/g, ''), 10)
