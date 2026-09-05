@@ -468,11 +468,27 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
  * placeholder copy of the record someone just finished saving, all on
  * one device, no multi-device timing required (confirmed live: WSR #1
  * ended up duplicated seconds after being saved, on the same session).
- * Reuses the exact same "real record wins over a blank Sheet-import
- * placeholder" rule as findTransactionBySerial's own self-heal
- * (serialNumber.js), scoped to just the warehouses this cycle touched.
+ *
+ * Deliberately NOT a one-time migration (the pattern used by the
+ * transaction-field-type-and-dedup-fix-v2/transaction-consolidated-
+ * fix-v7/transaction-dedup-merge-v8 flags above) - a one-time pass only
+ * catches whatever duplicates already existed the moment it first
+ * runs, and goes permanently blind to anything created after its flag
+ * is marked done, which is exactly how this bug class has needed
+ * re-fixing three separate times already. This instead runs on every
+ * single preload cycle, for every warehouse it touches, so it can never
+ * go stale. Uses the same general "most complete record wins, merge in
+ * whatever fields the losers had that the winner didn't" survivor rule
+ * as v8 above (broadened from only merging blank Sheet-import
+ * placeholders to merging ANY duplicate pair, on the reasoning that a
+ * genuine data-integrity backstop that only catches one specific shape
+ * of duplicate isn't actually closing off the underlying problem -
+ * there is still no hard database-level guarantee this can't happen,
+ * but this makes it self-heal on every sync instead of needing to be
+ * rediscovered and re-patched by hand each time a new way to create one
+ * turns up), scoped to just the warehouses this cycle touched.
  */
-const dedupeStaleSheetPlaceholders = async (type, warehouseIds) => {
+const dedupeDuplicateTransactions = async (type, warehouseIds) => {
   if (warehouseIds.length === 0) return
   const rows = await db.transactions
     .where('type').equals(type)
@@ -484,18 +500,30 @@ const dedupeStaleSheetPlaceholders = async (type, warehouseIds) => {
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key).push(tx)
   }
-  const isPlaceholder = (tx) => tx.fromSheetImport && tx.needsCompletion && !tx.pileId
+  const completeness = (tx) => Object.values(tx).filter((v) => v != null && v !== '').length
   const idsToDelete = []
+  const toUpdate = []
+  let mergeCount = 0
   for (const group of groups.values()) {
     if (group.length <= 1) continue
-    const real = group.find((tx) => !isPlaceholder(tx)) ?? group[0]
-    for (const tx of group) {
-      if (tx.id !== real.id && isPlaceholder(tx)) idsToDelete.push(tx.id)
+    mergeCount++
+    const nonImported = group.filter((tx) => tx.fromSheetImport !== true)
+    const survivorPool = nonImported.length > 0 ? nonImported : group
+    const survivor = { ...[...survivorPool].sort((a, b) => completeness(b) - completeness(a))[0] }
+    const others = group.filter((tx) => tx.id !== survivor.id)
+    for (const other of others) {
+      for (const [field, value] of Object.entries(other)) {
+        if (field === 'id') continue
+        if ((survivor[field] == null || survivor[field] === '') && value != null && value !== '') survivor[field] = value
+      }
     }
+    toUpdate.push(survivor)
+    for (const other of others) idsToDelete.push(other.id)
   }
+  if (toUpdate.length > 0) await db.transactions.bulkPut(toUpdate)
   if (idsToDelete.length > 0) {
     await db.transactions.bulkDelete(idsToDelete)
-    console.log(`preloadOneType(${type}): self-healed ${idsToDelete.length} duplicate Sheet-import placeholder(s) left by a same-device save/preload race`)
+    console.log(`preloadOneType(${type}): self-healed ${idsToDelete.length} duplicate(s) across ${mergeCount} group(s) left by a same-device save/preload race`)
   }
 }
 
@@ -660,6 +688,24 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
           continue
         }
 
+        // One last LIVE check against the real database, not the
+        // existingByWarehouse snapshot taken at the top of this
+        // function - that snapshot is exactly what the same-device
+        // save/preload race (see dedupeDuplicateTransactions's own
+        // comment) exploits, since a save completing after the
+        // snapshot but before this exact line is invisible to it. This
+        // narrows that race from "the whole preload cycle's duration"
+        // down to the single moment between this query and the write
+        // right after it - not a database-level guarantee, but as
+        // tight as a plain check-then-write can get without one, and
+        // dedupeDuplicateTransactions still cleans up anything that
+        // slips through even this.
+        const stillMissing = !(await db.transactions
+          .where('[type+warehouseId+serialNo]').equals([type, rowWarehouseId, String(serialNo)])
+          .and((t) => (t.cerealCategory ?? '') === (imported.cerealCategory ?? ''))
+          .first())
+        if (!stillMissing) { skippedUnchanged++; continue }
+
         imported.createdAt = ordinal
         await db.transactions.add(imported)
         existingRecords?.set(`${serialNo}::${imported.cerealCategory ?? ''}`, { id: imported.id, isSynced: true })
@@ -706,7 +752,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
     }
   })
 
-  await dedupeStaleSheetPlaceholders(type, warehouseIds)
+  await dedupeDuplicateTransactions(type, warehouseIds)
 
   for (const [warehouseId, { serialNo }] of highestImportedByWarehouse) {
     await recordSerialUsed(type, warehouseId, serialNo)

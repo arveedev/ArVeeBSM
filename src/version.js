@@ -888,4 +888,18 @@
 //            record check didn't account for Rice and Palay keeping
 //            separate serial numbers, so a warehouse with the same
 //            number in both could cross-contaminate their data on sync.
-export const APP_VERSION = '1.9-54'
+//   1.9-55 - Strengthened duplicate-record protection, per a follow-up
+//            request to close it off for good rather than patch it
+//            again next time it resurfaces. The cleanup pass that
+//            already ran on every background sync now catches ANY
+//            duplicate it finds (not just the one specific shape it
+//            used to), merging the most complete copy instead of just
+//            deleting - and, unlike the four one-time fixes before it
+//            this app has needed for this same bug class, this one
+//            never "expires": it keeps checking on every single sync,
+//            forever, instead of only once. Also added one more check
+//            right at the moment a new record is about to be saved
+//            during sync, querying the real database instead of a
+//            slightly-stale snapshot, to make the odds of a duplicate
+//            slipping through in the first place even smaller.
+export const APP_VERSION = '1.9-55'
