@@ -855,4 +855,17 @@
 //            timing needed. Preload now self-heals any such duplicate
 //            it created, using the same "real record wins over a blank
 //            Sheet placeholder" rule as 1.9-46's fix.
-export const APP_VERSION = '1.9-52'
+//   1.9-53 - Found and fixed a real bug during live testing: voiding or
+//            deleting a receipt (WSR, or a WTS's received side) AFTER
+//            some of its stock had already been issued elsewhere could
+//            leave the pile's balance completely unchanged, silently
+//            undoing what should have been a real reduction. Cause:
+//            the pile-effect reversal ran BEFORE the transaction was
+//            actually marked cancelled/deleted in the database, and its
+//            own fallback recompute (used when a plain subtract would
+//            go negative) reads live status from the DB - so it still
+//            counted the record being voided/deleted as active. Fixed
+//            in both forms that touch pile stock (WSR/WSI, WTS) by
+//            writing the cancel/delete first, then reversing the pile
+//            effect - ESR/ESI never touch pile stock, so unaffected.
+export const APP_VERSION = '1.9-53'

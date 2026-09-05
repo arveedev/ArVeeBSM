@@ -2145,8 +2145,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // Grouped into one atomic transaction, same reasoning as
     // performSave/handleUpdate above.
     await db.transaction('rw', db.tables, async () => {
-      await reverseGroupEffect(loadedTransaction)
-
+      // Delete happens BEFORE reversing this transaction's pile effect -
+      // see handleConfirmVoid's identical fix/reasoning just above.
+      // reverseGroupEffect's fallback recompute reads live transaction
+      // status from the DB, and running it first left the record still
+      // there for that recompute to count, silently cancelling out the
+      // deletion's effect on the pile total.
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
       queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
@@ -2155,6 +2159,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         await db.transactions.delete(orig.id)
         queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
       }
+
+      await reverseGroupEffect(loadedTransaction)
     })
 
     toast.success(`${type} ${serialNo.trim()} deleted`)
@@ -2175,19 +2181,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
-    if (loadedTransaction && loadedTransaction.status !== 'Cancelled') {
-      // Voiding a multi-pile issuance voids the WHOLE group - same
-      // reasoning as Delete (one real-world event, several linked
-      // records purely for per-pile ledger accuracy). Each extra pile
-      // becomes its own Cancelled record too (below), rather than
-      // being deleted or left Active, so the audit trail still shows
-      // exactly what was voided on every pile originally touched - per
-      // explicit request (Option A).
-      await reverseGroupEffect(loadedTransaction)
-    }
+    const wasActive = Boolean(loadedTransaction) && loadedTransaction.status !== 'Cancelled'
     const cancelledRecord = loadedTransaction
       ? buildCancelledPayload({ id: loadedTransaction.id })
       : { id: crypto.randomUUID(), ...buildCancelledPayload() }
+    // The DB write (marking this Cancelled) happens BEFORE reversing its
+    // pile effect below, not after - reverseGroupEffect can fall back to
+    // a full recompute from real history (pileLedger.js's negative-clamp
+    // self-heal) when a fast incremental subtract would go negative, and
+    // that recompute reads transaction status fresh from the DB. Reverse
+    // running first left this transaction still marked Active for that
+    // recompute to see, so it silently re-counted itself and the void
+    // had NO effect on the pile total at all - confirmed live: voiding a
+    // WSR after some of its stock had already been issued elsewhere left
+    // the pile balance completely unchanged.
     if (loadedTransaction) {
       await db.transactions.update(loadedTransaction.id, cancelledRecord)
     } else {
@@ -2197,6 +2204,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // that was never actually loaded, so this is a no-op in that case.
     for (const orig of originalExtraAllocations) {
       await db.transactions.update(orig.id, { ...buildCancelledPayload(), serialNo: orig.serialNo })
+    }
+    if (wasActive) {
+      // Voiding a multi-pile issuance voids the WHOLE group - same
+      // reasoning as Delete (one real-world event, several linked
+      // records purely for per-pile ledger accuracy). Each extra pile
+      // becomes its own Cancelled record too (above), rather than
+      // being deleted or left Active, so the audit trail still shows
+      // exactly what was voided on every pile originally touched - per
+      // explicit request (Option A).
+      await reverseGroupEffect(loadedTransaction)
     }
     await recordSerialUsed(type, currentWarehouseId, serialNo.trim(), activeCategory)
     setIsCancelled(true)

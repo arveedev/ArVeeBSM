@@ -705,11 +705,18 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     setPendingDelete(false)
     setIsSaving(true)
     // Grouped into one atomic Dexie transaction - see handleSave above.
+    // Delete happens BEFORE reversing this WTS's pile effect - see
+    // StockFormBase.jsx's identical fix/reasoning. reverseWtsFromPiles
+    // can fall back to a full recompute from real transaction history
+    // (pileLedger.js's negative-clamp self-heal), which reads live
+    // status from the DB - running it first left this record still
+    // Active for that recompute to see, silently undoing the deletion's
+    // effect on the pile total.
     await db.transaction('rw', db.tables, async () => {
-      await reverseWtsFromPiles(loadedTransaction)
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter('WTS', currentWarehouseId)
       queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
+      await reverseWtsFromPiles(loadedTransaction)
     })
     toast.success(`WTS ${serialNo.trim()} deleted`)
     resetForm(serialNo.trim())
@@ -725,16 +732,19 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
-    if (loadedTransaction && loadedTransaction.status !== 'Cancelled') {
-      await reverseWtsFromPiles(loadedTransaction)
-    }
+    const wasActive = Boolean(loadedTransaction) && loadedTransaction.status !== 'Cancelled'
     const cancelledRecord = loadedTransaction
       ? buildCancelledPayload({ id: loadedTransaction.id })
       : { id: crypto.randomUUID(), ...buildCancelledPayload() }
+    // DB write happens BEFORE reversing pile effect - see
+    // handleDeleteConfirmed's identical fix/reasoning just above.
     if (loadedTransaction) {
       await db.transactions.update(loadedTransaction.id, cancelledRecord)
     } else {
       await db.transactions.add(cancelledRecord)
+    }
+    if (wasActive) {
+      await reverseWtsFromPiles(loadedTransaction)
     }
     await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim())
     setIsCancelled(true)
