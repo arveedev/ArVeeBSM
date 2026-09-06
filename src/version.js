@@ -928,4 +928,24 @@
 //            Sort & Filter control per Regional Authority Number - sort
 //            by date or by Net Kgs, or narrow to a date range - opened
 //            from a small button above each expanded number's list.
-export const APP_VERSION = '1.9-57'
+//   1.9-58 - Closed the actual root cause behind 1.9-57's duplicate AI/
+//            SIA records, after an app-wide check requested to make
+//            sure this class of bug is really gone for good. The
+//            existing cleanup only ran for a specific AI/SIA number
+//            when that number's row was still present in the current
+//            5-minute sync's fetch from the Sheet - a number whose row
+//            later got archived/moved/removed on the Sheet itself
+//            (normal once NFA staff are done with it) could leave a
+//            stale duplicate that no future sync would ever touch
+//            again. Added a full-table sweep that now runs at the
+//            start of every single sync regardless, checking every
+//            authority already in the app's database - not just the
+//            ones in this round's Sheet fetch - so a stale duplicate
+//            can no longer survive more than one sync cycle no matter
+//            how it got there. Also verified the separate outbound path
+//            (this app's own transaction records backing up TO the
+//            Sheet) was already solid: it has a real server-side lock
+//            plus a same-serial-number check before adding any row, so
+//            two devices racing to back up the same record converges to
+//            one row, not two.
+export const APP_VERSION = '1.9-58'

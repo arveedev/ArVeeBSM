@@ -523,11 +523,64 @@ export const syncAuthoritiesFromSheets = async () => {
   }
 }
 
+/**
+ * Full-table stale-duplicate sweep for db.authorities, run once at the
+ * start of every authority sync cycle - independent of whether a given
+ * aiNumber/siaNumber's row is still present in this round's Sheet
+ * fetch. upsertAuthority/upsertSiaAuthority's own per-row cleanup only
+ * fires for numbers this sync actually re-processes; a duplicate whose
+ * Sheet row was later archived, moved, or removed (a normal thing for
+ * NFA staff to do once a number is fully used) would otherwise never
+ * get caught again, even though this app keeps syncing every 5 minutes
+ * forever - this is the same "never expires, checks every cycle"
+ * approach already used for transaction duplicates
+ * (dedupeDuplicateTransactions in transactionPreload.js), applied here
+ * too since authorities had the reactive-only version of the same gap.
+ * Same canonical-record rules as each type's own upsert function below,
+ * so which copy survives is always consistent regardless of which code
+ * path catches it.
+ */
+const dedupeStaleAuthorities = async () => {
+  const all = await db.authorities.toArray()
+  const aiGroups = new Map()
+  const siaGroups = new Map()
+  for (const a of all) {
+    if (a.type === 'AI' && a.aiNumber) {
+      if (!aiGroups.has(a.aiNumber)) aiGroups.set(a.aiNumber, [])
+      aiGroups.get(a.aiNumber).push(a)
+    } else if (a.type === 'SIA' && a.siaNumber) {
+      if (!siaGroups.has(a.siaNumber)) siaGroups.set(a.siaNumber, [])
+      siaGroups.get(a.siaNumber).push(a)
+    }
+  }
+
+  const staleIds = []
+  for (const records of aiGroups.values()) {
+    if (records.length < 2) continue
+    const canonical = records.find((a) => (a.totalIssuedBags ?? 0) > 0 || (a.totalIssuedKilos ?? 0) > 0 || a.manuallyCompleted) ?? records[0]
+    staleIds.push(...records.filter((a) => a.authId !== canonical.authId).map((a) => a.authId))
+  }
+  for (const records of siaGroups.values()) {
+    if (records.length < 2) continue
+    const canonical = records.find((a) => Array.isArray(a.sackLines)) ?? records[0]
+    staleIds.push(...records.filter((a) => a.authId !== canonical.authId).map((a) => a.authId))
+  }
+
+  if (staleIds.length > 0) await db.authorities.bulkDelete(staleIds)
+  return staleIds.length
+}
+
 const runAuthoritiesSync = async () => {
   const sources = await getAllSheetSources()
   if (sources.length === 0) return { ok: false, reason: 'not_configured' }
 
   try {
+    // Runs before anything below reads db.authorities, so the
+    // aiCache/siaCache built next already reflects a clean table - see
+    // dedupeStaleAuthorities' own comment for why this full sweep is
+    // needed on top of the per-row cleanup those caches feed into.
+    await dedupeStaleAuthorities()
+
     const [warehouses, aliases, varieties, sackTypes, customerAliases, customers] = await Promise.all([
       db.warehouses.toArray(),
       db.warehouseAliases.toArray(),
