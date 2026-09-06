@@ -553,7 +553,11 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     serialHeader,
     linkedColHeader,
     { content: 'FROM WHOM ' + (isIssues ? 'ISSUED' : 'RECEIVED') + '\nNAME', styles: { halign: 'center' } },
-    'VARIETY\nCODE',
+    // A smaller font here (not a wider column) fixes "VARIETY" breaking
+    // mid-word - widening the column instead would come straight out of
+    // GROSS/NET KILOS' own width budget (see the widthList comment
+    // below), which is exactly what caused those to start wrapping.
+    { content: 'VARIETY\nCODE', styles: { fontSize: 6 } },
     ...(isByProducts ? [] : ['MC\n%']),
     'BAGS',
     'GROSS\nKILOS',
@@ -567,16 +571,26 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   // correctly whichever columns are actually present, rather than
   // needing every index hand-adjusted whenever a column is added,
   // removed, or conditionally omitted (like MC is here for By Products).
+  // GROSS/NET KILOS are deliberately left as auto-width (no cellWidth
+  // below) rather than fixed - autoTable sizes an unset column from its
+  // own actual content, which is what makes it robust to the real
+  // range of values this report can show. That only works, though, if
+  // enough total width is left over for it to work with, and a couple
+  // of other columns here had more fixed width than their actual
+  // longest real value needs (NATURE/FROM WHOM/serial/linked), starving
+  // GROSS/NET down to the point they started wrapping mid-number
+  // ("6,250.375" as "6,250.37" / "5") - confirmed against a live
+  // export. Trimmed back to what they actually need instead of touching
+  // VARIETY CODE's own width (see its header cell's own comment for why
+  // that one's fixed with a smaller font instead).
   const widthList = [
     { cellWidth: 15 },   // DATE
-    { cellWidth: 28 },   // NATURE OF TRANS ACTIVITY
-    { cellWidth: 18 },   // serial
-    { cellWidth: 16 },   // linked doc
-    { cellWidth: isIssues ? 30 : 38 }, // FROM WHOM NAME
-    ...(isIssues ? [{ cellWidth: 16 }] : []), // OR #
-    { cellWidth: 18 },   // VARIETY CODE - "VARIETY" alone doesn't fit
-                         // a narrower column at the header's bold 7pt,
-                         // so it was breaking mid-word ("VARIET"/"Y").
+    { cellWidth: 22 },   // NATURE OF TRANS ACTIVITY
+    { cellWidth: 16 },   // serial
+    { cellWidth: 14 },   // linked doc
+    { cellWidth: isIssues ? 26 : 32 }, // FROM WHOM NAME
+    ...(isIssues ? [{ cellWidth: 14 }] : []), // OR #
+    { cellWidth: 13 },   // VARIETY CODE
     ...(isByProducts ? [] : [{ cellWidth: 9, halign: 'right' }]), // MC%
     { cellWidth: 14, halign: 'right' }, // BAGS
     { halign: 'right' }, // GROSS KILOS

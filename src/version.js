@@ -1058,4 +1058,15 @@
 //            cell outline instead of just its bottom edge, so it reads
 //            as a solid, unambiguous black rectangle all the way around
 //            each header cell.
-export const APP_VERSION = '1.9-68'
+//   1.9-69 - Two PDF export fixes, both from the same live-export
+//            screenshot: GROSS/NET KILOS values were wrapping mid-
+//            number ("6,250.375" as "6,250.37" / "5") - 1.9-68's
+//            VARIETY CODE column widening had eaten directly into their
+//            width budget. Per direct feedback, that column is back to
+//            its original width with a smaller header font instead
+//            (fixing the "VARIETY" word-break without taking space from
+//            anything else), and a few other columns that had more
+//            fixed width than they actually needed (NATURE, FROM WHOM,
+//            serial, linked doc) were trimmed back, giving GROSS/NET
+//            real breathing room again.
+export const APP_VERSION = '1.9-69'
