@@ -1085,4 +1085,31 @@
 //            Back to auto-width for those two, which is what correctly
 //            fills the page - they no longer wrap either now that every
 //            other column is trimmed to what it actually needs.
-export const APP_VERSION = '1.9-71'
+//   1.9-72 - Fixed the real bug behind "AI shows 0kg issued despite a
+//            genuine active WSI document existing for it": the balance-
+//            adjustment functions (adjustAuthorityBalance/
+//            adjustSiaBalance) looked up which authority record to
+//            update with a plain "first match" query - if a duplicate
+//            authId existed for that number at that exact moment (a
+//            real, confirmed sync-race case), the update could land on
+//            the wrong copy, and a later duplicate cleanup keeping the
+//            OTHER copy as canonical then silently lost it. Both now
+//            consolidate duplicates first, so there's only ever one
+//            record left to update. Also added a self-healing sweep,
+//            recalculateAuthorityIssuedTotals, run every sync: it
+//            recomputes every authority's issued totals directly from
+//            its own real transactions, so an authority already thrown
+//            out of sync by this bug (or any other cause) repairs
+//            itself on the next cycle instead of needing a manual fix.
+//   1.9-73 - PDF export: GROSS/NET KILOS were left auto-width in the
+//            previous round to fix the full-page-width bug, but that
+//            meant they soaked up ALL the leftover space - visibly too
+//            wide for their typically short values, cramping the rest
+//            of the table by comparison. They're now a modest fixed
+//            20mm each (comfortable for even the largest realistic
+//            value), and FROM WHOM NAME is the auto-width column
+//            instead - it's the one that actually benefits from
+//            unpredictable extra room (long customer names, farmer
+//            co-op addresses), and it's what now keeps the table
+//            filling the full page in every case.
+export const APP_VERSION = '1.9-73'

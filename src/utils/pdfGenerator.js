@@ -571,31 +571,30 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   // correctly whichever columns are actually present, rather than
   // needing every index hand-adjusted whenever a column is added,
   // removed, or conditionally omitted (like MC is here for By Products).
-  // GROSS/NET KILOS are back to auto-width (no cellWidth) - fixing them
-  // at a flat 18mm in the previous round stopped them from wrapping, but
-  // it also stopped them from stretching to fill whatever space is left
-  // over, so a By Products table (no MC% column) rendered visibly
-  // narrower than the page instead of filling it, confirmed against a
-  // live export. Auto-width columns are what absorb leftover space in
-  // autoTable, which is exactly the behavior that's wanted here. This
-  // only wrapped in the first place because the OTHER columns below
-  // were taking more fixed width than they actually needed, starving
-  // whatever was left for GROSS/NET down too far - now that those are
-  // trimmed to their real content needs, auto-width GROSS/NET gets
-  // enough room in every case (with or without MC%/OR#) to both fill
-  // the page and never wrap.
+  // GROSS/NET KILOS get a modest FIXED width now (not auto) - auto let
+  // them soak up the whole leftover page width, which fixed the "table
+  // doesn't fill the page" bug but overcorrected: with typically short
+  // values ("6.000", "75.000") they ended up far wider than needed,
+  // leaving the rest of the table visibly cramped by comparison
+  // (confirmed against a live export). 20mm comfortably fits even the
+  // largest realistic value ("17,526.250") with room to spare. FROM
+  // WHOM NAME is the one left auto-width instead - it's the column that
+  // actually benefits from unpredictable extra room (long customer
+  // names, farmer co-op addresses), and it's what now stretches to keep
+  // the table filling the full page in every case (with or without
+  // MC%/OR#).
   const widthList = [
     { cellWidth: 13 },   // DATE
     { cellWidth: 16 },   // NATURE OF TRANS ACTIVITY
     { cellWidth: 15 },   // serial
     { cellWidth: 15 },   // linked doc
-    { cellWidth: isIssues ? 39 : 43 }, // FROM WHOM NAME
+    {}, // FROM WHOM NAME - auto-width, absorbs leftover space
     ...(isIssues ? [{ cellWidth: 12 }] : []), // OR #
     { cellWidth: 13 },   // VARIETY CODE
     ...(isByProducts ? [] : [{ cellWidth: 9, halign: 'right' }]), // MC%
     { cellWidth: 11, halign: 'right' }, // BAGS
-    { halign: 'right' }, // GROSS KILOS
-    { halign: 'right' }, // NET KILOS
+    { cellWidth: 20, halign: 'right' }, // GROSS KILOS
+    { cellWidth: 20, halign: 'right' }, // NET KILOS
   ]
   const columnStyles = Object.fromEntries(widthList.map((style, i) => [i, style]))
 

@@ -78,7 +78,7 @@ import {
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionToPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
-import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
@@ -1780,7 +1780,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
   const adjustAuthorityBalance = async (linkedNo, bagsDelta, kilosDelta) => {
     if (!linkedDocDeductsFromAi || !linkedNo) return
-    const authority = await db.authorities.where('aiNumber').equals(linkedNo).first()
+    // resolveCanonicalAuthority (not a plain query) - see its own doc
+    // comment: a duplicate authId for this aiNumber existing at this
+    // exact moment used to mean this delta could land on the wrong
+    // copy and then get silently lost the next time a duplicate cleanup
+    // pass kept the OTHER copy as canonical.
+    const authority = await resolveCanonicalAuthority('aiNumber', linkedNo, 'AI')
     if (!authority) return
     await db.authorities.update(authority.authId, {
       totalIssuedKilos:

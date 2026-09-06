@@ -40,7 +40,7 @@ import {
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
-import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
@@ -803,7 +803,12 @@ const SackFormBase = forwardRef(function SackFormBase(
 
   const adjustSiaBalance = async (siaNo, lineDeltas) => {
     if (type !== 'ESI' || !siaNo) return
-    const authority = await db.authorities.where('siaNumber').equals(siaNo).and((a) => a.type === 'SIA').first()
+    // resolveCanonicalAuthority (not a plain query) - see its own doc
+    // comment in googleSheetsBridge.js: a duplicate authId for this
+    // siaNumber existing at this exact moment used to mean this delta
+    // could land on the wrong copy and then get silently lost the next
+    // time a duplicate cleanup pass kept the OTHER copy as canonical.
+    const authority = await resolveCanonicalAuthority('siaNumber', siaNo, 'SIA')
     if (!authority || !Array.isArray(authority.sackLines)) return
 
     const updatedLines = authority.sackLines.map((line) => {

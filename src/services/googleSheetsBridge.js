@@ -184,6 +184,48 @@ const fetchAuthorityRows = async (source, type) => {
 }
 
 /**
+ * Picks the canonical record among duplicate authority rows sharing one
+ * aiNumber/siaNumber - shared by every place in this file that needs
+ * this exact decision (upsertAuthority, upsertSiaAuthority,
+ * dedupeStaleAuthorities), and also exported for resolveCanonicalAuthority
+ * below, so there is exactly one rule for "which copy wins" no matter
+ * which code path is doing the picking.
+ */
+const pickCanonicalAuthority = (matches, type) =>
+  type === 'AI'
+    ? matches.find((a) => (a.totalIssuedBags ?? 0) > 0 || (a.totalIssuedKilos ?? 0) > 0 || a.manuallyCompleted) ?? matches[0]
+    : matches.find((a) => Array.isArray(a.sackLines)) ?? matches[0]
+
+/**
+ * Finds the single canonical authority record for a given aiNumber or
+ * siaNumber directly from the database, consolidating any duplicate
+ * authId records found along the way first (deleting the stale ones,
+ * same rule as dedupeStaleAuthorities' own sweep below).
+ *
+ * This exists because adjustAuthorityBalance/adjustSiaBalance (in
+ * StockFormBase.jsx/SackFormBase.jsx) used to look up the record to
+ * update with a plain `.first()` query - if a duplicate authId existed
+ * for that number at that exact moment (a real, confirmed case: a sync-
+ * race duplicate that hadn't been cleaned up yet), `.first()` could land
+ * on either copy. The balance delta would apply to whichever one it
+ * picked, and if a LATER dedup pass then kept the OTHER copy as
+ * canonical, the just-applied delta was silently lost - the authority
+ * showed 0 issued even though a real, active WSI/ESI document existed
+ * for it. Every balance-adjustment call site now goes through here
+ * first, so there is only ever one candidate record left to apply the
+ * delta to by the time it does.
+ */
+export const resolveCanonicalAuthority = async (matchField, matchValue, type) => {
+  const matches = await db.authorities.where(matchField).equals(matchValue).and((a) => a.type === type).toArray()
+  if (matches.length === 0) return undefined
+  if (matches.length === 1) return matches[0]
+  const canonical = pickCanonicalAuthority(matches, type)
+  const staleIds = matches.filter((a) => a.authId !== canonical.authId).map((a) => a.authId)
+  if (staleIds.length > 0) await db.authorities.bulkDelete(staleIds)
+  return canonical
+}
+
+/**
  * Upserts a single AI authority row, matched by aiNumber. Preserves any
  * existing totalIssued* values rather than resetting them, since
  * issuance is tracked locally as forms are saved, never overwritten
@@ -213,11 +255,7 @@ const upsertAuthority = async (incoming, cacheByAiNumber = null) => {
   const allMatching = cacheByAiNumber
     ? (cacheByAiNumber.get(incoming.aiNumber) ?? [])
     : await db.authorities.where('aiNumber').equals(incoming.aiNumber).and((a) => a.type === 'AI').toArray()
-  // Prefer whichever record has actual issued progress as canonical -
-  // that's the one genuinely in use, not an accidental duplicate that
-  // was never touched.
-  const existing = allMatching.find((a) => (a.totalIssuedBags ?? 0) > 0 || (a.totalIssuedKilos ?? 0) > 0 || a.manuallyCompleted)
-    ?? allMatching[0]
+  const existing = pickCanonicalAuthority(allMatching, 'AI')
 
   const staleDuplicateIds = allMatching.filter((a) => a.authId !== existing?.authId).map((a) => a.authId)
   if (staleDuplicateIds.length > 0) {
@@ -279,11 +317,7 @@ const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null) => {
     ? (cacheBySiaNumber.get(incoming.siaNumber) ?? [])
     : await db.authorities.where('siaNumber').equals(incoming.siaNumber).and((a) => a.type === 'SIA').toArray()
 
-  // Prefer an existing record that already has a sackLines array (i.e.
-  // one already migrated to the new shape) as the canonical one to
-  // update, so its issued-progress history is preserved; otherwise fall
-  // back to whichever came first.
-  const existing = allMatching.find((a) => Array.isArray(a.sackLines)) ?? allMatching[0]
+  const existing = pickCanonicalAuthority(allMatching, 'SIA')
 
   const existingLineFor = (sackTypeId, condition) =>
     existing?.sackLines?.find((l) => l.sackTypeId === sackTypeId && l.condition === condition)
@@ -557,12 +591,12 @@ const dedupeStaleAuthorities = async () => {
   const staleIds = []
   for (const records of aiGroups.values()) {
     if (records.length < 2) continue
-    const canonical = records.find((a) => (a.totalIssuedBags ?? 0) > 0 || (a.totalIssuedKilos ?? 0) > 0 || a.manuallyCompleted) ?? records[0]
+    const canonical = pickCanonicalAuthority(records, 'AI')
     staleIds.push(...records.filter((a) => a.authId !== canonical.authId).map((a) => a.authId))
   }
   for (const records of siaGroups.values()) {
     if (records.length < 2) continue
-    const canonical = records.find((a) => Array.isArray(a.sackLines)) ?? records[0]
+    const canonical = pickCanonicalAuthority(records, 'SIA')
     staleIds.push(...records.filter((a) => a.authId !== canonical.authId).map((a) => a.authId))
   }
 
@@ -570,16 +604,99 @@ const dedupeStaleAuthorities = async () => {
   return staleIds.length
 }
 
+/**
+ * Recomputes every authority's totalIssuedKilos/totalIssuedBags (AI) or
+ * each sackLine's totalIssuedBags (SIA) directly from its own real
+ * Active WSI/ESI transactions, run at the start of every authority sync
+ * alongside dedupeStaleAuthorities.
+ *
+ * Normally these totals are maintained incrementally: every form save/
+ * update/delete applies its own +/- delta via adjustAuthorityBalance/
+ * adjustSiaBalance. That's efficient, but it's still a cached number
+ * that can drift from the truth - confirmed against a real case where
+ * an authority showed 0 issued despite a genuine active WSI document
+ * existing for it, traced to a duplicate-authority-record race (the
+ * delta landed on one copy, a later cleanup pass kept the other -
+ * resolveCanonicalAuthority above closes that specific race going
+ * forward). This sweep is the actual repair, self-healing on every
+ * cycle no matter how a total got out of sync: it always recomputes
+ * from the one thing that structurally cannot drift - the transactions
+ * themselves.
+ */
+const recalculateAuthorityIssuedTotals = async () => {
+  const [aiAuthorities, siaAuthorities, wsiTx, esiTx] = await Promise.all([
+    db.authorities.where('type').equals('AI').toArray(),
+    db.authorities.where('type').equals('SIA').toArray(),
+    db.transactions.where('type').equals('WSI').and((t) => t.status === 'Active').toArray(),
+    db.transactions.where('type').equals('ESI').and((t) => t.status === 'Active').toArray(),
+  ])
+
+  const realByAiNumber = new Map()
+  for (const t of wsiTx) {
+    if (!t.aiNumber) continue
+    const cur = realByAiNumber.get(t.aiNumber) ?? { bags: 0, kilos: 0 }
+    cur.bags += t.numberOfBags ?? 0
+    cur.kilos += t.netKilos ?? 0
+    realByAiNumber.set(t.aiNumber, cur)
+  }
+
+  // Per SIA number, per (sackTypeId, condition) line - an ESI can carry
+  // several lines, and each line tracks its own issued total.
+  const realLinesBySiaNumber = new Map()
+  for (const t of esiTx) {
+    if (!t.siaNumber) continue
+    if (!realLinesBySiaNumber.has(t.siaNumber)) realLinesBySiaNumber.set(t.siaNumber, new Map())
+    const lineMap = realLinesBySiaNumber.get(t.siaNumber)
+    for (const l of (t.sackLines ?? [])) {
+      const key = `${l.sackTypeId}::${l.condition}`
+      lineMap.set(key, (lineMap.get(key) ?? 0) + (l.pieces ?? 0))
+    }
+  }
+
+  let corrected = 0
+  for (const a of aiAuthorities) {
+    const real = realByAiNumber.get(a.aiNumber) ?? { bags: 0, kilos: 0 }
+    // Only touches a field this authority actually tracks - matches
+    // adjustAuthorityBalance's own guard. An authority with no bags
+    // allocation (totalAllocationBags == null) deliberately never gets
+    // a totalIssuedBags value; some downstream code falls back from
+    // totalIssuedKilos to totalIssuedBags (or vice versa) when the
+    // "kilos" side is null, which would break if this sweep started
+    // populating a field that's supposed to stay untouched.
+    const update = {}
+    if (a.totalAllocationBags != null && (a.totalIssuedBags ?? 0) !== real.bags) update.totalIssuedBags = real.bags
+    if (a.totalAllocationKilos != null && (a.totalIssuedKilos ?? 0) !== real.kilos) update.totalIssuedKilos = real.kilos
+    if (Object.keys(update).length === 0) continue
+    await db.authorities.update(a.authId, update)
+    corrected += 1
+  }
+  for (const a of siaAuthorities) {
+    if (!Array.isArray(a.sackLines)) continue
+    const lineMap = realLinesBySiaNumber.get(a.siaNumber) ?? new Map()
+    let changed = false
+    const newLines = a.sackLines.map((line) => {
+      const real = lineMap.get(`${line.sackTypeId}::${line.condition}`) ?? 0
+      if ((line.totalIssuedBags ?? 0) !== real) changed = true
+      return { ...line, totalIssuedBags: real }
+    })
+    if (!changed) continue
+    await db.authorities.update(a.authId, { sackLines: newLines })
+    corrected += 1
+  }
+  return corrected
+}
+
 const runAuthoritiesSync = async () => {
   const sources = await getAllSheetSources()
   if (sources.length === 0) return { ok: false, reason: 'not_configured' }
 
   try {
-    // Runs before anything below reads db.authorities, so the
-    // aiCache/siaCache built next already reflects a clean table - see
-    // dedupeStaleAuthorities' own comment for why this full sweep is
+    // Both run before anything below reads db.authorities, so the
+    // aiCache/siaCache built next already reflects a clean, correct
+    // table - see each function's own comment for why both sweeps are
     // needed on top of the per-row cleanup those caches feed into.
     await dedupeStaleAuthorities()
+    await recalculateAuthorityIssuedTotals()
 
     const [warehouses, aliases, varieties, sackTypes, customerAliases, customers] = await Promise.all([
       db.warehouses.toArray(),
