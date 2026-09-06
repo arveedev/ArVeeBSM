@@ -1112,4 +1112,9 @@
 //            unpredictable extra room (long customer names, farmer
 //            co-op addresses), and it's what now keeps the table
 //            filling the full page in every case.
-export const APP_VERSION = '1.9-73'
+//   1.9-74 - PDF export footer: removed the printed export date (it
+//            just showed today's date on every export, not anything
+//            about the report itself), and moved "Page X of Y" to the
+//            right corner instead of sitting centered next to "BSM by
+//            ArVee".
+export const APP_VERSION = '1.9-74'

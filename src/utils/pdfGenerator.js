@@ -281,18 +281,14 @@ const tableStyles = {
 
 const addFooter = (doc) => {
   const pageCount = doc.internal.getNumberOfPages()
-  const dateOnly = new Date().toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' })
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(6)
     doc.setTextColor(160, 160, 160)
-    doc.text(
-      `BSM by ArVee · ${dateOnly} · Page ${i} of ${pageCount}`,
-      pageW / 2,
-      doc.internal.pageSize.getHeight() - 5,
-      { align: 'center' }
-    )
+    const y = doc.internal.pageSize.getHeight() - 5
+    doc.text('BSM by ArVee', pageW / 2, y, { align: 'center' })
+    doc.text(`Page ${i} of ${pageCount}`, pageW - margin, y, { align: 'right' })
   }
 }
 
