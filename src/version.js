@@ -982,4 +982,11 @@
 //            now fills the available width the same natural way that
 //            table already does, instead of a second, different-looking
 //            approach for the same kind of data.
-export const APP_VERSION = '1.9-61'
+//   1.9-62 - NFA Issuance/Receipt: bumped the mobile card list's text
+//            from small to base size, per direct feedback that it was
+//            hard to read on a phone (dates, AI #s, and the "used of /
+//            issued / received" summary lines above the list). Also
+//            added tabular-nums everywhere a number shows in this view,
+//            desktop table included, so digits keep a fixed width and
+//            line up cleanly instead of shifting per-digit.
+export const APP_VERSION = '1.9-62'

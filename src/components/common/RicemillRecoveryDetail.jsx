@@ -123,7 +123,7 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
               <tr key={entry.authId} className="border-b border-neutral-800/50">
                 {columns.map((col) => (
                   <Td key={col} right={RIGHT_ALIGNED.has(col)}>
-                    <span className={col === 'netKgs' ? 'font-medium text-app-text' : col === 'date' || col === 'aiNumber' ? 'text-neutral-500' : 'text-neutral-400'}>
+                    <span className={`${RIGHT_ALIGNED.has(col) ? 'tabular-nums ' : ''}${col === 'netKgs' ? 'font-medium text-app-text' : col === 'date' || col === 'aiNumber' ? 'text-neutral-500' : 'text-neutral-400'}`}>
                       {cellContent(col, entry, weightUnit)}
                     </span>
                   </Td>
@@ -137,8 +137,8 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
                 <span className="font-bold text-app-text">Total</span>
               </Td>
               {leadColSpan > 1 && Array.from({ length: leadColSpan - 1 }).map((_, i) => <Td key={`fill-${i}`} />)}
-              <Td right><span className="font-bold text-app-text">{fmtNetBags(totalBags)}</span></Td>
-              <Td right><span className="font-bold text-app-text">{fmtWeight(totalKilos, weightUnit)}</span></Td>
+              <Td right><span className="font-bold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span></Td>
+              <Td right><span className="font-bold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span></Td>
             </tr>
           </tfoot>
         </table>
@@ -151,22 +151,22 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
           table. */}
       <div className="divide-y divide-neutral-900 rounded-lg bg-neutral-950 sm:hidden">
         {entries.map((entry) => (
-          <div key={entry.authId} className="flex items-center justify-between gap-3 px-2.5 py-2">
+          <div key={entry.authId} className="flex items-center justify-between gap-3 px-3 py-2.5">
             <div className="min-w-0">
-              <p className="text-sm text-app-text">{shortDate(entry.date)}</p>
+              <p className="text-base tabular-nums text-app-text">{shortDate(entry.date)}</p>
               {columns.includes('aiNumber') && (
-                <p className="truncate text-xs text-neutral-500">{entry.aiNumber ?? '—'}</p>
+                <p className="truncate text-sm tabular-nums text-neutral-500">{entry.aiNumber ?? '—'}</p>
               )}
             </div>
-            <p className="shrink-0 text-right text-sm tabular-nums">
+            <p className="shrink-0 text-right text-base tabular-nums">
               <span className="font-medium text-app-text">{fmtNetBags(entry.bags)} bags</span>
               <span className="text-neutral-500"> · {fmtWeight(entry.kilos, weightUnit)}</span>
             </p>
           </div>
         ))}
-        <div className="flex items-center justify-between gap-3 px-2.5 py-2">
-          <span className="text-sm font-semibold text-app-text">Total</span>
-          <p className="text-right text-sm tabular-nums">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <span className="text-base font-semibold text-app-text">Total</span>
+          <p className="text-right text-base tabular-nums">
             <span className="font-semibold text-app-text">{fmtNetBags(totalBags)} bags</span>
             <span className="text-neutral-400"> · {fmtWeight(totalKilos, weightUnit)}</span>
           </p>
@@ -192,7 +192,7 @@ export function AllocationUsageSummary({ used, total, weightUnit }) {
   const usedPercent = total > 0 ? Math.min(100, Math.max(0, (used / total) * 100)) : 0
   const barFillClass = isOver ? 'bg-brand-crimson' : usedPercent >= 100 ? 'bg-brand-neon' : 'bg-brand-neon/60'
   return (
-    <div className="text-sm text-neutral-500 md:text-base">
+    <div className="text-base tabular-nums text-neutral-500">
       <p>{fmtWeight(used, weightUnit)} used of {fmtWeight(total, weightUnit)}</p>
       <p className={isOver ? 'text-brand-crimson' : 'text-brand-neon'}>
         {isOver ? 'Over' : 'Remaining'}: {fmtWeight(remainingAbs, weightUnit)} · {fmtNetBags(remainingAbs / 50)} Net Bags
@@ -222,7 +222,7 @@ function RicemillRecoveryDetail({ recovery, weightUnit }) {
 
   return (
     <div className="space-y-2">
-      <div className="rounded-lg bg-neutral-950 p-2 text-sm md:p-3 md:text-base">
+      <div className="rounded-lg bg-neutral-950 p-3 text-base tabular-nums">
         <div className="flex items-center justify-between gap-2">
           <span className="text-neutral-500">{fmtWeight(recovery.issuedKilos, weightUnit)} issued → {fmtWeight(recovery.recoveredKilos, weightUnit)} received</span>
           <span className={`font-semibold ${recovery.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
