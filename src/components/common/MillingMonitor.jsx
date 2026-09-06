@@ -11,7 +11,7 @@ import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw, Check } from 'luc
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
-import { fmtBags, fmtWeight, calculateCurrentAge, AGE_BUCKETS } from '../../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtNetBags, calculateCurrentAge, AGE_BUCKETS } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
@@ -310,7 +310,7 @@ export function MillingOrderDetail({ order, onClose }) {
                   txs={stockTx}
                   categoryOf={stockCategoryOf}
                   renderRow={(t) => (
-                    <StockRow key={t.id} t={t} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} pileRecordMap={pileRecordMap} weightUnit={weightUnit} autoAgeMonitoring={autoAgeMonitoring} />
+                    <StockRow key={t.id} t={t} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} pileRecordMap={pileRecordMap} autoAgeMonitoring={autoAgeMonitoring} />
                   )}
                 />
               ) : (
@@ -369,7 +369,7 @@ function TransactionGroups({ txs, categoryOf, renderRow }) {
   )
 }
 
-function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, weightUnit, autoAgeMonitoring }) {
+function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, autoAgeMonitoring }) {
   const isIssue = t.type === 'WSI'
   // Age isn't a field on the transaction itself - it's the pile's own
   // initialAgeValue/dateOfReceipt, computed the same way HomeStocks.jsx
@@ -415,8 +415,13 @@ function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, weightU
           <p className="tabular-nums text-app-text">{fmtBags(t.numberOfBags)}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase text-neutral-600">Net Kgs</p>
-          <p className="tabular-nums text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
+          {/* Net Bags (kilos / 50), not the raw weight itself - same
+              derived-unit convention already used in NfaMillingMonitor.jsx,
+              shown here specifically to compare against the physically
+              counted Bags field beside it (they can legitimately drift
+              apart - see that file's own comment on why). */}
+          <p className="text-[10px] uppercase text-neutral-600">Net Bags</p>
+          <p className="tabular-nums text-app-text">{fmtNetBags((t.netKilos ?? 0) / 50)}</p>
         </div>
       </div>
     </li>

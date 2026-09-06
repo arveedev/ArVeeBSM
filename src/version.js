@@ -1040,4 +1040,11 @@
 //            sat flush against the modal's own edge. Bottom padding now
 //            only drops to zero when that scrollable section is actually
 //            there to continue it.
-export const APP_VERSION = '1.9-66'
+//   1.9-67 - MO/TMO detail modal's Stocks tab: each WSI/WSR trial card
+//            now shows Net Bags (weight ÷ 50) instead of the raw
+//            weight itself, next to the physically counted Bags field -
+//            same derived-unit convention already used in the NFA
+//            Ricemill monitor, so the two can be compared directly
+//            (they can legitimately differ, since one is counted by
+//            hand and the other is computed from the weight).
+export const APP_VERSION = '1.9-67'
