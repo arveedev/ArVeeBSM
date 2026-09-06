@@ -6,15 +6,17 @@
 // documented history of exactly that kind of duplication causing
 // stale-field bugs once one copy gets fixed and the other doesn't.
 //
-// Table-like column alignment requires every row to be a DIRECT grid
-// item of ONE shared grid container, not a nested div per row - CSS
-// Grid's `auto` column sizing is scoped per-container, so nested per-row
-// grids would each size their own columns independently and drift out
-// of alignment against each other the moment one row's content is wider
-// than another's. That grid stays desktop/tablet-only (`sm:` and up) -
-// on a real narrow phone its four fixed-width tracks don't fit the
-// screen and forced a sideways scroll just to read Net Kgs, so mobile
-// gets its own stacked-card rendering of the same entries instead.
+// Desktop/tablet uses a real <table> with the same Th/Td helpers and
+// w-full/border-b row styling as AdminHomeStocks.jsx's Age Grouping
+// table - a previous version of this used a fixed-pixel-width CSS grid
+// sized to its own content ("w-fit"), which technically aligned its own
+// columns correctly but, per direct feedback against a live screenshot,
+// looked broken sitting as a narrow island in a sea of empty space on
+// a wide desktop window. A real table with w-full fills the available
+// width the same natural way Age Grouping's table already does, instead
+// of hand-rolling a second, different-looking pattern for tabular data.
+// Mobile (below `sm`) still gets its own stacked-row rendering of the
+// same entries, since a table this wide genuinely doesn't fit a phone.
 //
 // Sort/filter (RicemillSortFilterModal) is local state here, not lifted
 // to the caller - each expanded Regional Authority Number already gets
@@ -22,40 +24,22 @@
 // renders it for the one currently-expanded number), so "per authority"
 // sort/filter falls out naturally without any extra wiring.
 
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
+import { Th, Td } from '../../pages/AdminHomeShared.jsx'
 import RicemillSortFilterModal, { DEFAULT_SORT } from './RicemillSortFilterModal.jsx'
 
 // Issuance has no AI # (there's only ever one AI covering the whole
 // allocation - a per-row AI # would have nothing useful to show), so it
-// gets its own 3-track grid instead of reusing Receipt's 4-track one
-// with a blank filler column - that filler used to sit there as a big
-// dead gap between Date and Net Bags with nothing in it, which looked
-// broken rather than aligned. The two sections are stacked vertically,
-// never side by side, so there was never a real need to keep their
-// columns lined up with each other in the first place.
+// gets its own 3-column table instead of reusing Receipt's 4-column one
+// with a blank filler column - that filler used to sit there as a
+// visible dead gap between Date and Net Bags. The two sections are
+// stacked vertically, never side by side, so there was never a real
+// need to keep their columns lined up with each other in the first
+// place.
 const ISSUANCE_COLUMNS = ['date', 'netBags', 'netKgs']
 const RECEIPT_COLUMNS = ['date', 'aiNumber', 'netBags', 'netKgs']
-
-// Tailwind's build-time scanner only picks up class names it can see as
-// a literal string - a runtime-concatenated `grid-cols-[${...}]` would
-// never make it into the generated CSS at all, so these stay static
-// strings, keyed by column count, rather than assembled from a
-// per-column width map at render time. No `1fr` track - a flexible
-// track stretched to fill whatever width its parent gave it, which on
-// a wide desktop screen was most of the page, leaving huge empty gaps
-// between columns. Every track is a fixed width sized to its real
-// content, and the grid itself is `w-fit` (see below) so the whole
-// table stops stretching wider than it needs to be. Net Kgs gets the
-// widest track of the four - "5,000.000 kg" is the longest realistic
-// value here and needs the room, paired with `whitespace-nowrap` on
-// every cell below so a value can never wrap onto a second line no
-// matter how a track's width compares to its content.
-const GRID_COLS_BY_COUNT = {
-  3: 'grid-cols-[92px_92px_128px] md:grid-cols-[110px_110px_152px]',
-  4: 'grid-cols-[92px_92px_76px_128px] md:grid-cols-[110px_110px_96px_152px]',
-}
 
 const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', netBags: 'Net Bags', netKgs: 'Net Kgs' }
 const RIGHT_ALIGNED = new Set(['netBags', 'netKgs'])
@@ -117,39 +101,47 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
   // so this only ever applies to Receipt, gated on its AI # column.
   const varietyName = columns.includes('aiNumber') ? entries.find((e) => e.varietyName)?.varietyName : null
   return (
-    <div className="w-fit max-w-full">
+    <div>
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:text-sm">
         {label}{varietyName ? ` · ${varietyName}` : ''}
       </p>
 
-      {/* Desktop/tablet: the original aligned grid, unchanged. */}
-      <div className="hidden overflow-x-auto rounded-lg bg-neutral-950 p-2 sm:block md:p-3">
-        <div className={`grid ${GRID_COLS_BY_COUNT[columns.length]} gap-x-3 gap-y-2 text-sm leading-tight md:text-base`}>
-          {columns.map((col, idx) => (
-            <span key={`h-${col}-${idx}`} className={`whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-neutral-600 md:text-sm ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
-              {COLUMN_LABEL[col]}
-            </span>
-          ))}
-          {entries.map((entry) => (
-            <Fragment key={entry.authId}>
-              {columns.map((col, idx) => (
-                <span
-                  key={`${col}-${idx}`}
-                  className={
-                    RIGHT_ALIGNED.has(col)
-                      ? `whitespace-nowrap text-right tabular-nums ${col === 'netKgs' ? 'font-medium text-app-text' : 'text-neutral-400'}`
-                      : 'whitespace-nowrap text-neutral-500'
-                  }
-                >
-                  {cellContent(col, entry, weightUnit)}
-                </span>
+      {/* Desktop/tablet: a real table, same pattern as AdminHomeStocks.jsx's
+          Age Grouping table - fills the available width instead of
+          hugging a fixed narrow size. */}
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full text-sm md:text-base">
+          <thead>
+            <tr className="border-b border-neutral-800">
+              {columns.map((col) => (
+                <Th key={col} right={RIGHT_ALIGNED.has(col)}>{COLUMN_LABEL[col]}</Th>
               ))}
-            </Fragment>
-          ))}
-          <span className="whitespace-nowrap border-t border-neutral-800 pt-1 font-semibold text-app-text" style={{ gridColumn: `span ${leadColSpan}` }}>Total</span>
-          <span className="whitespace-nowrap border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span>
-          <span className="whitespace-nowrap border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span>
-        </div>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((entry) => (
+              <tr key={entry.authId} className="border-b border-neutral-800/50">
+                {columns.map((col) => (
+                  <Td key={col} right={RIGHT_ALIGNED.has(col)}>
+                    <span className={col === 'netKgs' ? 'font-medium text-app-text' : col === 'date' || col === 'aiNumber' ? 'text-neutral-500' : 'text-neutral-400'}>
+                      {cellContent(col, entry, weightUnit)}
+                    </span>
+                  </Td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-neutral-700">
+              <Td>
+                <span className="font-bold text-app-text">Total</span>
+              </Td>
+              {leadColSpan > 1 && Array.from({ length: leadColSpan - 1 }).map((_, i) => <Td key={`fill-${i}`} />)}
+              <Td right><span className="font-bold text-app-text">{fmtNetBags(totalBags)}</span></Td>
+              <Td right><span className="font-bold text-app-text">{fmtWeight(totalKilos, weightUnit)}</span></Td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
 
       {/* Mobile: one compact divider-separated row per entry (no nested

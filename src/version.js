@@ -969,4 +969,17 @@
 //            over from Receipt's layout. Issuance now gets its own
 //            3-column layout without that filler, and every column
 //            (text and numbers both) is now set to never wrap.
-export const APP_VERSION = '1.9-60'
+//   1.9-61 - Replaced the NFA Issuance/Receipt table's whole approach on
+//            desktop/tablet, after 1.9-60's fix still looked wrong -
+//            it technically aligned correctly, but sat as a narrow,
+//            fixed-width island with a huge empty gap next to it on a
+//            wide screen, since it sized itself to its own content
+//            instead of the space actually available. Rebuilt it as a
+//            real table using the exact same pattern already proven on
+//            Admin Dashboard > Stocks > Age Grouping (the reference the
+//            request pointed at directly) - same Th/Td helpers, same
+//            row dividers, same bold double-bordered Total row - so it
+//            now fills the available width the same natural way that
+//            table already does, instead of a second, different-looking
+//            approach for the same kind of data.
+export const APP_VERSION = '1.9-61'
