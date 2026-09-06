@@ -175,8 +175,15 @@ export function MillingOrderDetail({ order, onClose }) {
         className={`flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl border border-neutral-800 bg-neutral-900 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Fixed section - never scrolls, only Transaction History below does */}
-        <div className="shrink-0 p-4 pb-0">
+        {/* Fixed section - never scrolls, only Transaction History below
+            does. pb-0 only makes sense while that scrollable section is
+            actually rendered right below it (its own pt-3 continues the
+            spacing) - "more details" and the tab section are mutually
+            exclusive (see shouldRenderTabContent above), so with more
+            details open there's nothing below this section at all, and
+            pb-0 left its last block sitting flush against the modal's
+            bottom edge with no gap. */}
+        <div className={`shrink-0 p-4 ${shouldRenderTabContent ? 'pb-0' : ''}`}>
           <div className="flex items-start justify-between">
             <div>
               <p className="text-base font-bold text-app-text">{order.number}</p>

@@ -1029,4 +1029,15 @@
 //            and bumped the Issued figure itself up too so it reads as
 //            the clear headline number it's meant to be, not the same
 //            size as the row's own label text next to it.
-export const APP_VERSION = '1.9-65'
+//   1.9-66 - Fixed the MO/TMO detail modal (Monitoring > Milling) ending
+//            with zero space below its last block whenever "more
+//            details" was expanded. Its fixed header section had no
+//            bottom padding, relying on the scrollable Transaction
+//            History section right below it to pick up the spacing -
+//            but that section is deliberately hidden while more details
+//            is open (the two are mutually exclusive), so there was
+//            nothing left to provide any gap at all, and the last card
+//            sat flush against the modal's own edge. Bottom padding now
+//            only drops to zero when that scrollable section is actually
+//            there to continue it.
+export const APP_VERSION = '1.9-66'
