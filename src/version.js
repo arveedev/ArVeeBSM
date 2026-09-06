@@ -1008,4 +1008,18 @@
 //            summary line no longer breaks alignment against its
 //            percentage once it wraps on a phone - the two now stack
 //            instead of sitting side by side.
-export const APP_VERSION = '1.9-63'
+//   1.9-64 - PDF export: the Statement of Receipts/Issues and Statement
+//            of MTS tables' DATE column now shows just the month and
+//            day on each row ("Aug 17"), with the year moved up into
+//            the column header ("DATE (2026)") instead of repeating on
+//            every row - only when the whole exported period falls in
+//            one year; a period that happens to cross a year boundary
+//            still shows the year per row, so nothing is ever lost.
+//            Also fixed the header row's bottom border reading as thin
+//            despite being set to a thick line - the row directly below
+//            it draws its own thinner border right at that same
+//            boundary and was visually winning out. Every table now
+//            redraws that specific line thicker, explicitly, after
+//            the header renders, so it reads as solid black no matter
+//            what's below it.
+export const APP_VERSION = '1.9-64'

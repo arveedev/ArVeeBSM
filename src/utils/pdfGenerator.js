@@ -41,6 +41,28 @@ const fmtDate = (s) => {
   return d.toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+/** Same as fmtDate but without the year - for a DATE column whose header
+ * already states the year once (see commonYear below), so it doesn't
+ * need repeating on every single row. */
+const fmtDateNoYear = (s) => {
+  if (!s) return ''
+  const d = new Date(s + 'T00:00:00')
+  return d.toLocaleDateString('en-PH', { day: '2-digit', month: 'short' })
+}
+
+/**
+ * The year shared by every date in the list, or null if the list is
+ * empty or spans more than one year. Lets a DATE column move the year
+ * up into its header (fmtDateNoYear on every row) whenever it's safe to
+ * do so, while falling back to the year-per-row (fmtDate) is when a
+ * report's period happens to cross a year boundary - dropping the year
+ * there would actually lose information, not just repeat it.
+ */
+const commonYear = (dates) => {
+  const years = new Set(dates.filter(Boolean).map((s) => String(s).slice(0, 4)))
+  return years.size === 1 ? [...years][0] : null
+}
+
 const fmtPeriod = (from, to) => {
   if (!from && !to) return ''
   const f = fmtDate(from).toUpperCase()
@@ -237,6 +259,21 @@ const tableStyles = {
     fillColor: [255, 255, 255],
   },
   alternateRowStyles: { fillColor: [248, 248, 248] },
+  // headStyles.lineWidth already draws a 0.4mm border around every
+  // header cell, but the first body row's own (thinner, gray) top
+  // border sits immediately below it at that same boundary and can
+  // visually dominate it - the header's bottom edge ends up reading as
+  // thin instead of the intended thick divider. Drawn again here,
+  // manually and per header cell, thicker than either side's own
+  // border, so it's unambiguously the thickest line on the page
+  // regardless of adjacent-cell draw order.
+  didDrawCell: (data) => {
+    if (data.section !== 'head') return
+    const { x, y, width, height } = data.cell
+    data.doc.setDrawColor(...BLACK)
+    data.doc.setLineWidth(0.6)
+    data.doc.line(x, y + height, x + width, y + height)
+  },
 }
 
 // ── Footer (page numbers) ─────────────────────────────────────────────────────
@@ -472,6 +509,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   // be smaller than another's, producing the reported "mixed data"
   // ordering instead of a clean date-then-series arrangement.
   const sorted = [...combinedTransactions].sort(compareByRecency)
+  const dateYear = commonYear(sorted.map((t) => t.date))
 
   let totBags = 0, totGross = 0, totNet = 0
   const body = sorted.map((t) => {
@@ -479,7 +517,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     totGross += t.grossKilos ?? 0
     totNet += t.netKilos ?? 0
     const row = [
-      fmtDate(t.date),
+      dateYear ? fmtDateNoYear(t.date) : fmtDate(t.date),
       t.transactionTypeName ?? '',
       t.serialNo ?? '',
       isIssues ? (t.aiNumber ?? '') : (t.linkedDocNo ?? ''),
@@ -509,7 +547,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   const serialHeader = isIssues ? 'WSI/WTS' : 'WSR/WTS'
 
   const head = [
-    'DATE',
+    dateYear ? `DATE\n(${dateYear})` : 'DATE',
     { content: 'NATURE OF TRANS\nACTIVITY', styles: { halign: 'center' } },
     serialHeader,
     linkedColHeader,
@@ -714,6 +752,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
   // See addStockStatementPage's matching comment - date-then-series
   // order, not raw serial magnitude alone.
   const sorted = [...transactions].sort(compareByRecency)
+  const dateYear = commonYear(sorted.map((t) => t.date))
 
   for (const t of sorted) {
     const lines = t.sackLines ?? []
@@ -723,7 +762,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
       const pcs = l?.pieces ?? 0
       grandTotal += pcs
       body.push([
-        i === 0 ? fmtDate(t.date) : '',
+        i === 0 ? (dateYear ? fmtDateNoYear(t.date) : fmtDate(t.date)) : '',
         i === 0 ? (t.transactionTypeName ?? '') : '',
         i === 0 ? (t.serialNo ?? '') : '',
         i === 0 ? (isIssues ? (t.siaNumber ?? t.linkedDocNo ?? '') : (t.linkedDocNo ?? '')) : '',
@@ -746,7 +785,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
     margin: { left: margin, right: margin },
     ...tableStyles,
     head: [[
-      'DATE',
+      dateYear ? `DATE\n(${dateYear})` : 'DATE',
       { content: 'NATURE OF TRANSACTION\nACTIVITY', styles: { halign: 'center' } },
       serialHeader,
       linkedHeader,
