@@ -1069,4 +1069,12 @@
 //            fixed width than they actually needed (NATURE, FROM WHOM,
 //            serial, linked doc) were trimmed back, giving GROSS/NET
 //            real breathing room again.
-export const APP_VERSION = '1.9-69'
+//   1.9-70 - PDF export: widened the FROM WHOM ISSUED/RECEIVED NAME
+//            column, which was wrapping long customer names/addresses
+//            onto 4-5 lines per row. Every column is now a fixed width
+//            sized against real longest values (rather than mixing
+//            fixed and auto-sized columns) - DATE/NATURE/serial/OR#/
+//            BAGS each had more room than their own short values ever
+//            need, trimmed back to fund the wider name column, without
+//            touching GROSS/NET KILOS' own width this time.
+export const APP_VERSION = '1.9-70'

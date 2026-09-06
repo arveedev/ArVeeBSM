@@ -571,30 +571,29 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   // correctly whichever columns are actually present, rather than
   // needing every index hand-adjusted whenever a column is added,
   // removed, or conditionally omitted (like MC is here for By Products).
-  // GROSS/NET KILOS are deliberately left as auto-width (no cellWidth
-  // below) rather than fixed - autoTable sizes an unset column from its
-  // own actual content, which is what makes it robust to the real
-  // range of values this report can show. That only works, though, if
-  // enough total width is left over for it to work with, and a couple
-  // of other columns here had more fixed width than their actual
-  // longest real value needs (NATURE/FROM WHOM/serial/linked), starving
-  // GROSS/NET down to the point they started wrapping mid-number
-  // ("6,250.375" as "6,250.37" / "5") - confirmed against a live
-  // export. Trimmed back to what they actually need instead of touching
-  // VARIETY CODE's own width (see its header cell's own comment for why
-  // that one's fixed with a smaller font instead).
+  // Every column below is now a fixed width, GROSS/NET KILOS included -
+  // sized deliberately against the real longest values seen across live
+  // exports (a bold 8-digit serial, "999,999.999"-scale kilos values,
+  // long customer/farmer names), not left to auto-size, since auto-
+  // sizing is exactly what silently starved GROSS/NET down to wrapping
+  // mid-number the last time a neighboring column grew (confirmed
+  // against a live export). FROM WHOM NAME was too narrow for real long
+  // names/addresses (wrapping to 4-5 lines per row) - widened here by
+  // trimming genuine slack out of DATE/NATURE/serial/OR#/BAGS (each had
+  // more room than their own actual short values ever need), not by
+  // taking anything from GROSS/NET.
   const widthList = [
-    { cellWidth: 15 },   // DATE
-    { cellWidth: 22 },   // NATURE OF TRANS ACTIVITY
-    { cellWidth: 16 },   // serial
-    { cellWidth: 14 },   // linked doc
-    { cellWidth: isIssues ? 26 : 32 }, // FROM WHOM NAME
-    ...(isIssues ? [{ cellWidth: 14 }] : []), // OR #
+    { cellWidth: 13 },   // DATE
+    { cellWidth: 16 },   // NATURE OF TRANS ACTIVITY
+    { cellWidth: 15 },   // serial
+    { cellWidth: 15 },   // linked doc
+    { cellWidth: isIssues ? 39 : 43 }, // FROM WHOM NAME
+    ...(isIssues ? [{ cellWidth: 12 }] : []), // OR #
     { cellWidth: 13 },   // VARIETY CODE
     ...(isByProducts ? [] : [{ cellWidth: 9, halign: 'right' }]), // MC%
-    { cellWidth: 14, halign: 'right' }, // BAGS
-    { halign: 'right' }, // GROSS KILOS
-    { halign: 'right' }, // NET KILOS
+    { cellWidth: 11, halign: 'right' }, // BAGS
+    { cellWidth: 18, halign: 'right' }, // GROSS KILOS
+    { cellWidth: 18, halign: 'right' }, // NET KILOS
   ]
   const columnStyles = Object.fromEntries(widthList.map((style, i) => [i, style]))
 
