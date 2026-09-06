@@ -948,4 +948,15 @@
 //            plus a same-serial-number check before adding any row, so
 //            two devices racing to back up the same record converges to
 //            one row, not two.
-export const APP_VERSION = '1.9-58'
+//   1.9-59 - Polish pass on 1.9-57's NFA Sort & Filter modal, per direct
+//            feedback that the mobile list and the button both looked
+//            off. The date range now uses the app's own calendar date
+//            picker (matching every other date range in the app)
+//            instead of the plain native date field, and picking a From
+//            date auto-opens the To picker the same way Reports' own
+//            period pickers do. The mobile Issuance/Receipt list is now
+//            a tighter divider-separated list instead of a card sitting
+//            inside a card, and the Sort & Filter button moved to the
+//            right and picked up the app's standard button styling
+//            instead of floating on its own as a small, out-of-place pill.
+export const APP_VERSION = '1.9-59'

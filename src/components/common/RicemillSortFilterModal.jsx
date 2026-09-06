@@ -2,9 +2,17 @@
 // Issuance/Receipt lists (RicemillRecoveryDetail.jsx) - same portal +
 // centered-box pattern as ConfirmDialog.jsx, since this is a quick
 // in-place control rather than a full-screen browsing experience.
+//
+// Date range uses the app's own CalendarDatePicker, not native <input
+// type="date"> - matches every other date range in the app (Reports.jsx's
+// Summary/Stock Statement periods). Picking a From date auto-opens the
+// To picker via the same ref-chaining pattern those use, so both ends
+// of the range can be set in one uninterrupted flow.
 
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import CalendarDatePicker from './CalendarDatePicker.jsx'
 
 export const DEFAULT_SORT = 'date-desc'
 
@@ -16,6 +24,8 @@ const SORT_OPTIONS = [
 ]
 
 function RicemillSortFilterModal({ sortBy, dateFrom, dateTo, onChange, onClose }) {
+  const toPickerRef = useRef(null)
+
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
@@ -55,21 +65,29 @@ function RicemillSortFilterModal({ sortBy, dateFrom, dateTo, onChange, onClose }
         <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-neutral-500">Date range</p>
         <div className="mt-1.5 grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs text-neutral-500">From</label>
-            <input
-              type="date"
+            <label className="mb-1 block text-xs text-neutral-500">From</label>
+            <CalendarDatePicker
               value={dateFrom}
-              onChange={(e) => onChange({ sortBy, dateFrom: e.target.value, dateTo })}
-              className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon"
+              label="Start Date"
+              required={false}
+              placeholder="Any"
+              valueClassName="text-sm"
+              onChange={(iso) => {
+                onChange({ sortBy, dateFrom: iso, dateTo })
+                toPickerRef.current?.open()
+              }}
             />
           </div>
           <div>
-            <label className="text-xs text-neutral-500">To</label>
-            <input
-              type="date"
+            <label className="mb-1 block text-xs text-neutral-500">To</label>
+            <CalendarDatePicker
+              ref={toPickerRef}
               value={dateTo}
-              onChange={(e) => onChange({ sortBy, dateFrom, dateTo: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon"
+              label="End Date"
+              required={false}
+              placeholder="Any"
+              valueClassName="text-sm"
+              onChange={(iso) => onChange({ sortBy, dateFrom, dateTo: iso })}
             />
           </div>
         </div>

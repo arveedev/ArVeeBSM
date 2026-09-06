@@ -149,31 +149,32 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
         </div>
       </div>
 
-      {/* Mobile: one compact row per entry - Date (+ AI # underneath, for
-          Receipt) on the left, Net Kgs always in the same top-right slot
-          with Net Bags as its subtext, matching the app's established
-          tap-friendly card convention instead of a cramped wide table. */}
-      <div className="space-y-1.5 rounded-lg bg-neutral-950 p-2 sm:hidden">
+      {/* Mobile: one compact divider-separated row per entry (no nested
+          per-row box - a card-inside-a-card read as cluttered) - Date
+          (+ AI # underneath, for Receipt) on the left, Net Bags/Net Kgs
+          together on one line on the right, instead of a cramped wide
+          table. */}
+      <div className="divide-y divide-neutral-900 rounded-lg bg-neutral-950 sm:hidden">
         {entries.map((entry) => (
-          <div key={entry.authId} className="flex items-center justify-between gap-3 rounded-lg bg-neutral-900 px-2.5 py-2">
+          <div key={entry.authId} className="flex items-center justify-between gap-3 px-2.5 py-2">
             <div className="min-w-0">
               <p className="text-sm text-app-text">{shortDate(entry.date)}</p>
               {columns.includes('aiNumber') && (
                 <p className="truncate text-xs text-neutral-500">{entry.aiNumber ?? '—'}</p>
               )}
             </div>
-            <div className="shrink-0 text-right">
-              <p className="text-sm font-medium tabular-nums text-app-text">{fmtWeight(entry.kilos, weightUnit)}</p>
-              <p className="text-xs tabular-nums text-neutral-500">{fmtNetBags(entry.bags)} bags</p>
-            </div>
+            <p className="shrink-0 text-right text-sm tabular-nums">
+              <span className="font-medium text-app-text">{fmtNetBags(entry.bags)} bags</span>
+              <span className="text-neutral-500"> · {fmtWeight(entry.kilos, weightUnit)}</span>
+            </p>
           </div>
         ))}
-        <div className="flex items-center justify-between gap-3 border-t border-neutral-800 px-2.5 pt-2">
+        <div className="flex items-center justify-between gap-3 px-2.5 py-2">
           <span className="text-sm font-semibold text-app-text">Total</span>
-          <div className="text-right">
-            <p className="text-sm font-semibold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</p>
-            <p className="text-xs tabular-nums text-neutral-500">{fmtNetBags(totalBags)} bags</p>
-          </div>
+          <p className="text-right text-sm tabular-nums">
+            <span className="font-semibold text-app-text">{fmtNetBags(totalBags)} bags</span>
+            <span className="text-neutral-400"> · {fmtWeight(totalKilos, weightUnit)}</span>
+          </p>
         </div>
       </div>
     </div>
@@ -235,18 +236,20 @@ function RicemillRecoveryDetail({ recovery, weightUnit }) {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setModalOpen(true)}
-        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-          isFiltered
-            ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
-            : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-600 hover:text-app-text'
-        }`}
-      >
-        <SlidersHorizontal size={13} />
-        Sort &amp; Filter{isFiltered ? ' (active)' : ''}
-      </button>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all active:scale-95 ${
+            isFiltered
+              ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
+              : 'border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-brand-neon/50 hover:text-brand-neon'
+          }`}
+        >
+          <SlidersHorizontal size={13} />
+          Sort &amp; Filter{isFiltered ? ' (active)' : ''}
+        </button>
+      </div>
 
       <RecoverySection label="Issuance" entries={millingEntries} weightUnit={weightUnit} columns={ISSUANCE_COLUMNS} />
       <RecoverySection label="Receipt" entries={transferEntries} weightUnit={weightUnit} columns={RECEIPT_COLUMNS} />
