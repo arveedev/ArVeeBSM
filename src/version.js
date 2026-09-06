@@ -1117,4 +1117,13 @@
 //            about the report itself), and moved "Page X of Y" to the
 //            right corner instead of sitting centered next to "BSM by
 //            ArVee".
-export const APP_VERSION = '1.9-74'
+//   1.9-75 - PDF export: fixed NATURE OF TRANS ACTIVITY being too
+//            narrow for "TEST MILLING" to fit on one line (it was even
+//            wrapping its own header into 3 lines) - widened it back
+//            up. That wrap was also the actual cause of a real row
+//            splitting across a page break (part of it printed at the
+//            bottom of one page, the rest at the top of the next) -
+//            fixed at the root by removing the wrap, plus added an
+//            explicit backstop (rowPageBreak: 'avoid') so a tall row
+//            can never split across pages regardless of cause.
+export const APP_VERSION = '1.9-75'

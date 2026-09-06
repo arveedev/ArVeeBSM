@@ -259,6 +259,15 @@ const tableStyles = {
     fillColor: [255, 255, 255],
   },
   alternateRowStyles: { fillColor: [248, 248, 248] },
+  // A row whose own text wraps to more than one line was landing right
+  // at a page boundary and rendering split - part of it on one page,
+  // the rest on the next (confirmed against a live export: "TEST" at
+  // the bottom of one page, "MILLING" alone at the top of the next).
+  // Explicit here as a backstop even though the real fix is the column
+  // widths below no longer forcing that wrap in the first place - a
+  // row that's genuinely only ever one line tall can't be split this
+  // way regardless.
+  rowPageBreak: 'avoid',
   // headStyles.lineWidth already draws a 0.4mm border around every
   // header cell, but an adjacent cell's own thinner/lighter border can
   // sit at the exact same boundary and visually win out (confirmed
@@ -581,7 +590,10 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   // MC%/OR#).
   const widthList = [
     { cellWidth: 13 },   // DATE
-    { cellWidth: 16 },   // NATURE OF TRANS ACTIVITY
+    { cellWidth: 24 },   // NATURE OF TRANS ACTIVITY - "TEST MILLING"
+                         // needs to fit on one line; 16mm forced it (and
+                         // even its own header) to wrap, which is what
+                         // produced the row-split-across-pages bug.
     { cellWidth: 15 },   // serial
     { cellWidth: 15 },   // linked doc
     {}, // FROM WHOM NAME - auto-width, absorbs leftover space
