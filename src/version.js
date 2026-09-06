@@ -1047,4 +1047,15 @@
 //            Ricemill monitor, so the two can be compared directly
 //            (they can legitimately differ, since one is counted by
 //            hand and the other is computed from the weight).
-export const APP_VERSION = '1.9-67'
+//   1.9-68 - Corrected 1.9-67: the Net Bags swap belonged on the MO/TMO
+//            modal's Issued/Received summary cards at the top (that's
+//            what the follow-up screenshot pointed at), not the
+//            per-trial cards further down - those are reverted back to
+//            showing raw Net Kgs. Also, in the PDF export: widened the
+//            VARIETY CODE column (it was breaking mid-word - "VARIET"/
+//            "Y"/"CODE" - at the old width), enlarged the DATE header's
+//            font, and made the header border's redraw fill the whole
+//            cell outline instead of just its bottom edge, so it reads
+//            as a solid, unambiguous black rectangle all the way around
+//            each header cell.
+export const APP_VERSION = '1.9-68'

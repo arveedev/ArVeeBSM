@@ -260,19 +260,20 @@ const tableStyles = {
   },
   alternateRowStyles: { fillColor: [248, 248, 248] },
   // headStyles.lineWidth already draws a 0.4mm border around every
-  // header cell, but the first body row's own (thinner, gray) top
-  // border sits immediately below it at that same boundary and can
-  // visually dominate it - the header's bottom edge ends up reading as
-  // thin instead of the intended thick divider. Drawn again here,
-  // manually and per header cell, thicker than either side's own
-  // border, so it's unambiguously the thickest line on the page
-  // regardless of adjacent-cell draw order.
+  // header cell, but an adjacent cell's own thinner/lighter border can
+  // sit at the exact same boundary and visually win out (confirmed
+  // against a live export: the header read as thick but not solidly
+  // black). Every side of every header cell is redrawn here, manually,
+  // in pure solid black at a thicker weight than any adjacent border -
+  // so the header's border is unambiguously both thick and black
+  // regardless of adjacent-cell draw order or a given PDF viewer's own
+  // rendering/anti-aliasing at a given zoom level.
   didDrawCell: (data) => {
     if (data.section !== 'head') return
     const { x, y, width, height } = data.cell
     data.doc.setDrawColor(...BLACK)
     data.doc.setLineWidth(0.6)
-    data.doc.line(x, y + height, x + width, y + height)
+    data.doc.rect(x, y, width, height)
   },
 }
 
@@ -547,7 +548,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   const serialHeader = isIssues ? 'WSI/WTS' : 'WSR/WTS'
 
   const head = [
-    dateYear ? `DATE\n(${dateYear})` : 'DATE',
+    { content: dateYear ? `DATE\n(${dateYear})` : 'DATE', styles: { fontSize: 9 } },
     { content: 'NATURE OF TRANS\nACTIVITY', styles: { halign: 'center' } },
     serialHeader,
     linkedColHeader,
@@ -573,7 +574,9 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     { cellWidth: 16 },   // linked doc
     { cellWidth: isIssues ? 30 : 38 }, // FROM WHOM NAME
     ...(isIssues ? [{ cellWidth: 16 }] : []), // OR #
-    { cellWidth: 13 },   // VARIETY CODE
+    { cellWidth: 18 },   // VARIETY CODE - "VARIETY" alone doesn't fit
+                         // a narrower column at the header's bold 7pt,
+                         // so it was breaking mid-word ("VARIET"/"Y").
     ...(isByProducts ? [] : [{ cellWidth: 9, halign: 'right' }]), // MC%
     { cellWidth: 14, halign: 'right' }, // BAGS
     { halign: 'right' }, // GROSS KILOS
@@ -785,7 +788,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
     margin: { left: margin, right: margin },
     ...tableStyles,
     head: [[
-      dateYear ? `DATE\n(${dateYear})` : 'DATE',
+      { content: dateYear ? `DATE\n(${dateYear})` : 'DATE', styles: { fontSize: 9 } },
       { content: 'NATURE OF TRANSACTION\nACTIVITY', styles: { halign: 'center' } },
       serialHeader,
       linkedHeader,

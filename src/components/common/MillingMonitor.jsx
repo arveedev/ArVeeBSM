@@ -248,16 +248,21 @@ export function MillingOrderDetail({ order, onClose }) {
             </>
           )}
 
+          {/* Net Bags (kilos / 50) instead of the raw net weight - same
+              derived-unit convention already used in the NFA Ricemill
+              monitor, per direct feedback pointing at these two
+              specific cards (not the per-trial cards further down,
+              which stay on raw Net Kgs). */}
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
               <p className="text-xs text-neutral-500">Issued</p>
               <p className="font-semibold tabular-nums text-app-text">{fmtBags(order.issuedPieces)} sacks</p>
-              <p className="font-semibold tabular-nums text-app-text">{fmtWeight(order.issuedKilos, weightUnit, 'Net')}</p>
+              <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(order.issuedKilos != null ? order.issuedKilos / 50 : null)} Net Bags</p>
             </div>
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
               <p className="text-xs text-neutral-500">Received</p>
               <p className="font-semibold tabular-nums text-app-text">{fmtBags(order.receivedPieces)} sacks</p>
-              <p className="font-semibold tabular-nums text-app-text">{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
+              <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(order.receivedKilos != null ? order.receivedKilos / 50 : null)} Net Bags</p>
             </div>
           </div>
 
@@ -310,7 +315,7 @@ export function MillingOrderDetail({ order, onClose }) {
                   txs={stockTx}
                   categoryOf={stockCategoryOf}
                   renderRow={(t) => (
-                    <StockRow key={t.id} t={t} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} pileRecordMap={pileRecordMap} autoAgeMonitoring={autoAgeMonitoring} />
+                    <StockRow key={t.id} t={t} warehouseMap={warehouseMap} varietyMap={varietyMap} pileMap={pileMap} pileRecordMap={pileRecordMap} weightUnit={weightUnit} autoAgeMonitoring={autoAgeMonitoring} />
                   )}
                 />
               ) : (
@@ -369,7 +374,7 @@ function TransactionGroups({ txs, categoryOf, renderRow }) {
   )
 }
 
-function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, autoAgeMonitoring }) {
+function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, weightUnit, autoAgeMonitoring }) {
   const isIssue = t.type === 'WSI'
   // Age isn't a field on the transaction itself - it's the pile's own
   // initialAgeValue/dateOfReceipt, computed the same way HomeStocks.jsx
@@ -415,13 +420,8 @@ function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, autoAge
           <p className="tabular-nums text-app-text">{fmtBags(t.numberOfBags)}</p>
         </div>
         <div>
-          {/* Net Bags (kilos / 50), not the raw weight itself - same
-              derived-unit convention already used in NfaMillingMonitor.jsx,
-              shown here specifically to compare against the physically
-              counted Bags field beside it (they can legitimately drift
-              apart - see that file's own comment on why). */}
-          <p className="text-[10px] uppercase text-neutral-600">Net Bags</p>
-          <p className="tabular-nums text-app-text">{fmtNetBags((t.netKilos ?? 0) / 50)}</p>
+          <p className="text-[10px] uppercase text-neutral-600">Net Kgs</p>
+          <p className="tabular-nums text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
         </div>
       </div>
     </li>
