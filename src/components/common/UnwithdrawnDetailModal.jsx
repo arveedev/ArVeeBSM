@@ -66,15 +66,15 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
           <div className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
               <p className="text-[10px] uppercase text-neutral-500">Authorized</p>
-              <p className="text-sm font-bold text-app-text">{fmtNetBags(totalAllocatedNetBags)}</p>
+              <p className="text-sm font-bold tabular-nums text-app-text">{fmtNetBags(totalAllocatedNetBags)}</p>
             </div>
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
               <p className="text-[10px] uppercase text-neutral-500">Withdrawn</p>
-              <p className="text-sm font-bold text-brand-neon">{fmtNetBags(totalWithdrawnNetBags)}</p>
+              <p className="text-sm font-bold tabular-nums text-brand-neon">{fmtNetBags(totalWithdrawnNetBags)}</p>
             </div>
             <div className="rounded-lg border border-red-400/30 bg-red-400/5 p-2">
               <p className="text-[10px] uppercase text-red-400/80">Unwithdrawn</p>
-              <p className="text-sm font-bold text-red-400">{fmtNetBags(totalUnwithdrawnNetBags)}</p>
+              <p className="text-sm font-bold tabular-nums text-red-400">{fmtNetBags(totalUnwithdrawnNetBags)}</p>
             </div>
           </div>
         </div>
@@ -110,7 +110,7 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
                           </p>
                         )}
                         {d.hasBagsKilosMismatch && (
-                          <p className="mt-1 rounded bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-amber">
+                          <p className="mt-1 rounded bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-brand-amber">
                             ⚠ Bags/Kgs don't match on this AI: {fmtNetBags(d.allocatedBags)} bags typed vs {fmtNetBags(allocatedNetBags)} implied by kilos — check the Sheet record
                           </p>
                         )}
@@ -118,13 +118,13 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
                       <div className="shrink-0 text-right">
                         {isFullyWithdrawn ? (
                           <>
-                            <p className="text-sm font-semibold text-brand-neon">{fmtNetBags(withdrawnNetBags)} withdrawn</p>
-                            <p className="text-xs text-neutral-500">{fmtNetBags(allocatedNetBags)} allocated</p>
+                            <p className="text-sm font-semibold tabular-nums text-brand-neon">{fmtNetBags(withdrawnNetBags)} withdrawn</p>
+                            <p className="text-xs tabular-nums text-neutral-500">{fmtNetBags(allocatedNetBags)} allocated</p>
                           </>
                         ) : (
                           <>
-                            <p className="text-sm font-semibold text-red-400">{fmtNetBags(unwithdrawnNetBags)} unwithdrawn</p>
-                            <p className="text-xs text-neutral-500">
+                            <p className="text-sm font-semibold tabular-nums text-red-400">{fmtNetBags(unwithdrawnNetBags)} unwithdrawn</p>
+                            <p className="text-xs tabular-nums text-neutral-500">
                               {fmtNetBags(allocatedNetBags)} allocated · {fmtNetBags(withdrawnNetBags)} withdrawn
                             </p>
                           </>
@@ -149,7 +149,7 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
                                 {t.customerName ? ` · ${t.customerName}` : ''}
                               </p>
                             </div>
-                            <span className="shrink-0 text-xs text-neutral-300">
+                            <span className="shrink-0 text-xs tabular-nums text-neutral-300">
                               {fmtNetBags(netBagsOf(t.type === 'WSI' ? t.netKilos : t.issuedNetKilos))} bags
                             </span>
                           </li>

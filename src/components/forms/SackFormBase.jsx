@@ -1469,7 +1469,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                       />
                     </div>
                     {type === 'ESI' && line.sackTypeId && line.condition && getSiaRemainingPieces(line.sackTypeId, line.condition) != null && (
-                      <p className="mt-1 text-xs text-brand-neon">
+                      <p className="mt-1 text-xs tabular-nums text-brand-neon">
                         SIA balance remaining: {getSiaRemainingPieces(line.sackTypeId, line.condition).toLocaleString()} pcs
                       </p>
                     )}
@@ -1483,7 +1483,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                       // checks whether the physical sacks to issue exist.
                       const exceedsAvailable = parseFormattedNumber(line.pieces) > available
                       return (
-                        <p className={`mt-1 text-xs ${exceedsAvailable ? 'text-brand-crimson' : 'text-neutral-500'}`}>
+                        <p className={`mt-1 text-xs tabular-nums ${exceedsAvailable ? 'text-brand-crimson' : 'text-neutral-500'}`}>
                           Available (physical stock): {fmtBags(available)} pcs
                           {exceedsAvailable ? ' — exceeds what this warehouse has on hand, not an SIA limit' : ''}
                         </p>
@@ -1501,7 +1501,7 @@ const SackFormBase = forwardRef(function SackFormBase(
             </button>
 
             {totalPieces > 0 && (
-              <p className="mt-2 text-xs text-neutral-500">
+              <p className="mt-2 text-xs tabular-nums text-neutral-500">
                 Total pieces: {fmtBags(totalPieces)}
               </p>
             )}

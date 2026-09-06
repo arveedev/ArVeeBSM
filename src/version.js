@@ -989,4 +989,23 @@
 //            added tabular-nums everywhere a number shows in this view,
 //            desktop table included, so digits keep a fixed width and
 //            line up cleanly instead of shifting per-digit.
-export const APP_VERSION = '1.9-62'
+//   1.9-63 - App-wide tabular-nums pass, plus three more layout fixes
+//            found from live feedback. tabular-nums (fixed-width digits,
+//            so a number never visually jitters as it updates) is now
+//            applied everywhere the app shows a formatted weight, bag
+//            count, or percentage - Age Grouping, Piles, Sacks,
+//            Milling/Ricemill monitors, Authority lists, Reports,
+//            Beginning Balances, unwithdrawn/potential-stock badges, and
+//            more. Also: the Reports Summary card's Net Kilos figure was
+//            wrapping onto two lines on some values ("13,591.706" then
+//            "kg" below it) - widened its column and dropped the
+//            redundant "kg"/"MT" suffix since the label above it already
+//            says the unit. The Admin Monitoring AI/SIA list now shows
+//            Issued and Authorized as two short stacked lines instead of
+//            one wide "issued / authorized" line, freeing up room for
+//            the left side, which also got a general text-size bump for
+//            phone readability. And the NFA detail's "issued → received"
+//            summary line no longer breaks alignment against its
+//            percentage once it wraps on a phone - the two now stack
+//            instead of sitting side by side.
+export const APP_VERSION = '1.9-63'

@@ -190,7 +190,7 @@ export function MillingOrderDetail({ order, onClose }) {
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
               <p className="text-xs text-neutral-500">{order.type === 'MO' ? 'Batch' : 'Trials Recovered'}</p>
-              <p className="font-semibold text-app-text">
+              <p className="font-semibold tabular-nums text-app-text">
                 {order.type === 'MO'
                   ? `${order.batchCurrent} of ${order.batchTotal}`
                   : `${(order.recoveredTrials ?? []).length} of 3`}
@@ -219,7 +219,7 @@ export function MillingOrderDetail({ order, onClose }) {
                   {byProductsBags > 0 && (
                     <div className="mt-2 rounded-lg border border-brand-byproduct/40 bg-brand-byproduct/10 p-2">
                       <p className="text-xs text-neutral-500">By Products (Total)</p>
-                      <p className="font-semibold text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
+                      <p className="font-semibold tabular-nums text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
                     </div>
                   )}
 
@@ -244,37 +244,37 @@ export function MillingOrderDetail({ order, onClose }) {
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
               <p className="text-xs text-neutral-500">Issued</p>
-              <p className="font-semibold text-app-text">{fmtBags(order.issuedPieces)} sacks</p>
-              <p className="font-semibold text-app-text">{fmtWeight(order.issuedKilos, weightUnit, 'Net')}</p>
+              <p className="font-semibold tabular-nums text-app-text">{fmtBags(order.issuedPieces)} sacks</p>
+              <p className="font-semibold tabular-nums text-app-text">{fmtWeight(order.issuedKilos, weightUnit, 'Net')}</p>
             </div>
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
               <p className="text-xs text-neutral-500">Received</p>
-              <p className="font-semibold text-app-text">{fmtBags(order.receivedPieces)} sacks</p>
-              <p className="font-semibold text-app-text">{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
+              <p className="font-semibold tabular-nums text-app-text">{fmtBags(order.receivedPieces)} sacks</p>
+              <p className="font-semibold tabular-nums text-app-text">{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
             </div>
           </div>
 
           {showRecoveryComparison ? (
             <div className={`mt-2 rounded-lg border-2 p-2 text-sm ${meetsExpectedKilos && meetsExpectedPieces ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
-              <p className="text-xs text-neutral-500">Recovery ({order.recoveryPercent}%) — Expected vs Actual</p>
+              <p className="text-xs tabular-nums text-neutral-500">Recovery ({order.recoveryPercent}%) — Expected vs Actual</p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-[10px] uppercase text-neutral-600">Expected</p>
-                  <p className="font-semibold text-app-text">{fmtWeight(expectedKilosFromIssued, weightUnit, 'Net')}</p>
-                  <p className="font-semibold text-app-text">{fmtBags(expectedPiecesFromIssued)} pcs</p>
+                  <p className="font-semibold tabular-nums text-app-text">{fmtWeight(expectedKilosFromIssued, weightUnit, 'Net')}</p>
+                  <p className="font-semibold tabular-nums text-app-text">{fmtBags(expectedPiecesFromIssued)} pcs</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase text-neutral-600">Actual</p>
-                  <p className={`font-semibold ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
-                  <p className={`font-semibold ${meetsExpectedPieces ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtBags(order.receivedPieces)} pcs</p>
+                  <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
+                  <p className={`font-semibold tabular-nums ${meetsExpectedPieces ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtBags(order.receivedPieces)} pcs</p>
                 </div>
               </div>
             </div>
           ) : (
             expectedBagsEquivalent != null && (
               <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-sm">
-                <p className="text-xs text-neutral-500">Expected Recovery ({order.recoveryPercent}%)</p>
-                <p className="font-semibold text-app-text">≈ {fmtBags(expectedBagsEquivalent)} bags</p>
+                <p className="text-xs tabular-nums text-neutral-500">Expected Recovery ({order.recoveryPercent}%)</p>
+                <p className="font-semibold tabular-nums text-app-text">≈ {fmtBags(expectedBagsEquivalent)} bags</p>
               </div>
             )
           )}
@@ -405,11 +405,11 @@ function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, weightU
         </div>
         <div>
           <p className="text-[10px] uppercase text-neutral-600">Bags</p>
-          <p className="text-app-text">{fmtBags(t.numberOfBags)}</p>
+          <p className="tabular-nums text-app-text">{fmtBags(t.numberOfBags)}</p>
         </div>
         <div>
           <p className="text-[10px] uppercase text-neutral-600">Net Kgs</p>
-          <p className="text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
+          <p className="tabular-nums text-app-text">{fmtWeight(t.netKilos ?? 0, weightUnit, 'Net')}</p>
         </div>
       </div>
     </li>
@@ -438,7 +438,7 @@ function SackRow({ t, warehouseMap, sackTypeMap }) {
             return (
               <div key={i} className="flex items-center justify-between text-neutral-400">
                 <span className="text-app-text">{st?.code ?? '—'} · {l.condition ?? '—'}</span>
-                <span>{fmtBags(l.pieces ?? 0)} pcs</span>
+                <span className="tabular-nums">{fmtBags(l.pieces ?? 0)} pcs</span>
               </div>
             )
           })}
@@ -552,7 +552,7 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
           {hasIssuance && (
             <>
               {o.type === 'TMO' && (
-                <div className="mt-1.5 flex justify-between text-[10px] text-neutral-500">
+                <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-neutral-500">
                   <span>Trial {issuedTrialsCount} of 3 issued</span>
                   <span>Trial {receivedTrialsCount} of 3 received</span>
                 </div>

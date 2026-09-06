@@ -2902,7 +2902,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           </div>
 
           {selectedPile && isIssuance && (
-            <div className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-400">
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs tabular-nums text-neutral-400">
               Available on {selectedPile.pileName}: {fmtBags(availableBags)} bags ·{' '}
               {fmtWeight(availableKilos, weightUnit)}
             </div>
@@ -2928,7 +2928,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <button
                   type="button"
                   onClick={() => setNumberOfBags(liveFormatNumber(String(suggestedBagsToComplete)))}
-                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
+                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs tabular-nums text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
                 >
                   Use {suggestedBagsToComplete.toLocaleString()} bags to complete AI balance
                 </button>
@@ -2952,7 +2952,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <button
                   type="button"
                   onClick={() => setGrossKilos(liveFormatNumber(suggestedGrossKilosToComplete.toFixed(3), 3))}
-                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
+                  className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs tabular-nums text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
                 >
                   Use {fmtWeight(suggestedGrossKilosToComplete, weightUnit, 'Gross')} to complete AI balance
                 </button>
@@ -2981,7 +2981,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           <div>
             <label className={labelClass}>Net Kilos</label>
             {autoComputeNet ? (
-              <div className={`${readOnlyClass} ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+              <div className={`${readOnlyClass} tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
                 {fmtWeight(netKilos, weightUnit)}
               </div>
             ) : (
@@ -2995,17 +2995,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               />
             )}
             {overKilos && (
-              <p className="mt-1 text-xs text-brand-crimson">
+              <p className="mt-1 text-xs tabular-nums text-brand-crimson">
                 {selectedPile?.pileName ?? 'This pile'} only has {fmtWeight(availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
               </p>
             )}
             {bagsNum > 0 && !overKilos && (
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs tabular-nums text-neutral-500">
                 Average weight per bag: {avgWeightPerBag.toFixed(2)} kg
               </p>
             )}
             {linkedDocDeductsFromAi && authorityRemainingKilos != null && (
-              <p className="mt-1 text-xs text-brand-neon">
+              <p className="mt-1 text-xs tabular-nums text-brand-neon">
                 AI balance remaining: {fmtWeight(authorityRemainingKilos, weightUnit, 'Net')}
                 {' '}({(authorityRemainingBags ?? Math.round(authorityRemainingKilos / 50)).toLocaleString()} bags)
               </p>
@@ -3087,7 +3087,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   </div>
 
                   {info.pile && (
-                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-neutral-400">
+                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs tabular-nums text-neutral-400">
                       Available on {info.pile.pileName}: {fmtBags(info.availableBags)} bags ·{' '}
                       {fmtWeight(info.availableKilos, weightUnit)}
                     </div>
@@ -3138,7 +3138,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   <div>
                     <label className={labelClass}>Net Kilos</label>
                     {alloc.autoComputeNet ? (
-                      <div className={`${readOnlyClass} mt-0 ${info.overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                      <div className={`${readOnlyClass} mt-0 tabular-nums ${info.overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
                         {fmtWeight(info.netKilos, weightUnit)}
                       </div>
                     ) : (
@@ -3150,12 +3150,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       />
                     )}
                     {info.overKilos && (
-                      <p className="mt-1 text-xs text-brand-crimson">
+                      <p className="mt-1 text-xs tabular-nums text-brand-crimson">
                         {info.pile?.pileName ?? 'This pile'} only has {fmtWeight(info.availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
                       </p>
                     )}
                     {parseFormattedNumber(alloc.bags) > 0 && !info.overKilos && (
-                      <p className="mt-1 text-xs text-neutral-500">
+                      <p className="mt-1 text-xs tabular-nums text-neutral-500">
                         Average weight per bag: {info.avgWeightPerBag.toFixed(2)} kg
                       </p>
                     )}

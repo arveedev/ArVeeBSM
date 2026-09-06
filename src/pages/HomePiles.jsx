@@ -87,19 +87,19 @@ function HomePiles() {
                     <button
                       type="button"
                       onClick={() => setEditingAgePile({ pile: p, age: p.age })}
-                      className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-app-text"
+                      className="shrink-0 rounded-md px-1.5 py-0.5 text-xs tabular-nums text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-app-text"
                     >
                       {fmtAge(p.age)} old
                     </button>
                   </div>
                   <div className="mt-2 flex items-end justify-between">
                     <div>
-                      <p className="text-base font-semibold text-app-text">{fmtBags(p.currentBags ?? 0)} bags</p>
-                      <p className="text-xs text-neutral-500">{fmtNetBags(netBags)} net bags</p>
+                      <p className="text-base font-semibold tabular-nums text-app-text">{fmtBags(p.currentBags ?? 0)} bags</p>
+                      <p className="text-xs tabular-nums text-neutral-500">{fmtNetBags(netBags)} net bags</p>
                     </div>
                     <div className="text-right">
-                      <p className="whitespace-nowrap text-xs text-neutral-400">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
-                      <p className="whitespace-nowrap text-xs text-neutral-500">avg {avgWeight.toFixed(2)}</p>
+                      <p className="whitespace-nowrap text-xs tabular-nums text-neutral-400">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
+                      <p className="whitespace-nowrap text-xs tabular-nums text-neutral-500">avg {avgWeight.toFixed(2)}</p>
                     </div>
                   </div>
                 </div>

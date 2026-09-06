@@ -129,13 +129,13 @@ function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
                       </div>
                       <div className="shrink-0 text-right">
                         {a.totalAllocationKilos != null && (
-                          <p className="text-xs font-semibold text-app-text">
+                          <p className="text-xs font-semibold tabular-nums text-app-text">
                             {fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}
                             <span className="text-neutral-500"> / {fmtWeight(a.totalAllocationKilos, weightUnit)}</span>
                           </p>
                         )}
                         {totalAllocBags != null && (
-                          <p className="text-xs font-semibold text-app-text">
+                          <p className="text-xs font-semibold tabular-nums text-app-text">
                             {fmtBags(totalIssuedBags ?? 0)}
                             <span className="text-neutral-500"> / {fmtBags(totalAllocBags)} {unitLabel}</span>
                           </p>

@@ -271,7 +271,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
               <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">
                 {regionalAuthFilter.trim()} — Total Issued
               </p>
-              <p className="mt-1 text-lg font-bold text-app-text">
+              <p className="mt-1 text-lg font-bold tabular-nums text-app-text">
                 {fmtBags(totalBags)} bags
                 <span className="ml-2 text-sm font-normal text-neutral-400">{fmtWeight(totalKilos, weightUnit)}</span>
               </p>
@@ -281,7 +281,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
                   return (
                     <div key={warehouseId} className="flex items-center justify-between text-xs">
                       <span className="text-neutral-400">{warehouse ? `${warehouse.code} — ${warehouse.name}` : warehouseId}</span>
-                      <span className="font-semibold text-app-text">
+                      <span className="font-semibold tabular-nums text-app-text">
                         {fmtBags(totals.bags)} bags · {fmtWeight(totals.kilos, weightUnit)}
                       </span>
                     </div>
@@ -352,17 +352,17 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
                     </div>
                     <div className="shrink-0 text-right">
                       {a.totalAllocationKilos != null && (
-                        <p className="text-sm font-semibold text-brand-neon">
+                        <p className="text-sm font-semibold tabular-nums text-brand-neon">
                           {fmtWeight(a.totalAllocationKilos, weightUnit)}
                         </p>
                       )}
                       {type === 'SIA' && (a.sackLines ?? []).length > 0 && (
-                        <p className="text-sm font-semibold text-brand-neon">
+                        <p className="text-sm font-semibold tabular-nums text-brand-neon">
                           {fmtBags((a.sackLines ?? []).reduce((s, l) => s + (l.totalAllocationBags ?? 0), 0))} {unitLabel}
                         </p>
                       )}
                       {type !== 'SIA' && a.totalAllocationBags != null && (
-                        <p className="text-sm font-semibold text-brand-neon">
+                        <p className="text-sm font-semibold tabular-nums text-brand-neon">
                           {fmtBags(a.totalAllocationBags)} {unitLabel}
                         </p>
                       )}

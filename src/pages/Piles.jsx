@@ -48,6 +48,11 @@ const PALAY_COLOR = '#ADEBB3'
 const RICE_COLOR = '#B8E3E9'
 const BYPRODUCT_COLOR = '#FBEBCC'
 
+// Which detail-popup field labels hold a formatted number/measurement
+// (vs. plain text like Variety/Condition/date) - used to apply
+// tabular-nums only to the numeric ones.
+const NUMERIC_FIELD_LABELS = new Set(['Bags', 'Net', 'Age', 'MC', 'Purity'])
+
 const boxesOverlap = (a, b) => {
   const aRowEnd = a.rowStart + a.rowSpan - 1
   const aColEnd = a.colStart + a.colSpan - 1
@@ -1226,8 +1231,8 @@ function Piles() {
                   ) : (
                     <div className="mt-0.5 text-center leading-tight">
                       <p className="truncate text-xs">{variety?.name ?? ''}</p>
-                      <p className="truncate text-xs font-medium">{fmtBags(pile.currentBags)} bags</p>
-                      <p className="truncate text-xs font-medium">{fmtWeight(pile.currentKilos, weightUnit)}</p>
+                      <p className="truncate text-xs font-medium tabular-nums">{fmtBags(pile.currentBags)} bags</p>
+                      <p className="truncate text-xs font-medium tabular-nums">{fmtWeight(pile.currentKilos, weightUnit)}</p>
                     </div>
                   )}
                 </button>
@@ -1445,7 +1450,7 @@ function Piles() {
                     {fields.map(([lbl, val]) => (
                       <div key={lbl} className="flex justify-between gap-3 text-sm">
                         <span className="text-neutral-400">{lbl}</span>
-                        <span className="font-medium text-app-text">{val}</span>
+                        <span className={`font-medium text-app-text ${NUMERIC_FIELD_LABELS.has(lbl) ? 'tabular-nums' : ''}`}>{val}</span>
                       </div>
                     ))}
                   </div>
@@ -1580,7 +1585,7 @@ function Piles() {
                     {fields.map(([lbl, val]) => (
                       <div key={lbl} className="flex justify-between gap-3 text-sm">
                         <span className="text-neutral-400">{lbl}</span>
-                        <span className="font-medium text-app-text">{val}</span>
+                        <span className={`font-medium text-app-text ${NUMERIC_FIELD_LABELS.has(lbl) ? 'tabular-nums' : ''}`}>{val}</span>
                       </div>
                     ))}
                   </div>

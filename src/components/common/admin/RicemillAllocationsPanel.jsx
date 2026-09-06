@@ -350,7 +350,7 @@ function PrivateMillerAllocationsPanel() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-app-text">{a.ricemillName}</p>
                 <p className="truncate text-xs text-neutral-500">{a.regionalAuthorityNumber}</p>
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs tabular-nums text-neutral-500">
                   {fmtWeight(used, weightUnit)} used of {fmtWeight(a.totalNetKgs, weightUnit)}
                   {' · '}
                   <span className={remaining < 0 ? 'text-brand-crimson' : 'text-brand-neon'}>

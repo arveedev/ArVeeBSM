@@ -80,7 +80,7 @@ function ProcurementBagsNotification() {
       </div>
       <ul className="ml-6 mt-1 space-y-0.5">
         {outstanding.map(({ code, condition, amount }) => (
-          <li key={`${code}::${condition}`} className="text-xs text-brand-amber">
+          <li key={`${code}::${condition}`} className="text-xs tabular-nums text-brand-amber">
             {code} ({condition}): {amount > 0
               ? `${fmtBags(amount)} bag${amount === 1 ? '' : 's'} still needs a matching SIA`
               : `SIA-backed issuance exceeds Procurement by ${fmtBags(Math.abs(amount))} - check for an over-issuance`}

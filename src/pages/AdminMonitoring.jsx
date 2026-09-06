@@ -232,7 +232,7 @@ function AdminMonitoring() {
             <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">
               {regionalAuthFilter.trim()} — Total Issued
             </p>
-            <p className="mt-1 text-lg font-bold text-app-text">
+            <p className="mt-1 text-lg font-bold tabular-nums text-app-text">
               {fmtBags(totalBags)} bags
               <span className="ml-2 text-sm font-normal text-neutral-400">{fmtWeight(totalKilos, weightUnit)}</span>
             </p>
@@ -242,7 +242,7 @@ function AdminMonitoring() {
                 return (
                   <div key={warehouseId} className="flex items-center justify-between text-xs">
                     <span className="text-neutral-400">{warehouse ? `${warehouse.code} — ${warehouse.name}` : warehouseId}</span>
-                    <span className="font-semibold text-app-text">
+                    <span className="font-semibold tabular-nums text-app-text">
                       {fmtBags(totals.bags)} bags · {fmtWeight(totals.kilos, weightUnit)}
                     </span>
                   </div>
@@ -321,44 +321,59 @@ function AdminMonitoring() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className={`text-sm font-medium ${categoryColor(a)}`}>
+                    <p className={`text-base font-medium ${categoryColor(a)}`}>
                       {a.type} · {a.type === 'AI' ? a.aiNumber : a.siaNumber}
                     </p>
-                    <p className="truncate text-xs text-neutral-400">
+                    <p className="truncate text-sm text-neutral-400">
                       {warehouse ? `${warehouse.code} — ${warehouse.name}` : a.assignedWarehouse}
                     </p>
-                    <p className="break-words text-xs text-neutral-400">
+                    <p className="break-words text-sm text-neutral-400">
                       {a.customerName}
                       {a.transactionTypeName ? ` — ${a.transactionTypeName}` : ''}
                     </p>
-                    <p className="break-words text-xs text-neutral-500">
+                    <p className="break-words text-sm text-neutral-500">
                       {a.type === 'AI' && variety ? `${variety.name} (${variety.category})` : ''}
                       {isSia && (a.sackLines ?? []).length > 0
                         ? a.sackLines.map((l) => `${sackTypeMap.get(l.sackTypeId)?.code ?? '?'} ${l.condition ?? ''}`).join(', ')
                         : ''}
                     </p>
                     {a.date && (
-                      <p className="truncate text-xs text-neutral-600">{String(a.date).slice(0, 10)}</p>
+                      <p className="truncate text-sm text-neutral-600">{String(a.date).slice(0, 10)}</p>
                     )}
                     {authorityExtraDetails(a).length > 0 && (
-                      <p className="break-words text-xs text-neutral-600">
+                      <p className="break-words text-sm text-neutral-600">
                         {authorityExtraDetails(a).map((d) => `${d.label}: ${d.value}`).join(' · ')}
                       </p>
                     )}
                   </div>
 
+                  {/* Issued and authorized now each get their own line
+                      (instead of "issued / authorized" crammed onto one
+                      wide line) - shortens the longest line this column
+                      can produce, so the column itself can stay narrow
+                      and leave more width for the left side, per direct
+                      feedback that the left side was unreadable on a
+                      phone next to a wide right column. */}
                   <div className="shrink-0 text-right">
                     {a.totalAllocationKilos != null && (
-                      <p className={`text-base font-semibold leading-tight ${progressColor}`}>
-                        {fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}
-                        <span className="text-neutral-500"> / {fmtWeight(a.totalAllocationKilos, weightUnit)}</span>
-                      </p>
+                      <div className="leading-tight">
+                        <p className={`text-base font-semibold tabular-nums ${progressColor}`}>
+                          {fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}
+                        </p>
+                        <p className="text-xs tabular-nums text-neutral-500">
+                          of {fmtWeight(a.totalAllocationKilos, weightUnit)}
+                        </p>
+                      </div>
                     )}
                     {totalAllocBags != null && (
-                      <p className={`text-base font-semibold leading-tight ${progressColor}`}>
-                        {fmtBags(totalIssuedBags ?? 0)}
-                        <span className="text-neutral-500"> / {fmtBags(totalAllocBags)} {unitLabel}</span>
-                      </p>
+                      <div className={`leading-tight ${a.totalAllocationKilos != null ? 'mt-1.5' : ''}`}>
+                        <p className={`text-base font-semibold tabular-nums ${progressColor}`}>
+                          {fmtBags(totalIssuedBags ?? 0)} {unitLabel}
+                        </p>
+                        <p className="text-xs tabular-nums text-neutral-500">
+                          of {fmtBags(totalAllocBags)} {unitLabel}
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>

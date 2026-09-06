@@ -58,7 +58,7 @@ function SummaryCard({ label, value, sub = false }) {
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <p className="text-xs text-neutral-400">{label}</p>
-      <p className={sub ? 'mt-1 text-lg font-medium text-neutral-300' : 'mt-1 text-2xl font-semibold text-app-text'}>
+      <p className={sub ? 'mt-1 text-lg font-medium tabular-nums text-neutral-300' : 'mt-1 text-2xl font-semibold tabular-nums text-app-text'}>
         {value}
       </p>
     </div>
@@ -136,10 +136,10 @@ function VarietyCard({
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
           <span className="truncate text-sm font-semibold text-app-text">{varietyName}</span>
           <div className="text-right">
-            <p className="whitespace-nowrap text-sm font-semibold text-app-text">
+            <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-app-text">
               {showNetBags ? `${fmtNetBags(Math.max(0, varietyKilos) / 50)} net bags` : `${fmtBags(Math.max(0, varietyBags))} bags`}
             </p>
-            <p className="whitespace-nowrap text-sm font-semibold text-app-text">{fmtWeight(Math.max(0, varietyKilos), weightUnit, 'Net')}</p>
+            <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-app-text">{fmtWeight(Math.max(0, varietyKilos), weightUnit, 'Net')}</p>
           </div>
         </div>
       </div>
@@ -167,10 +167,10 @@ function VarietyCard({
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                       <span className="truncate pl-2 text-xs text-neutral-400">{bucketLabel}</span>
                       <div className="text-right">
-                        <p className="whitespace-nowrap text-xs text-neutral-300">
+                        <p className="whitespace-nowrap text-xs tabular-nums text-neutral-300">
                           {showNetBags ? `${fmtNetBags(Math.max(0, totals.kilos) / 50)} net bags` : `${fmtBags(Math.max(0, totals.bags))} bags`}
                         </p>
-                        <p className="whitespace-nowrap text-xs text-neutral-300">{fmtWeight(Math.max(0, totals.kilos), weightUnit, 'Net')}</p>
+                        <p className="whitespace-nowrap text-xs tabular-nums text-neutral-300">{fmtWeight(Math.max(0, totals.kilos), weightUnit, 'Net')}</p>
                       </div>
                     </div>
                     {bucketHasUnwithdrawn && (
@@ -178,11 +178,11 @@ function VarietyCard({
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onOpenDetail({ varietyIds: [varietyId], bucketFilter: { category: cerealType, label: bucketLabel }, title: `${varietyName} — ${bucketLabel}`, subtitle: `${cerealType} · Unwithdrawn` }) }}
-                          className="whitespace-nowrap rounded-md bg-red-400/10 px-1.5 py-0.5 text-xs font-medium text-red-400/90 transition-colors hover:bg-red-400/20 active:scale-95 sm:text-sm"
+                          className="whitespace-nowrap rounded-md bg-red-400/10 px-1.5 py-0.5 text-xs font-medium tabular-nums text-red-400/90 transition-colors hover:bg-red-400/20 active:scale-95 sm:text-sm"
                         >
                           {formatAmount(bucketUnwithdrawnAmt, showNetBags)} {unitLabel} unwithdrawn
                         </button>
-                        <p className="whitespace-nowrap text-xs text-brand-amber/90 sm:text-sm">
+                        <p className="whitespace-nowrap text-xs tabular-nums text-brand-amber/90 sm:text-sm">
                           Potential: {formatAmount(Math.max(0, bucketTotalAmt - bucketUnwithdrawnAmt), showNetBags)} {unitLabel}
                         </p>
                       </div>
@@ -260,10 +260,10 @@ function CerealTotal({
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
           <span className={`truncate text-sm font-bold ${color}`}>Total ({cerealType})</span>
           <div className="text-right">
-            <p className={`whitespace-nowrap text-base font-bold ${color}`}>
+            <p className={`whitespace-nowrap text-base font-bold tabular-nums ${color}`}>
               {showNetBags ? `${fmtNetBags(Math.max(0, cerealKilos) / 50)} net bags` : `${fmtBags(Math.max(0, cerealBags))} bags`}
             </p>
-            <p className={`whitespace-nowrap text-base font-bold ${color}`}>{fmtWeight(Math.max(0, cerealKilos), weightUnit, 'Net')}</p>
+            <p className={`whitespace-nowrap text-base font-bold tabular-nums ${color}`}>{fmtWeight(Math.max(0, cerealKilos), weightUnit, 'Net')}</p>
           </div>
         </div>
         {displayed && (
@@ -271,11 +271,11 @@ function CerealTotal({
             <button
               type="button"
               onClick={() => onOpenDetail({ varietyIds: cerealVarietyIds, title: `${cerealType} — Unwithdrawn`, subtitle: 'All varieties in this category' })}
-              className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-sm font-bold text-red-400 transition-colors hover:bg-red-400/25 active:scale-95 sm:text-base"
+              className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-sm font-bold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95 sm:text-base"
             >
               {formatAmount(unwithdrawnAmt, showNetBags)} {unitLabel} unwithdrawn
             </button>
-            <p className="whitespace-nowrap text-xs font-medium text-brand-amber sm:text-sm">
+            <p className="whitespace-nowrap text-xs font-medium tabular-nums text-brand-amber sm:text-sm">
               Potential: {formatAmount(Math.max(0, (showNetBags ? cerealKilos / 50 : cerealBags) - unwithdrawnAmt), showNetBags)} {unitLabel}
             </p>
           </div>

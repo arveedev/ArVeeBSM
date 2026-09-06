@@ -105,7 +105,7 @@ function FullScreenPileLayout({ boxes, pileMap, varietyMap, gridCols, gridRows, 
                 {pile ? (
                   <>
                     <p className="mt-1 text-sm text-neutral-400">{variety?.name} ({pile.cerealType})</p>
-                    <p className="mt-1 text-sm font-semibold text-brand-neon">
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-brand-neon">
                       {fmtBags(pile.currentBags)} bags · {fmtWeight(pile.currentKilos ?? 0, weightUnit, 'Net')}
                     </p>
                   </>

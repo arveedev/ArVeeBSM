@@ -451,7 +451,7 @@ function PilesBeginningBalances({ warehouseId }) {
                 {p.pileName} <span className="text-xs text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? ''}</span>
                 {p.closedDate && <span className="ml-1 rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-semibold text-neutral-400">CLOSED</span>}
               </p>
-              <p className="text-xs text-neutral-500">{fmtBags(p.currentBags)} bags · {fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')} (live)</p>
+              <p className="text-xs tabular-nums text-neutral-500">{fmtBags(p.currentBags)} bags · {fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')} (live)</p>
             </div>
             <div className="relative flex items-center gap-1">
               <button type="button" onClick={() => handleEdit(p)} aria-label="Edit beginning balance" className={editIconClass}>
@@ -621,7 +621,7 @@ function SacksBeginningBalances({ warehouseId }) {
           <li key={e.id} className={listItemClass}>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-app-text">{sackTypeMap.get(e.sackTypeId)?.code ?? '?'} · {e.condition}</p>
-              <p className="text-xs text-neutral-500">{fmtBags(e.pieces)} pcs{e.asOfDate ? ` · as of ${e.asOfDate}` : ''}</p>
+              <p className="text-xs tabular-nums text-neutral-500">{fmtBags(e.pieces)} pcs{e.asOfDate ? ` · as of ${e.asOfDate}` : ''}</p>
             </div>
             <div className="flex gap-1">
               <button type="button" onClick={() => handleEdit(e)} aria-label="Edit" className={editIconClass}><Pencil size={20} /></button>

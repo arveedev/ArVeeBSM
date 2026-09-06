@@ -528,7 +528,7 @@ function Reports() {
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono text-sm font-bold text-app-text">{t.serialNo}</span>
                                   <span className="text-xs text-neutral-500">{t.date}</span>
-                                  <span className="text-xs text-neutral-500">MC {t.moistureContent ?? '—'}%</span>
+                                  <span className="text-xs tabular-nums text-neutral-500">MC {t.moistureContent ?? '—'}%</span>
                                   {(t.type === 'WSI' || t.wtsSide === 'issued') && (t.aiNumber || t.linkedDocNo) && (
                                     <span className="rounded bg-brand-neon/10 px-2 py-0.5 text-xs font-semibold text-brand-neon">
                                       AI {t.aiNumber || t.linkedDocNo}
@@ -546,8 +546,8 @@ function Reports() {
                                 <p className="text-xs text-neutral-500">{t.transactionTypeName} · {t.condition}</p>
                               </div>
                               <div className="shrink-0 text-right">
-                                <p className="text-lg font-bold text-app-text">{fmtBags(t.numberOfBags)}</p>
-                                <p className="text-xs text-neutral-400">Net {fmtWeight(t.netKilos, weightUnit)}</p>
+                                <p className="text-lg font-bold tabular-nums text-app-text">{fmtBags(t.numberOfBags)}</p>
+                                <p className="text-xs tabular-nums text-neutral-400">Net {fmtWeight(t.netKilos, weightUnit)}</p>
                               </div>
                             </div>
                           </button>
@@ -593,14 +593,14 @@ function Reports() {
                               </p>
                               <div className="flex flex-wrap gap-1.5 mt-0.5">
                                 {(t.enrichedSackLines ?? []).map((l, i) => (
-                                  <span key={i} className="text-xs text-neutral-500">
+                                  <span key={i} className="text-xs tabular-nums text-neutral-500">
                                     {l.code}/{l.condition}: {fmtBags(l.pieces ?? 0)}
                                   </span>
                                 ))}
                               </div>
                             </div>
                             <div className="shrink-0 text-right">
-                              <p className="text-lg font-bold text-app-text">{fmtBags(totalPieces)}</p>
+                              <p className="text-lg font-bold tabular-nums text-app-text">{fmtBags(totalPieces)}</p>
                               <p className="text-xs text-neutral-400">pieces</p>
                             </div>
                           </div>

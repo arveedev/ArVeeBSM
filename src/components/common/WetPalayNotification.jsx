@@ -62,11 +62,11 @@ function DryerStatusCard() {
       <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
         <div>
           <p className="text-blue-300/70">Wet Palay Received</p>
-          <p className="font-semibold text-blue-200">{fmtBags(status.wetReceived)} bags</p>
+          <p className="font-semibold tabular-nums text-blue-200">{fmtBags(status.wetReceived)} bags</p>
         </div>
         <div>
           <p className="text-blue-300/70">Dry Palay Issued Out</p>
-          <p className="font-semibold text-blue-200">{fmtBags(status.dryIssued)} bags</p>
+          <p className="font-semibold tabular-nums text-blue-200">{fmtBags(status.dryIssued)} bags</p>
         </div>
       </div>
     </div>
@@ -124,7 +124,7 @@ function WetPalayNotification() {
     <div className="mt-3 flex items-start gap-2 rounded-xl border-2 border-brand-crimson bg-brand-crimson/10 px-3 py-2.5">
       <AlertTriangle size={18} className="mt-0.5 shrink-0 text-brand-crimson" />
       <div>
-        <p className="text-sm font-semibold text-brand-crimson">
+        <p className="text-sm font-semibold tabular-nums text-brand-crimson">
           {fmtBags(outstanding.totalOutstandingBags)} bags of wet palay still need drying
         </p>
         <p className="mt-0.5 text-xs text-brand-crimson/80">
@@ -178,10 +178,10 @@ function DriedStockReceivedNotification() {
     <div className="mt-3 flex items-start gap-2 rounded-xl border-2 border-brand-neon bg-brand-neon/10 px-3 py-2.5">
       <Droplets size={18} className="mt-0.5 shrink-0 text-brand-neon" />
       <div>
-        <p className="text-sm font-semibold text-brand-neon">
+        <p className="text-sm font-semibold tabular-nums text-brand-neon">
           Dried stock received — {fmtBags(received.bags)} bags, {received.netKilos.toFixed(2)} net kgs
         </p>
-        <p className="mt-0.5 text-xs text-brand-neon/80">
+        <p className="mt-0.5 text-xs tabular-nums text-brand-neon/80">
           {received.date} · {received.warehouseName}
           {received.moistureContent != null ? ` · MC ${received.moistureContent}%` : ''}
         </p>

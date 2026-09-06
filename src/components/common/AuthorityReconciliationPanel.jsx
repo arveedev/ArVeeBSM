@@ -107,7 +107,7 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
                     {!isAi && (
                       <div className="mt-0.5 flex flex-wrap gap-1.5">
                         {(t.sackLines ?? []).map((l, i) => (
-                          <span key={i} className="text-xs text-neutral-500">
+                          <span key={i} className="text-xs tabular-nums text-neutral-500">
                             {sackTypeMap.get(l.sackTypeId)?.code ?? '?'}/{l.condition}: {fmtBags(l.pieces ?? 0)}
                           </span>
                         ))}
@@ -122,11 +122,11 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
                   <div className="shrink-0 text-right">
                     {isAi ? (
                       <>
-                        <p className="text-sm font-semibold text-app-text">{fmtBags(t.numberOfBags)} bags</p>
-                        <p className="text-xs text-neutral-400">{fmtWeight(t.netKilos, weightUnit)}</p>
+                        <p className="text-sm font-semibold tabular-nums text-app-text">{fmtBags(t.numberOfBags)} bags</p>
+                        <p className="text-xs tabular-nums text-neutral-400">{fmtWeight(t.netKilos, weightUnit)}</p>
                       </>
                     ) : (
-                      <p className="text-sm font-semibold text-app-text">
+                      <p className="text-sm font-semibold tabular-nums text-app-text">
                         {fmtBags((t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} pcs
                       </p>
                     )}
@@ -145,12 +145,12 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
               Total ({rows.length} document{rows.length !== 1 ? 's' : ''})
             </span>
             {isAi ? (
-              <div className="text-right">
+              <div className="text-right tabular-nums">
                 <span className="text-base font-bold text-brand-neon">{fmtBags(totalBags)} bags</span>
                 <span className="ml-3 text-sm text-neutral-400">{fmtWeight(totalKilos, weightUnit)}</span>
               </div>
             ) : (
-              <span className="text-base font-bold text-brand-neon">{fmtBags(totalPieces)} pcs</span>
+              <span className="text-base font-bold tabular-nums text-brand-neon">{fmtBags(totalPieces)} pcs</span>
             )}
           </div>
         </div>

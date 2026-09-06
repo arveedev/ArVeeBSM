@@ -105,7 +105,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
                 {conditions.map((r) => (
                   <div key={r.condition.code} className="flex items-center justify-between">
                     <span className="text-sm text-app-text">{r.condition.label}</span>
-                    <span className="text-sm font-semibold text-brand-neon">{fmtBags(r.total)} pcs</span>
+                    <span className="text-sm font-semibold tabular-nums text-brand-neon">{fmtBags(r.total)} pcs</span>
                   </div>
                 ))}
               </div>

@@ -18,7 +18,7 @@ import toast from 'react-hot-toast'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { db } from '../../db/dexie.js'
-import { fmtBags, fmtWeight, todayLocalISO } from '../../utils/calculations.js'
+import { fmtBags, fmtKilos, todayLocalISO } from '../../utils/calculations.js'
 import { splitStockTransactions } from '../../utils/wtsAdapter.js'
 
 const STOCK_TYPES = ['WSR', 'WSI', 'WTS']
@@ -198,15 +198,24 @@ function DailySummaryCard({ dateFrom, dateTo }) {
                         // of lining up as real columns. Same fixed-
                         // width-column fix already used for the Total
                         // Branch stat grid elsewhere in the app.
-                        <div key={varietyName} className="grid grid-cols-[1fr_4rem_6rem] items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
+                        <div key={varietyName} className="grid grid-cols-[1fr_4rem_7rem] items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
                           <span className="truncate text-xs text-app-text">{varietyName}</span>
                           <div className="text-right">
                             <p className="text-xs text-neutral-500">Bags</p>
-                            <p className="font-mono text-sm font-semibold text-app-text">{fmtBags(totals.bags)}</p>
+                            <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-app-text">{fmtBags(totals.bags)}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs text-neutral-500">Net Kilos</p>
-                            <p className="font-mono text-sm font-semibold text-brand-neon">{fmtWeight(totals.kilos, weightUnit)}</p>
+                            {/* Unit is already this card's own weightUnit
+                                setting - no per-value "kg"/"MT" suffix
+                                needed (that used to be wide enough to
+                                push "kg" onto its own line), just a
+                                unit-aware label instead. */}
+                            <p className="text-xs text-neutral-500">Net {weightUnit === 'mt' ? 'MT' : 'Kilos'}</p>
+                            <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-brand-neon">
+                              {weightUnit === 'mt'
+                                ? Number(totals.kilos / 1000).toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                                : fmtKilos(totals.kilos)}
+                            </p>
                           </div>
                           {isProcurement && (individualCount > 0 || totals.coopCount > 0) && (
                             <p className="col-span-3 mt-1 text-[11px] text-neutral-500">

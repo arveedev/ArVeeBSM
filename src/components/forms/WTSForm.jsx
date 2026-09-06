@@ -155,7 +155,7 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
         </div>
         {(side.bags !== '' || side.grossKilos !== '') && (
           <p className="text-xs text-neutral-500">
-            Net Kilos (computed): <span className="font-medium text-app-text">{fmtWeight(netKilos, weightUnit)}</span>
+            Net Kilos (computed): <span className="font-medium tabular-nums text-app-text">{fmtWeight(netKilos, weightUnit)}</span>
           </p>
         )}
         <div>

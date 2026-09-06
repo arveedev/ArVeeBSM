@@ -109,12 +109,21 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
       {/* Desktop/tablet: a real table, same pattern as AdminHomeStocks.jsx's
           Age Grouping table - fills the available width instead of
           hugging a fixed narrow size. */}
+      {/* Th/Td (shared with Age Grouping) hard-code a small text-xs on
+          the cell element itself, which wins over any font-size class
+          put on the <table> - a child's own explicit size always beats
+          an inherited one. Bumped to a bigger size here via a `text-sm`/
+          `text-base` span wrapped around each cell's actual content
+          instead of touching Th/Td themselves, so Age Grouping (and any
+          other shared consumer) keeps its own original small size. */}
       <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full text-sm md:text-base">
+        <table className="w-full">
           <thead>
             <tr className="border-b border-neutral-800">
               {columns.map((col) => (
-                <Th key={col} right={RIGHT_ALIGNED.has(col)}>{COLUMN_LABEL[col]}</Th>
+                <Th key={col} right={RIGHT_ALIGNED.has(col)}>
+                  <span className="text-sm">{COLUMN_LABEL[col]}</span>
+                </Th>
               ))}
             </tr>
           </thead>
@@ -123,7 +132,7 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
               <tr key={entry.authId} className="border-b border-neutral-800/50">
                 {columns.map((col) => (
                   <Td key={col} right={RIGHT_ALIGNED.has(col)}>
-                    <span className={`${RIGHT_ALIGNED.has(col) ? 'tabular-nums ' : ''}${col === 'netKgs' ? 'font-medium text-app-text' : col === 'date' || col === 'aiNumber' ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                    <span className={`text-base ${RIGHT_ALIGNED.has(col) ? 'tabular-nums ' : ''}${col === 'netKgs' ? 'font-medium text-app-text' : col === 'date' || col === 'aiNumber' ? 'text-neutral-500' : 'text-neutral-400'}`}>
                       {cellContent(col, entry, weightUnit)}
                     </span>
                   </Td>
@@ -134,11 +143,11 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
           <tfoot>
             <tr className="border-t-2 border-neutral-700">
               <Td>
-                <span className="font-bold text-app-text">Total</span>
+                <span className="text-base font-bold text-app-text">Total</span>
               </Td>
               {leadColSpan > 1 && Array.from({ length: leadColSpan - 1 }).map((_, i) => <Td key={`fill-${i}`} />)}
-              <Td right><span className="font-bold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span></Td>
-              <Td right><span className="font-bold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span></Td>
+              <Td right><span className="text-base font-bold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span></Td>
+              <Td right><span className="text-base font-bold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span></Td>
             </tr>
           </tfoot>
         </table>
@@ -222,13 +231,16 @@ function RicemillRecoveryDetail({ recovery, weightUnit }) {
 
   return (
     <div className="space-y-2">
+      {/* Stacked, not side-by-side - the issued/received sentence is
+          long enough to wrap on a phone, and a flex row keeps its
+          `items-center` cross-axis alignment even after wrapping, which
+          left the percentage floating oddly next to a two-line block
+          instead of sitting cleanly under it. */}
       <div className="rounded-lg bg-neutral-950 p-3 text-base tabular-nums">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-neutral-500">{fmtWeight(recovery.issuedKilos, weightUnit)} issued → {fmtWeight(recovery.recoveredKilos, weightUnit)} received</span>
-          <span className={`font-semibold ${recovery.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
-            {recovery.recoveryPct == null ? '—' : `${recovery.recoveryPct.toFixed(1)}%`}
-          </span>
-        </div>
+        <p className="text-neutral-500">{fmtWeight(recovery.issuedKilos, weightUnit)} issued → {fmtWeight(recovery.recoveredKilos, weightUnit)} received</p>
+        <p className={`mt-1 font-semibold ${recovery.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
+          Recovery: {recovery.recoveryPct == null ? '—' : `${recovery.recoveryPct.toFixed(1)}%`}
+        </p>
       </div>
 
       <div className="flex justify-end">

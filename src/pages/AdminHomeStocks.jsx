@@ -158,8 +158,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       <span className="font-medium text-app-text">{province.code}</span>
                       <span className="ml-1 text-xs text-neutral-500">{province.name}</span>
                     </Td>
-                    <Td right><span className="text-base font-bold text-blue-400">{fmt(riceValue)}</span></Td>
-                    <Td right><span className="text-base font-bold text-brand-neon">{fmt(palayValue)}</span></Td>
+                    <Td right><span className="text-base font-bold tabular-nums text-blue-400">{fmt(riceValue)}</span></Td>
+                    <Td right><span className="text-base font-bold tabular-nums text-brand-neon">{fmt(palayValue)}</span></Td>
                   </tr>
                 )
               })}
@@ -184,13 +184,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
                   Total — Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
-                <span className="text-lg font-bold text-blue-400">{fmt(riceBranchValue)}</span>
+                <span className="text-lg font-bold tabular-nums text-blue-400">{fmt(riceBranchValue)}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
                   Total — Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
-                <span className="text-lg font-bold text-brand-neon">{fmt(palayBranchValue)}</span>
+                <span className="text-lg font-bold tabular-nums text-brand-neon">{fmt(palayBranchValue)}</span>
               </div>
             </div>
           )
@@ -268,7 +268,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                           <tr key={cat} className="border-b border-neutral-800/50">
                             <Td><span className={`font-semibold ${colorClass}`}>{cat}</span></Td>
                             <Td right>
-                              <span className={`text-base font-bold ${colorClass}`}>
+                              <span className={`text-base font-bold tabular-nums ${colorClass}`}>
                                 {fmt(sum)}
                                 {hasUnwithdrawn && (
                                   <button
@@ -279,14 +279,14 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                       title: `${cat} — Unwithdrawn`,
                                       subtitle: `${province?.code} · ${stripWarehouseCodePrefix(warehouse.name)}`,
                                     })}
-                                    className="ml-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
+                                    className="ml-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
                                   >
                                     {fmt(unwithdrawnNetBags)} unwithdrawn
                                   </button>
                                 )}
                               </span>
                               {hasUnwithdrawn && (
-                                <div className="mt-0.5 text-[11px]">
+                                <div className="mt-0.5 text-[11px] tabular-nums">
                                   <span className="text-brand-amber">Potential: {fmt(Math.max(0, sum - unwithdrawnNetBags))}</span>
                                 </div>
                               )}
@@ -390,13 +390,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                     {buckets.map((b, i) => (
                       <div key={b.label} className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
                         <p className="text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
-                        <p className={`text-sm font-semibold ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
+                        <p className={`text-sm font-semibold tabular-nums ${catColor(cat)}`}>{fmt(columnTotals[i])}</p>
                       </div>
                     ))}
                     {buckets.length < 3 && <div className="hidden sm:block" aria-hidden="true" />}
                     <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
                       <p className="text-[10px] uppercase text-neutral-500">Total</p>
-                      <p className={`text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</p>
+                      <p className={`text-sm font-bold tabular-nums ${catColor(cat)}`}>{fmt(grandTotal)}</p>
                     </div>
                   </div>
                 </div>
@@ -458,9 +458,9 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                         <ChevronRight size={12} className="text-neutral-600" />
                                       </button>
                                     </Td>
-                                    {bucketTotals.map((val, i) => <Td key={i} right>{fmt(val)}</Td>)}
+                                    {bucketTotals.map((val, i) => <Td key={i} right><span className="tabular-nums">{fmt(val)}</span></Td>)}
                                     <Td right>
-                                      <span className={`font-semibold ${catColor(cat)}`}>
+                                      <span className={`font-semibold tabular-nums ${catColor(cat)}`}>
                                         {fmt(total)}
                                       </span>
                                     </Td>
@@ -472,11 +472,11 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                   <Td><span className="font-bold text-app-text">Total</span></Td>
                                   {columnTotals.map((val, i) => (
                                     <Td key={i} right>
-                                      <span className={`font-bold ${catColor(cat)}`}>{fmt(val)}</span>
+                                      <span className={`font-bold tabular-nums ${catColor(cat)}`}>{fmt(val)}</span>
                                     </Td>
                                   ))}
                                   <Td right>
-                                    <span className={`font-bold ${catColor(cat)}`}>
+                                    <span className={`font-bold tabular-nums ${catColor(cat)}`}>
                                       {fmt(grandTotal)}
                                     </span>
                                   </Td>
@@ -541,12 +541,12 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                       aria-expanded={isExpanded}
                                       className="flex shrink-0 items-center gap-1 active:scale-95"
                                     >
-                                      <span className={`text-sm font-bold ${catColor(cat)}`}>{fmt(total)}</span>
+                                      <span className={`text-sm font-bold tabular-nums ${catColor(cat)}`}>{fmt(total)}</span>
                                       <ChevronDown size={14} className={`text-neutral-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     </button>
                                   </div>
                                   {hasOldStock && (
-                                    <p className="mt-0.5 text-[11px] text-red-400">
+                                    <p className="mt-0.5 text-[11px] tabular-nums text-red-400">
                                       {fmt(oldestAmount)} at {buckets[oldestIdx].label.replace(/\s*months?$/i, '')} mo
                                     </p>
                                   )}
@@ -555,7 +555,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                       {buckets.map((b, i) => (
                                         <div key={b.label} className="rounded-md bg-neutral-900 px-1.5 py-1">
                                           <p className="text-[9px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')} mo</p>
-                                          <p className="text-xs font-semibold text-app-text">{fmt(bucketTotals[i])}</p>
+                                          <p className="text-xs font-semibold tabular-nums text-app-text">{fmt(bucketTotals[i])}</p>
                                         </div>
                                       ))}
                                     </div>
@@ -565,7 +565,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                             })}
                             <div className="flex items-center justify-between border-t-2 border-neutral-700 pt-2">
                               <span className="text-sm font-bold text-app-text">Total</span>
-                              <span className={`text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</span>
+                              <span className={`text-sm font-bold tabular-nums ${catColor(cat)}`}>{fmt(grandTotal)}</span>
                             </div>
                           </div>
                         </div>
