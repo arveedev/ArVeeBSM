@@ -282,6 +282,29 @@ export const isAuthorityComplete = (authority) => {
 }
 
 /**
+ * Sync-level cleanup (upsertAuthority) only consolidates duplicate
+ * aiNumber/siaNumber records the next time that specific number is
+ * re-synced - a stale row that hasn't been re-fetched yet (or a brief
+ * cross-run race) can leave two authId records for the same real
+ * authority sitting in db.authorities at once. Any screen that reads
+ * db.authorities directly needs this same guard, or it double-counts
+ * or double-lists that authority. Keeps whichever duplicate has the
+ * higher totalIssuedKilos (the more complete/up-to-date copy).
+ */
+export const dedupeAuthoritiesByRef = (list) => {
+  const byRef = new Map()
+  for (const a of list) {
+    const ref = a.type === 'AI' ? a.aiNumber : a.siaNumber
+    if (!ref) continue
+    const existing = byRef.get(ref)
+    if (!existing || (a.totalIssuedKilos ?? 0) > (existing.totalIssuedKilos ?? 0)) {
+      byRef.set(ref, a)
+    }
+  }
+  return [...byRef.values()]
+}
+
+/**
  * Every extra detail field an authority might carry, as an ordered
  * list of { label, value } pairs, skipping any that are blank/null.
  * These are synced from the Sheet (OR No., Remarks, Age Group, Note1,

@@ -18,7 +18,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/dexie.js'
-import { fmtWeight, isTransferTypeName } from '../../utils/calculations.js'
+import { fmtWeight, isTransferTypeName, dedupeAuthoritiesByRef } from '../../utils/calculations.js'
 import RicemillRecoveryDetail, { AllocationUsageSummary } from './RicemillRecoveryDetail.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
@@ -68,7 +68,11 @@ function NfaMillingMonitor({ warehouseId } = {}) {
     if (ricemillIds.length === 0) return new Map()
     const ricemillIdSet = new Set(ricemillIds)
 
-    const authorities = await db.authorities.where('type').equals('AI').toArray()
+    // Deduped by AI # before building any per-day entries below - a
+    // sync-race duplicate authId for the same real aiNumber (see
+    // dedupeAuthoritiesByRef's own doc comment) otherwise shows up here
+    // as the exact same date/Net Bags/Net Kgs row appearing twice.
+    const authorities = dedupeAuthoritiesByRef(await db.authorities.where('type').equals('AI').toArray())
     const varietyList = await db.varietyTypes.toArray()
     const varietyMap = new Map(varietyList.map((v) => [v.varietyId, v]))
     const capacityByNumber = new Map(allocations.map((a) => [a.regionalAuthorityNumber, a.millingInputCapacityBags ?? 0]))

@@ -11,10 +11,21 @@
 // Grid's `auto` column sizing is scoped per-container, so nested per-row
 // grids would each size their own columns independently and drift out
 // of alignment against each other the moment one row's content is wider
-// than another's.
+// than another's. That grid stays desktop/tablet-only (`sm:` and up) -
+// on a real narrow phone its four fixed-width tracks don't fit the
+// screen and forced a sideways scroll just to read Net Kgs, so mobile
+// gets its own stacked-card rendering of the same entries instead.
+//
+// Sort/filter (RicemillSortFilterModal) is local state here, not lifted
+// to the caller - each expanded Regional Authority Number already gets
+// its own mounted instance of this component (NfaMillingMonitor only
+// renders it for the one currently-expanded number), so "per authority"
+// sort/filter falls out naturally without any extra wiring.
 
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
+import { SlidersHorizontal } from 'lucide-react'
 import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
+import RicemillSortFilterModal, { DEFAULT_SORT } from './RicemillSortFilterModal.jsx'
 
 // Issuance has no AI # (there's only ever one AI covering the whole
 // allocation - a per-row AI # would have nothing useful to show).
@@ -60,6 +71,23 @@ function shortDate(isoDate) {
   return `${monthName} ${Number(day)}`
 }
 
+/** Sorts and date-range-filters one entries list per the modal's
+ * current settings. Kept generic across Issuance/Receipt - both share
+ * the same entry shape (date, bags, kilos, plus optional aiNumber). */
+function applySortFilter(entries, { sortBy, dateFrom, dateTo }) {
+  const filtered = entries.filter((e) => {
+    if (dateFrom && (e.date ?? '') < dateFrom) return false
+    if (dateTo && (e.date ?? '') > dateTo) return false
+    return true
+  })
+  return [...filtered].sort((a, b) => {
+    if (sortBy === 'date-asc') return (a.date ?? '').localeCompare(b.date ?? '')
+    if (sortBy === 'kilos-desc') return (b.kilos ?? 0) - (a.kilos ?? 0)
+    if (sortBy === 'kilos-asc') return (a.kilos ?? 0) - (b.kilos ?? 0)
+    return (b.date ?? '').localeCompare(a.date ?? '') // date-desc, the default
+  })
+}
+
 function cellContent(column, entry, weightUnit) {
   switch (column) {
     case 'date': return shortDate(entry.date)
@@ -70,8 +98,14 @@ function cellContent(column, entry, weightUnit) {
   }
 }
 
-function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, columns }) {
+// Total is always the sum of whatever entries are actually being shown
+// (computed here, not passed in) - that way it stays correct whether
+// the list is the full unfiltered set or has been narrowed down by the
+// sort/filter modal above, with no separate total to keep in sync.
+function RecoverySection({ label, entries, weightUnit, columns }) {
   if (entries.length === 0) return null
+  const totalBags = entries.reduce((s, e) => s + (e.bags ?? 0), 0)
+  const totalKilos = entries.reduce((s, e) => s + (e.kilos ?? 0), 0)
   const leadColSpan = columns.length - 2 // every column except Net Bags/Net Kgs, for the "Total" label
   // Every entry within one Regional Authority Number's Receipt list is
   // always the same variety - shown once here instead of repeated down
@@ -84,7 +118,9 @@ function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, co
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 md:text-sm">
         {label}{varietyName ? ` · ${varietyName}` : ''}
       </p>
-      <div className="overflow-x-auto rounded-lg bg-neutral-950 p-2 md:p-3">
+
+      {/* Desktop/tablet: the original aligned grid, unchanged. */}
+      <div className="hidden overflow-x-auto rounded-lg bg-neutral-950 p-2 sm:block md:p-3">
         <div className={`grid ${GRID_COLS} gap-x-3 gap-y-2 text-sm leading-tight md:text-base`}>
           {columns.map((col, idx) => (
             <span key={`h-${col}-${idx}`} className={`text-xs font-semibold uppercase tracking-wide text-neutral-600 md:text-sm ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
@@ -110,6 +146,34 @@ function RecoverySection({ label, entries, totalBags, totalKilos, weightUnit, co
           <span className="border-t border-neutral-800 pt-1 font-semibold text-app-text" style={{ gridColumn: `span ${leadColSpan}` }}>Total</span>
           <span className="border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span>
           <span className="border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span>
+        </div>
+      </div>
+
+      {/* Mobile: one compact row per entry - Date (+ AI # underneath, for
+          Receipt) on the left, Net Kgs always in the same top-right slot
+          with Net Bags as its subtext, matching the app's established
+          tap-friendly card convention instead of a cramped wide table. */}
+      <div className="space-y-1.5 rounded-lg bg-neutral-950 p-2 sm:hidden">
+        {entries.map((entry) => (
+          <div key={entry.authId} className="flex items-center justify-between gap-3 rounded-lg bg-neutral-900 px-2.5 py-2">
+            <div className="min-w-0">
+              <p className="text-sm text-app-text">{shortDate(entry.date)}</p>
+              {columns.includes('aiNumber') && (
+                <p className="truncate text-xs text-neutral-500">{entry.aiNumber ?? '—'}</p>
+              )}
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-sm font-medium tabular-nums text-app-text">{fmtWeight(entry.kilos, weightUnit)}</p>
+              <p className="text-xs tabular-nums text-neutral-500">{fmtNetBags(entry.bags)} bags</p>
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center justify-between gap-3 border-t border-neutral-800 px-2.5 pt-2">
+          <span className="text-sm font-semibold text-app-text">Total</span>
+          <div className="text-right">
+            <p className="text-sm font-semibold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</p>
+            <p className="text-xs tabular-nums text-neutral-500">{fmtNetBags(totalBags)} bags</p>
+          </div>
         </div>
       </div>
     </div>
@@ -146,21 +210,63 @@ export function AllocationUsageSummary({ used, total, weightUnit }) {
 
 /** recovery: { issuedKilos, issuedBags, recoveredKilos, recoveredBags, recoveryPct, millingEntries, transferEntries } | undefined */
 function RicemillRecoveryDetail({ recovery, weightUnit }) {
+  const [modalOpen, setModalOpen] = useState(false)
+  const [sortBy, setSortBy] = useState(DEFAULT_SORT)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const isFiltered = sortBy !== DEFAULT_SORT || Boolean(dateFrom) || Boolean(dateTo)
+
   if (!recovery) {
     return <p className="text-sm text-neutral-500 md:text-base">No Issuance (palay in) or Receipt (rice out) activity recorded yet for this Regional Authority Number.</p>
   }
+
+  const sortFilter = { sortBy, dateFrom, dateTo }
+  const millingEntries = applySortFilter(recovery.millingEntries, sortFilter)
+  const transferEntries = applySortFilter(recovery.transferEntries, sortFilter)
+
   return (
     <div className="space-y-2">
       <div className="rounded-lg bg-neutral-950 p-2 text-sm md:p-3 md:text-base">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <span className="text-neutral-500">{fmtWeight(recovery.issuedKilos, weightUnit)} issued → {fmtWeight(recovery.recoveredKilos, weightUnit)} received</span>
           <span className={`font-semibold ${recovery.recoveryPct == null ? 'text-neutral-500' : 'text-brand-neon'}`}>
             {recovery.recoveryPct == null ? '—' : `${recovery.recoveryPct.toFixed(1)}%`}
           </span>
         </div>
       </div>
-      <RecoverySection label="Issuance" entries={recovery.millingEntries} totalBags={recovery.issuedBags} totalKilos={recovery.issuedKilos} weightUnit={weightUnit} columns={ISSUANCE_COLUMNS} />
-      <RecoverySection label="Receipt" entries={recovery.transferEntries} totalBags={recovery.recoveredBags} totalKilos={recovery.recoveredKilos} weightUnit={weightUnit} columns={RECEIPT_COLUMNS} />
+
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+          isFiltered
+            ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
+            : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-600 hover:text-app-text'
+        }`}
+      >
+        <SlidersHorizontal size={13} />
+        Sort &amp; Filter{isFiltered ? ' (active)' : ''}
+      </button>
+
+      <RecoverySection label="Issuance" entries={millingEntries} weightUnit={weightUnit} columns={ISSUANCE_COLUMNS} />
+      <RecoverySection label="Receipt" entries={transferEntries} weightUnit={weightUnit} columns={RECEIPT_COLUMNS} />
+      {millingEntries.length === 0 && transferEntries.length === 0 && (
+        <p className="text-sm text-neutral-500 md:text-base">No entries match this date range.</p>
+      )}
+
+      {modalOpen && (
+        <RicemillSortFilterModal
+          sortBy={sortBy}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onChange={({ sortBy: nextSort, dateFrom: nextFrom, dateTo: nextTo }) => {
+            setSortBy(nextSort)
+            setDateFrom(nextFrom)
+            setDateTo(nextTo)
+          }}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
     </div>
   )
 }

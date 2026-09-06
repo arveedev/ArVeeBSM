@@ -915,4 +915,17 @@
 //            since ageing stock is worth noticing without expanding
 //            every card. Tablet/desktop is unchanged - the original
 //            table already had room to breathe at that width.
-export const APP_VERSION = '1.9-56'
+//   1.9-57 - Admin Monitoring > NFA tab: fixed real duplicate rows in
+//            the Issuance/Receipt breakdown (the same date/AI#/amount
+//            showing twice) - caused by the same sync-race duplicate-
+//            authority-record bug already guarded against elsewhere on
+//            this page, just missing here; now shares one fix
+//            (dedupeAuthoritiesByRef) with that other spot instead of
+//            two separate copies of the same logic. Also gave that
+//            Issuance/Receipt list a phone-friendly card layout (it
+//            needed sideways scrolling on a real narrow screen before;
+//            tablet/desktop keep the original aligned table) and a
+//            Sort & Filter control per Regional Authority Number - sort
+//            by date or by Net Kgs, or narrow to a date range - opened
+//            from a small button above each expanded number's list.
+export const APP_VERSION = '1.9-57'
