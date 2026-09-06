@@ -28,33 +28,36 @@ import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
 import RicemillSortFilterModal, { DEFAULT_SORT } from './RicemillSortFilterModal.jsx'
 
 // Issuance has no AI # (there's only ever one AI covering the whole
-// allocation - a per-row AI # would have nothing useful to show).
-// Neither section gives Variety its own column any more - within one
-// Regional Authority Number every Receipt row is always the same
-// variety, so it's shown once, next to the "Receipt" label itself,
-// rather than repeated identically down an entire column.
-//
-// Both sections still use the SAME 4-track grid (Issuance's unused AI#
-// track rendered as an empty, unlabeled spacer) rather than a narrower
-// grid of its own - two side-by-side tables with different column
-// counts don't read as a matched pair; Net Bags and Net Kgs need to
-// land in the same horizontal position in both.
-const ISSUANCE_COLUMNS = ['date', 'blank', 'netBags', 'netKgs']
+// allocation - a per-row AI # would have nothing useful to show), so it
+// gets its own 3-track grid instead of reusing Receipt's 4-track one
+// with a blank filler column - that filler used to sit there as a big
+// dead gap between Date and Net Bags with nothing in it, which looked
+// broken rather than aligned. The two sections are stacked vertically,
+// never side by side, so there was never a real need to keep their
+// columns lined up with each other in the first place.
+const ISSUANCE_COLUMNS = ['date', 'netBags', 'netKgs']
 const RECEIPT_COLUMNS = ['date', 'aiNumber', 'netBags', 'netKgs']
 
 // Tailwind's build-time scanner only picks up class names it can see as
 // a literal string - a runtime-concatenated `grid-cols-[${...}]` would
-// never make it into the generated CSS at all, so this stays a single
-// static string (both sections are always 4 tracks now) rather than
-// assembled from a per-column width map at render time. No `1fr` track -
-// a flexible track stretched to fill whatever width its parent gave it,
-// which on a wide desktop screen was most of the page, leaving a huge
-// empty gap between Date and Net Bags. Every track is now a fixed width
-// sized to its real content, and the grid itself is `w-fit` (see below)
-// so the whole table stops stretching wider than it needs to be.
-const GRID_COLS = 'grid-cols-[92px_92px_76px_104px] md:grid-cols-[110px_110px_96px_128px]'
+// never make it into the generated CSS at all, so these stay static
+// strings, keyed by column count, rather than assembled from a
+// per-column width map at render time. No `1fr` track - a flexible
+// track stretched to fill whatever width its parent gave it, which on
+// a wide desktop screen was most of the page, leaving huge empty gaps
+// between columns. Every track is a fixed width sized to its real
+// content, and the grid itself is `w-fit` (see below) so the whole
+// table stops stretching wider than it needs to be. Net Kgs gets the
+// widest track of the four - "5,000.000 kg" is the longest realistic
+// value here and needs the room, paired with `whitespace-nowrap` on
+// every cell below so a value can never wrap onto a second line no
+// matter how a track's width compares to its content.
+const GRID_COLS_BY_COUNT = {
+  3: 'grid-cols-[92px_92px_128px] md:grid-cols-[110px_110px_152px]',
+  4: 'grid-cols-[92px_92px_76px_128px] md:grid-cols-[110px_110px_96px_152px]',
+}
 
-const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', netBags: 'Net Bags', netKgs: 'Net Kgs', blank: '' }
+const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', netBags: 'Net Bags', netKgs: 'Net Kgs' }
 const RIGHT_ALIGNED = new Set(['netBags', 'netKgs'])
 
 /** "2026-07-31" -> "Jul 31" - a short, unambiguous form that never needs
@@ -121,9 +124,9 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
 
       {/* Desktop/tablet: the original aligned grid, unchanged. */}
       <div className="hidden overflow-x-auto rounded-lg bg-neutral-950 p-2 sm:block md:p-3">
-        <div className={`grid ${GRID_COLS} gap-x-3 gap-y-2 text-sm leading-tight md:text-base`}>
+        <div className={`grid ${GRID_COLS_BY_COUNT[columns.length]} gap-x-3 gap-y-2 text-sm leading-tight md:text-base`}>
           {columns.map((col, idx) => (
-            <span key={`h-${col}-${idx}`} className={`text-xs font-semibold uppercase tracking-wide text-neutral-600 md:text-sm ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
+            <span key={`h-${col}-${idx}`} className={`whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-neutral-600 md:text-sm ${RIGHT_ALIGNED.has(col) ? 'text-right' : ''}`}>
               {COLUMN_LABEL[col]}
             </span>
           ))}
@@ -134,7 +137,7 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
                   key={`${col}-${idx}`}
                   className={
                     RIGHT_ALIGNED.has(col)
-                      ? `text-right tabular-nums ${col === 'netKgs' ? 'font-medium text-app-text' : 'text-neutral-400'}`
+                      ? `whitespace-nowrap text-right tabular-nums ${col === 'netKgs' ? 'font-medium text-app-text' : 'text-neutral-400'}`
                       : 'whitespace-nowrap text-neutral-500'
                   }
                 >
@@ -143,9 +146,9 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
               ))}
             </Fragment>
           ))}
-          <span className="border-t border-neutral-800 pt-1 font-semibold text-app-text" style={{ gridColumn: `span ${leadColSpan}` }}>Total</span>
-          <span className="border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span>
-          <span className="border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span>
+          <span className="whitespace-nowrap border-t border-neutral-800 pt-1 font-semibold text-app-text" style={{ gridColumn: `span ${leadColSpan}` }}>Total</span>
+          <span className="whitespace-nowrap border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span>
+          <span className="whitespace-nowrap border-t border-neutral-800 pt-1 text-right font-semibold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span>
         </div>
       </div>
 

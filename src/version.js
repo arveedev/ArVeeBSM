@@ -959,4 +959,14 @@
 //            inside a card, and the Sort & Filter button moved to the
 //            right and picked up the app's standard button styling
 //            instead of floating on its own as a small, out-of-place pill.
-export const APP_VERSION = '1.9-59'
+//   1.9-60 - Fixed the actual desktop/tablet layout bug in that same
+//            table, confirmed against a real screenshot at v1.9-59: Net
+//            Kgs values were wrapping onto a second line ("5,000.000"
+//            then "kg" below it) because the numeric columns were
+//            missing the "never wrap" rule the text columns already
+//            had, and Issuance had an ugly empty gap between Date and
+//            Net Bags from a leftover unlabeled filler column copied
+//            over from Receipt's layout. Issuance now gets its own
+//            3-column layout without that filler, and every column
+//            (text and numbers both) is now set to never wrap.
+export const APP_VERSION = '1.9-60'
