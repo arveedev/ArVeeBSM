@@ -1077,4 +1077,12 @@
 //            BAGS each had more room than their own short values ever
 //            need, trimmed back to fund the wider name column, without
 //            touching GROSS/NET KILOS' own width this time.
-export const APP_VERSION = '1.9-70'
+//   1.9-71 - PDF export: fixed the table no longer filling the full
+//            page width on a By Products report (no MC% column) - the
+//            previous round made GROSS/NET KILOS a flat fixed width,
+//            which stopped them from stretching into whatever space is
+//            left over whenever an optional column (MC%) isn't present.
+//            Back to auto-width for those two, which is what correctly
+//            fills the page - they no longer wrap either now that every
+//            other column is trimmed to what it actually needs.
+export const APP_VERSION = '1.9-71'

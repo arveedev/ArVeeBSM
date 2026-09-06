@@ -571,17 +571,19 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   // correctly whichever columns are actually present, rather than
   // needing every index hand-adjusted whenever a column is added,
   // removed, or conditionally omitted (like MC is here for By Products).
-  // Every column below is now a fixed width, GROSS/NET KILOS included -
-  // sized deliberately against the real longest values seen across live
-  // exports (a bold 8-digit serial, "999,999.999"-scale kilos values,
-  // long customer/farmer names), not left to auto-size, since auto-
-  // sizing is exactly what silently starved GROSS/NET down to wrapping
-  // mid-number the last time a neighboring column grew (confirmed
-  // against a live export). FROM WHOM NAME was too narrow for real long
-  // names/addresses (wrapping to 4-5 lines per row) - widened here by
-  // trimming genuine slack out of DATE/NATURE/serial/OR#/BAGS (each had
-  // more room than their own actual short values ever need), not by
-  // taking anything from GROSS/NET.
+  // GROSS/NET KILOS are back to auto-width (no cellWidth) - fixing them
+  // at a flat 18mm in the previous round stopped them from wrapping, but
+  // it also stopped them from stretching to fill whatever space is left
+  // over, so a By Products table (no MC% column) rendered visibly
+  // narrower than the page instead of filling it, confirmed against a
+  // live export. Auto-width columns are what absorb leftover space in
+  // autoTable, which is exactly the behavior that's wanted here. This
+  // only wrapped in the first place because the OTHER columns below
+  // were taking more fixed width than they actually needed, starving
+  // whatever was left for GROSS/NET down too far - now that those are
+  // trimmed to their real content needs, auto-width GROSS/NET gets
+  // enough room in every case (with or without MC%/OR#) to both fill
+  // the page and never wrap.
   const widthList = [
     { cellWidth: 13 },   // DATE
     { cellWidth: 16 },   // NATURE OF TRANS ACTIVITY
@@ -592,8 +594,8 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     { cellWidth: 13 },   // VARIETY CODE
     ...(isByProducts ? [] : [{ cellWidth: 9, halign: 'right' }]), // MC%
     { cellWidth: 11, halign: 'right' }, // BAGS
-    { cellWidth: 18, halign: 'right' }, // GROSS KILOS
-    { cellWidth: 18, halign: 'right' }, // NET KILOS
+    { halign: 'right' }, // GROSS KILOS
+    { halign: 'right' }, // NET KILOS
   ]
   const columnStyles = Object.fromEntries(widthList.map((style, i) => [i, style]))
 
