@@ -1022,4 +1022,11 @@
 //            redraws that specific line thicker, explicitly, after
 //            the header renders, so it reads as solid black no matter
 //            what's below it.
-export const APP_VERSION = '1.9-64'
+//   1.9-65 - Admin Monitoring AI/SIA list: the "of [authorized amount]"
+//            subtext under Issued was too small after 1.9-63's stacking
+//            change (was text-xs), per direct feedback that the whole
+//            right side had become hard to read. Bumped it up a size,
+//            and bumped the Issued figure itself up too so it reads as
+//            the clear headline number it's meant to be, not the same
+//            size as the row's own label text next to it.
+export const APP_VERSION = '1.9-65'

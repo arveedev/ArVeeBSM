@@ -357,20 +357,20 @@ function AdminMonitoring() {
                   <div className="shrink-0 text-right">
                     {a.totalAllocationKilos != null && (
                       <div className="leading-tight">
-                        <p className={`text-base font-semibold tabular-nums ${progressColor}`}>
+                        <p className={`text-lg font-semibold tabular-nums ${progressColor}`}>
                           {fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}
                         </p>
-                        <p className="text-xs tabular-nums text-neutral-500">
+                        <p className="text-sm tabular-nums text-neutral-500">
                           of {fmtWeight(a.totalAllocationKilos, weightUnit)}
                         </p>
                       </div>
                     )}
                     {totalAllocBags != null && (
                       <div className={`leading-tight ${a.totalAllocationKilos != null ? 'mt-1.5' : ''}`}>
-                        <p className={`text-base font-semibold tabular-nums ${progressColor}`}>
+                        <p className={`text-lg font-semibold tabular-nums ${progressColor}`}>
                           {fmtBags(totalIssuedBags ?? 0)} {unitLabel}
                         </p>
-                        <p className="text-xs tabular-nums text-neutral-500">
+                        <p className="text-sm tabular-nums text-neutral-500">
                           of {fmtBags(totalAllocBags)} {unitLabel}
                         </p>
                       </div>
