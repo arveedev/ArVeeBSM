@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ChevronDown } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
@@ -26,6 +26,21 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // { warehouseId, varietyIds, title, subtitle } for the unwithdrawn
   // drill-down modal, or null when closed.
   const [detailContext, setDetailContext] = useState(null)
+  // Age Grouping's mobile card list: which warehouse+category rows are
+  // expanded to show their full age-bucket breakdown, keyed as
+  // `${warehouseId}::${cat}` since the same warehouse can appear under
+  // more than one category. Collapsed by default - see the mobile card
+  // row's own comment for why (Reveal: the breakdown is one tap away,
+  // not gone).
+  const [expandedAgeRows, setExpandedAgeRows] = useState(new Set())
+  const toggleAgeRow = (key) => {
+    setExpandedAgeRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
   // Actual vs Potential inventory toggles - kept as two independent
   // states (not shared) since the top card and the Breakdown tab are
   // separate controls that shouldn't move together. Both always default
@@ -414,7 +429,14 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                           <p className={`mb-1 text-sm font-bold uppercase ${catColor(cat)}`}>
                             {cat}
                           </p>
-                          <div className="overflow-x-auto">
+                          {/* Two renders of the same rows, not one table
+                              trying to serve both: sm+ keeps the plain
+                              table (every bucket column has room to
+                              breathe at that width), below sm switches to
+                              a tap-to-expand card per warehouse - see this
+                              block's own README-style comment further
+                              down for the full "six moves" reasoning. */}
+                          <div className="hidden overflow-x-auto sm:block">
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b border-neutral-800">
@@ -461,6 +483,90 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                 </tr>
                               </tfoot>
                             </table>
+                          </div>
+
+                          {/* Below sm: the same "many age columns squeezed
+                              onto one line" table was the actual reported
+                              problem (real figures getting clipped at the
+                              edge, not just needing a scroll) - restructured
+                              per the six-move method instead of shrinking
+                              further:
+                              Rank   - Total is the headline, the full
+                                       per-bucket breakdown is secondary.
+                              Stack  - warehouse name + Total on one line,
+                                       breakdown below instead of beside.
+                              Slot   - Total always sits in the same spot
+                                       (top-right of the row) on every card.
+                              Label  - each bucket keeps a short unit ("mo")
+                                       once it's off a shared column header.
+                              Reveal - the full breakdown isn't gone, it's
+                                       one tap away (expand in place), never
+                                       a separate page.
+                              Breakpoint - this card list only renders below
+                                       sm; the plain table above still
+                                       renders at sm+, where the columns
+                                       have room. */}
+                          <div className="space-y-2 sm:hidden">
+                            {rows.map(({ warehouse, bucketTotals, total }) => {
+                              const rowKey = `${warehouse.warehouseId}::${cat}`
+                              const isExpanded = expandedAgeRows.has(rowKey)
+                              // Last bucket is always the oldest (see
+                              // AGE_BUCKETS - every category's list is
+                              // ordered youngest to oldest) - stock sitting
+                              // there is the one figure worth surfacing
+                              // even before the row is expanded, since
+                              // ageing stock is a real spoilage signal,
+                              // not just another number.
+                              const oldestIdx = buckets.length - 1
+                              const oldestAmount = bucketTotals[oldestIdx]
+                              const hasOldStock = oldestAmount > 0
+                              return (
+                                <div key={warehouse.warehouseId} className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => onWarehouseSelect?.(warehouse)}
+                                      className="flex min-w-0 items-center gap-0.5 text-sm font-medium text-app-text transition-colors hover:text-brand-neon"
+                                    >
+                                      {hasOldStock && (
+                                        <span className="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" aria-hidden="true" />
+                                      )}
+                                      <span className="truncate">{warehouse.name}</span>
+                                      <ChevronRight size={12} className="shrink-0 text-neutral-600" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleAgeRow(rowKey)}
+                                      aria-label={isExpanded ? 'Hide age breakdown' : 'Show age breakdown'}
+                                      aria-expanded={isExpanded}
+                                      className="flex shrink-0 items-center gap-1 active:scale-95"
+                                    >
+                                      <span className={`text-sm font-bold ${catColor(cat)}`}>{fmt(total)}</span>
+                                      <ChevronDown size={14} className={`text-neutral-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                    </button>
+                                  </div>
+                                  {hasOldStock && (
+                                    <p className="mt-0.5 text-[11px] text-red-400">
+                                      {fmt(oldestAmount)} at {buckets[oldestIdx].label.replace(/\s*months?$/i, '')} mo
+                                    </p>
+                                  )}
+                                  {isExpanded && (
+                                    <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-neutral-800 pt-2">
+                                      {buckets.map((b, i) => (
+                                        <div key={b.label} className="rounded-md bg-neutral-900 px-1.5 py-1">
+                                          <p className="text-[9px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')} mo</p>
+                                          <p className="text-xs font-semibold text-app-text">{fmt(bucketTotals[i])}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            <div className="flex items-center justify-between border-t-2 border-neutral-700 pt-2">
+                              <span className="text-sm font-bold text-app-text">Total</span>
+                              <span className={`text-sm font-bold ${catColor(cat)}`}>{fmt(grandTotal)}</span>
+                            </div>
                           </div>
                         </div>
                       )

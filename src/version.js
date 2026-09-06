@@ -902,4 +902,17 @@
 //            during sync, querying the real database instead of a
 //            slightly-stale snapshot, to make the odds of a duplicate
 //            slipping through in the first place even smaller.
-export const APP_VERSION = '1.9-55'
+//   1.9-56 - Admin Dashboard > Stocks > Age Grouping: on a phone, this
+//            table's real figures were getting cut off at the edge
+//            (e.g. a total showing "10,055.4" instead of "10,055.45")
+//            since every age bracket got squeezed onto one line
+//            regardless of how many there were. Redesigned for narrow
+//            screens using the six-move method (Rank/Stack/Slot/Label/
+//            Reveal/Breakpoint): each warehouse is now a card showing
+//            its name and total up front, with the full age-bracket
+//            breakdown one tap away instead of crammed in - a small red
+//            dot flags a warehouse with stock past its oldest bracket,
+//            since ageing stock is worth noticing without expanding
+//            every card. Tablet/desktop is unchanged - the original
+//            table already had room to breathe at that width.
+export const APP_VERSION = '1.9-56'
