@@ -1126,4 +1126,16 @@
 //            fixed at the root by removing the wrap, plus added an
 //            explicit backstop (rowPageBreak: 'avoid') so a tall row
 //            can never split across pages regardless of cause.
-export const APP_VERSION = '1.9-75'
+//   1.9-76 - Admin Dashboard > Stocks: fixed the Data Start Date
+//            override having no effect here at all, found after direct
+//            testing showed moving it from Aug 1 to Sep 1 changed
+//            nothing. Root cause: this page read each pile's
+//            currentBags/currentKilos directly (its own comment called
+//            this "the live running total"), completely bypassing the
+//            cutoff-aware calculation the per-warehouse Home Stocks
+//            page already uses. Now goes through a new batched version
+//            of that same calculation (computeCurrentPileStatesBatch in
+//            pileLedger.js) - built batched rather than one-call-per-
+//            pile, since this page needs it across every pile in the
+//            app at once, not just one warehouse's worth.
+export const APP_VERSION = '1.9-76'

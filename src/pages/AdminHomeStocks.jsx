@@ -2,8 +2,10 @@
 // 1. Net bags per province, per category.
 // 2. Breakdown per warehouse, per category.
 // 3. Age grouping per province, warehouse, category.
-// "Net bags" = pile.currentKilos / 50, the live running total on each
-// pile, not a re-derivation from transaction history.
+// "Net bags" = each pile's cutoff-aware current total (respects the
+// Data Start Date override, same as HomeStocks.jsx), not
+// pile.currentKilos read directly - see computeCurrentPileStatesBatch's
+// own comment for why this page used to bypass that override entirely.
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -11,6 +13,7 @@ import { ChevronRight, ChevronDown } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
+import { computeCurrentPileStatesBatch } from '../utils/pileLedger.js'
 import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 import { computeUnwithdrawnByVariety, computeUnwithdrawnByCategoryAge, UNSPECIFIED_AGE } from '../utils/unwithdrawnStock.js'
@@ -96,11 +99,26 @@ function AdminHomeStocks({ onWarehouseSelect }) {
 
   const provinceMap = new Map(provinces.map((p) => [p.provinceId, p]))
 
-  const enrichedPiles = piles.map((p) => ({
-    ...p,
-    age: calculateCurrentAge(p.initialAgeValue ?? 0, p.dateOfReceipt, autoAgeMonitoring),
-    netBags: (p.currentKilos ?? 0) / 50,
-  }))
+  // Cutoff-aware current totals (respects each warehouse's own Reports
+  // Start Date and the global Data Start Date override) instead of
+  // pile.currentBags/currentKilos directly - see
+  // computeCurrentPileStatesBatch's own comment for why this page
+  // previously ignored that override entirely.
+  const warehouseCutoffByWarehouseId = new Map(warehouses.map((w) => [w.warehouseId, w.reportingCutoffDate]))
+  const pileStates = useLiveQuery(async () => {
+    if (piles.length === 0) return new Map()
+    return computeCurrentPileStatesBatch(piles, warehouseCutoffByWarehouseId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piles, warehouses]) ?? new Map()
+
+  const enrichedPiles = piles.map((p) => {
+    const state = pileStates.get(p.pileId)
+    return {
+      ...p,
+      age: calculateCurrentAge(p.initialAgeValue ?? 0, p.dateOfReceipt, autoAgeMonitoring),
+      netBags: (state?.kilos ?? p.currentKilos ?? 0) / 50,
+    }
+  })
 
   const sortedProvinces = [...provinces].sort((a, b) => a.code.localeCompare(b.code))
   const sortedWarehouses = [...warehouses].sort((a, b) => a.name.localeCompare(b.name))

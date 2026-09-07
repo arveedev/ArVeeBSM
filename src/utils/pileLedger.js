@@ -511,6 +511,91 @@ export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12
 }
 
 /**
+ * Batched, cutoff-aware "current state" for MANY piles at once - built
+ * for AdminHomeStocks.jsx, which (unlike HomeStocks.jsx, scoped to one
+ * warehouse) needs this across every pile in the app. Calling
+ * computeHistoricalPileState once per pile there would mean two full
+ * transaction queries PER PILE, repeated for however many piles exist
+ * across every warehouse - confirmed as the actual reason
+ * AdminHomeStocks.jsx was reading pile.currentBags/currentKilos
+ * directly instead (its own comment called this out explicitly), which
+ * meant it silently ignored the Data Start Date override entirely. This
+ * gets the same cutoff-correct numbers computeHistoricalPileState would
+ * (cutoffDate fixed at "now", so only the reportingCutoffDate LOWER
+ * bound and closedDate matter - there's no "as of a past date" upper
+ * bound to apply here) by fetching every relevant transaction ONCE and
+ * grouping in memory, instead of one query set per pile.
+ *
+ * pileList: piles needing {pileId, warehouseId, closedDate}.
+ * warehouseCutoffByWarehouseId: Map<warehouseId, reportingCutoffDate> -
+ * built once by the caller from an already-fetched warehouse list,
+ * rather than querying db.warehouses again per pile.
+ * Returns Map<pileId, {bags, kilos}>.
+ */
+export const computeCurrentPileStatesBatch = async (pileList, warehouseCutoffByWarehouseId) => {
+  const globalDataStartDate = await getGlobalDataStartDate()
+  const pileIds = new Set(pileList.map((p) => p.pileId))
+
+  const [directTx, wtsTx] = await Promise.all([
+    db.transactions.where('status').equals('Active')
+      .and((t) => (t.type === 'WSR' || t.type === 'WSI') && pileIds.has(t.pileId))
+      .toArray(),
+    db.transactions.where('type').equals('WTS')
+      .and((t) => t.status === 'Active' && (pileIds.has(t.issuedPileId) || pileIds.has(t.receivedPileId)))
+      .toArray(),
+  ])
+
+  const directByPile = new Map()
+  for (const t of directTx) {
+    if (!directByPile.has(t.pileId)) directByPile.set(t.pileId, [])
+    directByPile.get(t.pileId).push(t)
+  }
+  const wtsByPile = new Map()
+  for (const t of wtsTx) {
+    for (const pid of [t.issuedPileId, t.receivedPileId]) {
+      if (!pid || !pileIds.has(pid)) continue
+      if (!wtsByPile.has(pid)) wtsByPile.set(pid, [])
+      wtsByPile.get(pid).push(t)
+    }
+  }
+
+  const result = new Map()
+  for (const pile of pileList) {
+    // Cutoff fixed at "now" (see this function's own comment), so a
+    // closed pile is always past its own closedDate by definition -
+    // same effect as computeHistoricalPileState's `cutoffDate >=
+    // pile.closedDate` check, just simplified since cutoffDate is never
+    // actually variable here.
+    if (pile.closedDate) {
+      result.set(pile.pileId, { bags: 0, kilos: 0 })
+      continue
+    }
+    const reportingCutoffDate = effectiveCutoffDate(warehouseCutoffByWarehouseId.get(pile.warehouseId), globalDataStartDate)
+    let bags = 0
+    let kilos = 0
+    for (const t of (directByPile.get(pile.pileId) ?? [])) {
+      if (!(t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)) continue
+      const sign = t.type === 'WSR' ? 1 : -1
+      bags += (t.numberOfBags ?? 0) * sign
+      kilos += (t.netKilos ?? 0) * sign
+    }
+    for (const t of (wtsByPile.get(pile.pileId) ?? [])) {
+      if (!(!reportingCutoffDate || t.date > reportingCutoffDate)) continue
+      if (t.issuedPileId === pile.pileId) {
+        bags -= t.issuedBags ?? 0
+        kilos -= t.issuedNetKilos ?? 0
+      }
+      if (t.receivedPileId === pile.pileId) {
+        bags += t.receivedBags ?? 0
+        kilos += t.receivedNetKilos ?? 0
+      }
+    }
+    result.set(pile.pileId, { bags: Math.max(0, bags), kilos: Math.max(0, round3(kilos)) })
+  }
+  return result
+}
+
+/**
  * Recomputes a pile's live currentBags/currentKilos from its COMPLETE
  * transaction history (seed + every transaction since) and writes the
  * result to the pile record. This is the correct way to reflect an
