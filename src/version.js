@@ -1138,4 +1138,26 @@
 //            pileLedger.js) - built batched rather than one-call-per-
 //            pile, since this page needs it across every pile in the
 //            app at once, not just one warehouse's worth.
-export const APP_VERSION = '1.9-76'
+//   1.9-77 - Error handling audit, per direct request. Two real gaps
+//            found and fixed:
+//            (1) No page-level error boundary existed - a render crash
+//            in ANY page (Home, Reports, Settings, Admin Dashboard,
+//            etc.) blanked the entire app with no recovery except a
+//            hard reload, since only 3 small spots (forms, Alerts
+//            panel, Milling monitor) were ever wrapped. Every route is
+//            now wrapped in SectionErrorBoundary (a new `fullPage` mode
+//            added to it, since its existing copy - "the rest of the
+//            page is unaffected" - is simply false for a whole-route
+//            crash); bottom navigation stays usable either way, so
+//            there's always a way out instead of a dead blank screen.
+//            (2) Every save/update/delete/void/unvoid handler in
+//            StockFormBase.jsx, SackFormBase.jsx, and WTSForm.jsx had
+//            NO error handling at all - an unexpected throw anywhere
+//            inside (a Dexie error, a bug in any of the many awaited
+//            helper calls) left the Save button stuck disabled forever
+//            with zero feedback, no error shown, no way out short of
+//            closing and reopening the form. All 15 handlers across the
+//            three forms now wrap their work in try/catch/finally: a
+//            failure shows a clear toast and logs the real error, and
+//            the button is always guaranteed to re-enable either way.
+export const APP_VERSION = '1.9-77'

@@ -1822,8 +1822,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   }
 
   const performSave = async () => {
-    setIsSaving(true)
-
+    // isSaving is managed by handleSave (the only caller), which wraps
+    // this whole call in try/finally - not set here, so an error thrown
+    // anywhere below can't leave it stuck true with no way for the
+    // caller's finally to know to reset it.
     const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.grossKilos || a.manualKilos))
     const transaction = {
       id: crypto.randomUUID(),
@@ -1974,7 +1976,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     const next = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
     const loaded = await checkAndLoadSerial(next)
     if (!loaded && latestRequestedSerial.current === next) resetToBlankEntry(next)
-    setIsSaving(false)
     scrollToTop()
   }
 
@@ -1998,10 +1999,24 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       // bag count (net kilos is the hard limit, per clarification).
     }
 
-    const ok = await validateForm()
-    if (!ok) { setIsSaving(false); return }
-
-    await performSave()
+    // try/finally is the actual fix here, not just tidiness -
+    // performSave had no error handling of its own, so any unexpected
+    // throw partway through (a Dexie error, a bug in one of its many
+    // awaited helper calls) left isSaving stuck true forever with zero
+    // feedback: the Save button just stayed disabled, with no error
+    // shown, no way out short of closing and reopening the form. Every
+    // save/update/delete/void handler in this file had the same gap -
+    // fixed the same way in each.
+    try {
+      const ok = await validateForm()
+      if (!ok) return
+      await performSave()
+    } catch (err) {
+      console.error(`${type} save failed:`, err)
+      toast.error('Save failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Finds the lowest letter suffix not already taken by a RETAINED
@@ -2023,9 +2038,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // validateForm runs, not after.
     if (isSaving) return
     setIsSaving(true)
+    // See handleSave's matching comment - try/finally so an unexpected
+    // throw anywhere below can't leave isSaving stuck true forever.
+    try {
 
     const ok = await validateForm({ excludeId: loadedTransaction.id })
-    if (!ok) { setIsSaving(false); return }
+    if (!ok) return
 
     const validExtraAllocations = extraPileAllocations.filter((a) => a.pileId && (a.bags || a.grossKilos || a.manualKilos))
     const updated = buildTransactionPayload({
@@ -2189,14 +2207,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // with what was actually just persisted, so a second edit in the
     // same session reconciles against the real current state.
     loadTransactionIntoForm(updated)
-    setIsSaving(false)
     scrollToTop()
+    } catch (err) {
+      console.error(`${type} update failed:`, err)
+      toast.error('Update failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleDeleteConfirmed = async () => {
     if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
+    try {
 
     // Deleting a multi-pile issuance deletes the WHOLE group, not just
     // the primary record - it's one real-world event, split across
@@ -2237,8 +2261,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
-    setIsSaving(false)
     scrollToTop()
+    } catch (err) {
+      console.error(`${type} delete failed:`, err)
+      toast.error('Delete failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Voiding bypasses the normal Save button entirely - confirming
@@ -2251,6 +2280,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
+    try {
     const wasActive = Boolean(loadedTransaction) && loadedTransaction.status !== 'Cancelled'
     const cancelledRecord = loadedTransaction
       ? buildCancelledPayload({ id: loadedTransaction.id })
@@ -2289,7 +2319,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setIsCancelled(true)
     setLoadedTransaction(cancelledRecord)
     toast.success(`${type} ${serialNo.trim()} has been cancelled/voided`)
-    setIsSaving(false)
+    } catch (err) {
+      console.error(`${type} void failed:`, err)
+      toast.error('Void failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Un-voiding deletes the Cancelled record entirely (not just flips a
@@ -2304,6 +2339,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
+    try {
     // Grouped into one atomic Dexie transaction, same reasoning as
     // handleDeleteConfirmed's identical wrapping - a multi-pile group's
     // Cancelled records are one real-world un-void, not several
@@ -2322,7 +2358,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
-    setIsSaving(false)
+    } catch (err) {
+      console.error(`${type} unvoid failed:`, err)
+      toast.error('Unvoid failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleCategoryTabChange = (nextCategory) => {

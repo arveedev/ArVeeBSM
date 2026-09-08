@@ -744,7 +744,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // exact "duplicate WTS" reported.
     if (isSaving) return
     setIsSaving(true)
-    if (!(await validate())) { setIsSaving(false); return }
+    // try/finally - see StockFormBase.jsx's identical fix: none of
+    // these handlers had error handling before, so an unexpected throw
+    // anywhere inside left isSaving stuck true forever with zero
+    // feedback (the Save button just stayed disabled with no error
+    // shown). Fixed the same way in every handler in this file.
+    try {
+    if (!(await validate())) return
     // createdAt set ONLY here (create) - never touched by the update
     // path. See serialNumber.js's compareByRecency for why this
     // exists - `date` alone can't disambiguate two series used on the
@@ -764,15 +770,21 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // instead of a blind ±1 - see StockFormBase.jsx's matching change
     // for the full reasoning.
     resetForm(await suggestNextSerial('WTS', currentWarehouseId))
-    setIsSaving(false)
     scrollToTop()
+    } catch (err) {
+      console.error('WTS save failed:', err)
+      toast.error('Save failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleUpdate = async () => {
     // Same race-window fix as handleSave.
     if (isSaving) return
     setIsSaving(true)
-    if (!(await validate(loadedTransaction.id))) { setIsSaving(false); return }
+    try {
+    if (!(await validate(loadedTransaction.id))) return
     const updated = buildPayload({ id: loadedTransaction.id })
     // Grouped into one atomic Dexie transaction - see handleSave above.
     // Write the record's new values FIRST, then reconcile both piles'
@@ -788,14 +800,20 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     })
     toast.success(`WTS ${serialNo.trim()} updated`)
     setLoadedTransaction(updated)
-    setIsSaving(false)
     scrollToTop()
+    } catch (err) {
+      console.error('WTS update failed:', err)
+      toast.error('Update failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleDeleteConfirmed = async () => {
     if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
+    try {
     // Grouped into one atomic Dexie transaction - see handleSave above.
     // Delete happens BEFORE reversing this WTS's pile effect - see
     // StockFormBase.jsx's identical fix/reasoning. reverseWtsFromPiles
@@ -818,8 +836,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     })
     toast.success(`WTS ${serialNo.trim()} deleted`)
     resetForm(serialNo.trim())
-    setIsSaving(false)
     scrollToTop()
+    } catch (err) {
+      console.error('WTS delete failed:', err)
+      toast.error('Delete failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Voiding bypasses the normal Save button - confirming immediately
@@ -830,6 +853,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
+    try {
     const wasActive = Boolean(loadedTransaction) && loadedTransaction.status !== 'Cancelled'
     const cancelledRecord = loadedTransaction
       ? buildCancelledPayload({ id: loadedTransaction.id })
@@ -848,7 +872,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     setIsCancelled(true)
     setLoadedTransaction(cancelledRecord)
     toast.success(`WTS ${serialNo.trim()} has been cancelled/voided`)
-    setIsSaving(false)
+    } catch (err) {
+      console.error('WTS void failed:', err)
+      toast.error('Void failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Un-voiding deletes the Cancelled record entirely, making the
@@ -858,6 +887,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
+    try {
     // Grouped into one atomic Dexie transaction, same reasoning as
     // handleDeleteConfirmed's identical wrapping.
     await db.transaction('rw', db.tables, async () => {
@@ -867,7 +897,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     })
     toast.success(`WTS ${serialNo.trim()} is no longer cancelled — available again`)
     resetForm(serialNo.trim())
-    setIsSaving(false)
+    } catch (err) {
+      console.error('WTS unvoid failed:', err)
+      toast.error('Unvoid failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const isEditMode = Boolean(loadedTransaction)

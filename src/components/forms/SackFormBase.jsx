@@ -821,8 +821,8 @@ const SackFormBase = forwardRef(function SackFormBase(
   }
 
   const performSave = async () => {
-    setIsSaving(true)
-
+    // isSaving is managed by handleSave (the only caller) via
+    // try/finally - see its comment for why this must not be set here.
     // createdAt (real save-time timestamp) set ONLY here (create) -
     // never touched by the edit/update path, which preserves whatever
     // this was first set to. See serialNumber.js's compareByRecency for
@@ -913,7 +913,6 @@ const SackFormBase = forwardRef(function SackFormBase(
     const next = await suggestNextSerial(type, currentWarehouseId)
     const loaded = await checkAndLoadSerial(next)
     if (!loaded && latestRequestedSerial.current === next) resetToBlankEntry(next)
-    setIsSaving(false)
     scrollToTop()
   }
 
@@ -927,18 +926,30 @@ const SackFormBase = forwardRef(function SackFormBase(
     // serial.
     if (isSaving) return
     setIsSaving(true)
-    const ok = await validateForm()
-    if (!ok) { setIsSaving(false); return }
-
-    await performSave()
+    // try/finally - see StockFormBase.jsx's identical fix: performSave
+    // previously had no error handling, so an unexpected throw anywhere
+    // inside it left isSaving stuck true forever with zero feedback -
+    // the same gap existed in every handler below, fixed the same way
+    // in each.
+    try {
+      const ok = await validateForm()
+      if (!ok) return
+      await performSave()
+    } catch (err) {
+      console.error(`${type} save failed:`, err)
+      toast.error('Save failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleUpdate = async () => {
     // Same race-window fix as handleSave.
     if (isSaving) return
     setIsSaving(true)
+    try {
     const ok = await validateForm({ excludeId: loadedTransaction.id })
-    if (!ok) { setIsSaving(false); return }
+    if (!ok) return
 
     const updated = buildTransactionPayload({ id: loadedTransaction.id })
 
@@ -963,14 +974,20 @@ const SackFormBase = forwardRef(function SackFormBase(
 
     toast.success(`${type} ${serialNo.trim()} updated`)
     setLoadedTransaction(updated)
-    setIsSaving(false)
     scrollToTop()
+    } catch (err) {
+      console.error(`${type} update failed:`, err)
+      toast.error('Update failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleDeleteConfirmed = async () => {
     if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
+    try {
 
     // Grouped into one atomic Dexie transaction - see StockFormBase.jsx's
     // identical fix for the full reasoning.
@@ -991,8 +1008,13 @@ const SackFormBase = forwardRef(function SackFormBase(
 
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
-    setIsSaving(false)
     scrollToTop()
+    } catch (err) {
+      console.error(`${type} delete failed:`, err)
+      toast.error('Delete failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Voiding bypasses the normal Save button - confirming immediately
@@ -1004,6 +1026,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (isSaving) return
     setPendingVoidAction(null)
     setIsSaving(true)
+    try {
     const wasActive = Boolean(loadedTransaction) && loadedTransaction.status !== 'Cancelled'
     const cancelledRecord = loadedTransaction
       ? buildCancelledPayload({ id: loadedTransaction.id })
@@ -1028,7 +1051,12 @@ const SackFormBase = forwardRef(function SackFormBase(
     setIsCancelled(true)
     setLoadedTransaction(cancelledRecord)
     toast.success(`${type} ${serialNo.trim()} has been cancelled/voided`)
-    setIsSaving(false)
+    } catch (err) {
+      console.error(`${type} void failed:`, err)
+      toast.error('Void failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Un-voiding deletes the Cancelled record entirely, making the
@@ -1039,6 +1067,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     setPendingVoidAction(null)
     if (!loadedTransaction) { setIsCancelled(false); return }
     setIsSaving(true)
+    try {
     // Grouped into one atomic Dexie transaction, same reasoning as
     // handleDeleteConfirmed's identical wrapping.
     await db.transaction('rw', db.tables, async () => {
@@ -1049,7 +1078,12 @@ const SackFormBase = forwardRef(function SackFormBase(
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()
     resetToBlankEntry(freedSerial)
-    setIsSaving(false)
+    } catch (err) {
+      console.error(`${type} unvoid failed:`, err)
+      toast.error('Unvoid failed — please try again')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const isEditMode = Boolean(loadedTransaction)

@@ -201,7 +201,9 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              {isAdmin || isVisitor ? <AdminHome /> : <Home />}
+              <SectionErrorBoundary fullPage label={isAdmin || isVisitor ? 'Admin dashboard' : 'Home'}>
+                {isAdmin || isVisitor ? <AdminHome /> : <Home />}
+              </SectionErrorBoundary>
             </ProtectedRoute>
           }
         />
@@ -209,7 +211,9 @@ function App() {
           path="/piles"
           element={
             <ProtectedRoute denyRoles={['Visitor']}>
-              <Piles />
+              <SectionErrorBoundary fullPage label="Piles">
+                <Piles />
+              </SectionErrorBoundary>
             </ProtectedRoute>
           }
         />
@@ -217,7 +221,9 @@ function App() {
           path="/monitoring"
           element={
             <ProtectedRoute requireRole={['Admin', 'Visitor']}>
-              <AdminMonitoring />
+              <SectionErrorBoundary fullPage label="Monitoring">
+                <AdminMonitoring />
+              </SectionErrorBoundary>
             </ProtectedRoute>
           }
         />
@@ -225,7 +231,9 @@ function App() {
           path="/reports"
           element={
             <ProtectedRoute denyRoles={['Visitor']}>
-              <Reports />
+              <SectionErrorBoundary fullPage label="Reports">
+                <Reports />
+              </SectionErrorBoundary>
             </ProtectedRoute>
           }
         />
@@ -233,7 +241,9 @@ function App() {
           path="/settings"
           element={
             <ProtectedRoute denyRoles={['Visitor']}>
-              <Settings />
+              <SectionErrorBoundary fullPage label="Settings">
+                <Settings />
+              </SectionErrorBoundary>
             </ProtectedRoute>
           }
         />
@@ -241,7 +251,9 @@ function App() {
           path="/admin"
           element={
             <ProtectedRoute requireRole="Admin">
-              <AdminDashboard onClose={closeAdminDashboard} />
+              <SectionErrorBoundary fullPage label="Admin dashboard">
+                <AdminDashboard onClose={closeAdminDashboard} />
+              </SectionErrorBoundary>
             </ProtectedRoute>
           }
         />
