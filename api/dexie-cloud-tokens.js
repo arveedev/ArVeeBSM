@@ -13,6 +13,11 @@
 const DB_URL = process.env.DEXIE_CLOUD_DB_URL
 const CLIENT_ID = process.env.DEXIE_CLOUD_CLIENT_ID
 const CLIENT_SECRET = process.env.DEXIE_CLOUD_CLIENT_SECRET
+// Same value as the client's VITE_APP_SHARED_KEY - Vercel exposes every
+// env var to serverless functions regardless of the VITE_ prefix, which
+// only controls what Vite inlines into the browser bundle, so this is
+// deliberately read under that same name rather than a second variable.
+const APP_SHARED_KEY = process.env.VITE_APP_SHARED_KEY
 
 // Arbitrary, fixed identifier for the shared service account - every
 // device authenticates as this same identity, so they all share one
@@ -35,6 +40,22 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
+  // Previously ANY POST here with a public_key got back a live write
+  // token for the shared service account - full read/write access to
+  // every warehouse's real inventory data, no PIN, no rate limit, just
+  // knowledge of this URL. Rejecting anything that doesn't carry the
+  // matching shared key closes off casual/automated discovery of the
+  // bare endpoint. If VITE_APP_SHARED_KEY was never set as a Vercel env
+  // var, this check is skipped entirely (undefined !== undefined is
+  // true, but both sides default to '' below) rather than silently
+  // locking out every device - it fails safe toward "no worse than
+  // before" instead of an unexplained outage, but this should be set.
+  if (APP_SHARED_KEY && req.headers['x-bsm-app-key'] !== APP_SHARED_KEY) {
+    console.warn('[dexie-cloud-tokens] Rejected request with missing/incorrect x-bsm-app-key header.')
+    res.status(401).json({ error: 'Unauthorized' })
     return
   }
 

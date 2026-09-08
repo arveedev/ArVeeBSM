@@ -1216,4 +1216,18 @@
 //            would have added. Also confirmed no other external runtime
 //            dependency exists anywhere in the app - everything it
 //            needs to run is now part of its own precached bundle.
-export const APP_VERSION = '1.9-81'
+//   1.9-82 - CRITICAL SECURITY FIX, found by a full-app risk sweep:
+//            /api/dexie-cloud-tokens had NO check on the caller at all
+//            - any POST request with a public_key got back a live write
+//            token for the shared service account (ACCESS_DB +
+//            IMPERSONATE scope), meaning anyone who found this URL
+//            could read or change every warehouse's real inventory
+//            data, no PIN required. Added a shared-secret header check
+//            (x-bsm-app-key, matched against a new VITE_APP_SHARED_KEY
+//            env var) - not a complete fix on its own (anything shipped
+//            to the browser is technically extractable), but closes off
+//            casual/automated discovery of the bare endpoint, which is
+//            the realistic threat here. Fails safe (no-op) until that
+//            env var is actually set in Vercel - see the admin's own
+//            instructions for the value to use.
+export const APP_VERSION = '1.9-82'

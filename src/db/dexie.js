@@ -883,10 +883,28 @@ db.cloud.configure({
   // credentials server-side - they are never exposed to the browser.
   // PIN login remains the app's real, user-facing authentication;
   // this is invisible infrastructure underneath it.
+  // x-bsm-app-key: a shared secret, set once as the VITE_APP_SHARED_KEY
+  // env var (Vercel exposes it to both the client build AND this
+  // server function, since the VITE_ prefix only controls whether Vite
+  // inlines it into the bundle - it doesn't hide it from server code).
+  // This is NOT real security by itself - anything shipped to the
+  // browser is extractable by a determined attacker inspecting the
+  // built JS - but the token endpoint previously had ZERO check on the
+  // caller at all: any request with a public_key got a live write
+  // token for the shared service account, permission enough to read or
+  // change every warehouse's real inventory data. This closes off
+  // casual/automated discovery of the bare endpoint URL, which is the
+  // realistic threat for an internal tool with no public directory
+  // listing anyone's actually trying to break into deliberately - a
+  // genuinely determined attacker would need a stronger fix (moving PIN
+  // validation server-side), a larger change kept separate from this.
   fetchTokens: (tokenParams) =>
     fetch('/api/dexie-cloud-tokens', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-bsm-app-key': import.meta.env.VITE_APP_SHARED_KEY ?? '',
+      },
       body: JSON.stringify(tokenParams),
     }).then((res) => res.json()),
 })
