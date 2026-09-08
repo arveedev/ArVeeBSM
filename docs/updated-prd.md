@@ -1,172 +1,385 @@
-# BSM App - Updated PRD
+# BSM App — Product Requirements Document
 
-Reflects actual implementation as of this session. See docs/activity-log.md
-for the change-by-change history and handoff.md for current file locations.
+*Status: living document. Sections below are numbered for cross-reference
+from the other five planning documents (technical-design-document.md,
+app-flow.md, design-brief.md, backend-schema.md, engineering-plan.md).*
 
 ## 1. Objective and Core Strategy
 
-Unchanged from the original PRD: an offline-first warehouse stock
-management app for NFA, tracking stocks and sacks, AI/SIA authority
-balances, and generating NFA-format reports. Dexie.js (IndexedDB) for local
-storage; Firebase Firestore wired but not the primary sync path yet (see
-section 9).
+BSM App is an offline-first warehouse stock management system built for
+NFA (National Food Authority) branch operations. It tracks palay and rice
+stock movements, empty-sack inventory, procurement/issuance authority
+balances (AI/SIA), milling operations, and produces NFA-format paper
+reports for signature.
 
-One material addition not in the original PRD: WTS (Weigher's Tally Sheet)
-is now a first-class, dual-sided transaction type for in-warehouse transfers
-between piles - the original PRD listed WTS as a transaction type but did
-not specify its actual paper-form structure (issued side + received side,
-each with their own variety/sack type/condition/bags/gross kilos).
+The app must remain fully usable with no network connection — a warehouse
+assistant recording a receipt or issuance never waits on a server. Dexie.js
+(IndexedDB) is the local database and the only thing any screen actually
+reads from or writes to. Dexie Cloud provides background sync between
+devices; the production NFA spreadsheet (Google Sheets) is a companion
+system this app reads authorization data from and writes a backup log to,
+never a system it depends on to function.
 
-## 2. Global UI/UX and Design System
+Login is by PIN, not username/password or email — warehouse staff include
+elderly and non-technical users, and a 4–6 digit PIN entered on an on-screen
+keypad is the fastest, most reliable path into the app on a shared device.
 
-Visual specs (colors, dark theme) unchanged from the original PRD.
+## 2. Roles and Access
 
-New rule not in the original: color convention for issue vs receipt is
-fixed app-wide - green/neon = issuances, amber/orange = receipts. Applies
-anywhere the UI distinguishes an issuing action from a receiving one (WTS's
-two sides, pile action menu, transaction type badges).
+- **Admin** — cross-warehouse visibility and every configuration panel.
+  Has no warehouse of their own, so sees the cross-warehouse Home/Monitor
+  views instead of a single warehouse's transaction entry screens.
+- **Warehouse Supervisor** / **Acting Warehouse Supervisor** — full
+  transaction entry and pile management for their assigned warehouse(s).
+- **Warehouse Assistant** / **Acting Warehouse Assistant** — same
+  transaction entry access as a Supervisor, distinguished only for
+  signatory/reporting purposes.
+- **MPO III** / **Acting MPO III** — same access pattern, for staff whose
+  formal title differs from the two roles above.
+- **Visitor** — a single shared, admin-set 6-digit access code (not a real
+  user account) grants a strictly read-only cross-warehouse view (Home and
+  Monitor only). A Visitor session can never reach a transaction form, the
+  Piles editor, Reports, or Settings, and no code path available to that
+  session can write to the database.
 
-Navigation: the original PRD specified a static four-tab bottom nav (Home,
-Piles, Reports, Settings). Actual implementation is role-aware - Admins see
-Home, Monitor, Reports, Settings (no Piles tab, since an admin has no
-warehouse of their own); everyone else sees Home, Piles, Reports, Settings.
-The FAB and its five-button sheet (WSR/WSI/WTS/ESI/ESR) match the original
-PRD.
+Every "Acting" variant of a role carries identical permissions to its base
+role everywhere the app checks role — the distinction exists for signatory
+titles on printed reports, never for access control.
 
-## 3. Data Schema and Models
+## 3. Global UI/UX and Design System
 
-This is the area with the most drift from the original PRD. Current schema
-is Dexie v13; the original PRD specified a single flat v1 schema. Major
-differences:
+Dark theme by default with a full light-theme toggle, plus an independent
+kilograms/metric-tons display toggle — both persisted per device and
+exposed in the sticky app header alongside logout. The header also carries
+each page's own title/subtitle and is hidden entirely while a transaction
+form or the full-screen pile layout is open, so the input surface gets the
+full screen.
 
-### Tables not in the original PRD
-- **branches**: name, region, address - appears in the NFA report header.
-  A branch covers one or more provinces (via province.branchId); a
+Color is a fixed, app-wide convention: green/neon marks an issuance
+(stock or sacks leaving a warehouse), amber/orange marks a receipt (stock
+or sacks arriving) — this holds everywhere the UI distinguishes an issuing
+action from a receiving one: WTS's two sides, the pile action menu,
+transaction type badges, and the Issuance/Receipt breakdown on the NFA
+Ricemill monitor.
+
+Bottom navigation is role-aware: Admins and Visitors see Home / Monitor /
+Reports / Settings (Visitors get only Home / Monitor, no FAB); everyone
+with an assigned warehouse sees Home / Piles / Reports / Settings plus a
+central floating action button opening a five-way sheet (WSR / WSI / WTS /
+ESI / ESR). The active tab is marked by a continuously-animated pill that
+slides and squash-stretches to its new position on every navigation,
+rather than appearing and disappearing per tap.
+
+Every numeric bags/kilos/pieces input live-formats with comma separators
+as the user types. Every date field uses the app's own calendar picker,
+never a native OS date input. Inline validation messages state what's
+wrong, why, and how to fix it, kept to one or two lines.
+
+## 4. Data Model
+
+Dexie (IndexedDB), synced via Dexie Cloud.
+
+**Organizational structure**
+- `branches` (name, region, address) → `provinces` (branchId, code, name)
+  → `warehouses` (provinceId, code, name, facilityType, address). A
   warehouse's branch is always derived through its province, never stored
-  directly on the warehouse.
-- **signatories**: keyed by supervisor uid (not warehouseId). Stores
-  certifiedCorrectPosition (free text, for PDF signatory blocks) and
-  capacity (Warehouse Supervisor / Acting Warehouse Supervisor dropdown,
-  used only for customer-name-suggestion auto-detection).
-- **reportConfig**: single global record for Verified Correct (one or
-  more), Audited By, Noted By - these are the same on every report
-  regardless of warehouse.
-- **transactionTypes**: admin-configurable "Nature of Transaction" values
-  (Procurement, Transfer, etc), not hardcoded.
-- **customers**: autocomplete directory built automatically as forms are
-  saved - name, RSBSA, gender, address, farmer-org status.
-- **sackInventory**: id, warehouseId, sackTypeId, condition, pieces. A
-  snapshot (one record per warehouse+sackType+condition, upserted), not a
-  transaction log - represents state before any ESR/ESI transaction
-  existed. Not in the original PRD, which had no sack-specific initial
-  balance concept.
-- **settings**: persisted client preferences (autoAgeMonitoring toggle).
-- **googleSheetsConfig**: Apps Script webhook URL and sync state.
+  directly on the warehouse. `facilityType` distinguishes a plain
+  warehouse from a Ricemill facility, which changes what its own Home page
+  shows.
+- `users` (accessCode as a PIN hash, role, one or more assignedWarehouses).
 
-### Changed from the original PRD
-- **transactions**: the original PRD specified one flat shape for every
-  type. Actual: WSR/WSI share a flat shape (varietyId, numberOfBags,
-  grossKilos, netKilos, condition, moistureContent - MC% was not in the
-  original schema at all, added because every real NFA statement requires
-  it). WTS is NOT flat - it stores issued*/received* prefixed fields for
-  both sides of the transfer (issuedPileId, issuedVarietyId, issuedBags,
-  issuedGrossKilos, issuedNetKilos, issuedCondition, issuedStockCondition,
-  and the same for received*). ESR/ESI store a sackLines array
-  ([{sackTypeId, condition, pieces}]) rather than a single sack figure,
-  since one document can cover multiple sack types/conditions. All
-  transactions also gained isInitialBalance (boolean) - flags a pile's
-  beginning-balance seed, excluded from visible statement/recap rows but
-  included in beginning-balance calculations.
-- **authorities** (AI/SIA): gained manuallyCompleted (checkbox override,
-  independent of the balance-derived status) and confirmed as always
-  belonging to exactly one warehouse (not multiple, as an earlier draft
-  assumed).
-- **piles**: varietyId is now permanent once set - a pile can never change
-  variety after creation. Age (initialAgeValue + dateOfReceipt) is
-  independently editable via a dedicated dialog, never derived from a
-  transaction form's age field.
-- **warehouses**: gained address; branchId was tried and reverted in favor
-  of deriving branch through province (see section 3 tables above).
+**Inventory**
+- `piles` (warehouseId, varietyId — permanent once set, currentBags,
+  currentKilos, dateOfReceipt, initialAgeValue, purity, moistureContent,
+  condition, zeroedDate). Age is independently editable via its own
+  dialog, never derived from a transaction form's own age field.
+- `sackInventory` (warehouseId, sackTypeId, condition, pieces) — a
+  snapshot, not a log, representing stock on hand before any ESR/ESI
+  transaction existed for that warehouse.
+- `pileLayoutBoxes` / `pileLayoutHistory` — the warehouse floor-plan grid
+  (24 columns × 20 rows, fixed) mapping a drawn box to a pile, with
+  historical occupancy so a past date can be reconstructed.
+- `varietyTypes` (category: Rice / Palay / By Products, name),
+  `sackTypes` (category, code, per-condition tare weight).
 
-### Serial number scheme (unchanged concept, clarified in practice)
-Confirmed: [Warehouse Code]-[Document Type]-[Device Supervisor Initials]-
-[Counter] is the eventual paper-serial format, but the app enforces
-uniqueness per (type, warehouseId) via a compound index, and a brand-new
-warehouse's series always starts at 1 (not an arbitrary placeholder number).
-WTS keeps its own independent series, separate from WSR/WSI.
+**Transactions** — one `transactions` table for every movement type,
+distinguished by `type`:
+- **WSR / WSI** (Warehouse Stock Receipt / Issuance) — flat shape:
+  varietyId, numberOfBags, grossKilos, netKilos, condition,
+  moistureContent (MC%), an optional linked AI number, batch/trial number
+  for Milling-type transactions, and an `isInitialBalance` flag marking a
+  pile's beginning-balance seed (excluded from statement/recap rows,
+  included in beginning-balance math). WSI additionally supports drawing
+  from more than one pile on a single issuance — one primary pile plus any
+  number of additional pile allocations, each with its own full field set,
+  reconciled together on save/edit/void.
+- **WTS** (Weigher's Tally Sheet) — genuinely dual-sided, not a variant of
+  WSR/WSI: one record carries an issued side and a received side
+  (issued*/received* prefixed fields — pile, variety, sack condition,
+  bags, gross kilos), each side's net kilos computed independently
+  (gross − that condition's tare weight × bags) and it is that computed
+  net kilos, never raw gross, that moves each side's pile total.
+- **ESR / ESI** (Empty Sack Receipt / Issuance) — a `sackLines` array
+  (`{ sackTypeId, condition, pieces }`), since one document can cover
+  multiple sack types and conditions at once.
 
-## 4. System Mathematical Logic
+Every transaction carries `serialNo` (unique per warehouse+document type,
+a fresh warehouse's series always starting at 1), `status` (Active /
+Cancelled — never physically deleted, so a report can always be
+reconstructed as of a past date), and `isSynced`.
 
-Net Kilos = Gross Kilos - MTS, Net Bags = Net Kilos / 50 - unchanged from
-the original PRD for WSR/WSI.
+**Authorities (AI/SIA)** — `authorities` (type, aiNumber or siaNumber,
+assignedWarehouse, customerName, transactionTypeName, totalAllocationBags/
+Kilos, manuallyCompleted override, regionalAuthorityNumber). An SIA
+authority holds one `sackLines` array covering every sack-type+condition
+combination it authorizes, matched by SIA number alone — never split into
+multiple records. AI is single-valued, matched by AI number. Balance
+status (Pending / Complete / Over-Issued) is always derived from actual
+issued-vs-allocated figures, with `manuallyCompleted` only ever overriding
+the display for an authority that will never be perfectly balanced on
+paper — an authority that's genuinely fully served by real documents can
+never be left in a stale "manually completed" state.
 
-New for WTS (not in the original PRD, which only listed WTS as a
-transaction type without formulas): each side's net kilos is computed the
-same way - gross kilos minus (sack type's tare weight for the selected
-condition, times bags) - and it is that computed net kilos, never raw
-gross, that actually moves the pile's running total. The paper form itself
-only shows gross kilos per side; net kilos is computed and applied
-automatically.
+**Milling** — `millingOrders` (a read-only cache re-synced from the "MO"/
+"TMO" sheet tabs — private millers' Milling/Test Milling orders, tracked
+by MO/TMO number, not by AI/SIA), `privateMillerAllocations` (per
+Regional-Authority-Number-and-ricemill-name pair, tracked separately from
+the NFA-owned mechanism below), `ricemillAllocations` (regionalAuthorityNumber,
+totalNetKgs authorized, millingInputCapacityBags — the mill's own daily
+processing rate). NFA-owned Ricemills and Mechanical Dryers use ONLY the
+Regional Authority Number mechanism, never MO/TMO numbers.
 
-Authority balance calculation (Section 4.3 of the original PRD) is
-unchanged in formula, but the UI now displays actual-issued/total-
-authorized as the headline figure (large, color-coded: white while
-pending, neon at exactly Complete, crimson if Over-Issued) rather than a
-remaining/total figure, since remaining/total made a freshly-issued
-authority look identical in shape to a fully complete one.
+**Directories and aliasing** — `customers` (autocomplete directory built
+as forms are saved), `customerAliases` (maps a short AI/SIA nickname to a
+customer's real name), `warehouseAliases` (maps every spelling variant of
+a warehouse's name, across every source system, to one canonical
+warehouse — normalization ignores whitespace/hyphen differences
+automatically; only a genuinely different abbreviation needs an explicit
+alias row), `signatories` (per supervisor, their certified-correct
+position and capacity), `reportConfig` (the single global Verified
+Correct / Audited By / Noted By / BSQAO signatory set and the Visitor
+access code), `transactionTypes` (admin-configurable Nature of Transaction
+values), `sheetSources` (one or more production-spreadsheet URLs with
+date ranges, supporting a fresh spreadsheet copy each year without losing
+history — a query spanning a year boundary merges every overlapping
+source).
 
-## 5. Technical Configuration
+## 5. System Mathematical Logic
 
-Unchanged scaffolding commands and Tailwind palette from the original PRD.
+- **Net Kilos** = Gross Kilos − (sack condition's tare weight × bags),
+  computed automatically and used everywhere a pile or authority balance
+  actually moves; the paper form's own Gross Kilos field is never itself
+  the value applied to a running total.
+- **Net Bags** = Net Kilos ÷ 50, always shown to 2 decimal places
+  wherever it's a derived figure — distinct from an actual physical bag
+  count, which is a whole number pulled from its own recorded field, not
+  computed.
+- **Authority balance** = actual issued kilos/bags against
+  totalAllocationKilos/Bags, displayed as the actual-issued/total-
+  authorized figure (large, color-coded: neutral while pending, green at
+  exactly Complete, crimson if Over-Issued).
+- **NFA Ricemill Regional Authority tracking**: the allocation is a palay
+  quota. "Used" against it is the Issuance total, never the Receipt
+  total. Issuance (palay in) has no per-day record on the authorizing
+  sheet — it is the mill's own configured daily input capacity (Net
+  Bags/day), applied once for every distinct date that has real Receipt
+  (rice out, TRANSFER-type, Rice-category variety) activity that day.
+  Recovery % = Receipt kilos ÷ Issuance kilos.
+- **Age display**: "X days" at 30 days or under, "X month(s), Y day(s)"
+  above that (30-day months).
 
-## 6. Phased Roadmap - Actual Status
+## 6. Live Sheets Integration
 
-The original PRD's 8 phases are complete in spirit, but several phases
-absorbed significant scope not in the original plan:
+**One-way flows only, by design — no conflict resolution needed anywhere:**
+authorities (AI/SIA) and Milling Orders (MO/TMO) flow from the production
+spreadsheet into the app; transactions flow from the app to a backup log
+in the spreadsheet. Neither direction can ever conflict with the other.
 
-- **Phase 1-4** (scaffolding, offline DB, auth, navigation): complete,
-  matches the original PRD closely.
-- **Phase 5** (transaction forms): complete for WSR/WSI/ESR/ESI. WTS was
-  originally planned as a StockFormBase variant; actual implementation is
-  a fully separate dual-sided form, since WTS's real paper structure does
-  not fit the single-variety/single-quantity shape every other form uses.
-- **Phase 6** (authority panel, Sheets integration): complete, plus an
-  admin-only search-and-reconcile view not in the original PRD (search an
-  AI/SIA number, see every WSI/ESI document that used it, with totals).
-- **Phase 7** (spatial pile map): the original PRD's visual grid-based
-  pile map was not built. Pile management instead happens through cards on
-  Home.jsx (tap to act, tap age to edit) - functionally equivalent for a
-  single-warehouse view, but without the spatial layout visualization.
-- **Phase 8** (reporting): complete, and substantially larger than the
-  original PRD's single "stock statement" concept. Actual reports:
-  Summary, Statement of Receipts, Recapitulation of Receipts, Statement of
-  Issues, Recapitulation of Issues (each per cereal type with any activity
-  in the period) for stocks; Warehouse MTS Report, Statement of MTS
-  Issues/Receipts, Weekly Recapitulation of Empty Sack Issues/Receipts for
-  sacks - matching the real NFA paper documents exactly, including the
-  REGION/PROVINCE/CODE/WHSE header block and the five-signatory sign-off
-  layout.
+A structural write-allowlist (enforced independently on both the client
+and the Apps Script server) means the app can never write to the AI/SIA
+source sheets or any sheet outside an explicit, named backup list — not a
+convention, a hard-coded check before every write call on both sides.
 
-## 7. Features Not in the Original PRD
+Delta sync uses each row's own Last Modified timestamp, requesting only
+rows changed since the last successful sync rather than re-fetching every
+row every time. A concurrency guard prevents two overlapping sync passes
+from both importing the same not-yet-local row. The backup write path is
+idempotent (an existing row for a given serial is overwritten, never
+re-appended) and lock-protected against two devices racing the same
+not-yet-synced transaction.
 
-- Branch/Region admin configuration, feeding the report header.
-- Sack beginning balance and pile beginning balance, both reachable from
-  Settings (for both regular users and admins) - for onboarding a
-  warehouse's already-existing stock into the app without a receipt
-  transaction distorting reports.
-- Home.jsx and AdminHome.jsx inventory now split into Stocks/Sacks tabs,
-  each with sack-specific breakdowns the original PRD never specified.
-- WS/Acting WS customer-name auto-detection: typing "WS" or a supervisor's
-  name suggests that person as the customer, auto-filling their warehouse
-  address; the "Acting" prefix is derived from that supervisor's actual
-  capacity (Signatories tab), not from what was typed.
-- AI/SIA reconciliation search on the Admin Monitoring page.
-- Live comma-formatted number inputs across every bags/kilos/pieces field.
+Warehouse and customer name variants across every source system resolve
+to one canonical identity via the alias tables in Section 4, so a
+typo'd or abbreviated name never silently becomes a second, disconnected
+record.
 
-## 8. Deferred
+## 7. Cloud Sync Architecture
 
-Dexie Cloud as the primary sync layer (replacing or supplementing
-Firebase) - explicitly deferred until Google Sheets data retrieval is
-further along. Google Sheets remains the backup/export destination
-regardless of which cloud sync backend is chosen; that decision is
-independent of the primary sync layer.
+Dexie Cloud is the sync layer underneath PIN login, not a replacement for
+it. Every device silently authenticates as one fixed shared service
+account through a serverless token endpoint that holds the actual Dexie
+Cloud client credentials — the browser never sees them, and the endpoint
+is the only thing in the whole system that does. PIN login remains the
+app's real, user-facing authentication.
+
+The app works fully offline by design: local reads and writes never wait
+on any network call, and a lost connection never blocks data entry — sync
+resumes automatically the moment connectivity returns, with a periodic
+background retry as a safety net rather than relying solely on a
+reconnect event.
+
+## 8. Pile Layout
+
+A warehouse's floor plan is a fixed 24×20 grid. An admin/supervisor draws
+a pile's footprint directly on the grid with a live green/red
+valid/invalid preview as they draw, validated against the pile's actual
+content-driven size (which can exceed its originally drawn footprint) so
+a new box can never be placed where a data-heavy neighbor will grow into.
+An existing pile can be moved to a new position without changing its
+size, with the same live validation. A full-screen, rotated landscape
+view is available for reviewing the whole layout at once on a portrait
+phone. The exported floor-plan PDF always shows true warehouse
+proportions (never auto-cropped to just the used area, unlike the
+on-screen editor) since a floor plan must represent the whole space.
+
+## 9. Milling Operations
+
+Two structurally separate tracks, since NFA-owned facilities and private
+millers are authorized completely differently:
+
+- **Private millers**: Milling/Test Milling orders are read-only, synced
+  from the production spreadsheet's MO/TMO tabs. A Test Milling order
+  supports up to three trials; a trial number may legitimately span more
+  than one transaction (one combined receipt, one per trial, or one
+  transaction per variety/sack type under the same trial), so trial reuse
+  is never restricted by the entry form. Batch/trial numbers display
+  alongside the customer name on reports and exported statements.
+- **NFA-owned Ricemills and Mechanical Dryers**: no MO/TMO numbers at
+  all. An admin sets each Regional Authority Number's total palay
+  allocation and the mill's own daily milling input capacity. The
+  facility's own Home page (and the cross-warehouse admin Monitor)
+  present palay-in (Issuance) and rice-out (Receipt) as two aligned
+  tables per Regional Authority Number — same column layout in both, so
+  Net Bags/Net Kgs land in the same position whether or not a row has a
+  per-item AI number or variety to show — with a running Issuance vs.
+  allocation total and a recovery percentage.
+
+## 10. Reporting
+
+Full NFA-format paper report set, matching the real forms exactly
+(REGION/PROVINCE/CODE/WHSE header block, five-signatory sign-off layout):
+Summary, Statement of Receipts, Recapitulation of Receipts, Statement of
+Issues, and Recapitulation of Issues (each generated per cereal type with
+any activity in the selected period) for stocks; Warehouse MTS Report,
+Statement of MTS Issues/Receipts, and Weekly Recapitulation of Empty Sack
+Issues/Receipts for sacks. A period filter genuinely reconstructs
+historical pile state (replaying every transaction up to the selected
+date) rather than always showing today's live totals, correctly handling
+WTS's two-sided structure. PDF export never truncates a field — long
+values wrap instead, with every wrapped line's height reserved correctly
+in the layout.
+
+## 11. Data Integrity Principles
+
+- A transaction is never physically deleted — only marked Cancelled — so
+  historical reconstruction (reports, pile state as of a date) is always
+  possible.
+- A pile's variety is permanent once set; correcting a genuine mistake
+  means creating a new pile, never mutating an existing one's identity.
+- Syncing a Sheet-sourced record into a local one that already has real,
+  locally-completed data only ever fills in fields the Sheet actually
+  has values for — a field the Sheet's schema doesn't track at all can
+  never overwrite real local data with a blank.
+- Every background sync pass is single-flight — an overlapping second
+  pass can never import the same not-yet-local row twice.
+- PINs are one-way hashed before storage or comparison; nothing in the
+  app ever displays or pre-fills a stored PIN.
+
+## 12. Technical Foundation
+
+Vite + React, Tailwind CSS. Dexie.js (IndexedDB) as the only data layer
+every screen reads from; Dexie Cloud for sync. jsPDF + jspdf-autotable for
+report generation, html2canvas for image export. A Vite PWA plugin
+(vite-plugin-pwa, Workbox under the hood) precaches the app shell — JS,
+CSS, HTML, icons, and the self-hosted Inter font files — so the app itself
+(not just its data) survives a fully offline cold start, with a client-side
+router fallback to `index.html` for any deep route. Deployed on Vercel,
+with a single serverless function holding the Dexie Cloud service
+credentials server-side.
+
+An admin-browsable Error Log (`errorLogs` table, synced) captures every
+caught form save/update/delete/void failure and page-level crash
+(via a `SectionErrorBoundary` around each route), recording who hit it and
+on which device, so a field-reported bug can be diagnosed centrally without
+needing physical access to the device it happened on.
+
+## 13. Target Users
+
+- **Warehouse Supervisor / Acting Warehouse Supervisor** — the primary
+  daily user. Records WSR/WSI/WTS/ESR/ESI transactions for their assigned
+  warehouse(s), manages the pile layout, and is the named signatory
+  ("Certified Correct") on that warehouse's printed reports.
+- **Warehouse Assistant / Acting Warehouse Assistant** — same functional
+  access as a Supervisor; the distinction exists purely for the
+  signatory title printed on a report, not for what the app lets them do.
+- **MPO III / Acting MPO III** — same access pattern as the two roles
+  above, for facilities whose staff carry this title instead.
+- **Admin** — NFA branch/regional office staff who configure the system
+  (warehouses, users, sack/variety types, signatories, Sheet integration)
+  and need a cross-warehouse view of stock, authorities, and milling
+  activity rather than a single warehouse's entry screens. Typically not
+  the person physically present in a warehouse.
+- **Visitor** — anyone an admin wants to give a read-only look at
+  cross-warehouse Home/Monitor data (e.g. a regional office visitor, an
+  auditor) without a real user account or any ability to write data.
+- Every user in the field is expected to be operating on a personal
+  Android phone or a shared warehouse tablet, frequently with poor or no
+  signal — this shapes nearly every other decision in this document.
+
+## 14. Out of Scope
+
+The following are deliberately **not** part of this app, now or in any
+currently planned phase:
+
+- Payroll, HR, or any staff-management function beyond the PIN-login user
+  directory needed for access control and report signatories.
+- Financial accounting, procurement payment processing, or budgeting —
+  the CPF (Cash Procurement Fund) balance and cereal-price tracking that
+  feed the GSR report live in a separate companion Google Sheets system
+  (see `docs/sheets-reports-setup.md`), not in this app.
+- A native mobile app or app-store distribution — the PWA (installable,
+  offline-capable web app) is the only distribution mechanism.
+- Multi-tenant support for organizations other than NFA, or configurable
+  branding/white-labeling.
+- Conflict resolution UI for the Google Sheets integration — by design,
+  every sync direction (AI/SIA and MO/TMO in, transactions out as a
+  backup log) is one-way, so there is deliberately nothing to reconcile.
+- General document management, e-signatures, or workflow/approval chains
+  beyond a report's fixed five-signatory sign-off block.
+- Direct printer integration — reports are exported as PDF/image files
+  for the user to print or share through their device's own OS.
+
+## 15. Success Criteria
+
+- A warehouse Supervisor can record a full day's WSR/WSI/WTS/ESR/ESI
+  activity, including printing/exporting that day's reports, with zero
+  network connectivity from login to close of business.
+- Every transaction entered on any device eventually appears, unduplicated,
+  on every other device assigned to the same warehouse, and in the Google
+  Sheets backup log, without any user-visible conflict-resolution step.
+- A pile's or authority's running balance always matches what a full
+  recompute from its actual transaction history would produce — no
+  drift between the fast, incremental running total and the ground truth.
+- Every NFA-format report the app produces (Summary, Statement of
+  Receipts/Issues, Recapitulation of Receipts/Issues, Warehouse MTS
+  Report, Statement of MTS Issues/Receipts, Weekly Recap of Empty Sack
+  Issues/Receipts, Pile Layout) is visually and numerically consistent
+  with the equivalent hand-prepared paper form, for any historical
+  period selected — not just "today."
+- A non-technical warehouse worker can log in and start recording a
+  transaction in under 10 seconds on a shared device, with no password to
+  remember or forget.
+- A schema change never locks a user out of their own local data or
+  silently loses a locally-entered, not-yet-synced transaction — every
+  Dexie version bump in `src/db/dexie.js` carries a safe, tested
+  `.upgrade()` migration where one is needed.
