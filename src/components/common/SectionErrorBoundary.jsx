@@ -21,7 +21,10 @@ class SectionErrorBoundary extends Component {
   componentDidCatch(error, info) {
     // eslint-disable-next-line no-console
     console.error(`[SectionErrorBoundary${this.props.label ? `: ${this.props.label}` : ''}]`, error, info)
-    logError(`${this.props.label ?? 'Section'} crash`, error)
+    // `user` - a class component has no hook access to useAuth() itself,
+    // so every caller passes its own already-in-scope user down as a
+    // prop instead.
+    logError(`${this.props.label ?? 'Section'} crash`, error, this.props.user)
   }
 
   render() {

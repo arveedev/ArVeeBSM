@@ -201,7 +201,7 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <SectionErrorBoundary fullPage label={isAdmin || isVisitor ? 'Admin dashboard' : 'Home'}>
+              <SectionErrorBoundary user={user} fullPage label={isAdmin || isVisitor ? 'Admin dashboard' : 'Home'}>
                 {isAdmin || isVisitor ? <AdminHome /> : <Home />}
               </SectionErrorBoundary>
             </ProtectedRoute>
@@ -211,7 +211,7 @@ function App() {
           path="/piles"
           element={
             <ProtectedRoute denyRoles={['Visitor']}>
-              <SectionErrorBoundary fullPage label="Piles">
+              <SectionErrorBoundary user={user} fullPage label="Piles">
                 <Piles />
               </SectionErrorBoundary>
             </ProtectedRoute>
@@ -221,7 +221,7 @@ function App() {
           path="/monitoring"
           element={
             <ProtectedRoute requireRole={['Admin', 'Visitor']}>
-              <SectionErrorBoundary fullPage label="Monitoring">
+              <SectionErrorBoundary user={user} fullPage label="Monitoring">
                 <AdminMonitoring />
               </SectionErrorBoundary>
             </ProtectedRoute>
@@ -231,7 +231,7 @@ function App() {
           path="/reports"
           element={
             <ProtectedRoute denyRoles={['Visitor']}>
-              <SectionErrorBoundary fullPage label="Reports">
+              <SectionErrorBoundary user={user} fullPage label="Reports">
                 <Reports />
               </SectionErrorBoundary>
             </ProtectedRoute>
@@ -241,7 +241,7 @@ function App() {
           path="/settings"
           element={
             <ProtectedRoute denyRoles={['Visitor']}>
-              <SectionErrorBoundary fullPage label="Settings">
+              <SectionErrorBoundary user={user} fullPage label="Settings">
                 <Settings />
               </SectionErrorBoundary>
             </ProtectedRoute>
@@ -251,7 +251,7 @@ function App() {
           path="/admin"
           element={
             <ProtectedRoute requireRole="Admin">
-              <SectionErrorBoundary fullPage label="Admin dashboard">
+              <SectionErrorBoundary user={user} fullPage label="Admin dashboard">
                 <AdminDashboard onClose={closeAdminDashboard} />
               </SectionErrorBoundary>
             </ProtectedRoute>
@@ -274,7 +274,7 @@ function App() {
                 (() => {
                   const FormComponent = FORM_COMPONENTS[formTypeToRender]
                   return (
-                    <SectionErrorBoundary label={`${formTypeToRender} form`} onClose={closeForm}>
+                    <SectionErrorBoundary user={user} label={`${formTypeToRender} form`} onClose={closeForm}>
                       <FormComponent isOpen={Boolean(activeFormType)} onClose={closeForm} prefill={activeFormPrefill} />
                     </SectionErrorBoundary>
                   )

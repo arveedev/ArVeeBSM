@@ -938,7 +938,7 @@ const SackFormBase = forwardRef(function SackFormBase(
       await performSave()
     } catch (err) {
       console.error(`${type} save failed:`, err)
-      logError(`${type} save`, err)
+      logError(`${type} save`, err, user)
       toast.error('Save failed — please try again')
     } finally {
       setIsSaving(false)
@@ -979,7 +979,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     scrollToTop()
     } catch (err) {
       console.error(`${type} update failed:`, err)
-      logError(`${type} update`, err)
+      logError(`${type} update`, err, user)
       toast.error('Update failed — please try again')
     } finally {
       setIsSaving(false)
@@ -1014,7 +1014,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     scrollToTop()
     } catch (err) {
       console.error(`${type} delete failed:`, err)
-      logError(`${type} delete`, err)
+      logError(`${type} delete`, err, user)
       toast.error('Delete failed — please try again')
     } finally {
       setIsSaving(false)
@@ -1057,7 +1057,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     toast.success(`${type} ${serialNo.trim()} has been cancelled/voided`)
     } catch (err) {
       console.error(`${type} void failed:`, err)
-      logError(`${type} void`, err)
+      logError(`${type} void`, err, user)
       toast.error('Void failed — please try again')
     } finally {
       setIsSaving(false)
@@ -1085,7 +1085,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     resetToBlankEntry(freedSerial)
     } catch (err) {
       console.error(`${type} unvoid failed:`, err)
-      logError(`${type} unvoid`, err)
+      logError(`${type} unvoid`, err, user)
       toast.error('Unvoid failed — please try again')
     } finally {
       setIsSaving(false)

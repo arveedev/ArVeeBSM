@@ -1179,4 +1179,14 @@
 //            "Save failed" toast; this is what lets an admin actually
 //            diagnose what happened afterward instead of relying on a
 //            secondhand description.
-export const APP_VERSION = '1.9-78'
+//   1.9-79 - Error Log now records WHO and WHICH DEVICE, per direct
+//            follow-up ("how would the admin know...?") - it previously
+//            only showed what failed and when. Every entry now shows
+//            the logged-in staff user's name and role (or "Not logged
+//            in" if the crash happened before login), plus a
+//            recognizable device label ("Chrome on Android") backed by
+//            a persistent per-device ID generated once and kept in that
+//            browser's own storage - so the same tablet erroring
+//            repeatedly is now identifiable as the same device, not
+//            five unrelated-looking entries.
+export const APP_VERSION = '1.9-79'

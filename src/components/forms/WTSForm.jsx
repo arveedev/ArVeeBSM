@@ -774,7 +774,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     scrollToTop()
     } catch (err) {
       console.error('WTS save failed:', err)
-      logError('WTS save', err)
+      logError('WTS save', err, user)
       toast.error('Save failed — please try again')
     } finally {
       setIsSaving(false)
@@ -805,7 +805,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     scrollToTop()
     } catch (err) {
       console.error('WTS update failed:', err)
-      logError('WTS update', err)
+      logError('WTS update', err, user)
       toast.error('Update failed — please try again')
     } finally {
       setIsSaving(false)
@@ -842,7 +842,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     scrollToTop()
     } catch (err) {
       console.error('WTS delete failed:', err)
-      logError('WTS delete', err)
+      logError('WTS delete', err, user)
       toast.error('Delete failed — please try again')
     } finally {
       setIsSaving(false)
@@ -878,7 +878,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     toast.success(`WTS ${serialNo.trim()} has been cancelled/voided`)
     } catch (err) {
       console.error('WTS void failed:', err)
-      logError('WTS void', err)
+      logError('WTS void', err, user)
       toast.error('Void failed — please try again')
     } finally {
       setIsSaving(false)
@@ -904,7 +904,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     resetForm(serialNo.trim())
     } catch (err) {
       console.error('WTS unvoid failed:', err)
-      logError('WTS unvoid', err)
+      logError('WTS unvoid', err, user)
       toast.error('Unvoid failed — please try again')
     } finally {
       setIsSaving(false)

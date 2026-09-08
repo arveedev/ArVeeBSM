@@ -172,14 +172,14 @@ function Home() {
         <div className={inventoryTab === 'stocks' ? '' : 'hidden'}><HomeStocks /></div>
         <div className={inventoryTab === 'sacks' ? '' : 'hidden'}><HomeSacks /></div>
 
-        <SectionErrorBoundary label="Alerts panel">
+        <SectionErrorBoundary user={user} label="Alerts panel">
           <AlertsPanel />
         </SectionErrorBoundary>
       </div>
 
       <div key={`activity-${currentWarehouseId}`} className={`stagger-fields animate-flow-down ${pageTab === 'activity' ? '' : 'hidden'}`}>
         {showMillingSection && (
-          <SectionErrorBoundary label="Milling monitor">
+          <SectionErrorBoundary user={user} label="Milling monitor">
             <button
               type="button"
               onClick={() => {

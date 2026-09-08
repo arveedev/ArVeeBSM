@@ -87,11 +87,23 @@ function ErrorLogPanel() {
                         {isExpanded ? <ChevronDown size={14} className="shrink-0 text-neutral-500" /> : <ChevronRight size={14} className="shrink-0 text-neutral-500" />}
                       </div>
                       <p className="mt-0.5 text-xs text-neutral-500">{fmtTimestamp(entry.timestamp)}</p>
+                      <p className="mt-1 text-xs text-neutral-400">
+                        {entry.userName ? `${entry.userName}${entry.userRole ? ` (${entry.userRole})` : ''}` : 'Not logged in'}
+                        {' · '}
+                        {entry.deviceLabel ?? 'Unknown device'}
+                      </p>
                       <p className="mt-1 break-words text-xs text-neutral-400">{entry.message}</p>
-                      {isExpanded && entry.stack && (
-                        <pre className="mt-2 overflow-x-auto rounded-lg bg-neutral-900 p-2 text-[10px] leading-tight text-neutral-500">
-                          {entry.stack}
-                        </pre>
+                      {isExpanded && (
+                        <>
+                          {entry.deviceId && (
+                            <p className="mt-1 font-mono text-[10px] text-neutral-600">Device ID: {entry.deviceId}</p>
+                          )}
+                          {entry.stack && (
+                            <pre className="mt-2 overflow-x-auto rounded-lg bg-neutral-900 p-2 text-[10px] leading-tight text-neutral-500">
+                              {entry.stack}
+                            </pre>
+                          )}
+                        </>
                       )}
                     </div>
                   </button>
