@@ -23,6 +23,37 @@ export default defineConfig({
         // navigation not already in the precache falls back to the
         // cached index.html, which then lets React Router take over.
         navigateFallback: '/index.html',
+        // Left at the plugin's own default (js/css/html only), the
+        // precache silently excluded every static image in public/ -
+        // logo, favicons, app icons, the manifest itself - confirmed
+        // directly: the logo didn't render at all once actually tested
+        // offline. Every one of those needs to be precached too, not
+        // just the app's own compiled code.
+        // woff2 added for the self-hosted Inter font files (see
+        // index.css) - without it, the CSS itself would be cached but
+        // the actual font files it points to would not be, producing
+        // the exact same "silently falls back to a system font
+        // offline" gap this was meant to close. .woff (the older,
+        // larger fallback format) deliberately left out of the
+        // precache - every browser this PWA can even install on
+        // already supports woff2, which every @font-face rule here
+        // lists first and browsers always prefer when available, so
+        // the plain .woff files precaching would add is dead weight
+        // that's never actually used.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,woff2}'],
+        // @fontsource ships every unicode subset Inter has (cyrillic,
+        // greek, vietnamese, etc.) in one CSS file, each gated by its
+        // own unicode-range so a normal browser only ever actually
+        // fetches the ones it needs (latin/latin-ext, for this English/
+        // Filipino-names app) - but Workbox's precache doesn't
+        // understand unicode-range at all, it just globs every file
+        // unconditionally. Left alone this pulled in ~1MB+ of font
+        // subsets (Cyrillic, Greek, Vietnamese) this app will never
+        // render a single character from. Excluded here rather than
+        // trimmed from the CSS import itself, so a browser encountering
+        // a genuinely unusual character still has a real font to fall
+        // back to when online - it just isn't force-downloaded upfront.
+        globIgnores: ['**/inter-{cyrillic,cyrillic-ext,greek,greek-ext,vietnamese}-*'],
       },
     }),
   ],

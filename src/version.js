@@ -1189,4 +1189,31 @@
 //            browser's own storage - so the same tablet erroring
 //            repeatedly is now identifiable as the same device, not
 //            five unrelated-looking entries.
-export const APP_VERSION = '1.9-79'
+//   1.9-80 - Fixed the logo (and every favicon/app icon) not loading
+//            offline, confirmed by direct testing of the new offline
+//            service worker. The precache list was left at the plugin's
+//            own default, which only covers JS/CSS/HTML - every static
+//            image in public/ (logo, favicons, icons, the manifest
+//            itself) was silently excluded. Broadened the precache glob
+//            to include ico/png/svg/webmanifest too - went from 6
+//            precached files to 15, everything the app shell actually
+//            needs is now cached.
+//   1.9-81 - Closed the last offline gap, per direct follow-up ("make
+//            sure everything works offline"): the app's font (Inter)
+//            was loaded from Google's CDN via a live @import - not
+//            something a service worker can precache at all, since it's
+//            an external request, not one of the app's own files. A
+//            device that had never been online (or whose browser
+//            evicted the font from its own cache) would silently fall
+//            back to a system font offline. Self-hosted it instead
+//            (@fontsource/inter) so the actual font files are bundled
+//            and precached like everything else - trimmed to just the
+//            latin/latin-ext subsets and woff2 only (dropping unicode
+//            ranges like Cyrillic/Greek/Vietnamese this app never
+//            renders, and the older woff format every supported browser
+//            already has woff2 for), keeping the precache addition to
+//            about 200KB instead of the 1MB+ an unfiltered install
+//            would have added. Also confirmed no other external runtime
+//            dependency exists anywhere in the app - everything it
+//            needs to run is now part of its own precached bundle.
+export const APP_VERSION = '1.9-81'

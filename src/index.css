@@ -1,4 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Self-hosted (not Google's CDN @import) - the offline service worker
+   can only precache the app's own bundled assets, not a live external
+   request. A user who'd never been online on a given device (or whose
+   browser evicted the font from its own cache) would otherwise silently
+   fall back to a system font offline instead of Inter. @fontsource
+   ships the actual woff2 files as local assets Vite bundles like any
+   other import, so they're guaranteed to be in the precache list below. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/inter/800.css';
 
 @tailwind base;
 @tailwind components;
