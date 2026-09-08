@@ -92,6 +92,7 @@ import AnimatedBanner from '../common/AnimatedBanner.jsx'
 import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import SplitFlapText from '../common/SplitFlapText.jsx'
+import { logError } from '../../utils/errorLog.js'
 import {
   inputClass,
   labelClass,
@@ -2013,6 +2014,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       await performSave()
     } catch (err) {
       console.error(`${type} save failed:`, err)
+      logError(`${type} save`, err)
       toast.error('Save failed — please try again')
     } finally {
       setIsSaving(false)
@@ -2210,6 +2212,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     scrollToTop()
     } catch (err) {
       console.error(`${type} update failed:`, err)
+      logError(`${type} update`, err)
       toast.error('Update failed — please try again')
     } finally {
       setIsSaving(false)
@@ -2264,6 +2267,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     scrollToTop()
     } catch (err) {
       console.error(`${type} delete failed:`, err)
+      logError(`${type} delete`, err)
       toast.error('Delete failed — please try again')
     } finally {
       setIsSaving(false)
@@ -2321,6 +2325,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     toast.success(`${type} ${serialNo.trim()} has been cancelled/voided`)
     } catch (err) {
       console.error(`${type} void failed:`, err)
+      logError(`${type} void`, err)
       toast.error('Void failed — please try again')
     } finally {
       setIsSaving(false)
@@ -2360,6 +2365,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     resetToBlankEntry(freedSerial)
     } catch (err) {
       console.error(`${type} unvoid failed:`, err)
+      logError(`${type} unvoid`, err)
       toast.error('Unvoid failed — please try again')
     } finally {
       setIsSaving(false)

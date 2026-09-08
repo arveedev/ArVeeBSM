@@ -49,6 +49,7 @@ import {
 } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import { inputClass, labelClass, primaryButtonClass } from './shared.js'
+import { logError } from '../../utils/errorLog.js'
 
 const STOCK_CONDITIONS = ['Good', 'Part Damaged', 'Damaged']
 const SACK_CONDITIONS = ['BN', 'SH', 'US']
@@ -773,6 +774,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     scrollToTop()
     } catch (err) {
       console.error('WTS save failed:', err)
+      logError('WTS save', err)
       toast.error('Save failed — please try again')
     } finally {
       setIsSaving(false)
@@ -803,6 +805,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     scrollToTop()
     } catch (err) {
       console.error('WTS update failed:', err)
+      logError('WTS update', err)
       toast.error('Update failed — please try again')
     } finally {
       setIsSaving(false)
@@ -839,6 +842,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     scrollToTop()
     } catch (err) {
       console.error('WTS delete failed:', err)
+      logError('WTS delete', err)
       toast.error('Delete failed — please try again')
     } finally {
       setIsSaving(false)
@@ -874,6 +878,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     toast.success(`WTS ${serialNo.trim()} has been cancelled/voided`)
     } catch (err) {
       console.error('WTS void failed:', err)
+      logError('WTS void', err)
       toast.error('Void failed — please try again')
     } finally {
       setIsSaving(false)
@@ -899,6 +904,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     resetForm(serialNo.trim())
     } catch (err) {
       console.error('WTS unvoid failed:', err)
+      logError('WTS unvoid', err)
       toast.error('Unvoid failed — please try again')
     } finally {
       setIsSaving(false)

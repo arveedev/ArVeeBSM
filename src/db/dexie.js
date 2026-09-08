@@ -803,6 +803,20 @@ db.version(31).stores({
   userAliases: 'alias, uid',
 })
 
+// v32 - errorLogs: an admin-browsable log of errors actually caught by
+// the app (form save/update/delete/void failures, and whole-page
+// crashes caught by SectionErrorBoundary) - see utils/errorLog.js.
+// Deliberately a SYNCED table (not added to unsyncedTables below,
+// unlike the per-device performance caches) - the whole point is that
+// an admin can see what broke on ANY device from wherever they are,
+// not just whichever one they're physically standing at. `id` is a
+// real randomUUID, not an auto-increment key - Dexie Cloud sync needs
+// a value that's already globally unique on its own, the same
+// convention every other synced table in this app already follows.
+db.version(32).stores({
+  errorLogs: 'id, timestamp',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

@@ -25,6 +25,7 @@ import TransactionTypesPanel from '../components/common/admin/TransactionTypesPa
 import SheetSourcesPanel from '../components/common/admin/SheetSourcesPanel.jsx'
 import BackupPanel from '../components/common/admin/BackupPanel.jsx'
 import DataStartDatePanel from '../components/common/admin/DataStartDatePanel.jsx'
+import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 
 const GROUPS = [
   {
@@ -65,6 +66,7 @@ const GROUPS = [
       { id: 'sheets', label: 'Sheet Sources', Panel: SheetSourcesPanel },
       { id: 'dataStartDate', label: 'Data Start Date', Panel: DataStartDatePanel },
       { id: 'backup', label: 'Backup', Panel: BackupPanel },
+      { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
     ],
   },
 ]

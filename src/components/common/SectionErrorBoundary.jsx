@@ -6,6 +6,7 @@
 
 import { Component } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { logError } from '../../utils/errorLog.js'
 
 class SectionErrorBoundary extends Component {
   constructor(props) {
@@ -20,6 +21,7 @@ class SectionErrorBoundary extends Component {
   componentDidCatch(error, info) {
     // eslint-disable-next-line no-console
     console.error(`[SectionErrorBoundary${this.props.label ? `: ${this.props.label}` : ''}]`, error, info)
+    logError(`${this.props.label ?? 'Section'} crash`, error)
   }
 
   render() {

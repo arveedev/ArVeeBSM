@@ -1160,4 +1160,23 @@
 //            three forms now wrap their work in try/catch/finally: a
 //            failure shows a clear toast and logs the real error, and
 //            the button is always guaranteed to re-enable either way.
-export const APP_VERSION = '1.9-77'
+//   1.9-78 - Two additions, per direct follow-up on the error-handling
+//            audit:
+//            (1) Offline app-shell caching - added a real service
+//            worker (vite-plugin-pwa) precaching the app's own HTML/JS/
+//            CSS, so closing the app fully while offline and reopening
+//            it no longer depends on the browser's own opportunistic
+//            cache. Data (Dexie/IndexedDB) already worked offline; this
+//            covers the app shell itself, the missing piece for a
+//            device with no signal at all.
+//            (2) Admin Error Log (Admin Dashboard > System > Error Log)
+//            - every error the app catches (a failed form save/update/
+//            delete/void, or a page-level crash) now writes a record
+//            with the real technical detail (message, stack, context,
+//            timestamp) to a shared table, browsable by any admin from
+//            any device - not just console.error output nobody was
+//            looking at. The user still only ever sees the same plain
+//            "Save failed" toast; this is what lets an admin actually
+//            diagnose what happened afterward instead of relying on a
+//            secondhand description.
+export const APP_VERSION = '1.9-78'
