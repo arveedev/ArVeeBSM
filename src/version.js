@@ -1296,4 +1296,25 @@
 //               the table list live from db.tables, so a future new
 //               table is included automatically. Also added error
 //               handling (a failed export previously failed silently).
-export const APP_VERSION = '1.9-84'
+//   1.9-85 - Automatic off-Dexie-Cloud database backup, per explicit
+//            request: a real disaster-recovery copy of the whole
+//            database, not depending on an admin remembering to click
+//            Export. Any logged-in device now silently checks a
+//            shared, synced timestamp (db.reportConfig) and, throttled
+//            to once every 24 hours globally (not per device), builds
+//            the same full-table dump the manual Export button already
+//            produces and POSTs it to a new Vercel serverless function
+//            (api/backup-to-github.js), which commits it to this app's
+//            own GitHub repository under backups/ - a copy that lives
+//            completely outside Dexie Cloud, so a serious incident
+//            there wouldn't be the only place the data exists. Keeps
+//            the last ~30 days, pruning older ones automatically.
+//            REQUIRES a new Vercel env var (GITHUB_BACKUP_TOKEN, a
+//            GitHub personal access token scoped to just this repo's
+//            Contents permission) before it actually works - fails
+//            safe (logs the failure, nothing else breaks) until that's
+//            set, same rollout pattern as the shared app key. Admin >
+//            System > Backup now shows the last automatic backup time
+//            and a link to view backups on GitHub, alongside the
+//            existing manual Export All Data button (unchanged).
+export const APP_VERSION = '1.9-85'

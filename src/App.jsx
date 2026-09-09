@@ -23,6 +23,7 @@ import ESRForm from './components/forms/ESRForm.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { usePageHeader } from './context/PageHeaderContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
+import { startBackupWorker } from './services/backupWorker.js'
 import AnimatedToast from './components/common/AnimatedToast.jsx'
 import useDelayedUnmount from './hooks/useDelayedUnmount.js'
 
@@ -169,6 +170,16 @@ function App() {
   useEffect(() => {
     if (!user) return
     return startAuthoritySyncWorker()
+  }, [user])
+
+  // Automatic off-device database backup (Admin > System > Backup shows
+  // the last time this actually ran) - see backupWorker.js. Any logged-
+  // in user's device can be the one that fires it (not admin-only); the
+  // throttle itself lives in a synced field, so it runs once globally
+  // per day regardless of who happens to have the app open.
+  useEffect(() => {
+    if (!user) return
+    return startBackupWorker()
   }, [user])
 
   // Transaction data (WSR/WSI/ESR/ESI) - same shape as above, but on a

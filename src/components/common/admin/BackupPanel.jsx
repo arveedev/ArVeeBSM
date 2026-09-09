@@ -1,20 +1,25 @@
-// Backup Panel — exports every local Dexie table's full contents to a
-// single downloadable JSON file. Built specifically as a safety net
-// before reconnecting Dexie Cloud: whatever happens with that
-// connection, this gives a recovery path independent of it.
+// Backup Panel — two ways to get a full copy of every local Dexie
+// table's contents, both a safety net independent of Dexie Cloud
+// itself: an automatic daily commit to GitHub (see backupWorker.js /
+// api/backup-to-github.js), and an on-demand download to this device.
 
 import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Download } from 'lucide-react'
+import { Download, Cloud } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { logError } from '../../../utils/errorLog.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { primaryButtonClass } from './shared.js'
 
+const GITHUB_BACKUPS_URL = 'https://github.com/arveedev/ArVeeBSM/tree/main/backups'
+
 function BackupPanel() {
   const { user } = useAuth()
   const [isExporting, setIsExporting] = useState(false)
   const [lastExportInfo, setLastExportInfo] = useState(null)
+  const globalConfig = useLiveQuery(() => db.reportConfig.get('global'), [])
+  const lastAutoBackupAt = globalConfig?.lastAutoBackupAt ?? null
 
   const handleExport = async () => {
     setIsExporting(true)
@@ -64,32 +69,57 @@ function BackupPanel() {
   }
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-sm font-semibold text-app-text">Backup &amp; Export</h2>
-      <p className="mt-1 text-xs text-neutral-400">
-        Downloads every table's full contents as a single JSON file - a complete,
-        independent copy of everything currently in this device's local database.
-        Since almost every table syncs to the cloud, this device's copy is normally
-        as complete as the cloud's own - worth doing before any risky change, or on
-        a regular schedule if you want your own offline copy independent of both.
-      </p>
-
-      <button
-        type="button"
-        onClick={handleExport}
-        disabled={isExporting}
-        className={`mt-4 flex items-center justify-center gap-2 ${primaryButtonClass} disabled:opacity-50`}
-      >
-        <Download size={16} />
-        {isExporting ? 'Exporting…' : 'Export All Data'}
-      </button>
-
-      {lastExportInfo && (
-        <p className="mt-2 text-xs text-neutral-500">
-          Last export: {lastExportInfo.tableCount} tables, {lastExportInfo.recordCount} total records,
-          at {lastExportInfo.time.toLocaleTimeString()}.
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-app-text">
+          <Cloud size={16} className="text-brand-neon" /> Automatic Backup
+        </h2>
+        <p className="mt-1 text-xs text-neutral-400">
+          A full copy of the database is committed automatically, about once a day, to
+          this app's own GitHub repository - a copy that lives completely outside Dexie
+          Cloud, so a serious problem there wouldn't be the only place the data exists.
+          Runs quietly on any logged-in device; nobody needs to remember to do anything.
         </p>
-      )}
+        <p className="mt-2 text-xs text-neutral-500">
+          {lastAutoBackupAt
+            ? `Last automatic backup: ${new Date(lastAutoBackupAt).toLocaleString()}`
+            : 'No automatic backup has run yet - the first one runs shortly after any user is logged in.'}
+        </p>
+        <a
+          href={GITHUB_BACKUPS_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-block text-xs text-brand-neon underline"
+        >
+          View backups on GitHub
+        </a>
+      </div>
+
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+        <h2 className="text-sm font-semibold text-app-text">Manual Export</h2>
+        <p className="mt-1 text-xs text-neutral-400">
+          Downloads every table's full contents as a single JSON file right now, straight
+          to this device - useful right before a risky change, without waiting for the
+          automatic backup's own schedule.
+        </p>
+
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={isExporting}
+          className={`mt-4 flex items-center justify-center gap-2 ${primaryButtonClass} disabled:opacity-50`}
+        >
+          <Download size={16} />
+          {isExporting ? 'Exporting…' : 'Export All Data'}
+        </button>
+
+        {lastExportInfo && (
+          <p className="mt-2 text-xs text-neutral-500">
+            Last export: {lastExportInfo.tableCount} tables, {lastExportInfo.recordCount} total records,
+            at {lastExportInfo.time.toLocaleTimeString()}.
+          </p>
+        )}
+      </div>
     </div>
   )
 }
