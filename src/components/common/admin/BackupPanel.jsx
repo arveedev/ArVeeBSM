@@ -4,30 +4,33 @@
 // connection, this gives a recovery path independent of it.
 
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import { Download } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
+import { logError } from '../../../utils/errorLog.js'
+import { useAuth } from '../../../context/AuthContext.jsx'
 import { primaryButtonClass } from './shared.js'
 
-// Every table currently defined in the local schema (see db/dexie.js).
-const ALL_TABLES = [
-  'authorities', 'branches', 'customers', 'googleSheetsConfig',
-  'millingOrders', 'pendingSheetDeletions', 'pileLayoutBoxes', 'piles', 'provinces',
-  'privateMillerAllocations', 'reportConfig', 'ricemillAllocations',
-  'sackInventory', 'sackTypes', 'serialCounterCache', 'settings',
-  'sheetSources', 'signatories', 'transactionTypes', 'transactions',
-  'users', 'varietyTypes', 'warehouseAliases', 'warehouses',
-]
-
 function BackupPanel() {
+  const { user } = useAuth()
   const [isExporting, setIsExporting] = useState(false)
   const [lastExportInfo, setLastExportInfo] = useState(null)
 
   const handleExport = async () => {
     setIsExporting(true)
     try {
+      // Reads the table list off `db.tables` itself instead of a
+      // hardcoded array - a hardcoded list already went stale once
+      // (customerAliases, userAliases, and errorLogs were all added to
+      // the schema in later versions but never added here, so this
+      // "full" export silently excluded them for a while without
+      // anyone noticing, since the button still worked and still
+      // produced a file). Reading it live means a future new table is
+      // included automatically, with nothing to remember to update.
+      const allTables = db.tables.map((t) => t.name)
       const dump = {}
       let totalRecords = 0
-      for (const tableName of ALL_TABLES) {
+      for (const tableName of allTables) {
         const rows = await db.table(tableName).toArray()
         dump[tableName] = rows
         totalRecords += rows.length
@@ -36,6 +39,7 @@ function BackupPanel() {
       const payload = {
         exportedAt: new Date().toISOString(),
         databaseName: db.name,
+        schemaVersion: db.verno,
         tables: dump,
       }
 
@@ -50,7 +54,10 @@ function BackupPanel() {
       a.remove()
       URL.revokeObjectURL(url)
 
-      setLastExportInfo({ time: new Date(), tableCount: ALL_TABLES.length, recordCount: totalRecords })
+      setLastExportInfo({ time: new Date(), tableCount: allTables.length, recordCount: totalRecords })
+    } catch (err) {
+      toast.error('Export failed — please try again')
+      logError('Full database export', err, user)
     } finally {
       setIsExporting(false)
     }
@@ -62,6 +69,9 @@ function BackupPanel() {
       <p className="mt-1 text-xs text-neutral-400">
         Downloads every table's full contents as a single JSON file - a complete,
         independent copy of everything currently in this device's local database.
+        Since almost every table syncs to the cloud, this device's copy is normally
+        as complete as the cloud's own - worth doing before any risky change, or on
+        a regular schedule if you want your own offline copy independent of both.
       </p>
 
       <button

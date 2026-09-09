@@ -24,7 +24,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { ChevronLeft, ChevronRight, X, AlertTriangle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, AlertTriangle, Pencil } from 'lucide-react'
 import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -50,6 +50,7 @@ import {
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import { inputClass, labelClass, primaryButtonClass } from './shared.js'
 import { logError } from '../../utils/errorLog.js'
+import { renameTransactionSerial } from '../../utils/serialRename.js'
 
 const STOCK_CONDITIONS = ['Good', 'Part Damaged', 'Damaged']
 const SACK_CONDITIONS = ['BN', 'SH', 'US']
@@ -190,6 +191,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const { accessibleWarehouses, currentWarehouse, currentWarehouseId, setCurrentWarehouseId } =
     useWarehouse() ?? {}
   const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
 
   const [serialNo, setSerialNo] = useState('')
   const [date, setDate] = useState(todayLocalISO())
@@ -206,6 +208,11 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const [openedFromReports, setOpenedFromReports] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(false)
   const [deleteAnimKey, setDeleteAnimKey] = useState(0)
+  // Admin-only rename of an already-saved record's serial number - see
+  // StockFormBase.jsx's matching state/handler for the full rationale.
+  const [pendingRename, setPendingRename] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [isRenaming, setIsRenaming] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
@@ -812,6 +819,26 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     }
   }
 
+  const handleRenameConfirmed = async () => {
+    if (isRenaming || !loadedTransaction) return
+    setIsRenaming(true)
+    try {
+      const newSerial = await renameTransactionSerial(loadedTransaction, renameValue, {
+        type: 'WTS',
+        warehouseId: currentWarehouseId,
+      })
+      setPendingRename(false)
+      setSerialNo(newSerial)
+      setLoadedTransaction((prev) => prev && ({ ...prev, serialNo: newSerial }))
+      toast.success(`Renamed to ${newSerial}`)
+    } catch (err) {
+      toast.error(err.message ?? 'Could not rename this serial number')
+      logError('WTS serial rename', err, user)
+    } finally {
+      setIsRenaming(false)
+    }
+  }
+
   const handleDeleteConfirmed = async () => {
     if (isSaving) return
     setPendingDelete(false)
@@ -957,6 +984,15 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         <AnimatedBanner show={isEditMode} className="rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2 text-xs text-brand-amber">
           Reviewing WTS {loadedTransaction?.serialNo} — Update or Delete below.
         </AnimatedBanner>
+        {isAdmin && isEditMode && (
+          <button
+            type="button"
+            onClick={() => { setRenameValue(loadedTransaction?.serialNo ?? ''); setPendingRename(true) }}
+            className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300"
+          >
+            <Pencil size={11} /> Rename serial #
+          </button>
+        )}
 
         <div ref={serialFieldRef}>
           <label className={labelClass}>WTS No.</label>
@@ -1102,6 +1138,25 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
           onClose={() => setShowAuthorityPicker(false)}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingRename}
+        title={`Rename WTS #${loadedTransaction?.serialNo ?? ''}`}
+        description="Changes only this document's serial number - every other field stays exactly as saved. Admin only, for resolving a real serial collision between two different records."
+        confirmLabel="Rename"
+        onConfirm={handleRenameConfirmed}
+        onCancel={() => setPendingRename(false)}
+        confirmDisabled={isRenaming || !renameValue.trim()}
+      >
+        <input
+          type="text"
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          autoFocus
+          className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none focus:border-brand-neon"
+          placeholder="New serial number"
+        />
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={pendingDelete}

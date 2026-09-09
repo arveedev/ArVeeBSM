@@ -1272,4 +1272,28 @@
 //               recovery screen (DbOpenErrorScreen.jsx) with a Reset
 //               local data & reload option if it fails - most data
 //               re-downloads from the cloud either way.
-export const APP_VERSION = '1.9-83'
+//   1.9-84 - Two follow-ups from the risk-sweep fixes, per explicit
+//            request:
+//            1. Admin-only "Rename serial #" on WSR/WSI/ESR/ESI/WTS -
+//               changes an already-saved record's serial number in
+//               place, keeping every other field untouched. Needed
+//               because retyping the Serial No. field always means
+//               "find or start a different document" (it resets the
+//               whole form) - there was no actual way to fix a real
+//               serial collision (see 1.9-83) other than deleting the
+//               record and retyping it from scratch. A multi-pile WSI's
+//               linked extra-pile records rename together as one group
+//               (serialRename.js), so nothing is left pointing at a
+//               stale groupSerialNo.
+//            2. Found and fixed a real bug in the existing Admin >
+//               System > Backup panel (full-database JSON export,
+//               already built) while reviewing it for this request: its
+//               table list was a hardcoded array that had quietly gone
+//               stale - customerAliases, userAliases, and errorLogs
+//               were all added to the schema after this list was last
+//               updated, so "Export All Data" was silently skipping
+//               them with no indication anything was missing. Now reads
+//               the table list live from db.tables, so a future new
+//               table is included automatically. Also added error
+//               handling (a failed export previously failed silently).
+export const APP_VERSION = '1.9-84'

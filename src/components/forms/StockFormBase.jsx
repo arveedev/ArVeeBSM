@@ -41,7 +41,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle, Pencil } from 'lucide-react'
 import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -93,6 +93,7 @@ import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import SplitFlapText from '../common/SplitFlapText.jsx'
 import { logError } from '../../utils/errorLog.js'
+import { renameTransactionSerial } from '../../utils/serialRename.js'
 import {
   inputClass,
   labelClass,
@@ -254,6 +255,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const [openedFromReports, setOpenedFromReports] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(false)
   const [deleteAnimKey, setDeleteAnimKey] = useState(0)
+  // Admin-only rename of an already-saved record's serial number (see
+  // serialRename.js) - a different mechanism from typing into the
+  // Serial No. field, which always means "find or start a different
+  // document" for a real collision between two different records.
+  const [pendingRename, setPendingRename] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [isRenaming, setIsRenaming] = useState(false)
 
   const [isSaving, setIsSaving] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
@@ -2219,6 +2227,31 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     }
   }
 
+  const handleRenameConfirmed = async () => {
+    if (isRenaming || !loadedTransaction) return
+    setIsRenaming(true)
+    try {
+      const newSerial = await renameTransactionSerial(loadedTransaction, renameValue, {
+        type,
+        warehouseId: currentWarehouseId,
+        cerealCategory: activeCategory,
+      })
+      setPendingRename(false)
+      setSerialNo(newSerial)
+      setLoadedTransaction((prev) => prev && ({
+        ...prev,
+        serialNo: newSerial,
+        groupSerialNo: prev.groupSerialNo === (prev.serialNo) ? newSerial : prev.groupSerialNo,
+      }))
+      toast.success(`Renamed to ${newSerial}`)
+    } catch (err) {
+      toast.error(err.message ?? 'Could not rename this serial number')
+      logError(`${type} serial rename`, err, user)
+    } finally {
+      setIsRenaming(false)
+    }
+  }
+
   const handleDeleteConfirmed = async () => {
     if (isSaving) return
     setPendingDelete(false)
@@ -2575,6 +2608,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <span className="text-brand-amber">Reviewing {type} {loadedTransaction?.serialNo}</span>
               ) : null}
             </p>
+            {isAdmin && isEditMode && (
+              <button
+                type="button"
+                onClick={() => { setRenameValue(loadedTransaction?.serialNo ?? ''); setPendingRename(true) }}
+                className="mt-1 inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300"
+              >
+                <Pencil size={11} /> Rename serial #
+              </button>
+            )}
           </div>
 
           <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
@@ -3476,6 +3518,25 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           onClose={() => setShowAuthorityPicker(false)}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingRename}
+        title={`Rename ${type} #${loadedTransaction?.serialNo ?? ''}`}
+        description="Changes only this document's serial number - every other field stays exactly as saved. Admin only, for resolving a real serial collision between two different records."
+        confirmLabel="Rename"
+        onConfirm={handleRenameConfirmed}
+        onCancel={() => setPendingRename(false)}
+        confirmDisabled={isRenaming || !renameValue.trim()}
+      >
+        <input
+          type="text"
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          autoFocus
+          className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-center font-mono text-app-text outline-none focus:border-brand-neon"
+          placeholder="New serial number"
+        />
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={pendingDelete}
