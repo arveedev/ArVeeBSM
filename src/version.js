@@ -1230,4 +1230,46 @@
 //            the realistic threat here. Fails safe (no-op) until that
 //            env var is actually set in Vercel - see the admin's own
 //            instructions for the value to use.
-export const APP_VERSION = '1.9-82'
+//   1.9-83 - The four remaining findings from the risk-sweep audit
+//            (docs/risk-sweep-audit-2026-09.md), all self-healing/
+//            additive fixes, none touching normal save/login behavior
+//            for a healthy account:
+//            1. Pile balances can drift from their true value under
+//               concurrent offline edits on two devices (the same
+//               reversal-ordering bug class already fixed for AI/SIA
+//               authority totals). Added recalculatePileStatesForWarehouses
+//               (pileLedger.js), a periodic self-healing sweep (every 5
+//               minutes, via transactionPreload.js) that recomputes each
+//               pile's true bags/kilos from its full transaction history
+//               and corrects the cached total only when it actually
+//               differs - a no-op on healthy data, never a one-time fix.
+//            2. Manually-typed serial numbers can collide across two
+//               offline devices (same warehouse/serial/category, two
+//               genuinely different real transactions). The existing
+//               duplicate-cleanup pass (dedupeDuplicateTransactions) used
+//               to merge (and delete) ANY two records sharing that key,
+//               assuming they were always the same event synced twice -
+//               correct for that case, but would have silently destroyed
+//               one side's real data on an actual collision. Added
+//               looksLikeSameEvent (date/customer/amount comparison) to
+//               gate the existing merge: a real match merges exactly as
+//               before, a genuine mismatch is left completely untouched
+//               and flagged in the admin Error Log instead, for a human
+//               to resolve by renumbering one of them.
+//            3. PINs were hashed (SHA-256) but never salted - a 6-digit
+//               PIN only has 1,000,000 possibilities, cheap for a generic
+//               precomputed rainbow table to crack, and the users table
+//               syncs to the cloud, not just this device. Added a fixed
+//               app-specific salt (pinHash.js); every account is upgraded
+//               to the salted hash automatically the next time its real
+//               PIN is entered at login - no PIN reset needed, no
+//               lockout, nothing for anyone to do.
+//            4. No recovery path existed if the local database itself
+//               failed to open (corrupted IndexedDB, a schema-migration
+//               upgrade throwing) - previously a permanent blank screen
+//               on every reload. main.jsx now opens the database
+//               explicitly before rendering and shows a plain-language
+//               recovery screen (DbOpenErrorScreen.jsx) with a Reset
+//               local data & reload option if it fails - most data
+//               re-downloads from the cloud either way.
+export const APP_VERSION = '1.9-83'

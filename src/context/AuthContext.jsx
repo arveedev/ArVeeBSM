@@ -8,7 +8,7 @@
 import { createContext, useContext, useState } from 'react'
 import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
-import { hashPin } from '../utils/pinHash.js'
+import { hashPin, hashPinLegacyUnsalted } from '../utils/pinHash.js'
 import { preloadTransactionsForUser } from '../services/transactionPreload.js'
 
 const AuthContext = createContext(null)
@@ -79,6 +79,21 @@ export const AuthProvider = ({ children }) => {
       throw err
     }
 
+    // No match against the salted hash - the account may predate PIN
+    // salting (see pinHash.js). Check the old unsalted form; if it
+    // matches, this genuinely is the right PIN, so upgrade the stored
+    // hash to the salted form now while the real PIN is in hand (a
+    // hash can never be migrated without it). Silent and one-time per
+    // account - every later login already matches on the first try.
+    if (!match) {
+      const legacyHash = await hashPinLegacyUnsalted(accessCode)
+      const legacyMatch = await db.users.where('accessCode').equals(legacyHash).first()
+      if (legacyMatch) {
+        await db.users.update(legacyMatch.uid, { accessCode: hashedInput })
+        match = { ...legacyMatch, accessCode: hashedInput }
+      }
+    }
+
     if (match) {
       setUser(match)
       runPreloadWithFeedback(match)
@@ -86,10 +101,19 @@ export const AuthProvider = ({ children }) => {
     }
 
     const config = await db.reportConfig.get('global')
-    if (config?.visitorAccessCode && hashedInput === config.visitorAccessCode) {
-      const visitorUser = { role: 'Visitor', nickname: 'Visitor', name: 'Visitor' }
-      setUser(visitorUser)
-      return visitorUser
+    if (config?.visitorAccessCode) {
+      if (hashedInput === config.visitorAccessCode) {
+        const visitorUser = { role: 'Visitor', nickname: 'Visitor', name: 'Visitor' }
+        setUser(visitorUser)
+        return visitorUser
+      }
+      const legacyVisitorHash = await hashPinLegacyUnsalted(accessCode)
+      if (legacyVisitorHash === config.visitorAccessCode) {
+        await db.reportConfig.update('global', { visitorAccessCode: hashedInput })
+        const visitorUser = { role: 'Visitor', nickname: 'Visitor', name: 'Visitor' }
+        setUser(visitorUser)
+        return visitorUser
+      }
     }
 
     return null

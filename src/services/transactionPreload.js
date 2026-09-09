@@ -49,6 +49,7 @@
 import { db } from '../db/dexie.js'
 import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix, markRowsSeen, isWtsBackupSerial } from './googleSheetsBridge.js'
 import { recordSerialUsed } from '../utils/serialNumber.js'
+import { recalculatePileStatesForWarehouses } from '../utils/pileLedger.js'
 
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
 const SERIAL_COLUMN_BY_TYPE = { WSR: 'WSR #', WSI: 'WSI #', ESR: 'ESR#', ESI: 'ESI#' }
@@ -456,6 +457,35 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
       console.error(`preloadTransactionsForUser: preload failed for ${type}:`, err)
     }
   }
+
+  await maybeRecalculatePileStates(warehouseIds)
+}
+
+// This whole function (runPreloadTransactionsForUser) runs every 30
+// seconds via startTransactionSyncWorker - fine for the transaction
+// pulls above, which are cheap, incremental "what's new" checks after
+// the first pull, but recalculatePileStatesForWarehouses does a real
+// recompute pass over every pile in scope every time it's called.
+// Throttled to once per 5 minutes (matching the cadence
+// recalculateAuthorityIssuedTotals already uses for the same kind of
+// self-healing sweep) instead of letting it run on every 30-second
+// tick, which would be wasted repeated work on a healthy database with
+// nothing to correct. module-level (not per-call) state is intentional -
+// this only needs to happen once per session roughly this often, not
+// once per warehouse/user separately.
+const PILE_RECALC_THROTTLE_MS = 5 * 60 * 1000
+let lastPileRecalcAt = 0
+const maybeRecalculatePileStates = async (warehouseIds) => {
+  if (Date.now() - lastPileRecalcAt < PILE_RECALC_THROTTLE_MS) return
+  lastPileRecalcAt = Date.now()
+  try {
+    await recalculatePileStatesForWarehouses(warehouseIds)
+  } catch (err) {
+    // Never let a self-healing sweep's own failure break the preload
+    // cycle it's riding along with - same reasoning as the per-type
+    // try/catch above.
+    console.error('preloadTransactionsForUser: pile-state recalc failed:', err)
+  }
 }
 
 /**
@@ -488,6 +518,36 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
  * rediscovered and re-patched by hand each time a new way to create one
  * turns up), scoped to just the warehouses this cycle touched.
  */
+// Distinguishes "two copies of the SAME real event" (safe to merge -
+// what this function was built for: a re-import or a same-device save/
+// preload race) from "two DIFFERENT real events that happen to share a
+// serial number" (NOT safe to merge - that would silently destroy one
+// side's real business data, keeping only the survivor's own numbers).
+// The second case is a real, separate risk: two offline devices can
+// each independently suggest or type the same next serial number for
+// the same warehouse before either has seen the other's save, and once
+// both sync, they'd land in the exact same group this function already
+// groups by (warehouseId+serialNo+cerealCategory) - see
+// docs/risk-sweep-audit-2026-09.md. Compares whichever numeric fields
+// this transaction type actually carries (fields the type doesn't have
+// are undefined on both sides, which compares as equal and is
+// harmless) plus date and customer name - deliberately conservative:
+// every field must be a close match, not just some of them, since a
+// false "these are the same" call would delete real data.
+const looksLikeSameEvent = (a, b) => {
+  if (a.date !== b.date) return false
+  if ((a.customerName ?? '').trim().toLowerCase() !== (b.customerName ?? '').trim().toLowerCase()) return false
+  const closeEnough = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) < 0.01
+  const piecesOf = (tx) => (tx.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
+  return closeEnough(a.numberOfBags, b.numberOfBags)
+    && closeEnough(a.netKilos, b.netKilos)
+    && closeEnough(a.issuedBags, b.issuedBags)
+    && closeEnough(a.issuedNetKilos, b.issuedNetKilos)
+    && closeEnough(a.receivedBags, b.receivedBags)
+    && closeEnough(a.receivedNetKilos, b.receivedNetKilos)
+    && closeEnough(piecesOf(a), piecesOf(b))
+}
+
 const dedupeDuplicateTransactions = async (type, warehouseIds) => {
   if (warehouseIds.length === 0) return
   const rows = await db.transactions
@@ -504,26 +564,51 @@ const dedupeDuplicateTransactions = async (type, warehouseIds) => {
   const idsToDelete = []
   const toUpdate = []
   let mergeCount = 0
+  const collisions = []
   for (const group of groups.values()) {
     if (group.length <= 1) continue
-    mergeCount++
     const nonImported = group.filter((tx) => tx.fromSheetImport !== true)
     const survivorPool = nonImported.length > 0 ? nonImported : group
     const survivor = { ...[...survivorPool].sort((a, b) => completeness(b) - completeness(a))[0] }
     const others = group.filter((tx) => tx.id !== survivor.id)
-    for (const other of others) {
-      for (const [field, value] of Object.entries(other)) {
-        if (field === 'id') continue
-        if ((survivor[field] == null || survivor[field] === '') && value != null && value !== '') survivor[field] = value
+    // Split into "genuinely the same event" (merge, as before) vs.
+    // "looks like a real collision" (leave both alone entirely - never
+    // delete, never partially merge - and flag it for a human to
+    // resolve by renumbering one of them through the normal Update
+    // form).
+    const sameEventOthers = others.filter((other) => looksLikeSameEvent(survivor, other))
+    const collidingOthers = others.filter((other) => !looksLikeSameEvent(survivor, other))
+    if (sameEventOthers.length > 0) {
+      mergeCount++
+      for (const other of sameEventOthers) {
+        for (const [field, value] of Object.entries(other)) {
+          if (field === 'id') continue
+          if ((survivor[field] == null || survivor[field] === '') && value != null && value !== '') survivor[field] = value
+        }
       }
+      toUpdate.push(survivor)
+      for (const other of sameEventOthers) idsToDelete.push(other.id)
     }
-    toUpdate.push(survivor)
-    for (const other of others) idsToDelete.push(other.id)
+    if (collidingOthers.length > 0) {
+      collisions.push({ survivor, others: collidingOthers })
+    }
   }
   if (toUpdate.length > 0) await db.transactions.bulkPut(toUpdate)
   if (idsToDelete.length > 0) {
     await db.transactions.bulkDelete(idsToDelete)
     console.log(`preloadOneType(${type}): self-healed ${idsToDelete.length} duplicate(s) across ${mergeCount} group(s) left by a same-device save/preload race`)
+  }
+  for (const { survivor, others } of collisions) {
+    const describe = (tx) => `${tx.type} #${tx.serialNo} · ${tx.date} · ${tx.customerName ?? '—'} (id ${tx.id})`
+    logError(
+      `Serial collision: ${type} #${survivor.serialNo}`,
+      new Error(
+        `${survivor.warehouseId} / ${survivor.cerealCategory ?? 'n/a'}: ` +
+        [survivor, ...others].map(describe).join(' vs. ') +
+        ' - these look like two different real transactions sharing one serial number, not a duplicate. Nothing was deleted or merged; one needs to be renumbered by hand.'
+      ),
+      { nickname: 'Background sync', role: 'System' }
+    )
   }
 }
 

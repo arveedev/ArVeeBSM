@@ -628,6 +628,54 @@ export const recalculatePileCurrentState = async (pileId) => {
 }
 
 /**
+ * Batched self-healing sweep: recomputes every pile in the given
+ * warehouses from its real transaction history (via
+ * computeCurrentPileStatesBatch) and corrects any pile whose stored
+ * currentBags/currentKilos has drifted from that truth. Only writes a
+ * pile when its recomputed total actually differs from what's stored -
+ * a no-op, safe to run repeatedly, on a healthy database.
+ *
+ * Exists for the same reason recalculateAuthorityIssuedTotals
+ * (googleSheetsBridge.js) exists for authorities:
+ * applyTransactionToPile/reverseTransactionFromPile do a read-modify-
+ * write, not a true atomic increment, so two offline devices editing
+ * the SAME pile before either has synced the other's change can
+ * silently lose one side's delta once both come back online -
+ * confirmed as a real, open gap by the 2026-09 risk sweep (see
+ * docs/risk-sweep-audit-2026-09.md). Called periodically from
+ * transactionPreload.js, scoped to whichever warehouses the current
+ * session already has in view (its own call site handles throttling
+ * and warehouse scope - see the comment there).
+ */
+export const recalculatePileStatesForWarehouses = async (warehouseIds) => {
+  if (!warehouseIds || warehouseIds.length === 0) return 0
+  const [piles, warehouses] = await Promise.all([
+    db.piles.where('warehouseId').anyOf(warehouseIds).toArray(),
+    db.warehouses.bulkGet(warehouseIds),
+  ])
+  if (piles.length === 0) return 0
+
+  const warehouseCutoffByWarehouseId = new Map(
+    warehouses.filter(Boolean).map((w) => [w.warehouseId, w.reportingCutoffDate])
+  )
+  const states = await computeCurrentPileStatesBatch(piles, warehouseCutoffByWarehouseId)
+
+  let corrected = 0
+  for (const pile of piles) {
+    const state = states.get(pile.pileId)
+    if (!state) continue
+    if ((pile.currentBags ?? 0) === state.bags && (pile.currentKilos ?? 0) === state.kilos) continue
+    await db.piles.update(pile.pileId, {
+      currentBags: state.bags,
+      currentKilos: state.kilos,
+      ...deriveZeroedDateUpdate(pile, state.bags, state.kilos),
+    })
+    corrected += 1
+  }
+  return corrected
+}
+
+/**
  * Closes a pile - a long-running pile's ledger can otherwise grow
  * indefinitely, so this marks it as done (depleted, or closed for any
  * other reason) and zeroes out whatever balance remains at that point
