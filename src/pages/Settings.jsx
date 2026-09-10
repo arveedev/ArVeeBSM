@@ -486,10 +486,6 @@ function PileBalanceSection({ warehouseId }) {
   return (
     <div className="mt-6">
       <h2 className="text-sm font-semibold text-app-text">Create Pile</h2>
-      <p className="mt-1 text-xs text-neutral-500">
-        For onboarding stock already on hand - creates a pile with a
-        beginning balance, not a receipt transaction.
-      </p>
 
       <div
         ref={formRef}

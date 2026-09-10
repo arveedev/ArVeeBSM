@@ -330,6 +330,11 @@ const TRANSACTION_SYNC_INTERVAL_MS = 30 * 1000
 let transactionSyncPauseCount = 0
 export const pauseTransactionSync = () => { transactionSyncPauseCount++ }
 export const resumeTransactionSync = () => { transactionSyncPauseCount = Math.max(0, transactionSyncPauseCount - 1) }
+// Readable by other background workers (backupWorker.js's heavy
+// full-table dump in particular) that also want to stay out of the
+// way while a form is open, without each needing its own separate
+// pause/resume wiring through every form.
+export const isTransactionSyncPaused = () => transactionSyncPauseCount > 0
 
 export const startTransactionSyncWorker = (user) => {
   let cancelled = false

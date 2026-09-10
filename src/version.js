@@ -1338,4 +1338,35 @@
 //            with real development work again. The polluting commits
 //            already on main were reverted; the backup data itself was
 //            never at risk, only which branch it landed on.
-export const APP_VERSION = '1.9-87'
+//   1.9-88 - Three fixes from direct feedback:
+//            1. Beginning Balances' edit form now shows the pile's
+//               variety next to its name for Rice/Palay (e.g. "Test
+//               Pile 1 (WD1)") - previously invisible there entirely
+//               (only By Products showed a variety, via its own
+//               editable per-line picker), even though the pile list
+//               above the form already showed it. Rice/Palay's variety
+//               is locked at pile creation and isn't editable from
+//               here, so this is read-only confirmation of which
+//               variety you're correcting.
+//            2. Removed three explanatory captions per explicit
+//               request (Beginning Balances' own description, its
+//               "add a separate line..." hint, and Settings > Create
+//               Pile's "for onboarding stock already on hand..." line).
+//            3. Found and fixed a real resource-contention bug behind
+//               a report of slower serial lookups: yesterday's
+//               automatic backup worker (backupWorker.js) reads every
+//               table in full when it runs, but - unlike the existing
+//               transaction sync worker - never checked whether a
+//               form had paused background sync while open for
+//               exactly this reason. It now respects that same pause
+//               signal (isTransactionSyncPaused, syncWorker.js), so it
+//               can no longer compete with an open form's own local
+//               IndexedDB lookups for a serial. Whether this was the
+//               specific cause of the reported WebSocket disconnect
+//               error is not confirmed - unlike the lookup slowness,
+//               that trace points at Dexie Cloud's own realtime
+//               connection, which this fix does not directly touch -
+//               but closing off a real, unguarded source of main-
+//               thread/IndexedDB contention is a genuine improvement
+//               either way.
+export const APP_VERSION = '1.9-88'

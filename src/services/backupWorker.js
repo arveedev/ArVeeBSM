@@ -20,6 +20,7 @@
 
 import { db } from '../db/dexie.js'
 import { logError } from '../utils/errorLog.js'
+import { isTransactionSyncPaused } from './syncWorker.js'
 
 const BACKUP_CHECK_INTERVAL_MS = 5 * 60 * 1000 // cheap check; the real work below only runs once BACKUP_THROTTLE_MS has actually elapsed
 const BACKUP_THROTTLE_MS = 24 * 60 * 60 * 1000
@@ -40,6 +41,15 @@ const buildFullDump = async () => {
 
 const runAutoBackupIfDue = async () => {
   if (!navigator.onLine) return
+  // The dump below reads every table in full - real, if brief,
+  // competition for the same IndexedDB connection a transaction form's
+  // own serial lookups depend on. Forms already pause the 30-second
+  // transaction sync worker for exactly this reason (see syncWorker.js);
+  // this worker piggybacks on that same signal rather than adding its
+  // own separate wiring through every form. Skipping this cycle costs
+  // nothing - the 24h throttle means the next check (at most
+  // BACKUP_CHECK_INTERVAL_MS later) just tries again.
+  if (isTransactionSyncPaused()) return
   try {
     const config = await db.reportConfig.get('global')
     const lastAt = config?.lastAutoBackupAt ? new Date(config.lastAutoBackupAt).getTime() : 0

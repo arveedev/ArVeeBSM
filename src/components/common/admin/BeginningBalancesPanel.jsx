@@ -317,6 +317,9 @@ function PilesBeginningBalances({ warehouseId }) {
         <div ref={formRef} className="mb-3 space-y-2 rounded-xl border border-brand-amber/40 bg-brand-amber/5 p-3">
           <p className="text-xs font-semibold text-brand-amber">
             Editing beginning balance: {piles.find((p) => p.pileId === editingPileId)?.pileName}
+            {editingCategory !== 'By Products' && varietyMap.get(editingPile?.varietyId)?.name && (
+              <span className="text-neutral-400"> ({varietyMap.get(editingPile?.varietyId)?.name})</span>
+            )}
           </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -442,10 +445,6 @@ function PilesBeginningBalances({ warehouseId }) {
               </div>
             </div>
           ))}
-          <p className="text-[11px] text-neutral-500">
-            Add a separate line for each distinct sack weight/condition this pile's
-            beginning balance actually had - each becomes its own report row.
-          </p>
           <button type="button" onClick={addLine} className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-700 py-1.5 text-xs font-medium text-neutral-400 hover:border-brand-neon hover:text-brand-neon">
             <Plus size={14} /> Add line
           </button>
@@ -670,11 +669,6 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <h2 className="text-center text-base font-semibold text-app-text">Beginning Balances</h2>
-      <p className="mt-1 text-xs text-neutral-500">
-        Corrects a pile's or sack's starting figures directly - separate from creating new
-        piles/sacks and from the live Piles/Home views, so a correction here never gets
-        confused with live, transaction-accumulated stock.
-      </p>
 
       {!externalWarehouseId && sortedWarehouses.length > 1 && (
         <select
