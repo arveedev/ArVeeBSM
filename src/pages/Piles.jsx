@@ -27,7 +27,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db } from '../db/dexie.js'
-import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO } from '../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO, AGE_BUCKETS } from '../utils/calculations.js'
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
@@ -1196,6 +1196,17 @@ function Piles() {
                     ? BYPRODUCT_COLOR
                     : RICE_COLOR
               const isHovered = hoveredBoxId === box.id
+              // Concept R (picked) - flags a pile whose stock has aged
+              // past its variety's own oldest AGE_BUCKETS bracket (the
+              // same bucket definitions Home Stocks' own age grouping
+              // already uses), not a closed pile (no real age left to
+              // flag) or By Products (AGE_BUCKETS has no bracket set
+              // for it).
+              const ageDays = pile && !pile.closedDate
+                ? calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring)
+                : null
+              const oldestBracket = pile ? AGE_BUCKETS[pile.cerealType]?.at(-1) : null
+              const isPastOldestBracket = ageDays != null && oldestBracket ? oldestBracket.test(ageDays) : false
 
               return (
                 <button
@@ -1221,7 +1232,7 @@ function Piles() {
                   }}
                   className={`overflow-hidden rounded-md border p-1 text-left ${
                     isVacant ? 'border-neutral-700 bg-neutral-900 text-neutral-500' : 'border-neutral-800 text-brand-contrast'
-                  } ${(drawing || moving) ? 'pointer-events-none opacity-40' : ''}`}
+                  } ${(drawing || moving) ? 'pointer-events-none opacity-40' : ''} ${isPastOldestBracket ? 'animate-attention-pulse' : ''}`}
                 >
                   <p className="truncate text-center text-sm font-bold leading-tight">
                     {pile?.pileName ?? box.label ?? 'Box'}

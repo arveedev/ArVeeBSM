@@ -773,6 +773,38 @@ select {
 }
 .animate-popover-in { animation: popover-in 0.16s cubic-bezier(0.2, 1.2, 0.4, 1) both; }
 
+/* Stamp of approval (picked) - a checkmark that drops in and stamps
+   itself into place with a quick squash-bounce, for a genuine "marked
+   complete" moment (AI/SIA authorities, MO/TMO), rather than a
+   checkmark that just appears. No fill-mode, same reasoning as the PIN
+   dot pop fix above - this only ever plays once at the moment of the
+   tap (gated on a transient "isCompleting" flag, not on the permanent
+   completed state), so nothing needs its end state held afterward. */
+@keyframes stamp-drop {
+  0% { transform: translateY(-10px) scale(1.3); opacity: 0; }
+  55% { transform: translateY(0) scale(0.85); opacity: 1; }
+  75% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.animate-stamp-drop { animation: stamp-drop 0.42s cubic-bezier(0.2, 0.8, 0.3, 1); }
+
+@keyframes stamp-ring {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.animate-stamp-ring { animation: stamp-ring 0.42s ease-out; }
+
+/* Concept R (picked) - a slow, persistent glow for a Pile Layout box
+   whose pile has stock past its oldest age bracket, noticeable at a
+   glance without a separate badge or list to check. Deliberately slow
+   (2.2s) and low-amplitude - this runs continuously on-screen for as
+   long as the box is visible, not a one-off attention grab. */
+@keyframes attention-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.55); }
+  50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); }
+}
+.animate-attention-pulse { animation: attention-pulse 2.2s ease-in-out infinite; }
+
 /* CalendarDatePicker's Start/End Date label (visible while the calendar
    popup is open) - a slow, repeating glow pulse so the user keeps
    noticing which end of the range they're currently picking for as

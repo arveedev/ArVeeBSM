@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { FileDown, Loader } from 'lucide-react'
+import { FileDown, Loader, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -95,6 +95,11 @@ function Reports() {
   const [stmtTo, setStmtTo] = useState('')
   const stmtToPickerRef = useRef(null)
   const [isExporting, setIsExporting] = useState(false)
+  // Concept U (picked) - a brief "Ready" checkmark state after a
+  // successful export, instead of snapping straight back to "Export
+  // PDF" the instant the file is generated with no visible confirmation
+  // on the button itself (only a separate toast).
+  const [justExported, setJustExported] = useState(false)
 
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
@@ -351,6 +356,8 @@ function Reports() {
       const filename = `${sanitizeForFilename(currentWarehouse?.name) || 'WH'}-StockReport-${fmtDateForFilename(stmtFrom)}-${fmtDateForFilename(stmtTo)}.pdf`
       doc.save(filename)
       toast.success('PDF exported')
+      setJustExported(true)
+      setTimeout(() => setJustExported(false), 1600)
     } catch (err) {
       console.error('PDF export error:', err)
       toast.error('PDF export failed — check console')
@@ -447,8 +454,14 @@ function Reports() {
           <button type="button" onClick={handleExportPdf}
             disabled={isExporting || needsDates}
             className="flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-brand-neon transition-all hover:border-brand-neon/50 active:scale-95 disabled:opacity-40">
-            {isExporting ? <Loader size={13} className="animate-spin" /> : <FileDown size={13} />}
-            {isExporting ? 'Exporting…' : 'Export PDF'}
+            {isExporting ? (
+              <Loader size={13} className="animate-spin" />
+            ) : justExported ? (
+              <CheckCircle2 size={13} className="animate-toast-icon-check" />
+            ) : (
+              <FileDown size={13} />
+            )}
+            {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export PDF'}
           </button>
         </div>
 

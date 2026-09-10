@@ -306,11 +306,14 @@ function AdminMonitoring() {
                   }`}
                 >
                   <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+                    className={`relative flex h-5 w-5 items-center justify-center rounded-md border ${
                       showsChecked ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
                     }`}
                   >
-                    {showsChecked && <Check size={14} />}
+                    {isCompleting && (
+                      <span className="absolute inset-0 rounded-full border border-brand-neon animate-stamp-ring" />
+                    )}
+                    {showsChecked && <Check size={14} className={isCompleting ? 'animate-stamp-drop' : ''} />}
                   </span>
                 </button>
               )}

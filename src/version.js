@@ -1565,4 +1565,26 @@
 //            state to the same SyncProgressToast component already
 //            used for the GitHub backup and Sheets sync, instead of a
 //            plain unstyled loading line.
-export const APP_VERSION = '1.9-96'
+//   1.9-97 - Animation batch 5: the four remaining picked concepts.
+//            1. Stamp of approval - AI/SIA "mark complete" checkbox
+//               (AdminMonitoring.jsx) now drops in and stamps itself
+//               into place with a squash-bounce and a brief ring pulse
+//               on the moment of the tap, instead of the checkmark
+//               just appearing.
+//            2. Concept U - Reports' Export PDF button now holds a
+//               brief "Ready" checkmark state after a successful
+//               export instead of snapping straight back to "Export
+//               PDF" with only a separate toast as confirmation.
+//            3. Concept R - Pile Layout boxes now get a slow amber
+//               glow when their pile's stock is past its variety's own
+//               oldest AGE_BUCKETS bracket (the same bucket
+//               definitions Home Stocks' own age grouping already
+//               uses) - this flagging didn't exist anywhere in Pile
+//               Layout before. Scoped to the main grid view for now,
+//               not yet the full-screen variant.
+//            4. Concept V - the NFA Issuance/Receipt breakdown's
+//               mobile list now animates rows sliding to their new
+//               position when Sort & Filter changes the order (FLIP
+//               technique), instead of an instant re-render with no
+//               indication of what moved.
+export const APP_VERSION = '1.9-97'

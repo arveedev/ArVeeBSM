@@ -24,7 +24,7 @@
 // renders it for the one currently-expanded number), so "per authority"
 // sort/filter falls out naturally without any extra wiring.
 
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
 import { Th, Td } from '../../pages/AdminHomeShared.jsx'
@@ -89,7 +89,42 @@ function cellContent(column, entry, weightUnit) {
 // (computed here, not passed in) - that way it stays correct whether
 // the list is the full unfiltered set or has been narrowed down by the
 // sort/filter modal above, with no separate total to keep in sync.
+// Concept V (picked) - changing the Sort & Filter option used to just
+// re-render rows in the new order with no transition, making it hard
+// to tell what actually moved. FLIP technique (capture bounding rects
+// before the reorder, then animate each row from its OLD position to
+// its new one via transform) - scoped to the mobile list only (a real
+// <table>'s row reflow doesn't animate via transform reliably the same
+// way a plain div list does), keyed by authId so React reuses the same
+// DOM nodes across a reorder instead of remounting them.
+const useReorderFlip = (items, getKey) => {
+  const containerRef = useRef(null)
+  const rectsRef = useRef(new Map())
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const rows = [...container.children]
+    rows.forEach((row) => {
+      const key = row.dataset.flipKey
+      const prevRect = rectsRef.current.get(key)
+      if (!prevRect) return
+      const newRect = row.getBoundingClientRect()
+      const dy = prevRect.top - newRect.top
+      if (!dy) return
+      row.style.transition = 'none'
+      row.style.transform = `translateY(${dy}px)`
+      requestAnimationFrame(() => {
+        row.style.transition = 'transform 300ms cubic-bezier(0.2, 0.8, 0.3, 1)'
+        row.style.transform = ''
+      })
+    })
+    rectsRef.current = new Map(rows.map((row) => [row.dataset.flipKey, row.getBoundingClientRect()]))
+  }, [items, getKey])
+  return containerRef
+}
+
 function RecoverySection({ label, entries, weightUnit, columns }) {
+  const flipRef = useReorderFlip(entries, (e) => e.authId)
   if (entries.length === 0) return null
   const totalBags = entries.reduce((s, e) => s + (e.bags ?? 0), 0)
   const totalKilos = entries.reduce((s, e) => s + (e.kilos ?? 0), 0)
@@ -158,9 +193,9 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
           (+ AI # underneath, for Receipt) on the left, Net Bags/Net Kgs
           together on one line on the right, instead of a cramped wide
           table. */}
-      <div className="divide-y divide-neutral-900 rounded-lg bg-neutral-950 sm:hidden">
+      <div ref={flipRef} className="divide-y divide-neutral-900 rounded-lg bg-neutral-950 sm:hidden">
         {entries.map((entry) => (
-          <div key={entry.authId} className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <div key={entry.authId} data-flip-key={entry.authId} className="flex items-center justify-between gap-3 px-3 py-2.5">
             <div className="min-w-0">
               <p className="text-base tabular-nums text-app-text">{shortDate(entry.date)}</p>
               {columns.includes('aiNumber') && (
