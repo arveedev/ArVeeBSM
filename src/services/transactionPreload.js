@@ -50,6 +50,7 @@ import { db } from '../db/dexie.js'
 import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix, markRowsSeen, isWtsBackupSerial } from './googleSheetsBridge.js'
 import { recordSerialUsed } from '../utils/serialNumber.js'
 import { recalculatePileStatesForWarehouses } from '../utils/pileLedger.js'
+import { isTransactionSyncPaused } from './syncPauseState.js'
 
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
 const SERIAL_COLUMN_BY_TYPE = { WSR: 'WSR #', WSI: 'WSI #', ESR: 'ESR#', ESI: 'ESI#' }
@@ -477,6 +478,16 @@ const PILE_RECALC_THROTTLE_MS = 5 * 60 * 1000
 let lastPileRecalcAt = 0
 const maybeRecalculatePileStates = async (warehouseIds) => {
   if (Date.now() - lastPileRecalcAt < PILE_RECALC_THROTTLE_MS) return
+  // Re-checked here, not just by the caller (startTransactionSyncWorker's
+  // own runSync) - a form can open and call pauseTransactionSync() at
+  // any point WHILE the per-type preload loop above this call is still
+  // running, which the caller's own check (made before that loop even
+  // started) can't see. Catching it again right before the expensive
+  // part actually starts closes most of that window - not all of it
+  // (an already-started recalculatePileStatesForWarehouses call can't
+  // be interrupted mid-flight without restructuring it), but the
+  // common case (form opens before this point is reached) is covered.
+  if (isTransactionSyncPaused()) return
   lastPileRecalcAt = Date.now()
   try {
     await recalculatePileStatesForWarehouses(warehouseIds)

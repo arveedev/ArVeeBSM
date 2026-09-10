@@ -1369,4 +1369,33 @@
 //               but closing off a real, unguarded source of main-
 //               thread/IndexedDB contention is a genuine improvement
 //               either way.
-export const APP_VERSION = '1.9-88'
+//   1.9-89 - Follow-up to 1.9-88's contention fix, per a further report
+//            that serial lookup was still slow: found a real gap in
+//            that fix - the pile-balance recalc sweep only checked
+//            whether background sync was paused BEFORE its own preload
+//            cycle started, not right before the expensive recalc
+//            itself runs a few steps later. A form opening (pausing
+//            sync) partway through an already-in-flight cycle wasn't
+//            caught, so the recalc could still run concurrently with a
+//            freshly-opened form's own serial lookup. Re-checks the
+//            pause flag immediately before starting the recalc now,
+//            closing that gap for the common case. Split the pause
+//            flag itself into its own module (syncPauseState.js) so
+//            this and the backup worker can both read it without a
+//            circular import through syncWorker.js - no behavior
+//            change for the three forms that already pause/resume it,
+//            their import path is unchanged.
+//            Also looked into the two console errors reported
+//            alongside this: the AbortError from syncMillingOrdersFromSheets
+//            is pre-existing, intentional behavior (an 8-second timeout
+//            on every Google Sheets call, specifically so a slow/cold
+//            Apps Script response can never hang the UI - see
+//            googleSheetsBridge.js's fetchWithTimeout) - it means that
+//            one sync attempt was too slow and got cut short, not a new
+//            bug. The other error (reportAllChanges / reading
+//            'startTime') traces to an anonymous injected script, not
+//            this app's own bundle - this project has no analytics or
+//            web-vitals package at all, so it's most likely a Vercel
+//            dashboard feature (Speed Insights/Analytics) or a browser
+//            extension, neither of which this codebase can see or fix.
+export const APP_VERSION = '1.9-89'

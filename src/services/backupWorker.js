@@ -20,7 +20,7 @@
 
 import { db } from '../db/dexie.js'
 import { logError } from '../utils/errorLog.js'
-import { isTransactionSyncPaused } from './syncWorker.js'
+import { isTransactionSyncPaused } from './syncPauseState.js'
 
 const BACKUP_CHECK_INTERVAL_MS = 5 * 60 * 1000 // cheap check; the real work below only runs once BACKUP_THROTTLE_MS has actually elapsed
 const BACKUP_THROTTLE_MS = 24 * 60 * 60 * 1000

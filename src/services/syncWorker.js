@@ -12,6 +12,12 @@ import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
 import { preloadTransactionsForUser } from './transactionPreload.js'
+import { pauseTransactionSync, resumeTransactionSync, isTransactionSyncPaused } from './syncPauseState.js'
+
+// Re-exported so every existing form import (`from
+// '../../services/syncWorker.js'`) keeps working unchanged - see
+// syncPauseState.js for why the actual state now lives there instead.
+export { pauseTransactionSync, resumeTransactionSync }
 
 let isSyncing = false
 
@@ -318,29 +324,19 @@ const TRANSACTION_SYNC_INTERVAL_MS = 30 * 1000
  * @param {object} user - the current logged-in user (from useAuth())
  * @returns {() => void} cleanup function
  */
-// A simple counter, not a boolean - if more than one thing needs to
-// pause background sync at once (unlikely today, but safer), they
-// won't clobber each other's intent to resume. Exported so form
-// components can pause this worker specifically while they're open -
-// the periodic background sync competes for the same IndexedDB
-// connection as the form's own local lookups, which is the confirmed,
-// direct explanation for why even a purely local, already-loaded
-// record could feel slow to redisplay while a sync cycle happens to
-// be mid-flight at the same moment.
-let transactionSyncPauseCount = 0
-export const pauseTransactionSync = () => { transactionSyncPauseCount++ }
-export const resumeTransactionSync = () => { transactionSyncPauseCount = Math.max(0, transactionSyncPauseCount - 1) }
-// Readable by other background workers (backupWorker.js's heavy
-// full-table dump in particular) that also want to stay out of the
-// way while a form is open, without each needing its own separate
-// pause/resume wiring through every form.
-export const isTransactionSyncPaused = () => transactionSyncPauseCount > 0
+// pauseTransactionSync/resumeTransactionSync - exported above (see
+// syncPauseState.js). Forms call these to pause this worker while
+// they're open - the periodic background sync competes for the same
+// IndexedDB connection as the form's own local lookups, which is the
+// confirmed, direct explanation for why even a purely local, already-
+// loaded record could feel slow to redisplay while a sync cycle
+// happens to be mid-flight at the same moment.
 
 export const startTransactionSyncWorker = (user) => {
   let cancelled = false
 
   const runSync = async () => {
-    if (cancelled || !user || transactionSyncPauseCount > 0) return
+    if (cancelled || !user || isTransactionSyncPaused()) return
     await preloadTransactionsForUser(user)
   }
 
