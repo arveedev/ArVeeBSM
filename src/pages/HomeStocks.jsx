@@ -23,6 +23,7 @@ import { calculateCurrentAge, fmtBags, fmtWeight, fmtNetBags, AGE_BUCKETS } from
 import { computeUnwithdrawnByVariety, computeUnwithdrawnByVarietyAge } from '../utils/unwithdrawnStock.js'
 import { computePileStockBySackWeight } from '../utils/pileLedger.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
+import CountUpNumber from '../components/common/CountUpNumber.jsx'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
 
@@ -54,12 +55,16 @@ function PileWeightSubscriber({ pileId, warehouseCutoffDate, sackTypes, onData }
   return null
 }
 
-function SummaryCard({ label, value, sub = false }) {
+// Concept B (picked) - countUp/format (raw number + its formatter)
+// animates the figure up from its previous value instead of snapping;
+// passing the already-formatted `value` string directly (existing
+// call sites elsewhere) still works exactly as before.
+function SummaryCard({ label, value, countUp, format, sub = false }) {
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <p className="text-xs text-neutral-400">{label}</p>
       <p className={sub ? 'mt-1 text-lg font-medium tabular-nums text-neutral-300' : 'mt-1 text-2xl font-semibold tabular-nums text-app-text'}>
-        {value}
+        {countUp != null && format ? <CountUpNumber value={countUp} format={format} /> : value}
       </p>
     </div>
   )
@@ -444,8 +449,13 @@ function HomeStocks({ warehouseId } = {}) {
   if (!hasStocks) {
     return (
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <SummaryCard label="Total Bags" value={fmtBags(totalBags)} />
-        <SummaryCard label={weightUnit === 'mt' ? 'Total Net (MT)' : 'Total Net Bags'} value={weightUnit === 'mt' ? fmtWeight(totalKilos, 'mt') : fmtNetBags(totalNetBags)} sub />
+        <SummaryCard label="Total Bags" countUp={totalBags} format={fmtBags} />
+        <SummaryCard
+          label={weightUnit === 'mt' ? 'Total Net (MT)' : 'Total Net Bags'}
+          countUp={weightUnit === 'mt' ? totalKilos : totalNetBags}
+          format={weightUnit === 'mt' ? (v) => fmtWeight(v, 'mt') : fmtNetBags}
+          sub
+        />
       </div>
     )
   }

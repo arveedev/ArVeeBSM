@@ -1465,4 +1465,20 @@
 //               Google Sheets "Sync Now" button - deliberately NOT
 //               added to the continuous 30s/5min background polling
 //               cycles, which stay silent by design to avoid spam.
-export const APP_VERSION = '1.9-92'
+//   1.9-93 - Animation batch 2: login, boot, and dashboard.
+//            1. Concept A - each PIN dot now pops as it lands, and a
+//               wrong PIN shakes the whole dots row once (on top of
+//               Login's own existing fly-in/fly-out entrance/exit,
+//               which only plays before/after typing and never
+//               overlaps with this).
+//            2. Concept W - a soft breathing pulse on the app logo is
+//               shown the instant the page loads, before db.open()
+//               even starts, replacing what used to be a blank flash
+//               while the database opens.
+//            3. Concept B - the dashboard's headline Total figures
+//               (Admin Home Stocks' Rice/Palay totals, plus Home
+//               Stocks' Total Bags/Total Net Bags summary cards) now
+//               count up from their previous value instead of
+//               snapping to the new one, via a new shared
+//               CountUpNumber component.
+export const APP_VERSION = '1.9-93'

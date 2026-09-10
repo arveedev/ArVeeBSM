@@ -58,6 +58,11 @@ function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExiting, setIsExiting] = useState(false)
   const [hasEntered, setHasEntered] = useState(false)
+  // Bumped on a wrong PIN, purely to force the dots row to remount and
+  // replay its shake keyframe every time (a plain CSS class toggle
+  // wouldn't retrigger on a second consecutive wrong attempt, since the
+  // class would already be present).
+  const [shakeKey, setShakeKey] = useState(0)
   const inputRef = useRef(null)
   const navigate = useNavigate()
   const { user, login } = useAuth()
@@ -148,6 +153,7 @@ function Login() {
     } else {
       toast.error('Invalid access PIN')
       setPin('')
+      setShakeKey((k) => k + 1)
       inputRef.current?.focus()
       setIsSubmitting(false)
     }
@@ -229,18 +235,26 @@ function Login() {
           aria-label="Access PIN"
         />
 
-        {/* PIN progress dots */}
-        <div className="mt-8 flex justify-center gap-3">
+        {/* PIN progress dots - shakeKey remounts this whole row on a
+            wrong PIN, replaying animate-pin-dots-shake even on repeated
+            wrong attempts in a row (a plain class toggle wouldn't
+            retrigger if the class were already present). */}
+        <div key={shakeKey} className={`mt-8 flex justify-center gap-3 ${shakeKey > 0 ? 'animate-pin-dots-shake' : ''}`}>
           {Array.from({ length: PIN_LENGTH }).map((_, i) => (
             <div
-              key={i}
+              // Remounts each dot exactly when ITS OWN filled-state
+              // changes, so animate-pin-dot-pop (a keyframe, not a
+              // plain transition) replays fresh every time a digit
+              // actually lands - a bare className toggle wouldn't
+              // replay a keyframe animation already present.
+              key={i < pin.length ? `filled-${i}` : `empty-${i}`}
               style={{
                 transition: 'transform 1400ms, opacity 1400ms, border-color 150ms, background-color 150ms',
                 ...((isExiting || !hasEntered) ? flyTransformHorizontal(i) : {}),
               }}
               className={`h-4 w-4 rounded-full border ${
                 i < pin.length
-                  ? 'border-brand-neon bg-brand-neon'
+                  ? 'border-brand-neon bg-brand-neon animate-pin-dot-pop'
                   : 'border-neutral-700 bg-transparent'
               }`}
             />

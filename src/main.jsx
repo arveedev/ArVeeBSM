@@ -8,9 +8,15 @@ import { WarehouseProvider } from './context/WarehouseContext.jsx'
 import { PageHeaderProvider } from './context/PageHeaderContext.jsx'
 import { db } from './db/dexie.js'
 import DbOpenErrorScreen from './components/common/DbOpenErrorScreen.jsx'
+import BootScreen from './components/common/BootScreen.jsx'
 import './index.css'
 
 const root = ReactDOM.createRoot(document.getElementById('root'))
+
+// Concept W (picked) - a branded moment instead of a blank flash while
+// the database opens (normally near-instant, but not guaranteed - a
+// first-time schema migration on a device can take a real moment).
+root.render(<BootScreen />)
 
 // Every table read/write implicitly opens the database on first use,
 // but an implicit open's failure (a corrupted IndexedDB, a schema

@@ -19,6 +19,7 @@ import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 import { computeUnwithdrawnByVariety, computeUnwithdrawnByCategoryAge, UNSPECIFIED_AGE } from '../utils/unwithdrawnStock.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
+import CountUpNumber from '../components/common/CountUpNumber.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const BREAKDOWN_TABS = ['Breakdown', 'Age Grouping']
@@ -202,13 +203,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
                   Total — Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
-                <span className="text-lg font-bold tabular-nums text-blue-400">{fmt(riceBranchValue)}</span>
+                <span className="text-lg font-bold tabular-nums text-blue-400"><CountUpNumber value={riceBranchValue} format={fmt} /></span>
               </div>
               <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
                   Total — Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
                 </span>
-                <span className="text-lg font-bold tabular-nums text-brand-neon">{fmt(palayBranchValue)}</span>
+                <span className="text-lg font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayBranchValue} format={fmt} /></span>
               </div>
             </div>
           )
