@@ -48,6 +48,13 @@ function PilesBeginningBalances({ warehouseId }) {
   const [originalSeedIds, setOriginalSeedIds] = useState([])
   const [age, setAge] = useState('')
   const [ageUnit, setAgeUnit] = useState('Days')
+  // Free text (real procurement dates are often ranges, e.g. "MAR 24 TO
+  // APR 4, 2025") - same pile.dateProcured field the exported pile
+  // layout (pileLayoutPdfGenerator.js) and Settings > Create/Edit Pile
+  // both already use, labeled "Date Received" for Rice or "Date
+  // Procured" for Palay depending on cereal type. Was previously only
+  // editable from Settings, not from here.
+  const [dateProcured, setDateProcured] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
   const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
@@ -92,6 +99,7 @@ function PilesBeginningBalances({ warehouseId }) {
     setOriginalSeedIds([])
     setAge('')
     setAgeUnit('Days')
+    setDateProcured('')
   }
 
   const handleEdit = async (pile) => {
@@ -136,6 +144,7 @@ function PilesBeginningBalances({ warehouseId }) {
     setAge(liveFormatNumber(String(
       storedDays > 0 && storedDays % 30 === 0 ? storedDays / 30 : storedDays
     )))
+    setDateProcured(pile.dateProcured ?? '')
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -168,6 +177,7 @@ function PilesBeginningBalances({ warehouseId }) {
     await db.piles.update(editingPileId, {
       initialAgeValue: newAgeDays,
       dateOfReceipt: first?.dateReceived || todayLocalISO(),
+      dateProcured: dateProcured.trim() || null,
       condition: first?.condition || 'GQ',
       purity: first?.purity?.trim() || null,
       moistureContent: first?.moistureContent === '' || first?.moistureContent == null
@@ -331,6 +341,11 @@ function PilesBeginningBalances({ warehouseId }) {
                 {AGE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <label className={labelClass}>{editingCategory === 'Palay' ? 'Date Procured' : 'Date Received'} (optional)</label>
+            <input type="text" value={dateProcured} onChange={(e) => setDateProcured(e.target.value)}
+              className={inputClass} placeholder="MAR 24 TO APR 4, 2025" />
           </div>
           {lines.map((line, i) => (
             <div key={i} className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2.5">

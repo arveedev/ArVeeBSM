@@ -1317,4 +1317,13 @@
 //            System > Backup now shows the last automatic backup time
 //            and a link to view backups on GitHub, alongside the
 //            existing manual Export All Data button (unchanged).
-export const APP_VERSION = '1.9-85'
+//   1.9-86 - Admin > Beginning Balances (Piles tab) now has a "Date
+//            Received"/"Date Procured" field (labeled per cereal type,
+//            same convention already used on the exported pile layout
+//            and Settings > Create/Edit Pile) - previously only
+//            editable from Settings, meaning a full beginning-balance
+//            correction needed switching between two different panels
+//            to also fix this one field. Same underlying pile.dateProcured
+//            field, not a new one - editing it here or in Settings now
+//            updates the same value either way.
+export const APP_VERSION = '1.9-86'
