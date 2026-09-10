@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import MorphButton from '../MorphButton.jsx'
 import {
   inputClass,
   labelClass,
@@ -36,7 +37,7 @@ function ProvincesPanel() {
   const handleSave = async () => {
     if (!code.trim() || !name.trim()) {
       toast.error('Province code and name are required')
-      return
+      return false
     }
 
     const normalizedCode = code.trim().toUpperCase()
@@ -44,20 +45,21 @@ function ProvincesPanel() {
     const existing = await db.provinces.where('code').equals(normalizedCode).first()
     if (existing && existing.provinceId !== editingId) {
       toast.error('That province code is already registered')
-      return
+      return false
     }
 
     if (editingId) {
       await db.provinces.update(editingId, { code: normalizedCode, name: name.trim() })
-      toast.success('Province updated')
     } else {
       await db.provinces.add({
         provinceId: crypto.randomUUID(),
         code: normalizedCode,
         name: name.trim(),
       })
-      toast.success('Province saved')
     }
+    // Concept F (picked) - the Save button's own checkmark morph is
+    // the confirmation now; the separate success toasts this used to
+    // show are redundant on top of that.
 
     resetForm()
   }
@@ -114,9 +116,7 @@ function ProvincesPanel() {
         </div>
 
         <div className="flex gap-2">
-          <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>
-            Save
-          </button>
+          <MorphButton label="Save" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`} />
           {editingId && (
             <button type="button" onClick={resetForm} className={secondaryButtonClass}>
               Cancel

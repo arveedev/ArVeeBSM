@@ -1587,4 +1587,18 @@
 //               position when Sort & Filter changes the order (FLIP
 //               technique), instead of an instant re-render with no
 //               indication of what moved.
-export const APP_VERSION = '1.9-97'
+//   1.9-98 - Broadened two already-picked concepts to more places:
+//            1. Concept B (count-up) - Admin Home Sacks' per-condition
+//               pieces figures now count up too, not just the
+//               dashboard headline totals from the last round.
+//            2. Concept F (MorphButton) - wired into three more direct-
+//               save admin panels (Provinces, Branches, Transaction
+//               Types), each losing its separate success toast in
+//               favor of the button's own checkmark morph. Confirmed
+//               live: click-to-checkmark-to-"Saved" all fire correctly,
+//               no regressions. Many more admin panels still have a
+//               plain Save button (Varieties, Sack Types, Users,
+//               Customers, Warehouses, Sheet Sources, Signatories,
+//               Ricemill Allocations) - not yet converted, a real
+//               remaining scope item, not an oversight.
+export const APP_VERSION = '1.9-98'

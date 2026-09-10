@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import MorphButton from '../MorphButton.jsx'
 import {
   inputClass,
   labelClass,
@@ -36,7 +37,7 @@ function TransactionTypesPanel() {
   const handleSave = async () => {
     if (!name.trim()) {
       toast.error('Transaction type name is required')
-      return
+      return false
     }
 
     const normalizedName = name.trim()
@@ -44,19 +45,18 @@ function TransactionTypesPanel() {
     const existing = await db.transactionTypes.where('name').equals(normalizedName).first()
     if (existing && existing.transactionTypeId !== editingId) {
       toast.error('That transaction type already exists')
-      return
+      return false
     }
 
     if (editingId) {
       await db.transactionTypes.update(editingId, { name: normalizedName })
-      toast.success('Transaction type updated')
     } else {
       await db.transactionTypes.add({
         transactionTypeId: crypto.randomUUID(),
         name: normalizedName,
       })
-      toast.success('Transaction type saved')
     }
+    // Concept F (picked) - Save button's own morph is the confirmation.
 
     resetForm()
   }
@@ -95,9 +95,7 @@ function TransactionTypesPanel() {
         </div>
 
         <div className="flex gap-2">
-          <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>
-            Save
-          </button>
+          <MorphButton label="Save" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`} />
           {editingId && (
             <button type="button" onClick={resetForm} className={secondaryButtonClass}>
               Cancel

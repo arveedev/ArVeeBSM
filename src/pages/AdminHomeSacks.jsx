@@ -19,6 +19,7 @@ import { fmtBags, effectiveCutoffDate } from '../utils/calculations.js'
 import { SACK_CONDITIONS } from '../components/common/admin/shared.js'
 import { Section, Empty } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
+import CountUpNumber from '../components/common/CountUpNumber.jsx'
 
 const GROUP_TABS = ['Province', 'Warehouse']
 
@@ -105,7 +106,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
                 {conditions.map((r) => (
                   <div key={r.condition.code} className="flex items-center justify-between">
                     <span className="text-sm text-app-text">{r.condition.label}</span>
-                    <span className="text-sm font-semibold tabular-nums text-brand-neon">{fmtBags(r.total)} pcs</span>
+                    <span className="text-sm font-semibold tabular-nums text-brand-neon"><CountUpNumber value={r.total} format={(v) => `${fmtBags(v)} pcs`} /></span>
                   </div>
                 ))}
               </div>

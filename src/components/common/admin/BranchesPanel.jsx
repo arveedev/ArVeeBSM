@@ -17,6 +17,7 @@ import toast from 'react-hot-toast'
 import { Pencil, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import MorphButton from '../MorphButton.jsx'
 import {
   inputClass,
   labelClass,
@@ -61,13 +62,13 @@ function BranchesPanel() {
   const handleSave = async () => {
     if (!name.trim()) {
       toast.error('Branch name is required')
-      return
+      return false
     }
 
     const existing = await db.branches.where('name').equals(name.trim()).first()
     if (existing && existing.branchId !== editingId) {
       toast.error('A branch with that name already exists')
-      return
+      return false
     }
 
     const branchId = editingId ?? crypto.randomUUID()
@@ -99,7 +100,8 @@ function BranchesPanel() {
       await db.provinces.update(id, { branchId })
     }
 
-    toast.success(editingId ? 'Branch updated' : 'Branch saved')
+    // Concept F (picked) - the Save/Update button's own checkmark morph
+    // is the confirmation now; a separate toast on top is redundant.
     resetForm()
   }
 
@@ -215,9 +217,7 @@ function BranchesPanel() {
         </div>
 
         <div className="flex gap-2">
-          <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>
-            {editingId ? 'Update' : 'Save'}
-          </button>
+          <MorphButton label={editingId ? 'Update' : 'Save'} onClick={handleSave} className={`flex-1 ${primaryButtonClass}`} />
           {editingId && (
             <button type="button" onClick={resetForm} className={`flex-1 ${secondaryButtonClass}`}>
               Cancel
