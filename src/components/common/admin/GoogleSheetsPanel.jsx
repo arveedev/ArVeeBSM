@@ -14,6 +14,9 @@ import { RefreshCw } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { saveSheetsConfig, syncAuthoritiesFromSheets } from '../../../services/googleSheetsBridge.js'
 import { inputClass, labelClass, primaryButtonClass } from './shared.js'
+import { SyncProgressToast } from '../AnimatedToast.jsx'
+
+const SHEETS_SYNC_TOAST_ID = 'sheets-sync-now-progress'
 
 const emptyForm = {
   webAppUrl: '',
@@ -75,17 +78,21 @@ function GoogleSheetsPanel() {
     }
 
     setIsSyncing(true)
+    toast.loading(<SyncProgressToast label="Syncing from Google Sheets…" phase="progress" />, { id: SHEETS_SYNC_TOAST_ID })
     const result = await syncAuthoritiesFromSheets()
     setIsSyncing(false)
 
     if (result.ok) {
-      toast.success(`Synced ${result.aiCount} AI and ${result.siaCount} SIA record(s)`)
+      toast.success(
+        <SyncProgressToast doneLabel={`Synced ${result.aiCount} AI and ${result.siaCount} SIA record(s)`} phase="done" />,
+        { id: SHEETS_SYNC_TOAST_ID }
+      )
     } else if (result.reason === 'offline') {
-      toast.error('No connection — will retry automatically once online')
+      toast.error('No connection — will retry automatically once online', { id: SHEETS_SYNC_TOAST_ID })
     } else if (result.reason === 'not_configured') {
-      toast.error('Save a Web App URL first')
+      toast.error('Save a Web App URL first', { id: SHEETS_SYNC_TOAST_ID })
     } else {
-      toast.error('Sync failed — check the Web App URL and try again')
+      toast.error('Sync failed — check the Web App URL and try again', { id: SHEETS_SYNC_TOAST_ID })
     }
   }
 

@@ -18,9 +18,14 @@
 // so "a browser that's already logged in and already holds a full
 // local copy of everything" is the realistic place to build this from.
 
+import { createElement } from 'react'
+import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { logError } from '../utils/errorLog.js'
 import { isTransactionSyncPaused } from './syncPauseState.js'
+import { SyncProgressToast } from '../components/common/AnimatedToast.jsx'
+
+const BACKUP_TOAST_ID = 'auto-backup-progress'
 
 const BACKUP_CHECK_INTERVAL_MS = 5 * 60 * 1000 // cheap check; the real work below only runs once BACKUP_THROTTLE_MS has actually elapsed
 const BACKUP_THROTTLE_MS = 24 * 60 * 60 * 1000
@@ -55,6 +60,12 @@ const runAutoBackupIfDue = async () => {
     const lastAt = config?.lastAutoBackupAt ? new Date(config.lastAutoBackupAt).getTime() : 0
     if (Date.now() - lastAt < BACKUP_THROTTLE_MS) return
 
+    // Toast #2 (picked) - visible ONLY for this once-a-day event, never
+    // for the continuous 30s/5min polling cycles elsewhere in the app,
+    // which stay silent by design (a toast on every one of those would
+    // be spam). Rare and meaningful enough here to be worth showing.
+    toast.loading(createElement(SyncProgressToast, { label: 'Backing up database…', phase: 'progress' }), { id: BACKUP_TOAST_ID })
+
     const payload = await buildFullDump()
     const response = await fetch('/api/backup-to-github', {
       method: 'POST',
@@ -74,9 +85,11 @@ const runAutoBackupIfDue = async () => {
     // than silently skipping a whole day because of one failed attempt.
     await db.reportConfig.put({ ...config, id: 'global', lastAutoBackupAt: new Date().toISOString() })
     console.log('[backupWorker] Automatic backup committed to GitHub.')
+    toast.success(createElement(SyncProgressToast, { doneLabel: 'Backup committed to GitHub', phase: 'done' }), { id: BACKUP_TOAST_ID })
   } catch (err) {
     console.error('[backupWorker] Automatic backup failed:', err)
     logError('Automatic backup', err, { nickname: 'Background sync', role: 'System' })
+    toast.dismiss(BACKUP_TOAST_ID)
   }
 }
 

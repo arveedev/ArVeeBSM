@@ -10,7 +10,7 @@
 // dismiss it early. Stacking multiple toasts at once is already
 // react-hot-toast's own default behavior, nothing extra needed for that.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast as hotToast, resolveValue } from 'react-hot-toast'
 import { CheckCircle2, AlertTriangle, Loader2, Info } from 'lucide-react'
 
@@ -80,6 +80,78 @@ function AnimatedToast({ t }) {
       </span>
       <span className="text-sm font-medium text-app-text">{resolveValue(t.message, t)}</span>
     </div>
+  )
+}
+
+// Toast #10 (picked, per explicit request) - the standard message body
+// for every Save/Update confirmation across WSR/WSI/ESR/ESI/WTS. Counts
+// each real figure up from 0 instead of just showing a static number -
+// "numbers are the product," so a save confirmation shows the numbers,
+// not just a checkmark. `stats` is an ordered list of {label, value}
+// pairs (e.g. [{label:'bags', value:126}, {label:'kg', value:6249}]) -
+// deliberately generic across forms, since StockFormBase counts
+// bags+kilos, SackFormBase counts pieces, and WTS has two sides.
+const COUNT_UP_MS = 650
+export function SavedReceipt({ title, stats }) {
+  const [displayed, setDisplayed] = useState(() => stats.map(() => 0))
+  useEffect(() => {
+    let raf
+    const start = performance.now()
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / COUNT_UP_MS)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setDisplayed(stats.map((s) => Math.round(s.value * eased)))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // stats is rebuilt fresh per toast call (a new toast id each time),
+    // so this only ever needs to run once per mount, not react to
+    // later prop identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <span className="text-sm font-medium text-app-text">
+      <span className="block">{title}</span>
+      <span className="block text-xs text-neutral-400">
+        {stats.map((s, i) => (
+          <span key={s.label}>
+            {i > 0 && ' · '}
+            {displayed[i].toLocaleString()} {s.label}
+          </span>
+        ))}
+      </span>
+    </span>
+  )
+}
+
+// Toast #2 (picked, per explicit request) - for the app's own real
+// background/manual sync operations (the automatic GitHub backup,
+// the Google Sheets "Sync Now" button), not the continuous 30-second/
+// 5-minute polling cycles - those stay silent by design, a toast on
+// every one of those would be spam. `phase` is 'progress' (indeterminate
+// sweep - there's no reliable byte-level progress for a fetch() upload,
+// so this deliberately doesn't fake a timed fill) or 'done'.
+export function SyncProgressToast({ label, doneLabel, phase }) {
+  const isDone = phase === 'done'
+  return (
+    <span className="flex items-center gap-2.5">
+      {isDone ? (
+        <CheckCircle2 size={18} className="shrink-0 text-brand-neon" />
+      ) : (
+        <span className="relative block h-2.5 w-2.5 shrink-0 rounded-full border border-neutral-700">
+          <span className="absolute inset-0 rounded-full border border-t-brand-amber animate-spin" />
+        </span>
+      )}
+      <span className="text-sm font-medium text-app-text">
+        <span className="block">{isDone ? doneLabel : label}</span>
+        {!isDone && (
+          <span className="mt-1.5 block h-[3px] w-32 overflow-hidden rounded-full bg-neutral-800">
+            <span className="block h-full w-1/3 rounded-full bg-brand-amber animate-toast-progress-sweep" />
+          </span>
+        )}
+      </span>
+    </span>
   )
 }
 

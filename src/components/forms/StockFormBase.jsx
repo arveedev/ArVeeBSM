@@ -94,6 +94,7 @@ import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import SplitFlapText from '../common/SplitFlapText.jsx'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
+import { SavedReceipt } from '../common/AnimatedToast.jsx'
 import {
   inputClass,
   labelClass,
@@ -1958,7 +1959,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       }
     }
 
-    toast.success(`${type} saved — ${serialNo.trim()}`)
+    toast.success(<SavedReceipt title={`${type} saved — ${serialNo.trim()}`} stats={[{ label: 'bags', value: bagsNum }, { label: 'kg', value: netKilos }]} />)
 
     // Uses suggestNextSerial (date-aware, per the just-recorded save
     // above) instead of a blind ±1 off whatever was just typed - a
@@ -2200,7 +2201,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       }
     })
 
-    toast.success(`${type} ${serialNo.trim()} updated`)
+    toast.success(<SavedReceipt title={`${type} ${serialNo.trim()} updated`} stats={[{ label: 'bags', value: bagsNum }, { label: 'kg', value: netKilos }]} />)
     // Reloads from the freshly-saved state (including a fresh sibling
     // fetch) rather than just setLoadedTransaction(updated) - keeps
     // extraPileAllocations/originalExtraAllocations correctly in sync

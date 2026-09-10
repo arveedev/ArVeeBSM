@@ -53,6 +53,7 @@ import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
+import { SavedReceipt } from '../common/AnimatedToast.jsx'
 import {
   inputClass,
   labelClass,
@@ -897,7 +898,7 @@ const SackFormBase = forwardRef(function SackFormBase(
       }
     }
 
-    toast.success(`${type} saved — ${serialNo.trim()}`)
+    toast.success(<SavedReceipt title={`${type} saved — ${serialNo.trim()}`} stats={[{ label: 'pieces', value: totalPieces }]} />)
 
     // Uses suggestNextSerial (date-aware, per the just-recorded save
     // above) instead of a blind ±1 - see StockFormBase.jsx's matching
@@ -971,7 +972,7 @@ const SackFormBase = forwardRef(function SackFormBase(
       }
     })
 
-    toast.success(`${type} ${serialNo.trim()} updated`)
+    toast.success(<SavedReceipt title={`${type} ${serialNo.trim()} updated`} stats={[{ label: 'pieces', value: totalPieces }]} />)
     setLoadedTransaction(updated)
     scrollToTop()
     } catch (err) {

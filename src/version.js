@@ -1445,4 +1445,24 @@
 //            record already sitting in this stale state self-corrects
 //            the next time preload touches its warehouse, not just new
 //            merges from here on.
-export const APP_VERSION = '1.9-91'
+//   1.9-92 - Toast overhaul, batch 1 of the animation set worked
+//            through with the user (toast #1's edge-strip color and
+//            swipe-to-dismiss already existed - confirmed while
+//            starting this work):
+//            1. Default toast durations raised from react-hot-toast's
+//               own defaults (2s success / 4s error - reported as too
+//               fast to actually read) to 5s success / 6s error, set
+//               once at the <Toaster> level.
+//            2. Toast #10 - every Save and Update confirmation across
+//               WSR/WSI/ESR/ESI/WTS now shows a SavedReceipt: the
+//               real bags/kilos (or pieces, or issued/received bags
+//               for WTS) counting up from 0, instead of just a plain
+//               "saved" message.
+//            3. Toast #2 - a progress-style toast (an indeterminate
+//               sweep, not a fake timed fill, since a fetch() upload
+//               has no real byte-level progress to report) now shows
+//               for the automatic daily GitHub backup and the Admin >
+//               Google Sheets "Sync Now" button - deliberately NOT
+//               added to the continuous 30s/5min background polling
+//               cycles, which stay silent by design to avoid spam.
+export const APP_VERSION = '1.9-92'

@@ -37,6 +37,7 @@ import CalendarDatePicker from '../common/CalendarDatePicker.jsx'
 import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
+import { SavedReceipt } from '../common/AnimatedToast.jsx'
 import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter, findAdjacentTransaction } from '../../utils/serialNumber.js'
 import {
   liveFormatNumber,
@@ -773,7 +774,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim(), null, { date: tx.date, createdAt: tx.createdAt })
       await applyWtsToPiles(tx)
     })
-    toast.success(`WTS saved — ${serialNo.trim()}`)
+    toast.success(<SavedReceipt title={`WTS saved — ${serialNo.trim()}`} stats={[{ label: 'issued bags', value: issuedSide.bags ? parseFormattedNumber(issuedSide.bags) : 0 }, { label: 'received bags', value: receivedSide.bags ? parseFormattedNumber(receivedSide.bags) : 0 }]} />)
     // suggestNextSerial (date-aware, per the just-recorded save above)
     // instead of a blind ±1 - see StockFormBase.jsx's matching change
     // for the full reasoning.
@@ -807,7 +808,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       await db.transactions.update(loadedTransaction.id, updated)
       await reapplyWtsToPiles(loadedTransaction, updated)
     })
-    toast.success(`WTS ${serialNo.trim()} updated`)
+    toast.success(<SavedReceipt title={`WTS ${serialNo.trim()} updated`} stats={[{ label: 'issued bags', value: issuedSide.bags ? parseFormattedNumber(issuedSide.bags) : 0 }, { label: 'received bags', value: receivedSide.bags ? parseFormattedNumber(receivedSide.bags) : 0 }]} />)
     setLoadedTransaction(updated)
     scrollToTop()
     } catch (err) {

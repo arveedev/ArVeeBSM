@@ -299,7 +299,20 @@ function App() {
           Custom-rendered via AnimatedToast (icon per type, entrance motion,
           swipe-to-dismiss) - every existing toast.success/error/etc call
           site is untouched, this hooks in once at the Toaster level. */}
-      <Toaster position="top-center">
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          // Default react-hot-toast durations (2s success / 4s error) were
+          // reported as too fast to actually read on what's meant to be a
+          // readable confirmation, not a flash. Loading toasts are
+          // untouched (Infinity) - those are always dismissed
+          // programmatically once the real operation finishes, a fixed
+          // duration would be wrong either way.
+          duration: 5000,
+          success: { duration: 5000 },
+          error: { duration: 6000 },
+        }}
+      >
         {(t) => <AnimatedToast t={t} />}
       </Toaster>
     </div>
