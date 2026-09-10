@@ -559,6 +559,31 @@ const looksLikeSameEvent = (a, b) => {
     && closeEnough(piecesOf(a), piecesOf(b))
 }
 
+// A record imported from historical Sheet data starts with
+// needsCompletion: true (see mapSheetRowToTransaction) so the "pulled
+// from historical Sheet data" banner shows until Pile/MTS Sack (or,
+// for ESR/ESI, the sack breakdown) are filled in. Saving through the
+// normal Update button already clears this correctly (see
+// StockFormBase.jsx/SackFormBase.jsx's buildTransactionPayload) - but
+// the field-merge loop below (and its several one-time predecessors
+// earlier in this file) only ever fills a survivor's BLANK fields from
+// a duplicate/sibling record; needsCompletion is a non-blank boolean,
+// so that "only fill blanks" rule always leaves it untouched even
+// after the exact fields it was tracking as missing get filled in by
+// the merge. Confirmed, reported case: a record's real Pile ID and MTS
+// Sack were merged in from a genuine local duplicate, yet the banner
+// kept showing "need to be filled in" on data that was already there.
+// Recomputes the flag against what the record ACTUALLY has now,
+// rather than trusting a value that was only ever correct at import
+// time.
+const clearStaleNeedsCompletion = (tx) => {
+  if (!tx.needsCompletion) return
+  const isComplete = (tx.type === 'ESR' || tx.type === 'ESI')
+    ? Array.isArray(tx.sackLines) && tx.sackLines.length > 0
+    : Boolean(tx.pileId) && Boolean(tx.mtsSackTypeId)
+  if (isComplete) tx.needsCompletion = false
+}
+
 const dedupeDuplicateTransactions = async (type, warehouseIds) => {
   if (warehouseIds.length === 0) return
   const rows = await db.transactions
@@ -597,12 +622,27 @@ const dedupeDuplicateTransactions = async (type, warehouseIds) => {
           if ((survivor[field] == null || survivor[field] === '') && value != null && value !== '') survivor[field] = value
         }
       }
+      clearStaleNeedsCompletion(survivor)
       toUpdate.push(survivor)
       for (const other of sameEventOthers) idsToDelete.push(other.id)
     }
     if (collidingOthers.length > 0) {
       collisions.push({ survivor, others: collidingOthers })
     }
+  }
+  // Beyond fresh merges above, also heals any record ALREADY sitting
+  // locally with this stale combination (e.g. merged by an earlier
+  // preload cycle, or by one of the older one-time migrations further
+  // up this file, before this fix existed) - runs every cycle, so a
+  // device with the bad state already on disk self-corrects the next
+  // time this sweep touches its warehouse, not just for new merges
+  // going forward.
+  const alreadyUpdatingIds = new Set(toUpdate.map((tx) => tx.id))
+  for (const tx of rows) {
+    if (alreadyUpdatingIds.has(tx.id) || !tx.needsCompletion) continue
+    const patched = { ...tx }
+    clearStaleNeedsCompletion(patched)
+    if (patched.needsCompletion !== tx.needsCompletion) toUpdate.push(patched)
   }
   if (toUpdate.length > 0) await db.transactions.bulkPut(toUpdate)
   if (idsToDelete.length > 0) {

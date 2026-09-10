@@ -1422,4 +1422,27 @@
 //            preload genuinely completes, "not found" is trusted as
 //            definitive. Fixed identically in both StockFormBase.jsx
 //            and SackFormBase.jsx (WTSForm.jsx never had this pattern).
-export const APP_VERSION = '1.9-90'
+//   1.9-91 - Found and fixed the real cause of a genuinely different
+//            bug than 1.9-90's - the "pulled from historical Sheet
+//            data" banner showing on a record that DID already have
+//            real Pile ID and MTS Sack values filled in (confirmed via
+//            screenshot: the banner and the actual filled-in fields
+//            were visible on the same loaded record at once). Root
+//            cause, in transactionPreload.js's duplicate-cleanup merge
+//            (dedupeDuplicateTransactions, plus its three older one-
+//            time predecessors earlier in this file): the merge only
+//            ever fills a survivor's BLANK fields from a duplicate
+//            record, never touches needsCompletion itself (a non-blank
+//            boolean, so "only fill blanks" always skipped it) - so a
+//            record that started as an incomplete Sheet-imported stub
+//            could get its real Pile/MTS values merged in from a
+//            genuine local duplicate, yet keep showing the banner
+//            forever afterward, since nothing ever recomputed the flag
+//            against what the record actually has now. Added
+//            clearStaleNeedsCompletion, which does exactly that -
+//            wired into fresh merges going forward, AND into a general
+//            per-row healing pass that runs every sweep cycle, so any
+//            record already sitting in this stale state self-corrects
+//            the next time preload touches its warehouse, not just new
+//            merges from here on.
+export const APP_VERSION = '1.9-91'
