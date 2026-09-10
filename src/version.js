@@ -1398,4 +1398,28 @@
 //            web-vitals package at all, so it's most likely a Vercel
 //            dashboard feature (Speed Insights/Analytics) or a browser
 //            extension, neither of which this codebase can see or fix.
-export const APP_VERSION = '1.9-89'
+//   1.9-90 - Found and fixed the real cause of a serial lookup
+//            wrongly showing "pulled from historical Sheet data" on a
+//            record the user had genuinely created in-app, plus the
+//            2-3 second delay before anything showed on what's
+//            supposed to be an instant offline-first lookup. Root
+//            cause, in WSR/WSI/ESR/ESI's checkAndLoadSerial: whenever
+//            this device's own one-time historical Sheet preload for
+//            that (warehouse, type) hadn't finished yet (common right
+//            after login, especially for an admin with many accessible
+//            warehouses), "not found locally" triggered a live network
+//            fetch of the Sheet as a fallback - slow, AND wrong for a
+//            record that actually already exists as a normal, synced
+//            Dexie Cloud transaction that simply hasn't been pulled
+//            down to THIS specific device yet: the Sheet has a backup
+//            row for every transaction regardless, so it "found" the
+//            record and imported it fresh as an incomplete historical
+//            stub, even though the real, complete local version was
+//            never actually missing - just not-yet-synced here. Now
+//            simply waits for preload to finish on its own (it does,
+//            within moments, via the existing 30-second background
+//            cycle) instead of racing a live network call - once
+//            preload genuinely completes, "not found" is trusted as
+//            definitive. Fixed identically in both StockFormBase.jsx
+//            and SackFormBase.jsx (WTSForm.jsx never had this pattern).
+export const APP_VERSION = '1.9-90'

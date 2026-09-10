@@ -28,7 +28,7 @@ import toast from 'react-hot-toast'
 import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle, Pencil } from 'lucide-react'
 import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
-import { db, isCloudSyncCaughtUp } from '../../db/dexie.js'
+import { db } from '../../db/dexie.js'
 import {
   suggestNextSerial,
   isSerialTaken,
@@ -40,7 +40,7 @@ import {
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
-import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
@@ -581,33 +581,24 @@ const SackFormBase = forwardRef(function SackFormBase(
         return true
       }
 
-      // Not found locally - trusts preload-completeness for speed,
-      // consistent with StockFormBase.jsx's identical revert. Becomes
-      // largely moot once serial-typing navigation is removed.
+      // Not found locally - see StockFormBase.jsx's identical revert
+      // for the full reasoning. Previously fell into a live Sheet
+      // fetch whenever preload wasn't complete yet (common right after
+      // login) - slow (a real network round-trip on what's supposed to
+      // be an instant offline-first lookup) and risky (could wrongly
+      // import a genuinely already-synced, just-not-yet-pulled-down
+      // local record as an incomplete "historical" stub). Now simply
+      // waits for preload to finish on its own (it does, within
+      // moments, via the existing 30-second background cycle) instead
+      // of racing the network. Once preload genuinely has finished,
+      // "not found" is treated as definitive - it already pulled the
+      // full Sheet history for this (warehouse, type), so a fresh
+      // separate fetch of the same Sheet moments later would find
+      // nothing preload didn't already catch.
       const preloaded = await isPreloadComplete(currentWarehouseId, type)
-      const sheetResult = preloaded
-        ? { ok: true, row: null }
-        : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
-      if (latestRequestedSerial.current !== serial) return false
-      if (sheetResult.ok && sheetResult.row) {
-        // See StockFormBase.jsx's identical guard - refuses to import a
-        // blank placeholder copy while this device's own pull-down from
-        // the cloud might still be catching up, which is what let a
-        // real duplicate-record bug through.
-        if (!isCloudSyncCaughtUp()) {
-          toast.error('Still syncing your data - please wait a moment and try this serial again.', { duration: 6000 })
-          return false
-        }
-        const transactionTypesByName = new Map((transactionTypes ?? []).map((t) => [t.name.trim().toLowerCase(), t.transactionTypeId]))
-        const imported = mapSheetRowToTransaction(type, sheetResult.row, { warehouseId: currentWarehouseId, transactionTypesByName })
-        await db.transactions.add(imported)
-        await recordSerialUsed(type, currentWarehouseId, serial)
-        if (latestRequestedSerial.current !== serial) return false
-        loadTransactionIntoForm(imported)
-        if (imported.needsCompletion) {
-          toast('Pulled from historical Sheet data - the sack breakdown by type/condition was not tracked there and needs to be entered before saving further changes.', { icon: '📋', duration: 6000 })
-        }
-        return true
+      if (!preloaded) {
+        toast.error('Still syncing this warehouse\'s data - please wait a moment and try this serial again.', { duration: 6000 })
+        return false
       }
 
       if (latestRequestedSerial.current !== serial) return false

@@ -46,7 +46,7 @@ import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../comm
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
-import { db, isCloudSyncCaughtUp } from '../../db/dexie.js'
+import { db } from '../../db/dexie.js'
 import {
   calculateNetKilos,
   calculateMtsFromSackWeight,
@@ -78,7 +78,7 @@ import {
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionToPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
-import { fetchTransactionBySerial, mapSheetRowToTransaction, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
@@ -1461,46 +1461,36 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       // Not found locally at all - that alone doesn't mean it never
       // existed, UNLESS this (warehouse, type) has already been fully
       // preloaded, in which case local data is already comprehensive
-      // and "not found" is a definitive answer - skip the slow Sheet
-      // lookup entirely in that case. This concern becomes largely
-      // moot once serial-typing navigation is removed from the create
-      // form (see that change) - editing only happens via Reports from
-      // then on, which already has the transaction in hand locally,
-      // with no lookup of this kind ever needed for that path.
+      // and "not found" is a definitive answer.
+      //
+      // While preload is still in progress (common right after login,
+      // especially for an admin with many accessible warehouses), this
+      // used to fall straight into a live network fetch of the Sheet -
+      // slow (a real round-trip, felt as a multi-second wait before
+      // anything showed, on what's supposed to be an offline-first
+      // instant lookup), AND risky: a record that's actually a normal,
+      // already-synced-elsewhere Dexie Cloud transaction, just not yet
+      // pulled down to THIS device, would still be found on the Sheet
+      // (every transaction also backs up there) and get wrongly
+      // imported as an incomplete "historical" stub - showing the
+      // wrong banner on a record the user genuinely created in-app,
+      // not something pulled from paper/Sheet history. Preload
+      // finishes on its own within moments via the existing 30-second
+      // background cycle, so there's no real cost to simply waiting
+      // for it instead of racing the network.
+      //
+      // Once preload genuinely has finished, it already pulled the
+      // FULL Sheet history for this (warehouse, type) - a fresh,
+      // separate live fetch of the very same Sheet moments later would
+      // essentially never find anything preload didn't already catch,
+      // so "not found" at this point is treated as definitive rather
+      // than spending another network round-trip to confirm it. (The
+      // live-fetch-and-import-as-historical-stub path this replaced is
+      // gone entirely now, not just skipped in this branch.)
       const preloaded = await isPreloadComplete(currentWarehouseId, type)
-      const sheetResult = preloaded
-        ? { ok: true, row: null }
-        : await fetchTransactionBySerial(type, currentWarehouse?.name, serial)
-      if (latestRequestedSerial.current !== serial) return false // superseded - discard
-      if (sheetResult.ok && sheetResult.row) {
-        // This device's local pull-down from the cloud may not have
-        // caught up yet (e.g. right after local storage was cleared or
-        // reset) - importing a blank placeholder copy from the Sheet
-        // right now risks sitting alongside the real, complete record
-        // once IT finishes syncing in moments later, leaving two
-        // records under the same serial (confirmed as a real, reported
-        // case). Refuse to import while that's still a possibility -
-        // the user just needs to wait a moment for their own data to
-        // finish loading, not guess at that from nothing.
-        if (!isCloudSyncCaughtUp()) {
-          toast.error('Still syncing your data - please wait a moment and try this serial again.', { duration: 6000 })
-          return false
-        }
-        const varietyByName = new Map(sortedVarieties.map((v) => [v.name.trim().toLowerCase(), { varietyId: v.varietyId, category: v.category }]))
-        const transactionTypesByName = new Map((transactionTypes ?? []).map((t) => [t.name.trim().toLowerCase(), t.transactionTypeId]))
-        const imported = mapSheetRowToTransaction(type, sheetResult.row, {
-          warehouseId: currentWarehouseId,
-          varietyByName,
-          transactionTypesByName,
-        })
-        await db.transactions.add(imported)
-        await recordSerialUsed(type, currentWarehouseId, serial, activeCategory)
-        if (latestRequestedSerial.current !== serial) return false // superseded during the write - discard
-        loadTransactionIntoForm(imported)
-        if (imported.needsCompletion) {
-          toast('Pulled from historical Sheet data - Pile and MTS Sack need to be filled in before saving further changes.', { icon: '📋', duration: 6000 })
-        }
-        return true
+      if (!preloaded) {
+        toast.error('Still syncing this warehouse\'s data - please wait a moment and try this serial again.', { duration: 6000 })
+        return false
       }
 
       if (latestRequestedSerial.current !== serial) return false // superseded - discard
