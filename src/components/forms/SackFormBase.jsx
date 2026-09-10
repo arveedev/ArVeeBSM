@@ -41,7 +41,7 @@ import {
 } from '../../utils/serialNumber.js'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
 import { fetchTransactionBySerial, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
-import { isPreloadComplete } from '../../services/transactionPreload.js'
+import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName, isAuthorityComplete } from '../../utils/calculations.js'
@@ -596,13 +596,15 @@ const SackFormBase = forwardRef(function SackFormBase(
       // full Sheet history for this (warehouse, type), so a fresh
       // separate fetch of the same Sheet moments later would find
       // nothing preload didn't already catch.
-      const preloaded = await isPreloadComplete(currentWarehouseId, type)
+      // Polls for a few seconds instead of checking once - see
+      // StockFormBase.jsx's identical fix for the full reasoning.
+      const preloaded = await waitForPreloadComplete(currentWarehouseId, type)
+      if (latestRequestedSerial.current !== serial) return false // moved on during the wait - discard
       if (!preloaded) {
-        toast.error('Still syncing this warehouse\'s data - please wait a moment and try this serial again.', { duration: 6000 })
+        toast.error('Still syncing this warehouse\'s data - please wait a moment and try this serial again.', { duration: 4000 })
         return false
       }
 
-      if (latestRequestedSerial.current !== serial) return false
       if (loadedTransaction) setLoadedTransaction(null)
       return false
     } finally {

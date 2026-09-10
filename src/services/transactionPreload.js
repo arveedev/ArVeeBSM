@@ -906,3 +906,24 @@ export const isPreloadComplete = async (warehouseId, type) => {
   const state = await db.preloadState.get([warehouseId, type])
   return Boolean(state?.complete)
 }
+
+// checkAndLoadSerial refuses to guess (see its own comment) while
+// preload for this (warehouse, type) isn't done yet - correct, but on
+// its own that meant the FIRST lookup after login always failed with a
+// "please wait" message the user then had to manually retry by hand,
+// even though preload might finish a second or two later on its own.
+// This polls isPreloadComplete for a bounded window instead of
+// checking it once, so the common case (preload finishes within a
+// couple seconds) resolves automatically - the lookup that triggered
+// this just quietly waits and then succeeds, instead of needing the
+// user to notice a toast, wait, and retype the serial themselves.
+const PRELOAD_WAIT_POLL_MS = 350
+export const waitForPreloadComplete = async (warehouseId, type, timeoutMs = 4000) => {
+  const deadline = Date.now() + timeoutMs
+  if (await isPreloadComplete(warehouseId, type)) return true
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, PRELOAD_WAIT_POLL_MS))
+    if (await isPreloadComplete(warehouseId, type)) return true
+  }
+  return false
+}

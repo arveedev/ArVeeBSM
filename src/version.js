@@ -1525,4 +1525,44 @@
 //               own pass - there are many, each needs its own
 //               validation-failure case checked so a failed save can
 //               never show the checkmark.
-export const APP_VERSION = '1.9-95'
+//   1.9-96 - Fixed three real regressions from the last two animation
+//            batches, all confirmed live:
+//            1. The PIN dot pop animation used a "both" fill-mode,
+//               which permanently pins a CSS Animation's own transform
+//               value on an element for as long as its class stays
+//               applied - since the pop's class never comes off once a
+//               dot is filled, this silently blocked the exit fly-out
+//               from ever moving the dots again (animations win over
+//               transitions on the same property while "holding").
+//               Removed the fill-mode - confirmed live, dots now fly
+//               out correctly on a successful login.
+//            2. The "by ArVee"/version block never had any exit
+//               animation at all (not a regression - it just never had
+//               one) - now flies down and fades with everything else,
+//               composed carefully with its own centering transform
+//               (inline style.transform replaces, not adds to, a
+//               Tailwind transform class).
+//            3. The "Welcome back" toast passed a custom `style` object
+//               that AnimatedToast (the app's one custom toast
+//               renderer) never actually reads - it was silently doing
+//               nothing, so this toast rendered as a themed-but-generic
+//               'blank' toast, not the tuned neon design in the
+//               original code. Switched to toast.success, which gets
+//               the same real edge-strip + checkmark treatment every
+//               other success toast has.
+//            Also: found and fixed the real cause of a reported 5s
+//            serial-lookup delay - checkAndLoadSerial's "wait for
+//            preload" refusal (added last round to stop wrongly-
+//            imported historical stubs) checked preload-completeness
+//            ONCE and gave up, so the very first lookup after login
+//            (for an admin with many warehouses, preload can
+//            genuinely take a few seconds) always failed with a
+//            message the user then had to notice and manually retry.
+//            Now polls for up to 4s instead - the common case (preload
+//            finishes within that window) resolves the lookup
+//            automatically once it does, no manual retry needed.
+//            Also upgraded the login preload toast and its "done"
+//            state to the same SyncProgressToast component already
+//            used for the GitHub backup and Sheets sync, instead of a
+//            plain unstyled loading line.
+export const APP_VERSION = '1.9-96'

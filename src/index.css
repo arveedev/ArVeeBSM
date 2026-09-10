@@ -719,7 +719,16 @@ select {
   55% { transform: scale(1.35); }
   100% { transform: scale(1); }
 }
-.animate-pin-dot-pop { animation: pin-dot-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+/* Deliberately NO fill-mode (no "both"/"forwards") - the className
+   that applies this stays on the dot permanently once filled (see
+   Login.jsx), and a held fill-mode would leave a CSS Animation's own
+   transform value pinned on the element forever, silently overriding
+   any later transform this same element needs to receive via inline
+   style/transition (the exit fly-out) - animations take precedence
+   over transitions on the same property while "holding". Dropping the
+   fill-mode lets the animation fully let go of transform once its
+   0.22s finishes, handing control back to the element's normal style. */
+.animate-pin-dot-pop { animation: pin-dot-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
 @keyframes pin-dots-shake {
   0%, 100% { transform: translateX(0); }

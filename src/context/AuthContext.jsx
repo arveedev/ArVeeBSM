@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { hashPin, hashPinLegacyUnsalted } from '../utils/pinHash.js'
 import { preloadTransactionsForUser } from '../services/transactionPreload.js'
+import { SyncProgressToast } from '../components/common/AnimatedToast.jsx'
 
 const AuthContext = createContext(null)
 
@@ -31,11 +32,23 @@ const runPreloadWithFeedback = async (user) => {
   const timeoutId = setTimeout(() => toast.dismiss(toastId), 20000)
   try {
     await preloadTransactionsForUser(user, {
+      // Toast #2 (picked) - same progress-toast component used for the
+      // GitHub backup and Sheets "Sync Now", so this reads as the same
+      // kind of event instead of a plain, unstyled loading line.
       onProgress: ({ type, warehouseCount }) => {
-        toast.loading(`Preparing ${type} data for ${warehouseCount} warehouse${warehouseCount === 1 ? '' : 's'}…`, { id: toastId })
+        toast.loading(
+          <SyncProgressToast
+            label={`Preparing ${type} data for ${warehouseCount} warehouse${warehouseCount === 1 ? '' : 's'}…`}
+            phase="progress"
+          />,
+          { id: toastId }
+        )
       },
     })
-    toast.dismiss(toastId)
+    // A real "done" state (briefly, via the same component), not just
+    // a silent dismiss - login preload finishing is exactly the kind
+    // of meaningful sync event toast #2 was picked for.
+    toast.success(<SyncProgressToast doneLabel="Data ready" phase="done" />, { id: toastId, duration: 1400 })
   } catch (err) {
     console.error('Transaction preload failed:', err)
     toast.dismiss(toastId)

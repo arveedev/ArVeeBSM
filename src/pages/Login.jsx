@@ -53,6 +53,21 @@ const flyTransformHorizontal = (index, count = PIN_LENGTH) => {
  * flies apart. */
 const flyTransformUp = { transform: 'translateY(-15vh) scale(0.9)', opacity: 0 }
 
+/** Downward fly-and-fade for the "by ArVee"/version block - it sits
+ * fixed at the very bottom of the screen, so it flies further down
+ * and out rather than up, matching its own position instead of every
+ * other element's upward direction. Previously didn't animate at all -
+ * everything else in this exit sequence moves, this shouldn't be the
+ * one thing left sitting still.
+ *
+ * This element is centered via the Tailwind class -translate-x-1/2
+ * (paired with left-1/2) - since an inline style.transform fully
+ * REPLACES whatever transform the Tailwind class would have set (not
+ * additive), both states here explicitly include translateX(-50%) so
+ * the centering is never lost while this is animating. */
+const restTransformCentered = { transform: 'translateX(-50%)' }
+const flyTransformDown = { transform: 'translateX(-50%) translateY(10vh) scale(0.9)', opacity: 0 }
+
 function Login() {
   const [pin, setPin] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -122,18 +137,14 @@ function Login() {
       setIsExiting(true)
       setTimeout(() => {
         navigate('/')
-        const welcomeToastId = toast(`Welcome back, ${matchedUser.nickname || matchedUser.name}! 🎉`, {
-          icon: '👋',
-          duration: 4000,
-          style: {
-            background: '#171717',
-            color: '#00FFA3',
-            boxShadow: '0 0 20px -4px rgba(0,255,163,0.5)',
-            fontSize: '1.1rem',
-            fontWeight: 700,
-            padding: '16px 20px',
-          },
-        })
+        // Was passing a custom `style` object here, but AnimatedToast
+        // (the app's single custom renderer, hooked in once at the
+        // Toaster level) never reads t.style at all - every toast goes
+        // through its own type-based rendering instead, so that whole
+        // object was silently doing nothing. toast.success gets the
+        // real edge-strip + checkmark treatment every other success
+        // toast already has, instead of a dead custom style object.
+        const welcomeToastId = toast.success(`Welcome back, ${matchedUser.nickname || matchedUser.name}! 🎉`)
 
         // Dismiss as soon as the user does anything - scrolls, touches,
         // or clicks - rather than making them wait out the full
@@ -196,7 +207,13 @@ function Login() {
           scroll to ever see. `fixed` pins to the viewport itself,
           so it's always on screen regardless of how tall the content
           above it grows. */}
-      <div className="pointer-events-none fixed bottom-8 left-1/2 z-10 -translate-x-1/2 flex select-none flex-col items-center gap-0.5 px-4 text-center">
+      <div
+        style={{
+          transition: 'transform 1400ms, opacity 1400ms',
+          ...((isExiting || !hasEntered) ? flyTransformDown : restTransformCentered),
+        }}
+        className="pointer-events-none fixed bottom-8 left-1/2 z-10 flex select-none flex-col items-center gap-0.5 px-4 text-center"
+      >
         <p className="text-xs tracking-wide text-neutral-500 opacity-20">by ArVee</p>
         <p className="text-[10px] tracking-wide text-neutral-500 opacity-35">v{APP_VERSION}</p>
       </div>

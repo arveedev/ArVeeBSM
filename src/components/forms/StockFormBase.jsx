@@ -79,7 +79,7 @@ import {
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionToPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
 import { fetchTransactionBySerial, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
-import { isPreloadComplete } from '../../services/transactionPreload.js'
+import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
@@ -1488,13 +1488,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       // than spending another network round-trip to confirm it. (The
       // live-fetch-and-import-as-historical-stub path this replaced is
       // gone entirely now, not just skipped in this branch.)
-      const preloaded = await isPreloadComplete(currentWarehouseId, type)
+      // Polls for a few seconds instead of checking once - preload
+      // finishing while the user is still looking at the screen (the
+      // common case right after login) now resolves this lookup
+      // automatically, rather than always failing once with a "please
+      // wait" message the user had to notice and manually retry.
+      const preloaded = await waitForPreloadComplete(currentWarehouseId, type)
+      if (latestRequestedSerial.current !== serial) return false // moved on during the wait - discard
       if (!preloaded) {
-        toast.error('Still syncing this warehouse\'s data - please wait a moment and try this serial again.', { duration: 6000 })
+        toast.error('Still syncing this warehouse\'s data - please wait a moment and try this serial again.', { duration: 4000 })
         return false
       }
-
-      if (latestRequestedSerial.current !== serial) return false // superseded - discard
       if (loadedTransaction) {
         // Stepped/typed away from the loaded entry onto a blank serial —
         // return to normal new-entry mode.
