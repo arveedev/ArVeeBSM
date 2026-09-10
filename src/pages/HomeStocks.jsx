@@ -500,10 +500,11 @@ function HomeStocks({ warehouseId } = {}) {
           onChange={setShowNetBags}
         />
       </div>
-      {/* Keyed on both toggles so switching either one replays this
-          entrance animation on the now-different values, instead of the
-          numbers just silently swapping in place. */}
-      <div key={`${weightUnit}-${showNetBags}`} className="animate-flow-down">
+      {/* Keyed on both toggles AND the current warehouse (concept L,
+          picked) so switching either a toggle or the warehouse itself
+          replays this entrance animation on the now-different values,
+          instead of the numbers just silently swapping in place. */}
+      <div key={`${weightUnit}-${showNetBags}-${currentWarehouseId}`} className="animate-flow-down">
       {sortedGroups.map(([cerealType, byVariety], i) => {
         const cerealBags = Object.values(byVariety)
           .flatMap((v) => Object.values(v))

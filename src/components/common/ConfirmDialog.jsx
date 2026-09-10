@@ -23,10 +23,12 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
   const [shouldRender, setShouldRender] = useState(open)
   const [hasEntered, setHasEntered] = useState(false)
 
-  // Only warning-style (icon present) confirmations get the animated
-  // box - regular ones keep the simple, instant show/hide they always
-  // had.
-  const isAnimated = Boolean(Icon)
+  // Concept J (picked) - every dialog gets the scale+fade entrance/
+  // exit now, not just warning-style (icon-present) ones. A plain
+  // Delete confirmation used to just snap into existence with no
+  // transition at all - the only difference the icon should make is
+  // whether an icon renders, not whether the box itself animates.
+  const isAnimated = true
 
   useEffect(() => {
     if (!isAnimated) return

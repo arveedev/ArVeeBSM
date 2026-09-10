@@ -742,6 +742,28 @@ select {
 }
 .animate-boot-logo-pulse { animation: boot-logo-pulse 1.6s ease-in-out infinite; }
 
+/* Concept E (picked) - a soft scale+fade for "no data yet" messages,
+   which used to just appear flat with zero motion - reads as "nothing
+   here yet" rather than "did something break." Plays automatically on
+   mount (a genuine @keyframes animation, not a transition needing a
+   before/after state to interpolate between). */
+@keyframes empty-state-in {
+  0% { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.animate-empty-state-in { animation: empty-state-in 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+
+/* Concept I (picked) - popover/dropdown menus ("More options" etc.)
+   used to appear with zero transition. Scales and fades in from its
+   anchor corner instead. transform-origin is set per usage (top-right
+   for a right-aligned menu, top-left for a left-aligned one) via an
+   inline style, since the same keyframe serves both. */
+@keyframes popover-in {
+  0% { opacity: 0; transform: scale(0.85) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-popover-in { animation: popover-in 0.16s cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+
 /* CalendarDatePicker's Start/End Date label (visible while the calendar
    popup is open) - a slow, repeating glow pulse so the user keeps
    noticing which end of the range they're currently picking for as

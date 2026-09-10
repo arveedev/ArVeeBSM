@@ -40,7 +40,11 @@ function Toggle({ label, description, value, onChange }) {
         }`}
       >
         <span
-          className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+          // Concept K (picked) - the same spring overshoot curve used
+          // elsewhere in the app (toast pop-in, the bottom-nav active
+          // pill) instead of Tailwind's plain default ease, so the
+          // thumb settles with a little life rather than a flat slide.
+          className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
             value ? 'translate-x-6' : 'translate-x-1'
           }`}
         />

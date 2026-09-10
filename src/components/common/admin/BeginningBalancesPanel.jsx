@@ -457,7 +457,7 @@ function PilesBeginningBalances({ warehouseId }) {
       )}
 
       <ul className="space-y-1.5">
-        {sortedPiles.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
+        {sortedPiles.length === 0 && <p className="animate-empty-state-in py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
         {sortedPiles.map((p) => (
           <li key={p.pileId} className={`${listItemClass} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
             <div className="min-w-0">
@@ -485,7 +485,7 @@ function PilesBeginningBalances({ warehouseId }) {
               {openMenuPileId === p.pileId && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setOpenMenuPileId(null)} />
-                  <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 shadow-xl">
+                  <div className="animate-popover-in absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 shadow-xl" style={{ transformOrigin: 'top right' }}>
                     <button type="button" onClick={() => handleExportBinCard(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
                       Export BIN Card
                     </button>
@@ -630,7 +630,7 @@ function SacksBeginningBalances({ warehouseId }) {
       </div>
 
       <ul className="space-y-1.5">
-        {sortedEntries.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No sack beginning balances in this warehouse yet.</p>}
+        {sortedEntries.length === 0 && <p className="animate-empty-state-in py-3 text-center text-xs text-neutral-500">No sack beginning balances in this warehouse yet.</p>}
         {sortedEntries.map((e) => (
           <li key={e.id} className={listItemClass}>
             <div className="min-w-0">

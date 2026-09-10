@@ -1481,4 +1481,31 @@
 //               count up from their previous value instead of
 //               snapping to the new one, via a new shared
 //               CountUpNumber component.
-export const APP_VERSION = '1.9-93'
+//   1.9-94 - Animation batch 3: dialogs, empty states, menus, toggles,
+//            warehouse switching.
+//            1. Concept J - every ConfirmDialog now gets the same
+//               scale+fade entrance/exit - previously only the
+//               warning-style (icon-present) ones animated at all, a
+//               plain Delete confirmation just snapped into existence.
+//            2. Concept E - "No data available yet" (the shared Empty
+//               component, plus Beginning Balances' matching lines)
+//               now fades and scales in with a small icon, instead of
+//               appearing flat with zero motion.
+//            3. Concept I - Beginning Balances' "More options" popover
+//               (the only one of its kind in the app - confirmed by
+//               search) now scales and fades in from its anchor corner
+//               instead of appearing instantly.
+//            4. Concept K - Settings' Auto Age Monitoring toggle now
+//               uses the same spring-overshoot curve already used
+//               elsewhere (toast pop-in, the bottom-nav pill) instead
+//               of a plain linear slide. KG/MT and dark/light turned
+//               out to already be a different control shape (a
+//               segmented pill and an icon button, not a sliding
+//               thumb), so this concept only applies to this one real
+//               toggle switch.
+//            5. Concept L - Home Stocks' entrance animation (already
+//               existed for its own KG/MT and Net Bags toggles) is now
+//               also keyed on the current warehouse, so switching
+//               warehouses replays it too instead of numbers silently
+//               swapping in place.
+export const APP_VERSION = '1.9-94'
