@@ -132,25 +132,24 @@ export function SavedReceipt({ title, stats }) {
 // every one of those would be spam. `phase` is 'progress' (indeterminate
 // sweep - there's no reliable byte-level progress for a fetch() upload,
 // so this deliberately doesn't fake a timed fill) or 'done'.
+//
+// Deliberately renders NO icon of its own - AnimatedToast's outer
+// wrapper already renders one based on t.type (a spinner for
+// toast.loading, a checkmark for toast.success), and switches it
+// automatically when a call site moves from one to the other via the
+// same toast id. This component rendering its own icon on top of that
+// produced two stacked spinners/checkmarks on the same toast - a real,
+// reported bug, not a style choice.
 export function SyncProgressToast({ label, doneLabel, phase }) {
   const isDone = phase === 'done'
   return (
-    <span className="flex items-center gap-2.5">
-      {isDone ? (
-        <CheckCircle2 size={18} className="shrink-0 text-brand-neon" />
-      ) : (
-        <span className="relative block h-2.5 w-2.5 shrink-0 rounded-full border border-neutral-700">
-          <span className="absolute inset-0 rounded-full border border-t-brand-amber animate-spin" />
+    <span className="text-sm font-medium text-app-text">
+      <span className="block">{isDone ? doneLabel : label}</span>
+      {!isDone && (
+        <span className="mt-1.5 block h-[3px] w-32 overflow-hidden rounded-full bg-neutral-800">
+          <span className="block h-full w-1/3 rounded-full bg-brand-amber animate-toast-progress-sweep" />
         </span>
       )}
-      <span className="text-sm font-medium text-app-text">
-        <span className="block">{isDone ? doneLabel : label}</span>
-        {!isDone && (
-          <span className="mt-1.5 block h-[3px] w-32 overflow-hidden rounded-full bg-neutral-800">
-            <span className="block h-full w-1/3 rounded-full bg-brand-amber animate-toast-progress-sweep" />
-          </span>
-        )}
-      </span>
     </span>
   )
 }

@@ -142,9 +142,11 @@ function VarietyCard({
           <span className="truncate text-sm font-semibold text-app-text">{varietyName}</span>
           <div className="text-right">
             <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-app-text">
-              {showNetBags ? `${fmtNetBags(Math.max(0, varietyKilos) / 50)} net bags` : `${fmtBags(Math.max(0, varietyBags))} bags`}
+              {showNetBags
+                ? <CountUpNumber value={Math.max(0, varietyKilos) / 50} format={(v) => `${fmtNetBags(v)} net bags`} />
+                : <CountUpNumber value={Math.max(0, varietyBags)} format={(v) => `${fmtBags(v)} bags`} />}
             </p>
-            <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-app-text">{fmtWeight(Math.max(0, varietyKilos), weightUnit, 'Net')}</p>
+            <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-app-text"><CountUpNumber value={Math.max(0, varietyKilos)} format={(v) => fmtWeight(v, weightUnit, 'Net')} /></p>
           </div>
         </div>
       </div>
@@ -173,9 +175,11 @@ function VarietyCard({
                       <span className="truncate pl-2 text-xs text-neutral-400">{bucketLabel}</span>
                       <div className="text-right">
                         <p className="whitespace-nowrap text-xs tabular-nums text-neutral-300">
-                          {showNetBags ? `${fmtNetBags(Math.max(0, totals.kilos) / 50)} net bags` : `${fmtBags(Math.max(0, totals.bags))} bags`}
+                          {showNetBags
+                            ? <CountUpNumber value={Math.max(0, totals.kilos) / 50} format={(v) => `${fmtNetBags(v)} net bags`} />
+                            : <CountUpNumber value={Math.max(0, totals.bags)} format={(v) => `${fmtBags(v)} bags`} />}
                         </p>
-                        <p className="whitespace-nowrap text-xs tabular-nums text-neutral-300">{fmtWeight(Math.max(0, totals.kilos), weightUnit, 'Net')}</p>
+                        <p className="whitespace-nowrap text-xs tabular-nums text-neutral-300"><CountUpNumber value={Math.max(0, totals.kilos)} format={(v) => fmtWeight(v, weightUnit, 'Net')} /></p>
                       </div>
                     </div>
                     {bucketHasUnwithdrawn && (

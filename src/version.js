@@ -1601,4 +1601,27 @@
 //               Customers, Warehouses, Sheet Sources, Signatories,
 //               Ricemill Allocations) - not yet converted, a real
 //               remaining scope item, not an oversight.
-export const APP_VERSION = '1.9-98'
+//   1.9-99 - Fixed a real, reported bug: SyncProgressToast (toast #2)
+//            rendered its own icon/spinner INSIDE the message content,
+//            on top of AnimatedToast's own icon (which already renders
+//            one per toast type, and already switches it automatically
+//            from spinner to checkmark when a call site moves from
+//            toast.loading to toast.success on the same id) - so every
+//            sync toast showed two stacked spinners, then two stacked
+//            checkmarks. SyncProgressToast now renders text/progress-bar
+//            only, no icon of its own. Confirmed live: every toast now
+//            shows exactly one icon.
+//            Also broadened concept B (count-up) much further per
+//            explicit request ("every numerical value that loads up or
+//            refreshes"): every per-province row, per-category
+//            breakdown figure, per-warehouse row, and per-age-bucket
+//            figure on Admin Home Stocks now counts up, not just its
+//            two headline totals from before. Same for Home Stocks'
+//            per-variety and per-age-bucket figures. Deliberately left
+//            alone: Home Stocks' cereal-type Total card, which already
+//            has its own dedicated 3D flip animation for exactly this
+//            kind of value change - stacking count-up on top of an
+//            element that also remounts on flip would reset the count
+//            to 0 every time and fight the existing animation instead
+//            of complementing it.
+export const APP_VERSION = '1.9-99'
