@@ -12,7 +12,7 @@ import { logError } from '../../../utils/errorLog.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { primaryButtonClass } from './shared.js'
 
-const GITHUB_BACKUPS_URL = 'https://github.com/arveedev/ArVeeBSM/tree/main/backups'
+const GITHUB_BACKUPS_URL = 'https://github.com/arveedev/ArVeeBSM/tree/backups/backups'
 
 function BackupPanel() {
   const { user } = useAuth()
@@ -76,7 +76,8 @@ function BackupPanel() {
         </h2>
         <p className="mt-1 text-xs text-neutral-400">
           A full copy of the database is committed automatically, about once a day, to
-          this app's own GitHub repository - a copy that lives completely outside Dexie
+          this app's own GitHub repository (on its own dedicated "backups" branch, kept
+          separate from the actual app code) - a copy that lives completely outside Dexie
           Cloud, so a serious problem there wouldn't be the only place the data exists.
           Runs quietly on any logged-in device; nobody needs to remember to do anything.
         </p>

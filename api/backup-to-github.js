@@ -10,6 +10,15 @@
 // its own commit, so the full history of past backups is free and
 // browsable on github.com with nothing extra to build.
 //
+// Writes to a DEDICATED branch (BRANCH below), never to main. The
+// first version of this shipped without that, committing straight to
+// main - within a day it had already collided with a normal
+// development push (two unrelated histories fighting over the same
+// branch tip) and added a multi-megabyte JSON file to every future
+// `git pull` on this repo. A separate branch means backups can never
+// conflict with real development work again, and anyone cloning main
+// never has to download backup history they don't want.
+//
 // Called from src/services/backupWorker.js, which runs in the
 // background on any logged-in device, throttled to once a day via a
 // shared timestamp in db.reportConfig - this endpoint itself has no
@@ -19,9 +28,16 @@ const APP_SHARED_KEY = process.env.VITE_APP_SHARED_KEY
 const GITHUB_TOKEN = process.env.GITHUB_BACKUP_TOKEN
 const GITHUB_OWNER = process.env.GITHUB_BACKUP_OWNER || 'arveedev'
 const GITHUB_REPO = process.env.GITHUB_BACKUP_REPO || 'ArVeeBSM'
+const BRANCH = process.env.GITHUB_BACKUP_BRANCH || 'backups'
 // How many daily backups to keep before the oldest are pruned - about
 // a month's worth. Each is a small JSON file and its own commit, so
-// this is a generous cushion, not a tight limit.
+// this is a generous cushion, not a tight limit. Note: pruning removes
+// the FILE from the branch's current state, but - same as any git
+// history - the branch's commit history still grows by one commit per
+// day forever. At ~6MB per daily snapshot, that's a real, slow-growing
+// repo size cost worth knowing about; squashing that branch's history
+// periodically (keeping only the latest commit) would cap it, but
+// isn't built here yet.
 const RETENTION_COUNT = 30
 
 async function readJsonBody(req) {
@@ -40,6 +56,46 @@ const githubHeaders = {
   Accept: 'application/vnd.github+json',
   'Content-Type': 'application/json',
   'User-Agent': 'bsm-app-backup',
+}
+
+// GitHub's Contents API (used for everything else below) refuses to
+// write to a branch that doesn't exist yet - it never auto-creates
+// one. This creates BRANCH, pointed at the repo's current default
+// branch tip, the first time this function ever runs; every later
+// call sees the branch already exists and does nothing.
+const ensureBranchExists = async () => {
+  const existing = await fetch(
+    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/ref/heads/${BRANCH}`,
+    { headers: githubHeaders }
+  )
+  if (existing.ok) return
+
+  const repoInfo = await fetch(
+    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}`,
+    { headers: githubHeaders }
+  )
+  if (!repoInfo.ok) throw new Error(`Could not read repo info to create ${BRANCH} branch: HTTP ${repoInfo.status}`)
+  const { default_branch: defaultBranch } = await repoInfo.json()
+
+  const defaultRef = await fetch(
+    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/ref/heads/${defaultBranch}`,
+    { headers: githubHeaders }
+  )
+  if (!defaultRef.ok) throw new Error(`Could not read ${defaultBranch} ref to create ${BRANCH} branch: HTTP ${defaultRef.status}`)
+  const { object: { sha: baseSha } } = await defaultRef.json()
+
+  const createRef = await fetch(
+    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/refs`,
+    {
+      method: 'POST',
+      headers: githubHeaders,
+      body: JSON.stringify({ ref: `refs/heads/${BRANCH}`, sha: baseSha }),
+    }
+  )
+  if (!createRef.ok) {
+    const detail = await createRef.text()
+    throw new Error(`Could not create ${BRANCH} branch: HTTP ${createRef.status} ${detail}`)
+  }
 }
 
 export default async function handler(req, res) {
@@ -63,6 +119,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    await ensureBranchExists()
+
     const payload = await readJsonBody(req)
     const stamp = new Date().toISOString().slice(0, 10)
     const path = `backups/bsm-backup-${stamp}.json`
@@ -76,7 +134,7 @@ export default async function handler(req, res) {
     // which is expected, not an error.
     let sha
     const existing = await fetch(
-      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}?ref=${BRANCH}`,
       { headers: githubHeaders }
     )
     if (existing.ok) {
@@ -91,6 +149,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           message: `Automatic backup ${stamp}`,
           content,
+          branch: BRANCH,
           ...(sha ? { sha } : {}),
         }),
       }
@@ -108,7 +167,7 @@ export default async function handler(req, res) {
     // above already succeeded, and pruning can simply catch up next run.
     try {
       const listResponse = await fetch(
-        `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/backups`,
+        `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/backups?ref=${BRANCH}`,
         { headers: githubHeaders }
       )
       if (listResponse.ok) {
@@ -123,7 +182,7 @@ export default async function handler(req, res) {
             {
               method: 'DELETE',
               headers: githubHeaders,
-              body: JSON.stringify({ message: `Prune old backup ${file.name}`, sha: file.sha }),
+              body: JSON.stringify({ message: `Prune old backup ${file.name}`, sha: file.sha, branch: BRANCH }),
             }
           )
         }
@@ -132,7 +191,7 @@ export default async function handler(req, res) {
       console.error('[backup-to-github] Retention prune failed (backup itself still succeeded):', pruneErr)
     }
 
-    res.status(200).json({ ok: true, path })
+    res.status(200).json({ ok: true, path, branch: BRANCH })
   } catch (err) {
     console.error('[backup-to-github] Unexpected error:', err)
     res.status(500).json({ error: 'Unexpected server error', detail: err.message })

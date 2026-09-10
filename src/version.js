@@ -1326,4 +1326,16 @@
 //            to also fix this one field. Same underlying pile.dateProcured
 //            field, not a new one - editing it here or in Settings now
 //            updates the same value either way.
-export const APP_VERSION = '1.9-86'
+//   1.9-87 - CRITICAL fix to yesterday's automatic backup feature: it
+//            was committing straight to main, the same branch this
+//            app's own code lives on - within a day it had already
+//            collided with a normal development push (two unrelated
+//            histories fighting over the same branch tip) and would
+//            have added a multi-megabyte JSON file to every future
+//            `git pull` on this repo forever. Backups now write to a
+//            dedicated "backups" branch instead (created automatically
+//            the first time it's needed), which can never conflict
+//            with real development work again. The polluting commits
+//            already on main were reverted; the backup data itself was
+//            never at risk, only which branch it landed on.
+export const APP_VERSION = '1.9-87'
