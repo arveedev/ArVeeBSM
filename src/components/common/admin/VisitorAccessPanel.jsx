@@ -18,6 +18,7 @@ import toast from 'react-hot-toast'
 import { db } from '../../../db/dexie.js'
 import { hashPin } from '../../../utils/pinHash.js'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass } from '../../forms/shared.js'
+import MorphButton from '../MorphButton.jsx'
 
 function VisitorAccessPanel() {
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
@@ -26,11 +27,11 @@ function VisitorAccessPanel() {
   const handleSave = async () => {
     if (!visitorAccessCode) {
       toast.error('Enter a 6-digit PIN, or use Disable Visitor Access to turn it off')
-      return
+      return false
     }
     if (!/^\d{6}$/.test(visitorAccessCode)) {
       toast.error('Visitor PIN must be exactly 6 digits, matching the login keypad')
-      return
+      return false
     }
 
     const hashed = await hashPin(visitorAccessCode)
@@ -40,7 +41,9 @@ function VisitorAccessPanel() {
     // fully replaces the record, it doesn't merge.
     await db.reportConfig.put({ ...config, id: 'global', visitorAccessCode: hashed })
     setVisitorAccessCode('')
-    toast.success('Visitor PIN saved')
+    // Concept F (picked) - the Save button's own checkmark morph is
+    // the confirmation now; a toast on top would be redundant for a
+    // single, immediately-visible admin panel save.
   }
 
   const handleDisable = async () => {
@@ -78,9 +81,7 @@ function VisitorAccessPanel() {
       </div>
 
       <div className="flex gap-2">
-        <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>
-          Save
-        </button>
+        <MorphButton label="Save" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`} />
         {config?.visitorAccessCode && (
           <button type="button" onClick={handleDisable} className={secondaryButtonClass}>
             Disable Visitor Access

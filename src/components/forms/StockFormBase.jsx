@@ -2610,7 +2610,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             )}
           </div>
 
-          <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
+          {/* Concept S (picked) - was transition-opacity only, so the
+              border/padding change on Void applied as an instant snap
+              even though opacity already faded smoothly. transition-all
+              covers every property this className swaps. */}
+          <div className={`space-y-3 rounded-xl transition-all duration-300 ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />

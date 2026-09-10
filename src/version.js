@@ -1508,4 +1508,21 @@
 //               also keyed on the current warehouse, so switching
 //               warehouses replays it too instead of numbers silently
 //               swapping in place.
-export const APP_VERSION = '1.9-94'
+//   1.9-95 - Animation batch 4: void transition fix, reusable button
+//            morph.
+//            1. Concept S - WSR/WSI/ESR/ESI/WTS's void styling had
+//               transition-opacity only, so the border/padding change
+//               on Void applied as an instant snap even though opacity
+//               already faded smoothly. Now transition-all, covering
+//               every property that className swaps.
+//            2. Concept F - new reusable MorphButton component (a
+//               button that morphs spinner -> the same spring
+//               checkmark every success toast already uses, in place)
+//               - wired into Admin > Visitor Access's Save button as
+//               the first concrete example, replacing its separate
+//               success toast (redundant once the button itself
+//               confirms). More admin panel saves to follow as their
+//               own pass - there are many, each needs its own
+//               validation-failure case checked so a failed save can
+//               never show the checkmark.
+export const APP_VERSION = '1.9-95'

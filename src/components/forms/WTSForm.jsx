@@ -1026,7 +1026,8 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
           </div>
         </div>
 
-        <div className={`space-y-3 rounded-xl transition-opacity ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
+        {/* Concept S (picked) - see StockFormBase.jsx's identical fix. */}
+        <div className={`space-y-3 rounded-xl transition-all duration-300 ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
         <div>
           <label className={labelClass}>Date</label>
           <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
