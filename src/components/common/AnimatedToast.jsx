@@ -154,4 +154,26 @@ export function SyncProgressToast({ label, doneLabel, phase }) {
   )
 }
 
+// For UpdateChecker.jsx - a persistent (duration: Infinity, fixed toast
+// id so repeated poll ticks update the same card instead of stacking)
+// notice that a new deploy is available, with its own explicit Update
+// button rather than relying on the user noticing and tapping the whole
+// toast. Deliberately renders no icon of its own, same rule as
+// SyncProgressToast above - AnimatedToast's outer wrapper already
+// supplies one for this toast's type ('blank' -> Info).
+export function UpdateAvailableToast({ onUpdate }) {
+  return (
+    <span className="text-sm font-medium text-app-text">
+      <span className="block">A new version is available</span>
+      <button
+        type="button"
+        onClick={onUpdate}
+        className="mt-1.5 rounded-lg bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95"
+      >
+        Update now
+      </button>
+    </span>
+  )
+}
+
 export default AnimatedToast

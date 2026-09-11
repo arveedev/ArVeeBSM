@@ -1739,4 +1739,22 @@
 //            check the real sw.js every time the app becomes visible
 //            again, which is what actually covers "reopen the app" and
 //            should now show a new version within one open, not several.
-export const APP_VERSION = '1.9-104'
+//   1.9-105 - 1.9-104's service-worker-level auto-update fix wasn't
+//            enough on its own - reported still stuck on 1.9-103 after
+//            several tries, confirming SW update timing can genuinely get
+//            stuck on some devices/browsers even with that mechanism in
+//            place. Added a real, visible backstop: a new
+//            public/version.json (regenerated from src/version.js on
+//            every dev/build via the new sync-version.cjs, wired into
+//            predev/prebuild the same way check-imports.cjs already is)
+//            that the running app polls every 15 minutes and every time
+//            it becomes visible again, fetched with cache: 'no-store'
+//            plus a cache-busting query param so it always reflects
+//            what's actually deployed, not a stale cached copy. A
+//            mismatch against the running bundle's own APP_VERSION shows
+//            a persistent "A new version is available" toast with an
+//            explicit Update now button (UpdateChecker.jsx,
+//            AnimatedToast.jsx's new UpdateAvailableToast) - a real,
+//            actionable notice instead of silently hoping the service
+//            worker sorts itself out.
+export const APP_VERSION = '1.9-105'

@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "check-imports": "node check-imports.cjs",
-    "predev": "node check-imports.cjs",
-    "prebuild": "node check-imports.cjs",
+    "sync-version": "node sync-version.cjs",
+    "predev": "node check-imports.cjs && node sync-version.cjs",
+    "prebuild": "node check-imports.cjs && node sync-version.cjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"

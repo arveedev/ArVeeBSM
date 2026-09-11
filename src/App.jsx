@@ -25,6 +25,7 @@ import { usePageHeader } from './context/PageHeaderContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 import { startBackupWorker } from './services/backupWorker.js'
 import AnimatedToast from './components/common/AnimatedToast.jsx'
+import UpdateChecker from './components/common/UpdateChecker.jsx'
 import useDelayedUnmount from './hooks/useDelayedUnmount.js'
 
 // Must match the form's own pop-out exit transition duration (see
@@ -294,6 +295,11 @@ function App() {
           )}
         </>
       )}
+
+      {/* Explicit deployed-vs-running version check, backstopping
+          main.jsx's own registerSW()/visibilitychange update mechanism -
+          see UpdateChecker.jsx's own comment for why this exists. */}
+      <UpdateChecker />
 
       {/* Global notification layer — replaces alert()/confirm() per Section 2.3.
           Custom-rendered via AnimatedToast (icon per type, entrance motion,
