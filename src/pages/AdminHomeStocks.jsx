@@ -124,6 +124,44 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   const sortedProvinces = [...provinces].sort((a, b) => a.code.localeCompare(b.code))
   const sortedWarehouses = [...warehouses].sort((a, b) => a.name.localeCompare(b.name))
 
+  // Computed once here (not separately inside the table/card render AND
+  // the branch-total card below, as it previously was) so the total is
+  // ALWAYS exactly the sum of what the rows above it actually show.
+  // Reported, confirmed real bug: the branch total used to be
+  // recomputed independently from the raw branch-wide actual/unwithdrawn
+  // figures, which could come out LOWER than summing the displayed rows
+  // whenever a single province's own potential went negative (more
+  // unwithdrawn than actual, e.g. AIs authorized ahead of stock physically
+  // arriving) - that province correctly clamps to 0 for display, but an
+  // independent branch-wide computation still subtracted that province's
+  // full (now-invisible) excess from the total, making Total < the
+  // provinces' own displayed sum. Same reasoning already proven correct
+  // and applied to the Age Grouping tab's own totals further down this
+  // file - the fix here is identical: derive every total by summing the
+  // already-clamped per-row values, never by recomputing independently.
+  const provinceRows = sortedProvinces.map((province) => {
+    const wIds = new Set(
+      warehouses
+        .filter((w) => w.provinceId === province.provinceId)
+        .map((w) => w.warehouseId)
+    )
+    const pp = enrichedPiles.filter((p) => wIds.has(p.warehouseId))
+    const riceActual = pp.filter((p) => p.cerealType === 'Rice').reduce((s, p) => s + p.netBags, 0)
+    const palayActual = pp.filter((p) => p.cerealType === 'Palay').reduce((s, p) => s + p.netBags, 0)
+    // Potential mode swaps the plain number for actual-minus-unwithdrawn,
+    // no badge/tag - the enriched breakdown view lives only on the
+    // Breakdown tab, not here.
+    const riceValue = topCardShowPotential
+      ? Math.max(0, riceActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Rice') ?? 0), 0))
+      : riceActual
+    const palayValue = topCardShowPotential
+      ? Math.max(0, palayActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Palay') ?? 0), 0))
+      : palayActual
+    return { province, riceValue, palayValue }
+  })
+  const riceBranchValue = provinceRows.reduce((s, r) => s + r.riceValue, 0)
+  const palayBranchValue = provinceRows.reduce((s, r) => s + r.palayValue, 0)
+
   return (
     <>
       <Section
@@ -157,26 +195,6 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           // Breakpoint (table only renders where columns actually have
           // room).
           const unitLabel = weightUnit === 'mt' ? 'MT' : 'Net Bags'
-          const provinceRows = sortedProvinces.map((province) => {
-            const wIds = new Set(
-              warehouses
-                .filter((w) => w.provinceId === province.provinceId)
-                .map((w) => w.warehouseId)
-            )
-            const pp = enrichedPiles.filter((p) => wIds.has(p.warehouseId))
-            const riceActual = pp.filter((p) => p.cerealType === 'Rice').reduce((s, p) => s + p.netBags, 0)
-            const palayActual = pp.filter((p) => p.cerealType === 'Palay').reduce((s, p) => s + p.netBags, 0)
-            // Potential mode swaps the plain number for actual-minus-
-            // unwithdrawn, no badge/tag - the enriched breakdown view
-            // lives only on the Breakdown tab, not here.
-            const riceValue = topCardShowPotential
-              ? Math.max(0, riceActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Rice') ?? 0), 0))
-              : riceActual
-            const palayValue = topCardShowPotential
-              ? Math.max(0, palayActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Palay') ?? 0), 0))
-              : palayActual
-            return { province, riceValue, palayValue }
-          })
 
           return (
             <>
@@ -227,17 +245,10 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           )
         })()}
         {sortedProvinces.length > 0 && (() => {
-          // Two genuinely separate totals - Rice and Palay tracked
-          // independently, not combined into one meaningless
-          // cross-category sum.
-          const riceBranchActual = enrichedPiles.filter((p) => p.cerealType === 'Rice').reduce((s, p) => s + p.netBags, 0)
-          const palayBranchActual = enrichedPiles.filter((p) => p.cerealType === 'Palay').reduce((s, p) => s + p.netBags, 0)
-          const riceBranchValue = topCardShowPotential
-            ? Math.max(0, riceBranchActual - warehouses.reduce((s, w) => s + (unwithdrawnByWarehouse.get(w.warehouseId)?.get('Rice') ?? 0), 0))
-            : riceBranchActual
-          const palayBranchValue = topCardShowPotential
-            ? Math.max(0, palayBranchActual - warehouses.reduce((s, w) => s + (unwithdrawnByWarehouse.get(w.warehouseId)?.get('Palay') ?? 0), 0))
-            : palayBranchActual
+          // riceBranchValue/palayBranchValue are the SUM of provinceRows'
+          // own already-clamped values (computed once, above) - see that
+          // computation's own comment for why this must never be
+          // recomputed independently from the raw branch-wide figures.
           // Same card shape as each province card above (grid-cols-2,
           // Rice left/Palay right) so this reads as one more card in the
           // same stack instead of a visually distinct summary block - a
@@ -344,13 +355,24 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       // for the same reasoning) - only flag rows with a
                       // genuinely meaningful unwithdrawn amount.
                       const hasUnwithdrawn = breakdownShowPotential && unwithdrawnNetBags >= 0.005
+                      // Reported, real bug: the toggle above claims
+                      // "Potential" but the headline figure never
+                      // actually changed - it always showed the plain
+                      // actual total regardless of which pill was
+                      // selected, with the unwithdrawn/potential detail
+                      // only ever appearing as a small, easy-to-miss
+                      // annotation underneath. The headline itself now
+                      // switches to the real potential (actual minus
+                      // unwithdrawn) when that toggle is on, matching
+                      // the Province table above it.
+                      const displayValue = breakdownShowPotential ? Math.max(0, sum - unwithdrawnNetBags) : sum
                       const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
                       return (
                         <div key={cat} className="flex items-center justify-between gap-2">
                           <span className={`text-sm font-semibold ${colorClass}`}>{cat}</span>
                           <div className="text-right">
                             <span className={`text-lg font-bold tabular-nums ${colorClass}`}>
-                              <CountUpNumber value={sum} format={fmt} />
+                              <CountUpNumber value={displayValue} format={fmt} />
                             </span>
                             {hasUnwithdrawn && (
                               <div className="mt-0.5 flex items-center justify-end gap-1.5">
@@ -367,17 +389,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                       varietyIds: catVarietyIds,
                                       title: `${cat} — Unwithdrawn`,
                                       subtitle: `${province?.code} · ${stripWarehouseCodePrefix(warehouse.name)}`,
+                                      rawBags: cat === 'By Products',
                                     })
                                   }}
                                   className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
                                 >
                                   {fmt(unwithdrawnNetBags)} unwithdrawn
                                 </button>
-                              </div>
-                            )}
-                            {hasUnwithdrawn && (
-                              <div className="mt-0.5 text-[11px] tabular-nums">
-                                <span className="text-brand-amber">Potential: {fmt(Math.max(0, sum - unwithdrawnNetBags))}</span>
                               </div>
                             )}
                           </div>
@@ -675,6 +693,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           varietyIds={detailContext.varietyIds}
           title={detailContext.title}
           subtitle={detailContext.subtitle}
+          rawBags={detailContext.rawBags}
           onClose={() => setDetailContext(null)}
         />
       )}

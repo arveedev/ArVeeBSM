@@ -135,8 +135,9 @@ function VarietyCard({
   // bags" conversion (kilos / 50) the page's Bags/Net Bags toggle
   // normally applies simply doesn't mean anything there - always shows
   // the real bag count regardless of the toggle. See
-  // unwithdrawnStock.js's bagsKilosMismatch for the matching fix on the
-  // drill-down modal side.
+  // unwithdrawnStock.js's resolveBags for the matching fix on the
+  // drill-down modal side (net kg is always the source of truth
+  // whenever a typed bag count is missing/zero, for every category).
   const effectiveShowNetBags = isByProducts ? false : showNetBags
   const unitLabel = effectiveShowNetBags ? 'net bags' : 'bags'
   const weightColLabel = weightUnit === 'mt' ? 'net mt' : 'net kg'
@@ -317,7 +318,8 @@ const FLIP_MS = 600
 
 function CerealTotal({
   cerealType, color, cerealBags, cerealKilos, showNetBags, weightUnit,
-  hasUnwithdrawn, unwithdrawnAmt, unwithdrawnKilos, unitLabel, cerealVarietyIds, onOpenDetail, rawBags,
+  hasUnwithdrawn, unwithdrawnAmt, unwithdrawnKilos, potentialAmt, potentialKilos,
+  unitLabel, cerealVarietyIds, onOpenDetail, rawBags,
 }) {
   const [displayed, setDisplayed] = useState(hasUnwithdrawn)
   const [flipKey, setFlipKey] = useState(0)
@@ -368,8 +370,8 @@ function CerealTotal({
             </button>
             <div className="grid items-center gap-x-2 px-1.5" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
               <span className="text-xs font-medium text-brand-amber/80">Potential</span>
-              <span className="text-right text-base font-semibold tabular-nums text-brand-amber">{formatAmount(Math.max(0, totalAmt - unwithdrawnAmt), rawBags ? false : showNetBags)}</span>
-              <span className="text-right text-sm font-medium tabular-nums text-brand-amber/90">{fmtWeightPlain(Math.max(0, cerealKilos - unwithdrawnKilos), weightUnit)}</span>
+              <span className="text-right text-base font-semibold tabular-nums text-brand-amber">{formatAmount(potentialAmt, rawBags ? false : showNetBags)}</span>
+              <span className="text-right text-sm font-medium tabular-nums text-brand-amber/90">{fmtWeightPlain(potentialKilos, weightUnit)}</span>
             </div>
           </div>
         )}
@@ -656,6 +658,41 @@ function HomeStocks({ warehouseId } = {}) {
         // expanded - collapsed by default alongside the variety cards.
         const categoryHasExpanded = Object.keys(byVariety).some((v) => expandedVarieties.has(`${cerealType}::${v}`))
 
+        // The Total's own Potential figure is the SUM of every row's own
+        // already-clamped potential below it (each bucket's, or each By
+        // Products variety's), computed here from the exact same inputs
+        // VarietyCard itself displays with - NEVER independently as
+        // Math.max(0, cerealTotal - cerealUnwithdrawn), which can drift
+        // below what the rows actually show. Same bug class, same fix,
+        // as AdminHomeStocks.jsx's Province table: whenever one row's own
+        // unwithdrawn exceeds its own actual, that row correctly clamps
+        // to 0 for display, but an independently-recomputed Total would
+        // still subtract that row's full (now-invisible) excess,
+        // producing a Total lower than what's actually shown above it.
+        const cerealEffectiveShowNetBags = cerealType === 'By Products' ? false : showNetBags
+        let cerealPotentialAmt = 0
+        let cerealPotentialKilos = 0
+        for (const [varietyName, byBucket] of Object.entries(byVariety)) {
+          const varietyId = groupVarietyId[cerealType]?.[varietyName]
+          if (cerealType === 'By Products') {
+            const varietyBags = Object.values(byBucket).reduce((s, v) => s + v.bags, 0)
+            const varietyKilos = Object.values(byBucket).reduce((s, v) => s + v.kilos, 0)
+            const flatUnwithdrawn = varietyId ? unwithdrawnMap.get(varietyId) : null
+            const flatUnwithdrawnAmt = flatUnwithdrawn ? unwithdrawnAmount(flatUnwithdrawn, false) : 0
+            cerealPotentialAmt += Math.max(0, varietyBags - flatUnwithdrawnAmt)
+            cerealPotentialKilos += Math.max(0, varietyKilos - (flatUnwithdrawn?.kilos ?? 0))
+          } else {
+            const bucketUnwithdrawnMap = varietyId ? unwithdrawnByVarietyAge.get(varietyId) : null
+            for (const [bucketLabel, totals] of Object.entries(byBucket)) {
+              const bucketUnwithdrawn = bucketUnwithdrawnMap?.get(bucketLabel)
+              const bucketUnwithdrawnAmt = unwithdrawnAmount(bucketUnwithdrawn, cerealEffectiveShowNetBags)
+              const bucketTotalAmt = cerealEffectiveShowNetBags ? totals.kilos / 50 : totals.bags
+              cerealPotentialAmt += Math.max(0, bucketTotalAmt - bucketUnwithdrawnAmt)
+              cerealPotentialKilos += Math.max(0, totals.kilos - (bucketUnwithdrawn?.kilos ?? 0))
+            }
+          }
+        }
+
         return (
           <div
             key={cerealType}
@@ -715,7 +752,6 @@ function HomeStocks({ warehouseId } = {}) {
                 const uw = unwithdrawnMap.get(vid)
                 return uw ? { bags: acc.bags + uw.bags, kilos: acc.kilos + uw.kilos } : acc
               }, { bags: 0, kilos: 0 })
-              const cerealEffectiveShowNetBags = isByProducts ? false : showNetBags
               const cerealUnwithdrawnAmt = unwithdrawnAmount(cerealUnwithdrawn, cerealEffectiveShowNetBags)
               // By Products variety cards have no expand/collapse state
               // any more (see VarietyCard's own comment - age buckets
@@ -737,6 +773,8 @@ function HomeStocks({ warehouseId } = {}) {
                   hasUnwithdrawn={hasCerealUnwithdrawn}
                   unwithdrawnAmt={cerealUnwithdrawnAmt}
                   unwithdrawnKilos={cerealUnwithdrawn.kilos}
+                  potentialAmt={cerealPotentialAmt}
+                  potentialKilos={cerealPotentialKilos}
                   unitLabel={cerealUnitLabel}
                   cerealVarietyIds={cerealVarietyIds}
                   onOpenDetail={setDetailContext}

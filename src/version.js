@@ -2119,4 +2119,54 @@
 //              and Withdrawn figures moved into their own two-column row
 //              underneath (previously only ever one or the other showed,
 //              switching based on fully-withdrawn state).
-export const APP_VERSION = '1.9-121'
+//   1.9-122 - Data-integrity fixes to the unwithdrawn/potential math
+//            app-wide, driven by a directly reported, confirmed real
+//            inconsistency (a card showed "35 unwithdrawn" while that
+//            same data's own drill-down modal showed "235"):
+//            - Root cause: unwithdrawnStock.js derived "bags" from an
+//              AI's own separately-typed bag-count field, which can be
+//              left blank or typed as 0 while the kilos field (which the
+//              Sheet/form actually enforces) is real - an AI with 0
+//              typed bags but real kilos was showing as having NOTHING
+//              unwithdrawn on that specific AI, silently dragging a
+//              whole variety's or age-bucket's unwithdrawn total down
+//              below its true figure. Net kg is now the single source
+//              of truth everywhere a bag count is computed in that file
+//              (new resolveBags() helper): a typed bag count is only
+//              trusted when it's actually present, otherwise every bag
+//              figure falls back to kilos / 50 - for every category,
+//              including By Products (an estimate derived from a real,
+//              always-present figure beats a hard 0 that hides real
+//              stock). The "Bags/Kgs don't match" warning is removed
+//              entirely (not just for By Products) - it would only ever
+//              have been flagging normal bag-weight variance now.
+//            - Admin Dashboard > Net Bags by Province & Category: the
+//              branch TOTAL is now always exactly the sum of the
+//              province rows shown above it - previously recomputed
+//              independently from raw branch-wide figures, which could
+//              come out LOWER than the rows' own sum whenever one
+//              province's potential went negative (more unwithdrawn
+//              than actual) and clamped to 0 for display, silently
+//              dragging the independently-computed total down by that
+//              same now-invisible excess. Confirmed, reported: Albay +
+//              Catanduanes Rice not equalling the displayed Total.
+//              Same fix, same reasoning already proven correct on this
+//              page's own Age Grouping tab.
+//            - Admin Dashboard > Stock Breakdown: the Actual/Potential
+//              toggle now actually swaps each category's headline
+//              figure - it previously always showed the plain actual
+//              total regardless of which pill was selected, with
+//              potential only ever visible as an easy-to-miss
+//              annotation underneath (and only for By Products, since
+//              Rice/Palay's own unwithdrawn amount happened to be 0 in
+//              the reported case). Its unwithdrawn drill-down also now
+//              correctly requests real bag counts for a By Products tap
+//              (previously always requested the Rice/Palay net-bags
+//              math, even here).
+//            - HomeStocks.jsx's own cereal Total card now sums its
+//              Potential figure from every row shown above it (same
+//              root cause/fix as the Province table) instead of
+//              independently recomputing actual-minus-unwithdrawn at
+//              the whole-cereal-type level, which could diverge the
+//              same way.
+export const APP_VERSION = '1.9-122'

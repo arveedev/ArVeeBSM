@@ -7,16 +7,18 @@
 // By Products bags don't have a standard 50kg weight, so the usual
 // "net bags" figure (kilos / 50) used for Rice/Palay doesn't apply -
 // the AI's own typed bag count is the real, authoritative figure there
-// instead. Reported, confirmed real bug: this modal previously showed
-// EVERYTHING (including By Products) via kilos / 50, which silently
-// produced a wrong bag count for By Products, and the same 50kg
-// assumption also produced a false-positive "Bags/Kgs don't match"
-// warning on almost every By Products AI - both fixed by switching to
-// the authority's own real allocatedBags/withdrawnBags/unwithdrawnBags
-// fields (already computed by getUnwithdrawnDetail, just unused here
-// until now) whenever rawBags is true, and by getUnwithdrawnDetail
-// itself no longer running the mismatch check for a By Products
-// category at all (see bagsKilosMismatch's own comment).
+// instead (via allocatedBags/withdrawnBags/unwithdrawnBags, already
+// computed by getUnwithdrawnDetail). Per explicit direction, net kg is
+// now the single source of truth everywhere a bag COUNT is shown in
+// this app: unwithdrawnStock.js's own resolveBags() falls back to
+// kilos / 50 whenever a typed bag count is missing/zero (a real,
+// confirmed bug - a 0-typed-bags AI with real kilos was showing as
+// having nothing unwithdrawn, dragging a whole variety's total below
+// its true figure). Since a typed bag count and its kilos-derived
+// figure can therefore never meaningfully "disagree" any more, the
+// "Bags/Kgs don't match" warning this modal used to show has been
+// removed entirely, for every category - it would only ever have been
+// reporting normal bag-weight variance, not a real data problem.
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -24,7 +26,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { fmtBags, fmtKilos, fmtNetBags, authorityExtraDetails } from '../../utils/calculations.js'
-import { getUnwithdrawnDetail } from '../../utils/unwithdrawnStock.js'
+import { getUnwithdrawnDetail, resolveBags } from '../../utils/unwithdrawnStock.js'
 
 const netBagsOf = (kilos) => (kilos ?? 0) / 50
 
@@ -172,11 +174,6 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
                             .join(' · ')}
                         </p>
                       )}
-                      {d.hasBagsKilosMismatch && (
-                        <p className="mt-1 break-words rounded bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-brand-amber">
-                          ⚠ Bags/Kgs don't match on this AI: {fmtNetBags(d.allocatedBags)} bags typed vs {fmtNetBags(netBagsOf(d.allocatedKilos))} implied by kilos — check the Sheet record
-                        </p>
-                      )}
                     </div>
 
                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-neutral-800 pt-2">
@@ -211,7 +208,7 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
                             </div>
                             <span className="shrink-0 text-right text-xs tabular-nums text-neutral-300">
                               {rawBags
-                                ? `${fmtBags(t.type === 'WSI' ? t.numberOfBags : t.issuedBags)} bags`
+                                ? `${fmtBags(resolveBags(t.type === 'WSI' ? (t.numberOfBags ?? 0) : (t.issuedBags ?? 0), t.type === 'WSI' ? t.netKilos : t.issuedNetKilos))} bags`
                                 : `${fmtNetBags(netBagsOf(t.type === 'WSI' ? t.netKilos : t.issuedNetKilos))} bags`}
                             </span>
                           </li>

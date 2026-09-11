@@ -12,9 +12,28 @@
 // a different unit that doesn't roll into a bags/kilos "net bags" figure.
 
 import { db } from '../db/dexie.js'
-import { isAuthorityComplete, AGE_BUCKETS, isBagRepackingTypeName, effectiveCutoffDate } from './calculations.js'
+import { isAuthorityComplete, AGE_BUCKETS, effectiveCutoffDate } from './calculations.js'
 
 export const UNSPECIFIED_AGE = 'Unspecified Age'
+
+// Net kilos is the one figure every AI/WSI/WTS record reliably carries -
+// the separately-typed bag COUNT is not: it can be left blank, typed as
+// 0, or genuinely wrong, while the kilos figure is what the Sheet/form
+// actually enforces. Reported, confirmed real bug: an AI with a 0/blank
+// typed bag count but a real kilos figure was showing as having nothing
+// unwithdrawn on that specific AI, silently dragging a whole variety's
+// or age-bucket's unwithdrawn total down below its true figure (e.g. a
+// card showed "35 unwithdrawn" while the same data's own drill-down
+// modal - which has always derived its bags from kilos - correctly
+// showed 235). Net kg is the single source of truth everywhere in this
+// module now: a typed bag count is only trusted when it's actually
+// present (> 0); otherwise every bag figure below falls back to
+// kilos / 50, the same conversion already used throughout the rest of
+// the app. This applies to every category, including By Products (whose
+// bags don't have a standard 50kg weight, so kg/50 is only an estimate
+// there) - an estimate derived from a real, always-present figure is
+// still far better than a hard 0 that hides real unwithdrawn stock.
+export const resolveBags = (rawBags, kilos) => (rawBags > 0 ? rawBags : (kilos ?? 0) / 50)
 
 // Best-effort: pulls a representative day-count out of an AI's free-text
 // ageGroup field (the Sheet's repurposed "Note3"/"Age Group" column,
@@ -55,7 +74,7 @@ const withdrawalsForAuthority = async (aiNumber) => {
     .toArray()
 
   const withdrawnBags = withdrawals.reduce(
-    (s, t) => s + (t.type === 'WSI' ? (t.numberOfBags ?? 0) : (t.issuedBags ?? 0)), 0
+    (s, t) => s + resolveBags(t.type === 'WSI' ? (t.numberOfBags ?? 0) : (t.issuedBags ?? 0), t.type === 'WSI' ? (t.netKilos ?? 0) : (t.issuedNetKilos ?? 0)), 0
   )
   const withdrawnKilos = withdrawals.reduce(
     (s, t) => s + (t.type === 'WSI' ? (t.netKilos ?? 0) : (t.issuedNetKilos ?? 0)), 0
@@ -92,7 +111,7 @@ export const computeUnwithdrawnByVariety = async (warehouseId) => {
 
   for (const a of authorities) {
     const { withdrawnBags, withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
-    const unwithdrawnBags = Math.max(0, (a.totalAllocationBags ?? 0) - withdrawnBags)
+    const unwithdrawnBags = Math.max(0, resolveBags(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0) - withdrawnBags)
     const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
     if (unwithdrawnBags <= 0 && unwithdrawnKilos <= 0) continue
 
@@ -101,38 +120,6 @@ export const computeUnwithdrawnByVariety = async (warehouseId) => {
   }
 
   return result
-}
-
-// An authority carries totalAllocationBags and totalAllocationKilos as
-// two SEPARATE, independently-typed fields from the Sheet - normally
-// bags x 50 = kilos, but a Sheet typo on either one can leave them
-// disagreeing on the same real authority. A small gap is completely
-// normal (real bags don't all weigh exactly 50kg), which is why every
-// "Net Bags" figure elsewhere in this app is deliberately always
-// derived from kilos rather than trusting the separately-typed bags
-// field - but a LARGE gap (more than this tolerance) stops looking like
-// ordinary bag-weight variance and starts looking like one of the two
-// fields is just wrong. Flagged rather than silently trusted either
-// way, so a user sees the two disagree and can go check the real AI
-// record instead of unknowingly relying on whichever number their
-// current Bags/Net Bags toggle happens to read from.
-const BAGS_KILOS_MISMATCH_TOLERANCE = 0.05 // 5%
-// transactionTypeName is optional (older/other callers may not have it) -
-// a FILLERS/REBAGGING/BAGGING/RECLASSIFICATION authority is EXPECTED to
-// carry bags with zero (or near-zero) matching kilos, confirmed directly
-// - repacking bags is a real bag-count change that doesn't move kilos,
-// not a data-entry error, so it's never flagged. category is also
-// optional (older callers) - a By Products authority is EXPECTED to
-// disagree with the kilos/50 assumption too, since unlike Rice/Palay
-// By Products bags don't have a standard 50kg weight; the AI's own
-// typed bags and typed kilos are both independently real figures there,
-// not one derived from the other, so this check simply doesn't apply.
-export const bagsKilosMismatch = (bags, kilos, transactionTypeName = null, category = null) => {
-  if (category === 'By Products') return false
-  if (isBagRepackingTypeName(transactionTypeName)) return false
-  const bagsFromKilos = kilos / 50
-  if (bagsFromKilos <= 0) return bags > 0
-  return Math.abs(bags - bagsFromKilos) / bagsFromKilos > BAGS_KILOS_MISMATCH_TOLERANCE
 }
 
 // Per-authority breakdown (allocated/withdrawn/unwithdrawn, plus every
@@ -159,7 +146,8 @@ export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter
   for (const a of authorities) {
     if (bucketFilter && resolveAuthorityBucketLabel(a, bucketFilter.category) !== bucketFilter.label) continue
     const { withdrawals, withdrawnBags, withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
-    const unwithdrawnBags = Math.max(0, (a.totalAllocationBags ?? 0) - withdrawnBags)
+    const allocatedBags = resolveBags(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0)
+    const unwithdrawnBags = Math.max(0, allocatedBags - withdrawnBags)
     const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
     if (unwithdrawnBags <= 0 && unwithdrawnKilos <= 0) continue
 
@@ -168,13 +156,12 @@ export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter
     detail.push({
       authority: a,
       category,
-      allocatedBags: a.totalAllocationBags ?? 0,
+      allocatedBags,
       allocatedKilos: a.totalAllocationKilos ?? 0,
       withdrawnBags,
       withdrawnKilos,
       unwithdrawnBags,
       unwithdrawnKilos,
-      hasBagsKilosMismatch: bagsKilosMismatch(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0, a.transactionTypeName, category),
       withdrawals: [...withdrawals].sort((x, y) => (x.date < y.date ? -1 : 1)),
     })
   }
@@ -230,7 +217,7 @@ export const computeUnwithdrawnByVarietyAge = async (warehouseId, varietyCategor
     if (!a.varietyId) continue
     const category = varietyCategoryMap?.get(a.varietyId) ?? 'Unknown'
     const { withdrawnBags, withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
-    const unwithdrawnBags = Math.max(0, (a.totalAllocationBags ?? 0) - withdrawnBags)
+    const unwithdrawnBags = Math.max(0, resolveBags(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0) - withdrawnBags)
     const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
     if (unwithdrawnBags <= 0 && unwithdrawnKilos <= 0) continue
 
