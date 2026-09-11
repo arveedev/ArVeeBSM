@@ -161,16 +161,40 @@ export function SyncProgressToast({ label, doneLabel, phase }) {
 // toast. Deliberately renders no icon of its own, same rule as
 // SyncProgressToast above - AnimatedToast's outer wrapper already
 // supplies one for this toast's type ('blank' -> Info).
+//
+// Reported: tapping Update gave no feedback at all - the button just
+// sat there while window.location.reload() actually navigated away,
+// which reads as a freeze rather than "working on it," and the user was
+// then dropped on the PIN login screen with no warning why. Both are
+// real gaps, not a bug in the reload itself: AuthContext.jsx deliberately
+// never persists the logged-in session ("held in React state only... a
+// fresh page load requires re-entering the PIN" - see its own top
+// comment), so ANY reload, including this one, was always going to land
+// back on Login - that's by design, but this toast never said so. Now:
+// (1) the button disables and swaps to a spinner + "Updating…" the
+// instant it's tapped, so there's visible feedback even in the brief
+// window before the page actually unloads, and can't be double-tapped;
+// (2) the toast text says upfront that updating signs the user out, so
+// landing on Login reads as expected, not as something having gone
+// wrong.
 export function UpdateAvailableToast({ onUpdate }) {
+  const [isUpdating, setIsUpdating] = useState(false)
+  const handleClick = () => {
+    setIsUpdating(true)
+    onUpdate()
+  }
   return (
     <span className="text-sm font-medium text-app-text">
       <span className="block">A new version is available</span>
+      <span className="mt-0.5 block text-xs text-neutral-400">Updating will sign you out - you'll sign back in with your PIN.</span>
       <button
         type="button"
-        onClick={onUpdate}
-        className="mt-1.5 rounded-lg bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95"
+        onClick={handleClick}
+        disabled={isUpdating}
+        className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-70"
       >
-        Update now
+        {isUpdating && <Loader2 size={12} className="animate-spin" />}
+        {isUpdating ? 'Updating…' : 'Update now'}
       </button>
     </span>
   )

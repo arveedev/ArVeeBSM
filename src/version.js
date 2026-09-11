@@ -1815,4 +1815,20 @@
 //            Every one of these uses the same ShrinkFilterRow animation
 //            from the previous round - non-matching rows shrink away and
 //            grow back in live as you type, not an instant filter.
-export const APP_VERSION = '1.9-107'
+//   1.9-108 - Fixed a real, reported bug: tapping the "Update now" toast
+//            button (added in 1.9-105) gave no feedback at all and then
+//            silently landed on the PIN login screen, which read as the
+//            app freezing/crashing. Not actually a bug in the reload
+//            itself - AuthContext.jsx deliberately never persists the
+//            logged-in session ("held in React state only... a fresh
+//            page load requires re-entering the PIN," its own top
+//            comment), so any reload, this one included, was always
+//            going to land back on Login - that's by design, the toast
+//            just never said so. UpdateAvailableToast now disables the
+//            button and swaps to a spinner + "Updating…" the instant
+//            it's tapped (visible feedback for the brief window before
+//            the page actually unloads, and blocks a double-tap), and
+//            states upfront that updating signs the user out, so landing
+//            on Login now reads as expected instead of something having
+//            gone wrong.
+export const APP_VERSION = '1.9-108'
