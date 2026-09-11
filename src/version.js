@@ -1967,4 +1967,22 @@
 //            plain table at sm+ (unchanged), a per-province card below
 //            sm (name on top, Rice/Palay figures below it instead of
 //            squeezed beside it).
-export const APP_VERSION = '1.9-113'
+//   1.9-114 - Likely the REAL root cause behind "Update now" still not
+//            working after three straight rounds of client-side fixes:
+//            this repo had NO vercel.json at all, meaning every static
+//            file - including sw.js itself - was served under Vercel's
+//            own default caching. Per the Service Worker spec, a browser
+//            is allowed to reuse a cached sw.js for up to 24 hours
+//            unless the server explicitly says not to - meaning the
+//            browser (or an intermediary) could simply never have
+//            fetched the new sw.js at all within that window, no matter
+//            what any of the client-side registerType/applyUpdate logic
+//            did, since it never even saw the update existed. Added
+//            vercel.json with explicit no-cache headers on sw.js,
+//            workbox-*.js, registerSW.js, manifest.webmanifest,
+//            version.json, and index.html (the files that genuinely
+//            need to always be fetched fresh), plus long-lived immutable
+//            caching for /assets/* (content-hashed by Vite, safe to
+//            cache forever) and an explicit SPA rewrite so this doesn't
+//            regress deep-link routing.
+export const APP_VERSION = '1.9-114'
