@@ -32,6 +32,26 @@ export default defineConfig({
       registerType: 'prompt',
       manifest: false,
       workbox: {
+        // Reported, real bug found by reading the generated dist/sw.js
+        // directly: skipWaiting was correctly gated behind a message
+        // listener (registerType: 'prompt' does that automatically), so
+        // tapping "Update now" DID successfully activate the new
+        // service worker in the background every time - but without
+        // clientsClaim, an activated worker never takes control of an
+        // ALREADY OPEN tab on its own. That meant navigator.
+        // serviceWorker.controller never changed for the page still
+        // open, so the 'controllerchange' event workbox-window listens
+        // for (to trigger the actual reload - see appUpdate.js) never
+        // fired. The update was silently succeeding in the background
+        // on every tap, with nothing ever telling the open page to
+        // reload and show it - exactly "tapping Update now does
+        // nothing, repeatedly." clientsClaim: true here does NOT change
+        // WHEN a new worker activates (that's still only ever triggered
+        // by the user's own tap, via the message listener above) - it
+        // only makes activation actually take effect on the open tab
+        // once it happens, instead of silently doing nothing until a
+        // future unrelated navigation.
+        clientsClaim: true,
         // Every deep route (e.g. /reports) is client-side (BrowserRouter)
         // - there's no server to resolve it while offline, so any
         // navigation not already in the precache falls back to the

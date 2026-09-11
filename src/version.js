@@ -2001,4 +2001,30 @@
 //            province code now the small de-emphasized part), and
 //            bumped the cereal type label and figure text sizes up
 //            (figure now text-lg) for better legibility.
-export const APP_VERSION = '1.9-116'
+//   1.9-117 - Found the real bug behind "Update now does nothing" by
+//            reading the actual generated dist/sw.js, not guessing:
+//            skipWaiting was correctly gated behind a message listener
+//            (registerType: 'prompt' handles that automatically), so
+//            tapping the button WAS successfully activating the new
+//            service worker every time - but clientsClaim was never
+//            configured, so an activated worker never took control of
+//            the already-open tab on its own. That meant
+//            navigator.serviceWorker.controller never changed for the
+//            page still open, so the 'controllerchange' event
+//            appUpdate.js's reload logic waits for never fired - the
+//            update was silently succeeding in the background on every
+//            tap, with nothing ever telling the open page to reload and
+//            show it. Added clientsClaim: true to vite.config.js's
+//            workbox options - doesn't change WHEN a worker activates
+//            (still only the user's own tap), only makes that
+//            activation actually take effect on the open tab once it
+//            happens.
+//            Separate note on mobile still not showing the notice: the
+//            previous round's vercel.json no-cache fix only affects
+//            requests made AFTER it deployed - a phone that already had
+//            an old sw.js response cached before that point keeps using
+//            its own cached copy until that entry's original freshness
+//            window naturally expires (standard HTTP cache behavior,
+//            not fixable retroactively from the server side); a manual
+//            hard-refresh once should clear it immediately.
+export const APP_VERSION = '1.9-117'
