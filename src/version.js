@@ -2053,4 +2053,9 @@
 //              picker (WTSForm.jsx) is left unfiltered - a transfer has
 //              both an issued and a received side, so it doesn't map onto
 //              a single direction.
-export const APP_VERSION = '1.9-118'
+//   1.9-119 - Per explicit request: Admin Dashboard > Verified Correct now
+//            confirms before removing a signatory row, so an accidental
+//            tap/click can't silently drop one - a still-blank row (never
+//            typed into) skips the confirmation since there's nothing to
+//            lose.
+export const APP_VERSION = '1.9-119'

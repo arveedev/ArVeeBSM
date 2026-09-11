@@ -16,6 +16,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
+import ConfirmDialog from '../ConfirmDialog.jsx'
 import { inputClass, labelClass, primaryButtonClass, byAlpha } from './shared.js'
 
 const emptySignatory = () => ({ name: '', position: '' })
@@ -192,6 +193,23 @@ function GlobalSignatoriesSection() {
   const removeVerifiedRow = (index) =>
     setVerifiedCorrect((rows) => rows.length > 1 ? rows.filter((_, i) => i !== index) : rows)
 
+  // Guard against an accidental tap/click deleting a signatory a user
+  // already typed in - only a still-blank row (nothing to lose) skips
+  // the confirmation.
+  const [pendingRemoveIndex, setPendingRemoveIndex] = useState(null)
+  const requestRemoveVerifiedRow = (index) => {
+    const row = verifiedCorrect[index]
+    if (!row.name.trim() && !row.position.trim()) {
+      removeVerifiedRow(index)
+      return
+    }
+    setPendingRemoveIndex(index)
+  }
+  const confirmRemoveVerifiedRow = () => {
+    removeVerifiedRow(pendingRemoveIndex)
+    setPendingRemoveIndex(null)
+  }
+
   const handleSave = async () => {
     const cleanedVerified = verifiedCorrect.filter(
       (row) => row.name.trim() || row.position.trim()
@@ -248,7 +266,7 @@ function GlobalSignatoriesSection() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => removeVerifiedRow(i)}
+                  onClick={() => requestRemoveVerifiedRow(i)}
                   aria-label="Remove signatory"
                   className="rounded-xl border border-neutral-800 px-2 py-2 text-neutral-400 transition-colors hover:border-neutral-600 hover:text-app-text active:scale-95"
                 >
@@ -321,6 +339,14 @@ function GlobalSignatoriesSection() {
           Save
         </button>
       </div>
+
+      <ConfirmDialog
+        open={pendingRemoveIndex !== null}
+        title="Remove this signatory?"
+        description="This removes it from the Verified Correct list. Tap Save afterward to make it permanent."
+        onConfirm={confirmRemoveVerifiedRow}
+        onCancel={() => setPendingRemoveIndex(null)}
+      />
     </section>
   )
 }
