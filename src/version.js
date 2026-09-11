@@ -1685,4 +1685,20 @@
 //            added for every pile, not just multi-group ones, so the
 //            ledger itself always explains which group a receipt/issue
 //            belongs to.
-export const APP_VERSION = '1.9-101'
+//   1.9-102 - Follow-up per direct feedback with real screenshots: 1.9-101's
+//            multi-group breakdown looked "not professional" and "crowded"
+//            - the exported Pile Layout PDF in particular rendered every
+//            shared field, group heading, and group figure as the same
+//            plain gray label:value line, so a group heading (e.g. "DKA:")
+//            was visually indistinguishable from an ordinary field. Both
+//            the exported PDF and the on-screen grid box (only the box
+//            itself - the hover/tap popup and Pile List already had this)
+//            now draw a bold heading + thin divider rule above each group
+//            and a bold Total row at the bottom, so groups read as
+//            distinct sections. The PDF also folds each group's Received
+//            date (By Products only) into its heading line instead of a
+//            separate row, trading one row of height for the same
+//            information. Bags and Net Kg stay on their own stacked lines
+//            in every case, per explicit confirmation this shouldn't be
+//            re-combined onto one line.
+export const APP_VERSION = '1.9-102'

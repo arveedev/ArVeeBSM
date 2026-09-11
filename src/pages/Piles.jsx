@@ -1341,17 +1341,36 @@ function Piles() {
                     const groupRows = getGroupRows(pile)
                     // Multi-group pile (mixed sack weight/condition for
                     // Rice/Palay, or any By Products pile) - list each
-                    // group's own bags directly in the box itself, not
-                    // just the hover/tap popup, per explicit request.
+                    // group's own bags/net kg directly in the box itself,
+                    // not just the hover/tap popup, per explicit request.
+                    // Bold headings + divider rules (matching the popup's
+                    // PileGroupBreakdown and the PDF export) so groups read
+                    // as distinct sections instead of a flat list - a
+                    // reported complaint about the first version of this.
                     if (groupRows.length > 1) {
+                      const totalBags = groupRows.reduce((sum, r) => sum + r.bags, 0)
+                      const totalKilos = groupRows.reduce((sum, r) => sum + r.kilos, 0)
                       return (
-                        <div className="mt-0.5 text-center leading-tight">
+                        <div className="mt-0.5 text-left leading-tight">
                           {groupRows.map((row) => (
-                            <div key={row.key} className="flex items-center justify-between gap-1 text-[10px] tabular-nums">
-                              <span className="truncate text-neutral-700">{groupHeading(row)}</span>
-                              <span className="shrink-0 font-medium">{fmtBags(row.bags)}</span>
+                            <div key={row.key} className="border-t border-black/15 pt-0.5">
+                              <p className="truncate text-[9px] font-bold">{groupHeading(row)}</p>
+                              <div className="flex justify-between gap-1 text-[9px] tabular-nums">
+                                <span>Bags</span><span className="font-medium">{fmtBags(row.bags)}</span>
+                              </div>
+                              <div className="flex justify-between gap-1 text-[9px] tabular-nums">
+                                <span>Net Kg</span><span className="font-medium">{fmtWeight(row.kilos, weightUnit)}</span>
+                              </div>
                             </div>
                           ))}
+                          <div className="border-t border-black/40 pt-0.5">
+                            <div className="flex justify-between gap-1 text-[9px] font-bold tabular-nums">
+                              <span>Total Bags</span><span>{fmtBags(totalBags)}</span>
+                            </div>
+                            <div className="flex justify-between gap-1 text-[9px] font-bold tabular-nums">
+                              <span>Total Net Kg</span><span>{fmtWeight(totalKilos, weightUnit)}</span>
+                            </div>
+                          </div>
                         </div>
                       )
                     }

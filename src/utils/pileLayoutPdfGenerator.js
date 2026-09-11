@@ -106,45 +106,51 @@ export const generatePileLayoutReport = ({
     const rawH = box.rowSpan * cellH
 
     const isVacant = !box.pile
-    // Mirrors the on-screen grid box/popup rule exactly (Piles.jsx's
-    // PileGroupBreakdown component): a single-group pile keeps the plain
-    // flat field list; a multi-group pile (mixed sack weight/condition,
-    // or any By Products pile) instead lists shared fields (never Var/
-    // Procured for By Products - those move per-group) followed by one
-    // heading + Bags + Net Kg trio per group (plus a Received row, By
-    // Products only), then a TOTAL Bags/Net Kg pair. Reuses the existing
-    // label:value field-list rendering below unchanged - a group heading
-    // is just a field whose value is blank.
+    // Three entry kinds, so a multi-group pile's breakdown reads as
+    // distinct sections instead of a flat wall of identical label:value
+    // lines (confirmed, reported case - the plain field-list approach
+    // looked "crowded" and "not professional"): 'field' is the existing
+    // label:value row; 'heading' is a bold, left-aligned group name (with
+    // an optional lighter "aside" suffix - By Products' own Received
+    // date, folded into the heading line instead of its own row); 'rule'
+    // draws a thin divider above the next entry. Single-group piles are
+    // unaffected - still the plain flat field list, just expressed in the
+    // same entry shape.
+    const field = (label, value, bold = false) => ({ kind: 'field', label, value, bold })
+    const heading = (text, aside) => ({ kind: 'heading', text, aside })
+    const rule = () => ({ kind: 'rule' })
+
     const isMultiGroup = !isVacant && box.groupRows?.length > 1
     const isByProducts = box.pile?.cerealType === 'By Products'
     const detailFields = isVacant
       ? []
       : isMultiGroup
         ? [
-            !isByProducts && box.variety?.name && ['Var', box.variety.name],
-            box.pile.formattedAge && ['Age', box.pile.formattedAge],
-            box.pile.condition && ['Cond', box.pile.condition],
-            box.pile.moistureContent && ['MC', box.pile.moistureContent],
-            box.pile.purity && ['Purity', box.pile.purity],
-            !isByProducts && box.pile.dateProcured && [box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured],
+            !isByProducts && box.variety?.name && field('Var', box.variety.name),
+            box.pile.formattedAge && field('Age', box.pile.formattedAge),
+            box.pile.condition && field('Cond', box.pile.condition),
+            box.pile.moistureContent && field('MC', box.pile.moistureContent),
+            box.pile.purity && field('Purity', box.pile.purity),
+            !isByProducts && box.pile.dateProcured && field(box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured),
             ...box.groupRows.flatMap((row) => [
-              [groupHeading(row), ''],
-              isByProducts && row.lastReceivedDate && ['Received', fmtGroupDate(row.lastReceivedDate)],
-              ['Bags', fmtBags(row.bags)],
-              ['Net Kg', fmtKilos(row.kilos)],
-            ].filter(Boolean)),
-            ['TOTAL Bags', fmtBags(box.groupRows.reduce((sum, r) => sum + r.bags, 0))],
-            ['TOTAL Net Kg', fmtKilos(box.groupRows.reduce((sum, r) => sum + r.kilos, 0))],
+              rule(),
+              heading(groupHeading(row), isByProducts && row.lastReceivedDate ? `recv ${fmtGroupDate(row.lastReceivedDate)}` : null),
+              field('Bags', fmtBags(row.bags)),
+              field('Net Kg', fmtKilos(row.kilos)),
+            ]),
+            rule(),
+            field('Total Bags', fmtBags(box.groupRows.reduce((sum, r) => sum + r.bags, 0)), true),
+            field('Total Net Kg', fmtKilos(box.groupRows.reduce((sum, r) => sum + r.kilos, 0)), true),
           ].filter(Boolean)
         : [
-            box.variety?.name && ['Var', box.variety.name],
-            box.pile.currentBags != null && ['Bags', fmtBags(box.pile.currentBags)],
-            box.pile.currentKilos != null && ['Net Kg', fmtKilos(box.pile.currentKilos)],
-            box.pile.formattedAge && ['Age', box.pile.formattedAge],
-            box.pile.condition && ['Cond', box.pile.condition],
-            box.pile.moistureContent && ['MC', box.pile.moistureContent],
-            box.pile.purity && ['Purity', box.pile.purity],
-            box.pile.dateProcured && [box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured],
+            box.variety?.name && field('Var', box.variety.name),
+            box.pile.currentBags != null && field('Bags', fmtBags(box.pile.currentBags)),
+            box.pile.currentKilos != null && field('Net Kg', fmtKilos(box.pile.currentKilos)),
+            box.pile.formattedAge && field('Age', box.pile.formattedAge),
+            box.pile.condition && field('Cond', box.pile.condition),
+            box.pile.moistureContent && field('MC', box.pile.moistureContent),
+            box.pile.purity && field('Purity', box.pile.purity),
+            box.pile.dateProcured && field(box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured),
           ].filter(Boolean)
 
     // Fixed, comfortable, always-readable font sizes - only shrunk (down
@@ -168,15 +174,21 @@ export const generatePileLayoutReport = ({
       // Value gets whatever room is actually left after the label's own
       // measured width - not a fixed ratio for every field - since
       // labels are all short (Var, Bags, MC...) but values vary widely
-      // (a date range needs far more room than "GQ").
-      const wrapped = detailFields.map(([label, value]) => {
-        const labelText = `${label}:`
+      // (a date range needs far more room than "GQ"). Headings and rules
+      // are sized separately - a heading is one bold line (no wrapping,
+      // group names are short), a rule is a thin divider that only needs
+      // a fraction of a normal line's height.
+      const wrapped = detailFields.map((entry) => {
+        if (entry.kind === 'rule') return { kind: 'rule', slotsUsed: 0.5 }
+        if (entry.kind === 'heading') return { kind: 'heading', text: entry.text, aside: entry.aside, slotsUsed: 1 }
+        const labelText = `${entry.label}:`
         const labelWidth = doc.getTextWidth(labelText)
         const valueWidth = Math.max(8, blockWidthForWrap - labelWidth - 3)
-        return { label: labelText, valueLines: doc.splitTextToSize(String(value), valueWidth) }
+        const valueLines = doc.splitTextToSize(String(entry.value), valueWidth)
+        return { kind: 'field', label: labelText, valueLines, bold: entry.bold, slotsUsed: valueLines.length }
       })
-      const totalLines = wrapped.reduce((sum, f) => sum + f.valueLines.length, 0)
-      const slots = 1.2 + Math.max(totalLines, isVacant ? 1 : 0)
+      const totalSlotsUsed = wrapped.reduce((sum, f) => sum + f.slotsUsed, 0)
+      const slots = 1.2 + Math.max(totalSlotsUsed, isVacant ? 1 : 0)
       return { wrapped, requiredHeight: lineHeight * slots + padding * 2, slots }
     }
 
@@ -288,17 +300,46 @@ export const generatePileLayoutReport = ({
 
       // No safety-break here on purpose: h is already guaranteed (via
       // requiredHeight above) to have room for every line of every
-      // field, including wrapped continuations. A break here could only
+      // entry, including wrapped continuations. A break here could only
       // ever drop legitimate content in the case of a tiny rounding
       // mismatch - showing everything is the higher priority than
       // guarding against a fraction-of-a-millimeter visual overflow that
       // the box's own surrounding gap absorbs anyway.
-      for (const { label, valueLines } of wrappedFields) {
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(...GRAY_TEXT)
-        doc.text(label, blockLeftX, ty)
+      for (const entry of wrappedFields) {
+        if (entry.kind === 'rule') {
+          doc.setDrawColor(120, 120, 120)
+          doc.setLineWidth(0.15)
+          doc.line(blockLeftX, ty - lineHeight * 0.7, blockRightX, ty - lineHeight * 0.7)
+          ty += lineHeight * entry.slotsUsed
+          continue
+        }
+        if (entry.kind === 'heading') {
+          // Bold group name, left-aligned - reads as a section header
+          // instead of just another gray label, with its own lighter/
+          // smaller "recv <date>" suffix (By Products only) appended
+          // right after it on the same line rather than its own row.
+          doc.setFont('helvetica', 'bold')
+          doc.setTextColor(...BLACK)
+          doc.text(entry.text, blockLeftX, ty)
+          if (entry.aside) {
+            const headingWidth = doc.getTextWidth(entry.text)
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(Math.max(5, detailFontSize - 1))
+            doc.setTextColor(...GRAY_TEXT)
+            doc.text(` · ${entry.aside}`, blockLeftX + headingWidth, ty)
+            doc.setFontSize(detailFontSize)
+          }
+          ty += lineHeight
+          continue
+        }
+        // A bold field (the Total row) reads as its own emphasized
+        // summary instead of blending into the ordinary gray-label rows
+        // above it.
+        doc.setFont('helvetica', entry.bold ? 'bold' : 'normal')
+        doc.setTextColor(...(entry.bold ? BLACK : GRAY_TEXT))
+        doc.text(entry.label, blockLeftX, ty)
         doc.setTextColor(...BLACK)
-        for (const line of valueLines) {
+        for (const line of entry.valueLines) {
           doc.text(line, blockRightX, ty, { align: 'right' })
           ty += lineHeight
         }
