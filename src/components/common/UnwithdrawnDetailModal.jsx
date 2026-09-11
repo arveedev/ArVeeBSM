@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
-import { fmtNetBags } from '../../utils/calculations.js'
+import { fmtNetBags, authorityExtraDetails } from '../../utils/calculations.js'
 import { getUnwithdrawnDetail } from '../../utils/unwithdrawnStock.js'
 
 const netBagsOf = (kilos) => (kilos ?? 0) / 50
@@ -36,6 +36,14 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
   ) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
+  // Reported: this modal showed far less detail per AI than the
+  // Monitoring list it's drilled down from - just variety + a truncated
+  // customer name, missing the warehouse, date, and OR No./Remarks/Note
+  // fields already stored on every authority record. Reuses the same
+  // authorityExtraDetails helper AdminMonitoring.jsx's own row already
+  // uses, for the exact same "OR No.: ... · Note: ..." text.
+  const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
+  const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
 
   const totalAllocatedNetBags = detail.reduce((s, d) => s + netBagsOf(d.allocatedKilos), 0)
   const totalWithdrawnNetBags = detail.reduce((s, d) => s + netBagsOf(d.withdrawnKilos), 0)
@@ -100,13 +108,32 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-mono text-sm font-bold text-app-text">AI {d.authority.aiNumber}</p>
-                        <p className="truncate text-xs text-neutral-500">
+                        <p className="break-words text-xs text-neutral-500">
                           {varietyMap.get(d.authority.varietyId)?.name ?? '—'}
                           {d.authority.customerName ? ` · ${d.authority.customerName}` : ''}
                         </p>
+                        {(() => {
+                          const warehouse = warehouseMap.get(d.authority.assignedWarehouse)
+                          return (warehouse || d.authority.assignedWarehouse) && (
+                            <p className="truncate text-xs text-neutral-500">
+                              {warehouse ? `${warehouse.code} — ${warehouse.name}` : d.authority.assignedWarehouse}
+                            </p>
+                          )
+                        })()}
+                        {d.authority.date && (
+                          <p className="truncate text-xs text-neutral-600">{String(d.authority.date).slice(0, 10)}</p>
+                        )}
                         {d.authority.ageGroup && (
                           <p className="mt-0.5 inline-block rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-400">
                             Age Group: {d.authority.ageGroup}
+                          </p>
+                        )}
+                        {authorityExtraDetails(d.authority).filter((x) => x.label !== 'Age Group').length > 0 && (
+                          <p className="mt-0.5 break-words text-xs text-neutral-600">
+                            {authorityExtraDetails(d.authority)
+                              .filter((x) => x.label !== 'Age Group')
+                              .map((x) => `${x.label}: ${x.value}`)
+                              .join(' · ')}
                           </p>
                         )}
                         {d.hasBagsKilosMismatch && (
@@ -144,7 +171,7 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
                                 <span className="font-mono text-sm font-semibold text-app-text">{t.serialNo}</span>
                                 <span className="text-xs text-neutral-500">{t.date}</span>
                               </div>
-                              <p className="mt-0.5 truncate text-xs text-neutral-400">
+                              <p className="mt-0.5 break-words text-xs text-neutral-400">
                                 {varietyMap.get(t.varietyId)?.name ?? '—'}
                                 {t.customerName ? ` · ${t.customerName}` : ''}
                               </p>

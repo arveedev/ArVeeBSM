@@ -15,7 +15,7 @@
 //   to just that facility's own activity and only the Regional
 //   Authority Number(s) actually assigned to it, not every ricemill's.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Search, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
@@ -26,10 +26,34 @@ import { nfaAllocationMatchesQuery } from '../../utils/monitoringSearch.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
 
-function NfaMillingMonitor({ warehouseId } = {}) {
+// `active` - true by default (the facility Home page usage, warehouseId
+// passed, is the only view in that context so it's always active).
+// AdminMonitoring's NFA tab passes its own activeTab === 'NFA' - this
+// component stays mounted even while that tab is hidden (see
+// AdminMonitoring.jsx's own comment on why), so it can't rely on
+// unmounting to reset its search when the user switches away.
+function NfaMillingMonitor({ warehouseId, active = true } = {}) {
   const { weightUnit } = useSettings() ?? {}
   const [expandedNumber, setExpandedNumber] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    if (!active) setSearchQuery('')
+  }, [active])
+
+  // Reported: searching while scrolled down never brought the matching
+  // rows into view. Scrolls this card back into view the moment a
+  // search actually STARTS (empty -> non-empty), not on every further
+  // keystroke.
+  const wasSearchEmptyRef = useRef(true)
+  useEffect(() => {
+    const isEmpty = !searchQuery.trim()
+    if (!isEmpty && wasSearchEmptyRef.current) {
+      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    wasSearchEmptyRef.current = isEmpty
+  }, [searchQuery])
 
   const allocations = useLiveQuery(() => db.ricemillAllocations.toArray(), []) ?? []
 
@@ -128,7 +152,7 @@ function NfaMillingMonitor({ warehouseId } = {}) {
   }, [warehouseId, allocations]) ?? new Map()
 
   return (
-    <div className={warehouseId ? '' : 'mt-4'}>
+    <div ref={containerRef} className={warehouseId ? '' : 'mt-4'}>
       <p className="mb-2 text-sm text-neutral-500 md:text-base">
         {warehouseId
           ? 'NFA allocation vs. actual usage for this facility.'
@@ -141,7 +165,7 @@ function NfaMillingMonitor({ warehouseId } = {}) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Authority Number or AI number…"
+            placeholder="Search"
             className="w-full rounded-xl border border-neutral-800 bg-neutral-950 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
           />
           {searchQuery && (
@@ -156,7 +180,7 @@ function NfaMillingMonitor({ warehouseId } = {}) {
           )}
         </div>
       )}
-      <ul className="space-y-1.5">
+      <ul>
         {sortedAllocations.length === 0 && (
           <p className="py-6 text-center text-sm text-neutral-500 md:text-base">
             {warehouseId ? 'No NFA allocation assigned to this facility yet.' : 'No NFA ricemill allocations set up yet.'}
@@ -177,7 +201,7 @@ function NfaMillingMonitor({ warehouseId } = {}) {
           const isExpanded = expandedNumber === a.regionalAuthorityNumber
           const matches = nfaAllocationMatchesQuery(a.regionalAuthorityNumber, recovery?.transferEntries, searchQuery)
           return (
-            <ShrinkFilterRow key={a.regionalAuthorityNumber} as="li" matches={matches}>
+            <ShrinkFilterRow key={a.regionalAuthorityNumber} as="li" matches={matches} gapClass="mt-1.5">
             <div className={`${listItemClass} flex-col items-stretch`}>
               <button
                 type="button"

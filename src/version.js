@@ -1831,4 +1831,43 @@
 //            states upfront that updating signs the user out, so landing
 //            on Login now reads as expected instead of something having
 //            gone wrong.
-export const APP_VERSION = '1.9-108'
+//   1.9-109 - Follow-up fixes to the search work from the last two
+//            rounds, per direct feedback with real screenshots:
+//            1. Fixed real "weird gaps" between search results -
+//               root cause: the parent list used Tailwind's space-y-*
+//               (a fixed margin-top on every row regardless of state),
+//               so a collapsed (non-matching) row's CONTENT correctly
+//               shrank to ~0px but its MARGIN stayed in full, leaving
+//               real empty space stacked between every collapsed row.
+//               ShrinkFilterRow now carries its own conditional margin
+//               instead (zero while collapsed) and every list dropped
+//               its space-y-* - a collapsed row's total footprint is
+//               now genuinely zero, so matches sit flush together.
+//            2. Searching while scrolled down never brought the results
+//               into view - every monitoring search now scrolls back to
+//               the top (of the page, its own card, or its own modal,
+//               whichever applies) the moment a search actually STARTS
+//               (empty -> non-empty), not on every further keystroke.
+//            3. Search text now resets when switching tabs (Admin
+//               Monitoring's AI/SIA/MILLING/NFA tabs, and MILLING's own
+//               MO/TMO tab) - MillingMonitor/NfaMillingMonitor stay
+//               mounted the whole time (a deliberate, unrelated fix from
+//               an earlier round to avoid a flash of empty state), so
+//               their search text was silently surviving a tab switch
+//               instead of starting fresh.
+//            4. Every search box's placeholder just says "Search" now -
+//               the old ones described a narrow one-field search
+//               ("Search AI number for reconciliation…") that stopped
+//               being accurate once the previous round broadened every
+//               search to match customer/warehouse/OR No./etc, so it
+//               read as a stale, irrelevant hint.
+//            5. Fixed a separate, real gap reported the same day: the
+//               Unwithdrawn detail modal (tap an "unwithdrawn" badge)
+//               showed far less per AI than the Monitoring list it's
+//               drilled down from - a truncated one-line customer name
+//               and nothing else. Now also shows the full customer name
+//               (wraps instead of cutting off), the assigned warehouse,
+//               the date, and OR No./Remarks/Note - reusing the same
+//               authorityExtraDetails helper AdminMonitoring.jsx's own
+//               row already uses, instead of a separate, thinner display.
+export const APP_VERSION = '1.9-109'

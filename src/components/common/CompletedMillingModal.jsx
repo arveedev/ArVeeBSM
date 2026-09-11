@@ -6,7 +6,7 @@
 // place. Reuses MillingOrderRow (exported from MillingMonitor.jsx) so
 // the two lists never visually drift from each other.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, AlertTriangle, Search } from 'lucide-react'
 import { db } from '../../db/dexie.js'
@@ -24,6 +24,19 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
   // needs a matching exit rather than an instant, jarring unmount.
   const [isClosing, setIsClosing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const scrollRef = useRef(null)
+  // Reported: searching while scrolled down the list never brought the
+  // matching rows into view. Scrolls this modal's own scrollable area
+  // back to the top the moment a search actually STARTS (empty ->
+  // non-empty), not on every further keystroke.
+  const wasSearchEmptyRef = useRef(true)
+  useEffect(() => {
+    const isEmpty = !searchQuery.trim()
+    if (!isEmpty && wasSearchEmptyRef.current) {
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    wasSearchEmptyRef.current = isEmpty
+  }, [searchQuery])
 
   // Same authority join MillingMonitor.jsx's own pending list uses -
   // db.millingOrders has no customerName/orNumber/remarks of its own,
@@ -137,7 +150,7 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
         {orders.length > 0 && (
           <div className="relative mb-3">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
@@ -145,7 +158,7 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search customer, ricemill, warehouse, number…"
+              placeholder="Search"
               className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
             />
             {searchQuery && (
@@ -169,7 +182,7 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
             {orders.every((o) => !matchesQuery(o)) && (
               <p className="py-2 text-center text-xs text-neutral-500">No completed {type} operations match that search.</p>
             )}
-          <ul className="space-y-1.5">
+          <ul>
             {orders.map((o) => (
               <MillingOrderRow
                 key={o.orderId}

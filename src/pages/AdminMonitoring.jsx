@@ -14,7 +14,7 @@
 // Search finds a specific AI/SIA number; tapping a matched row opens the
 // reconciliation panel showing every WSI/ESI document that used it.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Search, X, Check } from 'lucide-react'
 import { db } from '../db/dexie.js'
@@ -53,6 +53,29 @@ function AdminMonitoring() {
   useEffect(() => {
     setPageHeader?.({ title: 'Monitoring', subtitle: 'Cross-warehouse AI / SIA oversight.' })
   }, [])
+
+  // Reported: switching tabs left the previous tab's search text sitting
+  // there, so returning to a tab (or switching to a fresh one) showed
+  // stale results instead of the real, unfiltered list.
+  useEffect(() => {
+    setSearchQuery('')
+  }, [activeTab])
+
+  // Reported: searching while scrolled down never brought the matching
+  // results into view - the list re-filtered in place, off-screen, with
+  // no indication anything happened. Scrolls back to the top (where the
+  // search box and results both live) the moment a search actually
+  // STARTS (empty -> non-empty) - not on every further keystroke, which
+  // would otherwise yank the view back up while refining an
+  // already-visible search.
+  const wasSearchEmptyRef = useRef(true)
+  useEffect(() => {
+    const isEmpty = !searchQuery.trim()
+    if (!isEmpty && wasSearchEmptyRef.current) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    wasSearchEmptyRef.current = isEmpty
+  }, [searchQuery])
 
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
 
@@ -162,7 +185,7 @@ function AdminMonitoring() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Search ${activeTab} number for reconciliation…`}
+                  placeholder="Search"
                   className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
                 />
                 {searchQuery && (
@@ -210,10 +233,10 @@ function AdminMonitoring() {
           once at the top of this component), so it's flash-safe either
           way, but kept in the same always-mounted shape for consistency. */}
       <div className={`mt-4 ${activeTab === 'MILLING' ? '' : 'hidden'}`}>
-        <MillingMonitor isAdmin={isAdmin} />
+        <MillingMonitor isAdmin={isAdmin} active={activeTab === 'MILLING'} />
       </div>
       <div className={activeTab === 'NFA' ? '' : 'hidden'}>
-        <NfaMillingMonitor />
+        <NfaMillingMonitor active={activeTab === 'NFA'} />
       </div>
       <div className={activeTab === 'MILLING' || activeTab === 'NFA' ? 'hidden' : ''}>
       {regionalAuthFilter.trim() && (() => {
@@ -259,7 +282,7 @@ function AdminMonitoring() {
         )
       })()}
 
-      <ul className="mt-4 space-y-2 animate-flow-down" key={`${activeTab}-${regionalAuthFilter}`}>
+      <ul className="mt-4 animate-flow-down" key={`${activeTab}-${regionalAuthFilter}`}>
         {filtered.length === 0 && (
           <p className="mt-4 text-center text-xs text-neutral-500">
             No pending {activeTab} records {query ? 'match that search.' : 'yet.'}

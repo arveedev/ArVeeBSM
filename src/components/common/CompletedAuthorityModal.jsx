@@ -5,7 +5,7 @@
 // Tapping an entry opens the same reconciliation panel the admin side
 // already uses, showing every WSI/ESI document that used it.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X, Check, AlertTriangle, Search } from 'lucide-react'
@@ -42,6 +42,19 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const scrollRef = useRef(null)
+  // Reported: searching while scrolled down the list never brought the
+  // matching rows into view. Scrolls this modal's own scrollable area
+  // back to the top the moment a search actually STARTS (empty ->
+  // non-empty), not on every further keystroke.
+  const wasSearchEmptyRef = useRef(true)
+  useEffect(() => {
+    const isEmpty = !searchQuery.trim()
+    if (!isEmpty && wasSearchEmptyRef.current) {
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    wasSearchEmptyRef.current = isEmpty
+  }, [searchQuery])
   const [reconciling, setReconciling] = useState(null)
   // Authority currently awaiting confirmation to be sent back to
   // Pending, or null when no confirmation is showing.
@@ -200,7 +213,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${type} number…`}
+            placeholder="Search"
             className="w-full rounded-lg border border-neutral-800 bg-neutral-900 py-1.5 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
           />
           {searchQuery && (
@@ -297,7 +310,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
         })()}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
         {preSearchFiltered.length === 0 ? (
           <p className="py-6 text-center text-xs text-neutral-500">
             No completed {type} records for this period.
@@ -309,7 +322,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
                 No completed {type} records match that search.
               </p>
             )}
-          <ul className="space-y-2">
+          <ul>
             {preSearchFiltered.map(({ a, completedDate }) => {
               const variety = type === 'AI' ? varietyMap.get(a.varietyId) : null
               const warehouse = warehouseMap.get(a.assignedWarehouse)

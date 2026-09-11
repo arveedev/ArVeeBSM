@@ -465,7 +465,7 @@ function SackRow({ t, warehouseMap, sackTypeMap }) {
 // Shared pending/completed row renderer - identical progress-bar math
 // and layout for both MillingMonitor's inline pending list and
 // CompletedMillingModal's list, extracted so the two never drift.
-export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimating = false, onToggleComplete, matches = true }) {
+export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimating = false, onToggleComplete, matches = true, gapClass = 'mt-1.5' }) {
   // Progress is issuance (0-50%) plus receipt (0-50%), not a single
   // received-vs-expected ratio - so a fully-issued but not-yet-received
   // order still shows real, visible progress (50%) rather than nothing
@@ -529,7 +529,7 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
   const showsChecked = o.manuallyCompleted || isAnimating
 
   return (
-    <ShrinkFilterRow as="li" matches={matches}>
+    <ShrinkFilterRow as="li" matches={matches} gapClass={gapClass}>
     <div className={`flex items-stretch gap-2 ${isAnimating ? 'animate-row-complete-out pointer-events-none' : ''}`}>
       {isAdmin && onToggleComplete && (
         <button
@@ -593,7 +593,7 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
   )
 }
 
-function MillingMonitor({ isAdmin = false }) {
+function MillingMonitor({ isAdmin = false, active = true }) {
   const [topTab, setTopTab] = useState('MO')
   const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
@@ -618,6 +618,31 @@ function MillingMonitor({ isAdmin = false }) {
     const stillPending = orders.some((o) => o.orderId === completingId && !(o.manuallyCompleted || o.sheetStatus === 'DONE'))
     if (!stillPending) setCompletingId(null)
   }, [orders, completingId])
+
+  // Reported: switching MO/TMO, or navigating away to a different
+  // Monitoring tab and back (this component stays mounted the whole
+  // time - see AdminMonitoring.jsx's own comment on why), left the old
+  // search text sitting there. This component has no `active` prop of
+  // its own to unmount on - reset explicitly instead, on either signal.
+  useEffect(() => {
+    setSearchQuery('')
+  }, [topTab])
+  useEffect(() => {
+    if (!active) setSearchQuery('')
+  }, [active])
+
+  // Reported: searching while scrolled down never brought the matching
+  // rows into view. Scrolls this card back into view the moment a
+  // search actually STARTS (empty -> non-empty), not on every further
+  // keystroke.
+  const wasSearchEmptyRef = useRef(true)
+  useEffect(() => {
+    const isEmpty = !searchQuery.trim()
+    if (!isEmpty && wasSearchEmptyRef.current) {
+      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    wasSearchEmptyRef.current = isEmpty
+  }, [searchQuery])
 
   // Must match .animate-row-complete-out's duration in index.css.
   const ROW_EXIT_MS = 700
@@ -790,7 +815,7 @@ function MillingMonitor({ isAdmin = false }) {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search customer, ricemill, warehouse, number…"
+            placeholder="Search"
             className="w-full rounded-xl border border-neutral-800 bg-neutral-950 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
           />
           {searchQuery && (
@@ -818,7 +843,7 @@ function MillingMonitor({ isAdmin = false }) {
       )}
 
       {isExpanded && (
-      <ul className="mt-3 space-y-1.5 animate-flow-down" key={topTab}>
+      <ul className="mt-3 animate-flow-down" key={topTab}>
         {filtered.length === 0 && (
           <p className="py-4 text-center text-xs text-neutral-500">
             No pending {topTab} operations.
