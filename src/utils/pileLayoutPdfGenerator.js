@@ -161,11 +161,17 @@ export const generatePileLayoutReport = ({
     // the previous 3.4mm looked needlessly loose for dense field lists.
     let headerFontSize = 10
     let detailFontSize = 7
-    let lineHeight = 3.0
-    const padding = 2
+    let lineHeight = 3.2
+    // 3 (was 2) - reported as text sitting right against the box border
+    // with no breathing room, especially once the multi-group breakdown
+    // added more lines. Still shrinks along with everything else in the
+    // rare too-tall-for-its-space case below.
+    const padding = 3
 
     const rawWInset = rawW - boxGap
-    const contentWForWrap = Math.min(rawWInset - padding * 2, rawWInset * 0.85)
+    // 0.8 (was 0.85) - a little more side margin inside the box, same
+    // "text touching the edges" complaint.
+    const contentWForWrap = Math.min(rawWInset - padding * 2, rawWInset * 0.8)
     const blockWidthForWrap = contentWForWrap
 
     const computeWrappedFields = () => {
@@ -179,8 +185,8 @@ export const generatePileLayoutReport = ({
       // group names are short), a rule is a thin divider that only needs
       // a fraction of a normal line's height.
       const wrapped = detailFields.map((entry) => {
-        if (entry.kind === 'rule') return { kind: 'rule', slotsUsed: 0.5 }
-        if (entry.kind === 'heading') return { kind: 'heading', text: entry.text, aside: entry.aside, slotsUsed: 1 }
+        if (entry.kind === 'rule') return { kind: 'rule', slotsUsed: 0.8 }
+        if (entry.kind === 'heading') return { kind: 'heading', text: entry.text, aside: entry.aside, slotsUsed: 1.2 }
         const labelText = `${entry.label}:`
         const labelWidth = doc.getTextWidth(labelText)
         const valueWidth = Math.max(8, blockWidthForWrap - labelWidth - 3)
@@ -294,7 +300,7 @@ export const generatePileLayoutReport = ({
       // that is itself centered in the box. A value that needs more than
       // one line wraps onto extra lines - each one already accounted for
       // in the box's height above, so nothing overlaps the next field.
-      const blockWidth = Math.min(contentW, w * 0.85)
+      const blockWidth = Math.min(contentW, w * 0.8)
       const blockLeftX = centerX - blockWidth / 2
       const blockRightX = centerX + blockWidth / 2
 
@@ -329,7 +335,7 @@ export const generatePileLayoutReport = ({
             doc.text(` · ${entry.aside}`, blockLeftX + headingWidth, ty)
             doc.setFontSize(detailFontSize)
           }
-          ty += lineHeight
+          ty += lineHeight * entry.slotsUsed
           continue
         }
         // A bold field (the Total row) reads as its own emphasized

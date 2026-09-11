@@ -1701,4 +1701,20 @@
 //            information. Bags and Net Kg stay on their own stacked lines
 //            in every case, per explicit confirmation this shouldn't be
 //            re-combined onto one line.
-export const APP_VERSION = '1.9-102'
+//   1.9-103 - Follow-up per direct feedback with real screenshots again:
+//            1.9-102's headers/dividers were a real improvement but the
+//            breakdown still looked crowded, text sitting right against
+//            the box border with no breathing room - confirmed in the
+//            screenshots (the exported PDF's text nearly touching the box
+//            edges, and the on-screen grid box's own value text visibly
+//            wrapping mid-value, e.g. "kg" landing on its own line and
+//            spilling past the box). Two real fixes: (1) the on-screen
+//            compact box's multi-group breakdown now renders each stat as
+//            its own centered, truncating line (matching how the plain
+//            single-group box already worked) instead of a label:value
+//            row with no width guard, which is what was wrapping mid-
+//            value. (2) The exported PDF gets real padding (2mm -> 3mm),
+//            a little more side margin, and slightly taller rule/heading
+//            spacing, so groups have actual room around them instead of
+//            being packed edge-to-edge.
+export const APP_VERSION = '1.9-103'

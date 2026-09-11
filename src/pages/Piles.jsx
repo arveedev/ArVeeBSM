@@ -1328,7 +1328,7 @@ function Piles() {
                     zIndex: isHovered ? 5 : 1,
                     outline: isHovered ? '2px solid #00FFA3' : 'none',
                   }}
-                  className={`overflow-hidden rounded-md border p-1 text-left ${
+                  className={`overflow-hidden rounded-md border p-1.5 text-left ${
                     isVacant ? 'border-neutral-700 bg-neutral-900 text-neutral-500' : 'border-neutral-800 text-brand-contrast'
                   } ${(drawing || moving) ? 'pointer-events-none opacity-40' : ''} ${isPastOldestBracket ? 'animate-attention-pulse' : ''}`}
                 >
@@ -1350,26 +1350,25 @@ function Piles() {
                     if (groupRows.length > 1) {
                       const totalBags = groupRows.reduce((sum, r) => sum + r.bags, 0)
                       const totalKilos = groupRows.reduce((sum, r) => sum + r.kilos, 0)
+                      // Centered, single-line-per-stat, truncating text -
+                      // matches the single-group box's own convention
+                      // below, instead of a label:value flex row (which
+                      // wrapped mid-value in a narrow box - "kg" landing
+                      // on its own line - the reported overflow). Real
+                      // vertical gaps (space-y-1, pt-1) instead of the
+                      // previous pt-0.5 give the text room to breathe.
                       return (
-                        <div className="mt-0.5 text-left leading-tight">
+                        <div className="mt-1 space-y-1 text-center leading-snug">
                           {groupRows.map((row) => (
-                            <div key={row.key} className="border-t border-black/15 pt-0.5">
+                            <div key={row.key} className="border-t border-black/15 pt-1">
                               <p className="truncate text-[9px] font-bold">{groupHeading(row)}</p>
-                              <div className="flex justify-between gap-1 text-[9px] tabular-nums">
-                                <span>Bags</span><span className="font-medium">{fmtBags(row.bags)}</span>
-                              </div>
-                              <div className="flex justify-between gap-1 text-[9px] tabular-nums">
-                                <span>Net Kg</span><span className="font-medium">{fmtWeight(row.kilos, weightUnit)}</span>
-                              </div>
+                              <p className="truncate text-[9px] font-medium tabular-nums">{fmtBags(row.bags)} bags</p>
+                              <p className="truncate text-[9px] font-medium tabular-nums">{fmtWeight(row.kilos, weightUnit)}</p>
                             </div>
                           ))}
-                          <div className="border-t border-black/40 pt-0.5">
-                            <div className="flex justify-between gap-1 text-[9px] font-bold tabular-nums">
-                              <span>Total Bags</span><span>{fmtBags(totalBags)}</span>
-                            </div>
-                            <div className="flex justify-between gap-1 text-[9px] font-bold tabular-nums">
-                              <span>Total Net Kg</span><span>{fmtWeight(totalKilos, weightUnit)}</span>
-                            </div>
+                          <div className="border-t border-black/40 pt-1">
+                            <p className="truncate text-[9px] font-bold tabular-nums">Total {fmtBags(totalBags)} bags</p>
+                            <p className="truncate text-[9px] font-bold tabular-nums">{fmtWeight(totalKilos, weightUnit)}</p>
                           </div>
                         </div>
                       )
