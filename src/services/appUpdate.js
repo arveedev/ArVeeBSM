@@ -15,7 +15,6 @@
 
 import { registerSW } from 'virtual:pwa-register'
 
-let applyUpdateFn = null
 let registration = null
 const listeners = new Set()
 // initAppUpdate() runs in main.jsx before React even mounts - if
@@ -26,7 +25,7 @@ const listeners = new Set()
 let needRefreshFired = false
 
 export const initAppUpdate = () => {
-  applyUpdateFn = registerSW({
+  registerSW({
     immediate: true,
     // Authoritative "a new service worker is genuinely ready" signal -
     // workbox-window itself detected a real waiting worker. This is a
@@ -43,6 +42,35 @@ export const initAppUpdate = () => {
     onRegisteredSW(_url, reg) {
       registration = reg
     },
+  })
+
+  // Reported, confirmed real bug: on PC, the toast kept reappearing
+  // even after a tap on "Update now", which itself silently did
+  // nothing. Root cause (found by reading vite-plugin-pwa's own
+  // register.js): registerSW()'s returned update function calls
+  // workbox-window's OWN internal messageSkipWaiting(), which only
+  // knows about a waiting worker if ITS OWN 'waiting' event already
+  // fired and populated its own internal reference - a separate,
+  // independently-tracked value from the raw registration.waiting this
+  // module polls in applyUpdate() below. The two can desync (e.g. a tab
+  // that didn't itself observe workbox-window's 'waiting' event live),
+  // making that call a silent no-op even though registration.waiting is
+  // genuinely populated - exactly matching "tap does nothing, no
+  // reload, no error", with the toast then correctly reappearing next
+  // poll since the update genuinely never applied.
+  //
+  // Fixed by never going through that wrapper again: applyUpdate()
+  // posts the skip-waiting message directly to registration.waiting
+  // itself (the generated sw.js's own message listener - confirmed via
+  // dist/sw.js - only ever checks for { type: 'SKIP_WAITING' }, the
+  // exact same message workbox-window sends), and this listener reloads
+  // the page itself the moment that produces a real new controller,
+  // instead of relying on workbox-window's own 'controlling' listener
+  // (which is registered only inside its internal showSkipWaitingPrompt
+  // - i.e. only when ITS 'waiting' event fired, the same desync as
+  // above).
+  navigator.serviceWorker?.addEventListener('controllerchange', () => {
+    window.location.reload()
   })
 }
 
@@ -88,7 +116,12 @@ export const applyUpdate = async () => {
     await new Promise((resolve) => setTimeout(resolve, 300))
   }
   if (registration?.waiting) {
-    applyUpdateFn?.(true)
+    // Sent straight to the raw waiting worker, not through
+    // workbox-window's own wrapper - see initAppUpdate()'s comment for
+    // why that wrapper can silently no-op on PC. This module's own
+    // 'controllerchange' listener (registered in initAppUpdate) reloads
+    // the page once this genuinely takes effect.
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' })
   } else {
     // Genuinely timed out with nothing to activate - 20s is well beyond
     // a normal install, so a plain reload is safe here (unlike the

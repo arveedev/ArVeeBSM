@@ -2058,4 +2058,26 @@
 //            tap/click can't silently drop one - a still-blank row (never
 //            typed into) skips the confirmation since there's nothing to
 //            lose.
-export const APP_VERSION = '1.9-119'
+//   1.9-120 - Found the real bug behind the still-open PC issue ("Update
+//            now" silently does nothing, and the update toast never
+//            stops reappearing even after the user is genuinely on the
+//            latest version) by reading vite-plugin-pwa's own
+//            register.js source: registerSW()'s own returned update
+//            function drives the reload through workbox-window's
+//            internal, independently-tracked waiting-worker reference,
+//            which only gets set if THAT library's own 'waiting' event
+//            fired live in this tab - a separate value from the raw
+//            registration.waiting this app already polls for. The two
+//            can desync (most easily on desktop, where a tab can miss
+//            that internal event), making the tap silently call into a
+//            stale/empty reference - no reload, no error, and since the
+//            update never actually applied, the next check correctly
+//            reports the user is still behind. Fixed by never routing
+//            through that wrapper again: appUpdate.js now posts the
+//            skip-waiting message directly to the real
+//            registration.waiting worker (confirmed against dist/sw.js
+//            that its message listener accepts exactly this message,
+//            since workbox-window sends the identical payload), and
+//            reloads via this app's own 'controllerchange' listener
+//            instead of relying on workbox-window's internal one.
+export const APP_VERSION = '1.9-120'

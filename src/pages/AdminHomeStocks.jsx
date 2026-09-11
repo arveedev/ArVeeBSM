@@ -238,21 +238,35 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           const palayBranchValue = topCardShowPotential
             ? Math.max(0, palayBranchActual - warehouses.reduce((s, w) => s + (unwithdrawnByWarehouse.get(w.warehouseId)?.get('Palay') ?? 0), 0))
             : palayBranchActual
+          // Same card shape as each province card above (grid-cols-2,
+          // Rice left/Palay right) so this reads as one more card in the
+          // same stack instead of a visually distinct summary block - a
+          // slightly brighter border is the only thing setting it apart.
+          const unitLabel = weightUnit === 'mt' ? 'MT' : 'Net Bags'
           return (
-            <div className="mt-2 space-y-1.5">
-              <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Total — Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
-                </span>
-                <span className="text-lg font-bold tabular-nums text-blue-400"><CountUpNumber value={riceBranchValue} format={fmt} /></span>
+            <>
+              <div className="mt-2 hidden items-center justify-between rounded-lg border border-neutral-600 bg-neutral-950 px-3 py-2 sm:flex">
+                <span className="text-sm font-bold uppercase tracking-wide text-app-text">Total</span>
+                <div className="flex gap-8">
+                  <span className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceBranchValue} format={fmt} /></span>
+                  <span className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayBranchValue} format={fmt} /></span>
+                </div>
               </div>
-              <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Total — Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})
-                </span>
-                <span className="text-lg font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayBranchValue} format={fmt} /></span>
+
+              <div className="mt-2 rounded-lg border border-neutral-600 bg-neutral-950/50 p-2.5 sm:hidden">
+                <p className="text-sm font-bold uppercase tracking-wide text-app-text">Total</p>
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-neutral-500">Rice ({unitLabel})</p>
+                    <p className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceBranchValue} format={fmt} /></p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-neutral-500">Palay ({unitLabel})</p>
+                    <p className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayBranchValue} format={fmt} /></p>
+                  </div>
+                </div>
               </div>
-            </div>
+            </>
           )
         })()}
         </div>
