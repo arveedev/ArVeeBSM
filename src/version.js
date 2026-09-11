@@ -1717,4 +1717,26 @@
 //            a little more side margin, and slightly taller rule/heading
 //            spacing, so groups have actual room around them instead of
 //            being packed edge-to-edge.
-export const APP_VERSION = '1.9-103'
+//   1.9-104 - Fixed a real, reported bug: users had to close and reopen
+//            the app 3-5 times before a new deploy actually showed up.
+//            Root cause, confirmed by reading vite-plugin-pwa's own
+//            generated output: nothing in this app ever imported the
+//            plugin's virtual:pwa-register module, so it fell back to
+//            its own bare injected registerSW.js, which only calls
+//            navigator.serviceWorker.register() - no update checking, no
+//            reload once a new service worker actually takes over. A new
+//            SW could sit "waiting" indefinitely, only getting a real
+//            chance to activate on a genuinely full close of every open
+//            instance, and even then nothing told the next launch's
+//            already-loaded JS to reload and fetch the new bundle.
+//            main.jsx now calls registerSW() itself (workbox-window under
+//            the hood), which checks for an update on load and reloads
+//            the page automatically the moment a new version activates -
+//            matches the existing registerType: 'autoUpdate' config, no
+//            user-facing prompt. workbox-window does NOT poll for updates
+//            on its own (confirmed by reading its source) - added an
+//            explicit visibilitychange listener that asks the browser to
+//            check the real sw.js every time the app becomes visible
+//            again, which is what actually covers "reopen the app" and
+//            should now show a new version within one open, not several.
+export const APP_VERSION = '1.9-104'
