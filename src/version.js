@@ -2080,4 +2080,43 @@
 //            since workbox-window sends the identical payload), and
 //            reloads via this app's own 'controllerchange' listener
 //            instead of relying on workbox-window's internal one.
-export const APP_VERSION = '1.9-120'
+//   1.9-121 - By Products stock display overhaul on HomeStocks.jsx (the
+//            per-warehouse Stocks tab, including WarehouseDetailModal's
+//            reuse of it), driven by a long round of reported issues:
+//            - Every variety row (and the cereal Total) now shows its
+//              bags and net kg in two fixed, aligned columns with the
+//              unit named once in a header above, instead of repeating
+//              "bags"/"Net Kgs" as inline text on every row - fixes a
+//              reported "left side crowded, right side empty" layout
+//              complaint.
+//            - By Products varieties now show their own Unwithdrawn/
+//              Potential figures directly (previously only the category
+//              Total ever showed anything there) - root cause found by
+//              reading the calculation chain: the per-variety-per-age-
+//              bucket unwithdrawn map silently excludes any authority
+//              whose ageGroup can't be resolved to a real bucket, and a
+//              By Products AI practically never has one, so every
+//              By Products variety's per-bucket figure was always empty.
+//              Fixed by giving By Products its own flat, non-bucketed
+//              unwithdrawn/potential row (the same real per-variety
+//              total already powering the category Total), since age
+//              bucketing was never a meaningful concept there anyway.
+//            - By Products no longer runs any figure through kilos / 50
+//              ("net bags") anywhere, on this page or in the unwithdrawn
+//              drill-down modal - confirmed via direct request that By
+//              Products bags don't have a standard 50kg weight, so that
+//              conversion was producing a wrong bag count. The AI's own
+//              typed bags/kilos are now what's shown directly.
+//            - The drill-down modal's "Bags/Kgs don't match" warning no
+//              longer fires for a By Products AI - it was built entirely
+//              on the same 50kg-per-bag assumption above, so for By
+//              Products it was comparing two numbers that were never
+//              expected to agree, a false positive every time.
+//            - Modal redesign, from several rounds of direct feedback:
+//              each AI's own detail block (variety, warehouse, date, OR
+//              No./Note) now always renders in full, full-width, never
+//              truncated or dropped on a narrow screen; its Unwithdrawn
+//              and Withdrawn figures moved into their own two-column row
+//              underneath (previously only ever one or the other showed,
+//              switching based on fully-withdrawn state).
+export const APP_VERSION = '1.9-121'

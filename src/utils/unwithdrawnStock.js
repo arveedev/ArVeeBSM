@@ -121,8 +121,14 @@ const BAGS_KILOS_MISMATCH_TOLERANCE = 0.05 // 5%
 // a FILLERS/REBAGGING/BAGGING/RECLASSIFICATION authority is EXPECTED to
 // carry bags with zero (or near-zero) matching kilos, confirmed directly
 // - repacking bags is a real bag-count change that doesn't move kilos,
-// not a data-entry error, so it's never flagged.
-export const bagsKilosMismatch = (bags, kilos, transactionTypeName = null) => {
+// not a data-entry error, so it's never flagged. category is also
+// optional (older callers) - a By Products authority is EXPECTED to
+// disagree with the kilos/50 assumption too, since unlike Rice/Palay
+// By Products bags don't have a standard 50kg weight; the AI's own
+// typed bags and typed kilos are both independently real figures there,
+// not one derived from the other, so this check simply doesn't apply.
+export const bagsKilosMismatch = (bags, kilos, transactionTypeName = null, category = null) => {
+  if (category === 'By Products') return false
   if (isBagRepackingTypeName(transactionTypeName)) return false
   const bagsFromKilos = kilos / 50
   if (bagsFromKilos <= 0) return bags > 0
@@ -143,7 +149,11 @@ export const bagsKilosMismatch = (bags, kilos, transactionTypeName = null) => {
 export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter) => {
   if (!warehouseId) return []
 
-  const authorities = await activeAiAuthoritiesFor(warehouseId, varietyIds)
+  const [authorities, varieties] = await Promise.all([
+    activeAiAuthoritiesFor(warehouseId, varietyIds),
+    db.varietyTypes.toArray(),
+  ])
+  const categoryByVarietyId = new Map(varieties.map((v) => [v.varietyId, v.category]))
   const detail = []
 
   for (const a of authorities) {
@@ -153,15 +163,18 @@ export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter
     const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
     if (unwithdrawnBags <= 0 && unwithdrawnKilos <= 0) continue
 
+    const category = categoryByVarietyId.get(a.varietyId) ?? null
+
     detail.push({
       authority: a,
+      category,
       allocatedBags: a.totalAllocationBags ?? 0,
       allocatedKilos: a.totalAllocationKilos ?? 0,
       withdrawnBags,
       withdrawnKilos,
       unwithdrawnBags,
       unwithdrawnKilos,
-      hasBagsKilosMismatch: bagsKilosMismatch(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0, a.transactionTypeName),
+      hasBagsKilosMismatch: bagsKilosMismatch(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0, a.transactionTypeName, category),
       withdrawals: [...withdrawals].sort((x, y) => (x.date < y.date ? -1 : 1)),
     })
   }
