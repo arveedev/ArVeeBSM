@@ -1985,4 +1985,13 @@
 //            caching for /assets/* (content-hashed by Vite, safe to
 //            cache forever) and an explicit SPA rewrite so this doesn't
 //            regress deep-link routing.
-export const APP_VERSION = '1.9-114'
+//   1.9-115 - Admin Dashboard's Stock Breakdown tab, per explicit
+//            request: each warehouse now uses the same boxed-card
+//            layout as the Province table above it, and the whole box
+//            is tappable (not just a small pill inside it) to open that
+//            warehouse's own Overview - same onWarehouseSelect
+//            navigation already used elsewhere on this page. The
+//            per-category Unwithdrawn button inside each box still
+//            opens its own detail modal without triggering the card's
+//            navigation (stopPropagation).
+export const APP_VERSION = '1.9-115'

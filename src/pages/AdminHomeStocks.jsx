@@ -290,72 +290,83 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             Potential toggle - see the top card's identical comment. */}
         <div key={`${weightUnit}-${breakdownShowPotential}`} className="animate-flow-down">
         {sortedWarehouses.length === 0 ? <Empty /> : (
-          <div className="space-y-4">
+          // Same boxed-card layout as the Province table above, per
+          // explicit request - one tappable box per warehouse (the
+          // whole box, not just a small pill inside it) that opens that
+          // warehouse's own Overview, same as tapping a warehouse name
+          // already did elsewhere on this page (onWarehouseSelect).
+          <div className="space-y-2">
             {sortedWarehouses.map((warehouse) => {
               const wPiles = enrichedPiles.filter((p) => p.warehouseId === warehouse.warehouseId)
               if (wPiles.length === 0) return null
               const province = provinceMap.get(warehouse.provinceId)
               return (
-                <div key={warehouse.warehouseId}>
-                  <button
-                    type="button"
-                    onClick={() => onWarehouseSelect?.(warehouse)}
-                    className="flex items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-sm font-bold text-app-text transition-all hover:border-brand-neon/50 hover:bg-brand-neon/10 hover:text-brand-neon active:scale-95"
-                  >
-                    {province?.code} · {stripWarehouseCodePrefix(warehouse.name)}
-                    <ChevronRight size={14} />
-                  </button>
-                  <table className="mt-1 w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-neutral-800">
-                        <Th>Category</Th>
-                        <Th right>{weightUnit === 'mt' ? 'MT' : 'Net Bags'}</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {CATEGORIES.map((cat) => {
-                        const sum = wPiles.filter((p) => p.cerealType === cat)
-                          .reduce((s, p) => s + p.netBags, 0)
-                        if (sum === 0) return null
-                        const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
-                        const unwithdrawnNetBags = unwithdrawnByWarehouse.get(warehouse.warehouseId)?.get(cat) ?? 0
-                        // Guard against a rounds-to-zero badge (see HomeStocks.jsx
-                        // for the same reasoning) - only flag rows with a
-                        // genuinely meaningful unwithdrawn amount.
-                        const hasUnwithdrawn = breakdownShowPotential && unwithdrawnNetBags >= 0.005
-                        const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
-                        return (
-                          <tr key={cat} className="border-b border-neutral-800/50">
-                            <Td><span className={`font-semibold ${colorClass}`}>{cat}</span></Td>
-                            <Td right>
-                              <span className={`text-base font-bold tabular-nums ${colorClass}`}>
-                                <CountUpNumber value={sum} format={fmt} />
-                                {hasUnwithdrawn && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setDetailContext({
+                <div
+                  key={warehouse.warehouseId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onWarehouseSelect?.(warehouse)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onWarehouseSelect?.(warehouse) }}
+                  className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-app-text">
+                      {province?.code} <span className="text-xs text-neutral-500">{stripWarehouseCodePrefix(warehouse.name)}</span>
+                    </p>
+                    <ChevronRight size={14} className="shrink-0 text-neutral-600" />
+                  </div>
+                  <div className="mt-1.5 space-y-1.5">
+                    {CATEGORIES.map((cat) => {
+                      const sum = wPiles.filter((p) => p.cerealType === cat)
+                        .reduce((s, p) => s + p.netBags, 0)
+                      if (sum === 0) return null
+                      const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
+                      const unwithdrawnNetBags = unwithdrawnByWarehouse.get(warehouse.warehouseId)?.get(cat) ?? 0
+                      // Guard against a rounds-to-zero badge (see HomeStocks.jsx
+                      // for the same reasoning) - only flag rows with a
+                      // genuinely meaningful unwithdrawn amount.
+                      const hasUnwithdrawn = breakdownShowPotential && unwithdrawnNetBags >= 0.005
+                      const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
+                      return (
+                        <div key={cat} className="flex items-center justify-between gap-2">
+                          <span className={`text-xs font-semibold ${colorClass}`}>{cat}</span>
+                          <div className="text-right">
+                            <span className={`text-sm font-bold tabular-nums ${colorClass}`}>
+                              <CountUpNumber value={sum} format={fmt} />
+                            </span>
+                            {hasUnwithdrawn && (
+                              <div className="mt-0.5 flex items-center justify-end gap-1.5">
+                                {/* stopPropagation - this sits inside the
+                                    card's own click-to-navigate area, but
+                                    opens the Unwithdrawn detail instead,
+                                    not the warehouse Overview. */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDetailContext({
                                       warehouseId: warehouse.warehouseId,
                                       varietyIds: catVarietyIds,
                                       title: `${cat} — Unwithdrawn`,
                                       subtitle: `${province?.code} · ${stripWarehouseCodePrefix(warehouse.name)}`,
-                                    })}
-                                    className="ml-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 align-middle text-[10px] font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
-                                  >
-                                    {fmt(unwithdrawnNetBags)} unwithdrawn
-                                  </button>
-                                )}
-                              </span>
-                              {hasUnwithdrawn && (
-                                <div className="mt-0.5 text-[11px] tabular-nums">
-                                  <span className="text-brand-amber">Potential: {fmt(Math.max(0, sum - unwithdrawnNetBags))}</span>
-                                </div>
-                              )}
-                            </Td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                                    })
+                                  }}
+                                  className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
+                                >
+                                  {fmt(unwithdrawnNetBags)} unwithdrawn
+                                </button>
+                              </div>
+                            )}
+                            {hasUnwithdrawn && (
+                              <div className="mt-0.5 text-[11px] tabular-nums">
+                                <span className="text-brand-amber">Potential: {fmt(Math.max(0, sum - unwithdrawnNetBags))}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })}
