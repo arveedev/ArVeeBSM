@@ -162,21 +162,13 @@ export function SyncProgressToast({ label, doneLabel, phase }) {
 // SyncProgressToast above - AnimatedToast's outer wrapper already
 // supplies one for this toast's type ('blank' -> Info).
 //
-// Reported: tapping Update gave no feedback at all - the button just
-// sat there while window.location.reload() actually navigated away,
-// which reads as a freeze rather than "working on it," and the user was
-// then dropped on the PIN login screen with no warning why. Both are
-// real gaps, not a bug in the reload itself: AuthContext.jsx deliberately
-// never persists the logged-in session ("held in React state only... a
-// fresh page load requires re-entering the PIN" - see its own top
-// comment), so ANY reload, including this one, was always going to land
-// back on Login - that's by design, but this toast never said so. Now:
-// (1) the button disables and swaps to a spinner + "Updating…" the
-// instant it's tapped, so there's visible feedback even in the brief
-// window before the page actually unloads, and can't be double-tapped;
-// (2) the toast text says upfront that updating signs the user out, so
-// landing on Login reads as expected, not as something having gone
-// wrong.
+// Reported: tapping Update gave no feedback at all, which reads as a
+// freeze rather than "working on it." The button now disables and swaps
+// to a spinner + "Updating…" the instant it's tapped, so there's visible
+// feedback even in the brief window before the page actually reloads,
+// and it can't be double-tapped. Per explicit follow-up feedback, no
+// extra subtext line - the notification text plus the button alone are
+// enough, nothing more to explain.
 export function UpdateAvailableToast({ onUpdate }) {
   const [isUpdating, setIsUpdating] = useState(false)
   const handleClick = () => {
@@ -186,7 +178,6 @@ export function UpdateAvailableToast({ onUpdate }) {
   return (
     <span className="text-sm font-medium text-app-text">
       <span className="block">A new version is available</span>
-      <span className="mt-0.5 block text-xs text-neutral-400">Updating will sign you out - you'll sign back in with your PIN.</span>
       <button
         type="button"
         onClick={handleClick}

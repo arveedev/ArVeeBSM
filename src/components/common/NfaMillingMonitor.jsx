@@ -43,16 +43,12 @@ function NfaMillingMonitor({ warehouseId, active = true } = {}) {
   }, [active])
 
   // Reported: searching while scrolled down never brought the matching
-  // rows into view. Scrolls this card back into view the moment a
-  // search actually STARTS (empty -> non-empty), not on every further
-  // keystroke.
-  const wasSearchEmptyRef = useRef(true)
+  // rows into view - and a first version that only scrolled once (empty
+  // -> non-empty) wasn't enough, per follow-up feedback: continuing to
+  // type needs to keep bringing the (changing) results into view too.
+  // Scrolls this card into view on every real change to the search text.
   useEffect(() => {
-    const isEmpty = !searchQuery.trim()
-    if (!isEmpty && wasSearchEmptyRef.current) {
-      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-    wasSearchEmptyRef.current = isEmpty
+    if (searchQuery.trim()) containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [searchQuery])
 
   const allocations = useLiveQuery(() => db.ricemillAllocations.toArray(), []) ?? []

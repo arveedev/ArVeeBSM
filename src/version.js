@@ -1870,4 +1870,43 @@
 //               the date, and OR No./Remarks/Note - reusing the same
 //               authorityExtraDetails helper AdminMonitoring.jsx's own
 //               row already uses, instead of a separate, thinner display.
-export const APP_VERSION = '1.9-109'
+//   1.9-110 - Fixed a real, serious bug found via direct phone testing:
+//            the app was force-reloading itself the INSTANT a new
+//            service worker activated, with zero say from the user -
+//            no toast, no confirmation, potentially mid-search or
+//            mid-reconciliation. Root cause: registerType: 'autoUpdate'
+//            (vite.config.js) makes vite-plugin-pwa's own registerSW()
+//            reload automatically on activation - this is also exactly
+//            why the "Update now" toast (added two rounds ago) never
+//            got a chance to show on a real phone: the silent
+//            auto-reload usually already happened (often within seconds
+//            of opening the app) before UpdateChecker.jsx's own
+//            version.json poll ever found a mismatch to report, since
+//            the device was already on the new version by then. Switched
+//            to registerType: 'prompt' - the service worker now installs
+//            a new version and sits WAITING, and nothing ever reloads
+//            until the user's own tap on "Update now" calls the real
+//            update function (new src/services/appUpdate.js, wired
+//            through main.jsx/UpdateChecker.jsx) - a plain reload
+//            fallback still fires a few seconds later on the rare
+//            chance the service worker itself wasn't ready in time, so
+//            the button always does something.
+//            Three smaller follow-ups, all per direct feedback:
+//            1. The "scroll to top on search" fix from last round only
+//               fired once (empty -> non-empty) - not enough, per
+//               feedback that continuing to type needs to keep bringing
+//               the (changing) results into view too. Now scrolls on
+//               every real change to the search text, everywhere it was
+//               added.
+//            2. Removed the "Updating will sign you out" subtext under
+//               the Update now button - the notification text plus the
+//               button alone are enough.
+//            3. Fixed a real, reported bug: a page's subtitle (e.g.
+//               "Welcome back, JP.") could get clipped down to
+//               "Welcome…" on a narrow phone, since `truncate` cut it to
+//               one line regardless of how little room was actually
+//               left next to the header's icon row. Now wraps onto a
+//               second line instead - the header's own height already
+//               adjusts dynamically via a ResizeObserver, so nothing
+//               below it overlaps.
+export const APP_VERSION = '1.9-110'

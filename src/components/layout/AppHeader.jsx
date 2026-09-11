@@ -151,7 +151,15 @@ function AppHeader({ hidden = false }) {
         <div className="flex items-center justify-between gap-2 px-4 py-2">
           <div className="min-w-0">
             {title && <h1 className="truncate text-lg font-semibold text-app-text">{title}</h1>}
-            {subtitle && <p className="truncate text-sm font-medium text-neutral-300">{subtitle}</p>}
+            {/* Reported, real bug: truncate clipped a short subtitle
+                like "Welcome back, JP." down to "Welcome…" on a narrow
+                phone, since this column only gets whatever width is
+                left after the icon row on the right. break-words wraps
+                onto a second line instead of cutting text off - the
+                header's own height is already computed dynamically
+                (see headerRef/setHeaderHeight above) so a taller header
+                here doesn't overlap the page content below it. */}
+            {subtitle && <p className="break-words text-sm font-medium text-neutral-300">{subtitle}</p>}
           </div>
 
           <div className="flex shrink-0 items-center gap-2">

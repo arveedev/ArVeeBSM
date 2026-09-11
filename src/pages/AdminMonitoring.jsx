@@ -14,7 +14,7 @@
 // Search finds a specific AI/SIA number; tapping a matched row opens the
 // reconciliation panel showing every WSI/ESI document that used it.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Search, X, Check } from 'lucide-react'
 import { db } from '../db/dexie.js'
@@ -63,18 +63,16 @@ function AdminMonitoring() {
 
   // Reported: searching while scrolled down never brought the matching
   // results into view - the list re-filtered in place, off-screen, with
-  // no indication anything happened. Scrolls back to the top (where the
-  // search box and results both live) the moment a search actually
-  // STARTS (empty -> non-empty) - not on every further keystroke, which
-  // would otherwise yank the view back up while refining an
-  // already-visible search.
-  const wasSearchEmptyRef = useRef(true)
+  // no indication anything happened. A first version of this only
+  // scrolled once (empty -> non-empty), on the theory that scrolling on
+  // every keystroke while refining an already-visible search would feel
+  // like it was yanking the view around - reported back that this
+  // wasn't enough: continuing to type after that first jump needs to
+  // keep bringing the (changing) results into view too. Scrolls to top
+  // on every real change to the search text now, not just the first
+  // character.
   useEffect(() => {
-    const isEmpty = !searchQuery.trim()
-    if (!isEmpty && wasSearchEmptyRef.current) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-    wasSearchEmptyRef.current = isEmpty
+    if (searchQuery.trim()) window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [searchQuery])
 
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []

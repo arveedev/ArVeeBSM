@@ -15,7 +15,21 @@ export default defineConfig({
     // linked directly in index.html; this plugin only adds the service
     // worker + precaching on top of it, not a second manifest.
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt', not 'autoUpdate' - reported, real bug: 'autoUpdate'
+      // makes vite-plugin-pwa's own registerSW() reload the page the
+      // INSTANT a new service worker activates, with zero say from the
+      // user - no toast, no confirmation, mid-work or not. This is
+      // exactly why the "Update now" toast (UpdateChecker.jsx) never
+      // got a chance to show on a real phone: the silent auto-reload
+      // already happened (often within seconds of opening the app) and
+      // put the device on the new version before the periodic
+      // version.json poll ever found a mismatch to report. 'prompt'
+      // installs the new service worker and lets it sit WAITING -
+      // nothing reloads until the user's own tap on "Update now" calls
+      // the update function returned by registerSW() (see main.jsx),
+      // so a reload can never interrupt someone mid-search or
+      // mid-reconciliation without their say-so.
+      registerType: 'prompt',
       manifest: false,
       workbox: {
         // Every deep route (e.g. /reports) is client-side (BrowserRouter)

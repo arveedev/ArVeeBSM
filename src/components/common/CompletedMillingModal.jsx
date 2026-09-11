@@ -26,16 +26,13 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
   const [searchQuery, setSearchQuery] = useState('')
   const scrollRef = useRef(null)
   // Reported: searching while scrolled down the list never brought the
-  // matching rows into view. Scrolls this modal's own scrollable area
-  // back to the top the moment a search actually STARTS (empty ->
-  // non-empty), not on every further keystroke.
-  const wasSearchEmptyRef = useRef(true)
+  // matching rows into view - and a first version that only scrolled
+  // once (empty -> non-empty) wasn't enough, per follow-up feedback:
+  // continuing to type needs to keep bringing the (changing) results
+  // into view too. Scrolls this modal's own scrollable area to the top
+  // on every real change to the search text.
   useEffect(() => {
-    const isEmpty = !searchQuery.trim()
-    if (!isEmpty && wasSearchEmptyRef.current) {
-      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-    wasSearchEmptyRef.current = isEmpty
+    if (searchQuery.trim()) scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [searchQuery])
 
   // Same authority join MillingMonitor.jsx's own pending list uses -
