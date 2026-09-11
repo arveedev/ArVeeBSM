@@ -1957,4 +1957,14 @@
 //               firing shows the notice, so a network/caching quirk
 //               affecting one path doesn't leave the user with no
 //               notice at all.
-export const APP_VERSION = '1.9-112'
+//   1.9-113 - Fixed a real, reported bug: Admin Dashboard's "Net Bags by
+//            Province & Category" table looked unprofessional on a real
+//            phone - the Palay column ran close to the row's edge, and
+//            the whole table didn't align, since its whitespace-nowrap
+//            Province/Rice/Palay columns had no real room next to each
+//            other at phone width. Same six-move-method card treatment
+//            this page already uses for its Age Grouping breakdown: a
+//            plain table at sm+ (unchanged), a per-province card below
+//            sm (name on top, Rice/Palay figures below it instead of
+//            squeezed beside it).
+export const APP_VERSION = '1.9-113'

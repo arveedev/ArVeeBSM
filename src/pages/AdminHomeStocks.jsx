@@ -143,48 +143,89 @@ function AdminHomeStocks({ onWarehouseSelect }) {
         <div key={`${weightUnit}-${topCardShowPotential}`} className="animate-flow-down">
         {sortedProvinces.length === 0 ? (
           <Empty />
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-neutral-800">
-                <Th>Province</Th>
-                <Th right>Rice ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})</Th>
-                <Th right>Palay ({weightUnit === 'mt' ? 'MT' : 'Net Bags'})</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedProvinces.map((province) => {
-                const wIds = new Set(
-                  warehouses
-                    .filter((w) => w.provinceId === province.provinceId)
-                    .map((w) => w.warehouseId)
-                )
-                const pp = enrichedPiles.filter((p) => wIds.has(p.warehouseId))
-                const riceActual = pp.filter((p) => p.cerealType === 'Rice').reduce((s, p) => s + p.netBags, 0)
-                const palayActual = pp.filter((p) => p.cerealType === 'Palay').reduce((s, p) => s + p.netBags, 0)
-                // Potential mode swaps the plain number for actual-minus-
-                // unwithdrawn, no badge/tag - the enriched breakdown view
-                // lives only on the Breakdown tab, not here.
-                const riceValue = topCardShowPotential
-                  ? Math.max(0, riceActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Rice') ?? 0), 0))
-                  : riceActual
-                const palayValue = topCardShowPotential
-                  ? Math.max(0, palayActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Palay') ?? 0), 0))
-                  : palayActual
-                return (
-                  <tr key={province.provinceId} className="border-b border-neutral-800/50">
-                    <Td>
-                      <span className="font-medium text-app-text">{province.code}</span>
-                      <span className="ml-1 text-xs text-neutral-500">{province.name}</span>
-                    </Td>
-                    <Td right><span className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceValue} format={fmt} /></span></Td>
-                    <Td right><span className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayValue} format={fmt} /></span></Td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
+        ) : (() => {
+          // Computed once, rendered twice below (a plain table at sm+,
+          // a card list under sm) - reported, real bug: the table's
+          // whitespace-nowrap Rice/Palay columns had no room to breathe
+          // on a real phone next to the Province column's own code+name
+          // text, so the numbers ran close to (and visually read as
+          // "almost out of bounds" against) the row's edge instead of
+          // sitting aligned. Same six-move-method card treatment this
+          // file already uses for the Age Grouping breakdown below -
+          // Rank (the two figures ARE the point, shown big), Stack
+          // (province name above, figures below instead of beside),
+          // Breakpoint (table only renders where columns actually have
+          // room).
+          const unitLabel = weightUnit === 'mt' ? 'MT' : 'Net Bags'
+          const provinceRows = sortedProvinces.map((province) => {
+            const wIds = new Set(
+              warehouses
+                .filter((w) => w.provinceId === province.provinceId)
+                .map((w) => w.warehouseId)
+            )
+            const pp = enrichedPiles.filter((p) => wIds.has(p.warehouseId))
+            const riceActual = pp.filter((p) => p.cerealType === 'Rice').reduce((s, p) => s + p.netBags, 0)
+            const palayActual = pp.filter((p) => p.cerealType === 'Palay').reduce((s, p) => s + p.netBags, 0)
+            // Potential mode swaps the plain number for actual-minus-
+            // unwithdrawn, no badge/tag - the enriched breakdown view
+            // lives only on the Breakdown tab, not here.
+            const riceValue = topCardShowPotential
+              ? Math.max(0, riceActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Rice') ?? 0), 0))
+              : riceActual
+            const palayValue = topCardShowPotential
+              ? Math.max(0, palayActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Palay') ?? 0), 0))
+              : palayActual
+            return { province, riceValue, palayValue }
+          })
+
+          return (
+            <>
+              <div className="hidden sm:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-800">
+                      <Th>Province</Th>
+                      <Th right>Rice ({unitLabel})</Th>
+                      <Th right>Palay ({unitLabel})</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {provinceRows.map(({ province, riceValue, palayValue }) => (
+                      <tr key={province.provinceId} className="border-b border-neutral-800/50">
+                        <Td>
+                          <span className="font-medium text-app-text">{province.code}</span>
+                          <span className="ml-1 text-xs text-neutral-500">{province.name}</span>
+                        </Td>
+                        <Td right><span className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceValue} format={fmt} /></span></Td>
+                        <Td right><span className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayValue} format={fmt} /></span></Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-2 sm:hidden">
+                {provinceRows.map(({ province, riceValue, palayValue }) => (
+                  <div key={province.provinceId} className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5">
+                    <p className="text-sm font-medium text-app-text">
+                      {province.code} <span className="text-xs text-neutral-500">{province.name}</span>
+                    </p>
+                    <div className="mt-1.5 grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-neutral-500">Rice ({unitLabel})</p>
+                        <p className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceValue} format={fmt} /></p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-neutral-500">Palay ({unitLabel})</p>
+                        <p className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayValue} format={fmt} /></p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )
+        })()}
         {sortedProvinces.length > 0 && (() => {
           // Two genuinely separate totals - Rice and Palay tracked
           // independently, not combined into one meaningless
