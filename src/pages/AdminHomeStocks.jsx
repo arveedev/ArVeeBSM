@@ -310,12 +310,16 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                   className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-app-text">
-                      {province?.code} <span className="text-xs text-neutral-500">{stripWarehouseCodePrefix(warehouse.name)}</span>
+                    {/* Per explicit request - the warehouse itself is
+                        what the user is actually looking for and tapping
+                        toward, so it's the highlighted, larger text now;
+                        the province code is just context, de-emphasized. */}
+                    <p className="text-base font-bold text-app-text">
+                      {stripWarehouseCodePrefix(warehouse.name)} <span className="text-xs font-medium text-neutral-500">{province?.code}</span>
                     </p>
-                    <ChevronRight size={14} className="shrink-0 text-neutral-600" />
+                    <ChevronRight size={16} className="shrink-0 text-neutral-600" />
                   </div>
-                  <div className="mt-1.5 space-y-1.5">
+                  <div className="mt-2 space-y-2">
                     {CATEGORIES.map((cat) => {
                       const sum = wPiles.filter((p) => p.cerealType === cat)
                         .reduce((s, p) => s + p.netBags, 0)
@@ -329,9 +333,9 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
                       return (
                         <div key={cat} className="flex items-center justify-between gap-2">
-                          <span className={`text-xs font-semibold ${colorClass}`}>{cat}</span>
+                          <span className={`text-sm font-semibold ${colorClass}`}>{cat}</span>
                           <div className="text-right">
-                            <span className={`text-sm font-bold tabular-nums ${colorClass}`}>
+                            <span className={`text-lg font-bold tabular-nums ${colorClass}`}>
                               <CountUpNumber value={sum} format={fmt} />
                             </span>
                             {hasUnwithdrawn && (

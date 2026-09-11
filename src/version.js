@@ -1994,4 +1994,11 @@
 //            per-category Unwithdrawn button inside each box still
 //            opens its own detail modal without triggering the card's
 //            navigation (stopPropagation).
-export const APP_VERSION = '1.9-115'
+//   1.9-116 - Follow-up polish on the Stock Breakdown cards, per direct
+//            feedback: the warehouse name is what the user is actually
+//            looking for, not the province code - swapped which one is
+//            highlighted/larger (warehouse name now bold + text-base,
+//            province code now the small de-emphasized part), and
+//            bumped the cereal type label and figure text sizes up
+//            (figure now text-lg) for better legibility.
+export const APP_VERSION = '1.9-116'
