@@ -2,8 +2,8 @@
 // modules can use without each holding their own reference to the
 // service worker registration - main.jsx calls initAppUpdate() once at
 // startup; UpdateChecker.jsx (the user-visible "a new version is
-// available" toast) calls applyUpdate() only when the user actually
-// taps its own button.
+// available" toast) subscribes via onUpdateAvailable() and calls
+// applyUpdate() only when the user actually taps its own button.
 //
 // registerType is 'prompt' (vite.config.js), specifically so NOTHING
 // here ever reloads the page on its own - see that file's own comment
@@ -17,14 +17,42 @@ import { registerSW } from 'virtual:pwa-register'
 
 let applyUpdateFn = null
 let registration = null
+const listeners = new Set()
+// initAppUpdate() runs in main.jsx before React even mounts - if
+// onNeedRefresh fires before UpdateChecker.jsx's own useEffect has had
+// a chance to subscribe (a real possible race, not just a theoretical
+// one), that signal must not be lost. Remembered here so a late
+// subscriber still gets notified immediately.
+let needRefreshFired = false
 
 export const initAppUpdate = () => {
   applyUpdateFn = registerSW({
     immediate: true,
+    // Authoritative "a new service worker is genuinely ready" signal -
+    // workbox-window itself detected a real waiting worker. This is a
+    // SEPARATE, independent path from UpdateChecker.jsx's own
+    // public/version.json poll (a plain static file fetch) - added
+    // after a reported case where the update toast never showed on a
+    // real phone at all, which a bare version.json comparison can't
+    // explain away (both paths now trigger the same visible notice, so
+    // either one succeeding is enough).
+    onNeedRefresh() {
+      needRefreshFired = true
+      listeners.forEach((fn) => fn())
+    },
     onRegisteredSW(_url, reg) {
       registration = reg
     },
   })
+}
+
+// Lets a component (UpdateChecker.jsx) know the moment the service
+// worker itself confirms an update is ready, independent of the
+// version.json poll. Returns an unsubscribe function.
+export const onUpdateAvailable = (fn) => {
+  listeners.add(fn)
+  if (needRefreshFired) fn()
+  return () => listeners.delete(fn)
 }
 
 // Asks the browser to check the real sw.js on the server right now -
@@ -38,6 +66,34 @@ export const checkForUpdate = () => {
 
 // The only path that ever actually reloads the page - only ever called
 // from the user's own tap on "Update now" (UpdateAvailableToast).
-export const applyUpdate = () => {
-  applyUpdateFn?.(true)
+//
+// Reported, confirmed real bug: calling this immediately on tap could
+// silently do nothing (desktop) - public/version.json (a small static
+// file) can report a mismatch well before the ACTUAL new service worker
+// - a much bigger download that has to fetch, parse, and precache
+// everything - has finished installing, so `registration.waiting` often
+// isn't populated yet at the exact moment the toast first appears and
+// gets tapped. A second version of this fix used a short fallback timer
+// to force a reload either way - that raced the real install on a real
+// device and made things WORSE (confirmed live: stuck reloading into
+// the still-old service worker on every tap). This version instead
+// actually WAITS for a real waiting worker to exist (checking every
+// 300ms, up to 20s - comfortably longer than a normal install takes)
+// before sending skip-waiting, and only falls back to a plain reload if
+// that genuinely never happens within the wait window.
+export const applyUpdate = async () => {
+  checkForUpdate()
+  const deadline = Date.now() + 20000
+  while (!registration?.waiting && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+  if (registration?.waiting) {
+    applyUpdateFn?.(true)
+  } else {
+    // Genuinely timed out with nothing to activate - 20s is well beyond
+    // a normal install, so a plain reload is safe here (unlike the
+    // earlier short-timer version): it can't be interrupting a real
+    // in-progress installation that was ever going to finish in time.
+    window.location.reload()
+  }
 }

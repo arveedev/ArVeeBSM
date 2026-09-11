@@ -1930,4 +1930,31 @@
 //            that work starts (a double requestAnimationFrame), which
 //            was the other half of "no feedback, just freezes" on a
 //            fast enough browser.
-export const APP_VERSION = '1.9-111'
+//   1.9-112 - Two more real, reported bugs in the update flow:
+//            1. Desktop: tapping "Update now" did nothing. Root cause:
+//               public/version.json (a small static file) can report a
+//               mismatch well before the ACTUAL new service worker - a
+//               much bigger download that has to fetch, parse, and
+//               precache everything - finishes installing, so
+//               registration.waiting often wasn't populated yet at the
+//               exact moment the toast appeared and got tapped, and
+//               applyUpdate() had nothing to act on. appUpdate.js's
+//               applyUpdate() now actually WAITS for a real waiting
+//               worker to exist (checking every 300ms, up to 20s -
+//               comfortably longer than a normal install) before
+//               sending skip-waiting, instead of assuming one was
+//               already there; only falls back to a plain reload if
+//               that genuinely never happens within the wait window
+//               (unlike the earlier short-timer version of this
+//               fallback, 20s can't be racing a real install that was
+//               ever going to finish in time).
+//            2. Mobile: the update notice didn't show at all. Added a
+//               second, independent trigger for the same toast: the
+//               service worker's own authoritative "I found a real
+//               waiting update" signal (registerSW's onNeedRefresh,
+//               wired through appUpdate.js's new onUpdateAvailable),
+//               alongside the existing version.json poll - either one
+//               firing shows the notice, so a network/caching quirk
+//               affecting one path doesn't leave the user with no
+//               notice at all.
+export const APP_VERSION = '1.9-112'
