@@ -23,6 +23,7 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, dedupeAuthoritiesByRef, fmtBags, fmtWeight } from '../utils/calculations.js'
 import ShrinkFilterRow from '../components/common/ShrinkFilterRow.jsx'
+import { authorityMatchesQuery } from '../utils/monitoringSearch.js'
 import AuthorityReconciliationPanel from '../components/common/AuthorityReconciliationPanel.jsx'
 import CompletedAuthorityModal from '../components/common/CompletedAuthorityModal.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
@@ -106,11 +107,10 @@ function AdminMonitoring() {
   // .filter()ing the search term out before rendering) so every row can
   // stay mounted and animate away/back in as the user types (see
   // ShrinkFilterRow) instead of just disappearing/reappearing instantly.
-  const matchesQuery = (a) => {
-    if (!query) return true
-    const ref = a.type === 'AI' ? a.aiNumber : a.siaNumber
-    return (ref ?? '').toLowerCase().includes(query)
-  }
+  // Broad match (customer, authority/AI/SIA number, warehouse, O.R.
+  // number, remarks/notes - not just the ref number) per explicit
+  // request - see monitoringSearch.js for the exact field list.
+  const matchesQuery = (a) => authorityMatchesQuery(a, searchQuery, warehouseMap)
   const preSearchFiltered = dedupeAuthoritiesByRef(typeAuthorities.filter((a) => !isAuthorityComplete(a)))
     .filter((a) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
     .sort((a, b) => {

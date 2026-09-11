@@ -1790,4 +1790,29 @@
 //               the exact suggestion-dropdown pattern Customer Name
 //               already uses), so a name doesn't get re-typed as a
 //               slightly different variant by accident.
-export const APP_VERSION = '1.9-106'
+//   1.9-107 - Search added to the two Monitoring tabs that never had one
+//            (MILLING and NFA, plus their own Completed views), and every
+//            monitoring search broadened to match multiple fields at
+//            once instead of just one reference number - per explicit
+//            request: customer, authority number, warehouse, AI/SIA
+//            number, MO/TMO number, ricemill name, O.R. number, remarks/
+//            notes. New shared monitoringSearch.js is the one place that
+//            defines "broad" for every screen:
+//            - AI/SIA (Admin Monitoring's list + Completed AI/SIA modal):
+//              now also matches customerName, regionalAuthorityNumber,
+//              orNumber, remarks, note1/note2, sourceWarehouse, and the
+//              linked warehouse's code/name - not just aiNumber/siaNumber.
+//            - MILLING/Test Milling (new search box on the pending list
+//              + Completed Milling modal): db.millingOrders itself has no
+//              customerName/orNumber/notes of its own (confirmed against
+//              the sync writer) - matches o.number/o.ricemillName/
+//              o.receivingWarehouse plus every one of those fields from
+//              the AI/SIA authority the order links to.
+//            - NFA (new search box): matches the Regional Authority
+//              Number itself plus every AI number that actually moved
+//              stock under it (from the already-computed recovery
+//              breakdown), covering "search by AI number" here too.
+//            Every one of these uses the same ShrinkFilterRow animation
+//            from the previous round - non-matching rows shrink away and
+//            grow back in live as you type, not an instant filter.
+export const APP_VERSION = '1.9-107'

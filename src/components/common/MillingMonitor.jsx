@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw, Check } from 'lucide-react'
+import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw, Check, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
@@ -15,6 +15,8 @@ import { fmtBags, fmtWeight, fmtNetBags, calculateCurrentAge, AGE_BUCKETS } from
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
+import ShrinkFilterRow from './ShrinkFilterRow.jsx'
+import { millingOrderMatchesQuery } from '../../utils/monitoringSearch.js'
 import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 
 const fmtDate = (s) => {
@@ -463,7 +465,7 @@ function SackRow({ t, warehouseMap, sackTypeMap }) {
 // Shared pending/completed row renderer - identical progress-bar math
 // and layout for both MillingMonitor's inline pending list and
 // CompletedMillingModal's list, extracted so the two never drift.
-export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimating = false, onToggleComplete }) {
+export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimating = false, onToggleComplete, matches = true }) {
   // Progress is issuance (0-50%) plus receipt (0-50%), not a single
   // received-vs-expected ratio - so a fully-issued but not-yet-received
   // order still shows real, visible progress (50%) rather than nothing
@@ -527,7 +529,8 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
   const showsChecked = o.manuallyCompleted || isAnimating
 
   return (
-    <li className={`flex items-stretch gap-2 ${isAnimating ? 'animate-row-complete-out pointer-events-none' : ''}`}>
+    <ShrinkFilterRow as="li" matches={matches}>
+    <div className={`flex items-stretch gap-2 ${isAnimating ? 'animate-row-complete-out pointer-events-none' : ''}`}>
       {isAdmin && onToggleComplete && (
         <button
           type="button"
@@ -585,7 +588,8 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
           <ChevronRight size={18} className="text-neutral-600" />
         </div>
       </button>
-    </li>
+    </div>
+    </ShrinkFilterRow>
   )
 }
 
@@ -593,6 +597,7 @@ function MillingMonitor({ isAdmin = false }) {
   const [topTab, setTopTab] = useState('MO')
   const [showCompletedModal, setShowCompletedModal] = useState(false)
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
@@ -605,6 +610,8 @@ function MillingMonitor({ isAdmin = false }) {
 
   const orders = useLiveQuery(() => computeMillingOrderStatuses(topTab), [topTab]) ?? []
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
+  const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
+  const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
 
   useEffect(() => {
     if (!completingId) return
@@ -644,15 +651,26 @@ function MillingMonitor({ isAdmin = false }) {
     }
   }
 
-  // Regional Authority Number comes from the AI/SIA the order links to
-  // (via the order's own aiNumber/siaNumber), not stored on the order
-  // directly.
-  const regionalAuthByOrder = new Map(
-    orders.map((o) => {
-      const auth = authorities.find((a) => (o.aiNumber && a.aiNumber === o.aiNumber) || (o.siaNumber && a.siaNumber === o.siaNumber))
-      return [o.orderId, auth?.regionalAuthorityNumber ?? null]
-    })
+  // Regional Authority Number (and every other authority-linked field a
+  // broad search should match - customer name, O.R. number, remarks...)
+  // comes from the AI/SIA the order links to (via the order's own
+  // aiNumber/siaNumber), not stored on the order directly.
+  const authorityByOrderId = new Map(
+    orders.map((o) => [
+      o.orderId,
+      authorities.find((a) => (o.aiNumber && a.aiNumber === o.aiNumber) || (o.siaNumber && a.siaNumber === o.siaNumber)) ?? null,
+    ])
   )
+  const regionalAuthByOrder = new Map(
+    [...authorityByOrderId].map(([orderId, auth]) => [orderId, auth?.regionalAuthorityNumber ?? null])
+  )
+  // Broad match (MO/TMO number, ricemill name, receiving warehouse,
+  // plus the linked authority's customer name, regional/AI/SIA number,
+  // O.R. number, remarks/notes, source warehouse) per explicit request -
+  // see monitoringSearch.js for the exact field list. Kept separate from
+  // the pending-list filter below so non-matching rows stay mounted and
+  // animate away/back in as the user types (see ShrinkFilterRow).
+  const matchesQuery = (o) => millingOrderMatchesQuery(o, searchQuery, authorityByOrderId.get(o.orderId), warehouseMap)
 
   // Sheet-marked DONE is unconditionally completed, regardless of what
   // the kg/piece-based fulfilled calculation separately says -
@@ -765,6 +783,29 @@ function MillingMonitor({ isAdmin = false }) {
       </div>
       )}
 
+      {isExpanded && (
+        <div className="relative mt-3">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search customer, ricemill, warehouse, number…"
+            className="w-full rounded-xl border border-neutral-800 bg-neutral-950 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
       {isExpanded && availableRegionalAuthNumbers.length > 0 && (
         <select
           value={regionalAuthFilter}
@@ -783,6 +824,9 @@ function MillingMonitor({ isAdmin = false }) {
             No pending {topTab} operations.
           </p>
         )}
+        {filtered.length > 0 && filtered.every((o) => !matchesQuery(o)) && (
+          <p className="py-4 text-center text-xs text-neutral-500">No pending {topTab} operations match that search.</p>
+        )}
         {filtered.map((o) => (
           <MillingOrderRow
             key={o.orderId}
@@ -791,6 +835,7 @@ function MillingMonitor({ isAdmin = false }) {
             isAdmin={isAdmin}
             isAnimating={completingId === o.orderId}
             onToggleComplete={toggleManualComplete}
+            matches={matchesQuery(o)}
           />
         ))}
       </ul>
@@ -814,6 +859,8 @@ function MillingMonitor({ isAdmin = false }) {
       {showCompletedModal && (
         <CompletedMillingModal
           orders={completedFiltered}
+          authorities={authorities}
+          warehouseMap={warehouseMap}
           type={topTab}
           onSelectOrder={setSelectedOrder}
           onClose={() => setShowCompletedModal(false)}

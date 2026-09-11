@@ -15,6 +15,7 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityReconciliationPanel from './AuthorityReconciliationPanel.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
+import { authorityMatchesQuery } from '../../utils/monitoringSearch.js'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -143,12 +144,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   // the user types (see ShrinkFilterRow) instead of just disappearing
   // instantly - month/year/regional/warehouse changes still hard-remove
   // rows immediately, since those aren't live-typing.
-  const matchesQuery = ({ a }) => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) return true
-    const ref = type === 'AI' ? a.aiNumber : a.siaNumber
-    return (ref ?? '').toLowerCase().includes(query)
-  }
+  const matchesQuery = ({ a }) => authorityMatchesQuery(a, searchQuery, warehouseMap)
   const preSearchFiltered = authorities
     .map((a) => ({ a, completedDate: lastDateFor(type === 'AI' ? a.aiNumber : a.siaNumber) }))
     .filter(({ completedDate }) => {

@@ -17,15 +17,19 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Search, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { fmtWeight, isTransferTypeName, dedupeAuthoritiesByRef } from '../../utils/calculations.js'
 import RicemillRecoveryDetail, { AllocationUsageSummary } from './RicemillRecoveryDetail.jsx'
+import ShrinkFilterRow from './ShrinkFilterRow.jsx'
+import { nfaAllocationMatchesQuery } from '../../utils/monitoringSearch.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
 
 function NfaMillingMonitor({ warehouseId } = {}) {
   const { weightUnit } = useSettings() ?? {}
   const [expandedNumber, setExpandedNumber] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const allocations = useLiveQuery(() => db.ricemillAllocations.toArray(), []) ?? []
 
@@ -130,11 +134,38 @@ function NfaMillingMonitor({ warehouseId } = {}) {
           ? 'NFA allocation vs. actual usage for this facility.'
           : 'NFA-owned Ricemill status - allocation vs. actual usage per Regional Authority Number. Set up allocations in Settings > Miller Allocations.'}
       </p>
+      {sortedAllocations.length > 0 && (
+        <div className="relative mb-2">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search Authority Number or AI number…"
+            className="w-full rounded-xl border border-neutral-800 bg-neutral-950 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
       <ul className="space-y-1.5">
         {sortedAllocations.length === 0 && (
           <p className="py-6 text-center text-sm text-neutral-500 md:text-base">
             {warehouseId ? 'No NFA allocation assigned to this facility yet.' : 'No NFA ricemill allocations set up yet.'}
           </p>
+        )}
+        {sortedAllocations.length > 0 && sortedAllocations.every((a) =>
+          !nfaAllocationMatchesQuery(a.regionalAuthorityNumber, recoverySummaryByNumber.get(a.regionalAuthorityNumber)?.transferEntries, searchQuery)
+        ) && (
+          <p className="py-6 text-center text-sm text-neutral-500 md:text-base">No Regional Authority Numbers match that search.</p>
         )}
         {sortedAllocations.map((a) => {
           const recovery = recoverySummaryByNumber.get(a.regionalAuthorityNumber)
@@ -144,8 +175,10 @@ function NfaMillingMonitor({ warehouseId } = {}) {
           // total against the allocation, which was wrong.
           const used = recovery?.issuedKilos ?? 0
           const isExpanded = expandedNumber === a.regionalAuthorityNumber
+          const matches = nfaAllocationMatchesQuery(a.regionalAuthorityNumber, recovery?.transferEntries, searchQuery)
           return (
-            <li key={a.regionalAuthorityNumber} className={`${listItemClass} flex-col items-stretch`}>
+            <ShrinkFilterRow key={a.regionalAuthorityNumber} as="li" matches={matches}>
+            <div className={`${listItemClass} flex-col items-stretch`}>
               <button
                 type="button"
                 onClick={() => setExpandedNumber(isExpanded ? null : a.regionalAuthorityNumber)}
@@ -159,7 +192,8 @@ function NfaMillingMonitor({ warehouseId } = {}) {
                   <RicemillRecoveryDetail recovery={recovery} weightUnit={weightUnit} />
                 </div>
               )}
-            </li>
+            </div>
+            </ShrinkFilterRow>
           )
         })}
       </ul>

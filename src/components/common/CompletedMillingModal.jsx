@@ -8,20 +8,33 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, AlertTriangle } from 'lucide-react'
+import { X, AlertTriangle, Search } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { MillingOrderRow } from './MillingMonitor.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
+import { millingOrderMatchesQuery } from '../../utils/monitoringSearch.js'
 
 // Must match the transition duration below.
 const CLOSE_ANIMATION_MS = 300
 
-function CompletedMillingModal({ orders, type, onSelectOrder, onClose, isAdmin = false }) {
+function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Map(), type, onSelectOrder, onClose, isAdmin = false }) {
   // Delays the actual onClose call until the exit animation has time
   // to play, same rule as CompletedAuthorityModal.jsx - every entrance
   // needs a matching exit rather than an instant, jarring unmount.
   const [isClosing, setIsClosing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Same authority join MillingMonitor.jsx's own pending list uses -
+  // db.millingOrders has no customerName/orNumber/remarks of its own,
+  // only via the AI/SIA it links to (see monitoringSearch.js).
+  const authorityByOrderId = new Map(
+    orders.map((o) => [
+      o.orderId,
+      authorities.find((a) => (o.aiNumber && a.aiNumber === o.aiNumber) || (o.siaNumber && a.siaNumber === o.siaNumber)) ?? null,
+    ])
+  )
+  const matchesQuery = (o) => millingOrderMatchesQuery(o, searchQuery, authorityByOrderId.get(o.orderId), warehouseMap)
   const handleClose = () => {
     setIsClosing(true)
     setTimeout(onClose, CLOSE_ANIMATION_MS)
@@ -125,11 +138,37 @@ function CompletedMillingModal({ orders, type, onSelectOrder, onClose, isAdmin =
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+        {orders.length > 0 && (
+          <div className="relative mb-3">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search customer, ricemill, warehouse, number…"
+              className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        )}
         {orders.length === 0 ? (
           <p className="py-6 text-center text-xs text-neutral-500">
             No completed {type} operations.
           </p>
         ) : (
+          <>
+            {orders.every((o) => !matchesQuery(o)) && (
+              <p className="py-2 text-center text-xs text-neutral-500">No completed {type} operations match that search.</p>
+            )}
           <ul className="space-y-1.5">
             {orders.map((o) => (
               <MillingOrderRow
@@ -139,9 +178,11 @@ function CompletedMillingModal({ orders, type, onSelectOrder, onClose, isAdmin =
                 isAdmin={canUncomplete(o)}
                 isAnimating={revertingId === o.orderId}
                 onToggleComplete={requestUncomplete}
+                matches={matchesQuery(o)}
               />
             ))}
           </ul>
+          </>
         )}
       </div>
 
