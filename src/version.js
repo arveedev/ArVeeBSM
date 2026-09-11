@@ -1757,4 +1757,37 @@
 //            AnimatedToast.jsx's new UpdateAvailableToast) - a real,
 //            actionable notice instead of silently hoping the service
 //            worker sorts itself out.
-export const APP_VERSION = '1.9-105'
+//   1.9-106 - Three changes, per explicit request:
+//            1. New shrink-away search animation (ShrinkFilterRow) -
+//               a non-matching row shrinks/fades away and grows back in
+//               live as the user types, instead of just vanishing/
+//               reappearing instantly. Wired into the two searches that
+//               already existed: Admin Monitoring's AI/SIA pending list,
+//               and the Completed AI/SIA modal (the other filters there -
+//               month/year/regional/warehouse - stay instant, only the
+//               live-typed text search animates). The Completed MO/TMO
+//               modal and the MILLING/NFA monitors have no search box at
+//               all currently - not touched here.
+//            2. Fixed a real, reported bug: every By Products variety on
+//               Home Stocks' Overview tab showed as a blank "—" line
+//               instead of its real name, even when a pile held more
+//               than one genuine variety. Root cause: the per-variety
+//               grouping read the PILE's own varietyId field, which is
+//               null/unreliable for By Products (the real mix only
+//               exists per-transaction - same root cause already fixed
+//               for Pile Layout). PileWeightSubscriber now reads the
+//               full computePileStockBreakdown (variety + sack weight)
+//               instead of the weight-only computePileStockBySackWeight
+//               wrapper, and By Products groups by each transaction's
+//               own varietyId instead of the pile's. Rice/Palay's
+//               existing behavior (including "never separate by sack
+//               weight for By Products") is unchanged - confirmed same
+//               figures, just resolved through the fuller data now.
+//               AdminHomeStocks.jsx has no per-variety breakdown at all
+//               (Rice/Palay included), so there was nothing to fix there.
+//            3. Settings > Classifier name field now suggests names
+//               already saved on other warehouses as you type (reusing
+//               the exact suggestion-dropdown pattern Customer Name
+//               already uses), so a name doesn't get re-typed as a
+//               slightly different variant by accident.
+export const APP_VERSION = '1.9-106'

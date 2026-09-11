@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, dedupeAuthoritiesByRef, fmtBags, fmtWeight } from '../utils/calculations.js'
+import ShrinkFilterRow from '../components/common/ShrinkFilterRow.jsx'
 import AuthorityReconciliationPanel from '../components/common/AuthorityReconciliationPanel.jsx'
 import CompletedAuthorityModal from '../components/common/CompletedAuthorityModal.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
@@ -101,18 +102,23 @@ function AdminMonitoring() {
     typeAuthorities.filter((a) => !isAuthorityComplete(a)).map((a) => a.regionalAuthorityNumber).filter(Boolean)
   )].sort()
 
-  const filtered = dedupeAuthoritiesByRef(typeAuthorities.filter((a) => !isAuthorityComplete(a)))
-    .filter((a) => {
-      if (!query) return true
-      const ref = a.type === 'AI' ? a.aiNumber : a.siaNumber
-      return (ref ?? '').toLowerCase().includes(query)
-    })
+  // matchesQuery is kept separate from the list itself (rather than
+  // .filter()ing the search term out before rendering) so every row can
+  // stay mounted and animate away/back in as the user types (see
+  // ShrinkFilterRow) instead of just disappearing/reappearing instantly.
+  const matchesQuery = (a) => {
+    if (!query) return true
+    const ref = a.type === 'AI' ? a.aiNumber : a.siaNumber
+    return (ref ?? '').toLowerCase().includes(query)
+  }
+  const preSearchFiltered = dedupeAuthoritiesByRef(typeAuthorities.filter((a) => !isAuthorityComplete(a)))
     .filter((a) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
     .sort((a, b) => {
       const aRef = a.type === 'AI' ? a.aiNumber : a.siaNumber
       const bRef = b.type === 'AI' ? b.aiNumber : b.siaNumber
       return (aRef ?? '').localeCompare(bRef ?? '')
     })
+  const filtered = preSearchFiltered.filter(matchesQuery)
   const completedList = dedupeAuthoritiesByRef(typeAuthorities.filter(isAuthorityComplete))
 
   return (
@@ -260,7 +266,7 @@ function AdminMonitoring() {
           </p>
         )}
 
-        {filtered.map((a) => {
+        {preSearchFiltered.map((a) => {
           const isSia = a.type === 'SIA'
           const totalAllocBags = isSia
             ? (a.sackLines ?? []).reduce((s, l) => s + (l.totalAllocationBags ?? 0), 0)
@@ -290,8 +296,8 @@ function AdminMonitoring() {
           const showsChecked = a.manuallyCompleted || isCompleting
 
           return (
-            <li
-              key={a.authId}
+            <ShrinkFilterRow key={a.authId} as="li" matches={matchesQuery(a)}>
+            <div
               className={`flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 transition-all hover:border-brand-neon/50 ${isCompleting ? 'animate-row-complete-out pointer-events-none' : ''}`}
             >
               {isAdmin && (
@@ -381,7 +387,8 @@ function AdminMonitoring() {
                   </div>
                 </div>
               </button>
-            </li>
+            </div>
+            </ShrinkFilterRow>
           )
         })}
       </ul>

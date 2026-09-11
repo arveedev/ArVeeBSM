@@ -21,7 +21,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtBags, fmtWeight, fmtNetBags, AGE_BUCKETS } from '../utils/calculations.js'
 import { computeUnwithdrawnByVariety, computeUnwithdrawnByVarietyAge } from '../utils/unwithdrawnStock.js'
-import { computePileStockBySackWeight } from '../utils/pileLedger.js'
+import { computePileStockBreakdown } from '../utils/pileLedger.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import CountUpNumber from '../components/common/CountUpNumber.jsx'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
@@ -41,17 +41,22 @@ import PillToggle from '../components/common/PillToggle.jsx'
 // for all of them just because one changed. Renders nothing itself -
 // reports its result up to the parent via onData, keyed by pileId.
 function PileWeightSubscriber({ pileId, warehouseCutoffDate, sackTypes, onData }) {
-  // computePileStockBySackWeight combines this warehouse-level cutoff
-  // with the global Data Start Date override itself internally - only
-  // the raw per-warehouse value needs to be passed down here, not a
-  // pre-combined one.
-  const byWeight = useLiveQuery(
-    () => computePileStockBySackWeight(pileId, '9999-12-31', { reportingCutoffDate: warehouseCutoffDate }, sackTypes),
+  // computePileStockBreakdown combines this warehouse-level cutoff with
+  // the global Data Start Date override itself internally - only the raw
+  // per-warehouse value needs to be passed down here, not a pre-combined
+  // one. Reads the full variety+sack-weight breakdown directly (rather
+  // than the weight-only computePileStockBySackWeight wrapper) so a By
+  // Products pile's real variety mix survives into the grouping below
+  // instead of being collapsed away before it ever gets there - the
+  // exact, reported cause of every By Products variety showing as a
+  // blank "—" line instead of its real name.
+  const breakdown = useLiveQuery(
+    () => computePileStockBreakdown(pileId, '9999-12-31', { reportingCutoffDate: warehouseCutoffDate }, sackTypes),
     [pileId, warehouseCutoffDate, sackTypes]
   )
   useEffect(() => {
-    if (byWeight) onData(pileId, byWeight)
-  }, [pileId, byWeight, onData])
+    if (breakdown) onData(pileId, breakdown)
+  }, [pileId, breakdown, onData])
   return null
 }
 
@@ -354,21 +359,29 @@ function HomeStocks({ warehouseId } = {}) {
   // here, leaving every other pile's already-computed entry untouched,
   // instead of one shared query recomputing every pile in the
   // warehouse whenever any single one of them changed.
-  const [pileStockByWeight, setPileStockByWeight] = useState(new Map())
-  const handlePileWeightData = useCallback((pileId, byWeight) => {
-    setPileStockByWeight((prev) => {
+  const [pileStockBreakdown, setPileStockBreakdown] = useState(new Map())
+  const handlePileWeightData = useCallback((pileId, breakdown) => {
+    setPileStockBreakdown((prev) => {
       const existing = prev.get(pileId)
-      // Bail out of the state update entirely when the new Map is
-      // equivalent to what's already stored - React treats a new Map
+      // Bail out of the state update entirely when the new breakdown is
+      // equivalent to what's already stored - React treats a new array
       // reference as a genuine change regardless of content, which
       // would otherwise re-render on every subscriber's initial mount
-      // even for piles whose figures didn't actually move.
-      if (existing && existing.size === byWeight.size
-        && [...byWeight].every(([w, v]) => existing.get(w)?.bags === v.bags && existing.get(w)?.kilos === v.kilos)) {
-        return prev
+      // even for piles whose figures didn't actually move. Groups are
+      // compared by their own composite key (varietyId::sackTypeId::
+      // mtsCondition, matching computePileStockBreakdown's own grouping)
+      // rather than array order, which isn't guaranteed stable.
+      const keyOf = (g) => `${g.varietyId ?? ''}::${g.sackTypeId ?? ''}::${g.mtsCondition ?? ''}`
+      if (existing && existing.length === breakdown.length) {
+        const existingByKey = new Map(existing.map((g) => [keyOf(g), g]))
+        const unchanged = breakdown.every((g) => {
+          const e = existingByKey.get(keyOf(g))
+          return e && e.bags === g.bags && e.kilos === g.kilos
+        })
+        if (unchanged) return prev
       }
       const next = new Map(prev)
-      next.set(pileId, byWeight)
+      next.set(pileId, breakdown)
       return next
     })
   }, [])
@@ -386,26 +399,27 @@ function HomeStocks({ warehouseId } = {}) {
   }))
 
   // First pass: for each variety, collect every distinct weight actually
-  // present across its piles' REAL stock (per pileStockByWeight, not the
-  // stale pile-level field) - only varieties with genuinely more than
-  // one distinct weight need separating at all. A variety using a
+  // present across its piles' REAL stock (per pileStockBreakdown, not
+  // the stale pile-level field) - only varieties with genuinely more
+  // than one distinct weight need separating at all. A variety using a
   // single sack condition throughout (the common case) stays as one
   // plain-named line, exactly as before this feature existed. By
   // Products is deliberately excluded, per an earlier explicit request
   // that it always show as a single unseparated line regardless of how
-  // many distinct sack weights are technically in use - unlike
-  // Rice/Palay's, that decision wasn't reported as wrong and isn't
-  // being changed here.
+  // many distinct sack weights are technically in use (still true below
+  // even though the variety-name fix changes how it groups) - unlike
+  // Rice/Palay's, that weight-separation decision wasn't reported as
+  // wrong and isn't being changed here.
   const weightsByVariety = new Map()
   for (const p of enrichedPiles) {
     if (p.variety?.category === 'By Products') continue
     const varietyName = p.variety?.name ?? '—'
-    const byWeight = pileStockByWeight.get(p.pileId)
-    if (!byWeight) continue
-    for (const [weight] of byWeight) {
-      if (weight === 'unspecified') continue
+    const breakdown = pileStockBreakdown.get(p.pileId)
+    if (!breakdown) continue
+    for (const g of breakdown) {
+      if (g.weight === 'unspecified') continue
       if (!weightsByVariety.has(varietyName)) weightsByVariety.set(varietyName, new Set())
-      weightsByVariety.get(varietyName).add(weight)
+      weightsByVariety.get(varietyName).add(g.weight)
     }
   }
 
@@ -414,9 +428,8 @@ function HomeStocks({ warehouseId } = {}) {
   // more than one distinct weight in use - otherwise just the plain
   // variety name, merging everything into one line as usual. Age
   // bucketing stays a whole-PILE property (a pile's age is one value
-  // regardless of how many sack weights are mixed within it), so each
-  // pile's per-weight portions all land in that same pile's one age
-  // bucket - only the weight split changes what's inside it.
+  // regardless of how many sack weights/varieties are mixed within it),
+  // so each pile's portions all land in that same pile's one age bucket.
   const stockGroups = {}
   // cerealType -> groupLabel -> varietyId, so the unwithdrawn-stock
   // lookup (keyed by varietyId) can be joined back onto each rendered
@@ -424,11 +437,52 @@ function HomeStocks({ warehouseId } = {}) {
   const groupVarietyId = {}
   for (const p of enrichedPiles) {
     const cerealType = p.variety?.category ?? p.cerealType ?? 'Unknown'
-    const varietyName = p.variety?.name ?? '—'
-    const needsSeparation = (weightsByVariety.get(varietyName)?.size ?? 0) > 1
     const buckets = AGE_BUCKETS[cerealType] ?? AGE_BUCKETS.Rice
     const bucket = buckets.find((b) => b.test(p.age)) ?? buckets[buckets.length - 1]
-    const byWeight = pileStockByWeight.get(p.pileId) ?? new Map([['unspecified', { bags: p.currentBags ?? 0, kilos: p.currentKilos ?? 0 }]])
+    const breakdown = pileStockBreakdown.get(p.pileId)
+      ?? [{ varietyId: p.varietyId, weight: 'unspecified', bags: p.currentBags ?? 0, kilos: p.currentKilos ?? 0 }]
+
+    if (cerealType === 'By Products') {
+      // Real variety mix (piles.varietyId is null/unreliable for By
+      // Products, confirmed - see computePileStockBreakdown's own doc
+      // comment) - grouped by each group's own varietyId, resolved to
+      // its real name via varietyMap, instead of the pile-level field
+      // that was producing a blank "—" line for every By Products pile
+      // regardless of how many real varieties it actually held. Still
+      // never separated by sack weight (folded together here), matching
+      // the existing, unchanged weight-separation decision above.
+      const byVarietyId = new Map()
+      for (const g of breakdown) {
+        const key = g.varietyId ?? ''
+        if (!byVarietyId.has(key)) byVarietyId.set(key, { bags: 0, kilos: 0 })
+        const entry = byVarietyId.get(key)
+        entry.bags += g.bags
+        entry.kilos += g.kilos
+      }
+      for (const [varietyId, totals] of byVarietyId) {
+        const groupLabel = (varietyId && varietyMap.get(varietyId)?.name) || '—'
+
+        stockGroups[cerealType] ??= {}
+        stockGroups[cerealType][groupLabel] ??= {}
+        stockGroups[cerealType][groupLabel][bucket.label] ??= { bags: 0, kilos: 0 }
+        stockGroups[cerealType][groupLabel][bucket.label].bags += totals.bags
+        stockGroups[cerealType][groupLabel][bucket.label].kilos += totals.kilos
+
+        groupVarietyId[cerealType] ??= {}
+        groupVarietyId[cerealType][groupLabel] = varietyId || null
+      }
+      continue
+    }
+
+    const varietyName = p.variety?.name ?? '—'
+    const needsSeparation = (weightsByVariety.get(varietyName)?.size ?? 0) > 1
+    const byWeight = new Map()
+    for (const g of breakdown) {
+      if (!byWeight.has(g.weight)) byWeight.set(g.weight, { bags: 0, kilos: 0 })
+      const entry = byWeight.get(g.weight)
+      entry.bags += g.bags
+      entry.kilos += g.kilos
+    }
 
     for (const [weight, totals] of byWeight) {
       const groupLabel = needsSeparation && weight !== 'unspecified' ? `${varietyName} (${weight.toFixed(3)})` : varietyName
@@ -486,7 +540,7 @@ function HomeStocks({ warehouseId } = {}) {
     <>
     {/* Renders nothing visible - each mounts its own independent
         per-pile Dexie subscription (see PileWeightSubscriber's own
-        comment above) and reports into pileStockByWeight via onData. */}
+        comment above) and reports into pileStockBreakdown via onData. */}
     {piles.map((p) => (
       <PileWeightSubscriber
         key={p.pileId}

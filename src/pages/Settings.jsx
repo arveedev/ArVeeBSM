@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2, ShieldCheck, MoreVertical, Check, AlertTriangle } from 'lucide-react'
+import { Pencil, Trash2, ShieldCheck, MoreVertical, Check, AlertTriangle, User } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -23,6 +23,9 @@ import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndica
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const AGE_UNITS = ['Days', 'Months']
+
+const initialsOf = (name = '') =>
+  name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
 
 function Toggle({ label, description, value, onChange }) {
   return (
@@ -61,9 +64,37 @@ function ClassifierSection({ warehouseId }) {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const containerRef = useRef(null)
 
   const warehouse = useLiveQuery(() => db.warehouses.get(warehouseId), [warehouseId])
   const savedName = warehouse?.classifierName ?? ''
+
+  // Same "already used elsewhere" name-suggestion pattern as
+  // CustomerNameAutocomplete.jsx, reused here so a classifier name
+  // already saved on another warehouse doesn't get re-typed as a
+  // slightly different variant by accident. db.warehouses is small
+  // (one row per warehouse) - a live query over the whole table plus an
+  // inline filter is cheap, no need for the debounced async search
+  // customerDirectory.js's db.customers lookups use for a much bigger
+  // table.
+  const allWarehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
+  const classifierSuggestions = (() => {
+    const q = name.trim().toLowerCase()
+    if (q.length < 2) return []
+    const seen = new Set()
+    const results = []
+    for (const w of allWarehouses) {
+      const cn = w.classifierName
+      if (!cn || w.warehouseId === warehouseId) continue
+      const key = cn.toLowerCase()
+      if (key === q || seen.has(key) || !key.includes(q)) continue
+      seen.add(key)
+      results.push(cn)
+      if (results.length >= 6) break
+    }
+    return results
+  })()
 
   useEffect(() => {
     setName(savedName)
@@ -72,6 +103,16 @@ function ClassifierSection({ warehouseId }) {
     // reason to sit in "edit mode" once a name is actually present.
     setIsEditing(!savedName)
   }, [savedName])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -98,14 +139,42 @@ function ClassifierSection({ warehouseId }) {
 
       {showInput ? (
         <>
-          <div className="mt-3 flex gap-2">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={`flex-1 ${inputClass} ${!name.trim() ? '!border-brand-amber' : ''}`}
-              placeholder="Full name"
-            />
+          <div ref={containerRef} className="relative mt-3 flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  setShowSuggestions(true)
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                className={`w-full ${inputClass} ${!name.trim() ? '!border-brand-amber' : ''}`}
+                placeholder="Full name"
+                autoComplete="off"
+              />
+              {showSuggestions && classifierSuggestions.length > 0 && (
+                <ul className="absolute z-10 mt-1.5 w-full divide-y divide-neutral-800 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50">
+                  {classifierSuggestions.map((cn) => (
+                    <li key={cn}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setName(cn)
+                          setShowSuggestions(false)
+                        }}
+                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-neutral-800 active:bg-neutral-800"
+                      >
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-xs font-semibold text-neutral-300">
+                          {initialsOf(cn) || <User size={14} />}
+                        </span>
+                        <span className="truncate text-sm text-app-text">{cn}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleSave}

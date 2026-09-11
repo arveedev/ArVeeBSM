@@ -14,6 +14,7 @@ import { isAuthorityNaturallyComplete, authorityExtraDetails, fmtBags, fmtWeight
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityReconciliationPanel from './AuthorityReconciliationPanel.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
+import ShrinkFilterRow from './ShrinkFilterRow.jsx'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -136,7 +137,19 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   const availableWarehouses = [...(accessibleWarehouses ?? [])]
     .sort((x, y) => (x.code ?? '').localeCompare(y.code ?? ''))
 
-  const filtered = authorities
+  // The text search is kept separate from the other (dropdown-driven)
+  // filters, rather than folded into one .filter() chain, so its
+  // non-matching rows can stay mounted and shrink away/grow back in as
+  // the user types (see ShrinkFilterRow) instead of just disappearing
+  // instantly - month/year/regional/warehouse changes still hard-remove
+  // rows immediately, since those aren't live-typing.
+  const matchesQuery = ({ a }) => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return true
+    const ref = type === 'AI' ? a.aiNumber : a.siaNumber
+    return (ref ?? '').toLowerCase().includes(query)
+  }
+  const preSearchFiltered = authorities
     .map((a) => ({ a, completedDate: lastDateFor(type === 'AI' ? a.aiNumber : a.siaNumber) }))
     .filter(({ completedDate }) => {
       // No transaction date at all (manually completed, nothing to
@@ -152,13 +165,8 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
     })
     .filter(({ a }) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
     .filter(({ a }) => !warehouseFilter || a.assignedWarehouse === warehouseFilter)
-    .filter(({ a }) => {
-      const query = searchQuery.trim().toLowerCase()
-      if (!query) return true
-      const ref = type === 'AI' ? a.aiNumber : a.siaNumber
-      return (ref ?? '').toLowerCase().includes(query)
-    })
     .sort((x, y) => (y.completedDate ?? '').localeCompare(x.completedDate ?? ''))
+  const filtered = preSearchFiltered.filter(matchesQuery)
 
   // Portaled straight to document.body - opened from AuthorityMonitor,
   // which on Home.jsx sits under a `.stagger-fields`/`.animate-flow-down`
@@ -294,13 +302,19 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
-        {filtered.length === 0 ? (
+        {preSearchFiltered.length === 0 ? (
           <p className="py-6 text-center text-xs text-neutral-500">
             No completed {type} records for this period.
           </p>
         ) : (
+          <>
+            {filtered.length === 0 && (
+              <p className="py-2 text-center text-xs text-neutral-500">
+                No completed {type} records match that search.
+              </p>
+            )}
           <ul className="space-y-2">
-            {filtered.map(({ a, completedDate }) => {
+            {preSearchFiltered.map(({ a, completedDate }) => {
               const variety = type === 'AI' ? varietyMap.get(a.varietyId) : null
               const warehouse = warehouseMap.get(a.assignedWarehouse)
               const unitLabel = type === 'SIA' ? 'pieces' : 'bags'
@@ -312,7 +326,8 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
               const isReverting = revertingId === a.authId
 
               return (
-                <li key={a.authId} className={`flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 ${isReverting ? 'animate-row-revert-out pointer-events-none' : ''}`}>
+                <ShrinkFilterRow key={a.authId} as="li" matches={matchesQuery({ a })}>
+                <div className={`flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 ${isReverting ? 'animate-row-revert-out pointer-events-none' : ''}`}>
                   {canUncomplete && (
                     <button
                       type="button"
@@ -368,10 +383,12 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
                       )}
                     </div>
                   </button>
-                </li>
+                </div>
+                </ShrinkFilterRow>
               )
             })}
           </ul>
+          </>
         )}
       </div>
 
