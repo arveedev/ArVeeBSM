@@ -31,7 +31,8 @@ import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateC
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
-import { computeHistoricalPileState, vacateBoxForPile, closePile } from '../utils/pileLedger.js'
+import { computeHistoricalPileState, computePileStockBreakdown, vacateBoxForPile, closePile } from '../utils/pileLedger.js'
+import { formatPileStockGroups, groupHeading, fmtGroupDate } from '../utils/pileStockGroups.js'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
@@ -52,6 +53,52 @@ const BYPRODUCT_COLOR = '#FBEBCC'
 // (vs. plain text like Variety/Condition/date) - used to apply
 // tabular-nums only to the numeric ones.
 const NUMERIC_FIELD_LABELS = new Set(['Bags', 'Net', 'Age', 'MC', 'Purity'])
+
+/**
+ * Renders a multi-group pile's breakdown inside the hover/tap popup - one
+ * block per group (heading, own Received date for By Products only, then
+ * Bags/Net Kg stacked on their own lines rather than inlined), followed by
+ * a bold TOTAL block. Used only once groupRows.length > 1 - a single-group
+ * pile keeps the plain Bags/Net fields rendered by its caller instead.
+ */
+function PileGroupBreakdown({ groupRows, cerealType, weightUnit }) {
+  const isByProducts = cerealType === 'By Products'
+  const totalBags = groupRows.reduce((sum, r) => sum + r.bags, 0)
+  const totalKilos = groupRows.reduce((sum, r) => sum + r.kilos, 0)
+  return (
+    <div className="mt-1 space-y-2">
+      {groupRows.map((row) => (
+        <div key={row.key} className="border-t border-neutral-800 pt-1.5">
+          <p className="text-xs font-semibold text-brand-neon">{groupHeading(row)}</p>
+          {isByProducts && row.lastReceivedDate && (
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="text-neutral-400">Received</span>
+              <span className="font-medium text-app-text">{fmtGroupDate(row.lastReceivedDate)}</span>
+            </div>
+          )}
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-neutral-400">Bags</span>
+            <span className="font-medium tabular-nums text-app-text">{fmtBags(row.bags)}</span>
+          </div>
+          <div className="flex justify-between gap-3 text-sm">
+            <span className="text-neutral-400">Net Kg</span>
+            <span className="font-medium tabular-nums text-app-text">{fmtWeight(row.kilos, weightUnit)}</span>
+          </div>
+        </div>
+      ))}
+      <div className="border-t-2 border-brand-neon pt-1.5">
+        <div className="flex justify-between gap-3 text-sm">
+          <span className="font-bold text-brand-neon">TOTAL Bags</span>
+          <span className="font-bold tabular-nums text-app-text">{fmtBags(totalBags)}</span>
+        </div>
+        <div className="flex justify-between gap-3 text-sm">
+          <span className="font-bold text-brand-neon">TOTAL Net Kg</span>
+          <span className="font-bold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const boxesOverlap = (a, b) => {
   const aRowEnd = a.rowStart + a.rowSpan - 1
@@ -74,13 +121,31 @@ const regionFromCorners = (a, b) => ({
   colSpan: Math.abs(a.col - b.col) + 1,
 })
 
-/** Counts how many non-blank detail fields a pile has (Variety, Bags, Net Kg, Age, Condition, MC, Purity, Date Procured). */
-const countPileFields = (pile, variety) => {
+/**
+ * Counts how many non-blank detail "rows" a pile's popup/box needs, so its
+ * box can grow to fit. Single-group piles count the usual flat fields
+ * (Variety, Bags, Net Kg, Age, Condition, MC, Purity, Date Procured/
+ * Received). A multi-group pile (groupRows.length > 1) instead counts its
+ * shared fields (Age/Cond/MC/Purity, plus Variety/Procured for Rice/Palay
+ * only - By Products breaks Variety out per group) plus 3 rows per group
+ * (heading, stacked Bags, stacked Net Kg, and a date row for By Products)
+ * plus a TOTAL block (heading + 2 stacked figures).
+ */
+const countPileFields = (pile, variety, groupRows = []) => {
   if (!pile) return 0
-  return [
-    variety?.name, pile.currentBags != null, pile.currentKilos != null,
-    pile.initialAgeValue != null, pile.condition, pile.moistureContent, pile.purity, pile.dateProcured,
+  if (groupRows.length <= 1) {
+    return [
+      variety?.name, pile.currentBags != null, pile.currentKilos != null,
+      pile.initialAgeValue != null, pile.condition, pile.moistureContent, pile.purity, pile.dateProcured,
+    ].filter(Boolean).length
+  }
+  const isByProducts = pile.cerealType === 'By Products'
+  const sharedFields = [
+    !isByProducts && variety?.name, pile.initialAgeValue != null, pile.condition,
+    pile.moistureContent, pile.purity, !isByProducts && pile.dateProcured,
   ].filter(Boolean).length
+  const perGroupRows = isByProducts ? 4 : 3 // heading + (date, By Products only) + Bags + Net Kg
+  return sharedFields + groupRows.length * perGroupRows + 3 // + TOTAL heading/Bags/Net Kg
 }
 
 // A box's rendered footprint can exceed its drawn size once its content
@@ -456,6 +521,34 @@ function Piles() {
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const sortedPiles = [...effectivePiles].sort((a, b) => byAlpha(a.pileName, b.pileName))
 
+  // Per-pile stock breakdown (by variety + sack weight/condition) - see
+  // computePileStockBreakdown's own doc comment. Batched the same way
+  // historicalMap above already is (keyed on the stable set of pile IDs,
+  // not the `piles` array itself, for the same reason). A group is only
+  // meaningful for display once there's more than one of them for a given
+  // pile - breakdownMap.get(pileId) still returns every pile's groups so
+  // callers decide that threshold themselves.
+  const sackTypesForBreakdown = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
+  const sackTypeMapForBreakdown = new Map(sackTypesForBreakdown.map((s) => [s.sackTypeId, s]))
+  const breakdownMap = useLiveQuery(async () => {
+    if (piles.length === 0) return new Map()
+    const cutoff = periodTo || '9999-12-31'
+    const entries = await Promise.all(
+      piles.map(async (p) => [p.pileId, await computePileStockBreakdown(p.pileId, cutoff, null, sackTypesForBreakdown)])
+    )
+    return new Map(entries)
+  }, [pileIdsKeyForHistory, periodTo, sackTypesForBreakdown]) ?? new Map()
+
+  // Formatted, display-ready group rows for a pile - empty when there's
+  // only one group (or none), which every rendering site treats as "show
+  // the plain single Bags/Net Kg pair, nothing broken out".
+  const getGroupRows = (pile) => {
+    if (!pile) return []
+    const raw = breakdownMap.get(pile.pileId) ?? []
+    if (raw.length <= 1) return []
+    return formatPileStockGroups(raw, { varietyMap, sackTypeMap: sackTypeMapForBreakdown, cerealType: pile.cerealType })
+  }
+
   // Auto-vacate: a pile that's been at zero bags AND zero kilos since
   // before today (one full calendar day's grace period - it still
   // shows normally, with its 0 values and transactions, for the rest
@@ -644,7 +737,7 @@ function Piles() {
       if (b.id === excludeId) return false
       const pile = b.pileId ? pileMap.get(b.pileId) : null
       const variety = pile ? varietyMap.get(pile.varietyId) : null
-      const fieldCount = countPileFields(pile, variety)
+      const fieldCount = countPileFields(pile, variety, getGroupRows(pile))
       const effective = { ...b, rowSpan: effectiveRowSpan(b, fieldCount) }
       return boxesOverlap(region, effective)
     })
@@ -852,6 +945,7 @@ function Piles() {
         transactions: [...allPileTransactions, ...wtsTransfers],
         transactionTypeMap,
         globalDataStartDate,
+        varietyMap, sackTypeMap: sackTypeMapForBreakdown,
       })
       doc.save(`${(pile.pileName || 'Pile').replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
       // Was missing entirely - a silent success looked identical to a
@@ -896,7 +990,11 @@ function Piles() {
         const formattedAge = pile?.initialAgeValue != null
           ? fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring, periodTo || undefined))
           : null
-        return { ...box, pile: pile ? { ...pile, formattedAge } : pile, variety }
+        // Already-formatted, display-ready rows (see getGroupRows/
+        // formatPileStockGroups) - the PDF generator renders them as-is,
+        // same breakdown-when-multi-group rule as the on-screen box/popups.
+        const groupRows = getGroupRows(pile)
+        return { ...box, pile: pile ? { ...pile, formattedAge } : pile, variety, groupRows }
       })
 
       const doc = generatePileLayoutReport({
@@ -1239,13 +1337,32 @@ function Piles() {
                   </p>
                   {isVacant ? (
                     <p className="text-center text-xs text-neutral-600">VACANT</p>
-                  ) : (
-                    <div className="mt-0.5 text-center leading-tight">
-                      <p className="truncate text-xs">{variety?.name ?? ''}</p>
-                      <p className="truncate text-xs font-medium tabular-nums">{fmtBags(pile.currentBags)} bags</p>
-                      <p className="truncate text-xs font-medium tabular-nums">{fmtWeight(pile.currentKilos, weightUnit)}</p>
-                    </div>
-                  )}
+                  ) : (() => {
+                    const groupRows = getGroupRows(pile)
+                    // Multi-group pile (mixed sack weight/condition for
+                    // Rice/Palay, or any By Products pile) - list each
+                    // group's own bags directly in the box itself, not
+                    // just the hover/tap popup, per explicit request.
+                    if (groupRows.length > 1) {
+                      return (
+                        <div className="mt-0.5 text-center leading-tight">
+                          {groupRows.map((row) => (
+                            <div key={row.key} className="flex items-center justify-between gap-1 text-[10px] tabular-nums">
+                              <span className="truncate text-neutral-700">{groupHeading(row)}</span>
+                              <span className="shrink-0 font-medium">{fmtBags(row.bags)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className="mt-0.5 text-center leading-tight">
+                        <p className="truncate text-xs">{variety?.name ?? ''}</p>
+                        <p className="truncate text-xs font-medium tabular-nums">{fmtBags(pile.currentBags)} bags</p>
+                        <p className="truncate text-xs font-medium tabular-nums">{fmtWeight(pile.currentKilos, weightUnit)}</p>
+                      </div>
+                    )
+                  })()}
                 </button>
               )
             })}
@@ -1315,7 +1432,7 @@ function Piles() {
                     if (b.id === excludeId) return false
                     const pile = b.pileId ? pileMap.get(b.pileId) : null
                     const variety = pile ? varietyMap.get(pile.varietyId) : null
-                    const fieldCount = countPileFields(pile, variety)
+                    const fieldCount = countPileFields(pile, variety, getGroupRows(pile))
                     const effRowSpan = effectiveRowSpan(b, fieldCount)
                     return row >= b.rowStart && row <= b.rowStart + effRowSpan - 1 &&
                            col >= b.colStart && col <= b.colStart + b.colSpan - 1
@@ -1353,16 +1470,23 @@ function Piles() {
           const pile = box.pileId ? pileMap.get(box.pileId) : null
           const variety = pile ? varietyMap.get(pile.varietyId) : null
           const isVacant = !pile
+          const groupRows = getGroupRows(pile)
+          const isMultiGroup = groupRows.length > 1
+          const isByProducts = pile?.cerealType === 'By Products'
 
+          // Multi-group: shared fields only (Age/Cond/MC/Purity always;
+          // Variety/Procured too for Rice/Palay - By Products breaks
+          // Variety out per group below and never shares one date across
+          // varieties). Single-group: unchanged, full flat field list.
           const fields = isVacant ? [] : [
-            variety?.name && ['Variety', variety.name],
-            pile.currentBags != null && ['Bags', fmtBags(pile.currentBags)],
-            pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
+            !isMultiGroup && variety?.name && ['Variety', variety.name],
+            !isMultiGroup && pile.currentBags != null && ['Bags', fmtBags(pile.currentBags)],
+            !isMultiGroup && pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
             pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring, periodTo || undefined))],
             pile.condition && ['Condition', pile.condition],
             pile.moistureContent && ['MC', pile.moistureContent],
             pile.purity && ['Purity', pile.purity],
-            pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
+            (!isMultiGroup || !isByProducts) && pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
           ].filter(Boolean)
 
           // 220 was cramped for the field text (especially at the
@@ -1464,6 +1588,7 @@ function Piles() {
                         <span className={`font-medium text-app-text ${NUMERIC_FIELD_LABELS.has(lbl) ? 'tabular-nums' : ''}`}>{val}</span>
                       </div>
                     ))}
+                    {isMultiGroup && <PileGroupBreakdown groupRows={groupRows} cerealType={pile.cerealType} weightUnit={weightUnit} />}
                   </div>
                 )}
               </div>
@@ -1483,16 +1608,19 @@ function Piles() {
           const pile = box.pileId ? pileMap.get(box.pileId) : null
           const variety = pile ? varietyMap.get(pile.varietyId) : null
           const isVacant = !pile
+          const groupRows = getGroupRows(pile)
+          const isMultiGroup = groupRows.length > 1
+          const isByProducts = pile?.cerealType === 'By Products'
 
           const fields = isVacant ? [] : [
-            variety?.name && ['Variety', variety.name],
-            pile.currentBags != null && ['Bags', fmtBags(pile.currentBags)],
-            pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
+            !isMultiGroup && variety?.name && ['Variety', variety.name],
+            !isMultiGroup && pile.currentBags != null && ['Bags', fmtBags(pile.currentBags)],
+            !isMultiGroup && pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
             pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring, periodTo || undefined))],
             pile.condition && ['Condition', pile.condition],
             pile.moistureContent && ['MC', pile.moistureContent],
             pile.purity && ['Purity', pile.purity],
-            pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
+            (!isMultiGroup || !isByProducts) && pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
           ].filter(Boolean)
 
           // 220 was cramped for the field text (especially at the
@@ -1599,6 +1727,7 @@ function Piles() {
                         <span className={`font-medium text-app-text ${NUMERIC_FIELD_LABELS.has(lbl) ? 'tabular-nums' : ''}`}>{val}</span>
                       </div>
                     ))}
+                    {isMultiGroup && <PileGroupBreakdown groupRows={groupRows} cerealType={pile.cerealType} weightUnit={weightUnit} />}
                   </div>
                 )}
                 <div className="mt-3 flex gap-2 border-t border-neutral-800 pt-3">

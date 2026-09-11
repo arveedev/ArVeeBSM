@@ -7,6 +7,7 @@
 
 import jsPDF from 'jspdf'
 import { fmtBags, fmtKilos } from './calculations.js'
+import { groupHeading, fmtGroupDate } from './pileStockGroups.js'
 
 const BLACK = [0, 0, 0]
 const GRAY_TEXT = [80, 80, 80]
@@ -105,18 +106,46 @@ export const generatePileLayoutReport = ({
     const rawH = box.rowSpan * cellH
 
     const isVacant = !box.pile
+    // Mirrors the on-screen grid box/popup rule exactly (Piles.jsx's
+    // PileGroupBreakdown component): a single-group pile keeps the plain
+    // flat field list; a multi-group pile (mixed sack weight/condition,
+    // or any By Products pile) instead lists shared fields (never Var/
+    // Procured for By Products - those move per-group) followed by one
+    // heading + Bags + Net Kg trio per group (plus a Received row, By
+    // Products only), then a TOTAL Bags/Net Kg pair. Reuses the existing
+    // label:value field-list rendering below unchanged - a group heading
+    // is just a field whose value is blank.
+    const isMultiGroup = !isVacant && box.groupRows?.length > 1
+    const isByProducts = box.pile?.cerealType === 'By Products'
     const detailFields = isVacant
       ? []
-      : [
-          box.variety?.name && ['Var', box.variety.name],
-          box.pile.currentBags != null && ['Bags', fmtBags(box.pile.currentBags)],
-          box.pile.currentKilos != null && ['Net Kg', fmtKilos(box.pile.currentKilos)],
-          box.pile.formattedAge && ['Age', box.pile.formattedAge],
-          box.pile.condition && ['Cond', box.pile.condition],
-          box.pile.moistureContent && ['MC', box.pile.moistureContent],
-          box.pile.purity && ['Purity', box.pile.purity],
-          box.pile.dateProcured && [box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured],
-        ].filter(Boolean)
+      : isMultiGroup
+        ? [
+            !isByProducts && box.variety?.name && ['Var', box.variety.name],
+            box.pile.formattedAge && ['Age', box.pile.formattedAge],
+            box.pile.condition && ['Cond', box.pile.condition],
+            box.pile.moistureContent && ['MC', box.pile.moistureContent],
+            box.pile.purity && ['Purity', box.pile.purity],
+            !isByProducts && box.pile.dateProcured && [box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured],
+            ...box.groupRows.flatMap((row) => [
+              [groupHeading(row), ''],
+              isByProducts && row.lastReceivedDate && ['Received', fmtGroupDate(row.lastReceivedDate)],
+              ['Bags', fmtBags(row.bags)],
+              ['Net Kg', fmtKilos(row.kilos)],
+            ].filter(Boolean)),
+            ['TOTAL Bags', fmtBags(box.groupRows.reduce((sum, r) => sum + r.bags, 0))],
+            ['TOTAL Net Kg', fmtKilos(box.groupRows.reduce((sum, r) => sum + r.kilos, 0))],
+          ].filter(Boolean)
+        : [
+            box.variety?.name && ['Var', box.variety.name],
+            box.pile.currentBags != null && ['Bags', fmtBags(box.pile.currentBags)],
+            box.pile.currentKilos != null && ['Net Kg', fmtKilos(box.pile.currentKilos)],
+            box.pile.formattedAge && ['Age', box.pile.formattedAge],
+            box.pile.condition && ['Cond', box.pile.condition],
+            box.pile.moistureContent && ['MC', box.pile.moistureContent],
+            box.pile.purity && ['Purity', box.pile.purity],
+            box.pile.dateProcured && [box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured],
+          ].filter(Boolean)
 
     // Fixed, comfortable, always-readable font sizes - only shrunk (down
     // to a genuinely legible floor, never the old illegible extreme) in

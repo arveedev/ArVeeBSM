@@ -9,6 +9,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { fmtBags, fmtKilos, effectiveCutoffDate } from './calculations.js'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
+import { sackLabelText } from './pileStockGroups.js'
 
 const BLACK = [0, 0, 0]
 const HEADER_BG = [200, 200, 200]
@@ -35,7 +36,7 @@ const fmtDate = (s) => {
  * entirely - a cancelled document never happened as far as the
  * pile's real stock movement is concerned.
  */
-const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoffDate) => {
+const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoffDate, sackTypeMap, varietyMap) => {
   const relevant = transactions.filter((t) => {
     if (t.status === 'Cancelled') return false
     if (!t.isInitialBalance && reportingCutoffDate && t.date <= reportingCutoffDate) return false
@@ -97,6 +98,11 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
       date: t.date, type, customer, reference,
       receiptBags, receiptKilos, issueBags, issueKilos,
       balanceBags: runningBags, balanceKilos: runningKilos,
+      // Sack weight/condition and variety, resolved the same way the
+      // on-screen breakdown does (pileStockGroups.js's sackLabelText) -
+      // Remarks (every pile) and Variety (By Products only) columns.
+      remarks: sackLabelText(sackTypeMap, t.mtsSackTypeId, t.mtsCondition) ?? '',
+      varietyName: varietyMap?.get(t.varietyId)?.name ?? '',
     })
   }
 
@@ -121,12 +127,25 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
   return rows
 }
 
-export const generatePileBinCard = ({ warehouse, branch, pile, variety, transactions, transactionTypeMap, globalDataStartDate = null }) => {
+export const generatePileBinCard = ({ warehouse, branch, pile, variety, transactions, transactionTypeMap, globalDataStartDate = null, varietyMap = null, sackTypeMap = null }) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
   const pileName = pile?.pileName ?? ''
   const warehouseName = stripWarehouseCodePrefix(warehouse?.name ?? '')
+  const isByProducts = pile?.cerealType === 'By Products'
+
+  const rows = buildLedgerRows(pile, transactions, transactionTypeMap, effectiveCutoffDate(warehouse?.reportingCutoffDate, globalDataStartDate), sackTypeMap, varietyMap)
+
+  // For By Products (the only cereal type that can genuinely mix
+  // varieties in one pile - see pileStockGroups.js), the single VARIETY:
+  // header line can no longer claim just one name once more than one
+  // real variety shows up in the ledger - the per-row VARIETY column
+  // below carries the real detail instead.
+  const distinctVarietyNames = [...new Set(rows.map((r) => r.varietyName).filter(Boolean))]
+  const headerVarietyText = isByProducts && distinctVarietyNames.length > 1
+    ? 'MIXED (see ledger)'
+    : (variety?.name ?? distinctVarietyNames[0] ?? '')
 
   let y = 14
   doc.setFont('helvetica', 'bold')
@@ -165,16 +184,19 @@ export const generatePileBinCard = ({ warehouse, branch, pile, variety, transact
   doc.setFont('helvetica', 'normal')
   doc.text('VARIETY:', margin, y)
   doc.setFont('helvetica', 'bold')
-  doc.text(variety?.name ?? '', margin + labelW, y)
+  doc.text(headerVarietyText, margin + labelW, y)
   y += 7
 
-  const rows = buildLedgerRows(pile, transactions, transactionTypeMap, effectiveCutoffDate(warehouse?.reportingCutoffDate, globalDataStartDate))
-
+  // By Products gets both a VARIETY column (genuinely multi-valued) and
+  // the Remarks column; Rice/Palay (locked to one variety for life,
+  // already named in the header above) gets Remarks only.
   const body = rows.map((r) => [
     fmtDate(r.date),
     r.customer,
     r.type,
     r.reference,
+    ...(isByProducts ? [r.varietyName ?? ''] : []),
+    r.remarks ?? '',
     r.receiptBags != null ? fmtBags(r.receiptBags) : '',
     r.receiptKilos != null ? fmtKilos(r.receiptKilos) : '',
     r.issueBags != null ? fmtBags(r.issueBags) : '',
@@ -227,6 +249,8 @@ export const generatePileBinCard = ({ warehouse, branch, pile, variety, transact
         { content: 'CUSTOMER', rowSpan: 2 },
         { content: 'TRANSACTION', rowSpan: 2 },
         { content: 'REFERENCE\nNO.', rowSpan: 2 },
+        ...(isByProducts ? [{ content: 'VARIETY', rowSpan: 2 }] : []),
+        { content: 'REMARKS', rowSpan: 2 },
         { content: 'RECEIPTS', colSpan: 2 },
         { content: 'ISSUES', colSpan: 2 },
         { content: 'BALANCE', colSpan: 2 },
@@ -242,19 +266,38 @@ export const generatePileBinCard = ({ warehouse, branch, pile, variety, transact
     // 12mm margin) so the table fills the full page width rather than
     // leaving unused space - combined with tableWidth above, which
     // tells autoTable to stretch to that exact target regardless of
-    // content-driven auto-sizing.
-    columnStyles: {
-      0: { cellWidth: 20 },
-      1: { cellWidth: 51 },
-      2: { cellWidth: 36 },
-      3: { cellWidth: 22 },
-      4: { cellWidth: 20, halign: 'right' },
-      5: { cellWidth: 26, halign: 'right' },
-      6: { cellWidth: 20, halign: 'right' },
-      7: { cellWidth: 26, halign: 'right' },
-      8: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
-      9: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
-    },
+    // content-driven auto-sizing. Rice/Palay shrinks CUSTOMER/
+    // TRANSACTION/REFERENCE slightly to make room for one new REMARKS
+    // column; By Products shrinks them further for two new columns
+    // (VARIETY + REMARKS) - both variants still sum to exactly 273.
+    columnStyles: isByProducts
+      ? {
+          0: { cellWidth: 16 },
+          1: { cellWidth: 37 },
+          2: { cellWidth: 24 },
+          3: { cellWidth: 16 },
+          4: { cellWidth: 18 },
+          5: { cellWidth: 18 },
+          6: { cellWidth: 20, halign: 'right' },
+          7: { cellWidth: 26, halign: 'right' },
+          8: { cellWidth: 20, halign: 'right' },
+          9: { cellWidth: 26, halign: 'right' },
+          10: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+          11: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
+        }
+      : {
+          0: { cellWidth: 18 },
+          1: { cellWidth: 47 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 18 },
+          5: { cellWidth: 20, halign: 'right' },
+          6: { cellWidth: 26, halign: 'right' },
+          7: { cellWidth: 20, halign: 'right' },
+          8: { cellWidth: 26, halign: 'right' },
+          9: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+          10: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
+        },
     didDrawPage: () => {
       const pageCount = doc.internal.getNumberOfPages()
       const pageCurrent = doc.internal.getCurrentPageInfo().pageNumber

@@ -1643,4 +1643,46 @@
 //            currently typed. Fixed in both StockFormBase.jsx and
 //            SackFormBase.jsx; WTSForm.jsx has no ricemillName matching
 //            of its own, so it was unaffected.
-export const APP_VERSION = '1.9-100'
+//   1.9-101 - Three real, reported gaps in how a pile's stock is shown,
+//            all sharing one root cause: a pile's flat currentBags/
+//            currentKilos/varietyId fields (and the exported PDFs/BIN
+//            Card built from them) can't reflect a pile that genuinely
+//            holds more than one thing at once.
+//            1. A Rice/Palay pile that received stock under more than one
+//               sack weight/condition (e.g. some bags at 50kg BN, some at
+//               25kg SH) only ever showed ONE combined total everywhere -
+//               the Pile Layout grid box itself, its hover/tap popup, the
+//               Pile List page, and both PDF exports. Every one of those
+//               now lists each sack-weight/condition group directly (own
+//               Bags/Net Kg, stacked on separate lines), plus a bold
+//               TOTAL once there's more than one group - a single-group
+//               pile (the common case) is completely unchanged.
+//            2. A By Products pile can hold a genuine mix of varieties at
+//               once (piles.varietyId is null/unreliable for By Products -
+//               the real mix only ever existed by aggregating each
+//               transaction's own varietyId, never actually read back out
+//               anywhere) - only one, often blank, variety ever displayed.
+//               By Products now always lists every variety it actually
+//               holds (grid box, popups, Pile List, both PDF exports, and
+//               the BIN Card's new VARIETY column), each with its own
+//               Received date (since, per explicit confirmation, varieties
+//               genuinely can be received on different days) - unlike
+//               Rice/Palay, which keeps exactly ONE shared Procured/
+//               Received date for the whole pile, never per group.
+//            3. Beginning Balances' repeatable lines already had their
+//               own "As of" date - the free-text Date Received/Procured
+//               field was still a single value shared across the whole
+//               pile. Per explicit confirmation this only matters for By
+//               Products (Rice/Palay genuinely has one procurement date
+//               for the whole pile) - By Products now gets a per-line
+//               Date Received field instead of the shared one; Rice/Palay
+//               is untouched.
+//            New computePileStockBreakdown (pileLedger.js) is the shared
+//            source of truth for all of this - computePileStockBySackWeight
+//            (Home Stocks' existing per-weight breakdown) is now a thin
+//            wrapper around it, provably unchanged for that caller.
+//            BIN Card's per-row REMARKS column (sack weight/condition) was
+//            added for every pile, not just multi-group ones, so the
+//            ledger itself always explains which group a receipt/issue
+//            belongs to.
+export const APP_VERSION = '1.9-101'

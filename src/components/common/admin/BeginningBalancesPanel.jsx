@@ -39,6 +39,12 @@ const AGE_UNITS = ['Days', 'Months']
 const emptyLine = () => ({
   txId: null, varietyId: '', bags: '', kilos: '', condition: 'GQ', dateReceived: todayLocalISO(),
   purity: '', moistureContent: '', mtsSackTypeId: '', mtsCondition: '',
+  // Only used/shown for By Products - a variety can genuinely be
+  // received on a different day than another variety in the same pile,
+  // confirmed via explicit request. Rice/Palay keeps the single shared
+  // dateProcured field below instead (one variety for life - only ever
+  // one real procurement date for the whole pile).
+  dateProcured: '',
 })
 
 function PilesBeginningBalances({ warehouseId }) {
@@ -110,7 +116,7 @@ function PilesBeginningBalances({ warehouseId }) {
     setEditingPileId(pile.pileId)
     setOriginalSeedIds(seeds.map((s) => s.id))
     setLines(seeds.length
-      ? seeds.map((s) => ({
+      ? seeds.map((s, i) => ({
           txId: s.id,
           varietyId: s.varietyId ?? '',
           bags: liveFormatNumber(String(s.numberOfBags ?? 0)),
@@ -130,6 +136,11 @@ function PilesBeginningBalances({ warehouseId }) {
           })(),
           mtsSackTypeId: s.mtsSackTypeId ?? '',
           mtsCondition: s.mtsCondition ?? '',
+          // By Products only (see emptyLine's comment) - falls back to
+          // the pile's own single dateProcured ONLY on the first line, so
+          // a pile saved before this per-line field existed doesn't
+          // silently lose its one recorded value on the next edit.
+          dateProcured: s.dateProcured ?? (i === 0 ? (pile.dateProcured ?? '') : ''),
         }))
       : [emptyLine()])
     // The app only stores the normalized days value, not which unit it
@@ -174,10 +185,17 @@ function PilesBeginningBalances({ warehouseId }) {
     // StockFormBase.jsx) - no longer authoritative for beginning-balance
     // reporting now that a pile can have multiple lines, but they still need
     // *some* sane value, so source them from the first line.
+    // By Products' date now lives per-line (dateProcured moves down into
+    // each seed transaction below, since varieties can genuinely be
+    // received on different days) - the pile-level field here just keeps
+    // the first line's value as a backward-compat fallback, unused by the
+    // new By Products display (which reads each group's own date
+    // instead). Rice/Palay keeps the single shared form field exactly as
+    // before - only ever ONE real procurement date for the whole pile.
     await db.piles.update(editingPileId, {
       initialAgeValue: newAgeDays,
       dateOfReceipt: first?.dateReceived || todayLocalISO(),
-      dateProcured: dateProcured.trim() || null,
+      dateProcured: editingCategory === 'By Products' ? (first?.dateProcured?.trim() || null) : (dateProcured.trim() || null),
       condition: first?.condition || 'GQ',
       purity: first?.purity?.trim() || null,
       moistureContent: first?.moistureContent === '' || first?.moistureContent == null
@@ -199,6 +217,8 @@ function PilesBeginningBalances({ warehouseId }) {
         moistureContent: line.moistureContent === '' ? null : parseFloat(parseFormattedNumber(line.moistureContent).toFixed(2)),
         mtsSackTypeId: line.mtsSackTypeId || null,
         mtsCondition: line.mtsSackTypeId ? (line.mtsCondition || null) : null,
+        // By Products only - see emptyLine's comment.
+        ...(editingCategory === 'By Products' ? { dateProcured: line.dateProcured.trim() || null } : {}),
       }
 
       // line.varietyId only ever has a real value for a By Products
@@ -307,6 +327,7 @@ function PilesBeginningBalances({ warehouseId }) {
       transactions: [...allPileTransactions, ...wtsTransfers],
       transactionTypeMap,
       globalDataStartDate,
+      varietyMap, sackTypeMap: new Map(sackTypes.map((s) => [s.sackTypeId, s])),
     })
     doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
   }
@@ -345,11 +366,13 @@ function PilesBeginningBalances({ warehouseId }) {
               </select>
             </div>
           </div>
-          <div>
-            <label className={labelClass}>{editingCategory === 'Palay' ? 'Date Procured' : 'Date Received'} (optional)</label>
-            <input type="text" value={dateProcured} onChange={(e) => setDateProcured(e.target.value)}
-              className={inputClass} placeholder="MAR 24 TO APR 4, 2025" />
-          </div>
+          {editingCategory !== 'By Products' && (
+            <div>
+              <label className={labelClass}>{editingCategory === 'Palay' ? 'Date Procured' : 'Date Received'} (optional)</label>
+              <input type="text" value={dateProcured} onChange={(e) => setDateProcured(e.target.value)}
+                className={inputClass} placeholder="MAR 24 TO APR 4, 2025" />
+            </div>
+          )}
           {lines.map((line, i) => (
             <div key={i} className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2.5">
               <div className="flex items-center justify-between">
@@ -361,19 +384,26 @@ function PilesBeginningBalances({ warehouseId }) {
                 )}
               </div>
               {editingCategory === 'By Products' && (
-                <div>
-                  <label className={labelClass}>Variety</label>
-                  <select
-                    value={line.varietyId}
-                    onChange={(e) => updateLine(i, 'varietyId', e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">Unspecified — mix of By Products</option>
-                    {editingCategoryVarieties.map((v) => (
-                      <option key={v.varietyId} value={v.varietyId}>{v.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <>
+                  <div>
+                    <label className={labelClass}>Variety</label>
+                    <select
+                      value={line.varietyId}
+                      onChange={(e) => updateLine(i, 'varietyId', e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">Unspecified — mix of By Products</option>
+                      {editingCategoryVarieties.map((v) => (
+                        <option key={v.varietyId} value={v.varietyId}>{v.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Date Received (optional)</label>
+                    <input type="text" value={line.dateProcured} onChange={(e) => updateLine(i, 'dateProcured', e.target.value)}
+                      className={inputClass} placeholder="MAR 24 TO APR 4, 2025" />
+                  </div>
+                </>
               )}
               <div className="grid grid-cols-2 gap-2">
                 <div>

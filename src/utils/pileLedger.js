@@ -438,24 +438,43 @@ export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOv
  * sack-weight batch a transfer's bags came from, a real data gap this
  * can't paper over), each holding { bags, kilos }.
  */
-export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12-31', warehouseOverride = null, sackTypesOverride = null) => {
+/**
+ * Superset of computePileStockBySackWeight - also splits by varietyId, and
+ * carries a representative "last received" date per group. Built for
+ * displaying a pile's TRUE current composition (Pile Layout box/popups,
+ * Pile List, both PDF exports) instead of the single flattened
+ * pile.currentBags/currentKilos/varietyId fields every one of those sites
+ * used to read directly - confirmed, reported case: a pile that received
+ * stock under more than one sack weight/condition, or (for By Products,
+ * which can hold a genuine mix of varieties at once - see
+ * BeginningBalancesPanel.jsx) more than one variety, only ever showed ONE
+ * combined total/variety everywhere, silently hiding the real mix.
+ *
+ * Returns an array of { varietyId, sackTypeId, mtsCondition, weight, bags,
+ * kilos, lastReceivedDate }, one entry per distinct
+ * varietyId::sackTypeId::mtsCondition combination actually present in the
+ * pile's ledger. `lastReceivedDate` is the latest date among that group's
+ * own WSR-type receipts (including isInitialBalance seeds) - meaningful for
+ * By Products display, where different varieties can genuinely be received
+ * on different days; Rice/Palay display ignores it and keeps using the
+ * pile's single shared dateProcured, since a Rice/Palay pile only ever has
+ * ONE procurement date for the whole pile regardless of sack-weight mix.
+ */
+export const computePileStockBreakdown = async (pileId, cutoffDate = '9999-12-31', warehouseOverride = null, sackTypesOverride = null) => {
   const pile = await db.piles.get(pileId)
 
   // See computeHistoricalPileState's matching comment - a closed pile
-  // reads as genuinely empty from its closedDate on, same as Pile List
-  // already shows, rather than leaking its real (possibly messy)
-  // pre-closure transaction history back in via a fresh recompute.
+  // reads as genuinely empty from its closedDate on.
   if (pile?.closedDate && cutoffDate >= pile.closedDate) {
-    return new Map()
+    return []
   }
 
   const warehouse = warehouseOverride ?? (pile?.warehouseId ? await db.warehouses.get(pile.warehouseId) : null)
   const reportingCutoffDate = effectiveCutoffDate(warehouse?.reportingCutoffDate, await getGlobalDataStartDate())
-  // Pass sackTypesOverride when calling this in a loop over many piles
-  // (e.g. HomeStocks.jsx/Piles.jsx) - sack types are a small, shared,
-  // warehouse-wide admin list, not per-pile data, so re-fetching the
-  // whole table on every single pile in that loop was pure redundant
-  // IndexedDB work multiplied by pile count on every recompute.
+  // Pass sackTypesOverride when calling this in a loop over many piles -
+  // sack types are a small, shared, warehouse-wide admin list, not
+  // per-pile data, so re-fetching the whole table on every single pile in
+  // that loop was pure redundant IndexedDB work multiplied by pile count.
   const sackTypes = sackTypesOverride ?? (await db.sackTypes.toArray())
   const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
   const resolveWeight = (t) => sackTypeMap.get(t.mtsSackTypeId)?.weights?.[t.mtsCondition] ?? 'unspecified'
@@ -474,39 +493,76 @@ export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12
     .toArray())
     .filter((t) => !reportingCutoffDate || t.date > reportingCutoffDate)
 
-  const byWeight = new Map()
-  const add = (weight, bags, kilos) => {
-    if (!byWeight.has(weight)) byWeight.set(weight, { bags: 0, kilos: 0 })
-    const entry = byWeight.get(weight)
+  const groups = new Map()
+  const groupKey = (varietyId, sackTypeId, mtsCondition) => `${varietyId ?? ''}::${sackTypeId ?? ''}::${mtsCondition ?? ''}`
+  const add = (varietyId, sackTypeId, mtsCondition, weight, bags, kilos, receivedDate) => {
+    const key = groupKey(varietyId, sackTypeId, mtsCondition)
+    if (!groups.has(key)) groups.set(key, { varietyId: varietyId ?? null, sackTypeId: sackTypeId ?? null, mtsCondition: mtsCondition ?? null, weight, bags: 0, kilos: 0, lastReceivedDate: null })
+    const entry = groups.get(key)
     entry.bags += bags
     entry.kilos = round3(entry.kilos + kilos)
+    if (receivedDate && (!entry.lastReceivedDate || receivedDate > entry.lastReceivedDate)) entry.lastReceivedDate = receivedDate
   }
 
   for (const t of direct) {
     const sign = t.type === 'WSR' ? 1 : t.type === 'WSI' ? -1 : 0
     if (sign === 0) continue
-    add(resolveWeight(t), (t.numberOfBags ?? 0) * sign, (t.netKilos ?? 0) * sign)
+    add(t.varietyId ?? pile?.varietyId, t.mtsSackTypeId, t.mtsCondition, resolveWeight(t), (t.numberOfBags ?? 0) * sign, (t.netKilos ?? 0) * sign, t.type === 'WSR' ? t.date : null)
   }
 
   for (const t of wtsAll) {
-    if (t.issuedPileId === pileId) add('unspecified', -(t.issuedBags ?? 0), -(t.issuedNetKilos ?? 0))
-    if (t.receivedPileId === pileId) add('unspecified', t.receivedBags ?? 0, t.receivedNetKilos ?? 0)
+    // WTSForm.jsx doesn't record which sack-weight batch or variety a
+    // transfer's bags came from (a real data gap this can't paper over) -
+    // matches computePileStockBySackWeight's existing 'unspecified' fallback.
+    if (t.issuedPileId === pileId) add(pile?.varietyId, null, null, 'unspecified', -(t.issuedBags ?? 0), -(t.issuedNetKilos ?? 0), null)
+    if (t.receivedPileId === pileId) add(pile?.varietyId, null, null, 'unspecified', t.receivedBags ?? 0, t.receivedNetKilos ?? 0, t.date)
   }
 
-  // NOT floored per weight-bucket - reverted, see version.js. A single
-  // pile's transactions can genuinely resolve to different weight
-  // buckets over its life (e.g. a receipt under one sack weight,
-  // matched later by an issuance whose mtsSackTypeId/mtsCondition
-  // resolves differently), so one bucket going negative while another
-  // is correspondingly positive is a REAL, NEEDED offset between the
-  // two - the pile's true total is only correct once every bucket is
-  // summed together. Clamping each bucket independently before that sum
-  // happens discards the offset instead of preserving it, which
-  // inflated every affected variety's total instead of correcting it
-  // (confirmed, reported case - a real total of ~14 bags rendered as
-  // 3,326 after this clamp was added). Whatever's actually behind a
-  // negative bucket (see computeHistoricalPileState's clamp for the
-  // reasoning) needs fixing at the source data, not by editing the sum.
+  // NOT floored per group - see computePileStockBySackWeight's original
+  // comment (kept verbatim in spirit): a single pile's transactions can
+  // genuinely resolve to different groups over its life, so one group
+  // going negative while another is correspondingly positive is a REAL,
+  // NEEDED offset - the pile's true total is only correct once every
+  // group is summed together.
+  return [...groups.values()]
+}
+
+/**
+ * Like computeHistoricalPileState, but broken out by the MTS sack
+ * weight/condition recorded on each individual transaction instead of
+ * summed into one total.
+ *
+ * Why this exists: piles.mtsSackTypeId only reflects whichever weight
+ * a pile happened to be CREATED with (via createPileWithBeginningBalance)
+ * - it is never updated by later WSR receipts, which each carry their
+ * own mtsSackTypeId/mtsCondition on the TRANSACTION, not the pile. A
+ * Rice/Palay pile is locked to one variety for life, but nothing locks
+ * it to one sack weight - ordinary receipts over the pile's lifetime
+ * can genuinely use different sack weights, and the pile's own field
+ * can't reflect that mix at all. Callers that need to know what sack
+ * weight(s) a pile's CURRENT stock actually consists of (e.g. Home
+ * Stocks' per-weight separation) need this, not the stale pile field.
+ *
+ * Returns a Map keyed by the resolved numeric weight, or the string
+ * 'unspecified' for a transaction whose sack type can't be resolved
+ * (including every WTS transfer - WTSForm.jsx doesn't record which
+ * sack-weight batch a transfer's bags came from, a real data gap this
+ * can't paper over), each holding { bags, kilos }.
+ *
+ * Now a thin wrapper around computePileStockBreakdown, folding its
+ * variety-aware groups down to weight-only buckets - HomeStocks.jsx (the
+ * only consumer) never cared about variety, since it already groups by
+ * variety itself one level up.
+ */
+export const computePileStockBySackWeight = async (pileId, cutoffDate = '9999-12-31', warehouseOverride = null, sackTypesOverride = null) => {
+  const breakdown = await computePileStockBreakdown(pileId, cutoffDate, warehouseOverride, sackTypesOverride)
+  const byWeight = new Map()
+  for (const g of breakdown) {
+    if (!byWeight.has(g.weight)) byWeight.set(g.weight, { bags: 0, kilos: 0 })
+    const entry = byWeight.get(g.weight)
+    entry.bags += g.bags
+    entry.kilos = round3(entry.kilos + g.kilos)
+  }
   return byWeight
 }
 
