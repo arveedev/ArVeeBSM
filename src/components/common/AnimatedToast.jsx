@@ -163,17 +163,25 @@ export function SyncProgressToast({ label, doneLabel, phase }) {
 // supplies one for this toast's type ('blank' -> Info).
 //
 // Reported: tapping Update gave no feedback at all, which reads as a
-// freeze rather than "working on it." The button now disables and swaps
-// to a spinner + "Updating…" the instant it's tapped, so there's visible
-// feedback even in the brief window before the page actually reloads,
-// and it can't be double-tapped. Per explicit follow-up feedback, no
-// extra subtext line - the notification text plus the button alone are
+// freeze rather than "working on it." The button disables and swaps to
+// a spinner + "Updating…" the instant it's tapped, so there's visible
+// feedback while the real update (downloading/installing the new
+// service worker, which can genuinely take a few seconds) runs, and it
+// can't be double-tapped. Per explicit follow-up feedback, no extra
+// subtext line - the notification text plus the button alone are
 // enough, nothing more to explain.
 export function UpdateAvailableToast({ onUpdate }) {
   const [isUpdating, setIsUpdating] = useState(false)
   const handleClick = () => {
     setIsUpdating(true)
-    onUpdate()
+    // Double rAF - guarantees the browser has actually PAINTED the
+    // spinner/"Updating…" state at least once before onUpdate() runs
+    // (which can involve real work - messaging the service worker,
+    // eventually a full navigation). Without this, a fast enough
+    // reload could tear the page down before the state change above
+    // ever reached the screen, which is exactly what "no feedback, just
+    // freezes" looked like when reported.
+    requestAnimationFrame(() => requestAnimationFrame(onUpdate))
   }
   return (
     <span className="text-sm font-medium text-app-text">

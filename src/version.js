@@ -1909,4 +1909,25 @@
 //               second line instead - the header's own height already
 //               adjusts dynamically via a ResizeObserver, so nothing
 //               below it overlaps.
-export const APP_VERSION = '1.9-110'
+//   1.9-111 - Fixed the real bug behind 1.9-110's own "Update now" fix
+//            not working - confirmed live: tapping it repeatedly kept
+//            the app stuck on 1.9-109, restarting each time without
+//            ever landing on the new version; only a full close of the
+//            app let it actually update. Root cause: the fallback
+//            reload timer added alongside "Update now" (a plain
+//            window.location.reload() a few seconds after tapping, in
+//            case there was nothing to skip-wait on yet) raced against
+//            the real skipWaiting -> activate -> controlling sequence -
+//            downloading and installing the new service worker
+//            genuinely took longer than that timer on a real
+//            connection, so the fallback fired FIRST and reloaded back
+//            into the still-old, still-controlling service worker
+//            before it had finished taking over. Removed that timer
+//            entirely - applyUpdate() alone now drives the reload,
+//            whenever the real activation actually completes, however
+//            long that takes. Also: the button's spinner/"Updating…"
+//            state is now guaranteed to actually paint before any of
+//            that work starts (a double requestAnimationFrame), which
+//            was the other half of "no feedback, just freezes" on a
+//            fast enough browser.
+export const APP_VERSION = '1.9-111'

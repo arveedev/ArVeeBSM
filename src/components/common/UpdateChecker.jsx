@@ -36,21 +36,23 @@ const checkVersionMismatch = async () => {
       // waiting worker ready to activate immediately instead of only
       // starting the download at that moment.
       checkServiceWorkerForUpdate()
-      const handleUpdate = () => {
-        applyUpdate()
-        // Fallback: version.json said there's an update, but if the
-        // service worker itself somehow never got a waiting worker
-        // ready (checkServiceWorkerForUpdate above is best-effort, not
-        // guaranteed to finish in time), applyUpdate() has nothing to
-        // act on and never reloads - the button would silently do
-        // nothing. Falls back to a plain reload after a short grace
-        // period so tapping it always does SOMETHING; moot if
-        // applyUpdate() already triggered a real reload first, since
-        // the page is gone by the time this timer would fire.
-        setTimeout(() => window.location.reload(), 4000)
-      }
+      // Reported, real bug: a fallback timer here (a blind
+      // window.location.reload() a few seconds after tapping, in case
+      // applyUpdate() had nothing to act on yet) raced against the real
+      // skipWaiting -> activate -> controlling sequence on a real
+      // device - downloading + installing the new service worker
+      // legitimately took longer than the timer, so the fallback fired
+      // FIRST, reloading back into the still-old, still-controlling
+      // service worker before it had finished taking over. That looked
+      // like the app "restarting" on every tap while staying stuck on
+      // the old version - confirmed live (stuck on 1.9-109 through
+      // repeated taps, only a full close of the app let the
+      // already-waiting worker actually activate). No timer-based
+      // fallback now - applyUpdate() alone drives the reload, whenever
+      // the real activation actually completes, however long that
+      // takes on a given connection.
       toast(
-        <UpdateAvailableToast onUpdate={handleUpdate} />,
+        <UpdateAvailableToast onUpdate={applyUpdate} />,
         { id: UPDATE_TOAST_ID, duration: Infinity }
       )
     }
