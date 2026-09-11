@@ -39,7 +39,7 @@ import {
   recalculateSerialCounter,
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
-import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
+import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName, buildCustomerAliasMap, normalizeCustomerName } from '../../utils/customerDirectory.js'
 import { fetchTransactionBySerial, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -171,6 +171,17 @@ const SackFormBase = forwardRef(function SackFormBase(
   const selectedTransactionType = (transactionTypes ?? []).find((t) => t.transactionTypeId === transactionTypeId)
   const isMilling = isMillingTypeName(selectedTransactionType?.name)
   const isTestMilling = isTestMillingTypeName(selectedTransactionType?.name)
+
+  // See StockFormBase.jsx's identical fix - MO/TMO records store
+  // whatever text the miller's own sheet uses (often a nickname, e.g.
+  // "DENS RM"), not necessarily the real name Customer Name resolves
+  // to via customerAliases. canonicalName resolves either form through
+  // the same alias map before comparing.
+  const customerAliasMap = useLiveQuery(() => buildCustomerAliasMap(), [])
+  const canonicalName = (name) => {
+    const normalized = normalizeCustomerName(name ?? '')
+    return normalizeCustomerName(customerAliasMap?.get(normalized) ?? normalized)
+  }
 
   // Available MO/TMO numbers from the synced reference data, with
   // fulfillment computed - same logic as the stock side, just matched
@@ -1324,7 +1335,7 @@ const SackFormBase = forwardRef(function SackFormBase(
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableMoOrders = millingOrderOptions
               .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === moNumber)
-              .filter((o) => !trimmedCustomerName || o.number === moNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
+              .filter((o) => !trimmedCustomerName || o.number === moNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'ESR'
             const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !moNumber
@@ -1392,7 +1403,7 @@ const SackFormBase = forwardRef(function SackFormBase(
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableTmoNumbers = millingOrderOptions
               .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
-              .filter((o) => !trimmedCustomerName || o.number === tmoNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
+              .filter((o) => !trimmedCustomerName || o.number === tmoNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const isDerived = type !== 'ESR'
             const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !tmoNumber
             const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedSiaAuthority)

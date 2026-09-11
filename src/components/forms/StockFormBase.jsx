@@ -81,7 +81,7 @@ import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionT
 import { fetchTransactionBySerial, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName } from '../../utils/customerDirectory.js'
+import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName, buildCustomerAliasMap, normalizeCustomerName } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import SerialNumberField from './SerialNumberField.jsx'
 import ValidatedField from './ValidatedField.jsx'
@@ -384,6 +384,23 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // Test Milling TMO is fulfilled only once all 3 trials have SOME
   // amount recovered AND the user has explicitly confirmed Trial 3 as
   // complete (never inferred just from 3 trials existing).
+  // MO/TMO records store whatever text the miller's own MO/TMO sheet
+  // uses for them - often a short nickname ("DENS RM"), not their real
+  // registered name ("Dens Marketing Corporation") the Customer Name
+  // field resolves to once a matching customerAliases entry exists (see
+  // customerDirectory.js). Matching millingOrderOptions.ricemillName
+  // against the plain trimmed/lowercased customerName only worked when
+  // BOTH sides happened to be in the same form - confirmed, reported
+  // case: typing the real resolved name found nothing, typing the raw
+  // alias found the real MO/TMO records. canonicalName below resolves
+  // either form (alias or real name) through the same alias map before
+  // comparing, so it matches regardless of which one is actually typed.
+  const customerAliasMap = useLiveQuery(() => buildCustomerAliasMap(), [])
+  const canonicalName = (name) => {
+    const normalized = normalizeCustomerName(name ?? '')
+    return normalizeCustomerName(customerAliasMap?.get(normalized) ?? normalized)
+  }
+
   const millingOrderOptions = useLiveQuery(async () => {
     if (!isMilling && !isTestMilling) return []
     const orderType = isMilling ? 'MO' : 'TMO'
@@ -2708,7 +2725,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               // Always includes the currently-selected order even if
               // the name no longer matches exactly, so an existing
               // selection is never silently hidden.
-              .filter((o) => !trimmedCustomerName || o.number === moNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
+              .filter((o) => !trimmedCustomerName || o.number === moNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'WSR'
             const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !moNumber
@@ -2790,7 +2807,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableTmoNumbers = millingOrderOptions
               .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
-              .filter((o) => !trimmedCustomerName || o.number === tmoNumber || o.ricemillName?.trim().toLowerCase() === trimmedCustomerName)
+              .filter((o) => !trimmedCustomerName || o.number === tmoNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const isDerived = type !== 'WSR'
             const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !tmoNumber
             const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedAuthority)

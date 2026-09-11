@@ -1624,4 +1624,23 @@
 //            element that also remounts on flip would reset the count
 //            to 0 every time and fight the existing animation instead
 //            of complementing it.
-export const APP_VERSION = '1.9-99'
+//   1.9-100 - Fixed a real, reported bug: the MO/TMO Number dropdown on
+//            WSR/WSI/ESR/ESI/sack forms only showed real options when
+//            the Customer Name field held the EXACT text the miller's
+//            own MO/TMO Google Sheet uses for them (e.g. "DENS RM"),
+//            which is often just a nickname/alias, not their real
+//            registered name ("Dens Marketing Corporation") the field
+//            normally shows once resolved via customerAliases. Typing
+//            the resolved real name (the expected, normal case) found
+//            nothing; only typing the raw sheet alias worked. Root
+//            cause: the match compared millingOrderOptions.ricemillName
+//            against customerName as plain trimmed/lowercased text, with
+//            no alias resolution on either side. Both sides are now
+//            resolved through the same customerAliases map
+//            (canonicalName, reusing buildCustomerAliasMap from
+//            customerDirectory.js) before comparing, so the dropdown
+//            matches regardless of whether the alias or the real name is
+//            currently typed. Fixed in both StockFormBase.jsx and
+//            SackFormBase.jsx; WTSForm.jsx has no ricemillName matching
+//            of its own, so it was unaffected.
+export const APP_VERSION = '1.9-100'
