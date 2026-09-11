@@ -321,7 +321,13 @@ const SackFormBase = forwardRef(function SackFormBase(
 
   const sortedSackTypes = [...(sackTypes ?? [])].sort((a, b) => byAlpha(a.code, b.code))
   const sackTypeMap = new Map((sackTypes ?? []).map((s) => [s.sackTypeId, s]))
-  const sortedTransactionTypes = [...(transactionTypes ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  // See StockFormBase.jsx's identical fix - only offer transaction types
+  // suited to this form's own direction (receiving vs issuing). A type
+  // with no appliesTo yet is treated as 'Both'.
+  const currentDirection = type === 'ESR' ? 'Receipt' : 'Issuance'
+  const sortedTransactionTypes = [...(transactionTypes ?? [])]
+    .filter((t) => !t.appliesTo || t.appliesTo === 'Both' || t.appliesTo === currentDirection)
+    .sort((a, b) => byAlpha(a.name, b.name))
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
   useEffect(() => {

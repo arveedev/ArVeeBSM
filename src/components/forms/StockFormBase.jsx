@@ -493,7 +493,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const sortedVarieties = [...(varieties ?? [])]
     .filter((v) => !isCategoryScoped || v.category === activeCategory)
     .sort((a, b) => byAlpha(a.name, b.name))
-  const sortedTransactionTypes = [...(transactionTypes ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  // Per explicit request: only offer transaction types actually suited
+  // to what this form is doing (receiving vs issuing), instead of
+  // bombarding the user with every configured type regardless of
+  // relevance. A type with no appliesTo yet (older records, or
+  // deliberately left as the default) is treated as 'Both' - it keeps
+  // showing everywhere until an admin narrows it in Transaction Types.
+  const currentDirection = type === 'WSR' ? 'Receipt' : 'Issuance'
+  const sortedTransactionTypes = [...(transactionTypes ?? [])]
+    .filter((t) => !t.appliesTo || t.appliesTo === 'Both' || t.appliesTo === currentDirection)
+    .sort((a, b) => byAlpha(a.name, b.name))
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
   const sortedPiles = [...(piles ?? [])]

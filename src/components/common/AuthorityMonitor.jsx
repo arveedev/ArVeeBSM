@@ -243,7 +243,7 @@ function AuthorityMonitor() {
       </div>
 
       <div className="mt-2 flex items-center justify-between border-b border-neutral-800 px-1 pb-1.5">
-        <span className="text-xs font-medium text-app-text">Pending</span>
+        <span className="text-sm font-medium text-app-text">Pending</span>
         <button
           type="button"
           onClick={() => setShowCompleted(true)}
@@ -255,7 +255,7 @@ function AuthorityMonitor() {
 
       <ul className="mt-2 space-y-2 animate-flow-down" key={topTab}>
         {filtered.length === 0 && (
-          <p className="py-3 text-center text-xs text-neutral-500">
+          <p className="py-3 text-center text-sm text-neutral-500">
             No pending {topTab} records.
           </p>
         )}
@@ -328,27 +328,27 @@ function AuthorityMonitor() {
                 className="flex flex-1 items-center justify-between gap-3 py-2 pr-3 text-left active:scale-[0.99]"
               >
                 <div className="min-w-0">
-                  <p className={`truncate text-sm font-medium ${categoryColor(a)}`}>
+                  <p className={`break-words text-base font-medium ${categoryColor(a)}`}>
                     {a.type} · {a.type === 'AI' ? a.aiNumber : a.siaNumber}
                   </p>
-                  <p className="truncate text-xs text-neutral-400">
+                  <p className="break-words text-sm text-neutral-400">
                     {warehouse ? `${warehouse.code} — ${warehouse.name}` : a.assignedWarehouse}
                   </p>
-                  <p className="break-words text-xs text-neutral-400">
+                  <p className="break-words text-sm text-neutral-400">
                     {a.customerName}
                     {a.transactionTypeName ? ` — ${a.transactionTypeName}` : ''}
                   </p>
-                  <p className="break-words text-xs text-neutral-500">
+                  <p className="break-words text-sm text-neutral-500">
                     {a.type === 'AI' && variety ? `${variety.name} (${variety.category})` : ''}
                     {isSia && (a.sackLines ?? []).length > 0
                       ? a.sackLines.map((l) => `${sackTypeMap.get(l.sackTypeId)?.code ?? '?'} ${l.condition ?? ''}`).join(', ')
                       : ''}
                   </p>
                   {a.date && (
-                    <p className="truncate text-xs text-neutral-600">{String(a.date).slice(0, 10)}</p>
+                    <p className="break-words text-sm text-neutral-600">{String(a.date).slice(0, 10)}</p>
                   )}
                   {authorityExtraDetails(a).length > 0 && (
-                    <p className="break-words text-xs text-neutral-600">
+                    <p className="break-words text-sm text-neutral-600">
                       {authorityExtraDetails(a).map((d) => `${d.label}: ${d.value}`).join(' · ')}
                     </p>
                   )}
@@ -357,14 +357,14 @@ function AuthorityMonitor() {
                 <div className="shrink-0 text-right">
                   {a.totalAllocationKilos != null && (
                     <div className={`leading-tight tabular-nums ${progressColor}`}>
-                      <p className="text-sm font-semibold">{fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}</p>
-                      <p className="text-xs text-neutral-500">/ {fmtWeight(a.totalAllocationKilos, weightUnit)}</p>
+                      <p className="text-base font-semibold">{fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}</p>
+                      <p className="text-sm text-neutral-500">/ {fmtWeight(a.totalAllocationKilos, weightUnit)}</p>
                     </div>
                   )}
                   {totalAllocBags != null && (
                     <div className={`mt-1 leading-tight tabular-nums ${progressColor}`}>
-                      <p className="text-sm font-semibold">{fmtBags(totalIssuedBags ?? 0)}</p>
-                      <p className="text-xs text-neutral-500">/ {fmtBags(totalAllocBags)} {unitLabel}</p>
+                      <p className="text-base font-semibold">{fmtBags(totalIssuedBags ?? 0)}</p>
+                      <p className="text-sm text-neutral-500">/ {fmtBags(totalAllocBags)} {unitLabel}</p>
                     </div>
                   )}
                 </div>

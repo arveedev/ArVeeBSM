@@ -31,8 +31,8 @@ function Toggle({ label, description, value, onChange }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
       <div>
-        <p className="text-sm font-medium text-app-text">{label}</p>
-        {description && <p className="mt-0.5 text-xs text-neutral-500">{description}</p>}
+        <p className="text-base font-medium text-app-text">{label}</p>
+        {description && <p className="mt-0.5 text-sm text-neutral-500">{description}</p>}
       </div>
       <button
         type="button"
@@ -132,7 +132,7 @@ function ClassifierSection({ warehouseId }) {
 
   return (
     <div className="mt-6">
-      <h2 className="text-sm font-semibold text-app-text">Classifier</h2>
+      <h2 className="text-base font-semibold text-app-text">Classifier</h2>
       <p className="mt-1 text-xs text-neutral-500">
         Shown as "Prepared by" on this warehouse's Pile Layout report.
       </p>
@@ -192,7 +192,7 @@ function ClassifierSection({ warehouseId }) {
         </>
       ) : (
         <div className="mt-3 flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
-          <span className="text-sm text-app-text">{savedName}</span>
+          <span className="text-base text-app-text">{savedName}</span>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setIsEditing(true)} aria-label="Edit" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-app-text active:scale-90">
               <Pencil size={20} />
@@ -558,7 +558,7 @@ function PileBalanceSection({ warehouseId }) {
 
   return (
     <div className="mt-6">
-      <h2 className="text-sm font-semibold text-app-text">Create Pile</h2>
+      <h2 className="text-base font-semibold text-app-text">Create Pile</h2>
 
       <div
         ref={formRef}
@@ -767,8 +767,8 @@ function PileBalanceSection({ warehouseId }) {
         {sortedPiles.map((p) => (
           <li key={p.pileId} className={`${listItemClass} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-app-text">{p.pileName}</p>
-              <p className="text-xs text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
+              <p className="break-words text-base font-medium text-app-text">{p.pileName}</p>
+              <p className="text-sm text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
             </div>
             <button type="button" onClick={() => handleEdit(p)} aria-label="Edit pile name/details" className={editIconClass}>
               <Pencil size={20} />
@@ -875,52 +875,52 @@ function Settings() {
           </p>
           <div className="mt-2 space-y-1.5">
             <div>
-              <p className="text-[10px] uppercase text-neutral-600">Local Users Count (read-only, no risk to check)</p>
-              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              <p className="text-xs uppercase text-neutral-600">Local Users Count (read-only, no risk to check)</p>
+              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-app-text">
                 {localUsersCount ?? '(loading)'}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase text-neutral-600">Local Piles Count</p>
-              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              <p className="text-xs uppercase text-neutral-600">Local Piles Count</p>
+              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-app-text">
                 {localPilesCount ?? '(loading)'}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase text-neutral-600">Local Varieties Count</p>
-              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              <p className="text-xs uppercase text-neutral-600">Local Varieties Count</p>
+              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-app-text">
                 {localVarietiesCount ?? '(loading)'}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase text-neutral-600">Database URL (should be the SAME on every device)</p>
-              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              <p className="text-xs uppercase text-neutral-600">Database URL (should be the SAME on every device)</p>
+              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-app-text">
                 {db.cloud.options?.databaseUrl ?? '(not configured)'}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase text-neutral-600">Local Schema Version (should be 27 or higher)</p>
-              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              <p className="text-xs uppercase text-neutral-600">Local Schema Version (should be 27 or higher)</p>
+              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-app-text">
                 {db.verno}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase text-neutral-600">Sync Status</p>
-              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              <p className="text-xs uppercase text-neutral-600">Sync Status</p>
+              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-app-text">
                 {cloudSyncState ? `${cloudSyncState.phase} / ${cloudSyncState.status}` : '(not yet available)'}
               </p>
             </div>
             {syncErrorDetail && (
               <div>
-                <p className="text-[10px] uppercase text-neutral-600">Last Captured Sync Error (the actual reason, not just "error")</p>
-                <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-brand-crimson">
+                <p className="text-xs uppercase text-neutral-600">Last Captured Sync Error (the actual reason, not just "error")</p>
+                <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-brand-crimson">
                   {syncErrorDetail}
                 </p>
               </div>
             )}
             <div>
-              <p className="text-[10px] uppercase text-neutral-600">userId</p>
-              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-xs text-app-text">
+              <p className="text-xs uppercase text-neutral-600">userId</p>
+              <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-app-text">
                 {cloudUser?.userId ?? '(not yet connected)'}
               </p>
             </div>
@@ -944,11 +944,11 @@ function Settings() {
       <div ref={warehouseSectionRef}>
         {sortedWarehouses.length > 1 ? (
           <div className="mt-4">
-            <label className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Active Warehouse</label>
+            <label className="text-xs font-semibold uppercase tracking-wide text-brand-neon">Active Warehouse</label>
             <select
               value={currentWarehouseId ?? ''}
               onChange={(e) => setCurrentWarehouseId(e.target.value)}
-              className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon"
+              className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-lg font-semibold text-app-text outline-none focus:border-brand-neon"
             >
               {sortedWarehouses.map((w) => (
                 <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>
@@ -957,8 +957,8 @@ function Settings() {
           </div>
         ) : currentWarehouse ? (
           <div className="mt-4 rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Active Warehouse</p>
-            <p className="text-base font-bold text-app-text">{currentWarehouse.code} — {currentWarehouse.name}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-neon">Active Warehouse</p>
+            <p className="text-lg font-bold text-app-text">{currentWarehouse.code} — {currentWarehouse.name}</p>
           </div>
         ) : (
           <p className="mt-2 text-xs text-neutral-500">No warehouse assigned</p>
@@ -968,7 +968,7 @@ function Settings() {
 
       <div key={currentWarehouseId} className="animate-flow-down">
       <div className="mt-6 space-y-3">
-        <h2 className="text-sm font-semibold text-app-text">Preferences</h2>
+        <h2 className="text-base font-semibold text-app-text">Preferences</h2>
 
         <Toggle
           label="Auto Age Monitoring"

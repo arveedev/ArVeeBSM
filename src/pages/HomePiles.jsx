@@ -117,11 +117,11 @@ function HomePiles() {
                     <button
                       type="button"
                       onClick={() => setOpenMenuPileId(p.pileId)}
-                      className="flex flex-1 items-center gap-2 text-left text-sm font-medium text-app-text transition-opacity active:opacity-70"
+                      className="flex flex-1 items-center gap-2 text-left text-base font-medium text-app-text transition-opacity active:opacity-70"
                     >
                       {p.pileName}
                       {p.variety && (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${varietyBadgeClass(p.variety.category)}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-sm font-semibold ${varietyBadgeClass(p.variety.category)}`}>
                           {p.variety.name}
                         </span>
                       )}
@@ -129,7 +129,7 @@ function HomePiles() {
                     <button
                       type="button"
                       onClick={() => setEditingAgePile({ pile: p, age: p.age })}
-                      className="shrink-0 rounded-md px-1.5 py-0.5 text-xs tabular-nums text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-app-text"
+                      className="shrink-0 rounded-md px-1.5 py-0.5 text-sm tabular-nums text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-app-text"
                     >
                       {fmtAge(p.age)} old
                     </button>
@@ -139,29 +139,29 @@ function HomePiles() {
                     <div className="mt-2 space-y-2">
                       {p.groupRows.map((row) => (
                         <div key={row.key} className="border-t border-neutral-800 pt-1.5">
-                          <p className="text-xs font-semibold text-brand-byproduct">{groupHeading(row)}</p>
+                          <p className="text-sm font-semibold text-brand-byproduct">{groupHeading(row)}</p>
                           {row.lastReceivedDate && (
-                            <div className="flex justify-between text-xs text-neutral-400">
+                            <div className="flex justify-between text-sm text-neutral-400">
                               <span>Received</span>
                               <span className="text-app-text">{fmtGroupDate(row.lastReceivedDate)}</span>
                             </div>
                           )}
-                          <div className="flex justify-between text-sm tabular-nums">
+                          <div className="flex justify-between text-base tabular-nums">
                             <span className="text-neutral-400">Bags</span>
                             <span className="font-medium text-app-text">{fmtBags(row.bags)}</span>
                           </div>
-                          <div className="flex justify-between text-sm tabular-nums">
+                          <div className="flex justify-between text-base tabular-nums">
                             <span className="text-neutral-400">Net Kg</span>
                             <span className="font-medium text-app-text">{fmtWeight(row.kilos, weightUnit)}</span>
                           </div>
                         </div>
                       ))}
                       <div className="border-t-2 border-brand-byproduct pt-1.5">
-                        <div className="flex justify-between text-sm tabular-nums">
+                        <div className="flex justify-between text-base tabular-nums">
                           <span className="font-bold text-brand-byproduct">TOTAL Bags</span>
                           <span className="font-bold text-app-text">{fmtBags(totalBags)}</span>
                         </div>
-                        <div className="flex justify-between text-sm tabular-nums">
+                        <div className="flex justify-between text-base tabular-nums">
                           <span className="font-bold text-brand-byproduct">TOTAL Net Kg</span>
                           <span className="font-bold text-app-text">{fmtWeight(totalKilos, weightUnit)}</span>
                         </div>
@@ -171,12 +171,12 @@ function HomePiles() {
                     <>
                       <div className="mt-2 flex items-end justify-between">
                         <div>
-                          <p className="text-base font-semibold tabular-nums text-app-text">{fmtBags(p.currentBags ?? 0)} bags</p>
-                          <p className="text-xs tabular-nums text-neutral-500">{fmtNetBags(netBags)} net bags</p>
+                          <p className="text-lg font-semibold tabular-nums text-app-text">{fmtBags(p.currentBags ?? 0)} bags</p>
+                          <p className="text-sm tabular-nums text-neutral-500">{fmtNetBags(netBags)} net bags</p>
                         </div>
                         <div className="text-right">
-                          <p className="whitespace-nowrap text-xs tabular-nums text-neutral-400">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
-                          <p className="whitespace-nowrap text-xs tabular-nums text-neutral-500">avg {avgWeight.toFixed(2)}</p>
+                          <p className="whitespace-nowrap text-sm tabular-nums text-neutral-400">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
+                          <p className="whitespace-nowrap text-sm tabular-nums text-neutral-500">avg {avgWeight.toFixed(2)}</p>
                         </div>
                       </div>
                       {isMultiGroup && (
@@ -193,12 +193,12 @@ function HomePiles() {
                             <div className="space-y-2">
                               {p.groupRows.map((row) => (
                                 <div key={row.key} className="border-t border-neutral-800 pt-1.5">
-                                  <p className="text-xs font-semibold text-brand-neon">{groupHeading(row)}</p>
-                                  <div className="flex justify-between text-sm tabular-nums">
+                                  <p className="text-sm font-semibold text-brand-neon">{groupHeading(row)}</p>
+                                  <div className="flex justify-between text-base tabular-nums">
                                     <span className="text-neutral-400">Bags</span>
                                     <span className="font-medium text-app-text">{fmtBags(row.bags)}</span>
                                   </div>
-                                  <div className="flex justify-between text-sm tabular-nums">
+                                  <div className="flex justify-between text-base tabular-nums">
                                     <span className="text-neutral-400">Net Kg</span>
                                     <span className="font-medium text-app-text">{fmtWeight(row.kilos, weightUnit)}</span>
                                   </div>

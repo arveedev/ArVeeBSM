@@ -21,8 +21,17 @@ import {
   byAlpha,
 } from './shared.js'
 
+// Per explicit request: without this, adding a transaction bombards the
+// user with every configured type regardless of whether they're
+// receiving or issuing stock. 'Both' (the default, and what any
+// existing type with no appliesTo field yet is treated as - see
+// StockFormBase.jsx/SackFormBase.jsx's own fallback) keeps a type
+// showing everywhere until an admin deliberately narrows it.
+const APPLIES_TO_OPTIONS = ['Receipt', 'Issuance', 'Both']
+
 function TransactionTypesPanel() {
   const [name, setName] = useState('')
+  const [appliesTo, setAppliesTo] = useState('Both')
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
 
@@ -31,6 +40,7 @@ function TransactionTypesPanel() {
 
   const resetForm = () => {
     setName('')
+    setAppliesTo('Both')
     setEditingId(null)
   }
 
@@ -49,11 +59,12 @@ function TransactionTypesPanel() {
     }
 
     if (editingId) {
-      await db.transactionTypes.update(editingId, { name: normalizedName })
+      await db.transactionTypes.update(editingId, { name: normalizedName, appliesTo })
     } else {
       await db.transactionTypes.add({
         transactionTypeId: crypto.randomUUID(),
         name: normalizedName,
+        appliesTo,
       })
     }
     // Concept F (picked) - Save button's own morph is the confirmation.
@@ -64,6 +75,7 @@ function TransactionTypesPanel() {
   const handleEdit = (t) => {
     setEditingId(t.transactionTypeId)
     setName(t.name)
+    setAppliesTo(t.appliesTo ?? 'Both')
   }
 
   const confirmDelete = async () => {
@@ -94,6 +106,27 @@ function TransactionTypesPanel() {
           />
         </div>
 
+        <div>
+          <label className={labelClass}>Applies To</label>
+          <div className="mt-1 grid grid-cols-3 gap-1">
+            {APPLIES_TO_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setAppliesTo(opt)}
+                className={`rounded-lg border py-1.5 text-xs font-medium transition-all active:scale-95 ${
+                  appliesTo === opt ? 'border-brand-neon bg-brand-neon/10 text-brand-neon' : 'border-neutral-800 bg-neutral-900 text-neutral-400'
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-neutral-500">
+            Which forms offer this type - Receipt (WSR/ESR), Issuance (WSI/ESI), or both.
+          </p>
+        </div>
+
         <div className="flex gap-2">
           <MorphButton label="Save" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`} />
           {editingId && (
@@ -108,7 +141,14 @@ function TransactionTypesPanel() {
         <ul className="mt-4 space-y-2">
           {sortedTypes.map((t) => (
             <li key={t.transactionTypeId} className={listItemClass}>
-              <p className="font-medium text-app-text">{t.name}</p>
+              <p className="font-medium text-app-text">
+                {t.name}
+                {t.appliesTo && t.appliesTo !== 'Both' && (
+                  <span className="ml-2 rounded-full bg-neutral-800 px-2 py-0.5 align-middle text-[10px] font-semibold uppercase text-neutral-400">
+                    {t.appliesTo}
+                  </span>
+                )}
+              </p>
               <div className="flex gap-3">
                 <button
                   type="button"

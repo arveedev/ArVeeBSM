@@ -75,12 +75,12 @@ function HomeSacks({ warehouseId } = {}) {
         if (rows.length === 0) return null
         return (
           <div key={st.sackTypeId} className="mt-3 first:mt-0">
-            <p className="text-xs font-semibold uppercase text-neutral-400">{st.code}</p>
+            <p className="text-sm font-semibold uppercase text-neutral-400">{st.code}</p>
             <div className="mt-1 space-y-1">
               {rows.map((r) => (
                 <div key={r.condition.code} className="flex items-center justify-between border-b border-neutral-800/50 py-1">
-                  <span className="text-sm text-app-text">{r.condition.label}</span>
-                  <span className="text-sm font-semibold tabular-nums text-brand-neon">{fmtBags(r.pieces)} pcs</span>
+                  <span className="text-base text-app-text">{r.condition.label}</span>
+                  <span className="text-base font-semibold tabular-nums text-brand-neon">{fmtBags(r.pieces)} pcs</span>
                 </div>
               ))}
             </div>

@@ -2027,4 +2027,30 @@
 //            window naturally expires (standard HTTP cache behavior,
 //            not fixable retroactively from the server side); a manual
 //            hard-refresh once should clear it immediately.
-export const APP_VERSION = '1.9-117'
+//   1.9-118 - Large batch from direct user feedback after confirming the
+//            mobile update flow now works (PC still needing a manual
+//            close/reopen is a separate, still-open item):
+//            - Bumped text sizes across Home Overview (Stocks + Sacks
+//              tabs), the Activity tab's Pending list, Pile List, Settings,
+//              and the Admin/Visitor Sacks tab (Province + Warehouse
+//              views) - without losing any detail: truncate switched to
+//              break-words wherever the underlying text could plausibly
+//              be long (names, AI/SIA lines), left as-is (safe to bump)
+//              wherever a column had no real overflow risk.
+//            - Admin Dashboard > System tab: Verified Correct/Audited/
+//              Noted By name+position fields now stack instead of
+//              sitting side by side, per direct feedback that they were
+//              unreadable on a phone.
+//            - Admin Dashboard > Operations > Customers: same broad
+//              search + shrink-away animation as Monitoring.
+//            - Transaction Types can now be categorized as Receipt,
+//              Issuance, or Both (default) - the Receipt/Issuance/WSR/WSI/
+//              ESR/ESI picker on every receipt or issuance form now only
+//              offers types suited to that direction, instead of the full
+//              undifferentiated list, for a cleaner form. A type saved
+//              before this change (no appliesTo yet) is treated as 'Both'
+//              and keeps showing everywhere. Warehouse Transfer's own
+//              picker (WTSForm.jsx) is left unfiltered - a transfer has
+//              both an issued and a received side, so it doesn't map onto
+//              a single direction.
+export const APP_VERSION = '1.9-118'

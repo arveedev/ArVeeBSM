@@ -4,13 +4,14 @@
 // a mistake or remove one entirely, since there was previously no way
 // to do either.
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2, Search } from 'lucide-react'
+import { Pencil, Trash2, Search, X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { normalizeCustomerName } from '../../../utils/customerDirectory.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import ShrinkFilterRow from '../ShrinkFilterRow.jsx'
 import {
   inputClass,
   labelClass,
@@ -133,10 +134,30 @@ function CustomersPanel() {
     toast.success('Customer deleted')
   }
 
+  // Broad match (name, address, nicknames) - same pattern as Monitoring's
+  // search, per explicit request to reuse it here. Kept separate from the
+  // list itself (rather than .filter()ing non-matches out before
+  // rendering) so every row can stay mounted and animate away/back in as
+  // the user types (see ShrinkFilterRow) instead of just disappearing/
+  // reappearing instantly.
   const normalizedSearch = normalizeCustomerName(search)
-  const filtered = (customers ?? [])
-    .filter((c) => !normalizedSearch || c.normalizedName.includes(normalizedSearch))
-    .sort((a, b) => byAlpha(a.name, b.name))
+  const matchesQuery = (c) => {
+    if (!normalizedSearch) return true
+    if (c.normalizedName.includes(normalizedSearch)) return true
+    if (c.address && normalizeCustomerName(c.address).includes(normalizedSearch)) return true
+    const nicknames = nicknamesByCustomer.get(c.customerId) ?? []
+    return nicknames.some((n) => normalizeCustomerName(n).includes(normalizedSearch))
+  }
+  const sortedCustomers = [...(customers ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  const filtered = sortedCustomers.filter(matchesQuery)
+
+  const listRef = useRef(null)
+  // Reported, real bug on Monitoring's own search (same fix applied here
+  // for consistency): scrolls the list back into view on every real
+  // change to the search text, not just the first character.
+  useEffect(() => {
+    if (search.trim()) listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [search])
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
@@ -192,19 +213,31 @@ function CustomersPanel() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search customers…"
-          className={`${inputClass} pl-9`}
+          placeholder="Search"
+          className={`${inputClass} pl-9 pr-9`}
         />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            aria-label="Clear search"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
-      <ul className="mt-3 space-y-2">
-        {filtered.length === 0 && (
-          <p className="py-4 text-center text-xs text-neutral-500">
-            {normalizedSearch ? 'No matching customers' : 'No customers yet'}
-          </p>
+      <ul ref={listRef} className="mt-3">
+        {sortedCustomers.length === 0 && (
+          <p className="py-4 text-center text-xs text-neutral-500">No customers yet</p>
         )}
-        {filtered.map((c) => (
-          <li key={c.customerId} className={listItemClass}>
+        {sortedCustomers.length > 0 && filtered.length === 0 && (
+          <p className="py-4 text-center text-xs text-neutral-500">No matching customers</p>
+        )}
+        {sortedCustomers.map((c) => (
+          <ShrinkFilterRow key={c.customerId} as="li" matches={matchesQuery(c)}>
+          <div className={listItemClass}>
             <div>
               <p className="font-medium text-app-text">{c.name}</p>
               {c.address && <p className="text-xs text-neutral-500">{c.address}</p>}
@@ -222,7 +255,8 @@ function CustomersPanel() {
                 <Trash2 size={20} />
               </button>
             </div>
-          </li>
+          </div>
+          </ShrinkFilterRow>
         ))}
       </ul>
 

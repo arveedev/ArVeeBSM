@@ -90,23 +90,23 @@ function AdminHomeSacks({ onWarehouseSelect }) {
           <button
             type="button"
             onClick={onSelect}
-            className="flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-xs font-semibold uppercase text-neutral-400 transition-all hover:border-brand-neon/50 hover:bg-brand-neon/10 hover:text-brand-neon active:scale-95"
+            className="flex items-center gap-1 rounded-full border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-sm font-semibold uppercase text-neutral-400 transition-all hover:border-brand-neon/50 hover:bg-brand-neon/10 hover:text-brand-neon active:scale-95"
           >
             {label}
             <ChevronRight size={12} />
           </button>
         ) : (
-          <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
+          <p className="text-sm font-semibold uppercase text-neutral-500">{label}</p>
         )}
         <div className="mt-2 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
           {rows.map(({ sackType, conditions }, i) => (
             <div key={sackType.sackTypeId} className={`${i > 0 ? 'mt-3 border-t border-neutral-800 pt-3' : ''}`}>
-              <p className="text-xs font-semibold uppercase text-neutral-400">{sackType.code}</p>
+              <p className="text-sm font-semibold uppercase text-neutral-400">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (
                   <div key={r.condition.code} className="flex items-center justify-between">
-                    <span className="text-sm text-app-text">{r.condition.label}</span>
-                    <span className="text-sm font-semibold tabular-nums text-brand-neon"><CountUpNumber value={r.total} format={(v) => `${fmtBags(v)} pcs`} /></span>
+                    <span className="text-base text-app-text">{r.condition.label}</span>
+                    <span className="text-base font-semibold tabular-nums text-brand-neon"><CountUpNumber value={r.total} format={(v) => `${fmtBags(v)} pcs`} /></span>
                   </div>
                 ))}
               </div>

@@ -224,27 +224,33 @@ function GlobalSignatoriesSection() {
         <div>
           <p className="text-sm font-semibold text-app-text">Verified Correct</p>
           <div className="mt-2 space-y-2">
+            {/* Reported, real bug: name and position squeezed side by side
+                on a real phone read as cramped/unreadable - stacked
+                instead (name above position), remove button sits beside
+                the stacked pair rather than a third column. */}
             {verifiedCorrect.map((row, i) => (
-              <div key={i} className="flex gap-2">
-                <input
-                  type="text"
-                  value={row.name}
-                  onChange={(e) => updateVerifiedRow(i, 'name', e.target.value)}
-                  className={`${inputClass} mt-0 flex-1`}
-                  placeholder="Full name"
-                />
-                <input
-                  type="text"
-                  value={row.position}
-                  onChange={(e) => updateVerifiedRow(i, 'position', e.target.value)}
-                  className={`${inputClass} mt-0 flex-1`}
-                  placeholder="Accountant III"
-                />
+              <div key={i} className="flex items-start gap-2">
+                <div className="flex-1 space-y-2">
+                  <input
+                    type="text"
+                    value={row.name}
+                    onChange={(e) => updateVerifiedRow(i, 'name', e.target.value)}
+                    className={`${inputClass} mt-0`}
+                    placeholder="Full name"
+                  />
+                  <input
+                    type="text"
+                    value={row.position}
+                    onChange={(e) => updateVerifiedRow(i, 'position', e.target.value)}
+                    className={`${inputClass} mt-0`}
+                    placeholder="Accountant III"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => removeVerifiedRow(i)}
                   aria-label="Remove signatory"
-                  className="rounded-xl border border-neutral-800 px-2 text-neutral-400 transition-colors hover:border-neutral-600 hover:text-app-text active:scale-95"
+                  className="rounded-xl border border-neutral-800 px-2 py-2 text-neutral-400 transition-colors hover:border-neutral-600 hover:text-app-text active:scale-95"
                 >
                   <X size={16} />
                 </button>
@@ -269,7 +275,7 @@ function GlobalSignatoriesSection() {
             Department head of the quality section — used as "Verified
             Correct" on the Pile Layout report, same for every warehouse.
           </p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-1 gap-2">
             <div>
               <label className={labelClass}>Name</label>
               <input type="text" value={bsqaoName} onChange={(e) => setBsqaoName(e.target.value)} className={inputClass} placeholder="Full name" />
@@ -284,7 +290,7 @@ function GlobalSignatoriesSection() {
         {/* Audited By */}
         <div>
           <p className="text-sm font-semibold text-app-text">Audited By</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-1 gap-2">
             <div>
               <label className={labelClass}>Name</label>
               <input type="text" value={auditedByName} onChange={(e) => setAuditedByName(e.target.value)} className={inputClass} placeholder="Full name" />
@@ -299,7 +305,7 @@ function GlobalSignatoriesSection() {
         {/* Noted By */}
         <div>
           <p className="text-sm font-semibold text-app-text">Noted By</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-1 gap-2">
             <div>
               <label className={labelClass}>Name</label>
               <input type="text" value={notedByName} onChange={(e) => setNotedByName(e.target.value)} className={inputClass} placeholder="Full name" />

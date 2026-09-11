@@ -144,14 +144,14 @@ function VarietyCard({
         className={`rounded-lg bg-neutral-800/50 px-2 py-1.5 transition-colors ${hasExpandableDetail ? 'cursor-pointer active:bg-neutral-800' : ''}`}
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-          <span className="truncate text-sm font-semibold text-app-text">{varietyName}</span>
+          <span className="truncate text-base font-semibold text-app-text">{varietyName}</span>
           <div className="text-right">
-            <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-app-text">
+            <p className="whitespace-nowrap text-base font-semibold tabular-nums text-app-text">
               {showNetBags
                 ? <CountUpNumber value={Math.max(0, varietyKilos) / 50} format={(v) => `${fmtNetBags(v)} net bags`} />
                 : <CountUpNumber value={Math.max(0, varietyBags)} format={(v) => `${fmtBags(v)} bags`} />}
             </p>
-            <p className="whitespace-nowrap text-sm font-semibold tabular-nums text-app-text"><CountUpNumber value={Math.max(0, varietyKilos)} format={(v) => fmtWeight(v, weightUnit, 'Net')} /></p>
+            <p className="whitespace-nowrap text-base font-semibold tabular-nums text-app-text"><CountUpNumber value={Math.max(0, varietyKilos)} format={(v) => fmtWeight(v, weightUnit, 'Net')} /></p>
           </div>
         </div>
       </div>
@@ -177,14 +177,14 @@ function VarietyCard({
                 return (
                   <div key={bucketLabel} className="border-b border-neutral-800/50 py-1">
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                      <span className="truncate pl-2 text-xs text-neutral-400">{bucketLabel}</span>
+                      <span className="pl-2 text-sm text-neutral-400">{bucketLabel}</span>
                       <div className="text-right">
-                        <p className="whitespace-nowrap text-xs tabular-nums text-neutral-300">
+                        <p className="whitespace-nowrap text-sm tabular-nums text-neutral-300">
                           {showNetBags
                             ? <CountUpNumber value={Math.max(0, totals.kilos) / 50} format={(v) => `${fmtNetBags(v)} net bags`} />
                             : <CountUpNumber value={Math.max(0, totals.bags)} format={(v) => `${fmtBags(v)} bags`} />}
                         </p>
-                        <p className="whitespace-nowrap text-xs tabular-nums text-neutral-300"><CountUpNumber value={Math.max(0, totals.kilos)} format={(v) => fmtWeight(v, weightUnit, 'Net')} /></p>
+                        <p className="whitespace-nowrap text-sm tabular-nums text-neutral-300"><CountUpNumber value={Math.max(0, totals.kilos)} format={(v) => fmtWeight(v, weightUnit, 'Net')} /></p>
                       </div>
                     </div>
                     {bucketHasUnwithdrawn && (
@@ -192,11 +192,11 @@ function VarietyCard({
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onOpenDetail({ varietyIds: [varietyId], bucketFilter: { category: cerealType, label: bucketLabel }, title: `${varietyName} — ${bucketLabel}`, subtitle: `${cerealType} · Unwithdrawn` }) }}
-                          className="whitespace-nowrap rounded-md bg-red-400/10 px-1.5 py-0.5 text-xs font-medium tabular-nums text-red-400/90 transition-colors hover:bg-red-400/20 active:scale-95 sm:text-sm"
+                          className="whitespace-nowrap rounded-md bg-red-400/10 px-1.5 py-0.5 text-sm font-medium tabular-nums text-red-400/90 transition-colors hover:bg-red-400/20 active:scale-95"
                         >
                           {formatAmount(bucketUnwithdrawnAmt, showNetBags)} {unitLabel} unwithdrawn
                         </button>
-                        <p className="whitespace-nowrap text-xs tabular-nums text-brand-amber/90 sm:text-sm">
+                        <p className="whitespace-nowrap text-sm tabular-nums text-brand-amber/90">
                           Potential: {formatAmount(Math.max(0, bucketTotalAmt - bucketUnwithdrawnAmt), showNetBags)} {unitLabel}
                         </p>
                       </div>
@@ -272,12 +272,12 @@ function CerealTotal({
         className={`${flipDirection === 'open' ? 'animate-card-flip-open' : 'animate-card-flip-close'} rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-          <span className={`truncate text-sm font-bold ${color}`}>Total ({cerealType})</span>
+          <span className={`text-base font-bold ${color}`}>Total ({cerealType})</span>
           <div className="text-right">
-            <p className={`whitespace-nowrap text-base font-bold tabular-nums ${color}`}>
+            <p className={`whitespace-nowrap text-lg font-bold tabular-nums ${color}`}>
               {showNetBags ? `${fmtNetBags(Math.max(0, cerealKilos) / 50)} net bags` : `${fmtBags(Math.max(0, cerealBags))} bags`}
             </p>
-            <p className={`whitespace-nowrap text-base font-bold tabular-nums ${color}`}>{fmtWeight(Math.max(0, cerealKilos), weightUnit, 'Net')}</p>
+            <p className={`whitespace-nowrap text-lg font-bold tabular-nums ${color}`}>{fmtWeight(Math.max(0, cerealKilos), weightUnit, 'Net')}</p>
           </div>
         </div>
         {displayed && (
@@ -285,11 +285,11 @@ function CerealTotal({
             <button
               type="button"
               onClick={() => onOpenDetail({ varietyIds: cerealVarietyIds, title: `${cerealType} — Unwithdrawn`, subtitle: 'All varieties in this category' })}
-              className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-sm font-bold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95 sm:text-base"
+              className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-base font-bold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
             >
               {formatAmount(unwithdrawnAmt, showNetBags)} {unitLabel} unwithdrawn
             </button>
-            <p className="whitespace-nowrap text-xs font-medium tabular-nums text-brand-amber sm:text-sm">
+            <p className="whitespace-nowrap text-sm font-medium tabular-nums text-brand-amber">
               Potential: {formatAmount(Math.max(0, (showNetBags ? cerealKilos / 50 : cerealBags) - unwithdrawnAmt), showNetBags)} {unitLabel}
             </p>
           </div>
@@ -582,7 +582,7 @@ function HomeStocks({ warehouseId } = {}) {
             key={cerealType}
             className={`mt-4 first:mt-0 ${i > 0 ? 'border-t-2 border-neutral-700 pt-4' : ''}`}
           >
-            <p className={`text-base font-bold uppercase ${color}`}>{cerealType}</p>
+            <p className={`text-lg font-bold uppercase ${color}`}>{cerealType}</p>
             {(() => {
               // A variety split across multiple sack-weight lines (see
               // weightsByVariety above) would otherwise have its
