@@ -2376,4 +2376,16 @@
 //            shows Remaining (authorized minus issued) alongside
 //            Issued, as two stat tiles, instead of only the issued
 //            half of the picture.
-export const APP_VERSION = '1.9-135'
+//   1.9-136 - Redesigned Admin Monitoring's AI/SIA pending row (per
+//            explicit direction, picked from a set of demos): details
+//            now get the full row width instead of being squeezed
+//            beside a narrow figures column, with a compact issued/
+//            remaining strip underneath - a large bold issued figure
+//            and a smaller amber remaining figure, a thin progress bar
+//            between them, then the kg equivalent below (when the
+//            record has both bags and kilos) - all sized up per direct
+//            follow-up feedback for readability. Bags (or SIA pieces)
+//            drives the primary line/bar whenever present, since it's
+//            always there for both AI and SIA; a record with only a
+//            kilos allocation falls back to kilos as the primary line.
+export const APP_VERSION = '1.9-136'
