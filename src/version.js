@@ -2626,4 +2626,31 @@
 //              same treatment applied to the pile balance form too.
 //            - AuthorityMonitor (Home's own Activity tab) is no longer
 //              collapsible - always shown, per explicit request.
-export const APP_VERSION = '1.9-145'
+//   1.9-146 - More real fixes after using 1.9-145:
+//            - Pile tile values drop the trailing "kg" unit word too
+//              (the label already says NET KG) - both PileListSection
+//              and CreateEditPileModal's Current Stock tiles. "Edit
+//              balance" button loses its trailing arrow.
+//            - Real bug: ConfirmDialog used z-[60], LOWER than several
+//              modals that open it (AvatarPickerModal z-[70],
+//              EditBeginningBalanceModal z-[68], etc.) - since all of
+//              these portal to document.body as siblings, the confirm
+//              dialog rendered BEHIND whichever modal summoned it,
+//              genuinely invisible, not just low-contrast. Raised to
+//              z-[105] - now always the topmost layer regardless of
+//              what opened it (except CalendarDatePicker's own
+//              z-[110], since a date field can live inside a
+//              confirmation's own body).
+//            - Real bug: EditBeginningBalanceModal's outer wrapper had
+//              no background color of its own, letting the backdrop
+//              read through at its rounded corners - now has an
+//              explicit bg-neutral-900.
+//            - CreateEditPileModal and EditBeginningBalanceModal now
+//              animate in/out (fade backdrop + pop card, same
+//              technique EditPileAgeDialog already used) instead of
+//              just appearing/disappearing instantly.
+//            - Classifier gets a real Cancel button next to Update
+//              (was missing entirely - editing had no way back to the
+//              read-only view without saving), reverting to the last
+//              saved name.
+export const APP_VERSION = '1.9-146'

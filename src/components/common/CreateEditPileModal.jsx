@@ -84,6 +84,16 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
   const [pendingDelete, setPendingDelete] = useState(null)
   const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
   const [closeDate, setCloseDate] = useState(todayLocalISO())
+  const [isClosing, setIsClosing] = useState(false)
+  // Must match the fade/pop transition durations on the JSX below.
+  const CLOSE_ANIMATION_MS = 180
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(() => {
+      setIsClosing(false)
+      onClose()
+    }, CLOSE_ANIMATION_MS)
+  }
 
   if (!open) return null
 
@@ -111,7 +121,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
     if (linkedBox) await db.pileLayoutBoxes.update(linkedBox.id, { pileId: null, label: null })
     await db.piles.delete(pile.pileId)
     toast.success(`Pile "${pile.pileName}" deleted - its transactions were kept`)
-    onClose()
+    handleClose()
   }
 
   const confirmCloseToggle = () => {
@@ -130,7 +140,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
       await closePile(pile.pileId, closeDate)
       toast.success(`Pile "${pile.pileName}" closed`)
     }
-    onClose()
+    handleClose()
   }
 
   const handleExportBinCard = async () => {
@@ -222,7 +232,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
       await recalculatePileCurrentState(newPile.pileId)
       toast.success(`Pile "${newPile.pileName}" created`)
       setIsSaving(false)
-      onClose()
+      handleClose()
       return
     }
 
@@ -236,7 +246,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
     })
     toast.success(`Pile "${newPile.pileName}" created`)
     setIsSaving(false)
-    onClose()
+    handleClose()
   }
 
   // Metadata only - name/category/variety/purity/dates/condition. The
@@ -267,7 +277,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
     await recalculatePileCurrentState(pile.pileId)
     toast.success('Pile updated')
     setIsSaving(false)
-    onClose()
+    handleClose()
   }
 
   const handleSubmit = () => {
@@ -276,9 +286,12 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-4" onClick={onClose}>
+    <div
+      className={`fixed inset-0 z-[65] flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-4 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
+      onClick={handleClose}
+    >
       <div
-        className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-t-2xl border border-neutral-800 bg-neutral-900 sm:rounded-2xl"
+        className={`flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-t-2xl border border-neutral-800 bg-neutral-900 sm:rounded-2xl ${isClosing ? 'animate-pop-out' : 'animate-pop-in'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Hero header - live display of the name being typed + a
@@ -326,7 +339,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
               {/* Close/delete icons are always red, per house
                   convention - keeps the "this exits/removes" signal
                   consistent everywhere it appears. */}
-              <button type="button" onClick={onClose} aria-label="Close" className="flex items-center text-brand-crimson hover:brightness-125">
+              <button type="button" onClick={handleClose} aria-label="Close" className="flex items-center text-brand-crimson hover:brightness-125">
                 <X size={18} />
               </button>
             </div>
@@ -347,7 +360,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
                 </div>
                 <div className="rounded-lg bg-neutral-950 py-2 text-center">
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
-                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeight(pile.currentKilos ?? 0, weightUnit)}</p>
+                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeight(pile.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}</p>
                 </div>
               </div>
               <button
@@ -355,7 +368,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
                 onClick={() => { onGoToBalance?.(pile); onClose() }}
                 className="mt-2 w-full rounded-lg bg-neutral-950 py-2 text-center text-sm font-bold text-brand-neon transition-colors active:bg-neutral-800"
               >
-                Edit balance →
+                Edit balance
               </button>
             </div>
           )}

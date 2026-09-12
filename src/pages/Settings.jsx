@@ -33,6 +33,11 @@ const varietyBadgeClass = (category) => {
   return 'bg-neutral-800 text-neutral-300'
 }
 
+// A pile tile's own "NET KG" label already says what the value is -
+// fmtWeight always appends a trailing "kg"/"MT" unit word, which is
+// redundant directly under that label, so it's stripped back off here.
+const fmtWeightValue = (kilos, unit) => fmtWeight(kilos, unit).replace(/\s*(kg|MT)$/, '')
+
 function Toggle({ label, description, value, onChange, icon: Icon }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
@@ -146,6 +151,16 @@ function ClassifierSection({ warehouseId }) {
     }, 500)
   }
 
+  // Reverts to the last saved name and exits edit mode without saving -
+  // only shown once there's actually a saved name to go back to (a
+  // brand-new, never-saved classifier has nothing for Cancel to
+  // restore, so Save is the only real option there).
+  const handleCancel = () => {
+    setName(savedName)
+    setShowSuggestions(false)
+    setIsEditing(false)
+  }
+
   const showInput = isEditing || !savedName
 
   return (
@@ -218,6 +233,18 @@ function ClassifierSection({ warehouseId }) {
             >
               {justSaved ? <Check size={18} className="animate-pop-in" /> : (savedName ? 'Update' : 'Save')}
             </button>
+            {/* Only shown once there's a saved name to revert to - see
+                handleCancel's own comment. */}
+            {savedName && !justSaved && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={isSaving}
+                className="rounded-xl border border-neutral-800 px-4 text-sm font-medium text-neutral-400 transition-all hover:border-neutral-600 hover:text-app-text"
+              >
+                Cancel
+              </button>
+            )}
           </div>
           {!name.trim() && (
             <p className="mt-1 text-xs text-brand-amber">A classifier name is needed.</p>
@@ -311,7 +338,7 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
                 </div>
                 <div className="rounded-lg bg-neutral-950 py-2 text-center">
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
-                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeight(p.currentKilos ?? 0, weightUnit)}</p>
+                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeightValue(p.currentKilos ?? 0, weightUnit)}</p>
                 </div>
               </div>
             </button>

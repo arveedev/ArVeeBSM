@@ -59,7 +59,17 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
   // as its "fixed" reference frame instead of the actual screen.
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+      // z-[105] - reported real bug: ConfirmDialog is opened FROM
+      // several other modals with their own higher z-index (e.g.
+      // AvatarPickerModal z-[70], EditBeginningBalanceModal z-[68]),
+      // and since all of these portal to document.body as siblings,
+      // this dialog's old z-[60] rendered it BEHIND whichever modal
+      // summoned it - invisible, not just low-contrast. This must
+      // always be the topmost layer regardless of what opened it, so
+      // it now sits above every modal in the app except
+      // CalendarDatePicker's own z-[110] (a date field can still live
+      // inside a confirmation's own body).
+      className="fixed inset-0 z-[105] flex items-center justify-center bg-black/60 p-4"
       onClick={onCancel}
     >
       {/* rotate - for callers (Piles.jsx's full-screen pile layout) that
