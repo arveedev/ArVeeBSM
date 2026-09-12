@@ -2731,4 +2731,11 @@
 //            for free (App.jsx remounts the whole route on pathname
 //            change), so this only needed handling for same-page tab
 //            switches.
-export const APP_VERSION = '1.9-152'
+//   1.9-153 - Settings' Beginning Balances section: sack entries now
+//            use the same card style as PileListSection's own pile
+//            rows (name/actions up top, a Pieces tile below) instead
+//            of a single plain text line, per explicit request. Also
+//            added a "Beginning Balances" heading above the Stocks/
+//            Sacks tab pill, which previously had no label of its own
+//            identifying the section.
+export const APP_VERSION = '1.9-153'

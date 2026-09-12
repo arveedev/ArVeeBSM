@@ -608,7 +608,8 @@ function Settings() {
               gone now (see PileListSection's own comment) - Stocks IS
               the one pile list, and balance editing is reached through
               CreateEditPileModal's own "Edit balance ->" link instead. */}
-          <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+          <h2 className="text-base font-semibold text-app-text">Beginning Balances</h2>
+          <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
             <div
               className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
               style={{ transform: stockTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}

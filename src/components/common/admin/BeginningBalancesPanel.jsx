@@ -761,17 +761,26 @@ function SacksBeginningBalances({ warehouseId }) {
         </div>
       </div>
 
-      <ul className="space-y-1.5">
+      {/* Same card style as PileListSection's own pile rows (name/actions
+          up top, the actual figure as its own tile below) instead of a
+          single plain text line, per explicit request. */}
+      <ul className="space-y-2">
         {sortedEntries.length === 0 && <p className="animate-empty-state-in py-3 text-center text-xs text-neutral-500">No sack beginning balances in this warehouse yet.</p>}
         {sortedEntries.map((e) => (
-          <li key={e.id} className={listItemClass}>
-            <div className="min-w-0">
-              <p className="truncate text-base font-medium text-app-text">{sackTypeMap.get(e.sackTypeId)?.code ?? '?'} · {e.condition}</p>
-              <p className="text-sm tabular-nums text-neutral-500">{fmtBags(e.pieces)} pcs{e.asOfDate ? ` · as of ${e.asOfDate}` : ''}</p>
+          <li key={e.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-base font-medium text-app-text">{sackTypeMap.get(e.sackTypeId)?.code ?? '?'} · {e.condition}</p>
+                {e.asOfDate && <p className="text-sm text-neutral-500">as of {e.asOfDate}</p>}
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <button type="button" onClick={() => handleEdit(e)} aria-label="Edit" className={editIconClass}><Pencil size={20} /></button>
+                <button type="button" onClick={() => setPendingDelete(e)} aria-label="Delete" className={deleteIconClass}><Trash2 size={20} /></button>
+              </div>
             </div>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => handleEdit(e)} aria-label="Edit" className={editIconClass}><Pencil size={20} /></button>
-              <button type="button" onClick={() => setPendingDelete(e)} aria-label="Delete" className={deleteIconClass}><Trash2 size={20} /></button>
+            <div className="mt-2 rounded-lg bg-neutral-950 py-2 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-neutral-500">Pieces</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(e.pieces)}</p>
             </div>
           </li>
         ))}
