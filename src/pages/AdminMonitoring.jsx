@@ -237,14 +237,42 @@ function AdminMonitoring() {
         <NfaMillingMonitor active={activeTab === 'NFA'} />
       </div>
       <div className={activeTab === 'MILLING' || activeTab === 'NFA' ? 'hidden' : ''}>
-      {regionalAuthFilter.trim() && (() => {
+      {/* Reported, real gap: this box only ever appeared when the admin
+          picked a regional authority number from the dropdown - typing
+          the same number (or a customer/warehouse/etc. that happens to
+          narrow the list down to just one regional authority) into the
+          search box instead left it invisible, even though the search
+          results were just as scoped to one regional authority as the
+          dropdown selection would have been. Now derives the same
+          "effective" regional authority number from the search results
+          whenever the dropdown itself isn't set: if every currently
+          matched row shares one regional authority number, that number
+          drives this box exactly as if it had been picked from the
+          dropdown; if the search still spans more than one, there's
+          nothing unambiguous to summarize, so it stays hidden. */}
+      {(() => {
+        const searchDerivedRegionalNumber = (() => {
+          if (regionalAuthFilter.trim() || !searchQuery.trim()) return null
+          const nums = new Set(filtered.map((a) => a.regionalAuthorityNumber).filter(Boolean))
+          return nums.size === 1 ? [...nums][0] : null
+        })()
+        const effectiveRegionalAuthNumber = regionalAuthFilter.trim() || searchDerivedRegionalNumber
+        if (!effectiveRegionalAuthNumber) return null
+
         // Every authority under this regional authority, regardless of
         // pending/completed status - gives the full picture for this
         // regional authority overall, not just whatever happens to be
         // showing in the pending list above.
-        const regionalTotals = typeAuthorities.filter((a) => a.regionalAuthorityNumber === regionalAuthFilter.trim())
-        const totalBags = regionalTotals.reduce((s, a) => s + (a.totalIssuedBags ?? 0), 0)
-        const totalKilos = regionalTotals.reduce((s, a) => s + (a.totalIssuedKilos ?? 0), 0)
+        const regionalTotals = typeAuthorities.filter((a) => a.regionalAuthorityNumber === effectiveRegionalAuthNumber)
+        const totalIssuedBags = regionalTotals.reduce((s, a) => s + (a.totalIssuedBags ?? 0), 0)
+        const totalIssuedKilos = regionalTotals.reduce((s, a) => s + (a.totalIssuedKilos ?? 0), 0)
+        // Per explicit request - the remaining (authorized minus issued)
+        // figure alongside what's already issued, so this box shows the
+        // full picture rather than only the "used so far" half of it.
+        const totalAllocatedBags = regionalTotals.reduce((s, a) => s + (a.totalAllocationBags ?? 0), 0)
+        const totalAllocatedKilos = regionalTotals.reduce((s, a) => s + (a.totalAllocationKilos ?? 0), 0)
+        const remainingBags = Math.max(0, totalAllocatedBags - totalIssuedBags)
+        const remainingKilos = Math.max(0, totalAllocatedKilos - totalIssuedKilos)
         const byWarehouse = new Map()
         for (const a of regionalTotals) {
           const key = a.assignedWarehouse ?? 'Unassigned'
@@ -257,12 +285,20 @@ function AdminMonitoring() {
         return (
           <div className="mx-4 mt-2 rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">
-              {regionalAuthFilter.trim()} — Total Issued
+              {effectiveRegionalAuthNumber}
             </p>
-            <p className="mt-1 text-lg font-bold tabular-nums text-app-text">
-              {fmtBags(totalBags)} bags
-              <span className="ml-2 text-sm font-normal text-neutral-400">{fmtWeight(totalKilos, weightUnit)}</span>
-            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                <p className="text-[10px] uppercase text-neutral-500">Issued</p>
+                <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtBags(totalIssuedBags)} bags</p>
+                <p className="text-xs tabular-nums text-neutral-500">{fmtWeight(totalIssuedKilos, weightUnit)}</p>
+              </div>
+              <div className="rounded-lg border border-brand-amber/30 bg-brand-amber/5 p-2">
+                <p className="text-[10px] uppercase text-brand-amber/80">Remaining</p>
+                <p className="mt-0.5 text-base font-bold tabular-nums text-brand-amber">{fmtBags(remainingBags)} bags</p>
+                <p className="text-xs tabular-nums text-brand-amber/70">{fmtWeight(remainingKilos, weightUnit)}</p>
+              </div>
+            </div>
             <div className="mt-2 space-y-1 border-t border-neutral-800 pt-2">
               {[...byWarehouse.entries()].map(([warehouseId, totals]) => {
                 const warehouse = warehouseMap.get(warehouseId)

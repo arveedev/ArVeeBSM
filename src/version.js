@@ -2365,4 +2365,15 @@
 //            Total figure, the age-bucket breakdown once expanded, and
 //            the section's own Total row) are all a step larger now,
 //            without losing any detail.
-export const APP_VERSION = '1.9-134'
+//   1.9-135 - Admin Monitoring's regional-authority reconciliation box
+//            (previously only appeared when picking a number from the
+//            dropdown) now also appears from a plain search - whenever
+//            every currently matched row shares one regional authority
+//            number, that number drives the box exactly as if it had
+//            been picked from the dropdown; if the search still spans
+//            more than one, there's nothing unambiguous to summarize,
+//            so it stays hidden. Per explicit request, it also now
+//            shows Remaining (authorized minus issued) alongside
+//            Issued, as two stat tiles, instead of only the issued
+//            half of the picture.
+export const APP_VERSION = '1.9-135'
