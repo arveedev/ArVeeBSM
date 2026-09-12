@@ -2406,4 +2406,15 @@
 //              tab pending list) gets the identical row redesign Admin
 //              Monitoring's own pending list got last version - it had
 //              been missed there.
-export const APP_VERSION = '1.9-137'
+//   1.9-138 - Fixed a real reported bug: tapping a pile's age on the Pile
+//            List to open the Edit Age dialog could render it low/off-
+//            position (overlapping the bottom tab bar) instead of
+//            centered on screen. EditPileAgeDialog used a plain `fixed`
+//            overlay without portaling to document.body, so the page-
+//            transition wrapper's transform (animate-page-forward/back)
+//            became its containing block instead of the real viewport -
+//            the exact issue already documented and fixed this way on
+//            every other fixed-overlay modal in the app (ConfirmDialog,
+//            CompletedMillingModal, etc). Now portals to document.body
+//            like the rest, so it always centers on the true screen.
+export const APP_VERSION = '1.9-138'

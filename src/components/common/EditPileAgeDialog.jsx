@@ -21,6 +21,7 @@
 // real receipt date.
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
@@ -103,7 +104,13 @@ function EditPileAgeDialog({ pile, currentAge, onClose }) {
     handleClose()
   }
 
-  return (
+  // Portaled straight to document.body - a plain `fixed` element gets
+  // constrained to the nearest ancestor with its own transform (the page
+  // wrapper's animate-page-forward/animate-page-back slide) instead of
+  // the real viewport, which is exactly why this dialog could render
+  // low/off-position instead of centered on screen. Same fix as
+  // ConfirmDialog.jsx and every other fixed-overlay modal in the app.
+  return createPortal(
     <div
       className={`fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
       onClick={handleClose}
@@ -196,7 +203,8 @@ function EditPileAgeDialog({ pile, currentAge, onClose }) {
           Save
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
