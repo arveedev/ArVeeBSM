@@ -361,124 +361,139 @@ function AdminHomeStocks({ onWarehouseSelect }) {
         {/* Keyed on both the weight unit and this tab's own Actual/
             Potential toggle - see the top card's identical comment. */}
         <div key={`${weightUnit}-${breakdownShowPotential}`} className="animate-flow-down">
-        {sortedWarehouses.length === 0 ? <Empty /> : (
-          // Same boxed-card layout as the Province table above, per
-          // explicit request - one tappable box per warehouse (the
-          // whole box, not just a small pill inside it) that opens that
-          // warehouse's own Overview, same as tapping a warehouse name
-          // already did elsewhere on this page (onWarehouseSelect).
-          <div className="space-y-2">
-            {sortedWarehouses.map((warehouse) => {
-              const wStock = warehouseCategoryStock.get(warehouse.warehouseId)
-              // Confirmed, real case this was hiding: a warehouse with
-              // NO physical stock right now can still carry a real,
-              // active AI authorization against it (issued ahead of the
-              // stock ever being received) - that unwithdrawn amount
-              // still correctly reduces its province's Potential total,
-              // but with this warehouse never shown as its own card,
-              // that reduction looked unexplainable/wrong instead of
-              // traceable. Only skip a warehouse that has genuinely
-              // nothing going on in either direction.
-              if (!wStock || [...wStock.values()].every((c) => c.actualBags === 0 && c.actualKilos === 0 && c.unwithdrawnBags === 0 && c.unwithdrawnKilos === 0)) return null
-              const province = provinceMap.get(warehouse.provinceId)
-              return (
-                <div
-                  key={warehouse.warehouseId}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onWarehouseSelect?.(warehouse)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onWarehouseSelect?.(warehouse) }}
-                  className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    {/* Per explicit request - the warehouse itself is
-                        what the user is actually looking for and tapping
-                        toward, so it's the highlighted, larger text now;
-                        the province code is just context, de-emphasized. */}
-                    <p className="text-base font-bold text-app-text">
-                      {stripWarehouseCodePrefix(warehouse.name)} <span className="text-xs font-medium text-neutral-500">{province?.code}</span>
-                    </p>
-                    <ChevronRight size={16} className="shrink-0 text-neutral-600" />
-                  </div>
-                  <div className="mt-2 space-y-2">
-                    {CATEGORIES.map((cat) => {
-                      const isByProducts = cat === 'By Products'
-                      const catStock = wStock.get(cat)
-                      const sumBags = catStock?.actualBags ?? 0
-                      const sumKilos = catStock?.actualKilos ?? 0
-                      const sum = sumKilos / 50
-                      const unwithdrawnBags = catStock?.unwithdrawnBags ?? 0
-                      const unwithdrawnKilos = catStock?.unwithdrawnKilos ?? 0
-                      const unwithdrawnNetBags = unwithdrawnKilos / 50
-                      // Same reasoning as the card-level filter above -
-                      // a category with real unwithdrawn stock but zero
-                      // actual (nothing received into a pile yet) still
-                      // needs to show, not disappear as if there were
-                      // nothing to report for it.
-                      if (sumBags === 0 && sumKilos === 0 && unwithdrawnBags === 0 && unwithdrawnKilos === 0) return null
-                      const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
-                      // Guard against a rounds-to-zero badge (see HomeStocks.jsx
-                      // for the same reasoning) - only flag rows with a
-                      // genuinely meaningful unwithdrawn amount.
-                      const hasUnwithdrawn = breakdownShowPotential && (isByProducts ? unwithdrawnBags >= 1 : unwithdrawnNetBags >= 0.005)
-                      // Reported, real bug: the toggle above claims
-                      // "Potential" but the headline figure never
-                      // actually changed - it always showed the plain
-                      // actual total regardless of which pill was
-                      // selected, with the unwithdrawn/potential detail
-                      // only ever appearing as a small, easy-to-miss
-                      // annotation underneath. The headline itself now
-                      // switches to the real potential (actual minus
-                      // unwithdrawn) when that toggle is on, matching
-                      // the Province table above it.
-                      const displayValue = breakdownShowPotential
-                        ? (isByProducts ? Math.max(0, sumBags - unwithdrawnBags) : Math.max(0, sum - unwithdrawnNetBags))
-                        : (isByProducts ? sumBags : sum)
-                      const displayKilos = breakdownShowPotential ? Math.max(0, sumKilos - unwithdrawnKilos) : sumKilos
-                      const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
+        {sortedWarehouses.length === 0 ? <Empty /> : (() => {
+          // Per explicit request - grouped by province, one heading
+          // above that province's own warehouses, instead of repeating
+          // the province code on every single warehouse card. A
+          // warehouse with nothing to show (see the per-warehouse skip
+          // below) is filtered out BEFORE grouping, so a province with
+          // every warehouse currently empty doesn't render a heading
+          // over nothing.
+          const hasVisibleStock = (warehouse) => {
+            const wStock = warehouseCategoryStock.get(warehouse.warehouseId)
+            return wStock && [...wStock.values()].some((c) => c.actualBags !== 0 || c.actualKilos !== 0 || c.unwithdrawnBags !== 0 || c.unwithdrawnKilos !== 0)
+          }
+          const provinceGroups = sortedProvinces
+            .map((province) => ({
+              province,
+              provinceWarehouses: sortedWarehouses.filter((w) => w.provinceId === province.provinceId && hasVisibleStock(w)),
+            }))
+            .filter((g) => g.provinceWarehouses.length > 0)
+
+          return (
+            <div className="space-y-4">
+              {provinceGroups.map(({ province, provinceWarehouses }) => (
+                <div key={province.provinceId}>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
+                    {province.code} <span className="font-medium normal-case text-neutral-600">{province.name}</span>
+                  </p>
+                  {/* Same boxed-card layout as the Province table above,
+                      per explicit request - one tappable box per
+                      warehouse (the whole box, not just a small pill
+                      inside it) that opens that warehouse's own
+                      Overview, same as tapping a warehouse name already
+                      did elsewhere on this page (onWarehouseSelect). */}
+                  <div className="space-y-2">
+                    {provinceWarehouses.map((warehouse) => {
+                      const wStock = warehouseCategoryStock.get(warehouse.warehouseId)
                       return (
-                        <div key={cat} className="flex items-center justify-between gap-2">
-                          <span className={`text-sm font-semibold ${colorClass}`}>{cat}</span>
-                          <div className="text-right">
-                            <span className={`text-lg font-bold tabular-nums ${colorClass}`}>
-                              {isByProducts
-                                ? <CountUpNumber value={displayValue} format={(v) => fmtByProducts(v, displayKilos)} />
-                                : <CountUpNumber value={displayValue} format={fmt} />}
-                            </span>
-                            {hasUnwithdrawn && (
-                              <div className="mt-0.5 flex items-center justify-end gap-1.5">
-                                {/* stopPropagation - this sits inside the
-                                    card's own click-to-navigate area, but
-                                    opens the Unwithdrawn detail instead,
-                                    not the warehouse Overview. */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setDetailContext({
-                                      warehouseId: warehouse.warehouseId,
-                                      varietyIds: catVarietyIds,
-                                      title: `${cat} — Unwithdrawn`,
-                                      subtitle: `${province?.code} · ${stripWarehouseCodePrefix(warehouse.name)}`,
-                                      rawBags: isByProducts,
-                                    })
-                                  }}
-                                  className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
-                                >
-                                  {isByProducts ? fmtBags(unwithdrawnBags) : fmt(unwithdrawnNetBags)} unwithdrawn
-                                </button>
-                              </div>
-                            )}
+                        <div
+                          key={warehouse.warehouseId}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => onWarehouseSelect?.(warehouse)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onWarehouseSelect?.(warehouse) }}
+                          className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-base font-bold text-app-text">
+                              {stripWarehouseCodePrefix(warehouse.name)}
+                            </p>
+                            <ChevronRight size={16} className="shrink-0 text-neutral-600" />
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {CATEGORIES.map((cat) => {
+                              const isByProducts = cat === 'By Products'
+                              const catStock = wStock.get(cat)
+                              const sumBags = catStock?.actualBags ?? 0
+                              const sumKilos = catStock?.actualKilos ?? 0
+                              const sum = sumKilos / 50
+                              const unwithdrawnBags = catStock?.unwithdrawnBags ?? 0
+                              const unwithdrawnKilos = catStock?.unwithdrawnKilos ?? 0
+                              const unwithdrawnNetBags = unwithdrawnKilos / 50
+                              // Same reasoning as the card-level filter above -
+                              // a category with real unwithdrawn stock but zero
+                              // actual (nothing received into a pile yet) still
+                              // needs to show, not disappear as if there were
+                              // nothing to report for it.
+                              if (sumBags === 0 && sumKilos === 0 && unwithdrawnBags === 0 && unwithdrawnKilos === 0) return null
+                              const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
+                              // Guard against a rounds-to-zero badge (see HomeStocks.jsx
+                              // for the same reasoning) - only flag rows with a
+                              // genuinely meaningful unwithdrawn amount.
+                              const hasUnwithdrawn = breakdownShowPotential && (isByProducts ? unwithdrawnBags >= 1 : unwithdrawnNetBags >= 0.005)
+                              // Reported, real bug: the toggle above claims
+                              // "Potential" but the headline figure never
+                              // actually changed - it always showed the plain
+                              // actual total regardless of which pill was
+                              // selected, with the unwithdrawn/potential detail
+                              // only ever appearing as a small, easy-to-miss
+                              // annotation underneath. The headline itself now
+                              // switches to the real potential (actual minus
+                              // unwithdrawn) when that toggle is on, matching
+                              // the Province table above it.
+                              const displayValue = breakdownShowPotential
+                                ? (isByProducts ? Math.max(0, sumBags - unwithdrawnBags) : Math.max(0, sum - unwithdrawnNetBags))
+                                : (isByProducts ? sumBags : sum)
+                              const displayKilos = breakdownShowPotential ? Math.max(0, sumKilos - unwithdrawnKilos) : sumKilos
+                              const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
+                              return (
+                                <div key={cat} className="flex items-center justify-between gap-2">
+                                  <span className={`text-sm font-semibold ${colorClass}`}>{cat}</span>
+                                  <div className="text-right">
+                                    <span className={`text-lg font-bold tabular-nums ${colorClass}`}>
+                                      {isByProducts
+                                        ? <CountUpNumber value={displayValue} format={(v) => fmtByProducts(v, displayKilos)} />
+                                        : <CountUpNumber value={displayValue} format={fmt} />}
+                                    </span>
+                                    {hasUnwithdrawn && (
+                                      <div className="mt-0.5 flex items-center justify-end gap-1.5">
+                                        {/* stopPropagation - this sits inside the
+                                            card's own click-to-navigate area, but
+                                            opens the Unwithdrawn detail instead,
+                                            not the warehouse Overview. */}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setDetailContext({
+                                              warehouseId: warehouse.warehouseId,
+                                              varietyIds: catVarietyIds,
+                                              title: `${cat} — Unwithdrawn`,
+                                              subtitle: `${province.code} · ${stripWarehouseCodePrefix(warehouse.name)}`,
+                                              rawBags: isByProducts,
+                                            })
+                                          }}
+                                          className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
+                                        >
+                                          {isByProducts ? fmtBags(unwithdrawnBags) : fmt(unwithdrawnNetBags)} unwithdrawn
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       )
                     })}
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        )}
+              ))}
+            </div>
+          )
+        })()}
         </div>
       </Section>
       )}

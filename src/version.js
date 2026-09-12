@@ -2345,4 +2345,11 @@
 //            kept as a small secondary option for the rarer case where
 //            a plain restart alone doesn't pick it up (a stale cached
 //            copy the browser is still holding onto).
-export const APP_VERSION = '1.9-131'
+//   1.9-132 - Per explicit request: Admin Dashboard > Stock Breakdown
+//            now groups warehouse cards under one province heading
+//            each (ALB, then every ALB warehouse; CTD, then every CTD
+//            warehouse) instead of repeating the province code inline
+//            on every single warehouse card - a cleaner look with the
+//            exact same information, matching the Province table's own
+//            grouping above it.
+export const APP_VERSION = '1.9-132'
