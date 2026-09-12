@@ -346,19 +346,41 @@ function CerealTotal({
         key={flipKey}
         className={`${flipDirection === 'open' ? 'animate-card-flip-open' : 'animate-card-flip-close'} rounded-lg border-t-2 px-2 py-2 ${cerealType === 'Rice' ? 'border-blue-400 bg-blue-400/10' : cerealType === 'Palay' ? 'border-brand-neon bg-brand-neon/10' : 'border-brand-byproduct bg-brand-byproduct/10'}`}
       >
-        <div className="grid gap-x-2 text-right text-[9px] font-semibold uppercase tracking-wide text-neutral-500" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
+        {/* Column headers only make sense above the grid layout they
+            label - hidden on the same breakpoint the grid itself is. */}
+        <div className="hidden gap-x-2 text-right text-[9px] font-semibold uppercase tracking-wide text-neutral-500 sm:grid" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
           <span />
           <span>{unitLabel}</span>
           <span>{weightColLabel}</span>
         </div>
-        <div className="grid items-baseline gap-x-2" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
-          {/* Cereal type dropped from the label - the section's own
-              PALAY/RICE header above it (same color already indicates
-              it) already says it, and repeating it here just ate space
-              this row's own figures needed on a narrow phone. */}
-          <span className={`text-base font-bold ${color}`}>Total</span>
+        {/* Cereal type dropped from the label - the section's own
+            PALAY/RICE header above it (same color already indicates it)
+            already says it, and repeating it here just ate space this
+            row's own figures needed on a narrow phone.
+            Two layouts: sm+ keeps the same 3-column grid the variety
+            rows above use, for column alignment. Below sm, the total's
+            own (larger, summed) figures were reported as genuinely
+            crowded/confusing in those same fixed-width columns a per-
+            variety row's smaller numbers fit fine in - stacked into
+            label + a pair of tiles instead, same convention already
+            used for Pile List/Settings' own Bags/Net Kg tiles. */}
+        <div className="hidden items-baseline gap-x-2 sm:grid" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
+          <span className={`text-base font-bold ${color}`}>TOTAL</span>
           <span className={`text-right text-lg font-bold tabular-nums ${color}`}>{formatAmount(Math.max(0, totalAmt), rawBags ? false : showNetBags)}</span>
           <span className={`text-right text-base font-bold tabular-nums ${color}`}>{fmtWeightPlain(Math.max(0, cerealKilos), weightUnit)}</span>
+        </div>
+        <div className="sm:hidden">
+          <p className={`text-base font-bold ${color}`}>TOTAL</p>
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-neutral-950/40 py-1.5 text-center">
+              <p className="text-[9px] uppercase tracking-wide text-neutral-500">{unitLabel}</p>
+              <p className={`mt-0.5 text-base font-bold tabular-nums ${color}`}>{formatAmount(Math.max(0, totalAmt), rawBags ? false : showNetBags)}</p>
+            </div>
+            <div className="rounded-lg bg-neutral-950/40 py-1.5 text-center">
+              <p className="text-[9px] uppercase tracking-wide text-neutral-500">{weightColLabel}</p>
+              <p className={`mt-0.5 text-base font-bold tabular-nums ${color}`}>{fmtWeightPlain(Math.max(0, cerealKilos), weightUnit)}</p>
+            </div>
+          </div>
         </div>
         {displayed && (
           <div className="mt-2 space-y-1 border-t border-neutral-800/50 pt-2">

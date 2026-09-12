@@ -1367,7 +1367,7 @@ function Piles() {
                             </div>
                           ))}
                           <div className="border-t border-black/40 pt-1">
-                            <p className="truncate text-[9px] font-bold tabular-nums">Total {fmtBags(totalBags)} bags</p>
+                            <p className="truncate text-[9px] font-bold tabular-nums">TOTAL {fmtBags(totalBags)} bags</p>
                             <p className="truncate text-[9px] font-bold tabular-nums">{fmtWeight(totalKilos, weightUnit)}</p>
                           </div>
                         </div>

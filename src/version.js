@@ -2692,4 +2692,20 @@
 //              hand-rolled grid-template-rows transition that, per
 //              direct report, wasn't actually animating at all - just
 //              snapping between states.
-export const APP_VERSION = '1.9-148'
+//   1.9-149 - App-wide "Total" label sweep, per explicit request:
+//            every standalone "Total" row/summary label (Home Stocks,
+//            Admin Home Stocks, Piles.jsx's pile-layout box popup,
+//            RicemillRecoveryDetail, the Pile Layout PDF export's
+//            "TOTAL Bags"/"TOTAL Net Kg" fields) now reads "TOTAL" -
+//            left alone where "Total" is part of an actual field name
+//            rather than a summary label (e.g. RicemillAllocationsPanel's
+//            "Total Net Kgs Authorized" input).
+//            HomeStocks' own per-cereal Total row (Rice/Palay/By
+//            Products) gets a real responsive fix too, not just the
+//            label: on a narrow phone its own (larger, summed) Bags/
+//            Net Kg figures were genuinely cramped in the same fixed-
+//            width columns the smaller per-variety rows above it fit
+//            fine in - below the sm breakpoint it now stacks into a
+//            label + a pair of tiles instead, matching the same Bags/
+//            Net Kg tile convention already used on Pile List/Settings.
+export const APP_VERSION = '1.9-149'

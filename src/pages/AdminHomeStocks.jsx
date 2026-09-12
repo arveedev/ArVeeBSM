@@ -304,7 +304,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           return (
             <>
               <div className="mt-2 hidden items-center justify-between rounded-lg border border-neutral-600 bg-neutral-950 px-3 py-2 sm:flex">
-                <span className="text-sm font-bold uppercase tracking-wide text-app-text">Total</span>
+                <span className="text-sm font-bold uppercase tracking-wide text-app-text">TOTAL</span>
                 <div className="flex gap-8">
                   <span className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceBranchValue} format={fmt} /></span>
                   <span className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayBranchValue} format={fmt} /></span>
@@ -312,7 +312,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               </div>
 
               <div className="mt-2 rounded-lg border border-neutral-600 bg-neutral-950/50 p-2.5 sm:hidden">
-                <p className="text-sm font-bold uppercase tracking-wide text-app-text">Total</p>
+                <p className="text-sm font-bold uppercase tracking-wide text-app-text">TOTAL</p>
                 <div className="mt-1.5 grid grid-cols-2 gap-2">
                   <div>
                     <p className="text-[10px] uppercase tracking-wide text-neutral-500">Rice ({unitLabel})</p>
@@ -588,7 +588,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                     ))}
                     {buckets.length < 3 && <div className="hidden sm:block" aria-hidden="true" />}
                     <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2">
-                      <p className="text-xs uppercase text-neutral-500">Total</p>
+                      <p className="text-xs uppercase text-neutral-500">TOTAL</p>
                       <p className={`text-base font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={grandTotal} format={fmt} /></p>
                     </div>
                   </div>
@@ -635,7 +635,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                 <tr className="border-b border-neutral-800">
                                   <Th>Warehouse</Th>
                                   {buckets.map((b) => <Th key={b.label} right>{b.label.replace(/\s*months?$/i, '')}</Th>)}
-                                  <Th right>Total</Th>
+                                  <Th right>TOTAL</Th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -662,7 +662,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                               </tbody>
                               <tfoot>
                                 <tr className="border-t-2 border-neutral-700">
-                                  <Td><span className="font-bold text-app-text">Total</span></Td>
+                                  <Td><span className="font-bold text-app-text">TOTAL</span></Td>
                                   {columnTotals.map((val, i) => (
                                     <Td key={i} right>
                                       <span className={`font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={val} format={fmt} /></span>
@@ -757,7 +757,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                               )
                             })}
                             <div className="flex items-center justify-between border-t-2 border-neutral-700 pt-2">
-                              <span className="text-base font-bold text-app-text">Total</span>
+                              <span className="text-base font-bold text-app-text">TOTAL</span>
                               <span className={`text-lg font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={grandTotal} format={fmt} /></span>
                             </div>
                           </div>

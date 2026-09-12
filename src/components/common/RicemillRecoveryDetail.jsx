@@ -178,7 +178,7 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
           <tfoot>
             <tr className="border-t-2 border-neutral-700">
               <Td>
-                <span className="text-base font-bold text-app-text">Total</span>
+                <span className="text-base font-bold text-app-text">TOTAL</span>
               </Td>
               {leadColSpan > 1 && Array.from({ length: leadColSpan - 1 }).map((_, i) => <Td key={`fill-${i}`} />)}
               <Td right><span className="text-base font-bold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span></Td>
@@ -209,7 +209,7 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
           </div>
         ))}
         <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-          <span className="text-base font-semibold text-app-text">Total</span>
+          <span className="text-base font-semibold text-app-text">TOTAL</span>
           <p className="text-right text-base tabular-nums">
             <span className="font-semibold text-app-text">{fmtNetBags(totalBags)} bags</span>
             <span className="text-neutral-400"> · {fmtWeight(totalKilos, weightUnit)}</span>

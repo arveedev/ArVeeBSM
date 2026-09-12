@@ -139,8 +139,8 @@ export const generatePileLayoutReport = ({
               field('Net Kg', fmtKilos(row.kilos)),
             ]),
             rule(),
-            field('Total Bags', fmtBags(box.groupRows.reduce((sum, r) => sum + r.bags, 0)), true),
-            field('Total Net Kg', fmtKilos(box.groupRows.reduce((sum, r) => sum + r.kilos, 0)), true),
+            field('TOTAL Bags', fmtBags(box.groupRows.reduce((sum, r) => sum + r.bags, 0)), true),
+            field('TOTAL Net Kg', fmtKilos(box.groupRows.reduce((sum, r) => sum + r.kilos, 0)), true),
           ].filter(Boolean)
         : [
             box.variety?.name && field('Var', box.variety.name),
