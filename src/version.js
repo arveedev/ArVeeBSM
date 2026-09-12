@@ -2759,4 +2759,19 @@
 //            the shared labelClass/inputClass constants app-wide, so
 //            unrelated admin panels (Warehouses, Users, etc.) keep their
 //            existing sizing.
-export const APP_VERSION = '1.9-155'
+//   1.9-156 - Real bug found: v1.9-155's Edit Balance modal input bump
+//            used `text-base`, but inputClass sets no font-size of its
+//            own - inputs already rendered at that same ~1rem size by
+//            inheritance, so the "bump" was a no-op nobody could see.
+//            Switched to `text-lg` (PileBalanceForm/CreateEditPileModal)
+//            for a size that's actually bigger. Also, per explicit
+//            request: every sliding-pill/underline tab group app-wide
+//            (Home, Reports, Settings, Piles, AdminDashboard and its
+//            sub-panels, AuthorityMonitor, MillingMonitor, Beginning
+//            Balances, the Rice/Palay/By Products cereal tabs on
+//            Stock forms, Avatar picker's tabs) got a larger font size
+//            and the active tab now renders bold (font-bold/extrabold)
+//            while the inactive one keeps its previous, lighter weight -
+//            previously every tab used the same static weight regardless
+//            of which was selected.
+export const APP_VERSION = '1.9-156'

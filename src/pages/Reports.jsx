@@ -409,8 +409,8 @@ function Reports() {
         />
         {[{ id: 'summary', label: 'Summary' }, { id: 'statement', label: 'Stock Statement' }].map((t) => (
           <button key={t.id} type="button" onClick={() => setPageTab(t.id)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold transition-all active:scale-95 ${
-              pageTab === t.id ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+            className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-all active:scale-95 ${
+              pageTab === t.id ? 'font-extrabold text-brand-contrast' : 'font-semibold text-neutral-400 hover:text-app-text'
             }`}>
             {t.label}
           </button>
@@ -494,8 +494,8 @@ function Reports() {
           />
           {['stocks', 'sacks'].map((tab) => (
             <button key={tab} type="button" onClick={() => setMainTab(tab)}
-              className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm font-medium capitalize transition-all active:scale-95 ${
-                mainTab === tab ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+              className={`relative z-10 flex-1 rounded-lg py-1.5 text-base capitalize transition-all active:scale-95 ${
+                mainTab === tab ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-app-text'
               }`}>
               {tab}
             </button>
@@ -509,8 +509,8 @@ function Reports() {
             return (
               <button key={tab} type="button"
                 onClick={() => mainTab === 'stocks' ? setStockSubTab(tab) : setSackSubTab(tab)}
-                className={`-mb-px border-b-2 pb-1.5 text-xs font-medium capitalize transition-colors ${
-                  active ? 'border-brand-neon text-app-text' : 'border-transparent text-neutral-500 hover:text-neutral-300'
+                className={`-mb-px border-b-2 pb-1.5 text-sm capitalize transition-colors ${
+                  active ? 'border-brand-neon font-bold text-app-text' : 'border-transparent font-medium text-neutral-500 hover:text-neutral-300'
                 }`}>
                 {tab}
               </button>

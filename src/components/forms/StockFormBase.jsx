@@ -2534,7 +2534,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   key={tab.key}
                   type="button"
                   onClick={() => handleCategoryTabChange(tab.key)}
-                  className="relative z-10 rounded-lg border-2 border-transparent py-2.5 text-sm font-bold transition-colors active:scale-95"
+                  className={`relative z-10 rounded-lg border-2 border-transparent py-2.5 text-base transition-colors active:scale-95 ${cerealCategory === tab.key ? 'font-extrabold' : 'font-bold'}`}
                   style={{ color: cerealCategory === tab.key ? tab.textColor : '#737373' }}
                 >
                   {tab.label}

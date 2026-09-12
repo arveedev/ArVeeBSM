@@ -656,14 +656,14 @@ function Settings() {
             <button
               type="button"
               onClick={() => setStockTab('stocks')}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-base font-medium transition-colors ${stockTab === 'stocks' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-colors ${stockTab === 'stocks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}
             >
               Stocks
             </button>
             <button
               type="button"
               onClick={() => setStockTab('sacks')}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-base font-medium transition-colors ${stockTab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-colors ${stockTab === 'sacks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}
             >
               Sacks
             </button>

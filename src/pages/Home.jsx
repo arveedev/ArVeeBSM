@@ -123,8 +123,8 @@ function Home() {
             key={t.id}
             type="button"
             onClick={() => setPageTab(t.id)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold transition-all active:scale-95 ${
-              pageTab === t.id ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+            className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-all active:scale-95 ${
+              pageTab === t.id ? 'font-extrabold text-brand-contrast' : 'font-semibold text-neutral-400 hover:text-app-text'
             }`}
           >
             {t.label}
@@ -154,8 +154,8 @@ function Home() {
               key={tab}
               type="button"
               onClick={() => setInventoryTab(tab)}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium capitalize transition-colors active:scale-95 ${
-                inventoryTab === tab ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+              className={`relative z-10 flex-1 rounded-lg py-2 text-base capitalize transition-colors active:scale-95 ${
+                inventoryTab === tab ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-app-text'
               }`}
             >
               {tab}

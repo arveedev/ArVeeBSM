@@ -299,8 +299,8 @@ export function MillingOrderDetail({ order, onClose }) {
                 className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
                 style={{ transform: detailTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
               />
-              <button type="button" onClick={() => setDetailTab('stocks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-xs font-medium ${detailTab === 'stocks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Stocks</button>
-              <button type="button" onClick={() => setDetailTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-xs font-medium ${detailTab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
+              <button type="button" onClick={() => setDetailTab('stocks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm ${detailTab === 'stocks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>Stocks</button>
+              <button type="button" onClick={() => setDetailTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm ${detailTab === 'sacks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>Sacks</button>
             </div>
           )}
         </div>
@@ -796,7 +796,7 @@ function MillingMonitor({ isAdmin = false, active = true }) {
             key={t}
             type="button"
             onClick={() => setTopTab(t)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${topTab === t ? 'text-brand-contrast' : 'text-neutral-400'}`}
+            className={`relative z-10 flex-1 rounded-lg py-2 text-base ${topTab === t ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}
           >
             {t === 'MO' ? 'Milling' : 'Test Milling'}
           </button>

@@ -1155,8 +1155,8 @@ function Piles() {
             key={key}
             type="button"
             onClick={() => setPilesTab(key)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors active:scale-95 ${
-              pilesTab === key ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+            className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-colors active:scale-95 ${
+              pilesTab === key ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-app-text'
             }`}
           >
             {label}

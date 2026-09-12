@@ -124,8 +124,8 @@ function AvatarPickerModal({ open, current, name, onSave, onClose }) {
               key={t}
               type="button"
               onClick={() => setActiveTab(t)}
-              className={`flex-1 rounded-lg py-2 text-xs font-bold transition-colors ${
-                activeTab === t ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'
+              className={`flex-1 rounded-lg py-2 text-sm transition-colors ${
+                activeTab === t ? 'bg-brand-neon font-extrabold text-brand-contrast' : 'font-semibold text-neutral-400'
               }`}
             >
               {t}
@@ -140,14 +140,14 @@ function AvatarPickerModal({ open, current, name, onSave, onClose }) {
                 <button
                   type="button"
                   onClick={() => setBgMode('solid')}
-                  className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${bgMode === 'solid' ? 'bg-brand-neon text-brand-contrast' : 'bg-neutral-950 text-neutral-400'}`}
+                  className={`rounded-full px-3 py-1.5 text-xs ${bgMode === 'solid' ? 'bg-brand-neon font-extrabold text-brand-contrast' : 'bg-neutral-950 font-semibold text-neutral-400'}`}
                 >
                   Solid
                 </button>
                 <button
                   type="button"
                   onClick={() => setBgMode('gradient')}
-                  className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${bgMode === 'gradient' ? 'bg-brand-neon text-brand-contrast' : 'bg-neutral-950 text-neutral-400'}`}
+                  className={`rounded-full px-3 py-1.5 text-xs ${bgMode === 'gradient' ? 'bg-brand-neon font-extrabold text-brand-contrast' : 'bg-neutral-950 font-semibold text-neutral-400'}`}
                 >
                   Gradient
                 </button>
@@ -168,14 +168,14 @@ function AvatarPickerModal({ open, current, name, onSave, onClose }) {
                     <button
                       type="button"
                       onClick={() => setColorSlot(1)}
-                      className={`flex-1 rounded-full py-1.5 text-[11px] font-bold ${colorSlot === 1 ? 'bg-brand-neon text-brand-contrast' : 'bg-neutral-950 text-neutral-400'}`}
+                      className={`flex-1 rounded-full py-1.5 text-xs ${colorSlot === 1 ? 'bg-brand-neon font-extrabold text-brand-contrast' : 'bg-neutral-950 font-semibold text-neutral-400'}`}
                     >
                       Color 1
                     </button>
                     <button
                       type="button"
                       onClick={() => setColorSlot(2)}
-                      className={`flex-1 rounded-full py-1.5 text-[11px] font-bold ${colorSlot === 2 ? 'bg-brand-neon text-brand-contrast' : 'bg-neutral-950 text-neutral-400'}`}
+                      className={`flex-1 rounded-full py-1.5 text-xs ${colorSlot === 2 ? 'bg-brand-neon font-extrabold text-brand-contrast' : 'bg-neutral-950 font-semibold text-neutral-400'}`}
                     >
                       Color 2
                     </button>

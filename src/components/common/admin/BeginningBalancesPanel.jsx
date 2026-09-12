@@ -35,8 +35,14 @@ const AGE_UNITS = ['Days', 'Months']
 // including these two forms as used from Settings.jsx's modals.
 // PilesBeginningBalances (AdminDashboard's own standalone list) keeps
 // the shared default sizing untouched.
+// inputClass itself sets no explicit font-size, so it renders at the
+// ambient ~1rem (text-base-equivalent) default already - appending
+// "text-base" here would be a no-op override that LOOKS like a bump
+// but changes nothing on screen (this was a real bug: the Edit Balance
+// modal reported no visible size change at all). text-lg is the first
+// size that's actually bigger than that default.
 const labelClassLg = 'text-sm text-neutral-400'
-const inputClassLg = `${inputClass} text-base`
+const inputClassLg = `${inputClass} text-lg`
 
 // One beginning-balance line = one seed (isInitialBalance) transaction. A
 // Rice/Palay pile groups by variety, not by sack weight - it can legitimately
@@ -842,8 +848,8 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
           className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
           style={{ transform: tab === 'piles' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
         />
-        <button type="button" onClick={() => setTab('piles')} className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${tab === 'piles' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Piles</button>
-        <button type="button" onClick={() => setTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${tab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}>Sacks</button>
+        <button type="button" onClick={() => setTab('piles')} className={`relative z-10 flex-1 rounded-lg py-2 text-base ${tab === 'piles' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>Piles</button>
+        <button type="button" onClick={() => setTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-2 text-base ${tab === 'sacks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>Sacks</button>
       </div>
 
       {/* Both stay mounted, toggled via a plain class rather than a

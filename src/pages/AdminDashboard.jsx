@@ -160,8 +160,8 @@ function AdminDashboard({ onClose }) {
               key={group.id}
               type="button"
               onClick={() => handleGroupChange(group.id)}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                activeGroupId === group.id ? 'text-brand-contrast' : 'text-neutral-400'
+              className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-colors ${
+                activeGroupId === group.id ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'
               }`}
             >
               {group.label}
@@ -178,10 +178,10 @@ function AdminDashboard({ onClose }) {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTabId(tab.id)}
-                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95 ${
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-base transition-all active:scale-95 ${
                   activeTabId === tab.id
-                    ? 'bg-brand-neon text-brand-contrast'
-                    : 'border border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-neutral-600 hover:text-app-text'
+                    ? 'bg-brand-neon font-bold text-brand-contrast'
+                    : 'border border-neutral-800 bg-neutral-900 font-medium text-neutral-400 hover:border-neutral-600 hover:text-app-text'
                 }`}
               >
                 {tab.label}

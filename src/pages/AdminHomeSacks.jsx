@@ -172,7 +172,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
             key={t}
             type="button"
             onClick={() => setGroupTab(t)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium ${groupTab === t ? 'text-brand-contrast' : 'text-neutral-400'}`}
+            className={`relative z-10 flex-1 rounded-lg py-2 text-base ${groupTab === t ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}
           >
             {t}
           </button>

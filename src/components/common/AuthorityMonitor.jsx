@@ -216,8 +216,8 @@ function AuthorityMonitor() {
             key={tab}
             type="button"
             onClick={() => setTopTab(tab)}
-            className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors active:scale-95 ${
-              topTab === tab ? 'text-brand-contrast' : 'text-neutral-400 hover:text-app-text'
+            className={`relative z-10 flex-1 rounded-lg py-1.5 text-base transition-colors active:scale-95 ${
+              topTab === tab ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-app-text'
             }`}
           >
             {tab}

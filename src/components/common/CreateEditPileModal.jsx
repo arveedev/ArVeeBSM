@@ -41,9 +41,11 @@ const AGE_UNITS = ['Days', 'Months']
 
 // Larger local sizing than the shared admin-panel default (labelClass/
 // inputClass) - per explicit request to enlarge the font size inside
-// this modal.
+// this modal. inputClass itself sets no explicit font-size, so it
+// renders at the ambient ~1rem (text-base-equivalent) default already -
+// text-lg is the first size that's actually bigger than that.
 const labelClassLg = 'text-sm text-neutral-400'
-const inputClassLg = `${inputClass} text-base`
+const inputClassLg = `${inputClass} text-lg`
 
 // Same mapping as HomePiles.jsx's accentBarClass/varietyBadgeClass -
 // duplicated locally rather than imported/shared, matching this
