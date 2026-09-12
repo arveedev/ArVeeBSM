@@ -40,7 +40,6 @@ function AdminHomeSacks({ onWarehouseSelect }) {
   ) ?? []
   const sackInventory = useLiveQuery(() => db.sackInventory.toArray(), []) ?? []
 
-  const provinceMap = new Map(provinces.map((p) => [p.provinceId, p]))
   const sortedProvinces = [...provinces].sort((a, b) => a.code.localeCompare(b.code))
   const sortedWarehouses = [...warehouses].sort((a, b) => a.name.localeCompare(b.name))
   const sortedSackTypes = [...sackTypes].sort((a, b) => a.code.localeCompare(b.code))
@@ -122,6 +121,45 @@ function AdminHomeSacks({ onWarehouseSelect }) {
     )
   }
 
+  // Per explicit request - same boxed-card layout as
+  // AdminHomeStocks.jsx's Stock Breakdown section: one tappable box per
+  // warehouse (the whole box, not a separate pill) that opens that
+  // warehouse's own Overview, grouped under its own province heading
+  // instead of a "PROVINCE · Warehouse" label repeated on every card.
+  const WarehouseSackCard = ({ warehouse }) => {
+    const rows = sackTypeRows([warehouse.warehouseId])
+    if (rows.length === 0) return null
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onWarehouseSelect?.(warehouse)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onWarehouseSelect?.(warehouse) }}
+        className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-base font-bold text-app-text">{stripWarehouseCodePrefix(warehouse.name)}</p>
+          <ChevronRight size={16} className="shrink-0 text-neutral-600" />
+        </div>
+        <div className="mt-2 space-y-2">
+          {rows.map(({ sackType, conditions }, i) => (
+            <div key={sackType.sackTypeId} className={i > 0 ? 'border-t border-neutral-800 pt-2' : ''}>
+              <p className="text-sm font-semibold uppercase text-neutral-400">{sackType.code}</p>
+              <div className="mt-1 space-y-1">
+                {conditions.map((r) => (
+                  <div key={r.condition.code} className="flex items-center justify-between">
+                    <span className="text-sm text-app-text">{r.condition.label}</span>
+                    <span className="text-base font-semibold tabular-nums text-brand-neon"><CountUpNumber value={r.total} format={(v) => `${fmtBags(v)} pcs`} /></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
@@ -164,15 +202,25 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         <Section title="Sack Pieces by Warehouse">
           {sortedWarehouses.length === 0 ? <Empty /> : (
             <div key="warehouse" className="space-y-4 animate-flow-down">
-              {sortedWarehouses.map((warehouse) => {
-                const province = provinceMap.get(warehouse.provinceId)
+              {sortedProvinces.map((province) => {
+                // Only warehouses that actually have something to show -
+                // a province where every warehouse is currently empty
+                // shouldn't render a heading over nothing.
+                const provinceWarehouses = sortedWarehouses.filter(
+                  (w) => w.provinceId === province.provinceId && sackTypeRows([w.warehouseId]).length > 0
+                )
+                if (provinceWarehouses.length === 0) return null
                 return (
-                  <SackTypeCard
-                    key={warehouse.warehouseId}
-                    label={`${province?.code ?? ''} · ${stripWarehouseCodePrefix(warehouse.name)}`}
-                    onSelect={() => onWarehouseSelect?.(warehouse)}
-                    warehouseIds={[warehouse.warehouseId]}
-                  />
+                  <div key={province.provinceId}>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
+                      {province.code} <span className="font-medium normal-case text-neutral-600">{province.name}</span>
+                    </p>
+                    <div className="space-y-2">
+                      {provinceWarehouses.map((warehouse) => (
+                        <WarehouseSackCard key={warehouse.warehouseId} warehouse={warehouse} />
+                      ))}
+                    </div>
+                  </div>
                 )
               })}
             </div>

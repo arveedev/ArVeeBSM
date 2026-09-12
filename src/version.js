@@ -2352,4 +2352,10 @@
 //            on every single warehouse card - a cleaner look with the
 //            exact same information, matching the Province table's own
 //            grouping above it.
-export const APP_VERSION = '1.9-132'
+//   1.9-133 - Per explicit request: AdminHomeSacks.jsx's own Warehouse
+//            tab now uses the identical layout - one province heading
+//            above that province's own warehouse cards, each card the
+//            same boxed, tappable style as AdminHomeStocks.jsx's Stock
+//            Breakdown - instead of a "PROVINCE · Warehouse" pill label
+//            repeated per warehouse.
+export const APP_VERSION = '1.9-133'
