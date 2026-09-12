@@ -2738,4 +2738,12 @@
 //            added a "Beginning Balances" heading above the Stocks/
 //            Sacks tab pill, which previously had no label of its own
 //            identifying the section.
-export const APP_VERSION = '1.9-153'
+//   1.9-154 - Real gap found: Settings' pile cards (Stocks tab) had no
+//            Delete at all - it only lived one tap deeper, inside
+//            CreateEditPileModal's own kebab menu. Added a Delete icon
+//            directly on each card (next to Edit), always gated behind
+//            a real confirmation first (same "does it have real
+//            transactions beyond its beginning balance" check and
+//            ConfirmDialog already used everywhere else a pile can be
+//            deleted from) - never a one-tap delete.
+export const APP_VERSION = '1.9-154'

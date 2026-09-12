@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, ShieldCheck, User, Clock, Check, X } from 'lucide-react'
+import { Pencil, ShieldCheck, User, Clock, Check, X, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -13,13 +13,14 @@ import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { fmtBags, fmtWeight } from '../utils/calculations.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
-import { inputClass, labelClass, primaryButtonClass, byAlpha, editIconClass } from '../components/common/admin/shared.js'
+import { inputClass, labelClass, primaryButtonClass, byAlpha, editIconClass, deleteIconClass } from '../components/common/admin/shared.js'
 import { SacksBeginningBalances } from '../components/common/admin/BeginningBalancesPanel.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 import Avatar from '../components/common/Avatar.jsx'
 import AvatarPickerModal from '../components/common/AvatarPickerModal.jsx'
 import CreateEditPileModal from '../components/common/CreateEditPileModal.jsx'
 import EditBeginningBalanceModal from '../components/common/EditBeginningBalanceModal.jsx'
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
@@ -319,6 +320,28 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
   // Balances), where a closed pile IS still shown.
   const sortedPiles = [...piles].filter((p) => !p.closedDate).sort((a, b) => byAlpha(a.pileName, b.pileName))
 
+  // Delete was reported missing from this list entirely (it only lived
+  // inside CreateEditPileModal's own kebab menu, one extra tap away) -
+  // added back here as its own icon, always with a confirmation first,
+  // same check-for-real-history + ConfirmDialog pattern already used
+  // there and everywhere else a pile can be deleted from.
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const confirmDelete = async (pile) => {
+    const others = await db.transactions
+      .where('pileId').equals(pile.pileId)
+      .and((t) => !t.isInitialBalance)
+      .count()
+    setPendingDelete({ ...pile, hasHistory: others > 0 })
+  }
+  const handleDeleteConfirmed = async () => {
+    const pile = pendingDelete
+    setPendingDelete(null)
+    const linkedBox = await db.pileLayoutBoxes.where('pileId').equals(pile.pileId).first()
+    if (linkedBox) await db.pileLayoutBoxes.update(linkedBox.id, { pileId: null, label: null })
+    await db.piles.delete(pile.pileId)
+    toast.success(`Pile "${pile.pileName}" deleted - its transactions were kept`)
+  }
+
   return (
     <div className="mt-6">
       <button type="button" onClick={onCreatePile} className={`w-full ${primaryButtonClass}`}>
@@ -328,56 +351,72 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
       {/* Renaming an existing pile (or fixing its variety/purity/dates)
           is only ever exposed here, not on Piles.jsx or Beginning
           Balances - those cover the pile's balance and layout
-          placement, not its identity. Edit only - Close/Delete live in
-          the Edit Pile modal's own kebab menu now. Each row is a card
-          (name/variety + edit pencil up top, current Bags/Net Kg as
-          their own stacked tiles below) rather than a single plain
-          text line, so the figures Beginning Balances' own now-removed
-          list used to show are still visible at a glance here. */}
+          placement, not its identity. Close still lives in the Edit
+          Pile modal's own kebab menu; Delete is repeated here too (see
+          confirmDelete above) since it was reported missing from this
+          list. Each row is a card (name/variety + edit/delete icons up
+          top, current Bags/Net Kg as their own stacked tiles below)
+          rather than a single plain text line, so the figures
+          Beginning Balances' own now-removed list used to show are
+          still visible at a glance here. */}
       <ul className="mt-3 space-y-2">
         {sortedPiles.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
         {sortedPiles.map((p) => {
           const category = varietyMap.get(p.varietyId)?.category ?? p.cerealType
           const varietyLabel = varietyMap.get(p.varietyId)?.name ?? category
           return (
-          <li key={p.pileId}>
-            <button
-              type="button"
-              onClick={() => onEditPile(p)}
-              aria-label={`Edit ${p.pileName}`}
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-700"
-            >
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                {/* Variety now shares the name's row as a colored pill
-                    (same cereal-type color convention as the Pile
-                    List's own accent bars - HomePiles.jsx's
-                    varietyBadgeClass) instead of sitting on its own
-                    plain-text line below. */}
-                <div className="flex min-w-0 items-center gap-2">
-                  <p className="truncate text-base font-medium text-app-text">{p.pileName}</p>
-                  {varietyLabel && (
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${varietyBadgeClass(category)}`}>
-                      {varietyLabel}
-                    </span>
-                  )}
-                </div>
-                <span className={editIconClass}><Pencil size={20} /></span>
+          <li key={p.pileId} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+            <div className="flex items-center gap-2">
+              {/* Tapping the name/variety or the tiles below both open
+                  Edit Pile - only the trailing icons are their own
+                  distinct buttons now, so Delete has room to exist
+                  alongside Edit without nesting a button inside one. */}
+              <button
+                type="button"
+                onClick={() => onEditPile(p)}
+                aria-label={`Edit ${p.pileName}`}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <p className="truncate text-base font-medium text-app-text">{p.pileName}</p>
+                {varietyLabel && (
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${varietyBadgeClass(category)}`}>
+                    {varietyLabel}
+                  </span>
+                )}
+              </button>
+              <button type="button" onClick={() => onEditPile(p)} aria-label={`Edit ${p.pileName}`} className={editIconClass}>
+                <Pencil size={20} />
+              </button>
+              <button type="button" onClick={() => confirmDelete(p)} aria-label={`Delete ${p.pileName}`} className={deleteIconClass}>
+                <Trash2 size={20} />
+              </button>
+            </div>
+            <button type="button" onClick={() => onEditPile(p)} aria-label={`Edit ${p.pileName}`} className="mt-2 grid w-full grid-cols-2 gap-2 text-left">
+              <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
+                <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtBags(p.currentBags ?? 0)}</p>
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-neutral-950 py-2 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
-                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtBags(p.currentBags ?? 0)}</p>
-                </div>
-                <div className="rounded-lg bg-neutral-950 py-2 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
-                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeightValue(p.currentKilos ?? 0, weightUnit)}</p>
-                </div>
+              <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
+                <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeightValue(p.currentKilos ?? 0, weightUnit)}</p>
               </div>
             </button>
           </li>
           )
         })}
       </ul>
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={`Delete pile "${pendingDelete?.pileName}"?`}
+        description={
+          pendingDelete?.hasHistory
+            ? 'This pile has real transactions beyond its beginning balance - those transactions are NOT deleted and stay in the system permanently, still linked to this pile ID. Only the pile record itself (and its layout box, if any) is removed. This cannot be undone.'
+            : 'This cannot be undone.'
+        }
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   )
 }
