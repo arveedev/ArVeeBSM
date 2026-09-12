@@ -435,7 +435,7 @@ function CerealTotal({
   )
 }
 
-function HomeStocks({ warehouseId } = {}) {
+function HomeStocks({ warehouseId, active = true } = {}) {
   const { autoAgeMonitoring, weightUnit } = useSettings() ?? {}
   const { currentWarehouseId: contextWarehouseId } = useWarehouse() ?? {}
   const currentWarehouseId = warehouseId ?? contextWarehouseId
@@ -457,6 +457,14 @@ function HomeStocks({ warehouseId } = {}) {
       return next
     })
   }
+  // This component stays mounted (just hidden) when the user switches
+  // to the Activity page-tab or the Sacks inventory tab, rather than
+  // unmounting - so any age-group breakdown left expanded would
+  // otherwise silently still be expanded on return. Collapses
+  // everything the moment this tab stops being the visible one.
+  useEffect(() => {
+    if (!active) setExpandedVarieties(new Set())
+  }, [active])
 
   const piles = useLiveQuery(async () => {
     if (!currentWarehouseId) return []

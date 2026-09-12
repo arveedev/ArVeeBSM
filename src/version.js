@@ -2721,4 +2721,14 @@
 //            grid (still aligned with the age-bucket/unwithdrawn rows
 //            below it, which stay grid-based at every width - they're
 //            secondary, on-demand detail behind the expand arrow).
-export const APP_VERSION = '1.9-151'
+//   1.9-152 - Home Stocks' per-variety age-group breakdown now resets
+//            (collapses) the moment its tab stops being the visible
+//            one - it stays mounted (not unmounted) when switching to
+//            the Activity page-tab or the Sacks inventory tab, per the
+//            app's own established stay-mounted-avoid-flash pattern,
+//            so an expanded breakdown was silently still expanded on
+//            return. Navigating to a different PAGE already resets it
+//            for free (App.jsx remounts the whole route on pathname
+//            change), so this only needed handling for same-page tab
+//            switches.
+export const APP_VERSION = '1.9-152'

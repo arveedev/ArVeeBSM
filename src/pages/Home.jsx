@@ -169,7 +169,14 @@ function Home() {
             of key) restarted queries from undefined each time, flashing
             an empty/loading state before real data replaced it. Same fix
             as Settings.jsx/BeginningBalancesPanel.jsx. */}
-        <div className={inventoryTab === 'stocks' ? '' : 'hidden'}><HomeStocks /></div>
+        <div className={inventoryTab === 'stocks' ? '' : 'hidden'}>
+          {/* active - HomeStocks stays mounted while hidden (see this
+              block's own comment above), so its per-variety age-group
+              expand/collapse state would otherwise silently persist
+              across tab switches. Passed down so it can reset that
+              state the moment this tab stops being the visible one. */}
+          <HomeStocks active={pageTab === 'overview' && inventoryTab === 'stocks'} />
+        </div>
         <div className={inventoryTab === 'sacks' ? '' : 'hidden'}><HomeSacks /></div>
 
         <SectionErrorBoundary user={user} label="Alerts panel">
