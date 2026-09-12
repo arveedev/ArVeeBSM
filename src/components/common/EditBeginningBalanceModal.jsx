@@ -15,17 +15,18 @@ function EditBeginningBalanceModal({ open, pile, warehouseId, onClose }) {
   if (!open || !pile) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[68] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[68] flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div
         className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-t-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">
+          {/* Close/delete icons are always red, per house convention. */}
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white"
+            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-brand-crimson"
           >
             <X size={18} />
           </button>

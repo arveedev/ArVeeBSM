@@ -95,14 +95,15 @@ function AvatarPickerModal({ open, current, name, onSave, onClose }) {
   const initials = name ? name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') : '?'
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div
         className="flex max-h-[88vh] w-full max-w-sm flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
           <h2 className="text-base font-semibold text-app-text">Choose Your Avatar</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-neutral-400 hover:text-app-text">
+          {/* Close/delete icons are always red, per house convention. */}
+          <button type="button" onClick={onClose} aria-label="Close" className="text-brand-crimson hover:brightness-125">
             <X size={18} />
           </button>
         </div>
@@ -246,7 +247,7 @@ function AvatarPickerModal({ open, current, name, onSave, onClose }) {
           )}
         </div>
 
-        <div className="border-t border-neutral-800 p-4">
+        <div className="border-t border-neutral-800 p-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
           <button type="button" onClick={handleSave} disabled={isSaving} className={`w-full ${primaryButtonClass}`}>
             {isSaving ? 'Saving…' : 'Save Avatar'}
           </button>

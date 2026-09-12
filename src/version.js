@@ -2569,4 +2569,35 @@
 //              a checkmark (the same spring-overshoot pop used
 //              elsewhere) for a beat before the row settles back to
 //              read-only, instead of vanishing instantly.
-export const APP_VERSION = '1.9-143'
+//   1.9-144 - More real fixes/requests after using 1.9-143:
+//            - Settings restores a Stocks/Sacks tab pair (Create Pile
+//              lives only under Stocks) instead of both sections
+//              stacked on one page - PileListSection under Stocks now
+//              also shows each pile's live Bags/Net Kg as its own pair
+//              of stacked tiles (that info used to only exist in the
+//              now-removed duplicate list).
+//            - CreateEditPileModal/EditBeginningBalanceModal/
+//              AvatarPickerModal: header icon row now actually aligns
+//              (the kebab menu's wrapper div wasn't a flex/items-center
+//              container like its sibling X button), every Close (X)
+//              icon is red per house convention (delete already was),
+//              the backdrop is darker (bg-black/60 -> /80) and the hero
+//              header got an explicit opaque base so page content
+//              behind the modal reads much less through it, and the
+//              bottom action button now adds the device's own safe-
+//              area inset so it doesn't sit flush against a phone's
+//              home-indicator zone.
+//            - Sacks: Save/Cancel row gets the same shrink-beside-grow
+//              animation used elsewhere (Save shrinks via flex-1 as
+//              Cancel grows in from zero width) instead of Cancel just
+//              appearing/disappearing, and the sack entries list text
+//              sizes up (text-sm/text-xs -> text-base/text-sm).
+//            - AppHeader: fixed a real mobile bug - the header pill's
+//              44px icons left so little room next to the avatar that
+//              a single long title word ("Dashboard", "Monitoring")
+//              had no space to break at, so it split mid-word
+//              ("Dashboa"/"rd"). Pill icons sized to 40px (avatar
+//              matches), KG/MT padding tightened, title dropped to
+//              text-base - comfortably fits on one line on a real
+//              phone now instead of breaking apart.
+export const APP_VERSION = '1.9-144'

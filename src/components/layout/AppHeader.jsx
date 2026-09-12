@@ -168,11 +168,20 @@ function AppHeader({ hidden = false }) {
               avatarFace={userRecord?.avatarFace}
               avatarAnim={userRecord?.avatarAnim}
               name={user?.name}
-              size={44}
+              size={40}
               onClick={canEditAvatar ? () => setAvatarPickerOpen(true) : undefined}
             />
             <div className="min-w-0">
-              {title && <h1 className="break-words text-lg font-semibold text-app-text">{title}</h1>}
+              {/* Reported, real bug: on a narrow phone the pill (below)
+                  left so little room for the title that a single long
+                  word like "Dashboard"/"Monitoring" had nowhere to
+                  wrap at a space, so break-words split it mid-word
+                  ("Dashboa"/"rd") - unreadable. Fixed on both ends: the
+                  pill itself shrank (see its own comment below) to
+                  leave more room here, and the title dropped to
+                  text-base so more of it fits on the first line before
+                  any wrap is needed at all. */}
+              {title && <h1 className="break-words text-base font-semibold text-app-text">{title}</h1>}
               {/* Reported, real bug: truncate clipped a short subtitle
                   like "Welcome back, JP." down to "Welcome…" on a narrow
                   phone, since this column only gets whatever width is
@@ -190,11 +199,12 @@ function AppHeader({ hidden = false }) {
               than loose icons scattered across the header. shrink-0 so
               it never shrinks or wraps onto its own row even when the
               title/greeting above does - it stays pinned to this exact
-              top-right spot at this exact size on every page. Icon/
-              segment sizing (h-11/w-11, generous KG/MT padding) is
-              unchanged from before - already comfortably past a real
-              tap-target minimum, just no longer individually outlined. */}
-          <div className="flex shrink-0 items-center gap-1 rounded-full bg-neutral-900 p-1">
+              top-right spot at this exact size on every page. Icons
+              sized down from an earlier 44px to 40px (still a real tap
+              target, just tighter) specifically to free up room for
+              the title next to it - see the title's own comment for
+              the actual reported breakage this fixes on a narrow phone. */}
+          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-neutral-900 p-1">
             {/* Sync status - tap for a plain-language explanation. The
                 icon itself stays solid/static (scaling or fading it in
                 place reads as a dropped connection, not activity) - a
@@ -210,7 +220,7 @@ function AppHeader({ hidden = false }) {
               type="button"
               onClick={handleSyncIconTap}
               aria-label="Sync status"
-              className="relative flex h-11 w-11 items-center justify-center rounded-full transition-all active:scale-90"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-90"
             >
               {showRipple && (
                 <span className={`pointer-events-none absolute h-8 w-8 rounded-full border-2 ${rippleColorClass} ${rippleSpeedClass}`} />
@@ -237,10 +247,10 @@ function AppHeader({ hidden = false }) {
               aria-label="Toggle KG/MT weight unit"
               className="flex items-center overflow-hidden rounded-full bg-neutral-950 text-xs font-bold"
             >
-              <span className={`px-2.5 py-2 transition-colors ${!isMt ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}>
+              <span className={`px-2 py-2.5 transition-colors ${!isMt ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}>
                 KG
               </span>
-              <span className={`px-2.5 py-2 transition-colors ${isMt ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}>
+              <span className={`px-2 py-2.5 transition-colors ${isMt ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}>
                 MT
               </span>
             </button>
@@ -251,7 +261,7 @@ function AppHeader({ hidden = false }) {
               type="button"
               onClick={() => updateSetting?.('theme', isLight ? 'dark' : 'light')}
               aria-label="Toggle dark/light mode"
-              className={`flex h-11 w-11 items-center justify-center rounded-full transition-all active:scale-90 ${
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-90 ${
                 isLight
                   ? 'text-brand-neon shadow-[0_0_12px_rgba(0,255,163,0.6)]'
                   : 'text-neutral-300 hover:text-brand-neon'
@@ -264,7 +274,7 @@ function AppHeader({ hidden = false }) {
               type="button"
               onClick={() => setConfirmingLogout(true)}
               aria-label="Logout"
-              className="flex h-11 w-11 items-center justify-center rounded-full text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
             >
               <LogOut size={20} />
             </button>

@@ -276,7 +276,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/80 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div
         className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-t-2xl border border-neutral-800 bg-neutral-900 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -285,19 +285,24 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
             variety pill tinted to the cereal type, not itself an
             editable field (the real Pile Name/Category/Variety inputs
             stay normal boxed fields in the body below, matching the
-            existing form exactly - only the header is new). */}
-        <div style={{ backgroundImage: `linear-gradient(135deg, ${tint.wash})` }} className="px-4 py-4">
-          <div className="flex items-start justify-between gap-2">
+            existing form exactly - only the header is new). Solid
+            bg-neutral-900 base UNDER the tint (not just the modal
+            card's own background showing through a bare gradient) -
+            the backdrop behind the whole modal was reported as too
+            visible through this header specifically, so it gets its
+            own explicit opaque base same as the rest of the card. */}
+        <div style={{ backgroundImage: `linear-gradient(135deg, ${tint.wash})` }} className="bg-neutral-900 px-4 py-4">
+          <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="break-words text-xl font-extrabold text-app-text">{pileName.trim() || (isEditing ? pile.pileName : 'New Pile')}</p>
               <span className={`mt-1.5 inline-block rounded-full px-3 py-1 text-xs font-bold ${tint.pill}`}>
                 {category === 'By Products' ? 'By Products' : selectedVarietyName ? `${category} · ${selectedVarietyName}` : `${category} · pick a variety`}
               </span>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-2">
               {isEditing && (
-                <div className="relative">
-                  <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-label="More options" className="text-neutral-400 hover:text-app-text">
+                <div className="relative flex items-center">
+                  <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-label="More options" className="flex items-center text-neutral-400 hover:text-app-text">
                     <MoreVertical size={18} />
                   </button>
                   {menuOpen && (
@@ -318,7 +323,10 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
                   )}
                 </div>
               )}
-              <button type="button" onClick={onClose} aria-label="Close" className="text-neutral-400 hover:text-app-text">
+              {/* Close/delete icons are always red, per house
+                  convention - keeps the "this exits/removes" signal
+                  consistent everywhere it appears. */}
+              <button type="button" onClick={onClose} aria-label="Close" className="flex items-center text-brand-crimson hover:brightness-125">
                 <X size={18} />
               </button>
             </div>
@@ -494,7 +502,10 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
           {showHint && !canSave && <p className="mt-3 text-center text-xs text-brand-amber">Please complete all required fields.</p>}
         </div>
 
-        <div className="border-t border-neutral-800 p-4">
+        {/* pb includes the device's own safe-area inset (home-indicator
+            area on mobile) - without it the button sat flush against
+            that zone on phones, uncomfortably close to the edge. */}
+        <div className="border-t border-neutral-800 p-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
           <button type="button" onClick={handleSubmit} disabled={isSaving} className={`w-full ${primaryButtonClass}`}>
             {isEditing ? 'Update Pile' : 'Create Pile'}
           </button>

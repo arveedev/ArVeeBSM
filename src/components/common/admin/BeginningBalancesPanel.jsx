@@ -434,7 +434,11 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
             <Plus size={14} /> Add line
           </button>
 
-          <div className="flex gap-2">
+          {/* pb includes the device's own safe-area inset (home-indicator
+              area on mobile) - without it these buttons sat flush
+              against that zone when this form is shown inside
+              EditBeginningBalanceModal.jsx on a phone. */}
+          <div className="flex gap-2" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <button type="button" onClick={handleSave} disabled={isSaving} className={`flex-1 ${primaryButtonClass}`}>Save</button>
             <button type="button" onClick={onDone} className={secondaryButtonClass}>Cancel</button>
           </div>
@@ -722,9 +726,19 @@ function SacksBeginningBalances({ warehouseId }) {
           <label className={labelClass}>As of</label>
           <CalendarDatePicker value={asOfDate} onChange={setAsOfDate} />
         </div>
+        {/* Save/Update always takes the full row (flex-1); Cancel grows
+            in beside it from zero width via animated max-width/opacity
+            rather than just appearing/disappearing - same technique as
+            the app's other shrink-beside-grow transitions (e.g.
+            Sack Condition growing in next to Sack Weight/MTS above). */}
         <div className="flex gap-2">
           <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>{editingId ? 'Update' : 'Save'}</button>
-          {editingId && <button type="button" onClick={resetForm} className={secondaryButtonClass}>Cancel</button>}
+          <div
+            className="overflow-hidden transition-all duration-300 ease-out"
+            style={{ maxWidth: editingId ? '96px' : '0px', opacity: editingId ? 1 : 0 }}
+          >
+            <button type="button" onClick={resetForm} className={`whitespace-nowrap ${secondaryButtonClass}`}>Cancel</button>
+          </div>
         </div>
       </div>
 
@@ -733,8 +747,8 @@ function SacksBeginningBalances({ warehouseId }) {
         {sortedEntries.map((e) => (
           <li key={e.id} className={listItemClass}>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-app-text">{sackTypeMap.get(e.sackTypeId)?.code ?? '?'} · {e.condition}</p>
-              <p className="text-xs tabular-nums text-neutral-500">{fmtBags(e.pieces)} pcs{e.asOfDate ? ` · as of ${e.asOfDate}` : ''}</p>
+              <p className="truncate text-base font-medium text-app-text">{sackTypeMap.get(e.sackTypeId)?.code ?? '?'} · {e.condition}</p>
+              <p className="text-sm tabular-nums text-neutral-500">{fmtBags(e.pieces)} pcs{e.asOfDate ? ` · as of ${e.asOfDate}` : ''}</p>
             </div>
             <div className="flex gap-1">
               <button type="button" onClick={() => handleEdit(e)} aria-label="Edit" className={editIconClass}><Pencil size={20} /></button>

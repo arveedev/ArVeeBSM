@@ -11,7 +11,8 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
-import { inputClass, labelClass, primaryButtonClass, byAlpha, listItemClass, editIconClass } from '../components/common/admin/shared.js'
+import { fmtBags, fmtWeight } from '../utils/calculations.js'
+import { inputClass, labelClass, primaryButtonClass, byAlpha, editIconClass } from '../components/common/admin/shared.js'
 import { SacksBeginningBalances } from '../components/common/admin/BeginningBalancesPanel.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 import Avatar from '../components/common/Avatar.jsx'
@@ -235,6 +236,7 @@ function ClassifierSection({ warehouseId }) {
 // CreateEditPileModal.jsx's own top comment for why editing here never
 // touches them.
 function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
+  const { weightUnit } = useSettings() ?? {}
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const piles = useLiveQuery(
@@ -255,13 +257,15 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
       </button>
 
       {/* Renaming an existing pile (or fixing its variety/purity/dates)
-          is only ever exposed here, not on Piles.jsx or the admin
-          Beginning Balances panel - those cover the pile's balance and
-          layout placement, not its identity. Edit only - Close/Delete
-          already live in Piles.jsx and Beginning Balances respectively,
-          and duplicating destructive actions here (a plain, non-admin-
-          gated page) isn't the goal of this list. */}
-      <ul className="mt-3 space-y-1.5">
+          is only ever exposed here, not on Piles.jsx or Beginning
+          Balances - those cover the pile's balance and layout
+          placement, not its identity. Edit only - Close/Delete live in
+          the Edit Pile modal's own kebab menu now. Each row is a card
+          (name/variety + edit pencil up top, current Bags/Net Kg as
+          their own stacked tiles below) rather than a single plain
+          text line, so the figures Beginning Balances' own now-removed
+          list used to show are still visible at a glance here. */}
+      <ul className="mt-3 space-y-2">
         {sortedPiles.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
         {sortedPiles.map((p) => (
           <li key={p.pileId}>
@@ -269,13 +273,25 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
               type="button"
               onClick={() => onEditPile(p)}
               aria-label={`Edit ${p.pileName}`}
-              className={`w-full text-left ${listItemClass} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}
+              className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-700"
             >
-              <div className="min-w-0">
-                <p className="break-words text-base font-medium text-app-text">{p.pileName}</p>
-                <p className="text-sm text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                <div className="min-w-0">
+                  <p className="break-words text-base font-medium text-app-text">{p.pileName}</p>
+                  <p className="text-sm text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
+                </div>
+                <span className={editIconClass}><Pencil size={20} /></span>
               </div>
-              <span className={editIconClass}><Pencil size={20} /></span>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
+                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtBags(p.currentBags ?? 0)}</p>
+                </div>
+                <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
+                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
+                </div>
+              </div>
             </button>
           </li>
         ))}
@@ -293,6 +309,8 @@ function Settings() {
   const pileCardRef = useRef(null)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
+  // 'stocks' | 'sacks' - Create Pile only ever lives under Stocks.
+  const [stockTab, setStockTab] = useState('stocks')
   // null | { mode: 'create' } | { mode: 'edit', pile }
   const [pileModal, setPileModal] = useState(null)
   // The pile whose beginning balance is being edited, if any - set by
@@ -501,24 +519,46 @@ function Settings() {
           ref={pileCardRef}
           style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 24}px` }}
         >
-          {/* Create Pile used to be a permanently-open tab, and Beginning
-              Balances used to sit right below it with its OWN full pile
-              list - two lists of the same piles on one page, both with
-              their own edit affordance, reported directly as confusing.
-              Now there's exactly one pile list (PileListSection) and two
-              modals: CreateEditPileModal (metadata) and, reached from
-              its own "Edit balance ->" link, EditBeginningBalanceModal
-              (bags/kilos/age) - never both visible/listed at once. */}
-          <PileListSection
-            warehouseId={currentWarehouseId}
-            onCreatePile={() => setPileModal({ mode: 'create' })}
-            onEditPile={(pile) => setPileModal({ mode: 'edit', pile })}
-          />
-          <div className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-            <h2 className="text-center text-base font-semibold text-app-text">Sack Beginning Balances</h2>
-            <div className="mt-3">
-              <SacksBeginningBalances warehouseId={currentWarehouseId} />
-            </div>
+          {/* Stocks/Sacks stay two separate tabs - Create Pile only ever
+              lives under Stocks. Piles used to also duplicate a second
+              full list under a "Beginning Balances" tab here; that's
+              gone now (see PileListSection's own comment) - Stocks IS
+              the one pile list, and balance editing is reached through
+              CreateEditPileModal's own "Edit balance ->" link instead. */}
+          <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+            <div
+              className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+              style={{ transform: stockTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+            />
+            <button
+              type="button"
+              onClick={() => setStockTab('stocks')}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${stockTab === 'stocks' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+            >
+              Stocks
+            </button>
+            <button
+              type="button"
+              onClick={() => setStockTab('sacks')}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${stockTab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+            >
+              Sacks
+            </button>
+          </div>
+
+          {/* Both stay mounted, toggled via a plain class rather than a
+              key-based remount - remounting on every switch would
+              restart each panel's useLiveQuery from undefined, flashing
+              its empty state before real data replaced it. */}
+          <div className={stockTab === 'stocks' ? '' : 'hidden'}>
+            <PileListSection
+              warehouseId={currentWarehouseId}
+              onCreatePile={() => setPileModal({ mode: 'create' })}
+              onEditPile={(pile) => setPileModal({ mode: 'edit', pile })}
+            />
+          </div>
+          <div className={stockTab === 'sacks' ? 'mt-6' : 'hidden'}>
+            <SacksBeginningBalances warehouseId={currentWarehouseId} />
           </div>
         </div>
       )}
