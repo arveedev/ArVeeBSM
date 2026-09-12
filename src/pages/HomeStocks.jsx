@@ -658,40 +658,7 @@ function HomeStocks({ warehouseId } = {}) {
         // expanded - collapsed by default alongside the variety cards.
         const categoryHasExpanded = Object.keys(byVariety).some((v) => expandedVarieties.has(`${cerealType}::${v}`))
 
-        // The Total's own Potential figure is the SUM of every row's own
-        // already-clamped potential below it (each bucket's, or each By
-        // Products variety's), computed here from the exact same inputs
-        // VarietyCard itself displays with - NEVER independently as
-        // Math.max(0, cerealTotal - cerealUnwithdrawn), which can drift
-        // below what the rows actually show. Same bug class, same fix,
-        // as AdminHomeStocks.jsx's Province table: whenever one row's own
-        // unwithdrawn exceeds its own actual, that row correctly clamps
-        // to 0 for display, but an independently-recomputed Total would
-        // still subtract that row's full (now-invisible) excess,
-        // producing a Total lower than what's actually shown above it.
         const cerealEffectiveShowNetBags = cerealType === 'By Products' ? false : showNetBags
-        let cerealPotentialAmt = 0
-        let cerealPotentialKilos = 0
-        for (const [varietyName, byBucket] of Object.entries(byVariety)) {
-          const varietyId = groupVarietyId[cerealType]?.[varietyName]
-          if (cerealType === 'By Products') {
-            const varietyBags = Object.values(byBucket).reduce((s, v) => s + v.bags, 0)
-            const varietyKilos = Object.values(byBucket).reduce((s, v) => s + v.kilos, 0)
-            const flatUnwithdrawn = varietyId ? unwithdrawnMap.get(varietyId) : null
-            const flatUnwithdrawnAmt = flatUnwithdrawn ? unwithdrawnAmount(flatUnwithdrawn, false) : 0
-            cerealPotentialAmt += Math.max(0, varietyBags - flatUnwithdrawnAmt)
-            cerealPotentialKilos += Math.max(0, varietyKilos - (flatUnwithdrawn?.kilos ?? 0))
-          } else {
-            const bucketUnwithdrawnMap = varietyId ? unwithdrawnByVarietyAge.get(varietyId) : null
-            for (const [bucketLabel, totals] of Object.entries(byBucket)) {
-              const bucketUnwithdrawn = bucketUnwithdrawnMap?.get(bucketLabel)
-              const bucketUnwithdrawnAmt = unwithdrawnAmount(bucketUnwithdrawn, cerealEffectiveShowNetBags)
-              const bucketTotalAmt = cerealEffectiveShowNetBags ? totals.kilos / 50 : totals.bags
-              cerealPotentialAmt += Math.max(0, bucketTotalAmt - bucketUnwithdrawnAmt)
-              cerealPotentialKilos += Math.max(0, totals.kilos - (bucketUnwithdrawn?.kilos ?? 0))
-            }
-          }
-        }
 
         return (
           <div
@@ -747,12 +714,43 @@ function HomeStocks({ warehouseId } = {}) {
             })()}
             {(() => {
               const isByProducts = cerealType === 'By Products'
-              const cerealVarietyIds = [...new Set(Object.values(groupVarietyId[cerealType] ?? {}))]
+              // Reported, confirmed real bug: this used to sum only the
+              // varieties that currently have live pile stock
+              // (groupVarietyId, built from stockGroups) - an AI
+              // authorized against a variety that currently has ZERO
+              // physical stock in any pile (fully drawn down already, or
+              // authorized ahead of the stock ever being received) was
+              // silently excluded from this Total's own Unwithdrawn
+              // figure, even though AdminHomeStocks.jsx's warehouse/
+              // province views (which scope unwithdrawn to EVERY variety
+              // in the category, live pile stock or not) correctly
+              // counted it - making this page's Total look healthier
+              // (higher Potential) than the true, complete picture shown
+              // elsewhere for the exact same warehouse. Every variety
+              // whose OWN category matches this cereal type is now
+              // included here, matching AdminHomeStocks.jsx's scope
+              // exactly, regardless of whether it has a visible variety
+              // card on screen right now.
+              const cerealVarietyIds = [...unwithdrawnMap.keys()].filter((vid) => varietyCategoryMap.get(vid) === cerealType)
               const cerealUnwithdrawn = cerealVarietyIds.reduce((acc, vid) => {
                 const uw = unwithdrawnMap.get(vid)
                 return uw ? { bags: acc.bags + uw.bags, kilos: acc.kilos + uw.kilos } : acc
               }, { bags: 0, kilos: 0 })
               const cerealUnwithdrawnAmt = unwithdrawnAmount(cerealUnwithdrawn, cerealEffectiveShowNetBags)
+              // Potential is computed ONCE, directly from this Total's
+              // own actual and unwithdrawn figures (both immediately
+              // above/beside it) - not summed from the per-bucket/
+              // per-variety rows below, which is a DIFFERENT, narrower
+              // scope (per-bucket unwithdrawn additionally excludes any
+              // authority whose ageGroup can't be resolved to a bucket
+              // at all - see computeUnwithdrawnByVarietyAge). Summing
+              // that narrower scope would silently drop those
+              // authorities from the Total too, making Potential +
+              // Unwithdrawn stop adding up to Actual - the Total must
+              // stay self-consistent with the two numbers displayed
+              // right next to it.
+              const cerealPotentialAmt = Math.max(0, cerealEffectiveShowNetBags ? cerealKilos / 50 - cerealUnwithdrawnAmt : cerealBags - cerealUnwithdrawnAmt)
+              const cerealPotentialKilos = Math.max(0, cerealKilos - cerealUnwithdrawn.kilos)
               // By Products variety cards have no expand/collapse state
               // any more (see VarietyCard's own comment - age buckets
               // never genuinely applied there), so gating the Total's

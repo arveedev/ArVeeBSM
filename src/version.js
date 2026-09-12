@@ -2168,5 +2168,45 @@
 //              root cause/fix as the Province table) instead of
 //              independently recomputing actual-minus-unwithdrawn at
 //              the whole-cereal-type level, which could diverge the
-//              same way.
-export const APP_VERSION = '1.9-122'
+//              same way. (Superseded by 1.9-123 below - this approach
+//              turned out to be wrong for this specific card; see that
+//              entry for why and what replaced it.)
+//   1.9-123 - Two more real, reported data-integrity bugs, found by
+//            tracing a warehouse whose own per-warehouse Rice Potential
+//            (641) disagreed with the SAME warehouse's Rice Potential
+//            on the Province-level overview (0):
+//            - 1.9-122's own "sum the rows' clamped potential" fix for
+//              HomeStocks.jsx's cereal Total (see above) was itself
+//              wrong: unlike the Province table (where every warehouse
+//              belongs to exactly one province - summing province rows
+//              always reconstructs the true total exactly), a cereal
+//              Total's age-bucket rows do NOT cover every authority -
+//              any AI whose ageGroup can't be resolved to a bucket is
+//              structurally excluded from every bucket row by design
+//              (computeUnwithdrawnByVarietyAge), so summing bucket rows
+//              always undercounts real unwithdrawn stock, independent of
+//              whether any bucket even needed clamping. This made the
+//              Total's own Unwithdrawn and Potential badges stop adding
+//              up to its own Actual figure (confirmed: 971 unwithdrawn +
+//              641 potential = 1,612, not the 1,399 actual shown right
+//              above them). Reverted to computing Potential once,
+//              directly as Actual minus the Total's own (complete)
+//              Unwithdrawn figure - the two badges on a Total card must
+//              always add back up to the Actual figure beside them.
+//            - Real root cause of the 641-vs-0 warehouse/province
+//              mismatch: HomeStocks.jsx's own Total Unwithdrawn figure
+//              was scoped only to varieties that currently have live
+//              pile stock (matching which variety cards render on
+//              screen) - an AI authorized against a variety with ZERO
+//              current physical stock (fully drawn down, or authorized
+//              ahead of ever being received) was silently excluded
+//              there, while AdminHomeStocks.jsx's warehouse/province
+//              views correctly count every authority in the category
+//              regardless of live pile stock. Both now use the same,
+//              complete scope - the Total may now show more Unwithdrawn
+//              (and less Potential) than the visible variety cards
+//              alone would suggest, which is correct: a real
+//              commitment against this warehouse's category exists even
+//              when there's no matching pile on screen right now to
+//              attribute it to.
+export const APP_VERSION = '1.9-123'
