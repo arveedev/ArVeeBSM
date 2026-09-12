@@ -2442,4 +2442,40 @@
 //              (chevron-expand for Rice/Palay, always-shown for By
 //              Products) is unchanged in behavior, just reskinned to
 //              sit inside the new card frame.
-export const APP_VERSION = '1.9-139'
+//   1.9-140 - Header + avatar system, first pass of the Settings UX
+//            redesign agreed through many rounds of demos:
+//            - New custom avatar system, per real login user (not
+//              Visitors, who get a static default): pick a background
+//              (50 solid + 25 gradient, utils/avatarOptions.js),
+//              category (5), avatar (20 per category = 100), and an
+//              animation (12, index.css's avatar-* keyframes, off by
+//              default and skipped entirely under prefers-reduced-
+//              motion). Opens via AvatarPickerModal.jsx from either the
+//              header avatar or a new "Change Avatar" link on Settings'
+//              profile card - saves straight to db.users (no schema
+//              bump - same pattern as other optional per-record fields
+//              like purity/moistureContent), so it's live everywhere at
+//              once, on every device via Dexie Cloud sync.
+//            - AppHeader now shows that avatar beside the page title on
+//              every page/role (avatar left, title beside it, no
+//              subtext except Home's existing "Welcome back" greeting,
+//              unchanged). The four right-side controls (sync/KG-MT/
+//              theme/logout) now sit inside one shared pill instead of
+//              four individually bordered circles - same tap-target
+//              sizing as before, just visually grouped. The pill never
+//              wraps or shrinks; a long page title wraps onto its own
+//              second line instead, so the pill stays pinned to the
+//              same top-right spot at the same size on every page.
+//            - Settings: Classifier's separate Delete button removed -
+//              Edit already shows an editable, clearable input, so
+//              Delete was a second control for what's really one
+//              action. Auto Age Monitoring gets a small clock icon.
+//              The plain-user/Visitor "Sync Status" card is gone,
+//              folded into a small pill on the profile card instead
+//              (Admin's own diagnostic panel is untouched).
+//            - Still to come: the Create/Edit Pile modal and Beginning
+//              Balances redesign agreed in the same round of demos -
+//              a larger, higher-risk change (it touches live stock
+//              data entry) getting its own separate, focused pass
+//              rather than being rushed in alongside this one.
+export const APP_VERSION = '1.9-140'

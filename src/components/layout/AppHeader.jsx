@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useObservable } from 'dexie-react-hooks'
+import { useObservable, useLiveQuery } from 'dexie-react-hooks'
 import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, Check } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -18,6 +18,8 @@ import { usePageHeader } from '../../context/PageHeaderContext.jsx'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
+import Avatar from '../common/Avatar.jsx'
+import AvatarPickerModal from '../common/AvatarPickerModal.jsx'
 
 // Same phases treated as "caught up" in isCloudSyncCaughtUp (dexie.js) -
 // kept as a separate, purely-display copy here rather than importing
@@ -37,14 +39,25 @@ const SYNC_LABELS = {
 const LOGOUT_FADE_MS = 500
 
 function AppHeader({ hidden = false }) {
-  const { logout } = useAuth() ?? {}
+  const { user, logout } = useAuth() ?? {}
   const { theme, weightUnit, updateSetting } = useSettings() ?? {}
   const { title, subtitle, setHeaderHeight } = usePageHeader() ?? {}
   const navigate = useNavigate()
   const [confirmingLogout, setConfirmingLogout] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [hasEntered, setHasEntered] = useState(false)
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const headerRef = useRef(null)
+
+  // Live, not read off the in-memory `user` object from AuthContext -
+  // that object is a one-time snapshot from login and intentionally
+  // never persisted/refreshed (see AuthContext's own top comment), so a
+  // saved avatar change wouldn't show up here until the next login
+  // without querying the real record directly. Visitor sessions have no
+  // uid (synthetic, not a real db.users row) and just get the default,
+  // non-editable avatar.
+  const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
+  const canEditAvatar = Boolean(user?.uid)
 
   // Slides down from above on mount - needs a tick of delay
   // (requestAnimationFrame) so the browser actually paints the
@@ -148,21 +161,40 @@ function AppHeader({ hidden = false }) {
         }}
         className="sticky top-0 z-50 border-b border-neutral-800 bg-neutral-950"
       >
-        <div className="flex items-center justify-between gap-2 px-4 py-2">
-          <div className="min-w-0">
-            {title && <h1 className="truncate text-lg font-semibold text-app-text">{title}</h1>}
-            {/* Reported, real bug: truncate clipped a short subtitle
-                like "Welcome back, JP." down to "Welcome…" on a narrow
-                phone, since this column only gets whatever width is
-                left after the icon row on the right. break-words wraps
-                onto a second line instead of cutting text off - the
-                header's own height is already computed dynamically
-                (see headerRef/setHeaderHeight above) so a taller header
-                here doesn't overlap the page content below it. */}
-            {subtitle && <p className="break-words text-sm font-medium text-neutral-300">{subtitle}</p>}
+        <div className="flex items-start justify-between gap-2 px-4 py-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <Avatar
+              avatarBg={userRecord?.avatarBg}
+              avatarFace={userRecord?.avatarFace}
+              avatarAnim={userRecord?.avatarAnim}
+              name={user?.name}
+              size={32}
+              onClick={canEditAvatar ? () => setAvatarPickerOpen(true) : undefined}
+            />
+            <div className="min-w-0">
+              {title && <h1 className="break-words text-lg font-semibold text-app-text">{title}</h1>}
+              {/* Reported, real bug: truncate clipped a short subtitle
+                  like "Welcome back, JP." down to "Welcome…" on a narrow
+                  phone, since this column only gets whatever width is
+                  left after the icon row on the right. break-words wraps
+                  onto a second line instead of cutting text off - the
+                  header's own height is already computed dynamically
+                  (see headerRef/setHeaderHeight above) so a taller header
+                  here doesn't overlap the page content below it. */}
+              {subtitle && <p className="break-words text-sm font-medium text-neutral-300">{subtitle}</p>}
+            </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          {/* One shared pill instead of four individually bordered
+              circles - reads as one "session controls" cluster rather
+              than loose icons scattered across the header. shrink-0 so
+              it never shrinks or wraps onto its own row even when the
+              title/greeting above does - it stays pinned to this exact
+              top-right spot at this exact size on every page. Icon/
+              segment sizing (h-11/w-11, generous KG/MT padding) is
+              unchanged from before - already comfortably past a real
+              tap-target minimum, just no longer individually outlined. */}
+          <div className="flex shrink-0 items-center gap-1 rounded-full bg-neutral-900 p-1">
             {/* Sync status - tap for a plain-language explanation. The
                 icon itself stays solid/static (scaling or fading it in
                 place reads as a dropped connection, not activity) - a
@@ -178,7 +210,7 @@ function AppHeader({ hidden = false }) {
               type="button"
               onClick={handleSyncIconTap}
               aria-label="Sync status"
-              className="relative flex h-11 w-11 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 transition-all active:scale-90"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full transition-all active:scale-90"
             >
               {showRipple && (
                 <span className={`pointer-events-none absolute h-8 w-8 rounded-full border-2 ${rippleColorClass} ${rippleSpeedClass}`} />
@@ -203,7 +235,7 @@ function AppHeader({ hidden = false }) {
               type="button"
               onClick={() => updateSetting?.('weightUnit', isMt ? 'kg' : 'mt')}
               aria-label="Toggle KG/MT weight unit"
-              className="flex items-center overflow-hidden rounded-full border border-neutral-800 bg-neutral-900 text-xs font-bold"
+              className="flex items-center overflow-hidden rounded-full bg-neutral-950 text-xs font-bold"
             >
               <span className={`px-2.5 py-2 transition-colors ${!isMt ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}>
                 KG
@@ -219,10 +251,10 @@ function AppHeader({ hidden = false }) {
               type="button"
               onClick={() => updateSetting?.('theme', isLight ? 'dark' : 'light')}
               aria-label="Toggle dark/light mode"
-              className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all active:scale-90 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition-all active:scale-90 ${
                 isLight
-                  ? 'border-brand-neon bg-neutral-900 text-brand-neon shadow-[0_0_12px_rgba(0,255,163,0.6)]'
-                  : 'border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-brand-neon/50 hover:text-brand-neon'
+                  ? 'text-brand-neon shadow-[0_0_12px_rgba(0,255,163,0.6)]'
+                  : 'text-neutral-300 hover:text-brand-neon'
               }`}
             >
               {isLight ? <Sun size={20} /> : <Moon size={20} />}
@@ -232,7 +264,7 @@ function AppHeader({ hidden = false }) {
               type="button"
               onClick={() => setConfirmingLogout(true)}
               aria-label="Logout"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-crimson/40 bg-neutral-900 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90"
             >
               <LogOut size={20} />
             </button>
@@ -245,6 +277,16 @@ function AppHeader({ hidden = false }) {
             header's actual height, since this moves with it. */}
         <div className="pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-neutral-950 to-transparent" />
       </div>
+
+      {canEditAvatar && (
+        <AvatarPickerModal
+          open={avatarPickerOpen}
+          current={userRecord}
+          name={user?.name}
+          onClose={() => setAvatarPickerOpen(false)}
+          onSave={(avatar) => db.users.update(user.uid, avatar)}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmingLogout}

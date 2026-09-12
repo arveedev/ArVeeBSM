@@ -294,6 +294,79 @@ select {
   animation: page-slide-from-left 0.32s ease-out;
 }
 
+/* Avatar picker animations - one keyframe per option in
+   AVATAR_ANIMATIONS (avatarOptions.js), applied via inline
+   `animation: avatar-<id> ...` from Avatar.jsx rather than a Tailwind
+   utility per option, since the id is data-driven (a user's saved
+   choice), not a fixed class known at build time. Deliberately small
+   amplitude/slow-ish timing throughout - this sits on a working
+   warehouse app, not a game, and shouldn't distract next to real
+   figures. Respects prefers-reduced-motion (Avatar.jsx skips applying
+   any animation at all when that's set, regardless of the saved choice). */
+@keyframes avatar-bob {
+  0%, 100% { transform: scale(var(--avatar-scale, 1.2)) translateY(0); }
+  50% { transform: scale(var(--avatar-scale, 1.2)) translateY(-3px); }
+}
+@keyframes avatar-float {
+  0%, 100% { transform: scale(var(--avatar-scale, 1.2)) translateY(0) rotate(0deg); }
+  50% { transform: scale(var(--avatar-scale, 1.2)) translateY(-4px) rotate(-4deg); }
+}
+@keyframes avatar-sway {
+  0%, 100% { transform: scale(var(--avatar-scale, 1.2)) rotate(-6deg); }
+  50% { transform: scale(var(--avatar-scale, 1.2)) rotate(6deg); }
+}
+@keyframes avatar-nod {
+  0%, 100% { transform: scale(var(--avatar-scale, 1.2)) rotate(0deg) translateY(0); }
+  50% { transform: scale(var(--avatar-scale, 1.2)) rotate(3deg) translateY(1px); }
+}
+@keyframes avatar-blink {
+  0%, 88%, 100% { transform: scale(var(--avatar-scale, 1.2)) scaleY(1); }
+  92% { transform: scale(var(--avatar-scale, 1.2)) scaleY(0.15); }
+}
+@keyframes avatar-wiggle {
+  0%, 100% { transform: scale(var(--avatar-scale, 1.2)) rotate(0deg); }
+  25% { transform: scale(var(--avatar-scale, 1.2)) rotate(-9deg); }
+  75% { transform: scale(var(--avatar-scale, 1.2)) rotate(9deg); }
+}
+@keyframes avatar-spin-slow {
+  0% { transform: scale(var(--avatar-scale, 1.2)) rotate(0deg); }
+  100% { transform: scale(var(--avatar-scale, 1.2)) rotate(360deg); }
+}
+@keyframes avatar-bounce {
+  0%, 100% { transform: scale(var(--avatar-scale, 1.2)) translateY(0); }
+  30% { transform: scale(var(--avatar-scale, 1.2)) translateY(-6px); }
+  50% { transform: scale(var(--avatar-scale, 1.2)) translateY(0); }
+  65% { transform: scale(var(--avatar-scale, 1.2)) translateY(-2px); }
+}
+@keyframes avatar-wave {
+  0%, 100% { transform: scale(var(--avatar-scale, 1.2)) rotate(0deg); }
+  15% { transform: scale(var(--avatar-scale, 1.2)) rotate(14deg); }
+  30% { transform: scale(var(--avatar-scale, 1.2)) rotate(-8deg); }
+  45% { transform: scale(var(--avatar-scale, 1.2)) rotate(14deg); }
+  60% { transform: scale(var(--avatar-scale, 1.2)) rotate(0deg); }
+}
+@keyframes avatar-sparkle-ping {
+  0%, 75%, 100% { opacity: 0; transform: scale(0.4); }
+  85% { opacity: 1; transform: scale(1); }
+}
+.animate-avatar-bob { animation: avatar-bob 1.6s ease-in-out infinite; }
+.animate-avatar-float { animation: avatar-float 2.2s ease-in-out infinite; }
+.animate-avatar-sway { animation: avatar-sway 2s ease-in-out infinite; }
+.animate-avatar-nod { animation: avatar-nod 1.4s ease-in-out infinite; }
+.animate-avatar-blink { animation: avatar-blink 3.2s ease-in-out infinite; }
+.animate-avatar-wiggle { animation: avatar-wiggle 1.1s ease-in-out infinite; }
+.animate-avatar-spin-slow { animation: avatar-spin-slow 5s linear infinite; }
+.animate-avatar-bounce { animation: avatar-bounce 1.8s ease-in-out infinite; }
+.animate-avatar-wave { animation: avatar-wave 2s ease-in-out infinite; }
+.animate-avatar-sparkle { animation: avatar-sparkle-ping 2.4s ease-in-out infinite; }
+/* pulse-ring reuses Tailwind's built-in `animate-ping` on a separate
+   ring element (same sonar-ping pattern AppHeader's own sync icon
+   already uses), not a keyframe here - see Avatar.jsx. */
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-avatar-"] { animation: none !important; }
+}
+
 /* Staggered "flow down" reveal for the field block below the serial
    number, triggered alongside the nav slide animation above - each
    field cascades in with a slight increasing delay rather than all

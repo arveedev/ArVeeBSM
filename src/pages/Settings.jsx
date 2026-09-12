@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2, ShieldCheck, MoreVertical, Check, AlertTriangle, User } from 'lucide-react'
+import { Pencil, ShieldCheck, MoreVertical, Check, AlertTriangle, User, Clock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -16,10 +16,11 @@ import { createPileWithBeginningBalance, recalculatePileCurrentState, closePile,
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, listItemClass, editIconClass } from '../components/common/admin/shared.js'
 import { CONDITION_FLAGS } from '../components/forms/shared.js'
-import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
 import BeginningBalancesPanel from '../components/common/admin/BeginningBalancesPanel.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
+import Avatar from '../components/common/Avatar.jsx'
+import AvatarPickerModal from '../components/common/AvatarPickerModal.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const AGE_UNITS = ['Days', 'Months']
@@ -27,12 +28,19 @@ const AGE_UNITS = ['Days', 'Months']
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
 
-function Toggle({ label, description, value, onChange }) {
+function Toggle({ label, description, value, onChange, icon: Icon }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
-      <div>
-        <p className="text-base font-medium text-app-text">{label}</p>
-        {description && <p className="mt-0.5 text-sm text-neutral-500">{description}</p>}
+      <div className="flex items-start gap-3">
+        {Icon && (
+          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-neon/10 text-brand-neon">
+            <Icon size={15} />
+          </div>
+        )}
+        <div>
+          <p className="text-base font-medium text-app-text">{label}</p>
+          {description && <p className="mt-0.5 text-sm text-neutral-500">{description}</p>}
+        </div>
       </div>
       <button
         type="button"
@@ -63,7 +71,6 @@ function ClassifierSection({ warehouseId }) {
   const [name, setName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const containerRef = useRef(null)
 
@@ -120,12 +127,6 @@ function ClassifierSection({ warehouseId }) {
     toast.success(savedName ? 'Classifier updated' : 'Classifier saved')
     setIsSaving(false)
     setIsEditing(false)
-  }
-
-  const handleDeleteConfirmed = async () => {
-    setConfirmingDelete(false)
-    await db.warehouses.update(warehouseId, { classifierName: null })
-    toast.success('Classifier removed')
   }
 
   const showInput = isEditing || !savedName
@@ -193,24 +194,15 @@ function ClassifierSection({ warehouseId }) {
       ) : (
         <div className="mt-3 flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
           <span className="text-base text-app-text">{savedName}</span>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setIsEditing(true)} aria-label="Edit" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-app-text active:scale-90">
-              <Pencil size={20} />
-            </button>
-            <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Delete" className="rounded-lg p-2 text-neutral-400 transition-all hover:text-brand-crimson active:scale-90">
-              <Trash2 size={20} />
-            </button>
-          </div>
+          {/* Delete removed - the only real action here is edit (which
+              already shows an editable, clearable input pre-filled with
+              the current name), so a separate destructive button next
+              to it added a second control for what's really one action. */}
+          <button type="button" onClick={() => setIsEditing(true)} aria-label="Edit" className="rounded-lg p-2 text-brand-neon transition-all hover:text-app-text active:scale-90">
+            <Pencil size={20} />
+          </button>
         </div>
       )}
-
-      <ConfirmDialog
-        open={confirmingDelete}
-        title="Remove this classifier?"
-        description="This cannot be undone."
-        onConfirm={handleDeleteConfirmed}
-        onCancel={() => setConfirmingDelete(false)}
-      />
     </div>
   )
 }
@@ -788,6 +780,8 @@ function Settings() {
   const warehouseSectionRef = useRef(null)
   const pileCardRef = useRef(null)
   const [pileSection, setPileSection] = useState('create')
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+  const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
   // Only scrolls when a real tab click set this flag first - NOT inferred
   // from "is this the first render" (the previous approach), which
   // React StrictMode's dev-only double-invocation of effects defeats:
@@ -845,12 +839,51 @@ function Settings() {
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       {user && (
-        <div className="mt-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-          <p className="text-sm font-medium text-app-text">
-            {user.nickname} · {user.role}
-          </p>
-          <p className="text-xs text-neutral-400">{user.name}</p>
+        <div className="mt-4 flex items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+          <Avatar
+            avatarBg={userRecord?.avatarBg}
+            avatarFace={userRecord?.avatarFace}
+            avatarAnim={userRecord?.avatarAnim}
+            name={user.name}
+            size={44}
+            onClick={user.uid ? () => setAvatarPickerOpen(true) : undefined}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-app-text">{user.name}</p>
+            <p className="text-xs text-neutral-400">{user.nickname} · {user.role}</p>
+            {user.uid && (
+              <button type="button" onClick={() => setAvatarPickerOpen(true)} className="mt-0.5 text-xs font-semibold text-brand-neon">
+                Change Avatar
+              </button>
+            )}
+          </div>
+          {/* Sync status folded in here as a small pill for ordinary
+              users/visitors, instead of its own separate card below -
+              admins keep the full diagnostic panel further down
+              untouched, since that one carries real troubleshooting
+              data a status pill can't replace. */}
+          {user.role !== 'Admin' && (
+            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${syncBorderClass} ${syncBgClass} text-app-text`}>
+              {!cloudSyncState
+                ? 'Checking…'
+                : cloudSyncState.status !== 'connected'
+                  ? 'Offline'
+                  : cloudSyncState.phase === 'in-sync'
+                    ? 'Connected'
+                    : 'Syncing…'}
+            </span>
+          )}
         </div>
+      )}
+
+      {user?.uid && (
+        <AvatarPickerModal
+          open={avatarPickerOpen}
+          current={userRecord}
+          name={user.name}
+          onClose={() => setAvatarPickerOpen(false)}
+          onSave={(avatar) => db.users.update(user.uid, avatar)}
+        />
       )}
 
       {user?.role === 'Admin' && (
@@ -866,7 +899,7 @@ function Settings() {
         </Link>
       )}
 
-      {user?.role === 'Admin' ? (
+      {user?.role === 'Admin' && (
         <div className={`mt-4 rounded-xl border ${syncBorderClass} ${syncBgClass} p-3`}>
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-amber">Sync Identity (Diagnostic)</p>
           <p className="mt-1 text-xs text-neutral-400">
@@ -926,19 +959,6 @@ function Settings() {
             </div>
           </div>
         </div>
-      ) : (
-        <div className={`mt-4 rounded-xl border ${syncBorderClass} ${syncBgClass} p-3`}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Sync Status</p>
-          <p className="mt-1 text-sm font-medium text-app-text">
-            {!cloudSyncState
-              ? 'Checking...'
-              : cloudSyncState.status !== 'connected'
-                ? 'Not connected - contact your admin if this persists'
-                : cloudSyncState.phase === 'in-sync'
-                  ? 'Connected'
-                  : 'Syncing...'}
-          </p>
-        </div>
       )}
 
       <div ref={warehouseSectionRef}>
@@ -975,6 +995,7 @@ function Settings() {
           description="Automatically calculates pile age from the date of receipt. When off, the displayed age stays at the manually set value until you edit it directly on the pile."
           value={autoAgeMonitoring ?? true}
           onChange={(val) => updateSetting?.('autoAgeMonitoring', val)}
+          icon={Clock}
         />
       </div>
 
