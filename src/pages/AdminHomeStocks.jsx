@@ -138,6 +138,30 @@ function AdminHomeStocks({ onWarehouseSelect }) {
       // Products consumers need this instead of netBags.
       bags: state?.bags ?? p.currentBags ?? 0,
       kilos: state?.kilos ?? p.currentKilos ?? 0,
+      // Reported, confirmed real bug: every category filter on this
+      // page (riceActual/palayActual, the Stock Breakdown cards, Age
+      // Grouping) read the pile's own stored cerealType field directly,
+      // which can disagree with its variety's real category (the same
+      // reason HomeStocks.jsx already resolves this via
+      // `p.variety?.category ?? p.cerealType` instead of trusting the
+      // pile field alone - see that file's own stockGroups comment). A
+      // pile whose stored cerealType silently drifted from its
+      // variety's own category was being counted as "actual" stock on
+      // HomeStocks.jsx (which trusts the variety) but SILENTLY EXCLUDED
+      // from this page's own Actual total (which didn't) - while the
+      // unwithdrawn side (computeUnwithdrawnByVariety, keyed by
+      // varietyId -> variety.category, never touches the pile's own
+      // field at all) still counted it in full. That gap is exactly
+      // what let a warehouse's own Potential on HomeStocks.jsx
+      // (correctly positive) disagree with the Province-level overview
+      // for the same warehouse (incorrectly clamped to 0) - confirmed,
+      // reported case: Catanduanes Rice showing 434.72 on its own
+      // warehouse page but 0 on the province overview. Falls back to
+      // the pile's own field only when the variety can't be resolved at
+      // all (the same case HomeStocks.jsx falls back for - a By
+      // Products pile, whose own varietyId field is unreliable; see
+      // pileLedger.js's own documentation of that gap).
+      cerealType: varietyCategoryMap.get(p.varietyId) ?? p.cerealType ?? 'Unknown',
     }
   })
 

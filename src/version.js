@@ -2245,4 +2245,24 @@
 //            origin, then reloads with a cache-busting URL. A genuinely
 //            clean slate that can't get stuck the same way, regardless
 //            of what state the stuck registration/precache was in.
-export const APP_VERSION = '1.9-125'
+//   1.9-126 - Found the real, structural cause of the Catanduanes Rice
+//            mismatch (434.72 potential on the warehouse's own page,
+//            0 on the Province overview) - both pages ultimately read
+//            the same computeUnwithdrawnByVariety data, but only
+//            HomeStocks.jsx resolved each pile's category through
+//            `p.variety?.category ?? p.cerealType` (its own established
+//            pattern, precisely because a pile's own stored cerealType
+//            field can drift from its variety's real category - see
+//            that file's own stockGroups comment). AdminHomeStocks.jsx
+//            never did this - every category filter on this page (the
+//            Province table, Stock Breakdown cards, Age Grouping) read
+//            the pile's raw cerealType field directly. A pile whose
+//            stored field had drifted was still counted as Rice
+//            "actual" on HomeStocks.jsx (which trusts the variety) but
+//            silently excluded from this page's own Actual total (which
+//            didn't) - while the unwithdrawn side (keyed by variety
+//            category, never the pile field) still counted it in full,
+//            clamping Potential all the way to 0. Every category filter
+//            on this page now resolves through the exact same
+//            variety-first fallback chain HomeStocks.jsx already uses.
+export const APP_VERSION = '1.9-126'
