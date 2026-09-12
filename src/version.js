@@ -2712,4 +2712,13 @@
 //            Piles' own Net Kg tile still showed a trailing "kg" under
 //            its own "NET KG" label (the same fix had already landed
 //            on Settings' pile tiles, just not this page's).
-export const APP_VERSION = '1.9-150'
+//   1.9-151 - Home Stocks' own per-variety rows (PDm/PDs etc, inside
+//            each cereal's card) now get the same responsive card
+//            treatment as their TOTAL row below - name on its own
+//            line, Bags/Net Kg as a tile pair, below the sm
+//            breakpoint - per explicit request ("looks better and more
+//            readable at a glance"). sm+ keeps the original shared
+//            grid (still aligned with the age-bucket/unwithdrawn rows
+//            below it, which stay grid-based at every width - they're
+//            secondary, on-demand detail behind the expand arrow).
+export const APP_VERSION = '1.9-151'

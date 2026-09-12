@@ -177,11 +177,16 @@ function VarietyCard({
 
   return (
     <div className="mt-3 rounded-lg border border-neutral-800/80 bg-neutral-800/30 px-2.5 py-2">
-      {/* Column headers, once per card - every row below (main figures,
-          age buckets, unwithdrawn/potential) reuses this exact same
-          grid so the unit only needs to be named here, not repeated as
-          text on every single row. */}
-      <div className="grid gap-x-2 text-right text-[9px] font-semibold uppercase tracking-wide text-neutral-500" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
+      {/* Column headers, once per card - every sm+ row below (main
+          figures, age buckets, unwithdrawn/potential) reuses this exact
+          same grid so the unit only needs to be named here, not
+          repeated as text on every single row. Hidden below sm along
+          with the main row's own grid (now a card there instead, with
+          its own inline tile labels) - the age-bucket/unwithdrawn rows
+          that stay grid-based at every width lose this explicit header
+          on a narrow phone, but they're secondary, on-demand detail
+          (behind the expand arrow), not the primary figure. */}
+      <div className="hidden gap-x-2 text-right text-[9px] font-semibold uppercase tracking-wide text-neutral-500 sm:grid" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
         <span />
         <span>{unitLabel}</span>
         <span>{weightColLabel}</span>
@@ -191,7 +196,14 @@ function VarietyCard({
         onClick={hasExpandableDetail ? onToggle : undefined}
         className={`mt-0.5 rounded-md transition-colors ${hasExpandableDetail ? 'cursor-pointer active:bg-neutral-800/60' : ''}`}
       >
-        <div className="grid items-baseline gap-x-2" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
+        {/* Same dual layout as CerealTotal's own TOTAL row below -
+            sm+ keeps the shared grid (aligned with the column headers
+            and every sub-row below it); below sm, the variety's own
+            name + figures read as a small card (name on its own line,
+            Bags/Net Kg as a tile pair) instead of a tight 3-column
+            row, per explicit request ("looks better and more readable
+            at a glance"). */}
+        <div className="hidden items-baseline gap-x-2 sm:grid" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
           <span className="truncate text-base font-semibold text-app-text">{varietyName}</span>
           <span className="text-right text-base font-bold tabular-nums text-app-text">
             <CountUpNumber value={Math.max(0, varietyTotalAmt)} format={(v) => formatAmount(v, effectiveShowNetBags)} />
@@ -199,6 +211,23 @@ function VarietyCard({
           <span className="text-right text-sm font-semibold tabular-nums text-app-text">
             <CountUpNumber value={Math.max(0, varietyKilos)} format={(v) => fmtWeightPlain(v, weightUnit)} />
           </span>
+        </div>
+        <div className="sm:hidden">
+          <p className="truncate text-base font-semibold text-app-text">{varietyName}</p>
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-neutral-950/40 py-1.5 text-center">
+              <p className="text-[9px] uppercase tracking-wide text-neutral-500">{unitLabel}</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">
+                <CountUpNumber value={Math.max(0, varietyTotalAmt)} format={(v) => formatAmount(v, effectiveShowNetBags)} />
+              </p>
+            </div>
+            <div className="rounded-lg bg-neutral-950/40 py-1.5 text-center">
+              <p className="text-[9px] uppercase tracking-wide text-neutral-500">{weightColLabel}</p>
+              <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">
+                <CountUpNumber value={Math.max(0, varietyKilos)} format={(v) => fmtWeightPlain(v, weightUnit)} />
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
