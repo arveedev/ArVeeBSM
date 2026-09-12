@@ -58,9 +58,16 @@ const heroTint = (category) => {
   return { pill: 'bg-neutral-700 text-neutral-300', wash: 'rgba(115,115,115,.2), rgba(115,115,115,.03)' }
 }
 
-function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
-  const { weightUnit } = useSettings() ?? {}
-  const [editingPileId, setEditingPileId] = useState(null)
+// The actual balance-editing form (Age/Date Procured + repeatable Lines)
+// for ONE specific pile - extracted out of PilesBeginningBalances so it
+// can be reused two ways: inline, driven by that component's own list
+// (AdminDashboard's standalone Beginning Balances page), and inside
+// EditBeginningBalanceModal.jsx as its own modal (reached via
+// CreateEditPileModal's "Edit balance ->" on Settings.jsx, where a
+// second full pile list here would just duplicate PileListSection's own
+// list on that page). Fully self-contained - loads its own data from
+// `pile` on mount, calls onDone() after Save/Cancel.
+function PileBalanceForm({ pile, warehouseId, onDone }) {
   const [lines, setLines] = useState([emptyLine()])
   const [originalSeedIds, setOriginalSeedIds] = useState([])
   const [age, setAge] = useState('')
@@ -70,37 +77,22 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
   // APR 4, 2025") - same pile.dateProcured field the exported pile
   // layout (pileLayoutPdfGenerator.js) and Settings > Create/Edit Pile
   // both already use, labeled "Date Received" for Rice or "Date
-  // Procured" for Palay depending on cereal type. Was previously only
-  // editable from Settings, not from here.
+  // Procured" for Palay depending on cereal type.
   const [dateProcured, setDateProcured] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [pendingDelete, setPendingDelete] = useState(null)
-  const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
-  // Editable, not always today - per explicit request, a pile that
-  // actually finished a few days ago should be able to report its real
-  // close date. Only relevant while closing, not re-opening.
-  const [closeDate, setCloseDate] = useState(todayLocalISO())
-  const [openMenuPileId, setOpenMenuPileId] = useState(null)
   const formRef = useRef(null)
 
-  const piles = useLiveQuery(
-    () => (warehouseId ? db.piles.where('warehouseId').equals(warehouseId).toArray() : []),
-    [warehouseId]
-  ) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
-  const sortedPiles = [...piles].sort((a, b) => byAlpha(a.pileName, b.pileName))
-
-  // Sack types, used to resolve each pile's MTS (empty-sack tare) weight -
+  // Sack types, used to resolve this pile's MTS (empty-sack tare) weight -
   // matched against the sack-weight bucket that Reports.jsx/pdfGenerator.js
   // fall back to for transactions with no MTS of their own.
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
-  const editingPile = piles.find((p) => p.pileId === editingPileId)
   // The pile's own cerealType, not a varietyId->category lookup - a By
   // Products pile can legitimately have a blank/null varietyId (it
   // isn't locked to one), which would make that lookup fail to
   // resolve 'By Products' at all.
-  const editingCategory = editingPile?.cerealType
+  const editingCategory = pile.cerealType
   const editingCategoryVarieties = varieties
     .filter((v) => v.category === editingCategory)
     .sort((a, b) => byAlpha(a.name, b.name))
@@ -111,84 +103,65 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
     .filter((s) => editingCategory === 'By Products' || s.category === editingCategory)
     .sort((a, b) => byAlpha(a.code, b.code))
 
-  const resetForm = () => {
-    setEditingPileId(null)
-    setLines([emptyLine()])
-    setOriginalSeedIds([])
-    setAge('')
-    setAgeUnit('Days')
-    setDateProcured('')
-  }
-
-  const handleEdit = async (pile) => {
-    const seeds = await db.transactions
-      .where('pileId').equals(pile.pileId)
-      .and((t) => t.isInitialBalance)
-      .toArray()
-    setEditingPileId(pile.pileId)
-    setOriginalSeedIds(seeds.map((s) => s.id))
-    setLines(seeds.length
-      ? seeds.map((s, i) => ({
-          txId: s.id,
-          varietyId: s.varietyId ?? '',
-          bags: liveFormatNumber(String(s.numberOfBags ?? 0)),
-          kilos: liveFormatNumber(String(s.netKilos ?? 0), 3),
-          condition: s.condition ?? 'GQ',
-          dateReceived: s.date ?? pile.dateOfReceipt ?? todayLocalISO(),
-          // Falls back to the pile record's own purity/moistureContent
-          // when the seed transaction itself has none - older piles
-          // created before this was fixed had these two fields written
-          // to the pile but never to its own seed transaction, so
-          // editing showed them blank even though the pile genuinely
-          // had real values on file.
-          purity: (s.purity ?? pile.purity) ?? '',
-          moistureContent: (() => {
-            const mc = s.moistureContent ?? pile.moistureContent
-            return mc != null ? liveFormatNumber(String(mc)) : ''
-          })(),
-          mtsSackTypeId: s.mtsSackTypeId ?? '',
-          mtsCondition: s.mtsCondition ?? '',
-          // By Products only (see emptyLine's comment) - falls back to
-          // the pile's own single dateProcured ONLY on the first line, so
-          // a pile saved before this per-line field existed doesn't
-          // silently lose its one recorded value on the next edit.
-          dateProcured: s.dateProcured ?? (i === 0 ? (pile.dateProcured ?? '') : ''),
-        }))
-      : [emptyLine()])
-    // The app only stores the normalized days value, not which unit it
-    // was originally entered in - previously this always hardcoded
-    // 'Days' regardless, meaning a pile entered in Months would show
-    // back as a large Days number every time it was re-edited. This
-    // heuristic guesses Months when the value divides evenly by 30
-    // (the exact conversion ratio used elsewhere), which is by far the
-    // most likely case for anything actually entered in Months.
-    const storedDays = pile.initialAgeValue ?? 0
-    setAgeUnit(storedDays > 0 && storedDays % 30 === 0 ? 'Months' : 'Days')
-    setAge(liveFormatNumber(String(
-      storedDays > 0 && storedDays % 30 === 0 ? storedDays / 30 : storedDays
-    )))
-    setDateProcured(pile.dateProcured ?? '')
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
-    })
-  }
-
-  // Lets CreateEditPileModal.jsx's "Edit balance ->" jump straight into
-  // editing a specific pile here, instead of leaving the user to find
-  // it again in the list below. Runs once per distinct focusPileId
-  // (guarded so it doesn't keep re-triggering handleEdit's own scroll/
-  // form-reset on every unrelated re-render), and clears itself via
-  // onFocusHandled so a second visit with the same pile can re-fire.
   useEffect(() => {
-    if (!focusPileId) return
-    const pile = piles.find((p) => p.pileId === focusPileId)
-    if (!pile) return
-    handleEdit(pile)
-    onFocusHandled?.()
+    let cancelled = false
+    ;(async () => {
+      const seeds = await db.transactions
+        .where('pileId').equals(pile.pileId)
+        .and((t) => t.isInitialBalance)
+        .toArray()
+      if (cancelled) return
+      setOriginalSeedIds(seeds.map((s) => s.id))
+      setLines(seeds.length
+        ? seeds.map((s, i) => ({
+            txId: s.id,
+            varietyId: s.varietyId ?? '',
+            bags: liveFormatNumber(String(s.numberOfBags ?? 0)),
+            kilos: liveFormatNumber(String(s.netKilos ?? 0), 3),
+            condition: s.condition ?? 'GQ',
+            dateReceived: s.date ?? pile.dateOfReceipt ?? todayLocalISO(),
+            // Falls back to the pile record's own purity/moistureContent
+            // when the seed transaction itself has none - older piles
+            // created before this was fixed had these two fields written
+            // to the pile but never to its own seed transaction, so
+            // editing showed them blank even though the pile genuinely
+            // had real values on file.
+            purity: (s.purity ?? pile.purity) ?? '',
+            moistureContent: (() => {
+              const mc = s.moistureContent ?? pile.moistureContent
+              return mc != null ? liveFormatNumber(String(mc)) : ''
+            })(),
+            mtsSackTypeId: s.mtsSackTypeId ?? '',
+            mtsCondition: s.mtsCondition ?? '',
+            // By Products only (see emptyLine's comment) - falls back to
+            // the pile's own single dateProcured ONLY on the first line, so
+            // a pile saved before this per-line field existed doesn't
+            // silently lose its one recorded value on the next edit.
+            dateProcured: s.dateProcured ?? (i === 0 ? (pile.dateProcured ?? '') : ''),
+          }))
+        : [emptyLine()])
+      // The app only stores the normalized days value, not which unit it
+      // was originally entered in - previously this always hardcoded
+      // 'Days' regardless, meaning a pile entered in Months would show
+      // back as a large Days number every time it was re-edited. This
+      // heuristic guesses Months when the value divides evenly by 30
+      // (the exact conversion ratio used elsewhere), which is by far the
+      // most likely case for anything actually entered in Months.
+      const storedDays = pile.initialAgeValue ?? 0
+      setAgeUnit(storedDays > 0 && storedDays % 30 === 0 ? 'Months' : 'Days')
+      setAge(liveFormatNumber(String(
+        storedDays > 0 && storedDays % 30 === 0 ? storedDays / 30 : storedDays
+      )))
+      setDateProcured(pile.dateProcured ?? '')
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      })
+    })()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusPileId, piles.length])
+  }, [pile.pileId])
 
   const updateLine = (index, field, value) => {
     setLines((rows) => rows.map((row, i) => {
@@ -214,7 +187,6 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
   }
 
   const handleSave = async () => {
-    if (!editingPileId) return
     setIsSaving(true)
     const newAgeDays = age === '' ? 0 : normalizeAgeToDays(parseFormattedNumber(age), ageUnit)
     const first = lines[0]
@@ -231,7 +203,7 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
     // new By Products display (which reads each group's own date
     // instead). Rice/Palay keeps the single shared form field exactly as
     // before - only ever ONE real procurement date for the whole pile.
-    await db.piles.update(editingPileId, {
+    await db.piles.update(pile.pileId, {
       initialAgeValue: newAgeDays,
       dateOfReceipt: first?.dateReceived || todayLocalISO(),
       dateProcured: editingCategory === 'By Products' ? (first?.dateProcured?.trim() || null) : (dateProcured.trim() || null),
@@ -243,7 +215,6 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
       mtsCondition: first?.mtsSackTypeId ? (first.mtsCondition || null) : null,
     })
 
-    const pile = piles.find((p) => p.pileId === editingPileId)
     const survivingTxIds = new Set()
 
     for (let i = 0; i < lines.length; i++) {
@@ -271,9 +242,9 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
         await db.transactions.update(line.txId, { date: line.dateReceived, varietyId: lineVarietyId, numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos, ...seedFields })
       } else if (newBags > 0 || newKilos > 0) {
         await db.transactions.add({
-          id: crypto.randomUUID(), type: 'WSR', serialNo: `INIT-${editingPileId.slice(0, 8)}-${i + 1}`,
+          id: crypto.randomUUID(), type: 'WSR', serialNo: `INIT-${pile.pileId.slice(0, 8)}-${i + 1}`,
           status: 'Active', date: line.dateReceived, warehouseId,
-          pileId: editingPileId, varietyId: lineVarietyId,
+          pileId: pile.pileId, varietyId: lineVarietyId,
           numberOfBags: newBags, grossKilos: newKilos, netKilos: newKilos,
           customerName: 'Beginning Balance',
           isInitialBalance: true, isSynced: false,
@@ -292,103 +263,28 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
     // re-derive them fresh from the complete ledger (seed + every
     // transaction since), so correcting a beginning balance can never
     // silently discard real activity that happened after it.
-    await recalculatePileCurrentState(editingPileId)
+    await recalculatePileCurrentState(pile.pileId)
 
     toast.success('Beginning balance updated')
-    resetForm()
     setIsSaving(false)
-  }
-
-  // Checks for real transactions beyond the pile's own seed, purely to
-  // inform the confirmation text below - never deleted, only mentioned.
-  const confirmDelete = async (pile) => {
-    const others = await db.transactions
-      .where('pileId').equals(pile.pileId)
-      .and((t) => !t.isInitialBalance)
-      .count()
-    setPendingDelete({ ...pile, hasHistory: others > 0 })
-  }
-
-  // Deletes only the pile RECORD - never its transactions. Every WSR/
-  // WSI/WTS ever recorded stays in the database forever, still linked
-  // by pileId, exactly as it happened - a deleted pile just means that
-  // record no longer shows in live totals or the layout, not that the
-  // history it created ceases to exist. Also clears any layout box
-  // still pointing at this pile, so it doesn't end up silently
-  // dangling (occupied-looking but referencing a pile that no longer
-  // resolves to anything).
-  const handleDeleteConfirmed = async () => {
-    const pile = pendingDelete
-    setPendingDelete(null)
-    const linkedBox = await db.pileLayoutBoxes.where('pileId').equals(pile.pileId).first()
-    if (linkedBox) await db.pileLayoutBoxes.update(linkedBox.id, { pileId: null, label: null })
-    await db.piles.delete(pile.pileId)
-    toast.success(`Pile "${pile.pileName}" deleted - its transactions were kept`)
-    if (editingPileId === pile.pileId) resetForm()
-  }
-
-  const confirmCloseToggle = (pile) => {
-    setOpenMenuPileId(null)
-    setCloseDate(todayLocalISO())
-    setPendingCloseToggle({ ...pile, willClose: !pile.closedDate })
-  }
-
-  const handleCloseToggleConfirmed = async () => {
-    const pile = pendingCloseToggle
-    setPendingCloseToggle(null)
-    if (pile.closedDate) {
-      await reopenPile(pile.pileId)
-      toast.success(`Pile "${pile.pileName}" re-opened`)
-    } else {
-      await closePile(pile.pileId, closeDate)
-      toast.success(`Pile "${pile.pileName}" closed`)
-    }
-  }
-
-  const handleExportBinCard = async (pile) => {
-    setOpenMenuPileId(null)
-    const warehouse = await db.warehouses.get(warehouseId)
-    const branch = warehouse?.branchId ? await db.branches.get(warehouse.branchId) : null
-    const variety = varietyMap.get(pile.varietyId)
-    const allPileTransactions = await db.transactions.where('pileId').equals(pile.pileId).toArray()
-    // WTS transfers reference issuedPileId/receivedPileId directly, not
-    // pileId - fetch those separately so a transfer in/out of this pile
-    // isn't missing from its ledger.
-    const wtsTransfers = await db.transactions
-      .where('type').equals('WTS')
-      .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
-      .toArray()
-    const transactionTypes = await db.transactionTypes.toArray()
-    const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
-    const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
-    const doc = generatePileBinCard({
-      warehouse, branch, pile, variety,
-      transactions: [...allPileTransactions, ...wtsTransfers],
-      transactionTypeMap,
-      globalDataStartDate,
-      varietyMap, sackTypeMap: new Map(sackTypes.map((s) => [s.sackTypeId, s])),
-    })
-    doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
+    onDone()
   }
 
   return (
-    <div>
-      {editingPileId && (
-        <div ref={formRef} className="mb-3 overflow-hidden rounded-xl border border-neutral-800">
-          {/* Same tinted hero header as CreateEditPileModal.jsx's Edit
-              Pile, colored to this pile's own cereal type - arriving
-              here via that modal's "Edit balance ->" link reads as a
-              continuation of the same pile, not a jump to an unrelated
-              screen. Replaces the old plain amber alert-style banner
-              (an alert box implied something was wrong, and nothing
-              was). */}
-          <div style={{ backgroundImage: `linear-gradient(135deg, ${heroTint(editingCategory).wash})` }} className="px-3 py-3">
-            <p className="text-lg font-extrabold text-app-text">{piles.find((p) => p.pileId === editingPileId)?.pileName}</p>
-            <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${heroTint(editingCategory).pill}`}>
-              {editingCategory === 'By Products' ? 'By Products' : `${editingCategory}${varietyMap.get(editingPile?.varietyId)?.name ? ` · ${varietyMap.get(editingPile?.varietyId)?.name}` : ''}`}
-            </span>
-          </div>
-          <div className="space-y-2 bg-neutral-900 p-3">
+    <div ref={formRef} className="overflow-hidden rounded-xl border border-neutral-800">
+      {/* Tinted hero header, colored to this pile's own cereal type -
+          same convention as CreateEditPileModal.jsx's Edit Pile, so
+          arriving here via that modal's "Edit balance ->" reads as a
+          continuation of the same pile, not a jump to an unrelated
+          screen. Replaces the old plain amber alert-style banner (an
+          alert box implied something was wrong, and nothing was). */}
+      <div style={{ backgroundImage: `linear-gradient(135deg, ${heroTint(editingCategory).wash})` }} className="px-3 py-3">
+        <p className="text-lg font-extrabold text-app-text">{pile.pileName}</p>
+        <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${heroTint(editingCategory).pill}`}>
+          {editingCategory === 'By Products' ? 'By Products' : `${editingCategory}${varietyMap.get(pile.varietyId)?.name ? ` · ${varietyMap.get(pile.varietyId)?.name}` : ''}`}
+        </span>
+      </div>
+      <div className="space-y-2 bg-neutral-900 p-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelClass}>Age</label>
@@ -540,11 +436,9 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
 
           <div className="flex gap-2">
             <button type="button" onClick={handleSave} disabled={isSaving} className={`flex-1 ${primaryButtonClass}`}>Save</button>
-            <button type="button" onClick={resetForm} className={secondaryButtonClass}>Cancel</button>
+            <button type="button" onClick={onDone} className={secondaryButtonClass}>Cancel</button>
           </div>
-          </div>
-        </div>
-      )}
+      </div>
 
       <ConfirmDialog
         open={pendingRemoveLine !== null}
@@ -553,6 +447,113 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
         onConfirm={confirmRemoveLine}
         onCancel={() => setPendingRemoveLine(null)}
       />
+    </div>
+  )
+}
+
+function PilesBeginningBalances({ warehouseId }) {
+  const { weightUnit } = useSettings() ?? {}
+  const [editingPileId, setEditingPileId] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
+  // Editable, not always today - per explicit request, a pile that
+  // actually finished a few days ago should be able to report its real
+  // close date. Only relevant while closing, not re-opening.
+  const [closeDate, setCloseDate] = useState(todayLocalISO())
+  const [openMenuPileId, setOpenMenuPileId] = useState(null)
+
+  const piles = useLiveQuery(
+    () => (warehouseId ? db.piles.where('warehouseId').equals(warehouseId).toArray() : []),
+    [warehouseId]
+  ) ?? []
+  const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
+  const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
+  const sortedPiles = [...piles].sort((a, b) => byAlpha(a.pileName, b.pileName))
+  const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
+  const editingPile = piles.find((p) => p.pileId === editingPileId)
+
+  const resetForm = () => setEditingPileId(null)
+
+  // Checks for real transactions beyond the pile's own seed, purely to
+  // inform the confirmation text below - never deleted, only mentioned.
+  const confirmDelete = async (pile) => {
+    const others = await db.transactions
+      .where('pileId').equals(pile.pileId)
+      .and((t) => !t.isInitialBalance)
+      .count()
+    setPendingDelete({ ...pile, hasHistory: others > 0 })
+  }
+
+  // Deletes only the pile RECORD - never its transactions. Every WSR/
+  // WSI/WTS ever recorded stays in the database forever, still linked
+  // by pileId, exactly as it happened - a deleted pile just means that
+  // record no longer shows in live totals or the layout, not that the
+  // history it created ceases to exist. Also clears any layout box
+  // still pointing at this pile, so it doesn't end up silently
+  // dangling (occupied-looking but referencing a pile that no longer
+  // resolves to anything).
+  const handleDeleteConfirmed = async () => {
+    const pile = pendingDelete
+    setPendingDelete(null)
+    const linkedBox = await db.pileLayoutBoxes.where('pileId').equals(pile.pileId).first()
+    if (linkedBox) await db.pileLayoutBoxes.update(linkedBox.id, { pileId: null, label: null })
+    await db.piles.delete(pile.pileId)
+    toast.success(`Pile "${pile.pileName}" deleted - its transactions were kept`)
+    if (editingPileId === pile.pileId) resetForm()
+  }
+
+  const confirmCloseToggle = (pile) => {
+    setOpenMenuPileId(null)
+    setCloseDate(todayLocalISO())
+    setPendingCloseToggle({ ...pile, willClose: !pile.closedDate })
+  }
+
+  const handleCloseToggleConfirmed = async () => {
+    const pile = pendingCloseToggle
+    setPendingCloseToggle(null)
+    if (pile.closedDate) {
+      await reopenPile(pile.pileId)
+      toast.success(`Pile "${pile.pileName}" re-opened`)
+    } else {
+      await closePile(pile.pileId, closeDate)
+      toast.success(`Pile "${pile.pileName}" closed`)
+    }
+  }
+
+  const handleExportBinCard = async (pile) => {
+    setOpenMenuPileId(null)
+    const warehouse = await db.warehouses.get(warehouseId)
+    const branch = warehouse?.branchId ? await db.branches.get(warehouse.branchId) : null
+    const variety = varietyMap.get(pile.varietyId)
+    const allPileTransactions = await db.transactions.where('pileId').equals(pile.pileId).toArray()
+    // WTS transfers reference issuedPileId/receivedPileId directly, not
+    // pileId - fetch those separately so a transfer in/out of this pile
+    // isn't missing from its ledger.
+    const wtsTransfers = await db.transactions
+      .where('type').equals('WTS')
+      .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
+      .toArray()
+    const transactionTypes = await db.transactionTypes.toArray()
+    const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
+    const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
+    const doc = generatePileBinCard({
+      warehouse, branch, pile, variety,
+      transactions: [...allPileTransactions, ...wtsTransfers],
+      transactionTypeMap,
+      globalDataStartDate,
+      varietyMap, sackTypeMap: new Map(sackTypes.map((s) => [s.sackTypeId, s])),
+    })
+    doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
+  }
+
+  return (
+    <div>
+      {editingPile && (
+        <div className="mb-3">
+          <PileBalanceForm key={editingPile.pileId} pile={editingPile} warehouseId={warehouseId} onDone={resetForm} />
+        </div>
+      )}
 
       <ul className="space-y-1.5">
         {sortedPiles.length === 0 && <p className="animate-empty-state-in py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
@@ -566,7 +567,7 @@ function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
               <p className="text-xs tabular-nums text-neutral-500">{fmtBags(p.currentBags)} bags · {fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')} (live)</p>
             </div>
             <div className="relative flex items-center gap-1">
-              <button type="button" onClick={() => handleEdit(p)} aria-label="Edit beginning balance" className={editIconClass}>
+              <button type="button" onClick={() => setEditingPileId(p.pileId)} aria-label="Edit beginning balance" className={editIconClass}>
                 <Pencil size={20} />
               </button>
               <button type="button" onClick={() => confirmDelete(p)} aria-label="Delete" className={deleteIconClass}>
@@ -754,21 +755,21 @@ function SacksBeginningBalances({ warehouseId }) {
   )
 }
 
-function BeginningBalancesPanel({ warehouseId: externalWarehouseId, focusPileId, onFocusHandled } = {}) {
+// Standalone Piles + Sacks tabs, each with its own full list - used as-is
+// on AdminDashboard's own Beginning Balances config page. Settings.jsx
+// does NOT use this anymore (it has its own single pile list plus the
+// Create/Edit Pile and Edit Beginning Balance modals - rendering this
+// full panel there too would just duplicate that list a second time,
+// which is exactly what was reported). Settings.jsx instead renders
+// SacksBeginningBalances directly for its own Sacks section.
+function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
   const { accessibleWarehouses, currentWarehouseId, setCurrentWarehouseId } = useWarehouse() ?? {}
   const [tab, setTab] = useState('piles')
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
-  // When an external warehouseId is supplied (e.g. Settings.jsx already
-  // has its own page-level warehouse selector), use it directly and
-  // skip this panel's own internal selector entirely - showing two
-  // warehouse pickers on the same page would be confusing.
+  // When an external warehouseId is supplied, use it directly and skip
+  // this panel's own internal selector entirely - showing two warehouse
+  // pickers on the same page would be confusing.
   const effectiveWarehouseId = externalWarehouseId ?? currentWarehouseId
-  // A pile is always on the Piles tab, never Sacks - jumping here via
-  // Edit Pile's own "Edit balance ->" must land on the right tab even
-  // if Sacks happened to be showing.
-  useEffect(() => {
-    if (focusPileId) setTab('piles')
-  }, [focusPileId])
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
@@ -802,7 +803,7 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId, focusPileId,
           replaced it. */}
       <div className="mt-3">
         <div className={tab === 'piles' ? '' : 'hidden'}>
-          <PilesBeginningBalances warehouseId={effectiveWarehouseId} focusPileId={focusPileId} onFocusHandled={onFocusHandled} />
+          <PilesBeginningBalances warehouseId={effectiveWarehouseId} />
         </div>
         <div className={tab === 'sacks' ? '' : 'hidden'}>
           <SacksBeginningBalances warehouseId={effectiveWarehouseId} />
@@ -814,3 +815,4 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId, focusPileId,
 }
 
 export default BeginningBalancesPanel
+export { SacksBeginningBalances, PileBalanceForm }

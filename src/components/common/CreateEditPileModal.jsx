@@ -9,25 +9,32 @@
 //
 // Editing a pile here only ever touches its METADATA (name, category/
 // variety, purity, dates, condition) - bags/kilos/age/as-of stay
-// exclusively owned by the Beginning Balances panel, exactly as
-// before. Rather than hiding that split, an edit shows the pile's
-// live current stock as a read-only summary with an "Edit balance ->"
-// link that closes this modal and jumps straight into Beginning
-// Balances already scrolled to and editing that same pile - see
-// Settings.jsx's focusBalancePileId wiring.
+// exclusively owned by Beginning Balances, exactly as before. Rather
+// than hiding that split, an edit shows the pile's live current stock
+// as a read-only summary with an "Edit balance ->" link that closes
+// this modal and opens EditBeginningBalanceModal.jsx for that same
+// pile - see Settings.jsx's balanceModalPile wiring.
+//
+// The kebab menu (Export BIN Card / Close-Reopen / Delete) is ported
+// straight from the old always-visible Beginning Balances pile list on
+// Settings.jsx - that list is gone now (it duplicated this page's own
+// PileListSection), so these pile-lifecycle actions live here instead,
+// the other place a specific pile is already in hand.
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { X, Check, AlertTriangle } from 'lucide-react'
+import { X, Check, AlertTriangle, MoreVertical } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, todayLocalISO, liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
-import { createPileWithBeginningBalance, recalculatePileCurrentState } from '../../utils/pileLedger.js'
+import { createPileWithBeginningBalance, recalculatePileCurrentState, closePile, reopenPile } from '../../utils/pileLedger.js'
+import { generatePileBinCard } from '../../utils/pileBinCardGenerator.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha } from './admin/shared.js'
 import { CONDITION_FLAGS } from '../forms/shared.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
+import ConfirmDialog from './ConfirmDialog.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const AGE_UNITS = ['Days', 'Months']
@@ -73,12 +80,85 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
   const [isSaving, setIsSaving] = useState(false)
   const [nameCheckStatus, setNameCheckStatus] = useState('idle')
   const [showHint, setShowHint] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
+  const [closeDate, setCloseDate] = useState(todayLocalISO())
 
   if (!open) return null
 
   const categoryVarieties = varieties.filter((v) => v.category === category).sort((a, b) => byAlpha(a.name, b.name))
   const tint = heroTint(category)
   const selectedVarietyName = category === 'By Products' ? null : varietyMap.get(varietyId)?.name
+
+  // Checks for real transactions beyond the pile's own seed, purely to
+  // inform the confirmation text below - never deleted, only mentioned.
+  const confirmDelete = async () => {
+    setMenuOpen(false)
+    const others = await db.transactions
+      .where('pileId').equals(pile.pileId)
+      .and((t) => !t.isInitialBalance)
+      .count()
+    setPendingDelete({ hasHistory: others > 0 })
+  }
+
+  // Deletes only the pile RECORD - never its transactions. Every WSR/
+  // WSI/WTS ever recorded stays in the database forever, still linked
+  // by pileId. Also clears any layout box still pointing at this pile.
+  const handleDeleteConfirmed = async () => {
+    setPendingDelete(null)
+    const linkedBox = await db.pileLayoutBoxes.where('pileId').equals(pile.pileId).first()
+    if (linkedBox) await db.pileLayoutBoxes.update(linkedBox.id, { pileId: null, label: null })
+    await db.piles.delete(pile.pileId)
+    toast.success(`Pile "${pile.pileName}" deleted - its transactions were kept`)
+    onClose()
+  }
+
+  const confirmCloseToggle = () => {
+    setMenuOpen(false)
+    setCloseDate(todayLocalISO())
+    setPendingCloseToggle({ willClose: !pile.closedDate })
+  }
+
+  const handleCloseToggleConfirmed = async () => {
+    const willClose = pendingCloseToggle?.willClose
+    setPendingCloseToggle(null)
+    if (!willClose) {
+      await reopenPile(pile.pileId)
+      toast.success(`Pile "${pile.pileName}" re-opened`)
+    } else {
+      await closePile(pile.pileId, closeDate)
+      toast.success(`Pile "${pile.pileName}" closed`)
+    }
+    onClose()
+  }
+
+  const handleExportBinCard = async () => {
+    setMenuOpen(false)
+    const warehouse = await db.warehouses.get(warehouseId)
+    const branch = warehouse?.branchId ? await db.branches.get(warehouse.branchId) : null
+    const variety = varietyMap.get(pile.varietyId)
+    const sackTypes = await db.sackTypes.toArray()
+    const allPileTransactions = await db.transactions.where('pileId').equals(pile.pileId).toArray()
+    // WTS transfers reference issuedPileId/receivedPileId directly, not
+    // pileId - fetch those separately so a transfer in/out of this pile
+    // isn't missing from its ledger.
+    const wtsTransfers = await db.transactions
+      .where('type').equals('WTS')
+      .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
+      .toArray()
+    const transactionTypes = await db.transactionTypes.toArray()
+    const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
+    const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
+    const doc = generatePileBinCard({
+      warehouse, branch, pile, variety,
+      transactions: [...allPileTransactions, ...wtsTransfers],
+      transactionTypeMap,
+      globalDataStartDate,
+      varietyMap, sackTypeMap: new Map(sackTypes.map((s) => [s.sackTypeId, s])),
+    })
+    doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
+  }
 
   const checkPileNameDuplicate = async () => {
     const trimmed = pileName.trim()
@@ -214,9 +294,34 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
                 {category === 'By Products' ? 'By Products' : selectedVarietyName ? `${category} · ${selectedVarietyName}` : `${category} · pick a variety`}
               </span>
             </div>
-            <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 text-neutral-400 hover:text-app-text">
-              <X size={18} />
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              {isEditing && (
+                <div className="relative">
+                  <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-label="More options" className="text-neutral-400 hover:text-app-text">
+                    <MoreVertical size={18} />
+                  </button>
+                  {menuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                      <div className="animate-popover-in absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 text-left shadow-xl" style={{ transformOrigin: 'top right' }}>
+                        <button type="button" onClick={handleExportBinCard} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                          Export BIN Card
+                        </button>
+                        <button type="button" onClick={confirmCloseToggle} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                          {pile.closedDate ? 'Re-open Pile' : 'Close Pile'}
+                        </button>
+                        <button type="button" onClick={confirmDelete} className="block w-full px-3 py-2 text-left text-sm text-brand-crimson hover:bg-neutral-800">
+                          Delete Pile
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              <button type="button" onClick={onClose} aria-label="Close" className="text-neutral-400 hover:text-app-text">
+                <X size={18} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -395,6 +500,42 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
           </button>
         </div>
       </div>
+
+      {isEditing && (
+        <>
+          <ConfirmDialog
+            open={Boolean(pendingDelete)}
+            title={`Delete pile "${pile.pileName}"?`}
+            description={
+              pendingDelete?.hasHistory
+                ? 'This pile has real transactions beyond its beginning balance - those transactions are NOT deleted and stay in the system permanently, still linked to this pile ID. Only the pile record itself (and its layout box, if any) is removed. This cannot be undone.'
+                : 'This cannot be undone.'
+            }
+            onConfirm={handleDeleteConfirmed}
+            onCancel={() => setPendingDelete(null)}
+          />
+
+          <ConfirmDialog
+            open={Boolean(pendingCloseToggle)}
+            title={pendingCloseToggle?.willClose ? `Close pile "${pile.pileName}"?` : `Re-open pile "${pile.pileName}"?`}
+            description={
+              pendingCloseToggle?.willClose
+                ? 'This zeroes out its remaining balance and vacates its layout box (if any) immediately. Its full history stays exportable as a BIN Card.'
+                : 'This restores its live balance from its full transaction history. Note: it does not automatically get a box back on the layout - it must be re-placed like a new pile if it needs one.'
+            }
+            confirmLabel={pendingCloseToggle?.willClose ? 'Close' : 'Re-open'}
+            onConfirm={handleCloseToggleConfirmed}
+            onCancel={() => setPendingCloseToggle(null)}
+          >
+            {pendingCloseToggle?.willClose && (
+              <div className="text-left">
+                <label className={labelClass}>Close Date</label>
+                <CalendarDatePicker value={closeDate} label="Close Date" onChange={setCloseDate} />
+              </div>
+            )}
+          </ConfirmDialog>
+        </>
+      )}
     </div>,
     document.body
   )

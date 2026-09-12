@@ -5,28 +5,29 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, ShieldCheck, User, Clock } from 'lucide-react'
+import { Pencil, ShieldCheck, User, Clock, Check, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, listItemClass, editIconClass } from '../components/common/admin/shared.js'
-import BeginningBalancesPanel from '../components/common/admin/BeginningBalancesPanel.jsx'
+import { SacksBeginningBalances } from '../components/common/admin/BeginningBalancesPanel.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 import Avatar from '../components/common/Avatar.jsx'
 import AvatarPickerModal from '../components/common/AvatarPickerModal.jsx'
 import CreateEditPileModal from '../components/common/CreateEditPileModal.jsx'
+import EditBeginningBalanceModal from '../components/common/EditBeginningBalanceModal.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
 
 function Toggle({ label, description, value, onChange, icon: Icon }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
-      <div className="flex items-start gap-3">
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
+      <div className="flex items-center gap-3">
         {Icon && (
-          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-neon/10 text-brand-neon">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-neon/10 text-brand-neon">
             <Icon size={15} />
           </div>
         )}
@@ -39,7 +40,7 @@ function Toggle({ label, description, value, onChange, icon: Icon }) {
         type="button"
         onClick={() => onChange(!value)}
         aria-pressed={value}
-        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
           value ? 'bg-brand-neon' : 'bg-neutral-700'
         }`}
       >
@@ -65,6 +66,11 @@ function ClassifierSection({ warehouseId }) {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  // Briefly true right after a successful save - the Update/Save button
+  // morphs into a checkmark for a moment (same spring-overshoot pop
+  // already used elsewhere, e.g. toast pop-in) before the row switches
+  // back to its read-only display, instead of vanishing instantly.
+  const [justSaved, setJustSaved] = useState(false)
   const containerRef = useRef(null)
 
   const warehouse = useLiveQuery(() => db.warehouses.get(warehouseId), [warehouseId])
@@ -119,7 +125,14 @@ function ClassifierSection({ warehouseId }) {
     await db.warehouses.update(warehouseId, { classifierName: name.trim() || null })
     toast.success(savedName ? 'Classifier updated' : 'Classifier saved')
     setIsSaving(false)
-    setIsEditing(false)
+    setJustSaved(true)
+    // Hold the checkmark on screen for one beat before switching to the
+    // read-only row - immediately swapping would cut the morph off
+    // before it's visible at all.
+    setTimeout(() => {
+      setJustSaved(false)
+      setIsEditing(false)
+    }, 500)
   }
 
   const showInput = isEditing || !savedName
@@ -132,7 +145,7 @@ function ClassifierSection({ warehouseId }) {
       </p>
 
       {showInput ? (
-        <>
+        <div className="animate-fade-in">
           <div ref={containerRef} className="relative mt-3 flex gap-2">
             <div className="relative flex-1">
               <input
@@ -143,10 +156,23 @@ function ClassifierSection({ warehouseId }) {
                   setShowSuggestions(true)
                 }}
                 onFocus={() => setShowSuggestions(true)}
-                className={`w-full ${inputClass} ${!name.trim() ? '!border-brand-amber' : ''}`}
+                className={`w-full ${inputClass} ${name ? 'pr-9' : ''} ${!name.trim() ? '!border-brand-amber' : ''}`}
                 placeholder="Full name"
                 autoComplete="off"
               />
+              {/* Clears the field back to blank in one tap - a quicker
+                  way to retype the name than selecting/backspacing it
+                  by hand, per explicit request. */}
+              {name && (
+                <button
+                  type="button"
+                  onClick={() => setName('')}
+                  aria-label="Clear"
+                  className="absolute bottom-2.5 right-3 text-brand-crimson"
+                >
+                  <X size={16} />
+                </button>
+              )}
               {showSuggestions && classifierSuggestions.length > 0 && (
                 <ul className="absolute z-10 mt-1.5 w-full divide-y divide-neutral-800 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50">
                   {classifierSuggestions.map((cn) => (
@@ -172,20 +198,22 @@ function ClassifierSection({ warehouseId }) {
             <button
               type="button"
               onClick={handleSave}
-              disabled={isSaving || !name.trim()}
-              className={`rounded-xl px-4 text-sm font-semibold transition-all ${
-                name.trim() ? 'border border-brand-neon text-brand-neon' : 'border border-brand-neon/40 text-brand-neon/40'
+              disabled={isSaving || !name.trim() || justSaved}
+              className={`flex items-center justify-center rounded-xl px-4 text-sm font-semibold transition-all ${
+                justSaved
+                  ? 'border border-brand-neon bg-brand-neon/10 text-brand-neon'
+                  : name.trim() ? 'border border-brand-neon text-brand-neon' : 'border border-brand-neon/40 text-brand-neon/40'
               }`}
             >
-              {savedName ? 'Update' : 'Save'}
+              {justSaved ? <Check size={18} className="animate-pop-in" /> : (savedName ? 'Update' : 'Save')}
             </button>
           </div>
           {!name.trim() && (
             <p className="mt-1 text-xs text-brand-amber">A classifier name is needed.</p>
           )}
-        </>
+        </div>
       ) : (
-        <div className="mt-3 flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
+        <div className="animate-fade-in mt-3 flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
           <span className="text-base text-app-text">{savedName}</span>
           {/* Delete removed - the only real action here is edit (which
               already shows an editable, clearable input pre-filled with
@@ -267,10 +295,10 @@ function Settings() {
   const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
   // null | { mode: 'create' } | { mode: 'edit', pile }
   const [pileModal, setPileModal] = useState(null)
-  // Set when Edit Pile's own "Edit balance ->" is tapped - passed down
-  // to BeginningBalancesPanel so it opens straight into editing that
-  // exact pile instead of making the user find it again in the list.
-  const [focusBalancePileId, setFocusBalancePileId] = useState(null)
+  // The pile whose beginning balance is being edited, if any - set by
+  // CreateEditPileModal's own "Edit balance ->" link, which closes
+  // that modal and opens EditBeginningBalanceModal for this pile.
+  const [balancePile, setBalancePile] = useState(null)
   const cloudUser = useObservable(db.cloud.currentUser)
   const cloudSyncState = useObservable(db.cloud.syncState)
   // Green: genuinely connected and in-sync. Red: disconnected or
@@ -473,22 +501,24 @@ function Settings() {
           ref={pileCardRef}
           style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 24}px` }}
         >
-          {/* Create Pile used to be a permanently-open tab sharing this
-              same row with Beginning Balances - now it's just a button
-              (opens CreateEditPileModal), with Beginning Balances as
-              the one remaining section below it, no longer toggled
-              against anything. */}
+          {/* Create Pile used to be a permanently-open tab, and Beginning
+              Balances used to sit right below it with its OWN full pile
+              list - two lists of the same piles on one page, both with
+              their own edit affordance, reported directly as confusing.
+              Now there's exactly one pile list (PileListSection) and two
+              modals: CreateEditPileModal (metadata) and, reached from
+              its own "Edit balance ->" link, EditBeginningBalanceModal
+              (bags/kilos/age) - never both visible/listed at once. */}
           <PileListSection
             warehouseId={currentWarehouseId}
             onCreatePile={() => setPileModal({ mode: 'create' })}
             onEditPile={(pile) => setPileModal({ mode: 'edit', pile })}
           />
-          <div className="mt-6">
-            <BeginningBalancesPanel
-              warehouseId={currentWarehouseId}
-              focusPileId={focusBalancePileId}
-              onFocusHandled={() => setFocusBalancePileId(null)}
-            />
+          <div className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+            <h2 className="text-center text-base font-semibold text-app-text">Sack Beginning Balances</h2>
+            <div className="mt-3">
+              <SacksBeginningBalances warehouseId={currentWarehouseId} />
+            </div>
           </div>
         </div>
       )}
@@ -500,16 +530,16 @@ function Settings() {
           warehouseId={currentWarehouseId}
           pile={pileModal.mode === 'edit' ? pileModal.pile : null}
           onClose={() => setPileModal(null)}
-          onGoToBalance={(pile) => {
-            setFocusBalancePileId(pile.pileId)
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                pileCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-              })
-            })
-          }}
+          onGoToBalance={(pile) => setBalancePile(pile)}
         />
       )}
+
+      <EditBeginningBalanceModal
+        open={Boolean(balancePile)}
+        pile={balancePile}
+        warehouseId={currentWarehouseId}
+        onClose={() => setBalancePile(null)}
+      />
     </div>
   )
 }

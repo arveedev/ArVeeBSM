@@ -2540,4 +2540,33 @@
 //              beside Sack Weight/MTS in the same row (instead of
 //              sitting always-visible-but-disabled) only once a real
 //              sack weight is actually picked.
-export const APP_VERSION = '1.9-142'
+//   1.9-143 - Real bug fixes reported after using 1.9-142 for real:
+//            - Preferences' Auto Age Monitoring icon was visibly
+//              misaligned with its label (a leftover top-offset tuned
+//              for when the row still had a description line under
+//              the label, which was already dropped last version) -
+//              row now centers properly.
+//            - Settings had TWO separate pile lists - PileListSection
+//              (metadata edit) and Beginning Balances' own full Piles
+//              tab/list (bags/kg edit), both showing the same piles
+//              with their own edit affordance. Beginning Balances'
+//              Piles tab is no longer shown on Settings at all - it
+//              stays exactly as it was for AdminDashboard's own
+//              standalone Beginning Balances page (which has no other
+//              pile list to duplicate), but Settings now has exactly
+//              ONE pile list and reaches balance editing through two
+//              modals in sequence: CreateEditPileModal's own "Edit
+//              balance ->" closes it and opens the new
+//              EditBeginningBalanceModal.jsx for that same pile. Pile-
+//              lifecycle actions that only ever lived in the now-gone
+//              list (Export BIN Card, Close/Re-open, Delete) moved into
+//              a kebab menu on CreateEditPileModal's own header.
+//            - Classifier: the pencil now shows a red clear (X) button
+//              inside the input once there's text, for faster
+//              retyping; switching between the read-only row and the
+//              edit row now fades in (animate-fade-in) instead of
+//              snapping; and tapping Update/Save morphs the button into
+//              a checkmark (the same spring-overshoot pop used
+//              elsewhere) for a beat before the row settles back to
+//              read-only, instead of vanishing instantly.
+export const APP_VERSION = '1.9-143'
