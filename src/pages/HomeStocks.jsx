@@ -352,7 +352,11 @@ function CerealTotal({
           <span>{weightColLabel}</span>
         </div>
         <div className="grid items-baseline gap-x-2" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
-          <span className={`text-base font-bold ${color}`}>Total ({cerealType})</span>
+          {/* Cereal type dropped from the label - the section's own
+              PALAY/RICE header above it (same color already indicates
+              it) already says it, and repeating it here just ate space
+              this row's own figures needed on a narrow phone. */}
+          <span className={`text-base font-bold ${color}`}>Total</span>
           <span className={`text-right text-lg font-bold tabular-nums ${color}`}>{formatAmount(Math.max(0, totalAmt), rawBags ? false : showNetBags)}</span>
           <span className={`text-right text-base font-bold tabular-nums ${color}`}>{fmtWeightPlain(Math.max(0, cerealKilos), weightUnit)}</span>
         </div>

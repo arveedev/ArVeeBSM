@@ -12,7 +12,6 @@ import { db } from '../db/dexie.js'
 import { calculateCurrentAge, calculateNetBags, calculateAverageWeightPerBag, fmtBags, fmtWeight, fmtNetBags, fmtAge, ageGradientColor } from '../utils/calculations.js'
 import { computePileStockBreakdown } from '../utils/pileLedger.js'
 import { formatPileStockGroups, groupHeading, fmtGroupDate } from '../utils/pileStockGroups.js'
-import PileActionSheet from '../components/common/PileActionSheet.jsx'
 import EditPileAgeDialog from '../components/common/EditPileAgeDialog.jsx'
 
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
@@ -37,6 +36,15 @@ const accentBarClass = (cerealType) => {
   if (cerealType === 'By Products') return 'bg-brand-byproduct'
   return 'bg-neutral-700'
 }
+
+// Same color convention (amber=receipt, neon=issue) PileActionSheet
+// used to use as a floating popover - now rendered inline as its own
+// column growing out of the card itself instead, per explicit request.
+const ACTION_OPTIONS = [
+  { type: 'WSR', className: 'text-brand-amber active:bg-brand-amber/10' },
+  { type: 'WSI', className: 'text-brand-neon active:bg-brand-neon/10' },
+  { type: 'WTS', className: 'text-neutral-300 active:bg-neutral-800' },
+]
 
 function HomePiles() {
   const { autoAgeMonitoring, weightUnit } = useSettings() ?? {}
@@ -152,15 +160,45 @@ function HomePiles() {
               const tilesOpen = openTilePileIds.has(p.pileId)
               const ageColor = ageGradientColor(p.age, p.cerealType)
 
+              const menuOpen = openMenuPileId === p.pileId
               return (
                 <li key={p.pileId} className="relative">
                   <div className="flex overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
                     <div className={`w-1 shrink-0 ${accentBarClass(p.cerealType)}`} aria-hidden="true" />
+                    {/* Grows in from zero width instead of the old
+                        floating popover (PileActionSheet) - the card's
+                        own content shrinks/shifts right to make room,
+                        per explicit request, rather than a menu
+                        floating on top of it. */}
+                    <div
+                      // relative z-20 - must render above the tap-away
+                      // overlay (fixed, z-10) below, or these buttons
+                      // would be unclickable, covered by the very
+                      // overlay meant only to catch taps OUTSIDE them.
+                      className="relative z-20 shrink-0 overflow-hidden transition-all duration-300 ease-out"
+                      style={{ maxWidth: menuOpen ? '72px' : '0px' }}
+                    >
+                      <div className="flex h-full w-[72px] flex-col divide-y divide-neutral-800">
+                        {ACTION_OPTIONS.map(({ type, className }) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => handlePileAction(p, type)}
+                            className={`flex-1 text-xs font-bold transition-colors ${className}`}
+                          >
+                            {type}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="min-w-0 flex-1 px-3 py-3">
                       <div className="flex items-center justify-between gap-2">
+                        {/* Tapping again (or tapping away, via the
+                            overlay below) closes it - same toggle
+                            either way. */}
                         <button
                           type="button"
-                          onClick={() => setOpenMenuPileId(p.pileId)}
+                          onClick={() => setOpenMenuPileId(menuOpen ? null : p.pileId)}
                           className="flex min-w-0 flex-1 items-center gap-2 text-left text-base font-medium text-app-text transition-opacity active:opacity-70"
                         >
                           <span className="truncate">{p.pileName}</span>
@@ -277,17 +315,19 @@ function HomePiles() {
                       )}
                     </div>
                   </div>
-
-                  {openMenuPileId === p.pileId && (
-                    <PileActionSheet
-                      onSelect={(type) => handlePileAction(p, type)}
-                      onClose={() => setOpenMenuPileId(null)}
-                    />
-                  )}
                 </li>
               )
             })}
           </ul>
+
+          {/* Tap-away-to-close - transparent, sits under every card
+              (they're position:relative but not given their own
+              z-index, so this default-stacking-order overlay is
+              effectively behind them) so a tap anywhere else on the
+              page closes whichever pile's action buttons are open. */}
+          {openMenuPileId && (
+            <div className="fixed inset-0 z-10" onClick={() => setOpenMenuPileId(null)} />
+          )}
         </>
       )}
 

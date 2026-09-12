@@ -2673,4 +2673,23 @@
 //              collapses back down before the read-only label+pencil
 //              row reappears - matching the reverse of the entrance
 //              instead of just disappearing.
-export const APP_VERSION = '1.9-147'
+//   1.9-148 - More real fixes/requests after using 1.9-147:
+//            - Home > Piles: tapping a pile's name/variety no longer
+//              opens a floating popover (PileActionSheet.jsx, now
+//              deleted) - the card itself shrinks right instead, with
+//              WSR/WSI/WTS buttons (same colors as before) growing in
+//              from the left edge, per explicit request. Tapping the
+//              name/variety again, or tapping anywhere else on the
+//              page, closes it back down.
+//            - HomeStocks' "Total (Palay)"/"Total (Rice)" row drops the
+//              cereal type from its own label - the section's own
+//              PALAY/RICE header above it (same color) already says
+//              it, and repeating it there ate space the row's own
+//              figures needed on a narrow phone.
+//            - Classifier's entrance/exit animation is rebuilt on the
+//              app's own proven animate-flow-down/animate-flow-up-exit
+//              pair (already used successfully elsewhere) instead of a
+//              hand-rolled grid-template-rows transition that, per
+//              direct report, wasn't actually animating at all - just
+//              snapping between states.
+export const APP_VERSION = '1.9-148'
