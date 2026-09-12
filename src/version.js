@@ -2293,4 +2293,27 @@
 //            figures and the exact Province-row computation from the
 //            live data - so the next step is reading real numbers
 //            instead of forming another hypothesis to test blind.
-export const APP_VERSION = '1.9-128'
+//   1.9-129 - The diagnostic paid off: the math was never wrong.
+//            Catanduanes province genuinely has THREE registered
+//            warehouses (CTD-GID 2, CTD-GID 2 A, CTD-NFAO RM), not one
+//            - confirmed directly from the live console output. GID 2
+//            alone holds all of the province's physical Rice
+//            (1,405.72 net bags), but combined AI authorizations
+//            against all three warehouses total 1,907.47 net bags
+//            unwithdrawn - genuinely more than physically exists
+//            anywhere in the province right now, so Potential
+//            correctly clamps to 0. The Province overview was right;
+//            it only looked wrong because the Stock Breakdown section
+//            hid GID 2 A and NFAO RM entirely (a warehouse - or one
+//            category within it - with zero physical stock was
+//            filtered out, even when it carried a real, active
+//            unwithdrawn commitment), making the province total
+//            unexplainable from what was on screen. Both filters (the
+//            per-warehouse card, and the per-category row within it)
+//            now also show whenever there's real unwithdrawn stock,
+//            not only when there's physical stock - so a warehouse
+//            authorized ahead of ever receiving anything is visible
+//            with its own "0 actual, X unwithdrawn" line instead of
+//            disappearing. Removed the temporary [STOCK DEBUG] console
+//            logging now that it's served its purpose.
+export const APP_VERSION = '1.9-129'

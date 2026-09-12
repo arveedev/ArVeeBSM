@@ -92,18 +92,6 @@ function AdminHomeStocks({ onWarehouseSelect }) {
     await Promise.all(warehouses.map(async (w) => {
       result.set(w.warehouseId, await computeWarehouseCategoryStock(w.warehouseId, { varieties, sackTypes: sackTypesForStock }))
     }))
-    // TEMPORARY diagnostic - chasing a confirmed, reported real mismatch
-    // (a warehouse's own Potential positive, its province's own
-    // Potential clamped to 0) that persisted even after unifying both
-    // pages onto this one shared computation, with the warehouse count
-    // itself already confirmed correct - logs each warehouse's own
-    // per-category totals so the actual live numbers (not a guess) can
-    // be read directly from the browser console. Safe to remove once
-    // this is resolved.
-    console.log('[STOCK DEBUG] per-warehouse category stock:', [...result.entries()].map(([wId, byCat]) => {
-      const w = warehouses.find((x) => x.warehouseId === wId)
-      return { warehouse: `${w?.code ?? '?'} — ${w?.name ?? wId}`, byCategory: Object.fromEntries(byCat) }
-    }))
     return result
   }, [warehouses, varieties, sackTypesForStock]) ?? new Map()
 
@@ -204,14 +192,6 @@ function AdminHomeStocks({ onWarehouseSelect }) {
     const palayValue = topCardShowPotential
       ? Math.max(0, palayActual - sumFor('Palay', 'unwithdrawnKilos') / 50)
       : palayActual
-    // TEMPORARY diagnostic - see the matching comment on
-    // warehouseCategoryStock above. Safe to remove once resolved.
-    console.log('[STOCK DEBUG] province row:', province.code, {
-      wIds,
-      riceActualKilos: sumFor('Rice', 'actualKilos'),
-      riceUnwithdrawnKilos: sumFor('Rice', 'unwithdrawnKilos'),
-      riceActual, riceValue, topCardShowPotential,
-    })
     return { province, riceValue, palayValue }
   })
   const riceBranchValue = provinceRows.reduce((s, r) => s + r.riceValue, 0)
@@ -378,7 +358,16 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           <div className="space-y-2">
             {sortedWarehouses.map((warehouse) => {
               const wStock = warehouseCategoryStock.get(warehouse.warehouseId)
-              if (!wStock || [...wStock.values()].every((c) => c.actualBags === 0 && c.actualKilos === 0)) return null
+              // Confirmed, real case this was hiding: a warehouse with
+              // NO physical stock right now can still carry a real,
+              // active AI authorization against it (issued ahead of the
+              // stock ever being received) - that unwithdrawn amount
+              // still correctly reduces its province's Potential total,
+              // but with this warehouse never shown as its own card,
+              // that reduction looked unexplainable/wrong instead of
+              // traceable. Only skip a warehouse that has genuinely
+              // nothing going on in either direction.
+              if (!wStock || [...wStock.values()].every((c) => c.actualBags === 0 && c.actualKilos === 0 && c.unwithdrawnBags === 0 && c.unwithdrawnKilos === 0)) return null
               const province = provinceMap.get(warehouse.provinceId)
               return (
                 <div
@@ -406,11 +395,16 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       const sumBags = catStock?.actualBags ?? 0
                       const sumKilos = catStock?.actualKilos ?? 0
                       const sum = sumKilos / 50
-                      if (sumBags === 0 && sumKilos === 0) return null
-                      const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
                       const unwithdrawnBags = catStock?.unwithdrawnBags ?? 0
                       const unwithdrawnKilos = catStock?.unwithdrawnKilos ?? 0
                       const unwithdrawnNetBags = unwithdrawnKilos / 50
+                      // Same reasoning as the card-level filter above -
+                      // a category with real unwithdrawn stock but zero
+                      // actual (nothing received into a pile yet) still
+                      // needs to show, not disappear as if there were
+                      // nothing to report for it.
+                      if (sumBags === 0 && sumKilos === 0 && unwithdrawnBags === 0 && unwithdrawnKilos === 0) return null
+                      const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
                       // Guard against a rounds-to-zero badge (see HomeStocks.jsx
                       // for the same reasoning) - only flag rows with a
                       // genuinely meaningful unwithdrawn amount.
