@@ -517,6 +517,49 @@ export const AGE_BUCKETS = {
   ],
 }
 
+// Per-cereal-type absolute anchor (in days) for the Pile List age color
+// gradient - a pile's color reflects its true absolute age tier, fixed
+// per type rather than normalized against other piles in the same
+// warehouse (which would falsely stretch full green-to-red across a
+// trivially small or uniformly old/young age spread). Palay's shelf
+// life is genuinely much longer than Rice's, so it gets a longer scale
+// (double AGE_BUCKETS' own ">12 months" cutoff) rather than sharing
+// Rice's. By Products currently mirrors Rice/AGE_BUCKETS' own
+// placeholder - adjust if a real By Products cutoff is wanted.
+export const AGE_GRADIENT_MAX_DAYS = {
+  Rice: 180,
+  Palay: 730,
+  'By Products': 180,
+}
+
+const AGE_GRADIENT_STOPS = [
+  { t: 0, rgb: [0, 255, 163] },    // brand-neon - newest
+  { t: 0.4, rgb: [250, 204, 21] }, // yellow-400
+  { t: 0.7, rgb: [245, 158, 11] }, // brand-amber
+  { t: 1, rgb: [239, 68, 68] },    // brand-crimson - oldest
+]
+
+// Maps a pile's age (in days) to a color along its cereal type's own
+// fixed gradient scale - see AGE_GRADIENT_MAX_DAYS above for why the
+// scale differs per type.
+export const ageGradientColor = (days, cerealType) => {
+  const max = AGE_GRADIENT_MAX_DAYS[cerealType] ?? AGE_GRADIENT_MAX_DAYS.Rice
+  const t = Math.max(0, Math.min(1, (days ?? 0) / max))
+  let lo = AGE_GRADIENT_STOPS[0]
+  let hi = AGE_GRADIENT_STOPS[AGE_GRADIENT_STOPS.length - 1]
+  for (let i = 0; i < AGE_GRADIENT_STOPS.length - 1; i++) {
+    if (t >= AGE_GRADIENT_STOPS[i].t && t <= AGE_GRADIENT_STOPS[i + 1].t) {
+      lo = AGE_GRADIENT_STOPS[i]
+      hi = AGE_GRADIENT_STOPS[i + 1]
+      break
+    }
+  }
+  const span = hi.t - lo.t
+  const localT = span === 0 ? 0 : (t - lo.t) / span
+  const [r, g, b] = lo.rgb.map((c, i) => Math.round(c + (hi.rgb[i] - c) * localT))
+  return `rgb(${r}, ${g}, ${b})`
+}
+
 // Formats an ISO date string (YYYY-MM-DD) as MMDDYY for use in exported
 // filenames - e.g. "2026-06-01" -> "060126".
 export const fmtDateForFilename = (isoDate) => {

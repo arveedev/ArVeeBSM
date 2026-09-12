@@ -2417,4 +2417,29 @@
 //            every other fixed-overlay modal in the app (ConfirmDialog,
 //            CompletedMillingModal, etc). Now portals to document.body
 //            like the rest, so it always centers on the true screen.
-export const APP_VERSION = '1.9-138'
+//   1.9-139 - Pile List card redesign (Home > Piles > Pile List), agreed
+//            through several rounds of demos:
+//            - No icon - a thin left accent bar colored by the pile's
+//              cereal type (Rice=blue, Palay=neon, By Products=amber)
+//              instead, matching the existing variety-badge colors.
+//            - Age moves to its own bold, color-coded figure on the
+//              right of the header row (still tappable to open Edit
+//              Age) - color follows a fixed, per-cereal-type gradient
+//              scale (green->yellow->amber->red), not a per-warehouse-
+//              relative one, so a pile's color reflects its true
+//              absolute age tier and stays comparable to every other
+//              pile of the same type. Rice/By Products max out (full
+//              red) at 6 months, Palay at 24 - their genuinely
+//              different shelf lives - see AGE_GRADIENT_MAX_DAYS/
+//              ageGradientColor in calculations.js.
+//            - One generic newest/oldest gradient legend bar shown once
+//              above the whole list (no numbers on it, since the scale
+//              differs per cereal type underneath).
+//            - Bags/Net Kg are now boxed tiles; tapping either reveals
+//              net bags / kg-per-bag-avg stacked underneath, replacing
+//              the old always-visible subtext line.
+//            - The existing multi-group sack-weight/variety breakdown
+//              (chevron-expand for Rice/Palay, always-shown for By
+//              Products) is unchanged in behavior, just reskinned to
+//              sit inside the new card frame.
+export const APP_VERSION = '1.9-139'
