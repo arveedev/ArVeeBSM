@@ -170,9 +170,24 @@ export function SyncProgressToast({ label, doneLabel, phase }) {
 // can't be double-tapped. Per explicit follow-up feedback, no extra
 // subtext line - the notification text plus the button alone are
 // enough, nothing more to explain.
-export function UpdateAvailableToast({ onUpdate, onForceRefresh }) {
+//
+// Confirmed, reported: this whole interactive flow (skip-waiting via
+// the service worker) is reliable on mobile but keeps finding new ways
+// to silently no-op on PC, even after several rounds of real fixes -
+// per explicit request, PC gets a different, passive experience
+// instead of another "try tapping this button" cycle: just the version
+// number and an instruction to close/reopen the app manually, which
+// always works regardless of any service-worker-level bug. Mobile
+// keeps the interactive Update now button unchanged, since it's
+// confirmed working there. Same `(pointer: coarse)` check Piles.jsx
+// already uses to distinguish a touch device.
+const isTouchDevice = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
+
+export function UpdateAvailableToast({ version, onUpdate, onForceRefresh }) {
   const [isUpdating, setIsUpdating] = useState(false)
   const [isForcing, setIsForcing] = useState(false)
+  const [isMobile] = useState(isTouchDevice)
   const handleClick = () => {
     setIsUpdating(true)
     // Double rAF - guarantees the browser has actually PAINTED the
@@ -188,6 +203,33 @@ export function UpdateAvailableToast({ onUpdate, onForceRefresh }) {
     setIsForcing(true)
     requestAnimationFrame(() => requestAnimationFrame(onForceRefresh))
   }
+
+  if (!isMobile) {
+    return (
+      <span className="text-sm font-medium text-app-text">
+        <span className="block">
+          {version ? `Version ${version} is available` : 'A new version is available'}
+        </span>
+        <span className="mt-0.5 block text-xs text-neutral-400">Close and reopen the app to update.</span>
+        {/* Genuinely reliable regardless of whatever the service-worker
+            flow is doing - see appUpdate.js's forceRefresh. Kept as a
+            small, secondary option for whenever a plain restart alone
+            doesn't pick up the new version (a browser can still be
+            holding a stale cached copy), not the primary instruction. */}
+        {onForceRefresh && (
+          <button
+            type="button"
+            onClick={handleForceRefresh}
+            disabled={isForcing}
+            className="mt-1 block text-[11px] font-medium text-neutral-500 underline decoration-dotted transition-colors hover:text-neutral-300 disabled:opacity-70"
+          >
+            {isForcing ? 'Refreshing…' : "Restarting didn't work? Force refresh"}
+          </button>
+        )}
+      </span>
+    )
+  }
+
   return (
     <span className="text-sm font-medium text-app-text">
       <span className="block">A new version is available</span>

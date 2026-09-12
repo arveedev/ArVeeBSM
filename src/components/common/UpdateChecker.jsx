@@ -24,9 +24,14 @@ import { checkForUpdate, applyUpdate, onUpdateAvailable, forceRefresh } from '..
 const UPDATE_TOAST_ID = 'app-update-available'
 const POLL_MS = 15 * 60 * 1000 // 15 minutes, while the app stays open
 
-const showUpdateToast = () => {
+// version is known when this fires from the version.json poll (passed
+// through so the desktop variant below can name it); the service
+// worker's own onNeedRefresh signal carries no version string, so this
+// is just omitted there - UpdateAvailableToast falls back to generic
+// wording in that case.
+const showUpdateToast = (version) => {
   toast(
-    <UpdateAvailableToast onUpdate={applyUpdate} onForceRefresh={forceRefresh} />,
+    <UpdateAvailableToast version={version} onUpdate={applyUpdate} onForceRefresh={forceRefresh} />,
     { id: UPDATE_TOAST_ID, duration: Infinity }
   )
 }
@@ -41,7 +46,7 @@ const checkVersionMismatch = async () => {
       // in the background, so applyUpdate() has a head start once the
       // user actually taps.
       checkForUpdate()
-      showUpdateToast()
+      showUpdateToast(version)
     }
   } catch {
     // Offline, or version.json genuinely unreachable - not an error

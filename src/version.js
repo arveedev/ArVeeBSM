@@ -2331,4 +2331,18 @@
 //            point warehouses are loaded, so every listing and every
 //            province/branch total on both pages only ever considers
 //            real warehouses.
-export const APP_VERSION = '1.9-130'
+//   1.9-131 - Per explicit request: the update toast now behaves
+//            differently by platform, since the interactive "Update
+//            now" flow is confirmed working reliably on mobile but has
+//            kept finding new ways to silently no-op on PC across
+//            several real fixes. Mobile (touch devices, same
+//            `(pointer: coarse)` check Piles.jsx already uses) keeps
+//            the unchanged Update now button. PC instead gets a
+//            passive notice naming the actual version available and
+//            instructing a manual close/reopen - which always works
+//            regardless of any service-worker-level bug, no button to
+//            silently fail - with the "Force refresh" escape hatch
+//            kept as a small secondary option for the rarer case where
+//            a plain restart alone doesn't pick it up (a stale cached
+//            copy the browser is still holding onto).
+export const APP_VERSION = '1.9-131'
