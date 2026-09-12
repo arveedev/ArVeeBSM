@@ -2791,4 +2791,32 @@
 //            app already got - previously every label used the same
 //            static weight regardless of which page was active. Its
 //            label text size was also bumped a step, same as the rest.
-export const APP_VERSION = '1.9-158'
+//   1.9-159 - Redesigned the AI/SIA action menu and the View Transactions
+//            ledger it opens into, per explicit request and several
+//            rounds of demo review:
+//            - ChoiceAuthorityModal (Add New Transaction/View
+//              Transactions) now leads with a tinted hero band showing
+//              the AI/SIA number prominently (blue for AI, amber for
+//              SIA, same convention as CreateEditPileModal's own
+//              category tint) instead of a small centered line, and
+//              every button/label got a larger font.
+//            - AuthorityReconciliationPanel (View Transactions) carries
+//              the same hero band, adds a Net Kg/Net Bags toggle for AI
+//              (kilos/50, same conversion MillingMonitor.jsx already
+//              uses), switched every row to the established card style
+//              (stacked Bags/Net-figure tiles), stopped truncating the
+//              customer name, added the transaction's warehouse name
+//              (previously missing entirely), sorts newest-first by
+//              date (was ascending by serial number), and turned the
+//              total into its own neon-bordered card instead of a bare
+//              footer bar, with its own bottom padding respecting the
+//              device's safe-area inset.
+//            - AppHeader's title/subtitle now animate on every page
+//              change instead of swapping instantly, sliding in the
+//              direction the new page actually sits relative to the old
+//              one (same left-to-right order as the bottom nav's own
+//              REGULAR_NAV_COLUMN) - title and subtitle move as one
+//              block, so a subtitle appearing/disappearing (e.g. Home's
+//              "Welcome back" vs a page with none) is part of that same
+//              motion rather than a separate effect.
+export const APP_VERSION = '1.9-159'

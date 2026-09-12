@@ -9,7 +9,7 @@
 // are their own full-screen overlays with their own close control.
 
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useObservable, useLiveQuery } from 'dexie-react-hooks'
 import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, Check } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -20,6 +20,7 @@ import { db } from '../../db/dexie.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import Avatar from '../common/Avatar.jsx'
 import AvatarPickerModal from '../common/AvatarPickerModal.jsx'
+import { REGULAR_NAV_COLUMN } from './BottomNav.jsx'
 
 // Same phases treated as "caught up" in isCloudSyncCaughtUp (dexie.js) -
 // kept as a separate, purely-display copy here rather than importing
@@ -43,11 +44,58 @@ function AppHeader({ hidden = false }) {
   const { theme, weightUnit, updateSetting } = useSettings() ?? {}
   const { title, subtitle, setHeaderHeight } = usePageHeader() ?? {}
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [confirmingLogout, setConfirmingLogout] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [hasEntered, setHasEntered] = useState(false)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const headerRef = useRef(null)
+
+  // Title/subtitle change animation - direction follows where the new
+  // page actually sits relative to the old one (same left-to-right
+  // column order as the bottom nav), per explicit request, rather than
+  // a single fixed direction: navigating "forward" (Home -> Settings)
+  // slides the old text out to the left and the new text in from the
+  // right; navigating "backward" slides the opposite way. The title and
+  // its subtitle move together as one block, so a subtitle appearing or
+  // disappearing (e.g. Home's "Welcome back" vs a page with none) is
+  // just part of that same block's exit/enter rather than a separate
+  // effect. `displayed` is what's actually rendered - it lags behind
+  // the real title/subtitle props until the exit animation finishes,
+  // the same "swap content only once the old element is actually gone"
+  // technique used by CreateEditPileModal's handleClose.
+  const [displayed, setDisplayed] = useState({ title, subtitle })
+  const [textMotion, setTextMotion] = useState({ transform: 'translateX(0)', opacity: 1, transition: 'none' })
+  const prevColumnRef = useRef(REGULAR_NAV_COLUMN[pathname] ?? 0)
+  const isFirstHeaderRender = useRef(true)
+  const HEADER_EXIT_MS = 170
+  const HEADER_ENTER_MS = 220
+  useEffect(() => {
+    if (isFirstHeaderRender.current) {
+      isFirstHeaderRender.current = false
+      prevColumnRef.current = REGULAR_NAV_COLUMN[pathname] ?? 0
+      setDisplayed({ title, subtitle })
+      return
+    }
+    if (displayed.title === title && displayed.subtitle === subtitle) return
+    const column = REGULAR_NAV_COLUMN[pathname] ?? 0
+    const forward = column >= prevColumnRef.current
+    prevColumnRef.current = column
+    const exitX = forward ? -16 : 16
+    const enterX = forward ? 16 : -16
+    setTextMotion({ transform: `translateX(${exitX}px)`, opacity: 0, transition: `transform ${HEADER_EXIT_MS}ms ease-in, opacity ${HEADER_EXIT_MS}ms ease-in` })
+    const exitTimer = setTimeout(() => {
+      setDisplayed({ title, subtitle })
+      setTextMotion({ transform: `translateX(${enterX}px)`, opacity: 0, transition: 'none' })
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTextMotion({ transform: 'translateX(0)', opacity: 1, transition: `transform ${HEADER_ENTER_MS}ms ease-out, opacity ${HEADER_ENTER_MS}ms ease-out` })
+        })
+      })
+    }, HEADER_EXIT_MS)
+    return () => clearTimeout(exitTimer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, subtitle])
 
   // Live, not read off the in-memory `user` object from AuthContext -
   // that object is a one-time snapshot from login and intentionally
@@ -171,26 +219,28 @@ function AppHeader({ hidden = false }) {
               size={40}
               onClick={canEditAvatar ? () => setAvatarPickerOpen(true) : undefined}
             />
-            <div className="min-w-0">
-              {/* Reported, real bug: on a narrow phone the pill (below)
-                  left so little room for the title that a single long
-                  word like "Dashboard"/"Monitoring" had nowhere to
-                  wrap at a space, so break-words split it mid-word
-                  ("Dashboa"/"rd") - unreadable. Fixed on both ends: the
-                  pill itself shrank (see its own comment below) to
-                  leave more room here, and the title dropped to
-                  text-base so more of it fits on the first line before
-                  any wrap is needed at all. */}
-              {title && <h1 className="break-words text-base font-semibold text-app-text">{title}</h1>}
-              {/* Reported, real bug: truncate clipped a short subtitle
-                  like "Welcome back, JP." down to "Welcome…" on a narrow
-                  phone, since this column only gets whatever width is
-                  left after the icon row on the right. break-words wraps
-                  onto a second line instead of cutting text off - the
-                  header's own height is already computed dynamically
-                  (see headerRef/setHeaderHeight above) so a taller header
-                  here doesn't overlap the page content below it. */}
-              {subtitle && <p className="break-words text-sm font-medium text-neutral-300">{subtitle}</p>}
+            <div className="min-w-0 overflow-hidden">
+              <div style={textMotion}>
+                {/* Reported, real bug: on a narrow phone the pill (below)
+                    left so little room for the title that a single long
+                    word like "Dashboard"/"Monitoring" had nowhere to
+                    wrap at a space, so break-words split it mid-word
+                    ("Dashboa"/"rd") - unreadable. Fixed on both ends: the
+                    pill itself shrank (see its own comment below) to
+                    leave more room here, and the title dropped to
+                    text-base so more of it fits on the first line before
+                    any wrap is needed at all. */}
+                {displayed.title && <h1 className="break-words text-base font-semibold text-app-text">{displayed.title}</h1>}
+                {/* Reported, real bug: truncate clipped a short subtitle
+                    like "Welcome back, JP." down to "Welcome…" on a narrow
+                    phone, since this column only gets whatever width is
+                    left after the icon row on the right. break-words wraps
+                    onto a second line instead of cutting text off - the
+                    header's own height is already computed dynamically
+                    (see headerRef/setHeaderHeight above) so a taller header
+                    here doesn't overlap the page content below it. */}
+                {displayed.subtitle && <p className="break-words text-sm font-medium text-neutral-300">{displayed.subtitle}</p>}
+              </div>
             </div>
           </div>
 

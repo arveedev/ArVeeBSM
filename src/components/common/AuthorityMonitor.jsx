@@ -438,39 +438,58 @@ function ChoiceAuthorityModal({ choiceAuthority, onAddNew, onViewTransactions, o
     setTimeout(onClose, 250)
   }
 
+  const isAi = choiceAuthority.type === 'AI'
+  const refNumber = isAi ? choiceAuthority.aiNumber : choiceAuthority.siaNumber
+
   return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
       onClick={handleClose}
     >
       <div
-        className={`w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-3 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
+        className={`w-full max-w-sm overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="px-2 py-1 text-center text-sm font-medium text-app-text">
-          {choiceAuthority.type} · {choiceAuthority.type === 'AI' ? choiceAuthority.aiNumber : choiceAuthority.siaNumber}
-        </p>
-        <button
-          type="button"
-          onClick={onAddNew}
-          className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-sm font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+        {/* Tinted hero band, same convention as CreateEditPileModal's own
+            header - makes the AI/SIA number the most prominent thing on
+            screen instead of a small centered line, per explicit
+            request. Blue for AI (WSI/stock), amber for SIA (ESI/sacks) -
+            this modal has no cereal-category context to tint by (unlike
+            CreateEditPileModal's Rice/Palay/By Products), so it's keyed
+            off the authority TYPE instead. */}
+        <div
+          style={{ backgroundImage: `linear-gradient(135deg, ${isAi ? 'rgba(96,165,250,.28), rgba(96,165,250,.04)' : 'rgba(242,185,73,.28), rgba(242,185,73,.04)'})` }}
+          className="bg-neutral-900 px-4 py-4"
         >
-          Add New Transaction
-        </button>
-        <button
-          type="button"
-          onClick={onViewTransactions}
-          className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-sm font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
-        >
-          View Transactions
-        </button>
-        <button
-          type="button"
-          onClick={handleClose}
-          className="mt-2 w-full rounded-xl px-4 py-3 text-center text-sm font-medium text-neutral-500"
-        >
-          Cancel
-        </button>
+          <span className={`text-xs font-bold uppercase tracking-wide ${isAi ? 'text-blue-300' : 'text-brand-amber'}`}>
+            {isAi ? 'AI Number' : 'SIA Number'}
+          </span>
+          <p className="mt-0.5 break-words text-2xl font-extrabold text-app-text">{refNumber}</p>
+        </div>
+
+        <div className="p-3">
+          <button
+            type="button"
+            onClick={onAddNew}
+            className="w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-base font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+          >
+            Add New Transaction
+          </button>
+          <button
+            type="button"
+            onClick={onViewTransactions}
+            className="mt-2 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 text-left text-base font-medium text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+          >
+            View Transactions
+          </button>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="mt-2 w-full rounded-xl px-4 py-3 text-center text-base font-medium text-neutral-500"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>,
     document.body
