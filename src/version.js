@@ -2746,4 +2746,17 @@
 //            transactions beyond its beginning balance" check and
 //            ConfirmDialog already used everywhere else a pile can be
 //            deleted from) - never a one-tap delete.
-export const APP_VERSION = '1.9-154'
+//   1.9-155 - Font sizes bumped throughout the Beginning Balances area,
+//            per explicit request: both Stocks/Sacks tab pill labels,
+//            Settings' pile cards (Stocks tab), SacksBeginningBalances'
+//            list, and the shared PileBalanceForm (Age/Date/Bags/Net
+//            Kilos/Condition/Sack Weight-Condition/Purity/MC fields,
+//            used by both EditBeginningBalanceModal and AdminDashboard's
+//            own standalone Beginning Balances page) - plus
+//            CreateEditPileModal's own Identity/Quantity/Quality & Dates
+//            fields and Current Stock tiles. A local, larger label/input
+//            class is used in these specific spots rather than bumping
+//            the shared labelClass/inputClass constants app-wide, so
+//            unrelated admin panels (Warehouses, Users, etc.) keep their
+//            existing sizing.
+export const APP_VERSION = '1.9-155'

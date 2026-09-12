@@ -31,13 +31,19 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, todayLocalISO, liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
 import { createPileWithBeginningBalance, recalculatePileCurrentState, closePile, reopenPile } from '../../utils/pileLedger.js'
 import { generatePileBinCard } from '../../utils/pileBinCardGenerator.js'
-import { inputClass, labelClass, primaryButtonClass, byAlpha } from './admin/shared.js'
+import { inputClass, primaryButtonClass, byAlpha } from './admin/shared.js'
 import { CONDITION_FLAGS } from '../forms/shared.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const AGE_UNITS = ['Days', 'Months']
+
+// Larger local sizing than the shared admin-panel default (labelClass/
+// inputClass) - per explicit request to enlarge the font size inside
+// this modal.
+const labelClassLg = 'text-sm text-neutral-400'
+const inputClassLg = `${inputClass} text-base`
 
 // Same mapping as HomePiles.jsx's accentBarClass/varietyBadgeClass -
 // duplicated locally rather than imported/shared, matching this
@@ -307,8 +313,8 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
         <div style={{ backgroundImage: `linear-gradient(135deg, ${tint.wash})` }} className="bg-neutral-900 px-4 py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="break-words text-xl font-extrabold text-app-text">{pileName.trim() || (isEditing ? pile.pileName : 'New Pile')}</p>
-              <span className={`mt-1.5 inline-block rounded-full px-3 py-1 text-xs font-bold ${tint.pill}`}>
+              <p className="break-words text-2xl font-extrabold text-app-text">{pileName.trim() || (isEditing ? pile.pileName : 'New Pile')}</p>
+              <span className={`mt-1.5 inline-block rounded-full px-3 py-1 text-sm font-bold ${tint.pill}`}>
                 {category === 'By Products' ? 'By Products' : selectedVarietyName ? `${category} · ${selectedVarietyName}` : `${category} · pick a variety`}
               </span>
             </div>
@@ -322,13 +328,13 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                       <div className="animate-popover-in absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 text-left shadow-xl" style={{ transformOrigin: 'top right' }}>
-                        <button type="button" onClick={handleExportBinCard} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                        <button type="button" onClick={handleExportBinCard} className="block w-full px-3 py-2 text-left text-base text-app-text hover:bg-neutral-800">
                           Export BIN Card
                         </button>
-                        <button type="button" onClick={confirmCloseToggle} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                        <button type="button" onClick={confirmCloseToggle} className="block w-full px-3 py-2 text-left text-base text-app-text hover:bg-neutral-800">
                           {pile.closedDate ? 'Re-open Pile' : 'Close Pile'}
                         </button>
-                        <button type="button" onClick={confirmDelete} className="block w-full px-3 py-2 text-left text-sm text-brand-crimson hover:bg-neutral-800">
+                        <button type="button" onClick={confirmDelete} className="block w-full px-3 py-2 text-left text-base text-brand-crimson hover:bg-neutral-800">
                           Delete Pile
                         </button>
                       </div>
@@ -349,62 +355,62 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {isEditing && (
             <div className="mb-4">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Current Stock (live)</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Current Stock (live)</p>
               {/* Same stacked-tile card style as PileListSection's own
                   Bags/Net Kg pair, for visual consistency between the
                   two places a pile's live figures show up. */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-lg bg-neutral-950 py-2 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
-                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtBags(pile.currentBags ?? 0)}</p>
+                  <p className="text-xs uppercase tracking-wide text-neutral-500">Bags</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(pile.currentBags ?? 0)}</p>
                 </div>
                 <div className="rounded-lg bg-neutral-950 py-2 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
-                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeight(pile.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}</p>
+                  <p className="text-xs uppercase tracking-wide text-neutral-500">Net Kg</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtWeight(pile.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => { onGoToBalance?.(pile); onClose() }}
-                className="mt-2 w-full rounded-lg bg-neutral-950 py-2 text-center text-sm font-bold text-brand-neon transition-colors active:bg-neutral-800"
+                className="mt-2 w-full rounded-lg bg-neutral-950 py-2 text-center text-base font-bold text-brand-neon transition-colors active:bg-neutral-800"
               >
                 Edit balance
               </button>
             </div>
           )}
 
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Identity</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Identity</p>
           <div className="mb-4 space-y-2">
             <div>
-              <label className={labelClass}>Pile Name</label>
+              <label className={labelClassLg}>Pile Name</label>
               <div className="relative">
                 <input
                   type="text"
                   value={pileName}
                   onChange={(e) => { setPileName(e.target.value); setNameCheckStatus('idle') }}
                   onBlur={checkPileNameDuplicate}
-                  className={`${inputClass} ${nameCheckStatus === 'ok' ? '!border-brand-neon' : nameCheckStatus === 'duplicate' ? '!border-brand-amber' : !pileName.trim() ? '!border-brand-amber' : ''} ${nameCheckStatus === 'ok' || nameCheckStatus === 'duplicate' ? 'pr-9' : ''}`}
+                  className={`${inputClassLg} ${nameCheckStatus === 'ok' ? '!border-brand-neon' : nameCheckStatus === 'duplicate' ? '!border-brand-amber' : !pileName.trim() ? '!border-brand-amber' : ''} ${nameCheckStatus === 'ok' || nameCheckStatus === 'duplicate' ? 'pr-9' : ''}`}
                   placeholder="Pile C-1"
                   autoFocus
                 />
                 {nameCheckStatus === 'ok' && <Check size={16} className="pointer-events-none absolute bottom-2.5 right-3 text-brand-neon" />}
                 {nameCheckStatus === 'duplicate' && <AlertTriangle size={16} className="pointer-events-none absolute bottom-2.5 right-3 text-brand-amber" />}
               </div>
-              {nameCheckStatus === 'duplicate' && <p className="mt-1 text-xs text-brand-amber">This pile name is already used in this warehouse.</p>}
+              {nameCheckStatus === 'duplicate' && <p className="mt-1 text-sm text-brand-amber">This pile name is already used in this warehouse.</p>}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className={labelClass}>Category</label>
-                <select value={category} onChange={(e) => { setCategory(e.target.value); setVarietyId(''); setByProductBalances({}) }} className={inputClass}>
+                <label className={labelClassLg}>Category</label>
+                <select value={category} onChange={(e) => { setCategory(e.target.value); setVarietyId(''); setByProductBalances({}) }} className={inputClassLg}>
                   {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Variety{category === 'By Products' ? ' (optional)' : ''}</label>
+                <label className={labelClassLg}>Variety{category === 'By Products' ? ' (optional)' : ''}</label>
                 <select
                   value={varietyId}
                   onChange={(e) => setVarietyId(e.target.value)}
-                  className={`${inputClass} ${category !== 'By Products' && !varietyId ? '!border-brand-amber' : ''}`}
+                  className={`${inputClassLg} ${category !== 'By Products' && !varietyId ? '!border-brand-amber' : ''}`}
                 >
                   <option value="">{category === 'By Products' ? 'Optional — accepts any' : 'Select…'}</option>
                   {categoryVarieties.map((v) => <option key={v.varietyId} value={v.varietyId}>{v.name}</option>)}
@@ -415,31 +421,31 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
 
           {!isEditing && (
             <>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Quantity</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Quantity</p>
               <div className="mb-4 space-y-2">
                 {category === 'By Products' ? (
                   <div className="space-y-2">
-                    <p className="text-xs text-neutral-500">Beginning Balance by Variety (optional)</p>
+                    <p className="text-sm text-neutral-500">Beginning Balance by Variety (optional)</p>
                     {categoryVarieties.length === 0 && (
-                      <p className="text-xs text-neutral-500">No By Products varieties configured yet — add one in the Admin Dashboard's Varieties tab first.</p>
+                      <p className="text-sm text-neutral-500">No By Products varieties configured yet — add one in the Admin Dashboard's Varieties tab first.</p>
                     )}
                     {categoryVarieties.map((v) => {
                       const line = byProductBalances[v.varietyId] ?? { bags: '', kilos: '' }
                       return (
                         <div key={v.varietyId} className="rounded-lg border border-neutral-800 bg-neutral-950 p-2.5">
-                          <p className="text-xs font-semibold text-neutral-400">{v.name}</p>
+                          <p className="text-sm font-semibold text-neutral-400">{v.name}</p>
                           <div className="mt-1.5 grid grid-cols-2 gap-2">
                             <div>
-                              <label className={labelClass}>Bags</label>
+                              <label className={labelClassLg}>Bags</label>
                               <input type="text" inputMode="numeric" value={line.bags}
                                 onChange={(e) => updateByProductBalance(v.varietyId, 'bags', liveFormatNumber(e.target.value))}
-                                className={inputClass} placeholder="0" />
+                                className={inputClassLg} placeholder="0" />
                             </div>
                             <div>
-                              <label className={labelClass}>Net Kilos</label>
+                              <label className={labelClassLg}>Net Kilos</label>
                               <input type="text" inputMode="decimal" value={line.kilos}
                                 onChange={(e) => updateByProductBalance(v.varietyId, 'kilos', liveFormatNumber(e.target.value, 3))}
-                                className={inputClass} placeholder="0.000" />
+                                className={inputClassLg} placeholder="0.000" />
                             </div>
                           </div>
                         </div>
@@ -449,25 +455,25 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className={labelClass}>Bags</label>
+                      <label className={labelClassLg}>Bags</label>
                       <input type="text" inputMode="numeric" value={bags} onChange={(e) => setBags(liveFormatNumber(e.target.value))}
-                        className={`${inputClass} ${bags === '' ? '!border-brand-amber' : ''}`} placeholder="0" />
+                        className={`${inputClassLg} ${bags === '' ? '!border-brand-amber' : ''}`} placeholder="0" />
                     </div>
                     <div>
-                      <label className={labelClass}>Net Kilos</label>
+                      <label className={labelClassLg}>Net Kilos</label>
                       <input type="text" inputMode="decimal" value={kilos} onChange={(e) => setKilos(liveFormatNumber(e.target.value, 3))}
-                        className={`${inputClass} ${kilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.000" />
+                        className={`${inputClassLg} ${kilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.000" />
                     </div>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className={labelClass}>Age</label>
+                    <label className={labelClassLg}>Age</label>
                     <input type="text" inputMode="numeric" value={age} onChange={(e) => setAge(liveFormatNumber(e.target.value))}
-                      className={`${inputClass} ${age === '' ? '!border-brand-amber' : ''}`} placeholder="0" />
+                      className={`${inputClassLg} ${age === '' ? '!border-brand-amber' : ''}`} placeholder="0" />
                   </div>
                   <div>
-                    <label className={labelClass}>Unit</label>
+                    <label className={labelClassLg}>Unit</label>
                     <select
                       value={ageUnit}
                       onChange={(e) => {
@@ -479,28 +485,28 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
                         }
                         setAgeUnit(nextUnit)
                       }}
-                      className={inputClass}
+                      className={inputClassLg}
                     >
                       {AGE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>As of</label>
+                  <label className={labelClassLg}>As of</label>
                   <CalendarDatePicker value={asOfDate} onChange={setAsOfDate} />
                 </div>
               </div>
             </>
           )}
 
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Quality &amp; Dates</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Quality &amp; Dates</p>
           <div className="space-y-2">
             <div>
-              <label className={labelClass}>Condition</label>
+              <label className={labelClassLg}>Condition</label>
               <div className="mt-1 grid grid-cols-5 gap-1">
                 {CONDITION_FLAGS.map((flag) => (
                   <button key={flag} type="button" onClick={() => setCondition(flag)}
-                    className={`rounded-lg border py-1.5 text-xs font-medium transition-all active:scale-95 ${
+                    className={`rounded-lg border py-1.5 text-sm font-medium transition-all active:scale-95 ${
                       condition === flag ? 'border-brand-neon bg-brand-neon/10 text-brand-neon' : 'border-neutral-800 bg-neutral-950 text-neutral-400'
                     }`}>
                     {flag}
@@ -510,28 +516,28 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className={labelClass}>Purity (optional)</label>
-                <input type="text" value={purity} onChange={(e) => setPurity(e.target.value)} className={inputClass} placeholder="94%" />
+                <label className={labelClassLg}>Purity (optional)</label>
+                <input type="text" value={purity} onChange={(e) => setPurity(e.target.value)} className={inputClassLg} placeholder="94%" />
               </div>
               <div>
-                <label className={labelClass}>MC (optional)</label>
-                <input type="text" value={moistureContent} onChange={(e) => setMoistureContent(e.target.value)} className={inputClass} placeholder="11.1" />
+                <label className={labelClassLg}>MC (optional)</label>
+                <input type="text" value={moistureContent} onChange={(e) => setMoistureContent(e.target.value)} className={inputClassLg} placeholder="11.1" />
               </div>
             </div>
             <div>
-              <label className={labelClass}>{category === 'Palay' ? 'Date Procured' : 'Date Received'} (optional)</label>
-              <input type="text" value={dateProcured} onChange={(e) => setDateProcured(e.target.value)} className={inputClass} placeholder="MAR 24 TO APR 4, 2025" />
+              <label className={labelClassLg}>{category === 'Palay' ? 'Date Procured' : 'Date Received'} (optional)</label>
+              <input type="text" value={dateProcured} onChange={(e) => setDateProcured(e.target.value)} className={inputClassLg} placeholder="MAR 24 TO APR 4, 2025" />
             </div>
           </div>
 
-          {showHint && !canSave && <p className="mt-3 text-center text-xs text-brand-amber">Please complete all required fields.</p>}
+          {showHint && !canSave && <p className="mt-3 text-center text-sm text-brand-amber">Please complete all required fields.</p>}
         </div>
 
         {/* pb includes the device's own safe-area inset (home-indicator
             area on mobile) - without it the button sat flush against
             that zone on phones, uncomfortably close to the edge. */}
         <div className="border-t border-neutral-800 p-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
-          <button type="button" onClick={handleSubmit} disabled={isSaving} className={`w-full ${primaryButtonClass}`}>
+          <button type="button" onClick={handleSubmit} disabled={isSaving} className={`w-full text-base ${primaryButtonClass}`}>
             {isEditing ? 'Update Pile' : 'Create Pile'}
           </button>
         </div>
@@ -565,7 +571,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
           >
             {pendingCloseToggle?.willClose && (
               <div className="text-left">
-                <label className={labelClass}>Close Date</label>
+                <label className={labelClassLg}>Close Date</label>
                 <CalendarDatePicker value={closeDate} label="Close Date" onChange={setCloseDate} />
               </div>
             )}

@@ -29,6 +29,15 @@ import { CONDITION_FLAGS } from '../../forms/shared.js'
 
 const AGE_UNITS = ['Days', 'Months']
 
+// PileBalanceForm and SacksBeginningBalances get their own, larger text
+// sizing than the shared admin-panel default (labelClass/inputClass) -
+// per explicit request to enlarge everything inside Beginning Balances,
+// including these two forms as used from Settings.jsx's modals.
+// PilesBeginningBalances (AdminDashboard's own standalone list) keeps
+// the shared default sizing untouched.
+const labelClassLg = 'text-sm text-neutral-400'
+const inputClassLg = `${inputClass} text-base`
+
 // One beginning-balance line = one seed (isInitialBalance) transaction. A
 // Rice/Palay pile groups by variety, not by sack weight - it can legitimately
 // have had two different real sack weights in its beginning-balance history
@@ -285,19 +294,19 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
           screen. Replaces the old plain amber alert-style banner (an
           alert box implied something was wrong, and nothing was). */}
       <div style={{ backgroundImage: `linear-gradient(135deg, ${heroTint(editingCategory).wash})` }} className="px-3 py-3">
-        <p className="text-lg font-extrabold text-app-text">{pile.pileName}</p>
-        <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${heroTint(editingCategory).pill}`}>
+        <p className="text-xl font-extrabold text-app-text">{pile.pileName}</p>
+        <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-sm font-bold ${heroTint(editingCategory).pill}`}>
           {editingCategory === 'By Products' ? 'By Products' : `${editingCategory}${varietyMap.get(pile.varietyId)?.name ? ` · ${varietyMap.get(pile.varietyId)?.name}` : ''}`}
         </span>
       </div>
       <div className="space-y-2 bg-neutral-900 p-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className={labelClass}>Age</label>
-              <input type="text" inputMode="numeric" value={age} onChange={(e) => setAge(liveFormatNumber(e.target.value))} className={inputClass} placeholder="0" />
+              <label className={labelClassLg}>Age</label>
+              <input type="text" inputMode="numeric" value={age} onChange={(e) => setAge(liveFormatNumber(e.target.value))} className={inputClassLg} placeholder="0" />
             </div>
             <div>
-              <label className={labelClass}>Unit</label>
+              <label className={labelClassLg}>Unit</label>
               <select
                 value={ageUnit}
                 onChange={(e) => {
@@ -309,7 +318,7 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
                   }
                   setAgeUnit(nextUnit)
                 }}
-                className={inputClass}
+                className={inputClassLg}
               >
                 {AGE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
               </select>
@@ -317,29 +326,29 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
           </div>
           {editingCategory !== 'By Products' && (
             <div>
-              <label className={labelClass}>{editingCategory === 'Palay' ? 'Date Procured' : 'Date Received'} (optional)</label>
+              <label className={labelClassLg}>{editingCategory === 'Palay' ? 'Date Procured' : 'Date Received'} (optional)</label>
               <input type="text" value={dateProcured} onChange={(e) => setDateProcured(e.target.value)}
-                className={inputClass} placeholder="MAR 24 TO APR 4, 2025" />
+                className={inputClassLg} placeholder="MAR 24 TO APR 4, 2025" />
             </div>
           )}
           {lines.map((line, i) => (
             <div key={i} className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2.5">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-neutral-400">Line {i + 1}</p>
+                <p className="text-sm font-semibold text-neutral-400">Line {i + 1}</p>
                 {lines.length > 1 && (
-                  <button type="button" onClick={() => removeLine(i)} aria-label="Remove line" className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs font-semibold text-brand-crimson transition-transform active:scale-90">
-                    <X size={14} /> Remove
+                  <button type="button" onClick={() => removeLine(i)} aria-label="Remove line" className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-sm font-semibold text-brand-crimson transition-transform active:scale-90">
+                    <X size={16} /> Remove
                   </button>
                 )}
               </div>
               {editingCategory === 'By Products' && (
                 <>
                   <div>
-                    <label className={labelClass}>Variety</label>
+                    <label className={labelClassLg}>Variety</label>
                     <select
                       value={line.varietyId}
                       onChange={(e) => updateLine(i, 'varietyId', e.target.value)}
-                      className={inputClass}
+                      className={inputClassLg}
                     >
                       <option value="">Unspecified — mix of By Products</option>
                       {editingCategoryVarieties.map((v) => (
@@ -348,32 +357,32 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Date Received (optional)</label>
+                    <label className={labelClassLg}>Date Received (optional)</label>
                     <input type="text" value={line.dateProcured} onChange={(e) => updateLine(i, 'dateProcured', e.target.value)}
-                      className={inputClass} placeholder="MAR 24 TO APR 4, 2025" />
+                      className={inputClassLg} placeholder="MAR 24 TO APR 4, 2025" />
                   </div>
                 </>
               )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className={labelClass}>Bags</label>
-                  <input type="text" inputMode="numeric" value={line.bags} onChange={(e) => updateLine(i, 'bags', liveFormatNumber(e.target.value))} className={inputClass} placeholder="0" />
+                  <label className={labelClassLg}>Bags</label>
+                  <input type="text" inputMode="numeric" value={line.bags} onChange={(e) => updateLine(i, 'bags', liveFormatNumber(e.target.value))} className={inputClassLg} placeholder="0" />
                 </div>
                 <div>
-                  <label className={labelClass}>Net Kilos</label>
-                  <input type="text" inputMode="decimal" value={line.kilos} onChange={(e) => updateLine(i, 'kilos', liveFormatNumber(e.target.value, 3))} className={inputClass} placeholder="0.000" />
+                  <label className={labelClassLg}>Net Kilos</label>
+                  <input type="text" inputMode="decimal" value={line.kilos} onChange={(e) => updateLine(i, 'kilos', liveFormatNumber(e.target.value, 3))} className={inputClassLg} placeholder="0.000" />
                 </div>
               </div>
               <div>
-                <label className={labelClass}>As of</label>
+                <label className={labelClassLg}>As of</label>
                 <CalendarDatePicker value={line.dateReceived} onChange={(v) => updateLine(i, 'dateReceived', v)} />
               </div>
               <div>
-                <label className={labelClass}>Condition</label>
+                <label className={labelClassLg}>Condition</label>
                 <div className="mt-1 grid grid-cols-5 gap-1">
                   {CONDITION_FLAGS.map((flag) => (
                     <button key={flag} type="button" onClick={() => updateLine(i, 'condition', flag)}
-                      className={`rounded-lg border py-1.5 text-xs font-medium transition-all active:scale-95 ${
+                      className={`rounded-lg border py-1.5 text-sm font-medium transition-all active:scale-95 ${
                         line.condition === flag ? 'border-brand-neon bg-brand-neon/10 text-brand-neon' : 'border-neutral-800 bg-neutral-900 text-neutral-400'
                       }`}>
                       {flag}
@@ -393,11 +402,11 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
                 style={{ gridTemplateColumns: line.mtsSackTypeId ? '1fr 1fr' : '1fr 0fr', transition: 'grid-template-columns 0.25s ease-out' }}
               >
                 <div>
-                  <label className={labelClass}>Sack Weight / MTS (optional)</label>
+                  <label className={labelClassLg}>Sack Weight / MTS (optional)</label>
                   <select
                     value={line.mtsSackTypeId}
                     onChange={(e) => updateLine(i, 'mtsSackTypeId', e.target.value)}
-                    className={inputClass}
+                    className={inputClassLg}
                   >
                     <option value="">Unset (use pile's own if any)</option>
                     {sackTypesForCategory.map((s) => (
@@ -407,12 +416,12 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
                 </div>
                 <div className="overflow-hidden">
                   <div style={{ opacity: line.mtsSackTypeId ? 1 : 0, transition: 'opacity 0.2s ease-in 0.1s', minWidth: 140 }}>
-                    <label className={labelClass}>Sack Condition</label>
+                    <label className={labelClassLg}>Sack Condition</label>
                     <select
                       value={line.mtsCondition}
                       onChange={(e) => updateLine(i, 'mtsCondition', e.target.value)}
                       disabled={!line.mtsSackTypeId}
-                      className={inputClass}
+                      className={inputClassLg}
                     >
                       <option value="">Select...</option>
                       {SACK_CONDITIONS.map(({ code: cc, label }) => (
@@ -424,20 +433,20 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className={labelClass}>Purity (optional)</label>
+                  <label className={labelClassLg}>Purity (optional)</label>
                   <input type="text" value={line.purity} onChange={(e) => updateLine(i, 'purity', e.target.value)}
-                    className={inputClass} placeholder="94%" />
+                    className={inputClassLg} placeholder="94%" />
                 </div>
                 <div>
-                  <label className={labelClass}>MC (optional)</label>
+                  <label className={labelClassLg}>MC (optional)</label>
                   <input type="text" value={line.moistureContent} onChange={(e) => updateLine(i, 'moistureContent', liveFormatNumber(e.target.value))}
-                    className={inputClass} placeholder="11.1" />
+                    className={inputClassLg} placeholder="11.1" />
                 </div>
               </div>
             </div>
           ))}
-          <button type="button" onClick={addLine} className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-700 py-1.5 text-xs font-medium text-neutral-400 hover:border-brand-neon hover:text-brand-neon">
-            <Plus size={14} /> Add line
+          <button type="button" onClick={addLine} className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-700 py-1.5 text-sm font-medium text-neutral-400 hover:border-brand-neon hover:text-brand-neon">
+            <Plus size={16} /> Add line
           </button>
 
           {/* pb includes the device's own safe-area inset (home-indicator
@@ -445,8 +454,8 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
               against that zone when this form is shown inside
               EditBeginningBalanceModal.jsx on a phone. */}
           <div className="flex gap-2" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-            <button type="button" onClick={handleSave} disabled={isSaving} className={`flex-1 ${primaryButtonClass}`}>Save</button>
-            <button type="button" onClick={onDone} className={secondaryButtonClass}>Cancel</button>
+            <button type="button" onClick={handleSave} disabled={isSaving} className={`flex-1 text-base ${primaryButtonClass}`}>Save</button>
+            <button type="button" onClick={onDone} className={`text-base ${secondaryButtonClass}`}>Cancel</button>
           </div>
       </div>
 
@@ -723,26 +732,26 @@ function SacksBeginningBalances({ warehouseId }) {
       >
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className={labelClass}>Sack Type</label>
-            <select value={sackTypeId} onChange={(e) => { setSackTypeId(e.target.value); setCondition('') }} className={inputClass}>
+            <label className={labelClassLg}>Sack Type</label>
+            <select value={sackTypeId} onChange={(e) => { setSackTypeId(e.target.value); setCondition('') }} className={inputClassLg}>
               <option value="">Select…</option>
               {selectableSackTypes.map((st) => <option key={st.sackTypeId} value={st.sackTypeId}>{st.code}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelClass}>Condition</label>
-            <select value={condition} onChange={(e) => setCondition(e.target.value)} className={inputClass}>
+            <label className={labelClassLg}>Condition</label>
+            <select value={condition} onChange={(e) => setCondition(e.target.value)} className={inputClassLg}>
               <option value="">Select…</option>
               {selectableConditions.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
             </select>
           </div>
         </div>
         <div>
-          <label className={labelClass}>Pieces</label>
-          <input ref={piecesInputRef} type="text" inputMode="numeric" value={pieces} onChange={(e) => setPieces(liveFormatNumber(e.target.value))} className={inputClass} placeholder="0" />
+          <label className={labelClassLg}>Pieces</label>
+          <input ref={piecesInputRef} type="text" inputMode="numeric" value={pieces} onChange={(e) => setPieces(liveFormatNumber(e.target.value))} className={inputClassLg} placeholder="0" />
         </div>
         <div>
-          <label className={labelClass}>As of</label>
+          <label className={labelClassLg}>As of</label>
           <CalendarDatePicker value={asOfDate} onChange={setAsOfDate} />
         </div>
         {/* Save/Update always takes the full row (flex-1); Cancel grows
@@ -751,12 +760,12 @@ function SacksBeginningBalances({ warehouseId }) {
             the app's other shrink-beside-grow transitions (e.g.
             Sack Condition growing in next to Sack Weight/MTS above). */}
         <div className="flex gap-2">
-          <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>{editingId ? 'Update' : 'Save'}</button>
+          <button type="button" onClick={handleSave} className={`flex-1 text-base ${primaryButtonClass}`}>{editingId ? 'Update' : 'Save'}</button>
           <div
             className="overflow-hidden transition-all duration-300 ease-out"
             style={{ maxWidth: editingId ? '96px' : '0px', opacity: editingId ? 1 : 0 }}
           >
-            <button type="button" onClick={resetForm} className={`whitespace-nowrap ${secondaryButtonClass}`}>Cancel</button>
+            <button type="button" onClick={resetForm} className={`whitespace-nowrap text-base ${secondaryButtonClass}`}>Cancel</button>
           </div>
         </div>
       </div>
@@ -765,22 +774,22 @@ function SacksBeginningBalances({ warehouseId }) {
           up top, the actual figure as its own tile below) instead of a
           single plain text line, per explicit request. */}
       <ul className="space-y-2">
-        {sortedEntries.length === 0 && <p className="animate-empty-state-in py-3 text-center text-xs text-neutral-500">No sack beginning balances in this warehouse yet.</p>}
+        {sortedEntries.length === 0 && <p className="animate-empty-state-in py-3 text-center text-sm text-neutral-500">No sack beginning balances in this warehouse yet.</p>}
         {sortedEntries.map((e) => (
           <li key={e.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-base font-medium text-app-text">{sackTypeMap.get(e.sackTypeId)?.code ?? '?'} · {e.condition}</p>
-                {e.asOfDate && <p className="text-sm text-neutral-500">as of {e.asOfDate}</p>}
+                <p className="truncate text-lg font-medium text-app-text">{sackTypeMap.get(e.sackTypeId)?.code ?? '?'} · {e.condition}</p>
+                {e.asOfDate && <p className="text-base text-neutral-500">as of {e.asOfDate}</p>}
               </div>
               <div className="flex shrink-0 gap-1">
-                <button type="button" onClick={() => handleEdit(e)} aria-label="Edit" className={editIconClass}><Pencil size={20} /></button>
-                <button type="button" onClick={() => setPendingDelete(e)} aria-label="Delete" className={deleteIconClass}><Trash2 size={20} /></button>
+                <button type="button" onClick={() => handleEdit(e)} aria-label="Edit" className={editIconClass}><Pencil size={22} /></button>
+                <button type="button" onClick={() => setPendingDelete(e)} aria-label="Delete" className={deleteIconClass}><Trash2 size={22} /></button>
               </div>
             </div>
             <div className="mt-2 rounded-lg bg-neutral-950 py-2 text-center">
-              <p className="text-[10px] uppercase tracking-wide text-neutral-500">Pieces</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(e.pieces)}</p>
+              <p className="text-xs uppercase tracking-wide text-neutral-500">Pieces</p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-app-text">{fmtBags(e.pieces)}</p>
             </div>
           </li>
         ))}

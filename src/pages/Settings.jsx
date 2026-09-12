@@ -360,7 +360,7 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
           Beginning Balances' own now-removed list used to show are
           still visible at a glance here. */}
       <ul className="mt-3 space-y-2">
-        {sortedPiles.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
+        {sortedPiles.length === 0 && <p className="py-3 text-center text-sm text-neutral-500">No piles in this warehouse yet.</p>}
         {sortedPiles.map((p) => {
           const category = varietyMap.get(p.varietyId)?.category ?? p.cerealType
           const varietyLabel = varietyMap.get(p.varietyId)?.name ?? category
@@ -377,28 +377,28 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
                 aria-label={`Edit ${p.pileName}`}
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
               >
-                <p className="truncate text-base font-medium text-app-text">{p.pileName}</p>
+                <p className="truncate text-lg font-medium text-app-text">{p.pileName}</p>
                 {varietyLabel && (
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${varietyBadgeClass(category)}`}>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-sm font-semibold ${varietyBadgeClass(category)}`}>
                     {varietyLabel}
                   </span>
                 )}
               </button>
               <button type="button" onClick={() => onEditPile(p)} aria-label={`Edit ${p.pileName}`} className={editIconClass}>
-                <Pencil size={20} />
+                <Pencil size={22} />
               </button>
               <button type="button" onClick={() => confirmDelete(p)} aria-label={`Delete ${p.pileName}`} className={deleteIconClass}>
-                <Trash2 size={20} />
+                <Trash2 size={22} />
               </button>
             </div>
             <button type="button" onClick={() => onEditPile(p)} aria-label={`Edit ${p.pileName}`} className="mt-2 grid w-full grid-cols-2 gap-2 text-left">
               <div className="rounded-lg bg-neutral-950 py-2 text-center">
-                <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
-                <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtBags(p.currentBags ?? 0)}</p>
+                <p className="text-xs uppercase tracking-wide text-neutral-500">Bags</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(p.currentBags ?? 0)}</p>
               </div>
               <div className="rounded-lg bg-neutral-950 py-2 text-center">
-                <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
-                <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeightValue(p.currentKilos ?? 0, weightUnit)}</p>
+                <p className="text-xs uppercase tracking-wide text-neutral-500">Net Kg</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtWeightValue(p.currentKilos ?? 0, weightUnit)}</p>
               </div>
             </button>
           </li>
@@ -647,7 +647,7 @@ function Settings() {
               gone now (see PileListSection's own comment) - Stocks IS
               the one pile list, and balance editing is reached through
               CreateEditPileModal's own "Edit balance ->" link instead. */}
-          <h2 className="text-base font-semibold text-app-text">Beginning Balances</h2>
+          <h2 className="text-lg font-semibold text-app-text">Beginning Balances</h2>
           <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
             <div
               className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -656,14 +656,14 @@ function Settings() {
             <button
               type="button"
               onClick={() => setStockTab('stocks')}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${stockTab === 'stocks' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-base font-medium transition-colors ${stockTab === 'stocks' ? 'text-brand-contrast' : 'text-neutral-400'}`}
             >
               Stocks
             </button>
             <button
               type="button"
               onClick={() => setStockTab('sacks')}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${stockTab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+              className={`relative z-10 flex-1 rounded-lg py-2 text-base font-medium transition-colors ${stockTab === 'sacks' ? 'text-brand-contrast' : 'text-neutral-400'}`}
             >
               Sacks
             </button>
