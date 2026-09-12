@@ -12,7 +12,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
-import { calculateCurrentAge, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
+import { calculateCurrentAge, fmtBags, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
 import { computeCurrentPileStatesBatch } from '../utils/pileLedger.js'
 import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
@@ -59,6 +59,17 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // the app, rather than staying in bags - bags is a count, not a
   // weight unit, so it has no MT equivalent of its own.
   const fmt = (netBags) => weightUnit === 'mt' ? fmtWeight(netBags * 50, 'mt') : fmtNetBags(netBags)
+  // Reported, confirmed real bug: By Products figures on this page were
+  // shown as "net bags" (kilos / 50) exactly like Rice/Palay, even
+  // though By Products bags don't have a standard 50kg weight - the
+  // figure shown here (e.g. "2,873.69") never matched the SAME
+  // warehouse's own By Products total on HomeStocks.jsx (e.g. "3,149"
+  // real bags), which is the actual, correct bag count. bags is the
+  // real count (already reliable via resolveBags - see
+  // unwithdrawnStock.js), kilos still converts to MT the same way
+  // weight always does (that conversion is valid regardless of bag
+  // weight, since it never goes through a bags-based figure).
+  const fmtByProducts = (bags, kilos) => weightUnit === 'mt' ? fmtWeight(kilos, 'mt') : fmtBags(bags)
 
   const provinces = useLiveQuery(() => db.provinces.toArray(), []) ?? []
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
@@ -79,7 +90,12 @@ function AdminHomeStocks({ onWarehouseSelect }) {
       const byCategory = new Map()
       for (const [varietyId, uw] of byVariety) {
         const cat = varietyCategoryMap.get(varietyId) ?? 'Unknown'
-        byCategory.set(cat, (byCategory.get(cat) ?? 0) + uw.kilos / 50)
+        // bags (real count, via resolveBags) kept alongside kilos/50
+        // ("net bags") - Rice/Palay consumers read netBags, By Products
+        // consumers must read bags/kilos instead, since kilos/50 isn't a
+        // valid bag count there. See fmtByProducts's own comment above.
+        const cur = byCategory.get(cat) ?? { bags: 0, kilos: 0, netBags: 0 }
+        byCategory.set(cat, { bags: cur.bags + uw.bags, kilos: cur.kilos + uw.kilos, netBags: cur.netBags + uw.kilos / 50 })
       }
       result.set(w.warehouseId, byCategory)
     }
@@ -118,6 +134,10 @@ function AdminHomeStocks({ onWarehouseSelect }) {
       ...p,
       age: calculateCurrentAge(p.initialAgeValue ?? 0, p.dateOfReceipt, autoAgeMonitoring),
       netBags: (state?.kilos ?? p.currentKilos ?? 0) / 50,
+      // Real bag count - see fmtByProducts's own comment for why By
+      // Products consumers need this instead of netBags.
+      bags: state?.bags ?? p.currentBags ?? 0,
+      kilos: state?.kilos ?? p.currentKilos ?? 0,
     }
   })
 
@@ -152,10 +172,10 @@ function AdminHomeStocks({ onWarehouseSelect }) {
     // no badge/tag - the enriched breakdown view lives only on the
     // Breakdown tab, not here.
     const riceValue = topCardShowPotential
-      ? Math.max(0, riceActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Rice') ?? 0), 0))
+      ? Math.max(0, riceActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Rice')?.netBags ?? 0), 0))
       : riceActual
     const palayValue = topCardShowPotential
-      ? Math.max(0, palayActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Palay') ?? 0), 0))
+      ? Math.max(0, palayActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Palay')?.netBags ?? 0), 0))
       : palayActual
     return { province, riceValue, palayValue }
   })
@@ -346,15 +366,21 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                   </div>
                   <div className="mt-2 space-y-2">
                     {CATEGORIES.map((cat) => {
-                      const sum = wPiles.filter((p) => p.cerealType === cat)
-                        .reduce((s, p) => s + p.netBags, 0)
+                      const isByProducts = cat === 'By Products'
+                      const catPiles = wPiles.filter((p) => p.cerealType === cat)
+                      const sumBags = catPiles.reduce((s, p) => s + p.bags, 0)
+                      const sumKilos = catPiles.reduce((s, p) => s + p.kilos, 0)
+                      const sum = catPiles.reduce((s, p) => s + p.netBags, 0)
                       if (sum === 0) return null
                       const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
-                      const unwithdrawnNetBags = unwithdrawnByWarehouse.get(warehouse.warehouseId)?.get(cat) ?? 0
+                      const unwithdrawn = unwithdrawnByWarehouse.get(warehouse.warehouseId)?.get(cat)
+                      const unwithdrawnNetBags = unwithdrawn?.netBags ?? 0
+                      const unwithdrawnBags = unwithdrawn?.bags ?? 0
+                      const unwithdrawnKilos = unwithdrawn?.kilos ?? 0
                       // Guard against a rounds-to-zero badge (see HomeStocks.jsx
                       // for the same reasoning) - only flag rows with a
                       // genuinely meaningful unwithdrawn amount.
-                      const hasUnwithdrawn = breakdownShowPotential && unwithdrawnNetBags >= 0.005
+                      const hasUnwithdrawn = breakdownShowPotential && (isByProducts ? unwithdrawnBags >= 1 : unwithdrawnNetBags >= 0.005)
                       // Reported, real bug: the toggle above claims
                       // "Potential" but the headline figure never
                       // actually changed - it always showed the plain
@@ -365,14 +391,19 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       // switches to the real potential (actual minus
                       // unwithdrawn) when that toggle is on, matching
                       // the Province table above it.
-                      const displayValue = breakdownShowPotential ? Math.max(0, sum - unwithdrawnNetBags) : sum
+                      const displayValue = breakdownShowPotential
+                        ? (isByProducts ? Math.max(0, sumBags - unwithdrawnBags) : Math.max(0, sum - unwithdrawnNetBags))
+                        : (isByProducts ? sumBags : sum)
+                      const displayKilos = breakdownShowPotential ? Math.max(0, sumKilos - unwithdrawnKilos) : sumKilos
                       const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
                       return (
                         <div key={cat} className="flex items-center justify-between gap-2">
                           <span className={`text-sm font-semibold ${colorClass}`}>{cat}</span>
                           <div className="text-right">
                             <span className={`text-lg font-bold tabular-nums ${colorClass}`}>
-                              <CountUpNumber value={displayValue} format={fmt} />
+                              {isByProducts
+                                ? <CountUpNumber value={displayValue} format={(v) => fmtByProducts(v, displayKilos)} />
+                                : <CountUpNumber value={displayValue} format={fmt} />}
                             </span>
                             {hasUnwithdrawn && (
                               <div className="mt-0.5 flex items-center justify-end gap-1.5">
@@ -389,12 +420,12 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                       varietyIds: catVarietyIds,
                                       title: `${cat} — Unwithdrawn`,
                                       subtitle: `${province?.code} · ${stripWarehouseCodePrefix(warehouse.name)}`,
-                                      rawBags: cat === 'By Products',
+                                      rawBags: isByProducts,
                                     })
                                   }}
                                   className="whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
                                 >
-                                  {fmt(unwithdrawnNetBags)} unwithdrawn
+                                  {isByProducts ? fmtBags(unwithdrawnBags) : fmt(unwithdrawnNetBags)} unwithdrawn
                                 </button>
                               </div>
                             )}

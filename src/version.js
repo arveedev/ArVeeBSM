@@ -2209,4 +2209,25 @@
 //              commitment against this warehouse's category exists even
 //              when there's no matching pile on screen right now to
 //              attribute it to.
-export const APP_VERSION = '1.9-123'
+//   1.9-124 - Admin Dashboard's "Stock Breakdown — Warehouse & Category"
+//            section had the exact same 50kg-bag-weight assumption the
+//            By Products fixes earlier this session already removed
+//            from HomeStocks.jsx and the drill-down modal: its By
+//            Products figures were shown as kilos / 50 ("net bags")
+//            exactly like Rice/Palay, which never matched the SAME
+//            warehouse's own By Products total on HomeStocks.jsx (e.g.
+//            Admin showed "2,873.69", HomeStocks correctly showed
+//            "3,149" real bags, for the identical warehouse) - confirmed
+//            directly from a side-by-side screenshot. By Products now
+//            shows its real bag count here too (still converts to MT
+//            correctly when that unit is selected, since weight itself
+//            is never in question - only the bags-as-kilos/50 shortcut
+//            was wrong). Still investigating a separate report that a
+//            warehouse's own Rice Potential doesn't match its
+//            contribution to the Province-level Potential overview -
+//            traced the calculation chain and could not find a
+//            remaining structural cause (both now read the exact same
+//            underlying figures), so this may already be resolved by
+//            the last two versions' fixes - re-verify against this
+//            build specifically.
+export const APP_VERSION = '1.9-124'
