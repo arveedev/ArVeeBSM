@@ -2230,4 +2230,19 @@
 //            underlying figures), so this may already be resolved by
 //            the last two versions' fixes - re-verify against this
 //            build specifically.
-export const APP_VERSION = '1.9-124'
+//   1.9-125 - Confirmed, reported real trap: a PC stuck on a build from
+//            before 1.9-120's update-mechanism fix could tap "Update
+//            now" 50+ times, close/reopen the app repeatedly, and never
+//            get anywhere - the code running that tap WAS the broken
+//            code, so no future fix could ever arrive through it (the
+//            fix only exists in the new bundle the old bundle keeps
+//            failing to fetch). That instance needed a one-time manual
+//            browser fix (clearing site data). Added an escape hatch so
+//            nobody has to do that by hand again: the update toast now
+//            has a small secondary "Trouble updating? Force refresh"
+//            link beneath the main button - unregisters every service
+//            worker and clears every Cache Storage entry for this
+//            origin, then reloads with a cache-busting URL. A genuinely
+//            clean slate that can't get stuck the same way, regardless
+//            of what state the stuck registration/precache was in.
+export const APP_VERSION = '1.9-125'

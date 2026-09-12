@@ -130,3 +130,31 @@ export const applyUpdate = async () => {
     window.location.reload()
   }
 }
+
+// Confirmed, reported real trap: a user stuck on a build from BEFORE
+// this file's own update-mechanism fixes has no way to receive those
+// fixes through the normal "Update now" flow, because the code running
+// that flow IS the broken code - a chicken-and-egg problem no future
+// JS fix can self-heal (the fix only exists in the new bundle the old
+// bundle is failing to fetch). That specific trap needed a one-time
+// manual browser fix (clearing site data). This is the escape hatch so
+// nobody has to do that by hand again: unregister every service worker
+// this origin has (there should only ever be one, but a leftover from
+// an old dev/preview registration is possible) and delete every Cache
+// Storage entry, THEN reload - a completely clean slate that forces a
+// genuinely fresh fetch of everything, bypassing any stuck registration
+// or precache regardless of what state it's in.
+export const forceRefresh = async () => {
+  try {
+    const regs = await navigator.serviceWorker?.getRegistrations?.() ?? []
+    await Promise.all(regs.map((r) => r.unregister()))
+    const keys = await caches?.keys?.() ?? []
+    await Promise.all(keys.map((k) => caches.delete(k)))
+  } finally {
+    // Cache-busting query param, not just reload() - the DOCUMENT
+    // request itself (index.html) could otherwise still be served from
+    // the browser's own plain HTTP cache even with every service
+    // worker/Cache Storage entry gone.
+    window.location.href = `${window.location.pathname}?refresh=${Date.now()}`
+  }
+}
