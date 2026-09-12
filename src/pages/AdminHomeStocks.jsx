@@ -16,7 +16,8 @@ import { calculateCurrentAge, fmtBags, fmtNetBags, fmtWeight, AGE_BUCKETS } from
 import { computeCurrentPileStatesBatch } from '../utils/pileLedger.js'
 import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
-import { computeUnwithdrawnByVariety, computeUnwithdrawnByCategoryAge, UNSPECIFIED_AGE } from '../utils/unwithdrawnStock.js'
+import { computeUnwithdrawnByCategoryAge, UNSPECIFIED_AGE } from '../utils/unwithdrawnStock.js'
+import { computeWarehouseCategoryStock } from '../utils/warehouseCategoryStock.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
 import CountUpNumber from '../components/common/CountUpNumber.jsx'
@@ -77,30 +78,22 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyCategoryMap = new Map(varieties.map((v) => [v.varietyId, v.category]))
 
-  // Same "authorized but not yet withdrawn" concept as HomeStocks, here
-  // rolled up to warehouse+category (this page has no per-variety
-  // breakdown) - warehouseId -> category -> unwithdrawn net bags. Kept
-  // in kilos internally (not the separate bag-count field) so it can be
-  // formatted the same way as the rest of this page - net bags, or MT
-  // when that's the active weight unit.
-  const unwithdrawnByWarehouse = useLiveQuery(async () => {
+  // Single shared per-warehouse computation (see warehouseCategoryStock.js's
+  // own top comment for why this replaced two separately-maintained
+  // implementations that kept drifting apart) - warehouseId -> category
+  // -> { actualBags, actualKilos, unwithdrawnBags, unwithdrawnKilos }.
+  // Powers the Province table and Stock Breakdown section below; Age
+  // Grouping still uses its own per-age-bucket computation further down
+  // (a different shape - per bucket, not per warehouse total).
+  const sackTypesForStock = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
+  const warehouseCategoryStock = useLiveQuery(async () => {
+    if (warehouses.length === 0) return new Map()
     const result = new Map()
-    for (const w of warehouses) {
-      const byVariety = await computeUnwithdrawnByVariety(w.warehouseId)
-      const byCategory = new Map()
-      for (const [varietyId, uw] of byVariety) {
-        const cat = varietyCategoryMap.get(varietyId) ?? 'Unknown'
-        // bags (real count, via resolveBags) kept alongside kilos/50
-        // ("net bags") - Rice/Palay consumers read netBags, By Products
-        // consumers must read bags/kilos instead, since kilos/50 isn't a
-        // valid bag count there. See fmtByProducts's own comment above.
-        const cur = byCategory.get(cat) ?? { bags: 0, kilos: 0, netBags: 0 }
-        byCategory.set(cat, { bags: cur.bags + uw.bags, kilos: cur.kilos + uw.kilos, netBags: cur.netBags + uw.kilos / 50 })
-      }
-      result.set(w.warehouseId, byCategory)
-    }
+    await Promise.all(warehouses.map(async (w) => {
+      result.set(w.warehouseId, await computeWarehouseCategoryStock(w.warehouseId, { varieties, sackTypes: sackTypesForStock }))
+    }))
     return result
-  }, [warehouses, varieties]) ?? new Map()
+  }, [warehouses, varieties, sackTypesForStock]) ?? new Map()
 
   // Age Grouping shows POTENTIAL (actual minus unwithdrawn) instead of
   // raw actual inventory - warehouseId -> category -> Map(bucketLabel
@@ -184,22 +177,20 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // file - the fix here is identical: derive every total by summing the
   // already-clamped per-row values, never by recomputing independently.
   const provinceRows = sortedProvinces.map((province) => {
-    const wIds = new Set(
-      warehouses
-        .filter((w) => w.provinceId === province.provinceId)
-        .map((w) => w.warehouseId)
-    )
-    const pp = enrichedPiles.filter((p) => wIds.has(p.warehouseId))
-    const riceActual = pp.filter((p) => p.cerealType === 'Rice').reduce((s, p) => s + p.netBags, 0)
-    const palayActual = pp.filter((p) => p.cerealType === 'Palay').reduce((s, p) => s + p.netBags, 0)
+    const wIds = warehouses
+      .filter((w) => w.provinceId === province.provinceId)
+      .map((w) => w.warehouseId)
+    const sumFor = (cat, field) => wIds.reduce((s, wId) => s + (warehouseCategoryStock.get(wId)?.get(cat)?.[field] ?? 0), 0)
+    const riceActual = sumFor('Rice', 'actualKilos') / 50
+    const palayActual = sumFor('Palay', 'actualKilos') / 50
     // Potential mode swaps the plain number for actual-minus-unwithdrawn,
     // no badge/tag - the enriched breakdown view lives only on the
     // Breakdown tab, not here.
     const riceValue = topCardShowPotential
-      ? Math.max(0, riceActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Rice')?.netBags ?? 0), 0))
+      ? Math.max(0, riceActual - sumFor('Rice', 'unwithdrawnKilos') / 50)
       : riceActual
     const palayValue = topCardShowPotential
-      ? Math.max(0, palayActual - [...wIds].reduce((s, wId) => s + (unwithdrawnByWarehouse.get(wId)?.get('Palay')?.netBags ?? 0), 0))
+      ? Math.max(0, palayActual - sumFor('Palay', 'unwithdrawnKilos') / 50)
       : palayActual
     return { province, riceValue, palayValue }
   })
@@ -366,8 +357,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           // already did elsewhere on this page (onWarehouseSelect).
           <div className="space-y-2">
             {sortedWarehouses.map((warehouse) => {
-              const wPiles = enrichedPiles.filter((p) => p.warehouseId === warehouse.warehouseId)
-              if (wPiles.length === 0) return null
+              const wStock = warehouseCategoryStock.get(warehouse.warehouseId)
+              if (!wStock || [...wStock.values()].every((c) => c.actualBags === 0 && c.actualKilos === 0)) return null
               const province = provinceMap.get(warehouse.provinceId)
               return (
                 <div
@@ -391,16 +382,15 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                   <div className="mt-2 space-y-2">
                     {CATEGORIES.map((cat) => {
                       const isByProducts = cat === 'By Products'
-                      const catPiles = wPiles.filter((p) => p.cerealType === cat)
-                      const sumBags = catPiles.reduce((s, p) => s + p.bags, 0)
-                      const sumKilos = catPiles.reduce((s, p) => s + p.kilos, 0)
-                      const sum = catPiles.reduce((s, p) => s + p.netBags, 0)
-                      if (sum === 0) return null
+                      const catStock = wStock.get(cat)
+                      const sumBags = catStock?.actualBags ?? 0
+                      const sumKilos = catStock?.actualKilos ?? 0
+                      const sum = sumKilos / 50
+                      if (sumBags === 0 && sumKilos === 0) return null
                       const colorClass = cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
-                      const unwithdrawn = unwithdrawnByWarehouse.get(warehouse.warehouseId)?.get(cat)
-                      const unwithdrawnNetBags = unwithdrawn?.netBags ?? 0
-                      const unwithdrawnBags = unwithdrawn?.bags ?? 0
-                      const unwithdrawnKilos = unwithdrawn?.kilos ?? 0
+                      const unwithdrawnBags = catStock?.unwithdrawnBags ?? 0
+                      const unwithdrawnKilos = catStock?.unwithdrawnKilos ?? 0
+                      const unwithdrawnNetBags = unwithdrawnKilos / 50
                       // Guard against a rounds-to-zero badge (see HomeStocks.jsx
                       // for the same reasoning) - only flag rows with a
                       // genuinely meaningful unwithdrawn amount.

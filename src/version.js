@@ -2265,4 +2265,20 @@
 //            clamping Potential all the way to 0. Every category filter
 //            on this page now resolves through the exact same
 //            variety-first fallback chain HomeStocks.jsx already uses.
-export const APP_VERSION = '1.9-126'
+//   1.9-127 - The Catanduanes mismatch persisted even after 1.9-126, on
+//            a confirmed-current build - per direct request, stopped
+//            chasing individual discrepancies between two separately-
+//            maintained calculations and unified them instead: new
+//            warehouseCategoryStock.js is now the ONLY place either
+//            page computes "how much Rice/Palay/By Products does
+//            warehouse X actually have, and how much of that is
+//            unwithdrawn" - built on computePileStockBreakdown, the
+//            exact same per-pile function HomeStocks.jsx's own per-
+//            warehouse page already calls, so the actual figure is
+//            bit-for-bit the same calculation already shown and
+//            trusted there, not a second implementation kept in sync by
+//            hand. AdminHomeStocks.jsx's Province table and Stock
+//            Breakdown section now both sum this shared function's own
+//            per-warehouse output - there is exactly one calculation
+//            left that could ever disagree with itself.
+export const APP_VERSION = '1.9-127'
