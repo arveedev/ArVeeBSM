@@ -27,7 +27,12 @@ function AdminHomeSacks({ onWarehouseSelect }) {
   const [groupTab, setGroupTab] = useState('Province')
 
   const provinces = useLiveQuery(() => db.provinces.toArray(), []) ?? []
-  const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
+  // Same fix, same reasoning as AdminHomeStocks.jsx: an NFA-owned
+  // Mechanical Dryer or Ricemill isn't a warehouse (see the warehouses
+  // table's own facilityType schema comment) and shouldn't appear as
+  // one here either.
+  const warehouses = (useLiveQuery(() => db.warehouses.toArray(), []) ?? [])
+    .filter((w) => (w.facilityType ?? 'Warehouse') === 'Warehouse')
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const sackTx = useLiveQuery(
     () => db.transactions.where('type').anyOf(['ESR', 'ESI']).and((t) => t.status === 'Active').toArray(),

@@ -73,7 +73,19 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   const fmtByProducts = (bags, kilos) => weightUnit === 'mt' ? fmtWeight(kilos, 'mt') : fmtBags(bags)
 
   const provinces = useLiveQuery(() => db.provinces.toArray(), []) ?? []
-  const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
+  // Confirmed, reported real bug: an NFA-owned Mechanical Dryer or
+  // Ricemill is a fundamentally different kind of facility - it
+  // doesn't hold warehouse stock, it's a milling/drying process stop
+  // (see the warehouses table's own facilityType schema comment). A
+  // ricemill with an AI authorized against it for milling was showing
+  // up as its own "warehouse" card here, and its outstanding amount
+  // was being subtracted from its province's Potential as if it were
+  // ordinary warehouse-held stock. Filtered out once, here, so every
+  // computation and listing below this line only ever sees real
+  // warehouses - facilityType is unset ('Warehouse' is the implicit
+  // default) on every record created before this field existed.
+  const warehouses = (useLiveQuery(() => db.warehouses.toArray(), []) ?? [])
+    .filter((w) => (w.facilityType ?? 'Warehouse') === 'Warehouse')
   const piles = useLiveQuery(() => db.piles.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyCategoryMap = new Map(varieties.map((v) => [v.varietyId, v.category]))

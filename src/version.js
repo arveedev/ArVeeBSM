@@ -2316,4 +2316,19 @@
 //            with its own "0 actual, X unwithdrawn" line instead of
 //            disappearing. Removed the temporary [STOCK DEBUG] console
 //            logging now that it's served its purpose.
-export const APP_VERSION = '1.9-129'
+//   1.9-130 - Per explicit correction: NFAO RM is a Ricemill, not a
+//            warehouse (the warehouses table already carries a
+//            facilityType field precisely for this distinction -
+//            NFA-owned Mechanical Dryers and Ricemills follow entirely
+//            different rules, they're milling/drying process stops,
+//            not warehouse stock). It should never have appeared as
+//            its own "warehouse" card, and its outstanding AI
+//            shouldn't have been subtracted from Catanduanes' Rice
+//            Potential as if it were ordinary warehouse-held stock.
+//            AdminHomeStocks.jsx and AdminHomeSacks.jsx now both filter
+//            to facilityType 'Warehouse' (the implicit default for
+//            every record predating this field) at the very first
+//            point warehouses are loaded, so every listing and every
+//            province/branch total on both pages only ever considers
+//            real warehouses.
+export const APP_VERSION = '1.9-130'
