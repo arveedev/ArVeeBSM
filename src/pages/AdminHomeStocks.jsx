@@ -563,7 +563,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               if (grandTotal === 0 && columnTotals.every((v) => v === 0)) return null
               return (
                 <div key={cat} className="mt-2 first:mt-0">
-                  <p className={`mb-1.5 text-xs font-bold uppercase ${catColor(cat)}`}>{cat}</p>
+                  <p className={`mb-1.5 text-sm font-bold uppercase ${catColor(cat)}`}>{cat}</p>
                   {/* 2 columns on mobile, 4 on sm+ - fixing this at 4
                       columns unconditionally (the previous attempt) was
                       what squeezed each tile too narrow for its own
@@ -581,15 +581,15 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       since there is no shared row to align across. */}
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {buckets.map((b, i) => (
-                      <div key={b.label} className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
-                        <p className="text-[10px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
-                        <p className={`text-sm font-semibold tabular-nums ${catColor(cat)}`}><CountUpNumber value={columnTotals[i]} format={fmt} /></p>
+                      <div key={b.label} className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2">
+                        <p className="text-xs uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')}</p>
+                        <p className={`text-base font-semibold tabular-nums ${catColor(cat)}`}><CountUpNumber value={columnTotals[i]} format={fmt} /></p>
                       </div>
                     ))}
                     {buckets.length < 3 && <div className="hidden sm:block" aria-hidden="true" />}
-                    <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2 py-1.5">
-                      <p className="text-[10px] uppercase text-neutral-500">Total</p>
-                      <p className={`text-sm font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={grandTotal} format={fmt} /></p>
+                    <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2">
+                      <p className="text-xs uppercase text-neutral-500">Total</p>
+                      <p className={`text-base font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={grandTotal} format={fmt} /></p>
                     </div>
                   </div>
                 </div>
@@ -606,7 +606,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                 if (provinceWarehouses.length === 0) return null
                 return (
                   <div key={province.provinceId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-                    <p className="mb-2 text-sm font-semibold text-app-text">
+                    <p className="mb-2 text-base font-semibold text-app-text">
                       {province.code} — {province.name}
                     </p>
                     {CATEGORIES.map((cat) => {
@@ -619,7 +619,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       const { buckets, rows, columnTotals, grandTotal } = computeRows(provinceWarehouses, cat)
                       return (
                         <div key={cat} className="mt-3 first:mt-0">
-                          <p className={`mb-1 text-sm font-bold uppercase ${catColor(cat)}`}>
+                          <p className={`mb-1 text-base font-bold uppercase ${catColor(cat)}`}>
                             {cat}
                           </p>
                           {/* Two renders of the same rows, not one table
@@ -714,18 +714,18 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                               const oldestAmount = bucketTotals[oldestIdx]
                               const hasOldStock = oldestAmount > 0
                               return (
-                                <div key={warehouse.warehouseId} className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5">
+                                <div key={warehouse.warehouseId} className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
                                   <div className="flex items-center justify-between gap-2">
                                     <button
                                       type="button"
                                       onClick={() => onWarehouseSelect?.(warehouse)}
-                                      className="flex min-w-0 items-center gap-0.5 text-sm font-medium text-app-text transition-colors hover:text-brand-neon"
+                                      className="flex min-w-0 items-center gap-1 text-base font-medium text-app-text transition-colors hover:text-brand-neon"
                                     >
                                       {hasOldStock && (
-                                        <span className="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" aria-hidden="true" />
+                                        <span className="mr-0.5 h-2 w-2 shrink-0 rounded-full bg-red-400" aria-hidden="true" />
                                       )}
                                       <span className="truncate">{warehouse.name}</span>
-                                      <ChevronRight size={12} className="shrink-0 text-neutral-600" />
+                                      <ChevronRight size={14} className="shrink-0 text-neutral-600" />
                                     </button>
                                     <button
                                       type="button"
@@ -734,21 +734,21 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                       aria-expanded={isExpanded}
                                       className="flex shrink-0 items-center gap-1 active:scale-95"
                                     >
-                                      <span className={`text-sm font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={total} format={fmt} /></span>
-                                      <ChevronDown size={14} className={`text-neutral-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                      <span className={`text-lg font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={total} format={fmt} /></span>
+                                      <ChevronDown size={16} className={`text-neutral-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     </button>
                                   </div>
                                   {hasOldStock && (
-                                    <p className="mt-0.5 text-[11px] tabular-nums text-red-400">
+                                    <p className="mt-1 text-sm tabular-nums text-red-400">
                                       {fmt(oldestAmount)} at {buckets[oldestIdx].label.replace(/\s*months?$/i, '')} mo
                                     </p>
                                   )}
                                   {isExpanded && (
-                                    <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-neutral-800 pt-2">
+                                    <div className="mt-2 grid grid-cols-3 gap-2 border-t border-neutral-800 pt-2">
                                       {buckets.map((b, i) => (
-                                        <div key={b.label} className="rounded-md bg-neutral-900 px-1.5 py-1">
-                                          <p className="text-[9px] uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')} mo</p>
-                                          <p className="text-xs font-semibold tabular-nums text-app-text"><CountUpNumber value={bucketTotals[i]} format={fmt} /></p>
+                                        <div key={b.label} className="rounded-md bg-neutral-900 px-2 py-1.5">
+                                          <p className="text-xs uppercase text-neutral-500">{b.label.replace(/\s*months?$/i, '')} mo</p>
+                                          <p className="text-base font-semibold tabular-nums text-app-text"><CountUpNumber value={bucketTotals[i]} format={fmt} /></p>
                                         </div>
                                       ))}
                                     </div>
@@ -757,8 +757,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                               )
                             })}
                             <div className="flex items-center justify-between border-t-2 border-neutral-700 pt-2">
-                              <span className="text-sm font-bold text-app-text">Total</span>
-                              <span className={`text-sm font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={grandTotal} format={fmt} /></span>
+                              <span className="text-base font-bold text-app-text">Total</span>
+                              <span className={`text-lg font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={grandTotal} format={fmt} /></span>
                             </div>
                           </div>
                         </div>

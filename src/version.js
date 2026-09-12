@@ -2358,4 +2358,11 @@
 //            same boxed, tappable style as AdminHomeStocks.jsx's Stock
 //            Breakdown - instead of a "PROVINCE · Warehouse" pill label
 //            repeated per warehouse.
-export const APP_VERSION = '1.9-133'
+//   1.9-134 - Per explicit request: bumped text sizes across the Home
+//            page's Age Grouping tab (Admin Dashboard) - the Total
+//            Branch summary tiles, each province/category heading, and
+//            the per-warehouse mobile card list (warehouse name, its
+//            Total figure, the age-bucket breakdown once expanded, and
+//            the section's own Total row) are all a step larger now,
+//            without losing any detail.
+export const APP_VERSION = '1.9-134'
