@@ -168,7 +168,7 @@ function AppHeader({ hidden = false }) {
               avatarFace={userRecord?.avatarFace}
               avatarAnim={userRecord?.avatarAnim}
               name={user?.name}
-              size={32}
+              size={44}
               onClick={canEditAvatar ? () => setAvatarPickerOpen(true) : undefined}
             />
             <div className="min-w-0">

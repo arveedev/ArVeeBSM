@@ -32,7 +32,7 @@ function Avatar({ avatarBg, avatarFace, avatarAnim, name, size = 32, onClick, cl
     >
       {face ? (
         <span
-          className={anim !== 'none' && anim !== 'pulse-ring' ? `animate-avatar-${anim}` : ''}
+          className={anim !== 'none' ? `animate-avatar-${anim}` : ''}
           style={{ fontSize: faceSize, lineHeight: 1, display: 'inline-block', '--avatar-scale': 1.2 }}
         >
           {face}
@@ -42,11 +42,8 @@ function Avatar({ avatarBg, avatarFace, avatarAnim, name, size = 32, onClick, cl
           {initials || '?'}
         </span>
       )}
-      {anim === 'pulse-ring' && (
-        <span className="pointer-events-none absolute inset-0 animate-ping rounded-full border-2 border-white/50" />
-      )}
       {anim === 'sparkle' && (
-        <span className="animate-avatar-sparkle pointer-events-none absolute right-0 top-0 text-[0.6em]">✨</span>
+        <span className="animate-avatar-sparkle-glint pointer-events-none absolute right-0 top-0 text-[0.6em]">✨</span>
       )}
     </Tag>
   )

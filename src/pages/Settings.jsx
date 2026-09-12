@@ -845,17 +845,12 @@ function Settings() {
             avatarFace={userRecord?.avatarFace}
             avatarAnim={userRecord?.avatarAnim}
             name={user.name}
-            size={44}
+            size={64}
             onClick={user.uid ? () => setAvatarPickerOpen(true) : undefined}
           />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-app-text">{user.name}</p>
             <p className="text-xs text-neutral-400">{user.nickname} · {user.role}</p>
-            {user.uid && (
-              <button type="button" onClick={() => setAvatarPickerOpen(true)} className="mt-0.5 text-xs font-semibold text-brand-neon">
-                Change Avatar
-              </button>
-            )}
           </div>
           {/* Sync status folded in here as a small pill for ordinary
               users/visitors, instead of its own separate card below -
@@ -992,7 +987,6 @@ function Settings() {
 
         <Toggle
           label="Auto Age Monitoring"
-          description="Automatically calculates pile age from the date of receipt. When off, the displayed age stays at the manually set value until you edit it directly on the pile."
           value={autoAgeMonitoring ?? true}
           onChange={(val) => updateSetting?.('autoAgeMonitoring', val)}
           icon={Clock}

@@ -2478,4 +2478,37 @@
 //              a larger, higher-risk change (it touches live stock
 //              data entry) getting its own separate, focused pass
 //              rather than being rushed in alongside this one.
-export const APP_VERSION = '1.9-140'
+//   1.9-141 - Avatar picker refinements, all from real usage of 1.9-140:
+//            - Header avatar 32px -> 44px (matches the pill's own
+//              height); Settings profile avatar 44px -> 64px, with the
+//              redundant "Change Avatar" text link removed (tapping the
+//              avatar itself was always the real entry point).
+//            - Auto Age Monitoring's description line dropped - the
+//              icon + label + toggle state already say what it is.
+//            - Avatar picker rebuilt as 3 top-level tabs (Background /
+//              Avatar / Animation) instead of one long scroll, with the
+//              live preview pinned above the tabs so it's visible on
+//              every tab at every scroll position.
+//            - Background: 10 named palettes (Red/Orange/Amber/Yellow/
+//              Green/Teal/Blue/Indigo/Purple/Pink) x 10 shades each,
+//              plus a Neutral row with true black and white - 100 solid
+//              swatches total, replacing the old single hue-stepped
+//              wall that made every color look like a slightly
+//              different version of the same thing. Gradient mode
+//              reuses the identical 100-swatch set for a genuinely
+//              custom 2-color combo (own Color 1 / Color 2 sub-tabs),
+//              not a fixed preset list.
+//            - Avatar: 50 faces per category (was 20) x 5 categories =
+//              250 total, shown bigger (4 per row instead of 6-7) so
+//              they're actually recognizable, with the plain-initials
+//              option moved to be the FIRST tile in every category
+//              instead of the last.
+//            - Animation: rebuilt on distinct motion axes (Bob/Float/
+//              Pulse/Spin/Wiggle/Shake/Wave/Bounce/Flip/Zoom/Sparkle/
+//              None - see avatarOptions.js/index.css) so each one reads
+//              as genuinely different instead of "everything just
+//              jiggles the same way" - and the tab itself now shows
+//              every option as its own live, currently-playing preview
+//              tile instead of a plain text chip, so you can see the
+//              motion before picking it.
+export const APP_VERSION = '1.9-141'
