@@ -273,7 +273,11 @@ function HomePiles() {
                               className="rounded-lg bg-neutral-950 px-2.5 py-2 text-center transition-colors active:bg-neutral-800"
                             >
                               <p className="text-[10px] uppercase text-neutral-500">Net Kg</p>
-                              <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtWeight(p.currentKilos ?? 0, weightUnit)}</p>
+                              {/* Trailing "kg"/"MT" unit word stripped -
+                                  the tile's own "NET KG" label above it
+                                  already says it, same fix already
+                                  applied to Settings' own pile tiles. */}
+                              <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtWeight(p.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}</p>
                               {tilesOpen && (
                                 <div className="mt-1.5 border-t border-neutral-800 pt-1.5">
                                   <p className="text-sm font-semibold tabular-nums text-neutral-300">{avgWeight.toFixed(2)}</p>

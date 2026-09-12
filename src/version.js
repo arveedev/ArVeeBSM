@@ -2708,4 +2708,8 @@
 //            fine in - below the sm breakpoint it now stacks into a
 //            label + a pair of tiles instead, matching the same Bags/
 //            Net Kg tile convention already used on Pile List/Settings.
-export const APP_VERSION = '1.9-149'
+//   1.9-150 - Missed spot from the redundant-unit-word fix: Home >
+//            Piles' own Net Kg tile still showed a trailing "kg" under
+//            its own "NET KG" label (the same fix had already landed
+//            on Settings' pile tiles, just not this page's).
+export const APP_VERSION = '1.9-150'
