@@ -12,6 +12,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { fmtBags, fmtWeight } from '../utils/calculations.js'
+import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, editIconClass } from '../components/common/admin/shared.js'
 import { SacksBeginningBalances } from '../components/common/admin/BeginningBalancesPanel.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
@@ -87,6 +88,12 @@ function ClassifierSection({ warehouseId }) {
   // already used elsewhere, e.g. toast pop-in) before the row switches
   // back to its read-only display, instead of vanishing instantly.
   const [justSaved, setJustSaved] = useState(false)
+  // Drives the actual grow/collapse animation of the input+buttons
+  // block, decoupled from isEditing (the logical "are we editing" flag)
+  // so tapping Cancel/Update can play a real collapse animation BEFORE
+  // the block actually unmounts, instead of it just vanishing the
+  // instant isEditing flips - same reasoning as useDelayedUnmount below.
+  const [entered, setEntered] = useState(false)
   const containerRef = useRef(null)
 
   const warehouse = useLiveQuery(() => db.warehouses.get(warehouseId), [warehouseId])
@@ -136,19 +143,40 @@ function ClassifierSection({ warehouseId }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const showInputTarget = isEditing || !savedName
+  // Keeps the input+buttons block mounted for one beat after
+  // showInputTarget flips false, so its own collapse animation
+  // (entered -> false, below) actually has time to play before the
+  // read-only label+pencil row takes its place - without this the
+  // block would just vanish instantly the moment isEditing flips.
+  const shouldRenderInputBlock = useDelayedUnmount(showInputTarget, 300)
+  // entered itself starts false and flips true one frame after the
+  // block mounts (rAF) - CSS can't animate a property that's already
+  // at its target value on the very first paint, so this guarantees
+  // grid-template-rows genuinely transitions from 0fr open on every
+  // entrance, including the very first time this section ever renders.
+  useEffect(() => {
+    if (!showInputTarget) { setEntered(false); return }
+    const raf = requestAnimationFrame(() => setEntered(true))
+    return () => cancelAnimationFrame(raf)
+  }, [showInputTarget])
+
   const handleSave = async () => {
     setIsSaving(true)
     await db.warehouses.update(warehouseId, { classifierName: name.trim() || null })
     toast.success(savedName ? 'Classifier updated' : 'Classifier saved')
     setIsSaving(false)
+    // Cancel shrinks away (its own maxWidth/opacity transition below)
+    // while Update/Save grows to fill the row (it's flex-1, so this
+    // happens automatically as Cancel's width collapses) and morphs
+    // into a checkmark - held on screen for one beat, then the whole
+    // block collapses (entered -> false) before finally swapping back
+    // to the read-only label+pencil row.
     setJustSaved(true)
-    // Hold the checkmark on screen for one beat before switching to the
-    // read-only row - immediately swapping would cut the morph off
-    // before it's visible at all.
     setTimeout(() => {
-      setJustSaved(false)
       setIsEditing(false)
-    }, 500)
+      setJustSaved(false)
+    }, 550)
   }
 
   // Reverts to the last saved name and exits edit mode without saving -
@@ -161,8 +189,6 @@ function ClassifierSection({ warehouseId }) {
     setIsEditing(false)
   }
 
-  const showInput = isEditing || !savedName
-
   return (
     <div className="mt-6">
       <h2 className="text-base font-semibold text-app-text">Classifier</h2>
@@ -170,10 +196,10 @@ function ClassifierSection({ warehouseId }) {
         Shown as "Prepared by" on this warehouse's Pile Layout report.
       </p>
 
-      {showInput ? (
-        <div className="animate-fade-in">
-          <div ref={containerRef} className="relative mt-3 flex gap-2">
-            <div className="relative flex-1">
+      {shouldRenderInputBlock && (
+        <div className="overflow-hidden" style={{ display: 'grid', gridTemplateRows: entered ? '1fr' : '0fr', transition: 'grid-template-rows 300ms ease-out' }}>
+          <div className="overflow-hidden">
+            <div ref={containerRef} className="relative mt-3">
               <input
                 type="text"
                 value={name}
@@ -221,36 +247,56 @@ function ClassifierSection({ warehouseId }) {
                 </ul>
               )}
             </div>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || !name.trim() || justSaved}
-              className={`flex items-center justify-center rounded-xl px-4 text-sm font-semibold transition-all ${
-                justSaved
-                  ? 'border border-brand-neon bg-brand-neon/10 text-brand-neon'
-                  : name.trim() ? 'border border-brand-neon text-brand-neon' : 'border border-brand-neon/40 text-brand-neon/40'
-              }`}
-            >
-              {justSaved ? <Check size={18} className="animate-pop-in" /> : (savedName ? 'Update' : 'Save')}
-            </button>
-            {/* Only shown once there's a saved name to revert to - see
-                handleCancel's own comment. */}
-            {savedName && !justSaved && (
-              <button
-                type="button"
-                onClick={handleCancel}
-                disabled={isSaving}
-                className="rounded-xl border border-neutral-800 px-4 text-sm font-medium text-neutral-400 transition-all hover:border-neutral-600 hover:text-app-text"
-              >
-                Cancel
-              </button>
+            {!name.trim() && (
+              <p className="mt-1 text-xs text-brand-amber">A classifier name is needed.</p>
             )}
+
+            {/* Update/Cancel row grows in on its own, staggered ~150ms
+                behind the input above (its own transition-delay) - the
+                input expands first, then the buttons grow in beneath
+                it, rather than everything appearing at once. */}
+            <div className="overflow-hidden" style={{ display: 'grid', gridTemplateRows: entered ? '1fr' : '0fr', transition: 'grid-template-rows 250ms ease-out 150ms' }}>
+              <div className="overflow-hidden pt-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={isSaving || !name.trim() || justSaved}
+                    className={`flex flex-1 items-center justify-center rounded-xl px-4 text-sm font-semibold transition-all ${
+                      justSaved
+                        ? 'border border-brand-neon bg-brand-neon/10 text-brand-neon'
+                        : name.trim() ? 'border border-brand-neon text-brand-neon' : 'border border-brand-neon/40 text-brand-neon/40'
+                    }`}
+                  >
+                    {justSaved ? <Check size={18} className="animate-pop-in" /> : (savedName ? 'Update' : 'Save')}
+                  </button>
+                  {/* Only shown once there's a saved name to revert to
+                      (handleCancel's own comment) - shrinks to nothing
+                      as justSaved flips true, with Update/Save (flex-1)
+                      growing to fill the row it leaves behind. */}
+                  {savedName && (
+                    <div
+                      className="overflow-hidden transition-all duration-300 ease-out"
+                      style={{ maxWidth: justSaved ? '0px' : '96px', opacity: justSaved ? 0 : 1 }}
+                    >
+                      <button
+                        type="button"
+                        onClick={handleCancel}
+                        disabled={isSaving}
+                        className="whitespace-nowrap rounded-xl border border-neutral-800 px-4 py-2.5 text-sm font-medium text-neutral-400 transition-all hover:border-neutral-600 hover:text-app-text"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-          {!name.trim() && (
-            <p className="mt-1 text-xs text-brand-amber">A classifier name is needed.</p>
-          )}
         </div>
-      ) : (
+      )}
+
+      {!shouldRenderInputBlock && (
         <div className="animate-fade-in mt-3 flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2">
           <span className="text-base text-app-text">{savedName}</span>
           {/* Delete removed - the only real action here is edit (which

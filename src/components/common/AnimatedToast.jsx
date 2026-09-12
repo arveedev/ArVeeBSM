@@ -184,9 +184,8 @@ export function SyncProgressToast({ label, doneLabel, phase }) {
 const isTouchDevice = () =>
   typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
 
-export function UpdateAvailableToast({ version, onUpdate, onForceRefresh }) {
+export function UpdateAvailableToast({ version, onUpdate }) {
   const [isUpdating, setIsUpdating] = useState(false)
-  const [isForcing, setIsForcing] = useState(false)
   const [isMobile] = useState(isTouchDevice)
   const handleClick = () => {
     setIsUpdating(true)
@@ -199,10 +198,6 @@ export function UpdateAvailableToast({ version, onUpdate, onForceRefresh }) {
     // freezes" looked like when reported.
     requestAnimationFrame(() => requestAnimationFrame(onUpdate))
   }
-  const handleForceRefresh = () => {
-    setIsForcing(true)
-    requestAnimationFrame(() => requestAnimationFrame(onForceRefresh))
-  }
 
   if (!isMobile) {
     return (
@@ -211,21 +206,6 @@ export function UpdateAvailableToast({ version, onUpdate, onForceRefresh }) {
           {version ? `Version ${version} is available` : 'A new version is available'}
         </span>
         <span className="mt-0.5 block text-xs text-neutral-400">Close and reopen the app to update.</span>
-        {/* Genuinely reliable regardless of whatever the service-worker
-            flow is doing - see appUpdate.js's forceRefresh. Kept as a
-            small, secondary option for whenever a plain restart alone
-            doesn't pick up the new version (a browser can still be
-            holding a stale cached copy), not the primary instruction. */}
-        {onForceRefresh && (
-          <button
-            type="button"
-            onClick={handleForceRefresh}
-            disabled={isForcing}
-            className="mt-1 block text-[11px] font-medium text-neutral-500 underline decoration-dotted transition-colors hover:text-neutral-300 disabled:opacity-70"
-          >
-            {isForcing ? 'Refreshing…' : "Restarting didn't work? Force refresh"}
-          </button>
-        )}
       </span>
     )
   }
@@ -236,31 +216,12 @@ export function UpdateAvailableToast({ version, onUpdate, onForceRefresh }) {
       <button
         type="button"
         onClick={handleClick}
-        disabled={isUpdating || isForcing}
+        disabled={isUpdating}
         className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-brand-neon px-2.5 py-1 text-xs font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-70"
       >
         {isUpdating && <Loader2 size={12} className="animate-spin" />}
         {isUpdating ? 'Updating…' : 'Update now'}
       </button>
-      {/* Confirmed, reported real trap: a build old enough can get
-          stuck where this toast's own "Update now" tap silently does
-          nothing, no matter how many times the app is closed/reopened -
-          the code running that tap IS the broken code, so no future fix
-          can arrive through it (see appUpdate.js's forceRefresh for the
-          full reasoning). This is the escape hatch: unregisters every
-          service worker and clears every cache before reloading, a
-          clean slate that can't get stuck the same way. Kept small/
-          muted and secondary - "Update now" is still the normal path. */}
-      {onForceRefresh && (
-        <button
-          type="button"
-          onClick={handleForceRefresh}
-          disabled={isUpdating || isForcing}
-          className="mt-1 block text-[11px] font-medium text-neutral-500 underline decoration-dotted transition-colors hover:text-neutral-300 disabled:opacity-70"
-        >
-          {isForcing ? 'Refreshing…' : 'Trouble updating? Force refresh'}
-        </button>
-      )}
     </span>
   )
 }

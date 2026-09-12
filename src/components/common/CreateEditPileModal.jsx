@@ -85,8 +85,8 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
   const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
   const [closeDate, setCloseDate] = useState(todayLocalISO())
   const [isClosing, setIsClosing] = useState(false)
-  // Must match the fade/pop transition durations on the JSX below.
-  const CLOSE_ANIMATION_MS = 180
+  // Must match animate-sheet-slide-down's own duration (index.css).
+  const CLOSE_ANIMATION_MS = 300
   const handleClose = () => {
     setIsClosing(true)
     setTimeout(() => {
@@ -291,7 +291,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
       onClick={handleClose}
     >
       <div
-        className={`flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-t-2xl border border-neutral-800 bg-neutral-900 sm:rounded-2xl ${isClosing ? 'animate-pop-out' : 'animate-pop-in'}`}
+        className={`flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-t-2xl border border-neutral-800 bg-neutral-900 sm:rounded-2xl ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Hero header - live display of the name being typed + a

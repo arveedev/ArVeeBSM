@@ -2653,4 +2653,24 @@
 //              (was missing entirely - editing had no way back to the
 //              read-only view without saving), reverting to the last
 //              saved name.
-export const APP_VERSION = '1.9-146'
+//   1.9-147 - More real requests after using 1.9-146:
+//            - Update-available toast: dropped the "Restarting/Trouble
+//              updating? Force refresh" secondary line entirely, per
+//              explicit request - "Update now" (or "close and reopen")
+//              is the only thing shown now.
+//            - CreateEditPileModal/EditBeginningBalanceModal now slide
+//              up on entrance and slide down on exit (the app's own
+//              existing animate-sheet-slide-up/down, already used for
+//              other bottom sheets) instead of the fade+scale pop used
+//              last round.
+//            - Classifier's edit transition is a real choreographed
+//              sequence now, not just a fade: tapping the pencil grows
+//              the input in first, then the Update/Cancel row grows in
+//              beneath it a beat later (staggered, via a delayed grid-
+//              rows transition). Tapping Update shrinks Cancel away
+//              while Update grows to fill the row and morphs into a
+//              checkmark, holds for a beat, then the whole block
+//              collapses back down before the read-only label+pencil
+//              row reappears - matching the reverse of the entrance
+//              instead of just disappearing.
+export const APP_VERSION = '1.9-147'

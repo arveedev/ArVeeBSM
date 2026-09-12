@@ -19,7 +19,7 @@ import { useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { APP_VERSION } from '../../version.js'
 import { UpdateAvailableToast } from './AnimatedToast.jsx'
-import { checkForUpdate, applyUpdate, onUpdateAvailable, forceRefresh } from '../../services/appUpdate.js'
+import { checkForUpdate, applyUpdate, onUpdateAvailable } from '../../services/appUpdate.js'
 
 const UPDATE_TOAST_ID = 'app-update-available'
 const POLL_MS = 15 * 60 * 1000 // 15 minutes, while the app stays open
@@ -31,7 +31,7 @@ const POLL_MS = 15 * 60 * 1000 // 15 minutes, while the app stays open
 // wording in that case.
 const showUpdateToast = (version) => {
   toast(
-    <UpdateAvailableToast version={version} onUpdate={applyUpdate} onForceRefresh={forceRefresh} />,
+    <UpdateAvailableToast version={version} onUpdate={applyUpdate} />,
     { id: UPDATE_TOAST_ID, duration: Infinity }
   )
 }

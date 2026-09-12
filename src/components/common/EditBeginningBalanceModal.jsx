@@ -12,8 +12,8 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { PileBalanceForm } from './admin/BeginningBalancesPanel.jsx'
 
-// Must match the fade/pop transition durations below.
-const CLOSE_ANIMATION_MS = 180
+// Must match animate-sheet-slide-down's own duration (index.css).
+const CLOSE_ANIMATION_MS = 300
 
 function EditBeginningBalanceModal({ open, pile, warehouseId, onClose }) {
   const [isClosing, setIsClosing] = useState(false)
@@ -38,7 +38,7 @@ function EditBeginningBalanceModal({ open, pile, warehouseId, onClose }) {
           rounded corners, where PileBalanceForm's own inner rounded
           shape doesn't quite reach. */}
       <div
-        className={`max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-t-2xl bg-neutral-900 sm:rounded-2xl ${isClosing ? 'animate-pop-out' : 'animate-pop-in'}`}
+        className={`max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-t-2xl bg-neutral-900 sm:rounded-2xl ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">
