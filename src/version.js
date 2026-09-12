@@ -2785,4 +2785,10 @@
 //            tile's value repeated "Net Kgs" in the text itself (via
 //            fmtWeight's 'Net' label param) directly under a label that
 //            already says "Net Kgs" - now shows just the bare figure.
-export const APP_VERSION = '1.9-157'
+//   1.9-158 - Bottom nav (BottomNav.jsx's NavItem) now bolds whichever
+//            page the user is currently on, matching the same active/
+//            inactive weight distinction every other tab group in the
+//            app already got - previously every label used the same
+//            static weight regardless of which page was active. Its
+//            label text size was also bumped a step, same as the rest.
+export const APP_VERSION = '1.9-158'

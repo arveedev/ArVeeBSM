@@ -219,8 +219,8 @@ function NavItem({ to, label, Icon }) {
       to={to}
       end
       className={({ isActive }) =>
-        `relative z-10 flex flex-col items-center justify-center gap-0.5 text-xs transition-colors active:scale-95 ${
-          isActive ? 'text-brand-contrast' : 'text-neutral-400 hover:text-brand-neon/70'
+        `relative z-10 flex flex-col items-center justify-center gap-0.5 text-sm transition-colors active:scale-95 ${
+          isActive ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-brand-neon/70'
         }`
       }
     >
