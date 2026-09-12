@@ -23,6 +23,16 @@ import EditBeginningBalanceModal from '../components/common/EditBeginningBalance
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
 
+// Same category colors used elsewhere (HomePiles.jsx's own
+// varietyBadgeClass/accentBarClass) - duplicated locally per this
+// codebase's established convention for this small lookup.
+const varietyBadgeClass = (category) => {
+  if (category === 'Rice') return 'bg-blue-500/15 text-blue-400'
+  if (category === 'Palay') return 'bg-brand-neon/15 text-brand-neon'
+  if (category === 'By Products') return 'bg-brand-byproduct/15 text-brand-byproduct'
+  return 'bg-neutral-800 text-neutral-300'
+}
+
 function Toggle({ label, description, value, onChange, icon: Icon }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
@@ -267,7 +277,10 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
           list used to show are still visible at a glance here. */}
       <ul className="mt-3 space-y-2">
         {sortedPiles.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
-        {sortedPiles.map((p) => (
+        {sortedPiles.map((p) => {
+          const category = varietyMap.get(p.varietyId)?.category ?? p.cerealType
+          const varietyLabel = varietyMap.get(p.varietyId)?.name ?? category
+          return (
           <li key={p.pileId}>
             <button
               type="button"
@@ -276,9 +289,18 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
               className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-700"
             >
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                <div className="min-w-0">
-                  <p className="break-words text-base font-medium text-app-text">{p.pileName}</p>
-                  <p className="text-sm text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
+                {/* Variety now shares the name's row as a colored pill
+                    (same cereal-type color convention as the Pile
+                    List's own accent bars - HomePiles.jsx's
+                    varietyBadgeClass) instead of sitting on its own
+                    plain-text line below. */}
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-base font-medium text-app-text">{p.pileName}</p>
+                  {varietyLabel && (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${varietyBadgeClass(category)}`}>
+                      {varietyLabel}
+                    </span>
+                  )}
                 </div>
                 <span className={editIconClass}><Pencil size={20} /></span>
               </div>
@@ -289,12 +311,13 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
                 </div>
                 <div className="rounded-lg bg-neutral-950 py-2 text-center">
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
-                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeight(p.currentKilos ?? 0, weightUnit, 'Net')}</p>
+                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeight(p.currentKilos ?? 0, weightUnit)}</p>
                 </div>
               </div>
             </button>
           </li>
-        ))}
+          )
+        })}
       </ul>
     </div>
   )
@@ -517,6 +540,7 @@ function Settings() {
       {currentWarehouseId && (
         <div
           ref={pileCardRef}
+          className="mt-6"
           style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 24}px` }}
         >
           {/* Stocks/Sacks stay two separate tabs - Create Pile only ever

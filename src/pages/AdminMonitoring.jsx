@@ -51,7 +51,7 @@ function AdminMonitoring() {
   const [completingId, setCompletingId] = useState(null)
 
   useEffect(() => {
-    setPageHeader?.({ title: 'Monitoring', subtitle: 'Cross-warehouse AI / SIA oversight.' })
+    setPageHeader?.({ title: 'Monitoring' })
   }, [])
 
   // Reported: switching tabs left the previous tab's search text AND

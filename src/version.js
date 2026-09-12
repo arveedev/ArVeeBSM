@@ -2600,4 +2600,30 @@
 //              matches), KG/MT padding tightened, title dropped to
 //              text-base - comfortably fits on one line on a real
 //              phone now instead of breaking apart.
-export const APP_VERSION = '1.9-144'
+//   1.9-145 - Another real round of fixes/requests:
+//            - Settings: real missing gap between Classifier and the
+//              Stocks/Sacks tab pill below it, fixed. Pile List rows
+//              drop the redundant "Net Kgs" suffix on the value (the
+//              tile's own "NET KG" label already says it), and variety
+//              now shares the pile name's row as a colored pill (same
+//              cereal-type convention as HomePiles.jsx) instead of a
+//              separate plain-text line.
+//            - CreateEditPileModal's "Current Stock (live)" restyled to
+//              match the same stacked Bags/Net Kg tile card, with
+//              "Edit balance ->" as its own full-width button below
+//              instead of squeezed inline beside the figures.
+//            - AppHeader's KG/MT toggle: the highlight now slides
+//              between the two halves (same technique as the app's
+//              other tab pairs) instead of each label just snapping
+//              its own background on/off in place.
+//            - Monitoring and Piles page titles drop their subtitle -
+//              title only, per explicit request.
+//            - Real bug: tapping Edit on a sack beginning-balance entry
+//              scrolled toward the form but landed it partly under the
+//              sticky header (missing scrollMarginTop, same class of
+//              bug already fixed elsewhere) and never focused a field,
+//              so it wasn't obvious anything had happened - both fixed,
+//              same treatment applied to the pile balance form too.
+//            - AuthorityMonitor (Home's own Activity tab) is no longer
+//              collapsible - always shown, per explicit request.
+export const APP_VERSION = '1.9-145'

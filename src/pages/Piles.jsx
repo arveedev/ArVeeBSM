@@ -318,7 +318,7 @@ function Piles() {
   const { setPageHeader, setChromeHidden } = usePageHeader() ?? {}
 
   useEffect(() => {
-    setPageHeader?.({ title: 'Piles', subtitle: 'Pile list and visual warehouse layout.' })
+    setPageHeader?.({ title: 'Piles' })
   }, [])
 
   const [pilesTab, setPilesTab] = useState('list')

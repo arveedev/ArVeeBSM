@@ -335,17 +335,29 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {isEditing && (
-            <button
-              type="button"
-              onClick={() => { onGoToBalance?.(pile); onClose() }}
-              className="mb-4 flex w-full items-center justify-between rounded-xl bg-neutral-950 px-3 py-2.5 text-left transition-colors active:bg-neutral-800"
-            >
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Current stock (live)</p>
-                <p className="mt-0.5 text-sm font-semibold text-app-text">{fmtBags(pile.currentBags ?? 0)} bags · {fmtWeight(pile.currentKilos ?? 0, weightUnit, 'Net')}</p>
+            <div className="mb-4">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Current Stock (live)</p>
+              {/* Same stacked-tile card style as PileListSection's own
+                  Bags/Net Kg pair, for visual consistency between the
+                  two places a pile's live figures show up. */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
+                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtBags(pile.currentBags ?? 0)}</p>
+                </div>
+                <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
+                  <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtWeight(pile.currentKilos ?? 0, weightUnit)}</p>
+                </div>
               </div>
-              <span className="text-xs font-bold text-brand-neon">Edit balance →</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => { onGoToBalance?.(pile); onClose() }}
+                className="mt-2 w-full rounded-lg bg-neutral-950 py-2 text-center text-sm font-bold text-brand-neon transition-colors active:bg-neutral-800"
+              >
+                Edit balance →
+              </button>
+            </div>
           )}
 
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Identity</p>

@@ -20,12 +20,11 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Check, Inbox, ChevronDown, ChevronUp } from 'lucide-react'
+import { Check, Inbox } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
-import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 import CompletedAuthorityModal from './CompletedAuthorityModal.jsx'
 import AuthorityReconciliationPanel from './AuthorityReconciliationPanel.jsx'
 
@@ -44,11 +43,6 @@ function AuthorityMonitor() {
   // the animation finishes, so the row visibly glows green and shrinks
   // away instead of just vanishing the instant it's tapped.
   const [completingId, setCompletingId] = useState(null)
-  // Expanded by default (per explicit correction - an earlier pass
-  // defaulted this to collapsed, which wasn't what was wanted). Still
-  // collapsible via the header button, same as Milling Operations.
-  const [expanded, setExpanded] = useState(true)
-  const shouldRenderBody = useDelayedUnmount(expanded, 250)
 
   const accessibleIds = (accessibleWarehouses ?? []).map((w) => w.warehouseId)
   const accessibleIdsKey = accessibleIds.join(',')
@@ -198,31 +192,20 @@ function AuthorityMonitor() {
 
   return (
     <div className="mt-6">
-      <button
-        type="button"
-        onClick={() => setExpanded((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-left transition-all active:scale-[0.99]"
-      >
+      {/* No longer collapsible, per explicit request - always shown. */}
+      <div className="flex w-full items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3">
         <span className="flex min-w-0 items-center gap-2">
           <Inbox size={20} className="shrink-0 text-brand-neon" />
           <span className="truncate text-sm font-bold text-app-text">Authority Monitor</span>
         </span>
-        <span className="flex shrink-0 items-center gap-2">
-          {(aiPendingCount > 0 || siaPendingCount > 0) && (
-            <span className="whitespace-nowrap rounded-full bg-brand-neon/15 px-3 py-1.5 text-sm font-bold text-brand-neon">
-              {aiPendingCount} AI · {siaPendingCount} SIA
-            </span>
-          )}
-          {expanded ? (
-            <ChevronUp size={20} className="text-neutral-500" />
-          ) : (
-            <ChevronDown size={20} className="text-neutral-500" />
-          )}
-        </span>
-      </button>
+        {(aiPendingCount > 0 || siaPendingCount > 0) && (
+          <span className="shrink-0 whitespace-nowrap rounded-full bg-brand-neon/15 px-3 py-1.5 text-sm font-bold text-brand-neon">
+            {aiPendingCount} AI · {siaPendingCount} SIA
+          </span>
+        )}
+      </div>
 
-      {shouldRenderBody && (
-        <div className={`mt-3 ${expanded ? 'animate-flow-down' : 'animate-flow-up-exit'}`}>
+      <div className="mt-3 animate-flow-down">
       <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
         <div
           className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -406,7 +389,6 @@ function AuthorityMonitor() {
         })}
       </ul>
         </div>
-      )}
 
       {showCompleted && (
         <CompletedAuthorityModal

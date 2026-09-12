@@ -12,6 +12,7 @@ import { Pencil, Trash2, MoreVertical, Plus, X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useWarehouse } from '../../../context/WarehouseContext.jsx'
 import { useSettings } from '../../../context/SettingsContext.jsx'
+import { usePageHeader } from '../../../context/PageHeaderContext.jsx'
 import {
   fmtBags, fmtWeight, liveFormatNumber, parseFormattedNumber,
   normalizeAgeToDays, todayLocalISO,
@@ -68,6 +69,7 @@ const heroTint = (category) => {
 // list on that page). Fully self-contained - loads its own data from
 // `pile` on mount, calls onDone() after Save/Cancel.
 function PileBalanceForm({ pile, warehouseId, onDone }) {
+  const { headerHeight, stickyIndicatorHeight } = usePageHeader() ?? {}
   const [lines, setLines] = useState([emptyLine()])
   const [originalSeedIds, setOriginalSeedIds] = useState([])
   const [age, setAge] = useState('')
@@ -271,7 +273,11 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
   }
 
   return (
-    <div ref={formRef} className="overflow-hidden rounded-xl border border-neutral-800">
+    <div
+      ref={formRef}
+      className="overflow-hidden rounded-xl border border-neutral-800"
+      style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 24}px` }}
+    >
       {/* Tinted hero header, colored to this pile's own cereal type -
           same convention as CreateEditPileModal.jsx's Edit Pile, so
           arriving here via that modal's "Edit balance ->" reads as a
@@ -639,6 +645,7 @@ function PilesBeginningBalances({ warehouseId }) {
 }
 
 function SacksBeginningBalances({ warehouseId }) {
+  const { headerHeight, stickyIndicatorHeight } = usePageHeader() ?? {}
   const [sackTypeId, setSackTypeId] = useState('')
   const [condition, setCondition] = useState('')
   const [pieces, setPieces] = useState('')
@@ -646,6 +653,7 @@ function SacksBeginningBalances({ warehouseId }) {
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
   const formRef = useRef(null)
+  const piecesInputRef = useRef(null)
 
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
   const entries = useLiveQuery(
@@ -672,9 +680,16 @@ function SacksBeginningBalances({ warehouseId }) {
     setCondition(entry.condition)
     setPieces(liveFormatNumber(String(entry.pieces)))
     setAsOfDate(entry.asOfDate ?? todayLocalISO())
+    // Reported, real bug: scrollIntoView alone left the form sitting
+    // under the sticky header/warehouse indicator (fixed via the ref's
+    // own scrollMarginTop above), and with no field actually focused
+    // afterward it wasn't obvious the tap had done anything at all -
+    // same fix as the Pile Name input elsewhere: focus a real field
+    // once scrolled into place.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        piecesInputRef.current?.focus({ preventScroll: true })
       })
     })
   }
@@ -701,7 +716,11 @@ function SacksBeginningBalances({ warehouseId }) {
 
   return (
     <div>
-      <div ref={formRef} className="mb-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+      <div
+        ref={formRef}
+        className="mb-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3"
+        style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 24}px` }}
+      >
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={labelClass}>Sack Type</label>
@@ -720,7 +739,7 @@ function SacksBeginningBalances({ warehouseId }) {
         </div>
         <div>
           <label className={labelClass}>Pieces</label>
-          <input type="text" inputMode="numeric" value={pieces} onChange={(e) => setPieces(liveFormatNumber(e.target.value))} className={inputClass} placeholder="0" />
+          <input ref={piecesInputRef} type="text" inputMode="numeric" value={pieces} onChange={(e) => setPieces(liveFormatNumber(e.target.value))} className={inputClass} placeholder="0" />
         </div>
         <div>
           <label className={labelClass}>As of</label>
