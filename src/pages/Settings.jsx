@@ -5,25 +5,18 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, ShieldCheck, MoreVertical, Check, AlertTriangle, User, Clock } from 'lucide-react'
+import { Pencil, ShieldCheck, User, Clock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
-import { fmtBags, fmtWeight, todayLocalISO, liveFormatNumber, parseFormattedNumber } from '../utils/calculations.js'
-import { createPileWithBeginningBalance, recalculatePileCurrentState, closePile, reopenPile } from '../utils/pileLedger.js'
-import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, listItemClass, editIconClass } from '../components/common/admin/shared.js'
-import { CONDITION_FLAGS } from '../components/forms/shared.js'
-import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
 import BeginningBalancesPanel from '../components/common/admin/BeginningBalancesPanel.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 import Avatar from '../components/common/Avatar.jsx'
 import AvatarPickerModal from '../components/common/AvatarPickerModal.jsx'
-
-const CATEGORIES = ['Rice', 'Palay', 'By Products']
-const AGE_UNITS = ['Days', 'Months']
+import CreateEditPileModal from '../components/common/CreateEditPileModal.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
@@ -207,83 +200,19 @@ function ClassifierSection({ warehouseId }) {
   )
 }
 
-// Creates a pile with a beginning balance directly - for onboarding a
-// warehouse that already has physical stock, without a WSR transaction
-// that would incorrectly show up as a receipt in reports.
-function PileBalanceSection({ warehouseId }) {
-  const { headerHeight, stickyIndicatorHeight } = usePageHeader() ?? {}
-  const { weightUnit } = useSettings() ?? {}
-  const [pileName, setPileName] = useState('')
-  const [category, setCategory] = useState('Rice')
-  const [varietyId, setVarietyId] = useState('')
-  const [bags, setBags] = useState('')
-  const [kilos, setKilos] = useState('')
-  // By Products beginning balance, one line per configured By Products
-  // variety (not a repeatable/addable list - exactly one row per
-  // variety that exists, since a By Products pile genuinely accepts a
-  // mix of all of them). Keyed by varietyId; a variety with no entry
-  // (or left blank) simply gets no seed transaction - none of these
-  // are required, per explicit request. Only relevant when
-  // category === 'By Products'; the single bags/kilos state above
-  // still drives Rice/Palay, which stay locked to one variety.
-  const [byProductBalances, setByProductBalances] = useState({})
-  const updateByProductBalance = (varietyId, field, value) => {
-    setByProductBalances((prev) => ({
-      ...prev,
-      [varietyId]: { ...(prev[varietyId] ?? { bags: '', kilos: '' }), [field]: value },
-    }))
-  }
-  // Defaults to 1 day, per explicit request - incoming/newly-created
-  // piles almost always genuinely start at age 0-1, so this saves the
-  // vast majority of new piles a manual edit.
-  const [age, setAge] = useState('1')
-  const [ageUnit, setAgeUnit] = useState('Days')
-  const [condition, setCondition] = useState('GQ')
-  const [purity, setPurity] = useState('')
-  const [dateProcured, setDateProcured] = useState('')
-  const [asOfDate, setAsOfDate] = useState(todayLocalISO())
-  const [moistureContent, setMoistureContent] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
-  const [editingPileId, setEditingPileId] = useState(null)
-  const [pendingDelete, setPendingDelete] = useState(null)
-  const formRef = useRef(null)
-  const pileNameInputRef = useRef(null)
-  const [showPileHint, setShowPileHint] = useState(false)
-  // 'idle' | 'checking' | 'ok' | 'duplicate' - checked on blur, not on
-  // every keystroke, so it only reflects the name as the user last
-  // actually finished typing it, not a half-typed value mid-edit.
-  const [nameCheckStatus, setNameCheckStatus] = useState('idle')
-
-  const checkPileNameDuplicate = async () => {
-    const trimmed = pileName.trim()
-    if (!trimmed) { setNameCheckStatus('idle'); return }
-    setNameCheckStatus('checking')
-    // A closed pile's name is vacant, same as its layout box - it never
-    // blocks reuse. Only a still-OPEN pile with the same name does.
-    const existing = await db.piles
-      .where('warehouseId').equals(warehouseId)
-      .and((p) => p.pileId !== editingPileId && !p.closedDate && p.pileName.trim().toLowerCase() === trimmed.toLowerCase())
-      .first()
-    setNameCheckStatus(existing ? 'duplicate' : 'ok')
-  }
-
+// Existing piles list - tapping "+ Create Pile" opens CreateEditPileModal
+// in create mode, tapping a row opens the same modal pre-filled to edit
+// that pile's metadata (name/category/variety/purity/condition/dates).
+// Bags/kilos/age stay exclusively owned by Beginning Balances - see
+// CreateEditPileModal.jsx's own top comment for why editing here never
+// touches them.
+function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
-  const warehouse = useLiveQuery(() => db.warehouses.get(warehouseId), [warehouseId])
-  const branch = useLiveQuery(
-    async () => {
-      const province = warehouse?.provinceId ? await db.provinces.get(warehouse.provinceId) : null
-      return province?.branchId ? db.branches.get(province.branchId) : null
-    },
-    [warehouse?.provinceId]
-  )
-  const [openMenuPileId, setOpenMenuPileId] = useState(null)
+  const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   const piles = useLiveQuery(
     () => (warehouseId ? db.piles.where('warehouseId').equals(warehouseId).toArray() : []),
     [warehouseId]
   ) ?? []
-
-  const categoryVarieties = varieties.filter((v) => v.category === category).sort((a, b) => byAlpha(a.name, b.name))
-  const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   // Closed piles are excluded here - per explicit request, this list is
   // for renaming/editing piles still in use, and would otherwise only
   // ever grow longer over time as more piles get closed. Closing and
@@ -291,461 +220,11 @@ function PileBalanceSection({ warehouseId }) {
   // Balances), where a closed pile IS still shown.
   const sortedPiles = [...piles].filter((p) => !p.closedDate).sort((a, b) => byAlpha(a.pileName, b.pileName))
 
-  const resetForm = () => {
-    setPileName('')
-    setVarietyId('')
-    setBags('')
-    setKilos('')
-    setByProductBalances({})
-    setAge('1')
-    setCondition('GQ')
-    setPurity('')
-    setDateProcured('')
-    setMoistureContent('')
-    setEditingPileId(null)
-    setNameCheckStatus('idle')
-  }
-
-  // Loads a pile plus its linked seed transaction (for condition, since
-  // condition lives only on the transaction, not the pile).
-  const handleEdit = async (pile) => {
-    const variety = varietyMap.get(pile.varietyId)
-    const seed = await db.transactions
-      .where('pileId').equals(pile.pileId)
-      .and((t) => t.isInitialBalance)
-      .first()
-
-    setEditingPileId(pile.pileId)
-    setNameCheckStatus('idle')
-    setPileName(pile.pileName)
-    setCategory(variety?.category ?? 'Rice')
-    setVarietyId(pile.varietyId)
-    // The beginning balance's OWN figures (from the seed transaction),
-    // NOT the pile's live current totals - editing this must never be
-    // confused with editing the live, transaction-accumulated state.
-    setBags(liveFormatNumber(String(seed?.numberOfBags ?? 0)))
-    setKilos(liveFormatNumber(String(seed?.netKilos ?? 0), 3))
-    setAge(liveFormatNumber(String(pile.initialAgeValue ?? 0)))
-    setAgeUnit('Days')
-    setCondition(seed?.condition ?? 'GQ')
-    setPurity(pile.purity ?? '')
-    setDateProcured(pile.dateProcured ?? '')
-    setMoistureContent(pile.moistureContent ?? '')
-    setAsOfDate(seed?.date ?? pile.dateOfReceipt ?? todayLocalISO())
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        pileNameInputRef.current?.focus({ preventScroll: true })
-      })
-    })
-  }
-
-  // Gates the Create/Update Pile button - only enabled once the
-  // required fields actually have valid values. Variety isn't
-  // required for By Products - that pile accepts any mix of By
-  // Products varieties over its lifetime, unlike Rice/Palay, which
-  // genuinely are locked to one variety. Same for the single bags/
-  // kilos fields - By Products uses its own per-variety lines instead
-  // (byProductBalances), none of which are required either.
-  const canSavePile = Boolean(pileName.trim())
-    && (category === 'By Products' || Boolean(varietyId))
-    && (category === 'By Products' || (bags !== '' && kilos !== ''))
-    && age !== ''
-
-  // Cancel only shows once there's actually something to cancel -
-  // editing an existing pile, or having started filling in a new one.
-  const showCancelPile = Boolean(editingPileId) || Boolean(pileName.trim()) || Boolean(varietyId)
-    || bags !== '' || kilos !== '' || age !== ''
-
-  const handleCreate = async () => {
-    if (!pileName.trim()) { toast.error('Pile name is required'); return }
-    if (category !== 'By Products' && !varietyId) { toast.error('Select a variety'); return }
-
-    // Re-checked fresh rather than trusting the last blur result, in
-    // case the user ignored the inline warning or another pile with
-    // the same name got created elsewhere in the meantime.
-    const trimmedCreateName = pileName.trim()
-    // Closed piles don't block reuse of their name - see checkPileNameDuplicate.
-    const createDuplicate = await db.piles
-      .where('warehouseId').equals(warehouseId)
-      .and((p) => !p.closedDate && p.pileName.trim().toLowerCase() === trimmedCreateName.toLowerCase())
-      .first()
-    if (createDuplicate) {
-      toast.error(`A pile named "${trimmedCreateName}" already exists in this warehouse`)
-      setNameCheckStatus('duplicate')
-      return
-    }
-
-    setIsSaving(true)
-
-    if (category === 'By Products') {
-      // Bare pile first, no single seed (bags/kilos 0) - the real
-      // beginning balance comes from the per-variety lines below, each
-      // becoming its own seed transaction under this same pileId, same
-      // pattern BeginningBalancesPanel.jsx already uses for repeatable
-      // lines. currentBags/currentKilos are then re-derived from the
-      // full set via recalculatePileCurrentState rather than summed by
-      // hand here, so this can never drift from the ledger.
-      const pile = await createPileWithBeginningBalance({
-        warehouseId, pileName, category, varietyId: null,
-        bags: 0, kilos: 0,
-        age: age === '' ? 0 : parseFormattedNumber(age),
-        ageUnit, condition, purity, dateProcured, moistureContent,
-        asOfDate,
-      })
-      let lineIndex = 0
-      for (const v of categoryVarieties) {
-        const line = byProductBalances[v.varietyId]
-        const lineBags = line?.bags ? parseFormattedNumber(line.bags) : 0
-        const lineKilos = line?.kilos ? parseFormattedNumber(line.kilos) : 0
-        if (lineBags <= 0 && lineKilos <= 0) continue
-        lineIndex += 1
-        await db.transactions.add({
-          id: crypto.randomUUID(),
-          type: 'WSR',
-          serialNo: `INIT-${pile.pileId.slice(0, 8)}-${lineIndex}`,
-          status: 'Active',
-          date: pile.dateOfReceipt,
-          warehouseId,
-          pileId: pile.pileId,
-          varietyId: v.varietyId,
-          condition,
-          purity: purity?.trim() || null,
-          numberOfBags: lineBags,
-          grossKilos: lineKilos,
-          netKilos: lineKilos,
-          moistureContent: moistureContent?.trim() || null,
-          customerName: 'Beginning Balance',
-          isInitialBalance: true,
-          isSynced: true,
-        })
-      }
-      await recalculatePileCurrentState(pile.pileId)
-      toast.success(`Pile "${pile.pileName}" created`)
-      resetForm()
-      setIsSaving(false)
-      return
-    }
-
-    const pile = await createPileWithBeginningBalance({
-      warehouseId, pileName, category, varietyId,
-      bags: bags === '' ? 0 : parseFormattedNumber(bags),
-      kilos: kilos === '' ? 0 : parseFormattedNumber(kilos),
-      age: age === '' ? 0 : parseFormattedNumber(age),
-      ageUnit, condition, purity, dateProcured, moistureContent,
-      asOfDate,
-    })
-    toast.success(`Pile "${pile.pileName}" created`)
-    resetForm()
-    setIsSaving(false)
-  }
-
-  // Updates the pile's METADATA ONLY - name, category/variety,
-  // purity, dates, condition. The beginning balance itself (bags,
-  // kilos, age, as-of date) is exclusively managed by the separate
-  // Beginning Balances panel now - this form no longer touches the
-  // seed transaction, initialAgeValue, or dateOfReceipt at all, so
-  // there is only ever one place a balance correction can happen.
-  const handleUpdate = async () => {
-    if (!pileName.trim()) { toast.error('Pile name is required'); return }
-
-    // Re-checked fresh, excluding the pile being edited itself so
-    // saving an unchanged (or reverted) name never falsely flags.
-    const trimmedUpdateName = pileName.trim()
-    // Closed piles don't block reuse of their name - see checkPileNameDuplicate.
-    const updateDuplicate = await db.piles
-      .where('warehouseId').equals(warehouseId)
-      .and((p) => p.pileId !== editingPileId && !p.closedDate && p.pileName.trim().toLowerCase() === trimmedUpdateName.toLowerCase())
-      .first()
-    if (updateDuplicate) {
-      toast.error(`A pile named "${trimmedUpdateName}" already exists in this warehouse`)
-      setNameCheckStatus('duplicate')
-      return
-    }
-
-    setIsSaving(true)
-
-    await db.piles.update(editingPileId, {
-      pileName: pileName.trim(),
-      varietyId,
-      purity: purity.trim() || null,
-      dateProcured: dateProcured.trim() || null,
-      moistureContent: moistureContent.trim() || null,
-      condition,
-    })
-
-    // Derive the live totals fresh from the complete ledger (seed +
-    // every transaction since) - never set directly from the form.
-    await recalculatePileCurrentState(editingPileId)
-
-    toast.success('Pile updated')
-    resetForm()
-    setIsSaving(false)
-  }
-
-  // Deletes only the pile RECORD, never its transactions - every WSR/
-  // WSI/WTS ever recorded stays in the database permanently, still
-  // linked by pileId. Also clears any layout box still pointing at
-  // this pile so it doesn't end up dangling.
-  const handleDeleteConfirmed = async () => {
-    const pile = pendingDelete
-    setPendingDelete(null)
-    setIsSaving(true)
-
-    const linkedBox = await db.pileLayoutBoxes.where('pileId').equals(pile.pileId).first()
-    if (linkedBox) await db.pileLayoutBoxes.update(linkedBox.id, { pileId: null, label: null })
-    await db.piles.delete(pile.pileId)
-
-    toast.success(`Pile "${pile.pileName}" deleted - its transactions were kept`)
-    if (editingPileId === pile.pileId) resetForm()
-    setIsSaving(false)
-  }
-
-  const handleExportBinCard = async (pile) => {
-    setOpenMenuPileId(null)
-    const variety = varietyMap.get(pile.varietyId)
-    const allPileTransactions = await db.transactions
-      .where('pileId').equals(pile.pileId)
-      .toArray()
-    // WTS transfers reference issuedPileId/receivedPileId directly, not
-    // pileId - fetch those separately so a transfer in/out of this pile
-    // isn't missing from its ledger.
-    const wtsTransfers = await db.transactions
-      .where('type').equals('WTS')
-      .and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId)
-      .toArray()
-    const transactionTypes = await db.transactionTypes.toArray()
-    const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
-    const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
-
-    const doc = generatePileBinCard({
-      warehouse, branch, pile, variety,
-      transactions: [...allPileTransactions, ...wtsTransfers],
-      transactionTypeMap,
-      globalDataStartDate,
-    })
-    doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
-  }
-
-  const handleToggleClosePile = async (pile) => {
-    setOpenMenuPileId(null)
-    if (pile.closedDate) {
-      await reopenPile(pile.pileId)
-      toast.success(`Pile "${pile.pileName}" re-opened`)
-    } else {
-      await closePile(pile.pileId)
-      toast.success(`Pile "${pile.pileName}" closed`)
-    }
-  }
-
-  // Checks for real transactions beyond the pile's own seed, to warn
-  // before deleting rather than silently orphaning transaction history.
-  const confirmDelete = async (pile) => {
-    const others = await db.transactions
-      .where('pileId').equals(pile.pileId)
-      .and((t) => !t.isInitialBalance)
-      .count()
-    setPendingDelete({ ...pile, hasHistory: others > 0 })
-  }
-
   return (
     <div className="mt-6">
-      <h2 className="text-base font-semibold text-app-text">Create Pile</h2>
-
-      <div
-        ref={formRef}
-        style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 24}px` }}
-        className={`mt-3 space-y-2 rounded-xl border bg-neutral-900 p-3 ${editingPileId ? 'border-brand-amber' : 'border-neutral-800'}`}
-      >
-        <div>
-          <label className={labelClass}>Pile Name</label>
-          <div className="relative">
-            <input
-              ref={pileNameInputRef}
-              type="text"
-              value={pileName}
-              onChange={(e) => { setPileName(e.target.value); setNameCheckStatus('idle') }}
-              onBlur={checkPileNameDuplicate}
-              className={`${inputClass} ${nameCheckStatus === 'ok' ? '!border-brand-neon' : nameCheckStatus === 'duplicate' ? '!border-brand-amber' : !pileName.trim() ? '!border-brand-amber' : ''} ${nameCheckStatus === 'ok' || nameCheckStatus === 'duplicate' ? 'pr-9' : ''}`}
-              placeholder="Pile C-1"
-            />
-            {nameCheckStatus === 'ok' && (
-              <Check size={16} className="pointer-events-none absolute bottom-2.5 right-3 text-brand-neon" />
-            )}
-            {nameCheckStatus === 'duplicate' && (
-              <AlertTriangle size={16} className="pointer-events-none absolute bottom-2.5 right-3 text-brand-amber" />
-            )}
-          </div>
-          {nameCheckStatus === 'duplicate' && (
-            <p className="mt-1 text-xs text-brand-amber">This pile name is already used in this warehouse.</p>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className={labelClass}>Category</label>
-            <select value={category} onChange={(e) => { setCategory(e.target.value); setVarietyId(''); setByProductBalances({}) }} className={inputClass}>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Variety{category === 'By Products' ? ' (optional)' : ''}</label>
-            <select
-              value={varietyId}
-              onChange={(e) => setVarietyId(e.target.value)}
-              className={`${inputClass} ${category !== 'By Products' && !varietyId ? '!border-brand-amber' : ''}`}
-            >
-              <option value="">{category === 'By Products' ? 'Optional — accepts any' : 'Select…'}</option>
-              {categoryVarieties.map((v) => <option key={v.varietyId} value={v.varietyId}>{v.name}</option>)}
-            </select>
-          </div>
-        </div>
-        {!editingPileId && (
-          <>
-            {category === 'By Products' ? (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase text-neutral-500">
-                  Beginning Balance by Variety (optional)
-                </p>
-                {categoryVarieties.length === 0 && (
-                  <p className="text-xs text-neutral-500">
-                    No By Products varieties configured yet — add one in
-                    the Admin Dashboard's Varieties tab first.
-                  </p>
-                )}
-                {categoryVarieties.map((v) => {
-                  const line = byProductBalances[v.varietyId] ?? { bags: '', kilos: '' }
-                  return (
-                    <div key={v.varietyId} className="rounded-lg border border-neutral-800 bg-neutral-950 p-2.5">
-                      <p className="text-xs font-semibold text-neutral-400">{v.name}</p>
-                      <div className="mt-1.5 grid grid-cols-2 gap-2">
-                        <div>
-                          <label className={labelClass}>Bags</label>
-                          <input type="text" inputMode="numeric" value={line.bags}
-                            onChange={(e) => updateByProductBalance(v.varietyId, 'bags', liveFormatNumber(e.target.value))}
-                            className={inputClass} placeholder="0" />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Net Kilos</label>
-                          <input type="text" inputMode="decimal" value={line.kilos}
-                            onChange={(e) => updateByProductBalance(v.varietyId, 'kilos', liveFormatNumber(e.target.value, 3))}
-                            className={inputClass} placeholder="0.000" />
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={labelClass}>Bags</label>
-                  <input type="text" inputMode="numeric" value={bags} onChange={(e) => setBags(liveFormatNumber(e.target.value))}
-                    className={`${inputClass} ${bags === '' ? '!border-brand-amber' : ''}`} placeholder="0" />
-                </div>
-                <div>
-                  <label className={labelClass}>Net Kilos</label>
-                  <input type="text" inputMode="decimal" value={kilos} onChange={(e) => setKilos(liveFormatNumber(e.target.value, 3))}
-                    className={`${inputClass} ${kilos === '' ? '!border-brand-amber' : ''}`} placeholder="0.000" />
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className={labelClass}>Age</label>
-                <input type="text" inputMode="numeric" value={age} onChange={(e) => setAge(liveFormatNumber(e.target.value))}
-                  className={`${inputClass} ${age === '' ? '!border-brand-amber' : ''}`} placeholder="0" />
-              </div>
-              <div>
-                <label className={labelClass}>Unit</label>
-                <select
-                  value={ageUnit}
-                  onChange={(e) => {
-                    const nextUnit = e.target.value
-                    if (age !== '' && nextUnit !== ageUnit) {
-                      const numericAge = parseFormattedNumber(age)
-                      const converted = nextUnit === 'Months' ? numericAge / 30 : numericAge * 30
-                      setAge(liveFormatNumber(String(Math.round(converted * 100) / 100)))
-                    }
-                    setAgeUnit(nextUnit)
-                  }}
-                  className={inputClass}
-                >
-                  {AGE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className={labelClass}>As of</label>
-              <CalendarDatePicker value={asOfDate} onChange={setAsOfDate} />
-            </div>
-          </>
-        )}
-        <div>
-          <label className={labelClass}>Condition</label>
-          <div className="mt-1 grid grid-cols-5 gap-1">
-            {CONDITION_FLAGS.map((flag) => (
-              <button key={flag} type="button" onClick={() => setCondition(flag)}
-                className={`rounded-lg border py-1.5 text-xs font-medium transition-all active:scale-95 ${
-                  condition === flag ? 'border-brand-neon bg-brand-neon/10 text-brand-neon' : 'border-neutral-800 bg-neutral-950 text-neutral-400'
-                }`}>
-                {flag}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className={labelClass}>Purity (optional)</label>
-            <input type="text" value={purity} onChange={(e) => setPurity(e.target.value)}
-              className={inputClass} placeholder="94%" />
-          </div>
-          <div>
-            <label className={labelClass}>MC (optional)</label>
-            <input type="text" value={moistureContent} onChange={(e) => setMoistureContent(e.target.value)}
-              className={inputClass} placeholder="11.1" />
-          </div>
-        </div>
-        <div>
-          <label className={labelClass}>{category === 'Palay' ? 'Date Procured' : 'Date Received'} (optional)</label>
-          <input type="text" value={dateProcured} onChange={(e) => setDateProcured(e.target.value)}
-            className={inputClass} placeholder="MAR 24 TO APR 4, 2025" />
-        </div>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <button
-              type="button"
-              onClick={() => {
-                if (!canSavePile) { setShowPileHint(true); return }
-                editingPileId ? handleUpdate() : handleCreate()
-              }}
-              disabled={isSaving}
-              className={`w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all ${
-                canSavePile
-                  ? `${primaryButtonClass}`
-                  : 'border border-brand-neon/40 text-brand-neon/40'
-              }`}
-            >
-              {editingPileId ? 'Update Pile' : 'Create Pile'}
-            </button>
-          </div>
-          <div
-            className="overflow-hidden transition-all duration-300 ease-out"
-            style={{ maxWidth: showCancelPile ? '96px' : '0px', opacity: showCancelPile ? 1 : 0 }}
-          >
-            <button
-              type="button"
-              onClick={resetForm}
-              disabled={isSaving}
-              className="whitespace-nowrap rounded-xl border border-neutral-800 px-4 py-2 text-sm text-neutral-400"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-        {showPileHint && !canSavePile && (
-          <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
-        )}
-      </div>
+      <button type="button" onClick={onCreatePile} className={`w-full ${primaryButtonClass}`}>
+        + Create Pile
+      </button>
 
       {/* Renaming an existing pile (or fixing its variety/purity/dates)
           is only ever exposed here, not on Piles.jsx or the admin
@@ -757,13 +236,18 @@ function PileBalanceSection({ warehouseId }) {
       <ul className="mt-3 space-y-1.5">
         {sortedPiles.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
         {sortedPiles.map((p) => (
-          <li key={p.pileId} className={`${listItemClass} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}>
-            <div className="min-w-0">
-              <p className="break-words text-base font-medium text-app-text">{p.pileName}</p>
-              <p className="text-sm text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
-            </div>
-            <button type="button" onClick={() => handleEdit(p)} aria-label="Edit pile name/details" className={editIconClass}>
-              <Pencil size={20} />
+          <li key={p.pileId}>
+            <button
+              type="button"
+              onClick={() => onEditPile(p)}
+              aria-label={`Edit ${p.pileName}`}
+              className={`w-full text-left ${listItemClass} grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2`}
+            >
+              <div className="min-w-0">
+                <p className="break-words text-base font-medium text-app-text">{p.pileName}</p>
+                <p className="text-sm text-neutral-500">{varietyMap.get(p.varietyId)?.name ?? p.category}</p>
+              </div>
+              <span className={editIconClass}><Pencil size={20} /></span>
             </button>
           </li>
         ))}
@@ -779,25 +263,14 @@ function Settings() {
   const { setPageHeader, headerHeight, stickyIndicatorHeight } = usePageHeader() ?? {}
   const warehouseSectionRef = useRef(null)
   const pileCardRef = useRef(null)
-  const [pileSection, setPileSection] = useState('create')
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
-  // Only scrolls when a real tab click set this flag first - NOT inferred
-  // from "is this the first render" (the previous approach), which
-  // React StrictMode's dev-only double-invocation of effects defeats:
-  // the first of its two synthetic invocations flips a "seen it" ref to
-  // false as intended, but the second invocation then reads that
-  // already-flipped ref and fires the scroll anyway, on every single
-  // mount - confirmed via a frame-by-frame screen recording showing the
-  // page landing on Settings already scrolled to this card. Setting the
-  // flag directly in the click handler is StrictMode-proof, since
-  // nothing but an actual click ever sets it.
-  const scrollOnTabChange = useRef(false)
-  useEffect(() => {
-    if (!scrollOnTabChange.current) return
-    scrollOnTabChange.current = false
-    pileCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  }, [pileSection])
+  // null | { mode: 'create' } | { mode: 'edit', pile }
+  const [pileModal, setPileModal] = useState(null)
+  // Set when Edit Pile's own "Edit balance ->" is tapped - passed down
+  // to BeginningBalancesPanel so it opens straight into editing that
+  // exact pile instead of making the user find it again in the list.
+  const [focusBalancePileId, setFocusBalancePileId] = useState(null)
   const cloudUser = useObservable(db.cloud.currentUser)
   const cloudSyncState = useObservable(db.cloud.syncState)
   // Green: genuinely connected and in-sync. Red: disconnected or
@@ -997,54 +470,46 @@ function Settings() {
 
       {currentWarehouseId && (
         <div
-          className="mt-6"
           ref={pileCardRef}
           style={{ scrollMarginTop: `${(headerHeight ?? 60) + (stickyIndicatorHeight ?? 0) + 24}px` }}
         >
-          <div className="relative flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
-            <div
-              className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-              style={{
-                width: `calc(${100 / 2}% - 0.25rem)`,
-                transform: `translateX(calc(${(pileSection === 'create' ? 0 : 1) * 100}% + ${(pileSection === 'create' ? 0 : 1) * 0.5}rem))`,
-              }}
+          {/* Create Pile used to be a permanently-open tab sharing this
+              same row with Beginning Balances - now it's just a button
+              (opens CreateEditPileModal), with Beginning Balances as
+              the one remaining section below it, no longer toggled
+              against anything. */}
+          <PileListSection
+            warehouseId={currentWarehouseId}
+            onCreatePile={() => setPileModal({ mode: 'create' })}
+            onEditPile={(pile) => setPileModal({ mode: 'edit', pile })}
+          />
+          <div className="mt-6">
+            <BeginningBalancesPanel
+              warehouseId={currentWarehouseId}
+              focusPileId={focusBalancePileId}
+              onFocusHandled={() => setFocusBalancePileId(null)}
             />
-            <button
-              type="button"
-              onClick={() => { scrollOnTabChange.current = true; setPileSection('create') }}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'create' ? 'text-brand-contrast' : 'text-neutral-400'}`}
-            >
-              Create Pile
-            </button>
-            <button
-              type="button"
-              onClick={() => { scrollOnTabChange.current = true; setPileSection('balances') }}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${pileSection === 'balances' ? 'text-brand-contrast' : 'text-neutral-400'}`}
-            >
-              Beginning Balances
-            </button>
-          </div>
-          {/* Both stay mounted, toggled via a plain class rather than a
-              key-based remount - remounting on every switch meant each
-              panel's useLiveQuery started over from undefined, so its
-              "no piles/sacks yet" empty state (or a totally different,
-              sparser layout) would flash on screen for a moment before
-              the real, already-fetched-once data replaced it. That
-              flash is what read as a glitch. Keeping both mounted after
-              the first switch means the data is already loaded and
-              live-subscribed by the time you switch to it - nothing to
-              flash. */}
-          <div className="mt-3">
-            <div className={pileSection === 'create' ? '' : 'hidden'}>
-              <PileBalanceSection warehouseId={currentWarehouseId} />
-            </div>
-            <div className={pileSection === 'balances' ? '' : 'hidden'}>
-              <BeginningBalancesPanel warehouseId={currentWarehouseId} />
-            </div>
           </div>
         </div>
       )}
       </div>
+
+      {pileModal && (
+        <CreateEditPileModal
+          open
+          warehouseId={currentWarehouseId}
+          pile={pileModal.mode === 'edit' ? pileModal.pile : null}
+          onClose={() => setPileModal(null)}
+          onGoToBalance={(pile) => {
+            setFocusBalancePileId(pile.pileId)
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                pileCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+              })
+            })
+          }}
+        />
+      )}
     </div>
   )
 }

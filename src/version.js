@@ -2511,4 +2511,33 @@
 //              every option as its own live, currently-playing preview
 //              tile instead of a plain text chip, so you can see the
 //              motion before picking it.
-export const APP_VERSION = '1.9-141'
+//   1.9-142 - Create/Edit Pile modal + Beginning Balances rework - the
+//            larger, higher-risk piece deliberately deferred from
+//            1.9-140/141 since it touches live stock data entry:
+//            - Settings' old always-open "Create Pile" tab is gone -
+//              replaced by a "+ Create Pile" button (CreateEditPileModal.jsx)
+//              that opens a modal with the same fields, grouped into
+//              Identity / Quantity / Quality & Dates sections under a
+//              hero header that live-previews the pile's own name and
+//              a variety pill tinted to its cereal type (same
+//              convention as the Pile List's accent bars). Tapping an
+//              existing pile in the list below opens the identical
+//              modal pre-filled to edit its metadata.
+//            - Editing a pile still only ever touches metadata (name/
+//              category/variety/purity/dates/condition) - bags/kilos/
+//              age stay exclusively owned by Beginning Balances, same
+//              as before. Rather than leaving that split implicit,
+//              Edit Pile now shows live current stock as a read-only
+//              summary with an "Edit balance ->" link that closes the
+//              modal and jumps straight into Beginning Balances,
+//              already scrolled to and editing that same pile.
+//            - Beginning Balances' pile editor gets the same tinted
+//              hero header (replacing the old amber alert-style
+//              banner - nothing was actually wrong, an alert box
+//              shouldn't have implied it was), a red "Remove" on each
+//              line that now asks for confirmation before it actually
+//              deletes anything, and Sack Condition now grows in
+//              beside Sack Weight/MTS in the same row (instead of
+//              sitting always-visible-but-disabled) only once a real
+//              sack weight is actually picked.
+export const APP_VERSION = '1.9-142'

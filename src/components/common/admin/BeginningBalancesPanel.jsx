@@ -5,7 +5,7 @@
 // correction here can never be confused with (or accidentally
 // overwrite) live, transaction-accumulated stock.
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Pencil, Trash2, MoreVertical, Plus, X } from 'lucide-react'
@@ -47,13 +47,25 @@ const emptyLine = () => ({
   dateProcured: '',
 })
 
-function PilesBeginningBalances({ warehouseId }) {
+// Same category-color convention as HomePiles.jsx's accentBarClass/
+// varietyBadgeClass and CreateEditPileModal.jsx's heroTint - duplicated
+// locally per this codebase's own established pattern for this small
+// lookup (see AuthorityPickerModal's own categoryColor).
+const heroTint = (category) => {
+  if (category === 'Rice') return { pill: 'bg-blue-500 text-white', wash: 'rgba(59,130,246,.28), rgba(59,130,246,.04)' }
+  if (category === 'Palay') return { pill: 'bg-brand-neon text-brand-contrast', wash: 'rgba(0,255,163,.28), rgba(0,255,163,.04)' }
+  if (category === 'By Products') return { pill: 'bg-brand-byproduct text-neutral-950', wash: 'rgba(242,185,73,.28), rgba(242,185,73,.04)' }
+  return { pill: 'bg-neutral-700 text-neutral-300', wash: 'rgba(115,115,115,.2), rgba(115,115,115,.03)' }
+}
+
+function PilesBeginningBalances({ warehouseId, focusPileId, onFocusHandled }) {
   const { weightUnit } = useSettings() ?? {}
   const [editingPileId, setEditingPileId] = useState(null)
   const [lines, setLines] = useState([emptyLine()])
   const [originalSeedIds, setOriginalSeedIds] = useState([])
   const [age, setAge] = useState('')
   const [ageUnit, setAgeUnit] = useState('Days')
+  const [pendingRemoveLine, setPendingRemoveLine] = useState(null)
   // Free text (real procurement dates are often ranges, e.g. "MAR 24 TO
   // APR 4, 2025") - same pile.dateProcured field the exported pile
   // layout (pileLayoutPdfGenerator.js) and Settings > Create/Edit Pile
@@ -163,6 +175,21 @@ function PilesBeginningBalances({ warehouseId }) {
     })
   }
 
+  // Lets CreateEditPileModal.jsx's "Edit balance ->" jump straight into
+  // editing a specific pile here, instead of leaving the user to find
+  // it again in the list below. Runs once per distinct focusPileId
+  // (guarded so it doesn't keep re-triggering handleEdit's own scroll/
+  // form-reset on every unrelated re-render), and clears itself via
+  // onFocusHandled so a second visit with the same pile can re-fire.
+  useEffect(() => {
+    if (!focusPileId) return
+    const pile = piles.find((p) => p.pileId === focusPileId)
+    if (!pile) return
+    handleEdit(pile)
+    onFocusHandled?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPileId, piles.length])
+
   const updateLine = (index, field, value) => {
     setLines((rows) => rows.map((row, i) => {
       if (i !== index) return row
@@ -172,7 +199,19 @@ function PilesBeginningBalances({ warehouseId }) {
     }))
   }
   const addLine = () => setLines((rows) => [...rows, emptyLine()])
-  const removeLine = (index) => setLines((rows) => (rows.length > 1 ? rows.filter((_, i) => i !== index) : rows))
+  // Removing a line is destructive (its seed transaction is deleted on
+  // Save) - per explicit request, this now asks for confirmation first
+  // instead of disappearing on a single tap. See pendingRemoveLine's
+  // own ConfirmDialog below.
+  const removeLine = (index) => {
+    if (lines.length <= 1) return
+    setPendingRemoveLine(index)
+  }
+  const confirmRemoveLine = () => {
+    const index = pendingRemoveLine
+    setPendingRemoveLine(null)
+    setLines((rows) => (rows.length > 1 ? rows.filter((_, i) => i !== index) : rows))
+  }
 
   const handleSave = async () => {
     if (!editingPileId) return
@@ -335,13 +374,21 @@ function PilesBeginningBalances({ warehouseId }) {
   return (
     <div>
       {editingPileId && (
-        <div ref={formRef} className="mb-3 space-y-2 rounded-xl border border-brand-amber/40 bg-brand-amber/5 p-3">
-          <p className="text-xs font-semibold text-brand-amber">
-            Editing beginning balance: {piles.find((p) => p.pileId === editingPileId)?.pileName}
-            {editingCategory !== 'By Products' && varietyMap.get(editingPile?.varietyId)?.name && (
-              <span className="text-neutral-400"> ({varietyMap.get(editingPile?.varietyId)?.name})</span>
-            )}
-          </p>
+        <div ref={formRef} className="mb-3 overflow-hidden rounded-xl border border-neutral-800">
+          {/* Same tinted hero header as CreateEditPileModal.jsx's Edit
+              Pile, colored to this pile's own cereal type - arriving
+              here via that modal's "Edit balance ->" link reads as a
+              continuation of the same pile, not a jump to an unrelated
+              screen. Replaces the old plain amber alert-style banner
+              (an alert box implied something was wrong, and nothing
+              was). */}
+          <div style={{ backgroundImage: `linear-gradient(135deg, ${heroTint(editingCategory).wash})` }} className="px-3 py-3">
+            <p className="text-lg font-extrabold text-app-text">{piles.find((p) => p.pileId === editingPileId)?.pileName}</p>
+            <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${heroTint(editingCategory).pill}`}>
+              {editingCategory === 'By Products' ? 'By Products' : `${editingCategory}${varietyMap.get(editingPile?.varietyId)?.name ? ` · ${varietyMap.get(editingPile?.varietyId)?.name}` : ''}`}
+            </span>
+          </div>
+          <div className="space-y-2 bg-neutral-900 p-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelClass}>Age</label>
@@ -378,8 +425,8 @@ function PilesBeginningBalances({ warehouseId }) {
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-neutral-400">Line {i + 1}</p>
                 {lines.length > 1 && (
-                  <button type="button" onClick={() => removeLine(i)} aria-label="Remove line" className="rounded-lg p-1 text-neutral-500 hover:text-red-400 active:scale-90">
-                    <X size={16} />
+                  <button type="button" onClick={() => removeLine(i)} aria-label="Remove line" className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs font-semibold text-brand-crimson transition-transform active:scale-90">
+                    <X size={14} /> Remove
                   </button>
                 )}
               </div>
@@ -432,7 +479,17 @@ function PilesBeginningBalances({ warehouseId }) {
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {/* Sack Condition only means anything once a real Sack
+                  Weight/MTS is actually set (not "Unset") - grows in
+                  beside it, in the same row, rather than sitting
+                  always-visible-but-disabled. Both cells live in one
+                  grid so the Sack Weight/MTS select genuinely shrinks
+                  to make room as Sack Condition grows, instead of
+                  Condition appearing in space that was already empty. */}
+              <div
+                className="grid gap-x-2"
+                style={{ gridTemplateColumns: line.mtsSackTypeId ? '1fr 1fr' : '1fr 0fr', transition: 'grid-template-columns 0.25s ease-out' }}
+              >
                 <div>
                   <label className={labelClass}>Sack Weight / MTS (optional)</label>
                   <select
@@ -446,19 +503,21 @@ function PilesBeginningBalances({ warehouseId }) {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className={labelClass}>Sack Condition</label>
-                  <select
-                    value={line.mtsCondition}
-                    onChange={(e) => updateLine(i, 'mtsCondition', e.target.value)}
-                    disabled={!line.mtsSackTypeId}
-                    className={inputClass}
-                  >
-                    <option value="">Select...</option>
-                    {SACK_CONDITIONS.map(({ code: cc, label }) => (
-                      <option key={cc} value={cc}>{label} ({cc})</option>
-                    ))}
-                  </select>
+                <div className="overflow-hidden">
+                  <div style={{ opacity: line.mtsSackTypeId ? 1 : 0, transition: 'opacity 0.2s ease-in 0.1s', minWidth: 140 }}>
+                    <label className={labelClass}>Sack Condition</label>
+                    <select
+                      value={line.mtsCondition}
+                      onChange={(e) => updateLine(i, 'mtsCondition', e.target.value)}
+                      disabled={!line.mtsSackTypeId}
+                      className={inputClass}
+                    >
+                      <option value="">Select...</option>
+                      {SACK_CONDITIONS.map(({ code: cc, label }) => (
+                        <option key={cc} value={cc}>{label} ({cc})</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -483,8 +542,17 @@ function PilesBeginningBalances({ warehouseId }) {
             <button type="button" onClick={handleSave} disabled={isSaving} className={`flex-1 ${primaryButtonClass}`}>Save</button>
             <button type="button" onClick={resetForm} className={secondaryButtonClass}>Cancel</button>
           </div>
+          </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingRemoveLine !== null}
+        title={`Remove Line ${pendingRemoveLine !== null ? pendingRemoveLine + 1 : ''}?`}
+        description="This cannot be undone - save afterward to permanently delete this line's beginning-balance record."
+        onConfirm={confirmRemoveLine}
+        onCancel={() => setPendingRemoveLine(null)}
+      />
 
       <ul className="space-y-1.5">
         {sortedPiles.length === 0 && <p className="animate-empty-state-in py-3 text-center text-xs text-neutral-500">No piles in this warehouse yet.</p>}
@@ -686,7 +754,7 @@ function SacksBeginningBalances({ warehouseId }) {
   )
 }
 
-function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
+function BeginningBalancesPanel({ warehouseId: externalWarehouseId, focusPileId, onFocusHandled } = {}) {
   const { accessibleWarehouses, currentWarehouseId, setCurrentWarehouseId } = useWarehouse() ?? {}
   const [tab, setTab] = useState('piles')
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
@@ -695,6 +763,12 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
   // skip this panel's own internal selector entirely - showing two
   // warehouse pickers on the same page would be confusing.
   const effectiveWarehouseId = externalWarehouseId ?? currentWarehouseId
+  // A pile is always on the Piles tab, never Sacks - jumping here via
+  // Edit Pile's own "Edit balance ->" must land on the right tab even
+  // if Sacks happened to be showing.
+  useEffect(() => {
+    if (focusPileId) setTab('piles')
+  }, [focusPileId])
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
@@ -728,7 +802,7 @@ function BeginningBalancesPanel({ warehouseId: externalWarehouseId } = {}) {
           replaced it. */}
       <div className="mt-3">
         <div className={tab === 'piles' ? '' : 'hidden'}>
-          <PilesBeginningBalances warehouseId={effectiveWarehouseId} />
+          <PilesBeginningBalances warehouseId={effectiveWarehouseId} focusPileId={focusPileId} onFocusHandled={onFocusHandled} />
         </div>
         <div className={tab === 'sacks' ? '' : 'hidden'}>
           <SacksBeginningBalances warehouseId={effectiveWarehouseId} />
