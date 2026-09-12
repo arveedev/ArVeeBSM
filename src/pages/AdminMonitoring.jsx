@@ -54,11 +54,20 @@ function AdminMonitoring() {
     setPageHeader?.({ title: 'Monitoring', subtitle: 'Cross-warehouse AI / SIA oversight.' })
   }, [])
 
-  // Reported: switching tabs left the previous tab's search text sitting
-  // there, so returning to a tab (or switching to a fresh one) showed
-  // stale results instead of the real, unfiltered list.
+  // Reported: switching tabs left the previous tab's search text AND
+  // its regional-authority dropdown selection sitting there - a number
+  // picked on the AI tab (say) almost never exists under SIA too, so
+  // switching to SIA silently kept filtering to that leftover AI-only
+  // number, showing "no pending records" even though SIA genuinely had
+  // some - reading as a blank/broken tab rather than what it actually
+  // was, a stale filter from the tab the user just left. Also resets
+  // the open reconciliation panel for the same reason - it's keyed to
+  // one specific authority record, which has no meaning once the tab
+  // (and thus the list it came from) has changed.
   useEffect(() => {
     setSearchQuery('')
+    setRegionalAuthFilter('')
+    setSelectedAuthority(null)
   }, [activeTab])
 
   // Reported: searching while scrolled down never brought the matching
@@ -239,42 +248,48 @@ function AdminMonitoring() {
       <div className={activeTab === 'MILLING' || activeTab === 'NFA' ? 'hidden' : ''}>
       {/* Reported, real gap: this box only ever appeared when the admin
           picked a regional authority number from the dropdown - typing
-          the same number (or a customer/warehouse/etc. that happens to
-          narrow the list down to just one regional authority) into the
-          search box instead left it invisible, even though the search
-          results were just as scoped to one regional authority as the
-          dropdown selection would have been. Now derives the same
-          "effective" regional authority number from the search results
-          whenever the dropdown itself isn't set: if every currently
-          matched row shares one regional authority number, that number
-          drives this box exactly as if it had been picked from the
-          dropdown; if the search still spans more than one, there's
-          nothing unambiguous to summarize, so it stays hidden. */}
+          into the search box instead left it invisible, even when it
+          plainly narrowed the list to something summarizable. Two
+          sources now feed the exact same box: the dropdown (unchanged -
+          every authority under that number, regardless of pending/
+          completed status, for the full overall picture) or, whenever
+          the dropdown itself isn't set, the search's own current
+          matches - summarizing whatever's actually shown in the pending
+          list below. If every matched row happens to share one regional
+          authority number, that number becomes the label just like the
+          dropdown case; otherwise it's labeled by how many distinct
+          authorities matched, since there's no single number left to
+          name it after. */}
       {(() => {
-        const searchDerivedRegionalNumber = (() => {
-          if (regionalAuthFilter.trim() || !searchQuery.trim()) return null
-          const nums = new Set(filtered.map((a) => a.regionalAuthorityNumber).filter(Boolean))
-          return nums.size === 1 ? [...nums][0] : null
-        })()
-        const effectiveRegionalAuthNumber = regionalAuthFilter.trim() || searchDerivedRegionalNumber
-        if (!effectiveRegionalAuthNumber) return null
+        const hasDropdown = Boolean(regionalAuthFilter.trim())
+        const hasSearch = Boolean(searchQuery.trim())
+        if (!hasDropdown && !hasSearch) return null
 
-        // Every authority under this regional authority, regardless of
-        // pending/completed status - gives the full picture for this
-        // regional authority overall, not just whatever happens to be
-        // showing in the pending list above.
-        const regionalTotals = typeAuthorities.filter((a) => a.regionalAuthorityNumber === effectiveRegionalAuthNumber)
-        const totalIssuedBags = regionalTotals.reduce((s, a) => s + (a.totalIssuedBags ?? 0), 0)
-        const totalIssuedKilos = regionalTotals.reduce((s, a) => s + (a.totalIssuedKilos ?? 0), 0)
+        let sourceAuthorities
+        let label
+        if (hasDropdown) {
+          sourceAuthorities = typeAuthorities.filter((a) => a.regionalAuthorityNumber === regionalAuthFilter.trim())
+          label = regionalAuthFilter.trim()
+        } else {
+          sourceAuthorities = filtered
+          const nums = new Set(filtered.map((a) => a.regionalAuthorityNumber).filter(Boolean))
+          label = nums.size === 1
+            ? [...nums][0]
+            : `${filtered.length} matching ${filtered.length === 1 ? 'authority' : 'authorities'}`
+        }
+        if (sourceAuthorities.length === 0) return null
+
+        const totalIssuedBags = sourceAuthorities.reduce((s, a) => s + (a.totalIssuedBags ?? 0), 0)
+        const totalIssuedKilos = sourceAuthorities.reduce((s, a) => s + (a.totalIssuedKilos ?? 0), 0)
         // Per explicit request - the remaining (authorized minus issued)
         // figure alongside what's already issued, so this box shows the
         // full picture rather than only the "used so far" half of it.
-        const totalAllocatedBags = regionalTotals.reduce((s, a) => s + (a.totalAllocationBags ?? 0), 0)
-        const totalAllocatedKilos = regionalTotals.reduce((s, a) => s + (a.totalAllocationKilos ?? 0), 0)
+        const totalAllocatedBags = sourceAuthorities.reduce((s, a) => s + (a.totalAllocationBags ?? 0), 0)
+        const totalAllocatedKilos = sourceAuthorities.reduce((s, a) => s + (a.totalAllocationKilos ?? 0), 0)
         const remainingBags = Math.max(0, totalAllocatedBags - totalIssuedBags)
         const remainingKilos = Math.max(0, totalAllocatedKilos - totalIssuedKilos)
         const byWarehouse = new Map()
-        for (const a of regionalTotals) {
+        for (const a of sourceAuthorities) {
           const key = a.assignedWarehouse ?? 'Unassigned'
           const current = byWarehouse.get(key) ?? { bags: 0, kilos: 0 }
           current.bags += a.totalIssuedBags ?? 0
@@ -285,7 +300,7 @@ function AdminMonitoring() {
         return (
           <div className="mx-4 mt-2 rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">
-              {effectiveRegionalAuthNumber}
+              {label}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">

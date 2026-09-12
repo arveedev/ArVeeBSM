@@ -325,8 +325,18 @@ function AuthorityMonitor() {
                     handleOpen(a)
                   }
                 }}
-                className="flex flex-1 items-center justify-between gap-3 py-2 pr-3 text-left active:scale-[0.99]"
+                className="flex-1 py-2 pr-3 text-left active:scale-[0.99]"
               >
+                {/* Same redesign as Admin Monitoring's own pending row -
+                    details get the full row width instead of being
+                    squeezed beside a narrow figures column, with a
+                    compact issued/remaining strip underneath (big bold
+                    issued figure, smaller amber remaining figure, a
+                    thin progress bar between them, then the kg
+                    equivalent below when both bags and kilos exist).
+                    Bags (or SIA pieces) drives the primary line/bar
+                    whenever present; a record with only a kilos
+                    allocation falls back to kilos instead. */}
                 <div className="min-w-0">
                   <p className={`break-words text-base font-medium ${categoryColor(a)}`}>
                     {a.type} · {a.type === 'AI' ? a.aiNumber : a.siaNumber}
@@ -354,20 +364,42 @@ function AuthorityMonitor() {
                   )}
                 </div>
 
-                <div className="shrink-0 text-right">
-                  {a.totalAllocationKilos != null && (
-                    <div className={`leading-tight tabular-nums ${progressColor}`}>
-                      <p className="text-base font-semibold">{fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}</p>
-                      <p className="text-sm text-neutral-500">/ {fmtWeight(a.totalAllocationKilos, weightUnit)}</p>
+                {(() => {
+                  const hasBags = totalAllocBags != null
+                  const hasKilos = a.totalAllocationKilos != null
+                  if (!hasBags && !hasKilos) return null
+                  const primaryAllocation = hasBags ? totalAllocBags : a.totalAllocationKilos
+                  const primaryIssued = hasBags ? (totalIssuedBags ?? 0) : (a.totalIssuedKilos ?? 0)
+                  const primaryRemaining = hasBags ? bags.balanceRemaining : kilos.balanceRemaining
+                  const percent = primaryAllocation > 0 ? Math.min(100, Math.max(0, (primaryIssued / primaryAllocation) * 100)) : 0
+                  const fmtPrimary = (v) => hasBags ? `${fmtBags(v)} ${unitLabel}` : fmtWeight(v, weightUnit)
+                  return (
+                    <div className="mt-2.5 border-t border-neutral-800 pt-2.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className={`text-xl font-bold tabular-nums ${progressColor}`}>
+                          {fmtPrimary(primaryIssued)} <span className="text-sm font-normal text-neutral-500">issued</span>
+                        </span>
+                        {primaryRemaining != null && (
+                          <span className="whitespace-nowrap text-lg font-semibold tabular-nums text-brand-amber">
+                            {fmtPrimary(Math.max(0, primaryRemaining))} <span className="text-sm font-normal text-brand-amber/70">left</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-neutral-800">
+                        <div
+                          className={`h-full rounded-full ${status === 'Over-Issued' ? 'bg-brand-crimson' : status === 'Complete' ? 'bg-brand-neon' : 'bg-blue-400'}`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                      {hasBags && hasKilos && (
+                        <div className="mt-1 flex items-center justify-between text-base tabular-nums text-neutral-500">
+                          <span>{fmtWeight(a.totalIssuedKilos ?? 0, weightUnit)}</span>
+                          <span>{fmtWeight(Math.max(0, kilos.balanceRemaining ?? 0), weightUnit)}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {totalAllocBags != null && (
-                    <div className={`mt-1 leading-tight tabular-nums ${progressColor}`}>
-                      <p className="text-base font-semibold">{fmtBags(totalIssuedBags ?? 0)}</p>
-                      <p className="text-sm text-neutral-500">/ {fmtBags(totalAllocBags)} {unitLabel}</p>
-                    </div>
-                  )}
-                </div>
+                  )
+                })()}
               </button>
             </li>
           )

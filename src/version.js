@@ -2388,4 +2388,22 @@
 //            drives the primary line/bar whenever present, since it's
 //            always there for both AI and SIA; a record with only a
 //            kilos allocation falls back to kilos as the primary line.
-export const APP_VERSION = '1.9-136'
+//   1.9-137 - Three more real, reported fixes on the monitoring side:
+//            - Admin Monitoring's reconciliation box now also appears
+//              from a plain search that doesn't happen to share one
+//              regional authority number - it summarizes whatever's
+//              currently matched either way, labeled by the shared
+//              number when there is one, or by how many distinct
+//              authorities matched when there isn't.
+//            - Switching tabs on Admin Monitoring now also resets the
+//              regional-authority dropdown and the open reconciliation
+//              panel, not just the search text - a number picked on one
+//              tab almost never exists on another, so leaving it set
+//              was silently filtering the new tab down to nothing and
+//              reading as a blank/broken tab instead of a leftover
+//              filter from the tab just left.
+//            - AuthorityMonitor.jsx (the user Home page's own Activity
+//              tab pending list) gets the identical row redesign Admin
+//              Monitoring's own pending list got last version - it had
+//              been missed there.
+export const APP_VERSION = '1.9-137'
