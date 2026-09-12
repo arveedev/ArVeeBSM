@@ -2281,4 +2281,16 @@
 //            Breakdown section now both sum this shared function's own
 //            per-warehouse output - there is exactly one calculation
 //            left that could ever disagree with itself.
-export const APP_VERSION = '1.9-127'
+//   1.9-128 - The Catanduanes mismatch persisted even on 1.9-127 (both
+//            the Province table and Stock Breakdown now read the same
+//            shared warehouseCategoryStock data, and the warehouse
+//            count for that province was independently confirmed
+//            correct - Catanduanes genuinely has only one warehouse).
+//            Rather than keep guessing at a bug that direct code review
+//            can no longer explain, added a temporary, clearly-labeled
+//            console diagnostic ('[STOCK DEBUG]') to
+//            AdminHomeStocks.jsx, logging the exact per-warehouse
+//            figures and the exact Province-row computation from the
+//            live data - so the next step is reading real numbers
+//            instead of forming another hypothesis to test blind.
+export const APP_VERSION = '1.9-128'

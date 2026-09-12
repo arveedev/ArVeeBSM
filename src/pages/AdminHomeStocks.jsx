@@ -92,6 +92,18 @@ function AdminHomeStocks({ onWarehouseSelect }) {
     await Promise.all(warehouses.map(async (w) => {
       result.set(w.warehouseId, await computeWarehouseCategoryStock(w.warehouseId, { varieties, sackTypes: sackTypesForStock }))
     }))
+    // TEMPORARY diagnostic - chasing a confirmed, reported real mismatch
+    // (a warehouse's own Potential positive, its province's own
+    // Potential clamped to 0) that persisted even after unifying both
+    // pages onto this one shared computation, with the warehouse count
+    // itself already confirmed correct - logs each warehouse's own
+    // per-category totals so the actual live numbers (not a guess) can
+    // be read directly from the browser console. Safe to remove once
+    // this is resolved.
+    console.log('[STOCK DEBUG] per-warehouse category stock:', [...result.entries()].map(([wId, byCat]) => {
+      const w = warehouses.find((x) => x.warehouseId === wId)
+      return { warehouse: `${w?.code ?? '?'} — ${w?.name ?? wId}`, byCategory: Object.fromEntries(byCat) }
+    }))
     return result
   }, [warehouses, varieties, sackTypesForStock]) ?? new Map()
 
@@ -192,6 +204,14 @@ function AdminHomeStocks({ onWarehouseSelect }) {
     const palayValue = topCardShowPotential
       ? Math.max(0, palayActual - sumFor('Palay', 'unwithdrawnKilos') / 50)
       : palayActual
+    // TEMPORARY diagnostic - see the matching comment on
+    // warehouseCategoryStock above. Safe to remove once resolved.
+    console.log('[STOCK DEBUG] province row:', province.code, {
+      wIds,
+      riceActualKilos: sumFor('Rice', 'actualKilos'),
+      riceUnwithdrawnKilos: sumFor('Rice', 'unwithdrawnKilos'),
+      riceActual, riceValue, topCardShowPotential,
+    })
     return { province, riceValue, palayValue }
   })
   const riceBranchValue = provinceRows.reduce((s, r) => s + r.riceValue, 0)
