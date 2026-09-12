@@ -2774,4 +2774,15 @@
 //            while the inactive one keeps its previous, lighter weight -
 //            previously every tab used the same static weight regardless
 //            of which was selected.
-export const APP_VERSION = '1.9-156'
+//   1.9-157 - Font sizes bumped throughout MillingMonitor.jsx, per
+//            explicit request: the Milling/Test Milling pending list
+//            rows (MillingOrderRow - number, ricemill name, trial
+//            progress labels) and the detail modal opened by tapping an
+//            MO/TMO number (header, Batch/Receiving Warehouse tiles,
+//            Show more details section, Issued/Received tiles, Recovery
+//            comparison, and the Stocks/Sacks transaction rows). Also
+//            fixed a real redundancy: the per-transaction "Net Kgs"
+//            tile's value repeated "Net Kgs" in the text itself (via
+//            fmtWeight's 'Net' label param) directly under a label that
+//            already says "Net Kgs" - now shows just the bare figure.
+export const APP_VERSION = '1.9-157'
