@@ -2848,4 +2848,14 @@
 //            Replaced with a real click-outside listener (same pattern
 //            already used by Settings.jsx's ClassifierSection), which
 //            correctly collapses on a tap anywhere outside the card.
-export const APP_VERSION = '1.9-161'
+//   1.9-162 - Real bug found: the reconciliation ledger's bottom Issued
+//            card + its own padding/gaps had grown heavy enough
+//            (reported directly - "so much space at the bottom, not
+//            enough viewing area for the list") to noticeably eat into
+//            the scrollable list's on-screen room. Tightened the
+//            card's own padding/gaps (p-3->p-2.5, py-2->py-1.5,
+//            mt-2->mt-1.5) and its outer wrapper's top/bottom padding,
+//            plus reduced the ledger's own trailing pb-8 to pb-3
+//            (dead space at the end of a short list) - same figures
+//            shown, just a smaller footprint.
+export const APP_VERSION = '1.9-162'

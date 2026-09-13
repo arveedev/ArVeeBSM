@@ -172,7 +172,7 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+      <div className="flex-1 overflow-y-auto px-4 pb-3 pt-4">
         {rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-neutral-500">
             No {isAi ? 'WSI' : 'ESI'} documents reference this {authority.type} yet.
@@ -234,12 +234,12 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
           show) grows it to reveal Remaining below Issued - see
           hasRemainingData/totalExpanded above. */}
       {rows.length > 0 && (
-        <div className="border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+        <div className="border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
           <button
             ref={totalCardRef}
             type="button"
             onClick={() => hasRemainingData && setTotalExpanded((v) => !v)}
-            className="w-full rounded-xl border border-brand-neon/50 bg-brand-neon/5 p-3 text-left"
+            className="w-full rounded-xl border border-brand-neon/50 bg-brand-neon/5 p-2.5 text-left"
           >
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">
@@ -250,18 +250,18 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
               )}
             </div>
             {isAi ? (
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-neutral-950 py-2 text-center">
+              <div className="mt-1.5 grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
                   <p className="text-xs uppercase tracking-wide text-neutral-500">Bags</p>
                   <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(totalBags)}</p>
                 </div>
-                <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
                   <p className="text-xs uppercase tracking-wide text-neutral-500">{netLabel}</p>
                   <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{netValueOf(totalKilos)}</p>
                 </div>
               </div>
             ) : (
-              <div className="mt-2 rounded-lg bg-neutral-950 py-2 text-center">
+              <div className="mt-1.5 rounded-lg bg-neutral-950 py-1.5 text-center">
                 <p className="text-xs uppercase tracking-wide text-neutral-500">Pieces</p>
                 <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{fmtBags(totalPieces)}</p>
               </div>
@@ -276,23 +276,23 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
                 above this block's real rendered height. */}
             <div
               className="overflow-hidden transition-all duration-300 ease-out"
-              style={{ maxHeight: totalExpanded ? '160px' : '0px', opacity: totalExpanded ? 1 : 0 }}
+              style={{ maxHeight: totalExpanded ? '140px' : '0px', opacity: totalExpanded ? 1 : 0 }}
             >
-              <div className="mt-2 border-t border-neutral-800 pt-2">
+              <div className="mt-1.5 border-t border-neutral-800 pt-1.5">
                 <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Remaining</p>
                 {isAi ? (
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                  <div className="mt-1.5 grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
                       <p className="text-xs uppercase tracking-wide text-neutral-500">Bags</p>
                       <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{bagsRemaining != null ? fmtBags(bagsRemaining) : '—'}</p>
                     </div>
-                    <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                    <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
                       <p className="text-xs uppercase tracking-wide text-neutral-500">{netLabel}</p>
                       <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{kilosRemaining != null ? netValueOf(kilosRemaining) : '—'}</p>
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-2 rounded-lg bg-neutral-950 py-2 text-center">
+                  <div className="mt-1.5 rounded-lg bg-neutral-950 py-1.5 text-center">
                     <p className="text-xs uppercase tracking-wide text-neutral-500">Pieces</p>
                     <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{piecesRemaining != null ? fmtBags(piecesRemaining) : '—'}</p>
                   </div>
