@@ -2832,4 +2832,20 @@
 //            whole panel collapses/discards it. Same proven
 //            animate-flow-down/flow-up-exit + useDelayedUnmount pairing
 //            used throughout the app for this kind of grow/shrink.
-export const APP_VERSION = '1.9-160'
+//   1.9-161 - Real bugs found in v1.9-160's Issued/Remaining expand:
+//            (1) the animation wasn't smooth - the mount/unmount +
+//            animate-flow-down/up-exit pairing only animates the
+//            CONTENT's opacity/translate, not the card's own height, so
+//            the surrounding box snapped to its new size instantly
+//            while the text faded inside it. Switched to a permanently-
+//            mounted block with maxHeight+opacity both animated via
+//            inline style (same technique as Classifier's Cancel button
+//            and the Sack Condition column), so the card genuinely
+//            grows/shrinks smoothly. (2) tapping away didn't collapse
+//            it, only closing/reopening the whole panel did - the
+//            scoped absolutely-positioned overlay only covered the
+//            ledger list, not the hero header or the card itself.
+//            Replaced with a real click-outside listener (same pattern
+//            already used by Settings.jsx's ClassifierSection), which
+//            correctly collapses on a tap anywhere outside the card.
+export const APP_VERSION = '1.9-161'
