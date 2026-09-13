@@ -6,10 +6,11 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { X } from 'lucide-react'
+import { X, ChevronDown } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags } from '../../utils/calculations.js'
+import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 
 // Newest first, per explicit request - a reconciliation view is read
 // most often right after the latest document was posted, not from the
@@ -61,6 +62,37 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
     (s, t) => s + (t.sackLines ?? []).reduce((ls, l) => ls + (l.pieces ?? 0), 0),
     0
   )
+
+  // Remaining - the authority's own authorized allocation minus what
+  // this ledger shows as actually issued so far, per explicit request.
+  // AI carries its allocation as flat top-level fields; a SIA's
+  // allocation lives per-line (sackLines[].totalAllocationBags, only
+  // for lines that actually have one set) - matches the same
+  // hasAllocation check AuthorityMonitor's own handleOpen already uses.
+  // null (not 0) when no allocation is on file at all, so the UI can
+  // show "—" rather than a misleading "0 remaining".
+  const kilosRemaining = isAi && authority.totalAllocationKilos != null
+    ? parseFloat((authority.totalAllocationKilos - totalKilos).toFixed(3))
+    : null
+  const bagsRemaining = isAi && authority.totalAllocationBags != null
+    ? authority.totalAllocationBags - totalBags
+    : null
+  const siaAllocatedLines = (authority.sackLines ?? []).filter((l) => l.totalAllocationBags != null)
+  const piecesRemaining = !isAi && siaAllocatedLines.length > 0
+    ? siaAllocatedLines.reduce((s, l) => s + l.totalAllocationBags, 0) - totalPieces
+    : null
+
+  // Total card tap-to-expand, revealing Remaining below Issued - grows
+  // when tapped, shrinks when tapped again, tapped away from (the
+  // overlay below), or the whole panel is closed (unmounts with it,
+  // same as every other transient UI state here). Same proven
+  // animate-flow-down/flow-up-exit + useDelayedUnmount pairing already
+  // used throughout the app, rather than a hand-rolled height
+  // transition (Settings.jsx's Classifier section tried that once and
+  // it silently never animated at all).
+  const [totalExpanded, setTotalExpanded] = useState(false)
+  const shouldRenderRemaining = useDelayedUnmount(totalExpanded, 250)
+  const hasRemainingData = kilosRemaining != null || bagsRemaining != null || piecesRemaining != null
 
   // Portaled straight to document.body - opened both from AuthorityMonitor
   // directly and from inside CompletedAuthorityModal, both of which on
@@ -127,7 +159,15 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+      <div className="relative flex-1 overflow-y-auto px-4 pb-8 pt-4">
+        {/* Tap-away target for the expanded Total card below - scoped to
+            just this scrollable ledger area (not the hero header or the
+            Total card itself, which sit outside this container) via a
+            plain absolutely-positioned overlay, which paints above the
+            plain-flow list content beneath it regardless of DOM order.
+            Same tap-away-to-close convention as HomePiles.jsx's inline
+            action buttons. */}
+        {totalExpanded && <div className="absolute inset-0 z-10" onClick={() => setTotalExpanded(false)} />}
         {rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-neutral-500">
             No {isAi ? 'WSI' : 'ESI'} documents reference this {authority.type} yet.
@@ -185,13 +225,24 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
           Its own bottom padding includes the device's safe-area inset
           (home-indicator area on mobile), same as every other bottom-
           pinned action bar in the app, so it never sits flush against
-          that edge. */}
+          that edge. Tapping it (when there's real allocation data to
+          show) grows it to reveal Remaining below Issued - see
+          hasRemainingData/totalExpanded above. */}
       {rows.length > 0 && (
-        <div className="border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
-          <div className="rounded-xl border border-brand-neon/50 bg-brand-neon/5 p-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">
-              Total ({rows.length} document{rows.length !== 1 ? 's' : ''})
-            </p>
+        <div className="relative z-20 border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+          <button
+            type="button"
+            onClick={() => hasRemainingData && setTotalExpanded((v) => !v)}
+            className="w-full rounded-xl border border-brand-neon/50 bg-brand-neon/5 p-3 text-left"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">
+                Issued ({rows.length} document{rows.length !== 1 ? 's' : ''})
+              </p>
+              {hasRemainingData && (
+                <ChevronDown size={16} className={`shrink-0 text-brand-neon transition-transform ${totalExpanded ? 'rotate-180' : ''}`} />
+              )}
+            </div>
             {isAi ? (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <div className="rounded-lg bg-neutral-950 py-2 text-center">
@@ -209,7 +260,32 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
                 <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{fmtBags(totalPieces)}</p>
               </div>
             )}
-          </div>
+
+            {shouldRenderRemaining && (
+              <div className={totalExpanded ? 'animate-flow-down' : 'animate-flow-up-exit'}>
+                <div className="mt-2 border-t border-neutral-800 pt-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Remaining</p>
+                  {isAi ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                        <p className="text-xs uppercase tracking-wide text-neutral-500">Bags</p>
+                        <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{bagsRemaining != null ? fmtBags(bagsRemaining) : '—'}</p>
+                      </div>
+                      <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                        <p className="text-xs uppercase tracking-wide text-neutral-500">{netLabel}</p>
+                        <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{kilosRemaining != null ? netValueOf(kilosRemaining) : '—'}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 rounded-lg bg-neutral-950 py-2 text-center">
+                      <p className="text-xs uppercase tracking-wide text-neutral-500">Pieces</p>
+                      <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{piecesRemaining != null ? fmtBags(piecesRemaining) : '—'}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </button>
         </div>
       )}
     </div>,

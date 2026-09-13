@@ -2819,4 +2819,17 @@
 //              block, so a subtitle appearing/disappearing (e.g. Home's
 //              "Welcome back" vs a page with none) is part of that same
 //              motion rather than a separate effect.
-export const APP_VERSION = '1.9-159'
+//   1.9-160 - AuthorityReconciliationPanel's Total card renamed to
+//            Issued and made tappable, per explicit request: tapping it
+//            grows the card to reveal a Remaining figure below (the
+//            authority's own authorized allocation minus what this
+//            ledger shows as issued - AI reads its flat allocation
+//            fields, SIA sums whichever sackLines actually carry one,
+//            same "hasAllocation" check AuthorityMonitor's own
+//            handleOpen already uses; shows "—" when no allocation is
+//            on file at all rather than a misleading zero). Tapping the
+//            card again, tapping elsewhere in the ledger, or closing the
+//            whole panel collapses/discards it. Same proven
+//            animate-flow-down/flow-up-exit + useDelayedUnmount pairing
+//            used throughout the app for this kind of grow/shrink.
+export const APP_VERSION = '1.9-160'
