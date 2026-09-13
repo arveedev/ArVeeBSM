@@ -2905,4 +2905,17 @@
 //            edge once it would scroll out of view), so its height
 //            animates exactly like any other element always would, with
 //            no viewport-relative math involved at all.
-export const APP_VERSION = '1.9-165'
+//   1.9-166 - v1.9-165's sticky-positioning fix still showed the same
+//            symptom (reported directly, same wording as before): grows
+//            downward on mobile, upward on PC. Since sticky positioning
+//            itself is identical across browsers, the real mechanism is
+//            almost certainly Chrome's scroll-anchoring feature, applied
+//            more aggressively on mobile - it silently adjusts the
+//            scroll offset to keep the view visually stable whenever
+//            content resizes, which would compensate for the card's
+//            real upward growth by scrolling the list down the same
+//            amount, cancelling it out and making it read as downward
+//            growth instead. Added `overflow-anchor: none` to the
+//            ledger's scroll container and the sticky card itself to
+//            disable that silent compensation.
+export const APP_VERSION = '1.9-166'

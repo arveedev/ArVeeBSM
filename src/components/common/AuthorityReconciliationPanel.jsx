@@ -187,7 +187,21 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pt-4">
+      {/* overflow-anchor:none - Chrome's scroll-anchoring feature tries
+          to keep the user's scroll position visually stable whenever
+          content resizes, by silently adjusting the scroll offset to
+          compensate. Mobile Chrome applies this more aggressively than
+          desktop, and it was the actual explanation for the previous
+          fix (position:sticky) still showing the Issued card appearing
+          to "grow downward" on phones but correctly upward on PC
+          (reported directly): the card itself WAS resizing upward
+          exactly like on desktop, but the scroll anchor was silently
+          compensating by scrolling the list down by the same amount,
+          which visually cancels out the upward growth and makes it
+          read as the box extending downward instead. Disabling anchor
+          compensation on this scroll container removes that silent
+          adjustment entirely. */}
+      <div className="flex-1 overflow-y-auto px-4 pt-4" style={{ overflowAnchor: 'none' }}>
         {rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-neutral-500">
             No {isAi ? 'WSI' : 'ESI'} documents reference this {authority.type} yet.
@@ -264,7 +278,7 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
             allocation data to show) grows it to reveal Remaining below
             Issued - see hasRemainingData/totalExpanded above. */}
         {rows.length > 0 && (
-          <div className="sticky bottom-0 z-10 -mx-4 mt-2 border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
+          <div className="sticky bottom-0 z-10 -mx-4 mt-2 border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2" style={{ overflowAnchor: 'none' }}>
           <button
             ref={totalCardRef}
             type="button"
