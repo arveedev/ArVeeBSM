@@ -23,6 +23,21 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
     setTimeout(onClose, 250)
   }
 
+  // Real bug found: this was the one full-screen modal in the app
+  // missing the body-scroll lock every other one already has (see
+  // UnwithdrawnDetailModal.jsx's identical effect) - the page behind
+  // stayed technically scrollable even though visually covered. On
+  // mobile specifically, a still-scrollable body behind a fixed
+  // overlay is what caused the browser's own address-bar/toolbar
+  // show-hide viewport recalculation to fall out of sync with this
+  // panel's `fixed` elements, which is what actually produced the
+  // reported dead space below the Issued card on phones (desktop has
+  // no such toolbar, which is why it always rendered fine there).
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
   const { weightUnit } = useSettings() ?? {}
   const isAi = authority.type === 'AI'
   const refNumber = isAi ? authority.aiNumber : authority.siaNumber

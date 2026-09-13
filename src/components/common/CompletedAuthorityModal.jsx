@@ -35,6 +35,17 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
     setTimeout(onClose, CLOSE_ANIMATION_MS)
   }
 
+  // Same body-scroll lock every other full-screen modal already has
+  // (see UnwithdrawnDetailModal.jsx/AuthorityReconciliationPanel.jsx's
+  // identical effect) - a still-scrollable page behind a fixed overlay
+  // is what caused the mobile-only dead-space bug found and fixed in
+  // AuthorityReconciliationPanel; this modal shares the exact same
+  // structure, so it gets the same fix proactively.
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
   const { weightUnit } = useSettings() ?? {}
   const currentYear = new Date().getFullYear()
   const [month, setMonth] = useState('All')

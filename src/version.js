@@ -2872,4 +2872,22 @@
 //            (`fixed inset-x-0 bottom-0`), not a flex-col child, with
 //            the scrollable ledger given generous bottom padding
 //            (pb-40) so its last row doesn't render hidden underneath.
-export const APP_VERSION = '1.9-163'
+//   1.9-164 - Actual root cause found (v1.9-163's restructure alone
+//            didn't fix it - confirmed the bug was mobile-only, desktop
+//            fine, and other full-screen forms' own Save bars were
+//            unaffected): AuthorityReconciliationPanel was the one
+//            full-screen modal in the app missing the body-scroll lock
+//            every other one already has (UnwithdrawnDetailModal.jsx's
+//            identical effect, App.jsx's own for transaction forms,
+//            etc.) - the page behind it stayed technically scrollable
+//            even though visually covered. On mobile specifically, a
+//            still-scrollable body behind a `fixed` overlay is what
+//            desyncs the browser's own address-bar/toolbar show-hide
+//            viewport recalculation from the overlay's fixed elements -
+//            exactly the reported "dead space below the Issued card,
+//            only on phones, not PC". Added the same lock, and
+//            proactively added it to CompletedAuthorityModal.jsx and
+//            CompletedMillingModal.jsx too, which share the identical
+//            full-screen structure and were missing it for the same
+//            reason.
+export const APP_VERSION = '1.9-164'

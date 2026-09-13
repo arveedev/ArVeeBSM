@@ -25,6 +25,17 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
   const [isClosing, setIsClosing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const scrollRef = useRef(null)
+
+  // Same body-scroll lock every other full-screen modal already has
+  // (see UnwithdrawnDetailModal.jsx/AuthorityReconciliationPanel.jsx's
+  // identical effect) - a still-scrollable page behind a fixed overlay
+  // is what caused the mobile-only dead-space bug found and fixed in
+  // AuthorityReconciliationPanel; this modal shares the exact same
+  // structure, so it gets the same fix proactively.
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
   // Reported: searching while scrolled down the list never brought the
   // matching rows into view - and a first version that only scrolled
   // once (empty -> non-empty) wasn't enough, per follow-up feedback:
