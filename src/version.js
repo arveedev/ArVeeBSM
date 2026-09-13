@@ -2858,4 +2858,18 @@
 //            plus reduced the ledger's own trailing pb-8 to pb-3
 //            (dead space at the end of a short list) - same figures
 //            shown, just a smaller footprint.
-export const APP_VERSION = '1.9-162'
+//   1.9-163 - Real root cause found for v1.9-162's still-reported "huge
+//            dead space at the bottom": the Issued/Remaining card was a
+//            flex-col CHILD of the panel's own "fixed inset-0 flex
+//            flex-col" container - on at least one real device/browser
+//            that container rendered shorter than the true viewport
+//            (a known class of mobile quirk), leaving a large gap
+//            between the footer and the actual screen edge with the
+//            page behind (same dark background) showing through it.
+//            Restructured to match TransactionFormBase.jsx's own
+//            proven pattern for exactly this situation: the card is now
+//            an INDEPENDENTLY fixed-to-viewport sibling
+//            (`fixed inset-x-0 bottom-0`), not a flex-col child, with
+//            the scrollable ledger given generous bottom padding
+//            (pb-40) so its last row doesn't render hidden underneath.
+export const APP_VERSION = '1.9-163'
