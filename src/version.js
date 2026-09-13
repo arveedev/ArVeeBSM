@@ -2890,4 +2890,19 @@
 //            CompletedMillingModal.jsx too, which share the identical
 //            full-screen structure and were missing it for the same
 //            reason.
-export const APP_VERSION = '1.9-164'
+//   1.9-165 - Real root cause found (reported directly - on PC the
+//            Issued card grew upward/shrank downward as expected, but
+//            on mobile it grew DOWNWARD (past the true screen bottom)
+//            and shrank upward, which is exactly what left dead space
+//            below it): animating a `position:fixed` element's height
+//            via a nested maxHeight transition is a known class of
+//            mobile-browser quirk - the fixed box isn't reliably
+//            recomputed every frame the way it is on desktop, so it
+//            can visibly anchor from the wrong edge. Replaced `fixed
+//            inset-x-0 bottom-0` with `sticky bottom-0` inside the
+//            ledger's own scrollable container - a sticky element is
+//            normal in-flow (just pinned to its scroll container's
+//            edge once it would scroll out of view), so its height
+//            animates exactly like any other element always would, with
+//            no viewport-relative math involved at all.
+export const APP_VERSION = '1.9-165'

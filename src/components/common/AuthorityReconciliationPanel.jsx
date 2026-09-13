@@ -136,7 +136,6 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
   const netValueOf = (kilos) => (showBags ? fmtNetBags(kilos != null ? kilos / 50 : null) : fmtWeight(kilos, weightUnit).replace(/\s*(kg|MT)$/, ''))
 
   return createPortal(
-    <>
     <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 ${isClosing ? 'animate-push-slide-out' : 'animate-push-slide-in'}`}>
       {/* Tinted hero band, same convention as CreateEditPileModal/
           ChoiceAuthorityModal - the AI/SIA number is the most important
@@ -188,18 +187,7 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
         )}
       </div>
 
-      {/* pb-40 (not the earlier pb-3) - the Issued/Remaining card below
-          is no longer a flex-col child of this container (see its own
-          comment), it's an independently fixed-to-viewport element
-          overlaying the bottom of the screen, same established pattern
-          as TransactionFormBase.jsx's own Save/Cancel bar - a real bug
-          was found with the flex-col-child approach: on at least one
-          real device/browser its "fixed inset-0 flex flex-col" parent
-          rendered shorter than the true viewport, leaving a large dead
-          gap between the footer and the actual screen bottom. This
-          generous bottom padding just leaves room so the last list item
-          doesn't render hidden behind the floating card. */}
-      <div className="flex-1 overflow-y-auto px-4 pb-40 pt-4">
+      <div className="flex-1 overflow-y-auto px-4 pt-4">
         {rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-neutral-500">
             No {isAi ? 'WSI' : 'ESI'} documents reference this {authority.type} yet.
@@ -250,22 +238,33 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
             ))}
           </ul>
         )}
-      </div>
-    </div>
 
-      {/* Total is its own card now (matching the ledger rows above),
-          not a bare footer bar - a neon border marks it as the summary.
-          Independently fixed to the viewport bottom (a sibling of the
-          panel above, not nested inside its flex-col) - see the
-          scrollable area's own pb-40 comment for why. Its own bottom
-          padding includes the device's safe-area inset (home-indicator
-          area on mobile), same as every other bottom-pinned action bar
-          in the app, so it never sits flush against that edge. Tapping
-          it (when there's real allocation data to show) grows it to
-          reveal Remaining below Issued - see hasRemainingData/
-          totalExpanded above. */}
-      {rows.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-[51] border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
+        {/* Total is its own card now (matching the ledger rows above),
+            not a bare footer bar - a neon border marks it as the
+            summary. `sticky bottom-0`, not `fixed` - a real bug was
+            found with `fixed`: growing/shrinking its height via a
+            nested maxHeight transition worked fine on desktop but
+            visibly anchored from the wrong edge on mobile (grew
+            downward off past the true screen bottom instead of upward,
+            leaving dead space below it) - a known class of mobile
+            browser quirk where a `position:fixed` element's box isn't
+            reliably recomputed every frame during a height transition
+            on a fixed-positioned ancestor, tied into the same address-
+            bar/toolbar viewport recalculation already implicated here.
+            `sticky` is a normal in-flow box (just pinned to this
+            scrollable container's own bottom edge once it would
+            otherwise scroll out of view), so its height changes exactly
+            like a normal element's always would - no viewport-relative
+            math involved at all, immune to that whole class of bug. A
+            negative horizontal margin cancels this container's own
+            px-4 so the card still reads edge-to-edge like before. Its
+            own bottom padding includes the device's safe-area inset
+            (home-indicator area on mobile), same as every other bottom-
+            pinned action bar in the app. Tapping it (when there's real
+            allocation data to show) grows it to reveal Remaining below
+            Issued - see hasRemainingData/totalExpanded above. */}
+        {rows.length > 0 && (
+          <div className="sticky bottom-0 z-10 -mx-4 mt-2 border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
           <button
             ref={totalCardRef}
             type="button"
@@ -331,9 +330,10 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
               </div>
             </div>
           </button>
-        </div>
-      )}
-    </>,
+          </div>
+        )}
+      </div>
+    </div>,
     document.body
   )
 }
