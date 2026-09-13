@@ -2938,4 +2938,7 @@
 //            Kg/Net Bags toggle was being treated as an outside click
 //            and immediately collapsing Remaining - excluded that
 //            toggle's own container from the click-outside check.
-export const APP_VERSION = '1.9-167'
+//   1.9-168 - Removed the chevron icon from the Issued card, per
+//            explicit request - the card's own tap-to-expand affordance
+//            speaks for itself without it.
+export const APP_VERSION = '1.9-168'

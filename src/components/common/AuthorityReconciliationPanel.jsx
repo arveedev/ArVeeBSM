@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { X, ChevronDown } from 'lucide-react'
+import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags } from '../../utils/calculations.js'
@@ -320,14 +320,9 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
               onClick={() => hasRemainingData && setTotalExpanded((v) => !v)}
               className={`relative w-full border border-brand-neon/50 bg-brand-neon/5 p-2.5 text-left ${totalExpanded && hasRemainingData ? 'rounded-b-xl' : 'rounded-xl'}`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">
-                  Issued ({rows.length} document{rows.length !== 1 ? 's' : ''})
-                </p>
-                {hasRemainingData && (
-                  <ChevronDown size={16} className={`shrink-0 text-brand-neon transition-transform ${totalExpanded ? 'rotate-180' : ''}`} />
-                )}
-              </div>
+              <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">
+                Issued ({rows.length} document{rows.length !== 1 ? 's' : ''})
+              </p>
               {isAi ? (
                 <div className="mt-1.5 grid grid-cols-2 gap-2">
                   <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
