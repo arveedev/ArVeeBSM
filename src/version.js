@@ -2918,4 +2918,24 @@
 //            growth instead. Added `overflow-anchor: none` to the
 //            ledger's scroll container and the sticky card itself to
 //            disable that silent compensation.
-export const APP_VERSION = '1.9-166'
+//   1.9-167 - A screen recording finally pinned down the actual bug
+//            (thank you): the Issued card's FINAL resting state was
+//            fine, but the animation itself briefly overflowed past the
+//            screen edge mid-transition on mobile - animating a
+//            position:sticky element's own box height via a nested
+//            maxHeight transition doesn't reliably recompute the
+//            sticky offset every frame on some mobile browsers, so it
+//            can briefly overshoot before settling. Root fix: the
+//            sticky Issued wrapper's own height no longer changes AT
+//            ALL. Remaining is now a separate, absolutely-positioned
+//            overlay (bottom-full, positioned against the sticky
+//            wrapper itself, which sticky already qualifies as a
+//            containing block for) that slides up from behind the
+//            Issued button via transform/opacity only - nothing here
+//            can ever trigger that height-driven mobile recalculation
+//            bug again, since no box's height is ever animated.
+//            Also fixed, reported directly: tapping the header's Net
+//            Kg/Net Bags toggle was being treated as an outside click
+//            and immediately collapsing Remaining - excluded that
+//            toggle's own container from the click-outside check.
+export const APP_VERSION = '1.9-167'

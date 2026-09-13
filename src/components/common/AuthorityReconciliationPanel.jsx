@@ -96,27 +96,40 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
     ? siaAllocatedLines.reduce((s, l) => s + l.totalAllocationBags, 0) - totalPieces
     : null
 
-  // Total card tap-to-expand, revealing Remaining below Issued - grows
+  // Total card tap-to-expand, revealing Remaining above Issued - grows
   // when tapped, shrinks when tapped again, tapped anywhere else on
-  // screen, or the whole panel is closed. The Remaining block stays
-  // permanently mounted with its height/opacity animated via inline
-  // style (same maxWidth/opacity "shrink-beside-grow" technique already
-  // used for Classifier's Cancel button and the Sack Condition column) -
-  // a mount/unmount pairing (useDelayedUnmount + a CSS animation class)
-  // was tried first but only animates the CONTENT's opacity/translate,
-  // not the card's own height, so the surrounding box still snapped to
-  // its new size instantly - not smooth. Same real click-outside
-  // listener already used by Settings.jsx's ClassifierSection (a
-  // scoped absolutely-positioned overlay was tried first but only
-  // covered the ledger list, not the header or the card itself, so
-  // tapping anywhere else didn't collapse it).
+  // screen, or the whole panel is closed.
+  //
+  // Real bug found from a screen recording: animating the Issued card's
+  // own box height (via a nested maxHeight transition) - even with
+  // position:sticky - visibly overflowed past the screen edge on mobile
+  // MID-TRANSITION (the final resting state was fine; the animation
+  // itself glitched), because sticky's offset recalculation doesn't
+  // reliably track a smoothly animating ancestor height on every frame
+  // on some mobile browsers. Fixed by never animating the sticky
+  // element's own height at all: Remaining is now a separate,
+  // ABSOLUTELY POSITIONED overlay (`bottom-full`, sitting directly above
+  // the Issued button within this same sticky-positioned parent, which
+  // sticky already qualifies as a containing block for) that slides in
+  // via transform/opacity only - the sticky box's own dimensions never
+  // change, so there is nothing for that mobile recalculation bug to
+  // ever mis-time.
   const [totalExpanded, setTotalExpanded] = useState(false)
   const hasRemainingData = kilosRemaining != null || bagsRemaining != null || piecesRemaining != null
+  // Both the card itself AND the header's Kg/Bags toggle are excluded
+  // from "click outside" - a real bug reported directly: tapping the
+  // unit toggle (which lives up in the hero header, nowhere near the
+  // card) was being treated as an outside click and immediately
+  // collapsing Remaining, when it should only ever change which unit
+  // is displayed.
   const totalCardRef = useRef(null)
+  const unitToggleRef = useRef(null)
   useEffect(() => {
     if (!totalExpanded) return
     const handleClickOutside = (e) => {
-      if (totalCardRef.current && !totalCardRef.current.contains(e.target)) setTotalExpanded(false)
+      if (totalCardRef.current?.contains(e.target)) return
+      if (unitToggleRef.current?.contains(e.target)) return
+      setTotalExpanded(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -172,7 +185,7 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
             to toggle. Same sliding-pill technique as the app's other
             two-way toggles (KG/MT in the header, Stocks/Sacks tabs). */}
         {isAi && (
-          <div className="relative mt-3 inline-flex gap-1 rounded-full bg-neutral-900 p-1 text-sm font-bold">
+          <div ref={unitToggleRef} className="relative mt-3 inline-flex gap-1 rounded-full bg-neutral-900 p-1 text-sm font-bold">
             <div
               className="absolute inset-y-1 w-[calc(50%-2px)] rounded-full bg-brand-neon transition-transform duration-300 ease-out"
               style={{ transform: showBags ? 'translateX(100%)' : 'translateX(0%)' }}
@@ -255,74 +268,32 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
 
         {/* Total is its own card now (matching the ledger rows above),
             not a bare footer bar - a neon border marks it as the
-            summary. `sticky bottom-0`, not `fixed` - a real bug was
-            found with `fixed`: growing/shrinking its height via a
-            nested maxHeight transition worked fine on desktop but
-            visibly anchored from the wrong edge on mobile (grew
-            downward off past the true screen bottom instead of upward,
-            leaving dead space below it) - a known class of mobile
-            browser quirk where a `position:fixed` element's box isn't
-            reliably recomputed every frame during a height transition
-            on a fixed-positioned ancestor, tied into the same address-
-            bar/toolbar viewport recalculation already implicated here.
-            `sticky` is a normal in-flow box (just pinned to this
-            scrollable container's own bottom edge once it would
-            otherwise scroll out of view), so its height changes exactly
-            like a normal element's always would - no viewport-relative
-            math involved at all, immune to that whole class of bug. A
-            negative horizontal margin cancels this container's own
-            px-4 so the card still reads edge-to-edge like before. Its
-            own bottom padding includes the device's safe-area inset
+            summary. `sticky bottom-0` (not `fixed` - see the module
+            comment on totalExpanded for why `fixed` was dropped
+            earlier). This wrapper's own height NEVER changes -
+            Remaining is a separate, absolutely-positioned overlay
+            (`bottom-full`, positioned relative to this sticky wrapper,
+            which sticky already qualifies as a containing block for)
+            that slides up from directly behind the Issued button via
+            transform/opacity only, so nothing here ever triggers a
+            height-driven layout recalculation on a stickily-positioned
+            box - see totalExpanded's own comment for the mobile bug
+            this avoids. A negative horizontal margin cancels this
+            container's own px-4 so the card still reads edge-to-edge.
+            Its own bottom padding includes the device's safe-area inset
             (home-indicator area on mobile), same as every other bottom-
-            pinned action bar in the app. Tapping it (when there's real
-            allocation data to show) grows it to reveal Remaining below
-            Issued - see hasRemainingData/totalExpanded above. */}
+            pinned action bar in the app. */}
         {rows.length > 0 && (
-          <div className="sticky bottom-0 z-10 -mx-4 mt-2 border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2" style={{ overflowAnchor: 'none' }}>
-          <button
-            ref={totalCardRef}
-            type="button"
-            onClick={() => hasRemainingData && setTotalExpanded((v) => !v)}
-            className="w-full rounded-xl border border-brand-neon/50 bg-brand-neon/5 p-2.5 text-left"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">
-                Issued ({rows.length} document{rows.length !== 1 ? 's' : ''})
-              </p>
-              {hasRemainingData && (
-                <ChevronDown size={16} className={`shrink-0 text-brand-neon transition-transform ${totalExpanded ? 'rotate-180' : ''}`} />
-              )}
-            </div>
-            {isAi ? (
-              <div className="mt-1.5 grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
-                  <p className="text-xs uppercase tracking-wide text-neutral-500">Bags</p>
-                  <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(totalBags)}</p>
-                </div>
-                <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
-                  <p className="text-xs uppercase tracking-wide text-neutral-500">{netLabel}</p>
-                  <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{netValueOf(totalKilos)}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-1.5 rounded-lg bg-neutral-950 py-1.5 text-center">
-                <p className="text-xs uppercase tracking-wide text-neutral-500">Pieces</p>
-                <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{fmtBags(totalPieces)}</p>
-              </div>
-            )}
-
-            {/* Always mounted - height AND opacity both animate via
-                inline style (not a mount/unmount + CSS-animation-class
-                pairing), so the card's own box actually grows/shrinks
-                smoothly instead of snapping to its new height while
-                only the content inside fades. maxHeight is a generous
-                fixed value (not 'auto', which can't transition) well
-                above this block's real rendered height. */}
-            <div
-              className="overflow-hidden transition-all duration-300 ease-out"
-              style={{ maxHeight: totalExpanded ? '140px' : '0px', opacity: totalExpanded ? 1 : 0 }}
-            >
-              <div className="mt-1.5 border-t border-neutral-800 pt-1.5">
+          <div ref={totalCardRef} className="sticky bottom-0 z-10 -mx-4 mt-2 border-t border-neutral-800 bg-neutral-950 px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2" style={{ overflowAnchor: 'none' }}>
+            {hasRemainingData && (
+              <div
+                className="absolute inset-x-4 bottom-full overflow-hidden rounded-t-xl border border-b-0 border-brand-neon/50 bg-neutral-950 px-2.5 pb-1.5 pt-2 transition-all duration-300 ease-out"
+                style={{
+                  transform: totalExpanded ? 'translateY(0%)' : 'translateY(100%)',
+                  opacity: totalExpanded ? 1 : 0,
+                  pointerEvents: totalExpanded ? 'auto' : 'none',
+                }}
+              >
                 <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Remaining</p>
                 {isAi ? (
                   <div className="mt-1.5 grid grid-cols-2 gap-2">
@@ -342,8 +313,39 @@ function AuthorityReconciliationPanel({ authority, onClose }) {
                   </div>
                 )}
               </div>
-            </div>
-          </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => hasRemainingData && setTotalExpanded((v) => !v)}
+              className={`relative w-full border border-brand-neon/50 bg-brand-neon/5 p-2.5 text-left ${totalExpanded && hasRemainingData ? 'rounded-b-xl' : 'rounded-xl'}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">
+                  Issued ({rows.length} document{rows.length !== 1 ? 's' : ''})
+                </p>
+                {hasRemainingData && (
+                  <ChevronDown size={16} className={`shrink-0 text-brand-neon transition-transform ${totalExpanded ? 'rotate-180' : ''}`} />
+                )}
+              </div>
+              {isAi ? (
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">Bags</p>
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(totalBags)}</p>
+                  </div>
+                  <div className="rounded-lg bg-neutral-950 py-1.5 text-center">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500">{netLabel}</p>
+                    <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{netValueOf(totalKilos)}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-1.5 rounded-lg bg-neutral-950 py-1.5 text-center">
+                  <p className="text-xs uppercase tracking-wide text-neutral-500">Pieces</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{fmtBags(totalPieces)}</p>
+                </div>
+              )}
+            </button>
           </div>
         )}
       </div>
