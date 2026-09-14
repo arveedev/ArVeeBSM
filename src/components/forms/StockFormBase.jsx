@@ -3253,57 +3253,67 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3">
-            <span className="text-xs text-neutral-400">Auto-compute Net Kilos</span>
-            <button
-              type="button"
-              onClick={() => setAutoComputeNet((v) => !v)}
-              aria-pressed={autoComputeNet}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
-                  autoComputeNet ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div>
-            <label className={labelClass}>Net Kilos</label>
-            {autoComputeNet ? (
-              <div className={`${readOnlyClass} tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
-                {fmtWeight(netKilos, weightUnit)}
+          {/* Auto-compute + Net Kilos compacted onto one row, per
+              explicit request - applies on both mobile and PC (not
+              gated on isPC). The toggle keeps its own label-above
+              treatment (matching every other field here) instead of
+              the old label-left/switch-right bar, so its column reads
+              consistently with Net Kilos's column right next to it. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Auto-compute Net Kilos</label>
+              <div className={`${inputClass} flex items-center justify-center`}>
+                <button
+                  type="button"
+                  onClick={() => setAutoComputeNet((v) => !v)}
+                  aria-pressed={autoComputeNet}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                    autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+                      autoComputeNet ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
-            ) : (
-              <input
-                type="text"
-                inputMode="decimal"
-                value={manualNetKilos}
-                onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
-                className={`${inputClass} ${overKilos ? 'border-brand-crimson' : ''}`}
-                placeholder="0.000"
-              />
-            )}
-            {overKilos && (
-              <p className="mt-1 text-xs tabular-nums text-brand-crimson">
-                {selectedPile?.pileName ?? 'This pile'} only has {fmtWeight(availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
-              </p>
-            )}
-            {bagsNum > 0 && !overKilos && (
-              <p className="mt-1 text-xs tabular-nums text-neutral-500">
-                Average weight per bag: {avgWeightPerBag.toFixed(2)} kg
-              </p>
-            )}
-            {linkedDocDeductsFromAi && authorityRemainingKilos != null && (
-              <p className="mt-1 text-xs tabular-nums text-brand-neon">
-                AI balance remaining: {fmtWeight(authorityRemainingKilos, weightUnit, 'Net')}
-                {' '}({(authorityRemainingBags ?? Math.round(authorityRemainingKilos / 50)).toLocaleString()} bags)
-              </p>
-            )}
+            </div>
+
+            <div>
+              <label className={labelClass}>Net Kilos</label>
+              {autoComputeNet ? (
+                <div className={`${readOnlyClass} tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                  {fmtWeight(netKilos, weightUnit)}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={manualNetKilos}
+                  onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
+                  className={`${inputClass} ${overKilos ? 'border-brand-crimson' : ''}`}
+                  placeholder="0.000"
+                />
+              )}
+            </div>
           </div>
+          {overKilos && (
+            <p className="text-xs tabular-nums text-brand-crimson">
+              {selectedPile?.pileName ?? 'This pile'} only has {fmtWeight(availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
+            </p>
+          )}
+          {bagsNum > 0 && !overKilos && (
+            <p className="text-xs tabular-nums text-neutral-500">
+              Average weight per bag: {avgWeightPerBag.toFixed(2)} kg
+            </p>
+          )}
+          {linkedDocDeductsFromAi && authorityRemainingKilos != null && (
+            <p className="text-xs tabular-nums text-brand-neon">
+              AI balance remaining: {fmtWeight(authorityRemainingKilos, weightUnit, 'Net')}
+              {' '}({(authorityRemainingBags ?? Math.round(authorityRemainingKilos / 50)).toLocaleString()} bags)
+            </p>
+          )}
 
           {/* Sits right after the primary pile's own Net Kilos, before
               Age - by the time the user gets here they know whether this
@@ -3472,49 +3482,56 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            {ageUnit === 'Months + Days' ? (
-              <>
-                <div>
-                  <label className={labelClass}>Months</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={monthsValue}
-                    onChange={(e) => setMonthsValue(liveFormatNumber(e.target.value))}
-                    className={`${inputClass} ${monthsValue === '' ? '!border-brand-amber' : ''}`}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Days</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={daysValue}
-                    onChange={(e) => setDaysValue(liveFormatNumber(e.target.value))}
-                    className={`${inputClass} ${daysValue === '' ? '!border-brand-amber' : ''}`}
-                  />
-                </div>
-              </>
-            ) : (
+          {/* Age/Unit/Condition compacted onto one row, per explicit
+              request - applies on both mobile and PC. Months+Days mode
+              needs an extra field (Months AND Days instead of one Age
+              value), so it gets its own short row above, with Unit and
+              Condition staying on the shared row either way. */}
+          {ageUnit === 'Months + Days' && (
+            <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className={labelClass}>Months</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={monthsValue}
+                  onChange={(e) => setMonthsValue(liveFormatNumber(e.target.value))}
+                  className={`${inputClass} ${monthsValue === '' ? '!border-brand-amber' : ''}`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Days</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={daysValue}
+                  onChange={(e) => setDaysValue(liveFormatNumber(e.target.value))}
+                  className={`${inputClass} ${daysValue === '' ? '!border-brand-amber' : ''}`}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {ageUnit !== 'Months + Days' && (
+              <div className="w-20 shrink-0">
                 <label className={labelClass}>Age</label>
                 <input
                   type="text"
                   inputMode="decimal"
                   value={ageValue}
                   onChange={(e) => setAgeValue(liveFormatNumber(e.target.value))}
-                  className={`${inputClass} ${ageValue === '' ? '!border-brand-amber' : ''}`}
+                  className={`${inputClass} px-2 ${ageValue === '' ? '!border-brand-amber' : ''}`}
                   placeholder="0"
                 />
               </div>
             )}
-            <div className={ageUnit === 'Months + Days' ? 'col-span-2' : ''}>
+            <div className="w-24 shrink-0">
               <label className={labelClass}>Unit</label>
               <select
                 value={ageUnit}
                 onChange={(e) => setAgeUnit(e.target.value)}
-                className={inputClass}
+                className={`${inputClass} px-2`}
               >
                 {AGE_UNITS.map((u) => (
                   <option key={u} value={u}>
@@ -3523,28 +3540,27 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 ))}
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Condition</label>
-            <div className="mt-1 grid grid-cols-5 gap-2">
-              {CONDITION_FLAGS.map((flag) => {
-                const active = condition === flag
-                return (
-                  <button
-                    key={flag}
-                    type="button"
-                    onClick={() => setCondition(flag)}
-                    className={`rounded-lg border py-2.5 text-xs font-medium transition-all active:scale-95 ${
-                      active
-                        ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
-                        : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-600'
-                    }`}
-                  >
-                    {flag}
-                  </button>
-                )
-              })}
+            <div className="min-w-0 flex-1">
+              <label className={labelClass}>Condition</label>
+              <div className="mt-1 flex gap-1">
+                {CONDITION_FLAGS.map((flag) => {
+                  const active = condition === flag
+                  return (
+                    <button
+                      key={flag}
+                      type="button"
+                      onClick={() => setCondition(flag)}
+                      className={`flex-1 rounded-lg border px-0.5 py-2.5 text-[11px] font-medium transition-all active:scale-95 ${
+                        active
+                          ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
+                          : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-600'
+                      }`}
+                    >
+                      {flag}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
           </div>

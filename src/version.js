@@ -3208,4 +3208,18 @@
 //            card's own fill is a real translucent tint (not opaque),
 //            and the glow shadow is stronger/wider so it stays clearly
 //            visible against that lighter fill.
-export const APP_VERSION = '1.9-177'
+//   1.9-178 - Compacted the Quantity group on WSR/WSI/ESR/ESI, per
+//            explicit request, on both mobile and PC: Auto-compute Net
+//            Kilos and Net Kilos now sit side by side in one row
+//            (the toggle switched to the same label-above treatment
+//            every other field here uses, instead of its old label-
+//            left/switch-right bar, so it reads consistently next to
+//            Net Kilos); Age, Unit, and Condition now sit in one row
+//            too (Condition's 5 flag buttons narrowed to fit). The rare
+//            Months + Days age mode still gets its own short row above
+//            for the extra Months/Days fields, since that mode needs
+//            two number inputs instead of one. Cancelled was already
+//            rendered outside every group box (it sits after Farmers
+//            Organization, right before the Save bar) - confirmed
+//            unchanged, no group tint or border wraps it.
+export const APP_VERSION = '1.9-178'
