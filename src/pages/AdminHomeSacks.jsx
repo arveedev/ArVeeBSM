@@ -11,7 +11,7 @@
 // actually in frame - reading as an endless list of bare "Condition"
 // rows with no sack type or pieces value in sight.
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight } from 'lucide-react'
 import { db } from '../db/dexie.js'
@@ -125,7 +125,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
               key={sackType.sackTypeId}
               className="rounded-lg border border-neutral-800 bg-neutral-950 p-3"
             >
-              <p className="text-base font-bold uppercase text-brand-neon">{sackType.code}</p>
+              <p className="text-lg font-bold uppercase text-app-text">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (
                   <div key={r.condition.code} className="flex items-center justify-between">
@@ -155,7 +155,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         tabIndex={0}
         onClick={() => onWarehouseSelect?.(warehouse)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onWarehouseSelect?.(warehouse) }}
-        className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+        className="mb-3 break-inside-avoid-column cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
       >
         <div className="flex items-center justify-between gap-2">
           {/* Warehouse name highlighted (accent color, not plain
@@ -174,7 +174,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         <div className="mt-2 space-y-2">
           {rows.map(({ sackType, conditions }, i) => (
             <div key={sackType.sackTypeId} className={i > 0 ? 'border-t border-neutral-800 pt-2' : ''}>
-              <p className="text-sm font-bold uppercase text-brand-neon">{sackType.code}</p>
+              <p className="text-lg font-bold uppercase text-app-text">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (
                   <div key={r.condition.code} className="flex items-center justify-between">
@@ -234,47 +234,37 @@ function AdminHomeSacks({ onWarehouseSelect }) {
       {groupTab === 'Warehouse' && (
         <Section title="Sack Pieces by Warehouse">
           {sortedWarehouses.length === 0 ? <Empty /> : (
-            // Real bugs found across several rounds, all reported
-            // directly with screenshots. A single shared grid/multi-
-            // column flow across every province (tried twice) never
-            // worked: (a) a province heading only appears once,
-            // wherever CSS multi-column happens to place it in its own
-            // column - a card in a DIFFERENT column that belongs to the
-            // same province has no heading above it and starts higher
-            // up, so cards from different provinces visually don't line
-            // up with each other at all; (b) a province with few
-            // warehouses (Catanduanes) became visually indistinguishable
-            // from the province next to it, since nothing actually
-            // separated them once their cards were interleaved into the
-            // same flow. Each province is now its own clearly-bordered
-            // section (heading INSIDE its own box, not floating loose)
-            // with its own independent auto-filling grid of warehouse
-            // cards - no cross-province alignment problem (each grid is
-            // separate), no confusion about which province a card
-            // belongs to (each section is its own visually distinct
-            // box), and no wasted space (auto-fill sizes each section's
-            // own column count to how many warehouses IT actually has,
-            // not a shared fixed count).
-            <div key="warehouse" className="space-y-3 animate-flow-down">
+            // Back to one shared flow, per direct correction ("i told
+            // you not to divide this part by province") - the bordered-
+            // per-province-box version (real CSS Grid inside each box)
+            // traded the earlier problem for a worse one: every card in
+            // the SAME grid row is forced to match the tallest card's
+            // height, so a province with one much bigger card (more
+            // sack types) left every shorter card next to it sitting on
+            // a lot of dead space underneath. Real CSS multi-column
+            // doesn't have that problem (each column flows independently
+            // by real content height, not a shared row), so it's back -
+            // just with the province heading itself made bigger/bolder
+            // so it stays noticeable even though it can only physically
+            // appear once, wherever its own card lands in the flow.
+            <div key="warehouse" className="columns-1 gap-3 animate-flow-down sm:columns-2 lg:columns-3">
               {sortedProvinces.map((province) => {
                 // Only warehouses that actually have something to show -
                 // a province where every warehouse is currently empty
-                // shouldn't render a section over nothing.
+                // shouldn't render a heading over nothing.
                 const provinceWarehouses = sortedWarehouses.filter(
                   (w) => w.provinceId === province.provinceId && sackTypeRows([w.warehouseId]).length > 0
                 )
                 if (provinceWarehouses.length === 0) return null
                 return (
-                  <div key={province.provinceId} className="rounded-xl border border-neutral-800 p-3">
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
-                      {province.code} <span className="font-medium normal-case text-neutral-600">{province.name}</span>
+                  <Fragment key={province.provinceId}>
+                    <p className="mb-2 break-inside-avoid-column text-base font-bold uppercase tracking-wide text-app-text">
+                      {province.code} <span className="font-medium normal-case text-neutral-500">{province.name}</span>
                     </p>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
-                      {provinceWarehouses.map((warehouse) => (
-                        <WarehouseSackCard key={warehouse.warehouseId} warehouse={warehouse} />
-                      ))}
-                    </div>
-                  </div>
+                    {provinceWarehouses.map((warehouse) => (
+                      <WarehouseSackCard key={warehouse.warehouseId} warehouse={warehouse} />
+                    ))}
+                  </Fragment>
                 )
               })}
             </div>

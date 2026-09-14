@@ -3436,4 +3436,35 @@
 //               outside the columned flow as its own full-width tile,
 //               since multi-column can't reliably keep one item pinned
 //               last and full-width the way a plain block below it can.
-export const APP_VERSION = '1.9-186'
+//   1.9-187 - Direct correction to 1.9-186's Sacks Warehouse tab redesign,
+//            reported immediately after seeing it live: "i told you not to
+//            divide this part by province, the first 3 columns looks
+//            better, just make the province more noticeable, and don't
+//            make the sack type be the same color of the warehouse name,
+//            just white with a larger text than the values."
+//            1. Reverted the per-province bordered-box grid back to the
+//               shared columns-1/sm:2/lg:3 CSS multi-column flow the
+//               previous version replaced - the bordered-box version
+//               traded one problem for a worse one: every card in the
+//               same grid ROW is forced to match the tallest card's
+//               height, so a province with one bigger card left every
+//               shorter neighbor sitting on dead space underneath it.
+//               Real CSS multi-column doesn't have that problem since
+//               each column flows independently by actual content
+//               height. The earlier "hard to tell provinces apart"
+//               complaint is addressed differently this time: the
+//               province heading itself is now bigger, bolder and
+//               brighter (text-app-text instead of text-neutral-500,
+//               bumped to text-base) so it stays noticeable even though
+//               it can still only physically appear once, wherever its
+//               own card lands in the flow.
+//            2. Sack type code label (both the Province tab's
+//               SackTypeCard and the Warehouse tab's WarehouseSackCard)
+//               was styled text-brand-neon - the same accent green as
+//               the warehouse name highlight - and was the same size as
+//               (or smaller than) the condition values below it. Changed
+//               to plain white (text-app-text) and bumped to text-lg, so
+//               it's no longer confusable with the warehouse-name accent
+//               color and reads as clearly larger than the figures it
+//               labels.
+export const APP_VERSION = '1.9-187'
