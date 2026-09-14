@@ -3058,4 +3058,49 @@
 //               has no Pile ID field at all; WTSForm has two pile
 //               sections, issued and received, which the sidebar
 //               concept doesn't map onto and hasn't been designed for).
-export const APP_VERSION = '1.9-171'
+//   1.9-172 - Follow-up fixes from live use of 1.9-171, per direct report:
+//            1. A sync push that failed once (dropped connection, cold
+//               Apps Script start) but succeeded on the NEXT automatic
+//               retry still showed a "failed to sync" toast, even though
+//               the record was already correctly on the Sheet by the
+//               time it was checked - needlessly alarming. Every push
+//               (and the queued-deletion replay) now gets one immediate
+//               inline retry before it's ever counted as failed or
+//               toasted, so only a genuinely persistent failure surfaces.
+//            2. Real bug in the post-save auto-advance (all three forms):
+//               it jumped straight to suggestNextSerial's "recency-best"
+//               guess instead of trying the very next serial first -
+//               reported with a concrete example (saving #11760188 with
+//               #11760189 still open should land there, not on some
+//               unrelated "latest" number). Now always tries the plain
+//               immediate next serial first; only falls back to the
+//               date-aware "latest series" guess when that immediate
+//               next serial turns out to already have real data (e.g.
+//               saving #11760190 right before #11760191, which is taken -
+//               never shown as if it were blank).
+//            3. The PC two-column field-group layout from 1.9-171 was
+//               genuinely broken on real data, confirmed via screenshots:
+//               CSS multi-column balances by total HEIGHT, not by row,
+//               so unrelated groups ended up scattered next to each
+//               other with nothing aligned. Replaced with a real CSS
+//               Grid using grid-auto-flow: column (an explicit row count
+//               measured live from the rendered DOM, since this deeply-
+//               conditional field list has no JS array to take a .length
+//               from) - groups now fill straight down the left column
+//               first, then the right one (reading/tab order 1,3,2,4 for
+//               4 groups, per explicit follow-up), each row genuinely
+//               row-aligned, and no group can ever be split across the
+//               column break. Added a subtle vertical rule down the
+//               center, per explicit request.
+//            4. Keyboard accessibility, per explicit request: every
+//               input/select across the entry forms now shows a real
+//               glow ring on focus (not just a border-color change), Tab
+//               moving focus anywhere in the form now smooth-scrolls
+//               that field to the vertical center of the screen, and
+//               tapping Save/Update while something required is missing
+//               now focuses (and centers) the actual first offending
+//               field instead of only showing a toast - reusing the
+//               `!border-brand-amber` class every required field already
+//               gets when empty/invalid, rather than threading a ref
+//               through nearly every field in three very large forms.
+export const APP_VERSION = '1.9-172'

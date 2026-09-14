@@ -60,6 +60,10 @@ import {
   labelClass,
   smallButtonClass,
   removeButtonClass,
+  attachCenterFocusScroll,
+  focusFirstInvalidField,
+  useFieldGroupRowCount,
+  columnDividerStyle,
 } from './shared.js'
 
 const SACK_CONDITION_CODES = ['BN', 'SH', 'US']
@@ -173,6 +177,10 @@ const SackFormBase = forwardRef(function SackFormBase(
     observer.observe(target)
     return () => observer.disconnect()
   }, [])
+
+  // Per explicit request - see attachCenterFocusScroll's own comment
+  // (StockFormBase.jsx).
+  useEffect(() => attachCenterFocusScroll(scrollContainerRef.current), [])
 
   useImperativeHandle(ref, () => ({
     focus: () => customerNameRef.current?.focus(),
@@ -955,27 +963,20 @@ const SackFormBase = forwardRef(function SackFormBase(
 
     toast.success(<SavedReceipt title={`${type} saved — ${serialNo.trim()}`} stats={[{ label: 'pieces', value: totalPieces }]} />)
 
-    // Uses suggestNextSerial (date-aware, per the just-recorded save
-    // above) instead of a blind ±1 - see StockFormBase.jsx's matching
-    // change for the full reasoning. Same check-before-blanking as
-    // handleStepForward besides that - without it, advancing to the
-    // next serial after a save shows it as a blank new entry even when
-    // that serial already has real data (local or historical Sheet),
-    // letting the user unknowingly start overwriting/duplicating it
-    // instead of being loaded into Update/Delete like every other way
-    // of reaching an existing serial does.
-    const next = await suggestNextSerial(type, currentWarehouseId)
-    const loaded = await checkAndLoadSerial(next)
+    // See StockFormBase.jsx's identical fix/comment for the full
+    // reasoning - tries the plain immediate next serial first (lands
+    // there blank if it's genuinely free), only falling back to
+    // suggestNextSerial's date-aware "latest series" guess when that
+    // immediate next serial already has real data.
+    const immediateNext = stepSerial(serialNo.trim(), 1)
+    const loaded = await checkAndLoadSerial(immediateNext)
     if (loaded) {
-      // See StockFormBase.jsx's identical fix/comment - don't silently
-      // drop the user into editing whatever record the naive
-      // next-serial guess collided with; skip forward to the actual
-      // next genuinely free serial instead.
-      if (latestRequestedSerial.current !== next) { scrollToTop(); return }
-      const available = await findNextAvailableSerial(type, currentWarehouseId, next, null)
-      if (latestRequestedSerial.current === next) resetToBlankEntry(available)
-    } else if (latestRequestedSerial.current === next) {
-      resetToBlankEntry(next)
+      if (latestRequestedSerial.current !== immediateNext) { scrollToTop(); return }
+      const suggested = await suggestNextSerial(type, currentWarehouseId)
+      const available = await findNextAvailableSerial(type, currentWarehouseId, suggested, null)
+      if (latestRequestedSerial.current === immediateNext) resetToBlankEntry(available)
+    } else if (latestRequestedSerial.current === immediateNext) {
+      resetToBlankEntry(immediateNext)
     }
     scrollToTop()
   }
@@ -1186,6 +1187,7 @@ const SackFormBase = forwardRef(function SackFormBase(
   // identical state/comment. No live pile sidebar here - SackFormBase
   // (ESR/ESI) has no Pile ID field at all.
   const [isPC] = useState(isTouchDevicePointer() === false)
+  const [fieldGroupRef, fieldGroupRowCount] = useFieldGroupRowCount(isPC)
 
   const isEditMode = Boolean(loadedTransaction)
 
@@ -1337,9 +1339,17 @@ const SackFormBase = forwardRef(function SackFormBase(
 
           {/* Concept S (picked) + background-tint grouping, PC two-column
               layout - see StockFormBase.jsx's identical fix/comment for
-              the full explanation. No live pile sidebar here (no Pile ID
-              field on this form). */}
-          <div className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'columns-2 gap-4 [&>*]:mb-3 [&>*]:break-inside-avoid-column' : 'space-y-3'}`}>
+              the full explanation (real CSS Grid + grid-auto-flow:
+              column so groups fill straight down the left column then
+              the right one, raster order 1,3,2,4 - not multi-column's
+              height-balanced flow, and not plain row-major grid-cols-2
+              either, both rejected per explicit feedback). No live pile
+              sidebar here (no Pile ID field on this form). */}
+          <div
+            ref={fieldGroupRef}
+            style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
+            className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
+          >
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
@@ -1711,7 +1721,7 @@ const SackFormBase = forwardRef(function SackFormBase(
           <div>
             <SaveButton
               onClick={() => {
-                if (!canSave) { setShowSaveHint(true); return }
+                if (!canSave) { setShowSaveHint(true); focusFirstInvalidField(scrollContainerRef.current); return }
                 handleSave()
               }}
               disabled={isSaving}

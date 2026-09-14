@@ -21,6 +21,22 @@ export { pauseTransactionSync, resumeTransactionSync }
 
 let isSyncing = false
 
+// Real bug found: a single transient failure (a dropped connection, an
+// Apps Script cold-start timeout, a momentary quota hit) was reported as
+// "failed to sync" on the very first attempt, even though the existing
+// 30s safety-net retry (BACKUP_QUEUE_RETRY_INTERVAL_MS below) then
+// succeeded moments later - confirmed live: the row was already on the
+// Sheet by the time the user went to check, so the toast had already
+// caused needless worry. Gives one immediate inline retry before a push
+// counts as failed/toasts anything, so only a genuinely persistent
+// failure (still failing after this retry) is ever surfaced.
+const withOneRetry = async (attempt, delayMs = 1500) => {
+  const first = await attempt()
+  if (first.ok) return first
+  await new Promise((resolve) => setTimeout(resolve, delayMs))
+  return attempt()
+}
+
 /**
  * Process the local backup queue: push every not-yet-backed-up
  * transaction to the Google Sheet (appending it the first time,
@@ -106,9 +122,9 @@ const runSyncQueue = async () => {
         // by a later edit - it's what tells this apart from a genuinely
         // new, never-backed-up transaction, so an edit updates the
         // existing Sheet row instead of appending a stale duplicate.
-        const result = tx.hasBeenBackedUp
-          ? await updateTransactionBackup(tx, context)
-          : await pushTransactionBackup(tx, context)
+        const result = await withOneRetry(() =>
+          tx.hasBeenBackedUp ? updateTransactionBackup(tx, context) : pushTransactionBackup(tx, context)
+        )
 
         if (result.ok) {
           await db.transactions.update(tx.id, { isSynced: true, hasBeenBackedUp: true })
@@ -133,7 +149,9 @@ const runSyncQueue = async () => {
     const queuedDeletions = await db.pendingSheetDeletions.toArray()
     for (const deletion of queuedDeletions) {
       try {
-        const result = await deleteTransactionBackup(deletion.serialNo, deletion.type, deletion.warehouseCode)
+        const result = await withOneRetry(() =>
+          deleteTransactionBackup(deletion.serialNo, deletion.type, deletion.warehouseCode)
+        )
         if (result.ok) {
           if (result.found === false) {
             toast.error(`${deletion.type} ${deletion.serialNo} deleted locally, but no matching row was found on the Sheet — please verify manually`, { duration: 10000 })

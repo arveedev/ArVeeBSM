@@ -103,6 +103,10 @@ import {
   smallButtonClass,
   removeButtonClass,
   CONDITION_FLAGS,
+  attachCenterFocusScroll,
+  focusFirstInvalidField,
+  useFieldGroupRowCount,
+  columnDividerStyle,
 } from './shared.js'
 
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
@@ -487,6 +491,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     return () => observer.disconnect()
   }, [])
 
+  // Per explicit request - see attachCenterFocusScroll's own comment.
+  useEffect(() => attachCenterFocusScroll(scrollContainerRef.current), [])
+
   const piles = useLiveQuery(async () => {
     if (!currentWarehouse) return []
     return db.piles.where('warehouseId').equals(currentWarehouse.warehouseId).toArray()
@@ -557,6 +564,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // several rounds of demo review. Checked once per mount (a device
   // doesn't change pointer type mid-session).
   const [isPC] = useState(isTouchDevicePointer() === false)
+  const [fieldGroupRef, fieldGroupRowCount] = useFieldGroupRowCount(isPC)
   const selectedPile = (piles ?? []).find((p) => p.pileId === pileId)
   const selectedVariety = sortedVarieties.find((v) => v.varietyId === varietyId)
   const isProcurement = isProcurementTypeName(selectedTransactionType?.name)
@@ -2058,33 +2066,30 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
     toast.success(<SavedReceipt title={`${type} saved — ${serialNo.trim()}`} stats={[{ label: 'bags', value: bagsNum }, { label: 'kg', value: netKilos }]} />)
 
-    // Uses suggestNextSerial (date-aware, per the just-recorded save
-    // above) instead of a blind ±1 off whatever was just typed - a
-    // plain increment would suggest e.g. #2001 after saving #2000, even
-    // when #2000 was the last document of an exhausted booklet and the
-    // CURRENT series actually continues from a completely different
-    // number. Same check-before-blanking as handleStepForward besides
-    // that - without it, advancing to the next serial after a save
-    // shows it as a blank new entry even when that serial already has
-    // real data (local or historical Sheet), letting the user
-    // unknowingly start overwriting/duplicating it instead of being
-    // loaded into Update/Delete like every other way of reaching an
-    // existing serial does.
-    const next = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
-    const loaded = await checkAndLoadSerial(next)
+    // Real bug found, reported directly with a concrete example: this
+    // used to jump straight to suggestNextSerial's "recency-best + 1"
+    // guess, which can skip right over a genuinely free gap immediately
+    // after the just-saved serial (e.g. saving #11760188 with #11760189
+    // still open landed on some other, unrelated "latest" number instead
+    // of the very next, still-open one). Now always tries the plain
+    // immediate next serial FIRST - if that's free, land there blank,
+    // same as manual forward-nav's own gap behavior. Only when the
+    // immediate next ALREADY has real data (e.g. saving #11760190 right
+    // before #11760191, which is taken) does it fall back to
+    // suggestNextSerial's date-aware "latest series" guess - never
+    // silently shows a colliding real document as if it were blank.
+    const immediateNext = stepSerial(serialNo.trim(), 1)
+    const loaded = await checkAndLoadSerial(immediateNext)
     if (loaded) {
-      // Real bug found: suggestNextSerial has no occupancy awareness of
-      // its own (it's always "recency-best + 1", blind) - when that
-      // collided with a REAL document, this used to silently drop the
-      // user into editing whatever record it collided with. Per
-      // explicit request, skip forward to the actual next genuinely
-      // free serial in this series instead, never load a stranger's
-      // record after a save.
-      if (latestRequestedSerial.current !== next) { scrollToTop(); return }
-      const available = await findNextAvailableSerial(type, currentWarehouseId, next, activeCategory)
-      if (latestRequestedSerial.current === next) resetToBlankEntry(available)
-    } else if (latestRequestedSerial.current === next) {
-      resetToBlankEntry(next)
+      if (latestRequestedSerial.current !== immediateNext) { scrollToTop(); return }
+      const suggested = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
+      // suggestNextSerial has no occupancy awareness of its own (see its
+      // own comment) - findNextAvailableSerial is the safety net in case
+      // even ITS guess collides with a real document.
+      const available = await findNextAvailableSerial(type, currentWarehouseId, suggested, activeCategory)
+      if (latestRequestedSerial.current === immediateNext) resetToBlankEntry(available)
+    } else if (latestRequestedSerial.current === immediateNext) {
+      resetToBlankEntry(immediateNext)
     }
     scrollToTop()
   }
@@ -2751,11 +2756,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           {/* Concept S (picked) - was transition-opacity only, so the
               border/padding change on Void applied as an instant snap
               even though opacity already faded smoothly. transition-all
-              covers every property this className swaps. columns-2 on
-              PC lets the browser balance the existing fields (unchanged
-              order/conditionals) across two columns automatically,
-              rather than hand-splitting this already-deeply-conditional
-              form into two separate JSX halves. */}
+              covers every property this className swaps. */}
           {/* Grouping-box redesign (per explicit request, several rounds
               of demo review): each field block gets a subtle alternating
               tint background and its own rounded corners/padding, no
@@ -2765,9 +2766,31 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               (React's conditional fields that evaluate to null/false
               contribute no DOM node, so the alternation stays correct
               regardless of which optional fields are showing). Applies
-              identically on mobile (still one column, unchanged flow)
-              and PC (now flowed into two columns via columns-2 below). */}
-          <div className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'columns-2 gap-4 [&>*]:mb-3 [&>*]:break-inside-avoid-column' : 'space-y-3'}`}>
+              identically on mobile (still one column, unchanged flow).
+              Real bug found on PC, twice over: CSS multi-column
+              (columns-2) balances by total content HEIGHT, filling
+              column 1 top-to-bottom before wrapping into column 2 - it
+              does NOT place items row-by-row, so unrelated groups ended
+              up scattered next to each other with nothing actually
+              aligned - reported directly ("the group layout is a
+              mess... everything must align per row"). A first fix to
+              plain CSS Grid (grid-cols-2, row-major) fixed the row
+              alignment but placed groups left-right-left-right (1,2 top
+              row / 3,4 bottom row) - per explicit follow-up, the reading/
+              tab order must instead run straight down the left column
+              first, THEN the right column (1,3 down the left / 2,4 down
+              the right - i.e. raster order 1,3,2,4). That needs
+              grid-auto-flow: column with an explicit row count (see
+              useFieldGroupRowCount's own comment for why that count is
+              measured from the real DOM rather than computed from a
+              JS array this deeply-conditional field list doesn't have).
+              columnDividerStyle draws the subtle center rule, per
+              explicit request. */}
+          <div
+            ref={fieldGroupRef}
+            style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
+            className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
+          >
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
@@ -3651,7 +3674,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 // missing AI link, sack type, age, or an incomplete
                 // extra-pile allocation line that a NEW entry would
                 // have been blocked from saving in the first place.
-                if (!canSave) { setShowSaveHint(true); return }
+                if (!canSave) { setShowSaveHint(true); focusFirstInvalidField(scrollContainerRef.current); return }
                 handleUpdate()
               }}
               disabled={isSaving || deleteCompleting}
@@ -3676,7 +3699,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           <div>
             <SaveButton
               onClick={() => {
-                if (!canSave) { setShowSaveHint(true); return }
+                if (!canSave) { setShowSaveHint(true); focusFirstInvalidField(scrollContainerRef.current); return }
                 handleSave()
               }}
               disabled={isSaving}

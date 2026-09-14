@@ -49,7 +49,7 @@ import {
   round3,
 } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
-import { inputClass, labelClass } from './shared.js'
+import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useFieldGroupRowCount, columnDividerStyle } from './shared.js'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 
@@ -254,6 +254,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   // pile sections (issued/received), not one, so that concept doesn't
   // map cleanly and hasn't been designed for this form.
   const [isPC] = useState(isTouchDevicePointer() === false)
+  const [fieldGroupRef, fieldGroupRowCount] = useFieldGroupRowCount(isPC)
 
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
@@ -283,6 +284,10 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     observer.observe(target)
     return () => observer.disconnect()
   }, [])
+
+  // Per explicit request - see attachCenterFocusScroll's own comment
+  // (StockFormBase.jsx).
+  useEffect(() => attachCenterFocusScroll(scrollContainerRef.current), [])
 
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
@@ -816,22 +821,21 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       await applyWtsToPiles(tx)
     })
     toast.success(<SavedReceipt title={`WTS saved — ${serialNo.trim()}`} stats={[{ label: 'issued bags', value: issuedSide.bags ? parseFormattedNumber(issuedSide.bags) : 0 }, { label: 'received bags', value: receivedSide.bags ? parseFormattedNumber(receivedSide.bags) : 0 }]} />)
-    // suggestNextSerial (date-aware, per the just-recorded save above)
-    // instead of a blind ±1 - see StockFormBase.jsx's matching change
-    // for the full reasoning.
-    const next = await suggestNextSerial('WTS', currentWarehouseId)
-    const loaded = await checkAndLoadSerial(next)
+    // See StockFormBase.jsx's identical fix/comment for the full
+    // reasoning - tries the plain immediate next serial first (lands
+    // there blank if it's genuinely free), only falling back to
+    // suggestNextSerial's date-aware "latest series" guess when that
+    // immediate next serial already has real data.
+    const immediateNext = stepSerial(serialNo.trim(), 1)
+    const loaded = await checkAndLoadSerial(immediateNext)
     if (loaded) {
-      // See StockFormBase.jsx's identical fix/comment - don't silently
-      // drop the user into editing whatever record the naive
-      // next-serial guess collided with; skip forward to the actual
-      // next genuinely free serial instead.
-      if (latestRequestedSerial.current === next) {
-        const available = await findNextAvailableSerial('WTS', currentWarehouseId, next, null)
-        if (latestRequestedSerial.current === next) resetForm(available)
+      if (latestRequestedSerial.current === immediateNext) {
+        const suggested = await suggestNextSerial('WTS', currentWarehouseId)
+        const available = await findNextAvailableSerial('WTS', currentWarehouseId, suggested, null)
+        if (latestRequestedSerial.current === immediateNext) resetForm(available)
       }
-    } else if (latestRequestedSerial.current === next) {
-      resetForm(next)
+    } else if (latestRequestedSerial.current === immediateNext) {
+      resetForm(immediateNext)
     }
     scrollToTop()
     } catch (err) {
@@ -1094,9 +1098,15 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
 
         {/* Concept S (picked) + background-tint grouping, PC two-column
             layout - see StockFormBase.jsx's identical fix/comment for
-            the full explanation. No live pile sidebar here - WTS has two
-            pile sections (issued/received), not one. */}
-        <div className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''} ${isPC ? 'columns-2 gap-4 [&>*]:mb-3 [&>*]:break-inside-avoid-column' : 'space-y-3'}`}>
+            the full explanation (real CSS Grid + grid-auto-flow: column
+            so groups fill straight down the left column then the right
+            one, raster order 1,3,2,4). No live pile sidebar here - WTS
+            has two pile sections (issued/received), not one. */}
+        <div
+          ref={fieldGroupRef}
+          style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
+          className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
+        >
         <div>
           <label className={labelClass}>Date</label>
           <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
@@ -1183,7 +1193,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
           <div>
             <SaveButton
               onClick={() => {
-                if (!canSave) { setShowSaveHint(true); return }
+                if (!canSave) { setShowSaveHint(true); focusFirstInvalidField(scrollContainerRef.current); return }
                 handleSave()
               }}
               disabled={isSaving}
