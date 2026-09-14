@@ -189,28 +189,24 @@ function Login() {
   const handleBackspace = () => setPin((prev) => prev.slice(0, -1))
   const handleClear = () => setPin('')
 
-  // PC only, per explicit request - a real physical keyboard should be
-  // able to type the PIN directly, regardless of what currently has
-  // focus (e.g. after clicking one of the on-screen keypad buttons,
-  // which steals focus away from the hidden text input the mobile path
-  // relies on). Mobile is unaffected - it keeps relying on the hidden
-  // input + native numeric keypad only, unchanged.
-  useEffect(() => {
-    if (isTouchDevicePointer()) return
-    const handleKeyDown = (e) => {
-      if (isSubmitting) return
-      if (/^[0-9]$/.test(e.key)) {
-        appendDigit(e.key)
-      } else if (e.key === 'Backspace') {
-        handleBackspace()
-      } else if (e.key === 'Escape') {
-        handleClear()
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSubmitting, pin])
+  // Real bug found, reported directly: a separate document-level
+  // keydown listener used to live here, doing its own appendDigit call
+  // on top of the hidden input below (type="number", already wired to
+  // handleInputChange) - since that hidden input is normally focused,
+  // EVERY physical keypress fired both paths at once, double-entering
+  // every digit. There was never a missing physical-keyboard feature to
+  // add - the hidden input already handles it; the real gap was that
+  // clicking an on-screen keypad button steals focus away from it, so
+  // typing stops working until the user clicks back in manually. Fixed
+  // at the actual gap instead: refocusing the hidden input (PC only)
+  // whenever it loses focus, so physical typing keeps routing through
+  // the one real handler no matter what was just clicked. Mobile is
+  // unaffected - stealing focus back there would fight the on-screen
+  // native keyboard's own show/hide behavior.
+  const handlePinInputBlur = () => {
+    if (isTouchDevicePointer() || isSubmitting) return
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
 
   const handleInputChange = async (e) => {
     const value = e.target.value.replace(/[^0-9]/g, '').slice(0, PIN_LENGTH)
@@ -276,6 +272,7 @@ function Login() {
           disabled={isSubmitting}
           value={pin}
           onChange={handleInputChange}
+          onBlur={handlePinInputBlur}
           className="sr-only"
           aria-label="Access PIN"
         />

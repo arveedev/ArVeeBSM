@@ -3131,4 +3131,22 @@
 //            has a pile selected yet), each with its own accent color
 //            so they read as genuinely separate piles - no combined
 //            total card, per explicit request.
-export const APP_VERSION = '1.9-173'
+//   1.9-174 - Fixed a real, reported bug on Login: typing a PIN with a
+//            physical keyboard on PC entered every digit TWICE (one "0"
+//            press showed two dots filled). Root cause: 1.9's PIN-
+//            keyboard feature added a separate document-level keydown
+//            listener that called its own appendDigit - on top of the
+//            hidden type="number" input this page already had, wired to
+//            the exact same PIN state, and normally focused. Every
+//            physical keypress fired both paths at once. There was
+//            never a missing feature to add - the hidden input already
+//            handled physical-keyboard entry; the real gap (the one the
+//            original report was actually about) was that clicking an
+//            on-screen keypad button steals focus away from that hidden
+//            input, so typing stopped working until clicking back in
+//            manually. Removed the duplicate listener entirely and
+//            fixed the actual gap instead: the hidden input now
+//            refocuses itself (PC only) whenever it loses focus, so
+//            physical typing keeps routing through the one real handler
+//            no matter what was just clicked.
+export const APP_VERSION = '1.9-174'
