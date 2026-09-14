@@ -3508,4 +3508,25 @@
 //           and small isolated edits to Varieties/AdminDashboard/App/
 //           BottomNav - no existing table, page, or role's behavior
 //           changed.
-export const APP_VERSION = '1.10-0'
+//   1.10-1 - URGENT fix: v1.10-0 broke Dexie Cloud sync for EVERYONE, on
+//           every device, not just SDO users - reported directly (a
+//           Settings > Sync Identity diagnostic panel stuck on
+//           "unauthorized"/"disconnected"), confirmed via the app's own
+//           [DEXIE-CLOUD-DIAGNOSTIC] console logs. Root cause: cashLedger
+//           (new in v1.10-0) was the only table in this entire schema
+//           given Dexie's native auto-incrementing key ('id++') - every
+//           other table (30+) uses an app-assigned UUID string instead.
+//           Dexie Cloud doesn't support auto-incrementing keys on a
+//           synced table - two different devices working offline can
+//           independently create the exact same numeric id (both save
+//           their first row as id 1), which breaks the global identity
+//           sync depends on. Fixed at the source: cashLedger's primary
+//           key redefined to a plain UUID (schema v34 - safe, the table
+//           had zero real rows anywhere since the feature had only just
+//           shipped), CashActionModal.jsx now assigns that id itself via
+//           crypto.randomUUID() same as every other table already does.
+//           All 6 new SDO tables sync normally - none of them are
+//           excluded, since syncing across devices is the entire point
+//           (an SDO's Purchase Receipts, cash ledger, and Buying Price
+//           must be visible to Admin/other devices, not stuck local-only).
+export const APP_VERSION = '1.10-1'

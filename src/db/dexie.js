@@ -872,6 +872,23 @@ db.version(33).stores({
   enwFactors: 'id, purityLetter',
 })
 
+// v34 — real, confirmed production incident (reported directly, minutes
+// after v1.10-0 shipped): Dexie Cloud's sync connection broke for every
+// device, not just SDO users - syncState stuck at phase 'initial',
+// status 'disconnected', currentUser stuck 'unauthorized'. Root cause:
+// cashLedger (v33, above) was declared with Dexie's native auto-
+// incrementing key ('id++') - the ONLY table in this entire schema that
+// does that; every other table (30+) uses an app-assigned UUID string
+// as its primary key. Dexie Cloud does not support auto-incrementing
+// keys on a synced table - two different devices working offline can
+// independently generate the exact same numeric id (both create their
+// first row as id 1), which breaks the global identity sync relies on.
+// This table had zero real rows anywhere (the feature had just shipped)
+// so redefining its primary key outright, no migration needed, is safe.
+db.version(34).stores({
+  cashLedger: 'id, sdoUid, type, date',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the
@@ -922,7 +939,11 @@ db.cloud.configure({
   // sdoSerialCounterCache added: same per-device performance-cache
   // reasoning as serialCounterCache right next to it - the real source
   // of truth is purchaseReceipts.prId itself, this is just a fast
-  // local tracker for suggesting the next one.
+  // local tracker for suggesting the next one. Every OTHER new SDO
+  // table (buyingPrices, purchaseReceipts, cashLedger,
+  // cashDenominationCounts, pricerEligibility, enwFactors) DOES sync -
+  // see v34 below for why cashLedger needed a real fix first, not just
+  // an exclusion, to make that safe.
   unsyncedTables: ['serialCounterCache', 'sdoSerialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations'],
   // requireAuth MUST be false for an offline-first app. When true,
   // Dexie Cloud refuses to run ANY operation - including purely local
