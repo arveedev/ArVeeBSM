@@ -3291,82 +3291,82 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           )}
 
-          {/* Toggle:Net Kilos sized 1:2 (per explicit request, "net kg
-              should occupy more space than the toggle") via an explicit
-              column-width ratio instead of an equal grid-cols split -
-              Age/Unit keep an even share of what's left. The toggle's
-              own label text was dropped per explicit request (the
-              switch alone is self-explanatory once it sits directly
-              next to the field it controls); an invisible placeholder
-              of the same height keeps its cell's input still lined up
-              with every label-having cell beside it. */}
-          <div className={`grid gap-2 ${ageUnit === 'Months + Days' ? 'grid-cols-[1fr_2fr_1fr]' : 'grid-cols-[1fr_2fr_1fr_1fr]'}`}>
-            <div className="min-w-0">
-              <span className={`${labelClass} invisible block`} aria-hidden="true">Auto</span>
-              <div className={`${inputClass} flex items-center justify-center px-2`}>
-                <button
-                  type="button"
-                  onClick={() => setAutoComputeNet((v) => !v)}
-                  aria-pressed={autoComputeNet}
-                  aria-label="Auto-compute Net Kilos"
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                    autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
-                      autoComputeNet ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <label className={labelClass}>Net Kilos</label>
-              {autoComputeNet ? (
-                <div className={`${readOnlyClass} truncate px-2 tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
-                  {fmtWeight(netKilos, weightUnit)}
-                </div>
-              ) : (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={manualNetKilos}
-                  onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
-                  className={`${inputClass} px-2 ${overKilos ? 'border-brand-crimson' : ''}`}
-                  placeholder="0.000"
-                />
-              )}
-            </div>
-
-            {ageUnit !== 'Months + Days' && (
-              <div className="min-w-0">
-                <label className={labelClass}>Age</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={ageValue}
-                  onChange={(e) => setAgeValue(liveFormatNumber(e.target.value))}
-                  className={`${inputClass} px-2 ${ageValue === '' ? '!border-brand-amber' : ''}`}
-                  placeholder="0"
-                />
-              </div>
-            )}
-
-            <div className="min-w-0">
-              <label className={labelClass}>Unit</label>
-              <select
-                value={ageUnit}
-                onChange={(e) => setAgeUnit(e.target.value)}
-                className={`${inputClass} px-2`}
+          {/* Toggle+Net Kilos share the SAME column width as Number of
+              Bags above them; Age+Unit share the same column width as
+              Gross Kilos - per explicit request, so this row's two
+              halves actually line up with the row above instead of
+              cutting the page into a different split. The toggle lost
+              its bordered/filled box (per explicit request, "just a
+              toggle") - it's a bare switch now, vertically centered
+              next to Net Kilos rather than sitting in its own field-
+              styled container; an invisible label placeholder still
+              keeps Net Kilos's own label lined up with Bags/Gross
+              Kilos's labels above it. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid min-w-0 grid-cols-[auto_1fr] items-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAutoComputeNet((v) => !v)}
+                aria-pressed={autoComputeNet}
+                aria-label="Auto-compute Net Kilos"
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                  autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
+                }`}
               >
-                {AGE_UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
+                <span
+                  className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+                    autoComputeNet ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <div className="min-w-0">
+                <label className={labelClass}>Net Kilos</label>
+                {autoComputeNet ? (
+                  <div className={`${readOnlyClass} truncate px-2 tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                    {fmtWeight(netKilos, weightUnit)}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={manualNetKilos}
+                    onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
+                    className={`${inputClass} px-2 ${overKilos ? 'border-brand-crimson' : ''}`}
+                    placeholder="0.000"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className={`grid min-w-0 gap-2 ${ageUnit === 'Months + Days' ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              {ageUnit !== 'Months + Days' && (
+                <div className="min-w-0">
+                  <label className={labelClass}>Age</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={ageValue}
+                    onChange={(e) => setAgeValue(liveFormatNumber(e.target.value))}
+                    className={`${inputClass} px-2 ${ageValue === '' ? '!border-brand-amber' : ''}`}
+                    placeholder="0"
+                  />
+                </div>
+              )}
+
+              <div className="min-w-0">
+                <label className={labelClass}>Unit</label>
+                <select
+                  value={ageUnit}
+                  onChange={(e) => setAgeUnit(e.target.value)}
+                  className={`${inputClass} px-2`}
+                >
+                  {AGE_UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
           {overKilos && (
@@ -3394,8 +3394,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             <div>
               {extraPileAllocations.map((alloc, i) => {
                 const info = extraAllocInfos[i]
+                // Distinct amber tint/border (upgrading to neon once a
+                // pile is actually picked) - per explicit request, so
+                // this card visually stands apart from the plain
+                // groupBoxClass tint everything else in Quantity sits
+                // in, instead of blending into it.
                 return (
-                <div key={i} className={`mt-2 space-y-2 rounded-xl border bg-neutral-900 p-2.5 transition-colors ${alloc.pileId ? 'border-brand-neon' : 'border-neutral-800'}`}>
+                <div key={i} className={`mt-2 space-y-2 rounded-xl border p-2.5 transition-colors ${alloc.pileId ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber/40 bg-brand-amber/5'}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-neutral-400">Additional pile {i + 1}</span>
                     <button
@@ -3491,30 +3496,25 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     </div>
                   </div>
 
-                  {/* Toggle:Net Kilos in one row, 1:2 ratio, no toggle
-                      label - matches the primary pile's own compact
-                      layout further up. */}
-                  <div className="grid grid-cols-[1fr_2fr] gap-2">
-                    <div>
-                      <span className={`${labelClass} invisible block`} aria-hidden="true">Auto</span>
-                      <div className={`${inputClass} mt-0 flex items-center justify-center px-2`}>
-                        <button
-                          type="button"
-                          onClick={() => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, autoComputeNet: !r.autoComputeNet } : r)))}
-                          aria-pressed={alloc.autoComputeNet}
-                          aria-label="Auto-compute Net Kilos"
-                          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                            alloc.autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
-                              alloc.autoComputeNet ? 'translate-x-6' : 'translate-x-1'
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
+                  {/* Toggle+Net Kilos share the Bags column's width - a
+                      bare switch (no bordered box), matching the
+                      primary pile's own compact layout further up. */}
+                  <div className="grid grid-cols-[auto_1fr] items-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, autoComputeNet: !r.autoComputeNet } : r)))}
+                      aria-pressed={alloc.autoComputeNet}
+                      aria-label="Auto-compute Net Kilos"
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                        alloc.autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+                          alloc.autoComputeNet ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
 
                     <div>
                       <label className={labelClass}>Net Kilos</label>

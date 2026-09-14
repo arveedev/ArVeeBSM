@@ -3259,4 +3259,21 @@
 //               Document (Date + linked doc) now renders as its own
 //               full-width row above the other two groups, on both
 //               mobile and PC, instead of sharing a column with either.
-export const APP_VERSION = '1.9-180'
+//   1.9-181 - More follow-up fixes on StockFormBase (WSR/WSI/ESR/ESI),
+//            per direct feedback:
+//            1. The Auto-compute Net Kilos toggle no longer sits inside
+//               its own bordered/filled box - it's a bare switch now,
+//               per explicit request ("remove the background of the
+//               toggle, let it just be a toggle").
+//            2. The Toggle+Net Kilos row now shares the exact same
+//               column width as Number of Bags above it, and Age+Unit
+//               share Gross Kilos's column width - the row below now
+//               genuinely lines up with the row above instead of using
+//               a different split. Applied to both the primary pile
+//               section and the "Issue from another pile" card.
+//            3. The "Issue from another pile" card now has its own
+//               distinct amber tint/border (upgrading to neon once a
+//               pile is actually picked), so it visually stands apart
+//               from the plain tint every other group box uses, per
+//               explicit request.
+export const APP_VERSION = '1.9-181'
