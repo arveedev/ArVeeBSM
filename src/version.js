@@ -3474,4 +3474,10 @@
 //            continuous divide-y block - each sack type is now its own
 //            bordered/tinted tile inside the card, matching the tile
 //            treatment the Province tab's SackTypeCard already uses.
-export const APP_VERSION = '1.9-188'
+//   1.9-189 - Removed the date-fns dependency - a performance/dependency
+//            audit found zero imports of it anywhere in the app (src/,
+//            docs/, api/ all confirmed clean); it was never actually
+//            shipping in the built bundle since nothing referenced it,
+//            so this is pure dependency-hygiene cleanup with no runtime
+//            behavior change.
+export const APP_VERSION = '1.9-189'

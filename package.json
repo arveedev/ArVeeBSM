@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
-    "date-fns": "^3.6.0",
     "dexie": "^4.0.8",
     "dexie-cloud-addon": "^4.4.13",
     "dexie-react-hooks": "^1.1.7",
