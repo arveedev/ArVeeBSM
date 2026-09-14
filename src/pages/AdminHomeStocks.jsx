@@ -651,9 +651,16 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                         <ChevronRight size={12} className="text-neutral-600" />
                                       </button>
                                     </Td>
-                                    {bucketTotals.map((val, i) => <Td key={i} right><span className="tabular-nums"><CountUpNumber value={val} format={fmt} /></span></Td>)}
+                                    {/* Per-warehouse figures bumped up a
+                                        size on large screens - per direct
+                                        feedback that they read noticeably
+                                        smaller than the TOTAL row below,
+                                        even though both actually shared
+                                        the same size before (Td hard-codes
+                                        text-xs); only weight differed. */}
+                                    {bucketTotals.map((val, i) => <Td key={i} right><span className="tabular-nums lg:text-sm"><CountUpNumber value={val} format={fmt} /></span></Td>)}
                                     <Td right>
-                                      <span className={`font-semibold tabular-nums ${catColor(cat)}`}>
+                                      <span className={`font-semibold tabular-nums lg:text-sm ${catColor(cat)}`}>
                                         <CountUpNumber value={total} format={fmt} />
                                       </span>
                                     </Td>
@@ -662,14 +669,14 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                               </tbody>
                               <tfoot>
                                 <tr className="border-t-2 border-neutral-700">
-                                  <Td><span className="font-bold text-app-text">TOTAL</span></Td>
+                                  <Td><span className="font-bold text-app-text lg:text-base">TOTAL</span></Td>
                                   {columnTotals.map((val, i) => (
                                     <Td key={i} right>
-                                      <span className={`font-bold tabular-nums ${catColor(cat)}`}><CountUpNumber value={val} format={fmt} /></span>
+                                      <span className={`font-bold tabular-nums lg:text-base ${catColor(cat)}`}><CountUpNumber value={val} format={fmt} /></span>
                                     </Td>
                                   ))}
                                   <Td right>
-                                    <span className={`font-bold tabular-nums ${catColor(cat)}`}>
+                                    <span className={`font-bold tabular-nums lg:text-base ${catColor(cat)}`}>
                                       <CountUpNumber value={grandTotal} format={fmt} />
                                     </span>
                                   </Td>

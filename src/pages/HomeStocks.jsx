@@ -110,7 +110,16 @@ const fmtWeightPlain = (kilos, weightUnit) =>
 // CSS grid, so an "auto"-sized column would size independently per row
 // and silently drift out of alignment with its neighbors; a literal
 // shared width is what keeps them lined up.
-const STOCK_GRID_COLS = 'minmax(0,1fr) 68px 116px'
+// Real bug found, reported directly with a screenshot: the TOTAL row's
+// own figures (CerealTotal, below) render a size step bigger than a
+// normal row's (text-lg/text-base vs text-base/text-sm) - a real total
+// like "1,420,438.540" doesn't fit the old 116px column at that larger
+// size and visibly overflows into the bags column next to it, reading
+// as one concatenated number. This grid only ever applies from the
+// `sm:` breakpoint up (every consumer below is `hidden ... sm:grid` -
+// mobile uses its own separate stacked layout entirely), so widening
+// it here only affects larger displays, never a phone.
+const STOCK_GRID_COLS = 'minmax(0,1fr) 84px 150px'
 
 const sortBucketEntries = (cerealType, entries) => {
   const order = (AGE_BUCKETS[cerealType] ?? AGE_BUCKETS.Rice).map((b) => b.label)

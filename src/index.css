@@ -154,6 +154,18 @@ select {
 .light body { background-color: #F4F4F5; color: #171717; }
 
 .light .bg-neutral-950 { background-color: #F4F4F5 !important; }
+/* Real bug found, reported directly with a screenshot: Tailwind's
+   opacity-suffixed classes (e.g. bg-neutral-950/50) compile to their
+   OWN distinct CSS class, which this light-mode override system never
+   covered - only the plain, opacity-free class names above did. Two
+   real pages (AdminHomeSacks.jsx, AdminHomeStocks.jsx) use exactly
+   this class for their warehouse cards, rendering as a flat, muddy
+   gray box in light mode instead of the same soft light-gray tone
+   every other card already gets correctly. Matches bg-neutral-950's
+   own light value above, since the opacity was only ever there to
+   soften the dark theme's own background, not something light mode
+   needs to preserve. */
+.light .bg-neutral-950\/50 { background-color: #F4F4F5 !important; }
 .light .bg-neutral-900 { background-color: #FFFFFF !important; }
 .light .bg-neutral-800 { background-color: #E4E4E7 !important; }
 .light .bg-neutral-700 { background-color: #D4D4D4 !important; }

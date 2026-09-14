@@ -102,9 +102,18 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         ) : (
           <p className="text-sm font-semibold uppercase text-neutral-500">{label}</p>
         )}
-        <div className="mt-2 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+        {/* Sack types flow into a wrapping grid on large screens instead
+            of a single stacked column, per explicit request ("put the
+            sack types with each other on larger displays") - divider
+            lines only make sense when stacked, so they're swapped for
+            the tint each grid cell already gets from its own border/
+            bg below `lg`, and become plain bordered tiles at `lg`+. */}
+        <div className="mt-2 grid grid-cols-1 gap-3 rounded-xl border border-neutral-800 bg-neutral-950 p-3 lg:grid-cols-2 lg:gap-2 lg:border-none lg:bg-transparent lg:p-0">
           {rows.map(({ sackType, conditions }, i) => (
-            <div key={sackType.sackTypeId} className={`${i > 0 ? 'mt-3 border-t border-neutral-800 pt-3' : ''}`}>
+            <div
+              key={sackType.sackTypeId}
+              className={`${i > 0 ? 'border-t border-neutral-800 pt-3' : ''} lg:rounded-lg lg:border lg:border-neutral-800 lg:bg-neutral-950 lg:p-3 lg:pt-3`}
+            >
               <p className="text-sm font-semibold uppercase text-neutral-400">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (
@@ -138,12 +147,19 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="text-base font-bold text-app-text">{stripWarehouseCodePrefix(warehouse.name)}</p>
+          {/* Warehouse name highlighted (accent color, not plain
+              app-text) per explicit request, for at-a-glance scanning -
+              PC only, so mobile's existing look is unaffected. */}
+          <p className="text-base font-bold text-app-text lg:text-brand-neon">{stripWarehouseCodePrefix(warehouse.name)}</p>
           <ChevronRight size={16} className="shrink-0 text-neutral-600" />
         </div>
-        <div className="mt-2 space-y-2">
+        {/* Same large-screen sack-type grid as the Province card above. */}
+        <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
           {rows.map(({ sackType, conditions }, i) => (
-            <div key={sackType.sackTypeId} className={i > 0 ? 'border-t border-neutral-800 pt-2' : ''}>
+            <div
+              key={sackType.sackTypeId}
+              className={`${i > 0 ? 'border-t border-neutral-800 pt-2' : ''} lg:rounded-lg lg:border lg:border-neutral-800 lg:bg-neutral-950 lg:p-2 lg:pt-2`}
+            >
               <p className="text-sm font-semibold uppercase text-neutral-400">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (
@@ -182,7 +198,10 @@ function AdminHomeSacks({ onWarehouseSelect }) {
       {groupTab === 'Province' && (
         <Section title="Sack Pieces by Province">
           {sortedProvinces.length === 0 ? <Empty /> : (
-            <div key="province" className="space-y-4 animate-flow-down">
+            // Provinces sit side by side on large screens instead of one
+            // long vertical list, per explicit request ("we can put the
+            // albay and catanduanes per province beside each other").
+            <div key="province" className="grid grid-cols-1 gap-4 animate-flow-down lg:grid-cols-2">
               {sortedProvinces.map((province) => {
                 const wIds = warehouses.filter((w) => w.provinceId === province.provinceId).map((w) => w.warehouseId)
                 return (
@@ -201,7 +220,11 @@ function AdminHomeSacks({ onWarehouseSelect }) {
       {groupTab === 'Warehouse' && (
         <Section title="Sack Pieces by Warehouse">
           {sortedWarehouses.length === 0 ? <Empty /> : (
-            <div key="warehouse" className="space-y-4 animate-flow-down">
+            // Same side-by-side treatment as the Province tab, per
+            // explicit request ("i also think we can do that with the
+            // per warehouse") - province blocks side by side, and each
+            // province's own warehouse cards also flow 2-up within it.
+            <div key="warehouse" className="grid grid-cols-1 gap-4 animate-flow-down lg:grid-cols-2">
               {sortedProvinces.map((province) => {
                 // Only warehouses that actually have something to show -
                 // a province where every warehouse is currently empty
@@ -215,7 +238,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
                     <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
                       {province.code} <span className="font-medium normal-case text-neutral-600">{province.name}</span>
                     </p>
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                       {provinceWarehouses.map((warehouse) => (
                         <WarehouseSackCard key={warehouse.warehouseId} warehouse={warehouse} />
                       ))}

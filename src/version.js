@@ -3276,4 +3276,38 @@
 //               pile is actually picked), so it visually stands apart
 //               from the plain tint every other group box uses, per
 //               explicit request.
-export const APP_VERSION = '1.9-181'
+//   1.9-182 - Dashboard/overview fixes, per direct feedback with real
+//            screenshots:
+//            1. Real bug fixed: the Warehouse Inventory stock overview's
+//               TOTAL row (HomeStocks.jsx) renders its bags/net-kg
+//               figures a size step bigger than a normal row - a real
+//               total like "1,420,438.540" didn't fit the old fixed
+//               116px column at that larger size and visibly overflowed
+//               into the bags column next to it, reading as one
+//               concatenated number ("24,1931,420,438.540"). Widened
+//               the shared grid's two number columns - this grid only
+//               ever applies from the `sm:` breakpoint up, so this
+//               never affects a phone.
+//            2. Real bug fixed: two admin warehouse-card lists
+//               (AdminHomeSacks.jsx, AdminHomeStocks.jsx) render as a
+//               flat, muddy gray box in light mode instead of the same
+//               soft light-gray tone every other card gets - both use
+//               Tailwind's opacity-suffixed bg-neutral-950/50, which
+//               compiles to its own distinct CSS class that the light-
+//               mode override system never covered (only the plain,
+//               opacity-free class name was mapped). Added the missing
+//               override.
+//            3. Sack Pieces (AdminHomeSacks.jsx), large screens only:
+//               provinces now sit side by side instead of one long
+//               vertical list, same for per-province warehouse cards on
+//               the Warehouse tab; each card's own sack types now flow
+//               into a small grid instead of a single stacked column;
+//               warehouse names are now accent-colored for at-a-glance
+//               scanning. Mobile is completely unaffected (all gated on
+//               the `lg:` breakpoint).
+//            4. Age Grouping table (AdminHomeStocks.jsx), large screens
+//               only: per-warehouse row figures bumped up a size step to
+//               visually match the TOTAL row below them - both actually
+//               shared the same size before (only font-weight differed),
+//               reported as the rows reading noticeably smaller.
+export const APP_VERSION = '1.9-182'
