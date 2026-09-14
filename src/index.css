@@ -166,6 +166,7 @@ select {
    soften the dark theme's own background, not something light mode
    needs to preserve. */
 .light .bg-neutral-950\/50 { background-color: #F4F4F5 !important; }
+.light .bg-neutral-950\/60 { background-color: #F4F4F5 !important; }
 .light .bg-neutral-900 { background-color: #FFFFFF !important; }
 .light .bg-neutral-800 { background-color: #E4E4E7 !important; }
 .light .bg-neutral-700 { background-color: #D4D4D4 !important; }

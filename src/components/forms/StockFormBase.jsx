@@ -3303,22 +3303,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               keeps Net Kilos's own label lined up with Bags/Gross
               Kilos's labels above it. */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid min-w-0 grid-cols-[auto_1fr] items-end gap-2">
-              <button
-                type="button"
-                onClick={() => setAutoComputeNet((v) => !v)}
-                aria-pressed={autoComputeNet}
-                aria-label="Auto-compute Net Kilos"
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                  autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
-                    autoComputeNet ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
+            {/* Toggle moved to the RIGHT of Net Kilos (was left), and
+                sits in a fixed-height wrapper matching the input's own
+                height so it's genuinely centered against the input
+                itself - not just bottom-aligned against the whole
+                label+input column, which is what "not centered" was
+                actually about. Both per explicit follow-up request. */}
+            <div className="grid min-w-0 grid-cols-[1fr_auto] items-end gap-2">
               <div className="min-w-0">
                 <label className={labelClass}>Net Kilos</label>
                 {autoComputeNet ? (
@@ -3335,6 +3326,23 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     placeholder="0.000"
                   />
                 )}
+              </div>
+              <div className="flex h-[42px] shrink-0 items-center">
+                <button
+                  type="button"
+                  onClick={() => setAutoComputeNet((v) => !v)}
+                  aria-pressed={autoComputeNet}
+                  aria-label="Auto-compute Net Kilos"
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                    autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+                      autoComputeNet ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
             </div>
 
@@ -3497,25 +3505,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   </div>
 
                   {/* Toggle+Net Kilos share the Bags column's width - a
-                      bare switch (no bordered box), matching the
-                      primary pile's own compact layout further up. */}
-                  <div className="grid grid-cols-[auto_1fr] items-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, autoComputeNet: !r.autoComputeNet } : r)))}
-                      aria-pressed={alloc.autoComputeNet}
-                      aria-label="Auto-compute Net Kilos"
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                        alloc.autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
-                          alloc.autoComputeNet ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-
+                      bare switch (no bordered box), on the right of Net
+                      Kilos and centered against the input's own height,
+                      matching the primary pile's own layout further up. */}
+                  <div className="grid grid-cols-[1fr_auto] items-end gap-2">
                     <div>
                       <label className={labelClass}>Net Kilos</label>
                       {alloc.autoComputeNet ? (
@@ -3530,6 +3523,23 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                           className={`${inputClass} mt-0 ${info.overKilos ? 'border-brand-crimson' : ''}`}
                         />
                       )}
+                    </div>
+                    <div className="flex h-[42px] shrink-0 items-center">
+                      <button
+                        type="button"
+                        onClick={() => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, autoComputeNet: !r.autoComputeNet } : r)))}
+                        aria-pressed={alloc.autoComputeNet}
+                        aria-label="Auto-compute Net Kilos"
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                          alloc.autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+                            alloc.autoComputeNet ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
                     </div>
                   </div>
                   <div>

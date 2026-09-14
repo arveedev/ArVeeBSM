@@ -3310,4 +3310,37 @@
 //               visually match the TOTAL row below them - both actually
 //               shared the same size before (only font-weight differed),
 //               reported as the rows reading noticeably smaller.
-export const APP_VERSION = '1.9-182'
+//   1.9-183 - Follow-up fixes from the same round, reported directly
+//            with more screenshots:
+//            1. Real bug fixed: two new responsive/opacity Tailwind
+//               classes introduced in 1.9-182 (lg:bg-neutral-950,
+//               bg-neutral-950/60) had no light-mode override - this
+//               theming system only maps plain, non-variant class
+//               names, so anything with a breakpoint prefix or opacity
+//               suffix silently falls through as a near-black box in
+//               light mode. Added the missing bg-neutral-950/60
+//               mapping; the lg: variant is moot now (see #2).
+//            2. Real bug fixed: the per-warehouse Sack Pieces card
+//               (Warehouse tab) is already narrower than the Province
+//               card, since several sit side by side - cramming its
+//               sack types into 2 columns wrapped labels/values onto
+//               multiple lines. Reverted to single column there; the
+//               2-column treatment stays on the wider Province card.
+//            3. Real bug fixed: confining each province to its own
+//               2-column sub-grid on the Warehouse tab wasted a lot of
+//               space whenever one province had far fewer warehouses
+//               than another. Per explicit follow-up ("don't group them
+//               by province, just make sure the 2 provinces are
+//               divided but not like this"), every warehouse card now
+//               shares one wide auto-filling grid - a province heading
+//               is still its own full-width row marking where that
+//               province's cards start, dividing them without boxing
+//               them into a separate, narrower grid.
+//            4. Auto-compute Net Kilos toggle moved to the RIGHT of Net
+//               Kilos (was left) and now sits in a fixed-height wrapper
+//               matching the input's own height, so it's genuinely
+//               centered against the input - not just bottom-aligned
+//               against the whole label+input column. Applied to both
+//               the primary pile section and the "Issue from another
+//               pile" card.
+export const APP_VERSION = '1.9-183'

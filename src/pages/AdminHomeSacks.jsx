@@ -11,7 +11,7 @@
 // actually in frame - reading as an endless list of bare "Condition"
 // rows with no sack type or pieces value in sight.
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight } from 'lucide-react'
 import { db } from '../db/dexie.js'
@@ -153,13 +153,16 @@ function AdminHomeSacks({ onWarehouseSelect }) {
           <p className="text-base font-bold text-app-text lg:text-brand-neon">{stripWarehouseCodePrefix(warehouse.name)}</p>
           <ChevronRight size={16} className="shrink-0 text-neutral-600" />
         </div>
-        {/* Same large-screen sack-type grid as the Province card above. */}
-        <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+        {/* Real bug found, reported directly with a screenshot: a
+            per-warehouse card is already narrower than the province
+            card (several sit side by side at once), so cramming sack
+            types into 2 columns HERE wrapped labels/values onto
+            multiple lines and looked broken. Reverted to a single
+            stacked column - the 2-column treatment stays on the wider
+            Province card above, which actually has the room for it. */}
+        <div className="mt-2 space-y-2">
           {rows.map(({ sackType, conditions }, i) => (
-            <div
-              key={sackType.sackTypeId}
-              className={`${i > 0 ? 'border-t border-neutral-800 pt-2' : ''} lg:rounded-lg lg:border lg:border-neutral-800 lg:bg-neutral-950 lg:p-2 lg:pt-2`}
-            >
+            <div key={sackType.sackTypeId} className={i > 0 ? 'border-t border-neutral-800 pt-2' : ''}>
               <p className="text-sm font-semibold uppercase text-neutral-400">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (
@@ -220,11 +223,22 @@ function AdminHomeSacks({ onWarehouseSelect }) {
       {groupTab === 'Warehouse' && (
         <Section title="Sack Pieces by Warehouse">
           {sortedWarehouses.length === 0 ? <Empty /> : (
-            // Same side-by-side treatment as the Province tab, per
-            // explicit request ("i also think we can do that with the
-            // per warehouse") - province blocks side by side, and each
-            // province's own warehouse cards also flow 2-up within it.
-            <div key="warehouse" className="grid grid-cols-1 gap-4 animate-flow-down lg:grid-cols-2">
+            // Real bug found, reported directly with a screenshot:
+            // confining each province to its OWN 2-column sub-grid
+            // wasted a ton of horizontal space whenever one province
+            // had far fewer warehouses than another (Catanduanes' one
+            // card sat squeezed into a narrow half-width column while
+            // Albay's five cards crowded a tight 2-wide stack right
+            // next to it, with the whole right side of the screen
+            // empty). Per explicit follow-up ("don't group them by
+            // province, just make sure the 2 provinces are divided but
+            // not like this"): every warehouse card now shares ONE
+            // wide auto-filling grid, sized to however many actually
+            // fit the real screen width - a province heading is still
+            // its own full-width row (col-span-full) marking where
+            // that province's cards start, dividing them without
+            // boxing them into a separate, narrower grid.
+            <div key="warehouse" className="grid grid-cols-1 gap-3 animate-flow-down lg:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
               {sortedProvinces.map((province) => {
                 // Only warehouses that actually have something to show -
                 // a province where every warehouse is currently empty
@@ -234,16 +248,14 @@ function AdminHomeSacks({ onWarehouseSelect }) {
                 )
                 if (provinceWarehouses.length === 0) return null
                 return (
-                  <div key={province.provinceId}>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
+                  <Fragment key={province.provinceId}>
+                    <p className="col-span-full mb-1 text-xs font-bold uppercase tracking-wide text-neutral-500">
                       {province.code} <span className="font-medium normal-case text-neutral-600">{province.name}</span>
                     </p>
-                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                      {provinceWarehouses.map((warehouse) => (
-                        <WarehouseSackCard key={warehouse.warehouseId} warehouse={warehouse} />
-                      ))}
-                    </div>
-                  </div>
+                    {provinceWarehouses.map((warehouse) => (
+                      <WarehouseSackCard key={warehouse.warehouseId} warehouse={warehouse} />
+                    ))}
+                  </Fragment>
                 )
               })}
             </div>
