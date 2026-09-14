@@ -67,18 +67,18 @@ function AnimatedToast({ t }) {
   // demoed options): the WHOLE card is tinted the toast's own type
   // color, and a soft glow-ring shadow sits around the card so it reads
   // as more noticeable at a glance - not just another gray box.
-  // Real bug found, reported directly: the tint was a low-alpha color
-  // (~10%) applied as the card's ONLY background - with nothing opaque
-  // behind it, whatever was on the page showed straight through, making
-  // the whole toast look "transparent" rather than tinted. Fixed with a
-  // two-layer background: a fully opaque dark base (matches the app's
-  // own card color) UNDER a ~75% accent-color wash (per explicit
-  // request) - the wash blends against that opaque base, never against
-  // the page, so the card can never look see-through again, while still
-  // reading as strongly tinted by its own type color. Text/icon switched
-  // to white since the background is now much more saturated - the
-  // original colored-text-on-faint-tint pairing would have nearly
-  // vanished against it.
+  // Two follow-up corrections, both reported directly:
+  // (1) the very first version was a low-alpha tint with nothing opaque
+  // behind it - the real page showed straight through, looking
+  // "transparent" rather than tinted. (2) the fix for that went too far
+  // the other way (a ~75% opaque wash over a solid base) - reported as
+  // "too opaque," with the glow no longer reading as visible against
+  // it, and asked for "some transparency and maybe blur" instead. Now a
+  // real frosted-glass card: backdropFilter blurs whatever is actually
+  // behind it (so it never reads as a sharp see-through window onto the
+  // page) while the card's own fill stays a genuinely translucent tint,
+  // and the glow shadow is stronger/wider so it stays visible against
+  // that lighter fill.
   return (
     <div
       onPointerDown={handlePointerDown}
@@ -88,9 +88,11 @@ function AnimatedToast({ t }) {
         isPC ? 'min-w-[26rem] max-w-lg px-5 py-4' : 'px-3.5 py-2.5'
       } ${t.visible ? entranceStyle : entranceStyle}`}
       style={{
-        background: `linear-gradient(${color}bf, ${color}bf), #171717`,
-        border: `1px solid ${color}`,
-        boxShadow: `0 0 0 1px ${color}26, 0 0 28px -6px ${color}8c`,
+        backgroundColor: `${color}40`,
+        backdropFilter: 'blur(16px) saturate(1.5)',
+        WebkitBackdropFilter: 'blur(16px) saturate(1.5)',
+        border: `1px solid ${color}80`,
+        boxShadow: `0 0 0 1px ${color}40, 0 0 36px -2px ${color}, 0 8px 24px -8px rgba(0,0,0,0.6)`,
         transform: `translateX(${dragX}px)`,
         opacity: dragging ? Math.max(0.2, 1 - Math.abs(dragX) / 200) : 1,
         transition: dragging ? 'none' : 'transform 0.25s ease, opacity 0.25s ease',

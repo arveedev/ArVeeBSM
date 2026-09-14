@@ -3198,4 +3198,14 @@
 //               still reading as strongly tinted. Text/icon switched to
 //               white for contrast against the now much more saturated
 //               background.
-export const APP_VERSION = '1.9-176'
+//   1.9-177 - Follow-up correction to 1.9-176's notification fix,
+//            reported directly: the opaque-base fix went too far the
+//            other way - the card was now "too opaque" and the glow
+//            shadow no longer read as visible against it. Rebuilt as a
+//            genuine frosted-glass card: backdropFilter blurs whatever
+//            is actually behind the toast (so it can never look like a
+//            sharp see-through window onto the page again) while the
+//            card's own fill is a real translucent tint (not opaque),
+//            and the glow shadow is stronger/wider so it stays clearly
+//            visible against that lighter fill.
+export const APP_VERSION = '1.9-177'
