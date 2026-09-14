@@ -49,7 +49,7 @@ import {
   round3,
 } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
-import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useFieldGroupRowCount, columnDividerStyle, groupBoxClass } from './shared.js'
+import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useIsWideLayout, groupBoxClass } from './shared.js'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 
@@ -59,11 +59,6 @@ const STOCK_CONDITIONS = ['Good', 'Part Damaged', 'Damaged']
 // (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
 const DELETE_ANIM_MS = 1000
 
-// Same (pointer: coarse) check used elsewhere (StockFormBase.jsx,
-// SackFormBase.jsx, AnimatedToast.jsx, Login.jsx) - gates the PC-only
-// two-column field layout below, never on viewport width alone.
-const isTouchDevicePointer = () =>
-  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
 
 const SACK_CONDITIONS = ['BN', 'SH', 'US']
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
@@ -249,12 +244,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const [showSaveHint, setShowSaveHint] = useState(false)
   // See StockFormBase.jsx's identical state/comment.
   const [forwardIsGap, setForwardIsGap] = useState(false)
-  // Drives the PC-only two-column field layout - see StockFormBase.jsx's
-  // identical state/comment. No live pile sidebar here - WTS has two
-  // pile sections (issued/received), not one, so that concept doesn't
-  // map cleanly and hasn't been designed for this form.
-  const [isPC] = useState(isTouchDevicePointer() === false)
-  const [fieldGroupRef, fieldGroupRowCount] = useFieldGroupRowCount(isPC)
+  // Drives the two-column field layout - see StockFormBase.jsx's
+  // identical state/comment (now a live screen-width match, not a
+  // one-time pointer-type check). No live pile sidebar here - WTS has
+  // two pile sections (issued/received), not one, so that concept
+  // doesn't map cleanly and hasn't been designed for this form.
+  const isPC = useIsWideLayout()
 
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
@@ -1097,19 +1092,22 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         </div>
 
         {/* Grouping-box redesign - see StockFormBase.jsx's identical
-            fix/comment for the full explanation of the grid mechanics.
-            WTS's own field list doesn't map cleanly onto the same
-            Document/Customer/Stock Details/Quantity split the other two
-            forms use (it's a dual-sided ledger, not a flat field list) -
-            so here it's just two tinted groups (Document, Details) plus
-            the two SidePanel cards, which are already well-grouped and
-            visually distinct on their own (amber vs neon accent borders
-            for Received vs Issued) - wrapping them in another generic
-            tint box on top of that would just compete with, not
-            reinforce, their existing color-coded separation. */}
+            fix/comment for why the layout is screen-width driven
+            (useIsWideLayout, not a one-time pointer-type check). WTS's
+            own field list doesn't map cleanly onto the same Document/
+            Customer/Stock Details/Quantity split the other two forms use
+            (it's a dual-sided ledger, not a flat field list) - so here
+            it's just two tinted groups (Document, Details) plus the two
+            SidePanel cards, which are already well-grouped and visually
+            distinct on their own (amber vs neon accent borders for
+            Received vs Issued) - wrapping them in another generic tint
+            box on top of that would just compete with, not reinforce,
+            their existing color-coded separation. Plain row-major
+            grid-cols-2 (unlike StockFormBase/SackFormBase) is fine here -
+            all four items (two small field groups, two similarly-sized
+            SidePanel cards) are close enough in height that there's no
+            dead-gap risk to design around. */}
         <div
-          ref={fieldGroupRef}
-          style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
           className={`transition-all duration-300 ${isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
         >
         {/* Group: Document */}

@@ -105,8 +105,7 @@ import {
   CONDITION_FLAGS,
   attachCenterFocusScroll,
   focusFirstInvalidField,
-  useFieldGroupRowCount,
-  columnDividerStyle,
+  useIsWideLayout,
   groupBoxClass,
 } from './shared.js'
 
@@ -116,14 +115,6 @@ const GENDERS = ['Male', 'Female']
 // Must match DeleteButtonLabel's own "bin" phase hold time
 // (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
 const DELETE_ANIM_MS = 1000
-
-// Same (pointer: coarse) check used elsewhere (AnimatedToast.jsx,
-// Login.jsx, Piles.jsx) to distinguish a touch device from a PC - the
-// PC-only two-column layout + live pile sidebar (see isPC below) is
-// gated on this, never on viewport width alone, since a touch tablet
-// at a wide width should still get the mobile flow.
-const isTouchDevicePointer = () =>
-  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
 
 // One accent color per pile card in the live "Pile now" sidebar, so a
 // multi-pile WSI (primary pile + one or more "Issue from another pile"
@@ -567,12 +558,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     })
     .sort((a, b) => byAlpha(a.pileName, b.pileName))
 
-  // Drives the PC-only two-column field layout and the live "Pile now"
-  // sidebar that grows in once a pile is actually selected - per
-  // several rounds of demo review. Checked once per mount (a device
-  // doesn't change pointer type mid-session).
-  const [isPC] = useState(isTouchDevicePointer() === false)
-  const [fieldGroupRef, fieldGroupRowCount] = useFieldGroupRowCount(isPC)
+  // Drives the two-column field layout and the live "Pile now" sidebar
+  // that grows in once a pile is actually selected. Real bug found,
+  // reported directly: this used to be a one-time pointer-type check
+  // (isTouchDevicePointer), so a mouse-driven PC with a genuinely
+  // narrow/resized window still got the cramped two-column layout meant
+  // for a wide screen. Now a live screen-width match (useIsWideLayout,
+  // shared.js) that updates as the window actually resizes - "it should
+  // adjust the layout by screen size, not by actual device," per
+  // explicit correction. Name kept as isPC (still means "wide enough
+  // for the desktop layout") to avoid renaming every call site below.
+  const isPC = useIsWideLayout()
   const selectedPile = (piles ?? []).find((p) => p.pileId === pileId)
   const selectedVariety = sortedVarieties.find((v) => v.varietyId === varietyId)
   const isProcurement = isProcurementTypeName(selectedTransactionType?.name)
@@ -2766,35 +2762,39 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               even though opacity already faded smoothly. transition-all
               covers every property this className swaps. */}
           {/* Grouping-box redesign (per explicit request, several rounds
-              of demo review, and a follow-up correction that the first
-              build - a tint per already-existing single/paired-field div,
-              alternating - was "very ugly, very wrong grouping"): each of
-              the FOUR real semantic groups below (Document, Customer,
-              Stock Details, Quantity - grouped by relevance, matching an
-              earlier approved reference mockup) is one flat tinted box
-              (groupBoxClass, shared.js), same tint on every box, no title
-              text on any of them. Every individual field inside stays in
-              its exact original DOM position/order - only wrapper <div>s
-              were added around each existing contiguous run, nothing was
-              cut or moved, to avoid touching this file's extensive
-              conditional business logic. One accepted deviation from the
-              approved mockup: Age/Unit/Condition land in the Quantity box
-              rather than Stock Details, since moving them earlier in the
-              DOM order isn't worth the risk for a label-only grouping
-              choice. Applies identically on mobile (one column, unchanged
-              flow) and PC (grid-auto-flow: column below - see
-              useFieldGroupRowCount's own comment for why the row count is
-              measured from the real DOM rather than computed from a JS
-              array this deeply-conditional field list doesn't have -
-              raster reading/tab order 1,3,2,4 down the left column then
-              the right, per explicit request). columnDividerStyle draws
-              the subtle center rule. */}
-          <div
-            ref={fieldGroupRef}
-            style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
-            className={`transition-all duration-300 ${isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
-          >
-          {/* Group: Document */}
+              of demo review, and two follow-up corrections). Four real
+              semantic groups (Document, Customer, Stock Details,
+              Quantity - grouped by relevance, matching an earlier
+              approved reference mockup), each one flat tinted box
+              (groupBoxClass, shared.js), same tint on every box, no
+              title text on any of them. Every individual field inside
+              stays in its exact original DOM position/order - only
+              wrapper <div>s were added around each existing contiguous
+              run, nothing was cut or moved, to avoid touching this
+              file's extensive conditional business logic. One accepted
+              deviation from the approved mockup: Age/Unit/Condition land
+              in the Quantity box rather than Stock Details, since moving
+              them earlier in the DOM order isn't worth the risk for a
+              label-only grouping choice.
+              Real bug found, reported directly with screenshots: a
+              shared CSS Grid row (grid-auto-flow: column) forced both
+              columns' cells in the same row to match height - Document
+              (two single fields) sat far shorter than its row partner
+              Stock Details (several paired fields), leaving a dead empty
+              gap below it before the next row started. The four groups
+              are built once as local consts below and composed into two
+              INDEPENDENT flex columns on a wide screen (left: Document
+              then Stock Details = reading/tab order 1,3; right: Customer
+              then Quantity = order 2,4, per explicit request) - each
+              column just stacks its own two groups tightly with its own
+              natural height, no shared row-height, no gaps. On a narrow
+              screen the same four consts render in their plain original
+              1,2,3,4 order, single column. */}
+          {(() => {
+            const cancelledClass = isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''
+            const flashClass = navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''
+
+            const documentGroup = (
           <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Date</label>
@@ -2823,8 +2823,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           </div>
           </div>
+            )
 
-          {/* Group: Customer */}
+            const customerGroup = (
           <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Nature of Transaction</label>
@@ -3086,8 +3087,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           )}
           </div>
+            )
 
-          {/* Group: Stock Details */}
+            const stockDetailsGroup = (
           <div className={groupBoxClass}>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -3200,8 +3202,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           )}
           </div>
+            )
 
-          {/* Group: Quantity */}
+            const quantityGroup = (
           <div className={groupBoxClass}>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -3550,7 +3553,22 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           </div>
           </div>
-          </div>
+            )
+
+            return isPC ? (
+              <div className={`flex gap-4 ${cancelledClass} ${flashClass}`}>
+                <div className="min-w-0 flex-1 space-y-3">{documentGroup}{stockDetailsGroup}</div>
+                <div className="min-w-0 flex-1 space-y-3 border-l border-white/10 pl-4">{customerGroup}{quantityGroup}</div>
+              </div>
+            ) : (
+              <div className={`space-y-3 ${cancelledClass} ${flashClass}`}>
+                {documentGroup}
+                {customerGroup}
+                {stockDetailsGroup}
+                {quantityGroup}
+              </div>
+            )
+          })()}
           </div>
 
           {isPC && (() => {

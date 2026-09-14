@@ -1,40 +1,39 @@
 // Shared styling constants for transaction forms (WSR/WSI/WTS/ESR/ESI).
 
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-// PC field-group layout: real CSS Grid with grid-auto-flow: column, so
-// groups fill straight DOWN the left column first, then the right one
-// (raster reading/tab order 1,3,2,4... for 4 groups) - per explicit
-// request, NOT left-to-right row-major (1,2 / 3,4), and NOT CSS
-// multi-column's height-balanced flow either (the earlier, rejected
-// attempt - it could split a tall group's content across the column
-// break and gave no real row alignment between columns). grid-auto-flow:
-// column only distributes into the SECOND column once the declared row
-// count is exhausted - it needs a real row count up front, which this
-// form's deeply-conditional field list doesn't track anywhere as an
-// array. Rather than restructure ~700 lines of existing conditional
-// JSX into an array just to get a .length, this counts the container's
-// actual rendered children after each paint (cheap - just a DOM
-// children.length read) and feeds that back as the grid's row count,
-// so the split always matches whatever's really showing right now.
-export const useFieldGroupRowCount = (enabled) => {
-  const ref = useRef(null)
-  const [rowCount, setRowCount] = useState(1)
-  useLayoutEffect(() => {
-    if (!enabled || !ref.current) return
-    const count = Math.max(1, Math.ceil(ref.current.children.length / 2))
-    if (count !== rowCount) setRowCount(count)
-  })
-  return [ref, rowCount]
-}
+// Real bug found, twice over, reported directly with real screenshots:
+// (1) grid-auto-flow: column with a measured row count shared row
+// HEIGHT across both columns - whenever one column's group (e.g. Stock
+// Details, several paired fields) was naturally taller than its row
+// partner (e.g. Document, just two single fields), the shorter group
+// left a dead empty gap below it before the next row started, reading
+// as broken/misaligned rather than "grouped." (2) the whole two-column
+// layout was gated on isTouchDevicePointer() (pointer: coarse) - a
+// mouse-driven PC with a genuinely narrow/resized window still got the
+// cramped two-column layout meant for a wide screen, and a touchscreen
+// device at a wide width would have stayed single-column. Per explicit
+// correction, this must respond to actual SCREEN SIZE, not input
+// device type. Replaced with useIsWideLayout (a live matchMedia
+// listener, not a one-time check) driving a plain two-column FLEX split
+// instead of a shared-row grid - each column just stacks its own two
+// groups tightly with its own natural height (no forced row-height
+// matching, so no more dead gaps), and the field-group components pass
+// the four groups in explicitly chosen visual order rather than relying
+// on any DOM-order/row-count trick.
+const WIDE_LAYOUT_BREAKPOINT_PX = 1024
 
-// A subtle vertical rule down the middle of the PC two-column field
-// grid, per explicit request - independent of the grid's own column
-// track (which has no visual line of its own), so it stays centered
-// regardless of how uneven the two columns' real content heights are.
-export const columnDividerStyle = {
-  backgroundImage:
-    'linear-gradient(to right, transparent calc(50% - 0.5px), rgba(255,255,255,0.08) calc(50% - 0.5px), rgba(255,255,255,0.08) calc(50% + 0.5px), transparent calc(50% + 0.5px))',
+export const useIsWideLayout = () => {
+  const [isWide, setIsWide] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia?.(`(min-width: ${WIDE_LAYOUT_BREAKPOINT_PX}px)`).matches
+  )
+  useEffect(() => {
+    const mql = window.matchMedia(`(min-width: ${WIDE_LAYOUT_BREAKPOINT_PX}px)`)
+    const handleChange = (e) => setIsWide(e.matches)
+    mql.addEventListener('change', handleChange)
+    return () => mql.removeEventListener('change', handleChange)
+  }, [])
+  return isWide
 }
 
 // focus:shadow adds a real glow ring around whichever field currently

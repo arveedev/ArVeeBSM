@@ -3149,4 +3149,30 @@
 //            refocuses itself (PC only) whenever it loses focus, so
 //            physical typing keeps routing through the one real handler
 //            no matter what was just clicked.
-export const APP_VERSION = '1.9-174'
+//   1.9-175 - Two more layout fixes from the same round of live feedback,
+//            reported directly with real screenshots:
+//            1. The four-group layout (1.9-173) still looked wrong: a
+//               shared CSS Grid row (grid-auto-flow: column) forced two
+//               groups in the same row to match height - Document (two
+//               single fields) sat far shorter than its row partner
+//               Stock Details (several paired fields), leaving a dead
+//               empty gap below it before the next row started.
+//               Rebuilt as two INDEPENDENT flex columns instead of a
+//               shared-row grid - each column just stacks its own two
+//               groups tightly with its own natural height, no gaps.
+//               The four groups (WSR/WSI/ESR/ESI) or two groups (WTS)
+//               are now built once as local consts and composed in
+//               whichever visual order each screen width calls for,
+//               instead of relying on a measured DOM row count.
+//            2. The two-column layout was gated on isTouchDevicePointer
+//               (pointer: coarse) - a mouse-driven PC with a genuinely
+//               narrow/resized window still got the cramped two-column
+//               layout meant for a wide screen, and the reverse for a
+//               touch device at a wide width. Per explicit correction
+//               ("it should adjust the layout by screen size, not by
+//               actual device"), replaced with a live screen-width
+//               match (useIsWideLayout, shared.js) that updates as the
+//               window actually resizes - applies to the field-group
+//               layout and the live "Pile now" sidebar on all three
+//               entry forms.
+export const APP_VERSION = '1.9-175'

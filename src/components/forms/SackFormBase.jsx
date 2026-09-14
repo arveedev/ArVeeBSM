@@ -62,8 +62,7 @@ import {
   removeButtonClass,
   attachCenterFocusScroll,
   focusFirstInvalidField,
-  useFieldGroupRowCount,
-  columnDividerStyle,
+  useIsWideLayout,
   groupBoxClass,
 } from './shared.js'
 
@@ -72,12 +71,6 @@ const SACK_CONDITION_CODES = ['BN', 'SH', 'US']
 // Must match DeleteButtonLabel's own "bin" phase hold time
 // (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
 const DELETE_ANIM_MS = 1000
-
-// Same (pointer: coarse) check used elsewhere (StockFormBase.jsx,
-// AnimatedToast.jsx, Login.jsx) - gates the PC-only two-column field
-// layout below, never on viewport width alone.
-const isTouchDevicePointer = () =>
-  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
 
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
 
@@ -1184,11 +1177,11 @@ const SackFormBase = forwardRef(function SackFormBase(
     }
   }
 
-  // Drives the PC-only two-column field layout - see StockFormBase.jsx's
-  // identical state/comment. No live pile sidebar here - SackFormBase
-  // (ESR/ESI) has no Pile ID field at all.
-  const [isPC] = useState(isTouchDevicePointer() === false)
-  const [fieldGroupRef, fieldGroupRowCount] = useFieldGroupRowCount(isPC)
+  // Drives the two-column field layout - see StockFormBase.jsx's
+  // identical state/comment (now a live screen-width match, not a
+  // one-time pointer-type check). No live pile sidebar here -
+  // SackFormBase (ESR/ESI) has no Pile ID field at all.
+  const isPC = useIsWideLayout()
 
   const isEditMode = Boolean(loadedTransaction)
 
@@ -1343,14 +1336,18 @@ const SackFormBase = forwardRef(function SackFormBase(
               StockFormBase.jsx's identical fix/comment for the full
               explanation, including why every field stays in its exact
               original DOM order (only wrapper <div>s added around each
-              existing contiguous run). No live pile sidebar here (no
+              existing contiguous run), and why the two-column
+              composition below is two independent flex columns (built
+              once as local consts, composed in different order per
+              screen width) rather than a shared-row CSS grid - a shared
+              row forced two very different-height groups to match
+              height, leaving dead gaps. No live pile sidebar here (no
               Pile ID field on this form). */}
-          <div
-            ref={fieldGroupRef}
-            style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
-            className={`transition-all duration-300 ${isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
-          >
-          {/* Group: Document */}
+          {(() => {
+            const cancelledClass = isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''
+            const flashClass = navFlash || warehouseChangeFlash ? 'stagger-fields' : ''
+
+            const documentGroup = (
           <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Date</label>
@@ -1379,8 +1376,9 @@ const SackFormBase = forwardRef(function SackFormBase(
             </div>
           </div>
           </div>
+            )
 
-          {/* Group: Customer */}
+            const customerGroup = (
           <div className={groupBoxClass}>
           <CustomerNameAutocomplete
             ref={customerNameRef}
@@ -1417,8 +1415,9 @@ const SackFormBase = forwardRef(function SackFormBase(
             </select>
           </div>
           </div>
+            )
 
-          {/* Group: Stock Details */}
+            const stockDetailsGroup = (
           <div className={groupBoxClass}>
           {isMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
@@ -1585,8 +1584,9 @@ const SackFormBase = forwardRef(function SackFormBase(
             </div>
           )}
           </div>
+            )
 
-          {/* Group: Quantity */}
+            const quantityGroup = (
           <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Sack Lines</label>
@@ -1694,7 +1694,22 @@ const SackFormBase = forwardRef(function SackFormBase(
             )}
           </div>
           </div>
-          </div>
+            )
+
+            return isPC ? (
+              <div className={`flex gap-4 ${cancelledClass} ${flashClass}`}>
+                <div className="min-w-0 flex-1 space-y-3">{documentGroup}{stockDetailsGroup}</div>
+                <div className="min-w-0 flex-1 space-y-3 border-l border-white/10 pl-4">{customerGroup}{quantityGroup}</div>
+              </div>
+            ) : (
+              <div className={`space-y-3 ${cancelledClass} ${flashClass}`}>
+                {documentGroup}
+                {customerGroup}
+                {stockDetailsGroup}
+                {quantityGroup}
+              </div>
+            )
+          })()}
 
           <label className="flex items-center justify-center gap-2 py-1 text-base font-semibold text-brand-crimson">
             <input
