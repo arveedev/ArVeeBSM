@@ -25,12 +25,47 @@ import {
 
 const emptyForm = { purityLetter: '', ddMin: '', ddMax: '', mcMin: '', mcMax: '', factor: '' }
 
+// The exact reference sheet already shared for this feature - 17 MC
+// brackets x 2 Purity letters x 2 D&D brackets. Seeded in one tap
+// instead of asking Admin to retype 68 values by hand. (One value
+// corrected against the sheet's own decreasing trend: D&D 3.1-7%/
+// Purity A's MC 24.1-25% cell read "0.07417" in the source - a 10x
+// outlier next to 0.7533 and 0.73 either side of it - almost certainly
+// a copy artifact for 0.7417, which fits the trend exactly and is used
+// here; flagged so Admin can double check against the physical sheet.)
+const MC_BRACKETS = [
+  [11, 14], [14.1, 15], [15.1, 16], [16.1, 17], [17.1, 18], [18.1, 19], [19.1, 20],
+  [20.1, 21], [21.1, 22], [22.1, 23], [23.1, 24], [24.1, 25], [25.1, 26], [26.1, 27],
+  [27.1, 28], [28.1, 29], [29.1, 30],
+]
+const REFERENCE_ROWS = [
+  { purityLetter: 'A', ddMin: 0, ddMax: 3, factors: [1, 0.9797, 0.9594, 0.939, 0.9187, 0.8984, 0.8781, 0.8577, 0.8374, 0.8171, 0.7968, 0.7851, 0.7735, 0.7619, 0.7503, 0.7386, 0.727] },
+  { purityLetter: 'B', ddMin: 0, ddMax: 3, factors: [0.91, 0.8915, 0.873, 0.8545, 0.836, 0.8175, 0.799, 0.7805, 0.762, 0.7436, 0.7251, 0.7145, 0.7039, 0.6933, 0.6827, 0.6721, 0.6616] },
+  { purityLetter: 'A', ddMin: 3.1, ddMax: 7, factors: [0.9565, 0.9362, 0.9159, 0.8956, 0.8752, 0.8549, 0.8346, 0.8143, 0.7939, 0.7736, 0.7533, 0.7417, 0.73, 0.7184, 0.7068, 0.6951, 0.6835] },
+  { purityLetter: 'B', ddMin: 3.1, ddMax: 7, factors: [0.8665, 0.8481, 0.8297, 0.8113, 0.7929, 0.7745, 0.7561, 0.7376, 0.7192, 0.7008, 0.6824, 0.6619, 0.6613, 0.6508, 0.6403, 0.6297, 0.6192] },
+]
+
 function EnwFactorTablePanel() {
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [confirmingSeed, setConfirmingSeed] = useState(false)
 
   const rows = useLiveQuery(() => db.enwFactors.toArray(), []) ?? []
+
+  const handleSeed = async () => {
+    setConfirmingSeed(false)
+    const seedRows = REFERENCE_ROWS.flatMap(({ purityLetter, ddMin, ddMax, factors }) =>
+      factors.map((factor, i) => ({
+        id: crypto.randomUUID(),
+        purityLetter, ddMin, ddMax,
+        mcMin: MC_BRACKETS[i][0], mcMax: MC_BRACKETS[i][1],
+        factor,
+      }))
+    )
+    await db.enwFactors.bulkAdd(seedRows)
+    toast.success(`Loaded ${seedRows.length} reference rows`)
+  }
   const sorted = [...rows].sort((a, b) =>
     (a.purityLetter ?? '').localeCompare(b.purityLetter ?? '') || (a.mcMin ?? 0) - (b.mcMin ?? 0)
   )
@@ -92,6 +127,14 @@ function EnwFactorTablePanel() {
       <p className="mt-1 text-xs text-neutral-500">
         Admin only — MC bracket × Purity letter × D&D bracket → factor.
       </p>
+
+      <button
+        type="button"
+        onClick={() => setConfirmingSeed(true)}
+        className={`mt-3 w-full ${secondaryButtonClass}`}
+      >
+        Load Reference Table (17 MC brackets × 4 rows)
+      </button>
 
       <div className="mt-4 space-y-3">
         <div className="flex gap-2">
@@ -163,6 +206,15 @@ function EnwFactorTablePanel() {
         description="This cannot be undone."
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmingSeed}
+        title="Load the reference ENW table?"
+        description="Adds 68 rows (17 MC brackets × Purity A/B × D&D 0-3%/3.1-7%) from the reference sheet already provided for this feature. One value (D&D 3.1-7%, Purity A, MC 24.1-25%) was corrected from 0.07417 to 0.7417 to match the sheet's own decreasing trend either side of it - worth a quick check against the physical sheet. Existing rows are kept, not replaced - re-running this adds duplicates, so use it once."
+        confirmLabel="Load Table"
+        onConfirm={handleSeed}
+        onCancel={() => setConfirmingSeed(false)}
       />
     </section>
   )

@@ -77,7 +77,10 @@ function AbstractExportModal({ onClose }) {
           lessEntries: [{ label: 'This period’s disbursements', amount: periodTotal }],
         },
         signatories: {
-          preparedBy: config?.disbursementPreparedBy,
+          // Always the SDO who actually generated this export, not an
+          // admin-set fixed name - "the prepared by should always be
+          // the disbursing officer", confirmed directly.
+          preparedBy: { name: user.name, position: 'Disbursing Officer' },
           verifiedBy: config?.disbursementVerifiedBy,
           notedBy: config?.disbursementNotedBy,
         },

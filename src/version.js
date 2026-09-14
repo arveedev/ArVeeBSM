@@ -3594,4 +3594,24 @@
 //              ConfirmDialog) - they were rendering instantly before,
 //              which read as out of place next to how smooth everything
 //              else in the app is.
-export const APP_VERSION = '1.10-4'
+//   1.10-5 - Four more SDO fixes, reported directly:
+//           1. Abstract "Prepared By" is now always the SDO who
+//              actually generated the export, filled in dynamically
+//              from their own account - never an admin-configured
+//              fixed name. Removed from Admin's Abstract Signatories
+//              panel entirely (Verified By/Noted By stay, those genuinely
+//              are fixed branch roles regardless of which SDO exports).
+//           2. ENW Factor Table gets a "Load Reference Table" button -
+//              seeds all 68 rows (17 MC brackets x Purity A/B x D&D
+//              0-3%/3.1-7%) from the reference sheet already provided
+//              for this feature, instead of Admin retyping every value
+//              by hand. One value corrected against the sheet's own
+//              decreasing trend (a 10x outlier next to its neighbors,
+//              flagged in the confirmation dialog for a manual check).
+//           3. SDO Home's For Payment/Completed switched to the same
+//              sliding-pill tab style used everywhere else in the app
+//              (e.g. the Province/Warehouse toggle), not two plain
+//              buttons - and now that all assigned warehouses show
+//              together at once, added a warehouse filter dropdown
+//              next to the existing search/sort.
+export const APP_VERSION = '1.10-5'

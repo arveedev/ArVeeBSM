@@ -33,6 +33,7 @@ function SdoHome() {
   const { setPageHeader } = usePageHeader() ?? {}
 
   const [listTab, setListTab] = useState('payment')
+  const [warehouseFilter, setWarehouseFilter] = useState('')
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounced(search)
   const [sortDesc, setSortDesc] = useState(true)
@@ -130,7 +131,10 @@ function SdoHome() {
   const applySort = (list) =>
     [...list].sort((a, b) => (sortDesc ? 1 : -1) * ((a.date ?? '').localeCompare(b.date ?? '')) * -1)
 
-  const visibleList = applySort(applySearch(listTab === 'payment' ? unpaid : paid))
+  const applyWarehouseFilter = (list) =>
+    warehouseFilter ? list.filter((t) => t.warehouseId === warehouseFilter) : list
+
+  const visibleList = applySort(applySearch(applyWarehouseFilter(listTab === 'payment' ? unpaid : paid)))
 
   return (
     <div className={`min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
@@ -178,12 +182,18 @@ function SdoHome() {
       </div>
 
       <div className="mt-5 flex gap-2">
-        <button type="button" onClick={() => setListTab('payment')} className={`flex-1 rounded-lg py-2 text-xs font-bold transition-all active:scale-95 ${listTab === 'payment' ? 'bg-brand-neon text-brand-contrast' : 'border border-neutral-800 bg-neutral-900 text-neutral-400'}`}>
-          For Payment
-        </button>
-        <button type="button" onClick={() => setListTab('completed')} className={`flex-1 rounded-lg py-2 text-xs font-bold transition-all active:scale-95 ${listTab === 'completed' ? 'bg-brand-neon text-brand-contrast' : 'border border-neutral-800 bg-neutral-900 text-neutral-400'}`}>
-          Completed
-        </button>
+        <div className="relative flex flex-1 gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+          <div
+            className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+            style={{ transform: listTab === 'payment' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+          />
+          <button type="button" onClick={() => setListTab('payment')} className={`relative z-10 flex-1 rounded-lg py-2 text-xs transition-colors ${listTab === 'payment' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>
+            For Payment
+          </button>
+          <button type="button" onClick={() => setListTab('completed')} className={`relative z-10 flex-1 rounded-lg py-2 text-xs transition-colors ${listTab === 'completed' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>
+            Completed
+          </button>
+        </div>
         <button type="button" onClick={() => setShowAbstractExport(true)} aria-label="Export Abstract of Cereal Purchases" className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-neutral-400 transition-all active:scale-95">
           Export
         </button>
@@ -195,6 +205,19 @@ function SdoHome() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search farmer, WSR, PR no."
             className="w-full bg-transparent text-xs text-app-text outline-none placeholder:text-neutral-500" />
         </div>
+        {(accessibleWarehouses ?? []).length > 1 && (
+          <select
+            value={warehouseFilter}
+            onChange={(e) => setWarehouseFilter(e.target.value)}
+            aria-label="Filter by warehouse"
+            className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 text-xs text-neutral-300 outline-none transition-colors focus:border-brand-neon"
+          >
+            <option value="">All warehouses</option>
+            {[...(accessibleWarehouses ?? [])].sort((a, b) => a.name.localeCompare(b.name)).map((w) => (
+              <option key={w.warehouseId} value={w.warehouseId}>{w.code}</option>
+            ))}
+          </select>
+        )}
         <button type="button" onClick={() => setSortDesc((v) => !v)} aria-label="Toggle sort order" className="rounded-lg border border-neutral-800 bg-neutral-900 p-2 text-neutral-400 transition-all active:scale-95">
           <ArrowUpDown size={14} />
         </button>

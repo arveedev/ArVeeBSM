@@ -15,8 +15,13 @@ import toast from 'react-hot-toast'
 import { db } from '../../../db/dexie.js'
 import { byAlpha, inputClass, labelClass, primaryButtonClass } from './shared.js'
 
+// Prepared By is NOT configured here - it's always the SDO who actually
+// generated the export, filled in dynamically at export time
+// (AbstractExportModal.jsx), never an admin-set fixed name. Only
+// Verified By and Noted By are genuinely fixed branch roles (the
+// Accountant and Branch Manager who sign off regardless of which SDO
+// prepared it).
 const SIG_FIELDS = [
-  { key: 'disbursementPreparedBy', label: 'Prepared By' },
   { key: 'disbursementVerifiedBy', label: 'Verified By' },
   { key: 'disbursementNotedBy', label: 'Noted By' },
 ]
