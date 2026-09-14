@@ -65,9 +65,20 @@ function AnimatedToast({ t }) {
 
   // Variant "C + glow" (picked, per explicit request out of several
   // demoed options): the WHOLE card is tinted the toast's own type
-  // color (not just a left border sliver), title text carries that
-  // color too, and a soft glow-ring shadow sits around the card so it
-  // reads as more noticeable at a glance - not just another gray box.
+  // color, and a soft glow-ring shadow sits around the card so it reads
+  // as more noticeable at a glance - not just another gray box.
+  // Real bug found, reported directly: the tint was a low-alpha color
+  // (~10%) applied as the card's ONLY background - with nothing opaque
+  // behind it, whatever was on the page showed straight through, making
+  // the whole toast look "transparent" rather than tinted. Fixed with a
+  // two-layer background: a fully opaque dark base (matches the app's
+  // own card color) UNDER a ~75% accent-color wash (per explicit
+  // request) - the wash blends against that opaque base, never against
+  // the page, so the card can never look see-through again, while still
+  // reading as strongly tinted by its own type color. Text/icon switched
+  // to white since the background is now much more saturated - the
+  // original colored-text-on-faint-tint pairing would have nearly
+  // vanished against it.
   return (
     <div
       onPointerDown={handlePointerDown}
@@ -77,8 +88,8 @@ function AnimatedToast({ t }) {
         isPC ? 'min-w-[26rem] max-w-lg px-5 py-4' : 'px-3.5 py-2.5'
       } ${t.visible ? entranceStyle : entranceStyle}`}
       style={{
-        backgroundColor: `${color}1a`,
-        border: `1px solid ${color}59`,
+        background: `linear-gradient(${color}bf, ${color}bf), #171717`,
+        border: `1px solid ${color}`,
         boxShadow: `0 0 0 1px ${color}26, 0 0 28px -6px ${color}8c`,
         transform: `translateX(${dragX}px)`,
         opacity: dragging ? Math.max(0.2, 1 - Math.abs(dragX) / 200) : 1,
@@ -87,7 +98,7 @@ function AnimatedToast({ t }) {
         cursor: 'grab',
       }}
     >
-      <span className="relative flex shrink-0" style={{ color }}>
+      <span className="relative flex shrink-0 text-white">
         {t.type !== 'loading' && (
           <span
             className="absolute inset-0 rounded-full animate-toast-icon-ring"
@@ -96,7 +107,7 @@ function AnimatedToast({ t }) {
         )}
         <Icon size={isPC ? 26 : 20} className={t.type === 'loading' ? 'animate-toast-icon-spin' : motion} />
       </span>
-      <span className={`font-medium ${isPC ? 'text-base' : 'text-sm'}`} style={{ color }}>{resolveValue(t.message, t)}</span>
+      <span className={`font-medium text-white ${isPC ? 'text-base' : 'text-sm'}`}>{resolveValue(t.message, t)}</span>
     </div>
   )
 }

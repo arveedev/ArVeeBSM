@@ -3175,4 +3175,27 @@
 //               window actually resizes - applies to the field-group
 //               layout and the live "Pile now" sidebar on all three
 //               entry forms.
-export const APP_VERSION = '1.9-175'
+//   1.9-176 - Three more follow-up fixes from the same round of live
+//            feedback:
+//            1. Removed the "Locked to this pile's variety..." subtext
+//               under Variety Type - reported as adding to the
+//               misaligned feel between the Pile ID/Variety row and the
+//               row below it, since it made that box taller than its
+//               row-mates for no functional reason.
+//            2. The live "Pile now" sidebar's per-pile cards were
+//               shrunk down to small side-by-side stat rows during the
+//               multi-pile-accent rework - reported as "looks very
+//               small." Restored the original large, centered, stacked
+//               Bags/Net Kg tiles per pile, just with each pile's own
+//               accent border and name label layered on top.
+//            3. Real bug found in the notification "C + glow" redesign:
+//               the card's tint was a low-alpha color with nothing
+//               opaque behind it, so the actual page showed straight
+//               through - reported directly ("why is it transparent").
+//               Fixed with a two-layer background (an opaque dark base
+//               UNDER a ~75% accent wash, per explicit request) so the
+//               card can never show the page through it again, while
+//               still reading as strongly tinted. Text/icon switched to
+//               white for contrast against the now much more saturated
+//               background.
+export const APP_VERSION = '1.9-176'

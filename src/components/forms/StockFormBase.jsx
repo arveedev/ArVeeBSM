@@ -2755,7 +2755,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           <div className={isPC ? 'flex items-start gap-3' : undefined}>
           <div
             className={isPC ? 'min-w-0 transition-[flex-basis] duration-300 ease-out' : 'min-w-0'}
-            style={isPC ? { flexBasis: selectedPile ? 'calc(100% - 206px)' : '100%' } : undefined}
+            style={isPC ? { flexBasis: selectedPile ? 'calc(100% - 222px)' : '100%' } : undefined}
           >
           {/* Concept S (picked) - was transition-opacity only, so the
               border/padding change on Void applied as an instant snap
@@ -3149,11 +3149,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     </option>
                   ))}
                 </select>
-              )}
-              {selectedPile && (
-                <p className="mt-1 text-xs text-neutral-500">
-                  Locked to this pile's variety — piles never mix varieties.
-                </p>
               )}
             </div>
           </div>
@@ -3579,12 +3574,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             // one blended figure. Per explicit request: no combined
             // total card.
             const sidebarPiles = selectedPile ? [selectedPile, ...extraAllocInfos.map((i) => i.pile).filter(Boolean)] : []
+            const sidebarWidth = 210
             return (
               <div
                 className="shrink-0 self-stretch overflow-hidden rounded-xl bg-neutral-900/60 transition-[flex-basis,opacity] duration-300 ease-out"
                 style={{
-                  flexBasis: selectedPile ? '190px' : '0px',
-                  width: selectedPile ? '190px' : '0px',
+                  flexBasis: selectedPile ? `${sidebarWidth}px` : '0px',
+                  width: selectedPile ? `${sidebarWidth}px` : '0px',
                   opacity: selectedPile ? 1 : 0,
                   pointerEvents: selectedPile ? 'auto' : 'none',
                 }}
@@ -3592,35 +3588,40 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 {/* Fixed inner width regardless of the outer wrapper's
                     own animated width - so the content doesn't visibly
                     reflow/wrap mid-transition, it's simply revealed as
-                    the outer box widens. */}
-                <div className="w-[190px] p-3">
+                    the outer box widens. Real bug found, reported
+                    directly: the per-pile cards used to be small,
+                    cramped, side-by-side stat rows - restored to the
+                    original large, centered, stacked tile treatment
+                    (per pile), just with each pile's own accent border
+                    and name label added on top of that. */}
+                <div style={{ width: `${sidebarWidth}px` }} className="p-3">
                   <p className="mb-2 text-[10px] uppercase tracking-wide text-neutral-500">
                     {sidebarPiles.length > 1 ? 'Piles now (live)' : 'Pile now (live)'}
                   </p>
-                  {sidebarPiles.map((pile, i) => (
-                    <div
-                      key={pile.pileId}
-                      className="mb-2 rounded-lg bg-neutral-950 p-2 last:mb-0"
-                      style={{ borderLeft: `3px solid ${PILE_SIDEBAR_ACCENTS[i % PILE_SIDEBAR_ACCENTS.length]}` }}
-                    >
-                      {sidebarPiles.length > 1 && (
-                        <p className="mb-1 truncate text-[10px] text-neutral-500" title={pile.pileName}>{pile.pileName}</p>
-                      )}
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</span>
-                        <span className="text-sm font-bold tabular-nums text-app-text">{fmtBags(pile.currentBags ?? 0)}</span>
+                  {sidebarPiles.map((pile, i) => {
+                    const accent = PILE_SIDEBAR_ACCENTS[i % PILE_SIDEBAR_ACCENTS.length]
+                    return (
+                      <div
+                        key={pile.pileId}
+                        className="mb-3 rounded-lg p-2 last:mb-0"
+                        style={{ borderLeft: `3px solid ${accent}`, backgroundColor: 'rgba(0,0,0,0.3)' }}
+                      >
+                        {sidebarPiles.length > 1 && (
+                          <p className="mb-1.5 truncate px-1 text-[10px] font-semibold text-neutral-400" title={pile.pileName}>{pile.pileName}</p>
+                        )}
+                        <div className="mb-2 rounded-lg bg-neutral-950 py-2 text-center">
+                          <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
+                          <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(pile.currentBags ?? 0)}</p>
+                        </div>
+                        <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                          <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
+                          <p className="mt-0.5 text-lg font-bold tabular-nums" style={{ color: accent }}>
+                            {fmtWeight(pile.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</span>
-                        <span
-                          className="text-sm font-bold tabular-nums"
-                          style={{ color: PILE_SIDEBAR_ACCENTS[i % PILE_SIDEBAR_ACCENTS.length] }}
-                        >
-                          {fmtWeight(pile.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )
