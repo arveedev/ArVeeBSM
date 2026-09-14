@@ -8,35 +8,70 @@ import { Check, Loader2, Trash2 } from 'lucide-react'
 
 const DUST_ANGLES = [20, 70, 130, 190, 250, 310]
 
-/** Save button label - the text morphs into a checkmark the moment
- * isSaving flips from true back to false (the save actually finished),
- * holds briefly, then morphs back. Not triggered on click itself -
- * clicking only sets isSaving true, which starts the button's own
- * disabled state; this reacts to the save completing. */
-export function SaveButtonLabel({ isSaving, label = 'Save' }) {
-  const [showCheck, setShowCheck] = useState(false)
+/** Save button - owns its own `<button>` element (unlike Update/Delete's
+ * label-only components below) because its idle appearance itself
+ * animates: outline (disabled, a required field is blank) <-> filled
+ * (enabled, canSave true) plays a one-shot neon pulse-ring on the
+ * moment it BECOMES enabled (see save-enable-pulse in index.css) rather
+ * than a flat color swap, and tapping it shrinks the whole button down
+ * to a small circle with a truly centered spinner inside (fixed - the
+ * old check icon was `absolute` with no centering offsets, so it sat
+ * off to one side instead of the middle), then a centered check, then
+ * expands back - per explicit request and several rounds of demo
+ * review. */
+export function SaveButton({ onClick, disabled, canSave, isSaving, label = 'Save' }) {
+  const [phase, setPhase] = useState('idle') // idle | spinning | check
   const wasSaving = useRef(false)
   useEffect(() => {
-    if (wasSaving.current && !isSaving) {
-      setShowCheck(true)
-      const timer = setTimeout(() => setShowCheck(false), 1100)
-      wasSaving.current = isSaving
+    if (isSaving) {
+      setPhase('spinning')
+      wasSaving.current = true
+      return
+    }
+    if (wasSaving.current) {
+      setPhase('check')
+      const timer = setTimeout(() => setPhase('idle'), 900)
+      wasSaving.current = false
       return () => clearTimeout(timer)
     }
-    wasSaving.current = isSaving
   }, [isSaving])
 
+  // Only pulses on the FALSE -> TRUE edge (becoming savable) - settling
+  // back into disabled is not itself a moment worth marking.
+  const [pulseKey, setPulseKey] = useState(0)
+  const wasCanSave = useRef(canSave)
+  useEffect(() => {
+    if (canSave && !wasCanSave.current) setPulseKey((k) => k + 1)
+    wasCanSave.current = canSave
+  }, [canSave])
+
+  const shrunk = phase !== 'idle'
+  const filled = canSave || shrunk
+
   return (
-    <span className="relative inline-flex h-5 w-full items-center justify-center">
-      <span className={`transition-all duration-150 ${showCheck ? 'scale-75 opacity-0' : 'scale-100 opacity-100'}`}>
-        {label}
-      </span>
-      <Check
-        size={20}
-        strokeWidth={3}
-        className={`absolute transition-opacity duration-150 ${showCheck ? 'opacity-100 animate-toast-icon-check' : 'opacity-0'}`}
-      />
-    </span>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      key={pulseKey}
+      className={`mx-auto flex items-center justify-center text-sm font-semibold transition-all duration-300 ease-out disabled:pointer-events-none ${
+        shrunk ? 'h-11 w-11 rounded-full' : 'h-11 w-full rounded-xl'
+      } ${
+        filled
+          ? 'bg-brand-neon text-brand-contrast hover:brightness-110 active:scale-[0.98] disabled:opacity-50'
+          : 'border border-brand-neon/40 text-brand-neon/40'
+      } ${canSave && !shrunk ? 'animate-save-enable-pulse' : ''}`}
+    >
+      {shrunk ? (
+        phase === 'spinning' ? (
+          <Loader2 size={18} className="animate-toast-icon-spin" />
+        ) : (
+          <Check size={20} strokeWidth={3} className="animate-toast-icon-check" />
+        )
+      ) : (
+        label
+      )}
+    </button>
   )
 }
 
@@ -83,38 +118,74 @@ export function UpdateButtonContent({ isSaving, label = 'Update' }) {
   )
 }
 
-/** Delete button label - a purely cosmetic flourish on tap (the real
- * destructive action still waits for the separate ConfirmDialog, this
- * only acknowledges the tap): the label swaps for a shaking trash icon
- * with a small dust-particle burst, then reverts. incrementKey should
- * be bumped by the caller's onClick alongside whatever opens the
- * confirm dialog. */
-export function DeleteButtonLabel({ incrementKey, label = 'Delete' }) {
-  const [playing, setPlaying] = useState(false)
-  // Compares against the previous VALUE rather than a "have we run
-  // yet" boolean latch - the same class of bug just fixed in
-  // Settings.jsx: a boolean flipped unconditionally inside the "skip"
-  // branch gets flipped by the first of React StrictMode's two
-  // synthetic mount invocations, so the second invocation sees it
-  // already flipped and plays the animation anyway, on every mount
-  // (which is why this was firing on entrance, not just on tap). A
-  // value comparison is safe because both of StrictMode's invocations
-  // see the exact same incrementKey/prevKey pair and take the same
-  // branch, deterministically.
+// Simplified two-part bin (lid + body) instead of lucide's Trash2 -
+// needs its own separately-animatable lid group, which a single fixed
+// icon component can't give us. Body gives one small downward bounce
+// (delete-bin-drop) as the lid shuts (delete-bin-lid) - see index.css's
+// own comment: this whole motion, not a checkmark, IS the "it's gone"
+// confirmation, per explicit request.
+function DeleteBinIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <g className="animate-delete-bin-drop">
+        <g className="animate-delete-bin-lid" style={{ transformOrigin: '12px 6px' }}>
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </g>
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      </g>
+    </svg>
+  )
+}
+
+/** Delete button label - two independent flourishes layered on the same
+ * label:
+ *  1. A purely cosmetic tap acknowledgment (shake + dust burst) the
+ *     instant it's tapped - the real destructive action still waits for
+ *     the separate ConfirmDialog. `incrementKey` should be bumped by the
+ *     caller's onClick alongside whatever opens that dialog.
+ *  2. Once the user actually confirms and the delete is genuinely
+ *     in flight (`isSaving` true, same shared flag Save/Update already
+ *     use), a spinner plays, then - once it flips back to false, meaning
+ *     the delete finished - the bin-lid flourish above (DeleteBinIcon),
+ *     never a checkmark: the lid flipping open and shut IS the
+ *     confirmation here, per explicit request. The button itself never
+ *     shrinks or disappears through any of this - it only leaves the
+ *     screen when the form closes afterward. */
+export function DeleteButtonLabel({ incrementKey, isSaving, label = 'Delete' }) {
+  const [tapPlaying, setTapPlaying] = useState(false)
   const prevKey = useRef(incrementKey)
   useEffect(() => {
     if (incrementKey === prevKey.current) return
     prevKey.current = incrementKey
-    setPlaying(true)
-    const timer = setTimeout(() => setPlaying(false), 500)
+    setTapPlaying(true)
+    const timer = setTimeout(() => setTapPlaying(false), 500)
     return () => clearTimeout(timer)
   }, [incrementKey])
 
+  const [phase, setPhase] = useState('idle') // idle | spinning | bin
+  const wasSaving = useRef(false)
+  useEffect(() => {
+    if (isSaving) {
+      setPhase('spinning')
+      wasSaving.current = true
+      return
+    }
+    if (wasSaving.current) {
+      setPhase('bin')
+      const timer = setTimeout(() => setPhase('idle'), 1000)
+      wasSaving.current = false
+      return () => clearTimeout(timer)
+    }
+  }, [isSaving])
+
+  const showingIcon = tapPlaying || phase !== 'idle'
+
   return (
     <span className="relative inline-flex h-5 w-full items-center justify-center">
-      <span className={`transition-opacity duration-150 ${playing ? 'opacity-0' : 'opacity-100'}`}>{label}</span>
-      {playing && (
-        <span className="absolute inline-flex items-center justify-center">
+      <span className={`transition-opacity duration-150 ${showingIcon ? 'opacity-0' : 'opacity-100'}`}>{label}</span>
+      {tapPlaying && (
+        <span className="pointer-events-none absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">
           <Trash2 size={18} className="animate-toast-icon-shake" />
           {DUST_ANGLES.map((angle, i) => (
             <span
@@ -126,6 +197,11 @@ export function DeleteButtonLabel({ incrementKey, label = 'Delete' }) {
               }}
             />
           ))}
+        </span>
+      )}
+      {!tapPlaying && phase !== 'idle' && (
+        <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          {phase === 'spinning' ? <Loader2 size={18} className="animate-toast-icon-spin" /> : <DeleteBinIcon />}
         </span>
       )}
     </span>

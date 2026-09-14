@@ -42,7 +42,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle, Pencil } from 'lucide-react'
-import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
+import { SaveButton, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
@@ -99,7 +99,6 @@ import {
   inputClass,
   labelClass,
   readOnlyClass,
-  primaryButtonClass,
   smallButtonClass,
   removeButtonClass,
   CONDITION_FLAGS,
@@ -107,6 +106,10 @@ import {
 
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 const GENDERS = ['Male', 'Female']
+
+// Must match DeleteButtonLabel's own "bin" phase hold time
+// (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
+const DELETE_ANIM_MS = 1000
 
 // A pile's stock limit is a real physical constraint, but the running
 // total it's checked against can carry a few grams of floating-point
@@ -265,6 +268,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const [isRenaming, setIsRenaming] = useState(false)
 
   const [isSaving, setIsSaving] = useState(false)
+  // True for the brief window between a delete actually finishing and
+  // the form switching back to a blank entry - see handleDeleteConfirmed's
+  // own comment for why this delay exists (so the Delete button's own
+  // bin-lid completion animation has time to play before its row
+  // unmounts). Buttons stay blocked through this window too, not just
+  // visually mid-animation, so a second tap can't re-trigger a delete/
+  // update against a record that's already gone.
+  const [deleteCompleting, setDeleteCompleting] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
@@ -2317,13 +2328,23 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
     const freedSerial = serialNo.trim()
-    resetToBlankEntry(freedSerial)
-    scrollToTop()
+    // Delay switching back to a blank entry (which clears
+    // loadedTransaction, instantly swapping this whole button row for
+    // the plain Save button) until the Delete button's own bin-lid
+    // completion animation has actually had time to play - doing it
+    // immediately would unmount DeleteButtonLabel the moment isSaving
+    // flips back to false, before that animation ever rendered a frame.
+    setIsSaving(false)
+    setDeleteCompleting(true)
+    setTimeout(() => {
+      setDeleteCompleting(false)
+      resetToBlankEntry(freedSerial)
+      scrollToTop()
+    }, DELETE_ANIM_MS)
     } catch (err) {
       console.error(`${type} delete failed:`, err)
       logError(`${type} delete`, err, user)
       toast.error('Delete failed — please try again')
-    } finally {
       setIsSaving(false)
     }
   }
@@ -3501,7 +3522,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 if (!canSave) { setShowSaveHint(true); return }
                 handleUpdate()
               }}
-              disabled={isSaving}
+              disabled={isSaving || deleteCompleting}
               className="relative flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
               <UpdateButtonContent isSaving={isSaving} />
@@ -3509,10 +3530,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             <button
               type="button"
               onClick={() => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) }}
-              disabled={isSaving}
+              disabled={isSaving || deleteCompleting}
               className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
-              <DeleteButtonLabel incrementKey={deleteAnimKey} />
+              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving} />
             </button>
           </div>
           {showSaveHint && !canSave && (
@@ -3521,19 +3542,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           </div>
         ) : (
           <div>
-            <button
-              type="button"
+            <SaveButton
               onClick={() => {
                 if (!canSave) { setShowSaveHint(true); return }
                 handleSave()
               }}
               disabled={isSaving}
-              className={`w-full rounded-xl py-3 text-sm font-semibold transition-all ${
-                canSave ? `${primaryButtonClass}` : 'border border-brand-neon/40 text-brand-neon/40'
-              }`}
-            >
-              <SaveButtonLabel isSaving={isSaving} />
-            </button>
+              canSave={canSave}
+              isSaving={isSaving}
+            />
             {showSaveHint && !canSave && (
               <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
             )}

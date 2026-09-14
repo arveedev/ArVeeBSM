@@ -25,7 +25,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { ChevronLeft, ChevronRight, X, AlertTriangle, Pencil } from 'lucide-react'
-import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
+import { SaveButton, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -49,11 +49,15 @@ import {
   round3,
 } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
-import { inputClass, labelClass, primaryButtonClass } from './shared.js'
+import { inputClass, labelClass } from './shared.js'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 
 const STOCK_CONDITIONS = ['Good', 'Part Damaged', 'Damaged']
+
+// Must match DeleteButtonLabel's own "bin" phase hold time
+// (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
+const DELETE_ANIM_MS = 1000
 const SACK_CONDITIONS = ['BN', 'SH', 'US']
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
 
@@ -215,6 +219,11 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const [renameValue, setRenameValue] = useState('')
   const [isRenaming, setIsRenaming] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  // See StockFormBase.jsx's identical state/comment - blocks the
+  // Update/Delete buttons for the brief window between a delete
+  // finishing and the form switching back to a blank entry, so the
+  // Delete button's bin-lid completion animation has time to play.
+  const [deleteCompleting, setDeleteCompleting] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [hasEntered, setHasEntered] = useState(false)
@@ -866,13 +875,21 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       }
     })
     toast.success(`WTS ${serialNo.trim()} deleted`)
-    resetForm(serialNo.trim())
-    scrollToTop()
+    const freedSerial = serialNo.trim()
+    // See StockFormBase.jsx's identical fix/comment - delays switching
+    // back to a blank entry until the Delete button's own bin-lid
+    // completion animation has had time to play.
+    setIsSaving(false)
+    setDeleteCompleting(true)
+    setTimeout(() => {
+      setDeleteCompleting(false)
+      resetForm(freedSerial)
+      scrollToTop()
+    }, DELETE_ANIM_MS)
     } catch (err) {
       console.error('WTS delete failed:', err)
       logError('WTS delete', err, user)
       toast.error('Delete failed — please try again')
-    } finally {
       setIsSaving(false)
     }
   }
@@ -1101,30 +1118,26 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         {isEditMode ? (
           <div className="flex gap-3">
-            <button type="button" onClick={handleUpdate} disabled={isSaving}
+            <button type="button" onClick={handleUpdate} disabled={isSaving || deleteCompleting}
               className="relative flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50">
               <UpdateButtonContent isSaving={isSaving} />
             </button>
-            <button type="button" onClick={() => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) }} disabled={isSaving}
+            <button type="button" onClick={() => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) }} disabled={isSaving || deleteCompleting}
               className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50">
-              <DeleteButtonLabel incrementKey={deleteAnimKey} />
+              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving} />
             </button>
           </div>
         ) : (
           <div>
-            <button
-              type="button"
+            <SaveButton
               onClick={() => {
                 if (!canSave) { setShowSaveHint(true); return }
                 handleSave()
               }}
               disabled={isSaving}
-              className={`w-full rounded-xl py-3 text-sm font-semibold transition-all ${
-                canSave ? `${primaryButtonClass}` : 'border border-brand-neon/40 text-brand-neon/40'
-              }`}
-            >
-              <SaveButtonLabel isSaving={isSaving} />
-            </button>
+              canSave={canSave}
+              isSaving={isSaving}
+            />
             {showSaveHint && !canSave && (
               <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
             )}

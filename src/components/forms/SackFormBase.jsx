@@ -26,7 +26,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { Plus, X, ChevronLeft, ChevronRight, AlertTriangle, Pencil } from 'lucide-react'
-import { SaveButtonLabel, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
+import { SaveButton, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { db } from '../../db/dexie.js'
 import {
@@ -57,12 +57,15 @@ import { SavedReceipt } from '../common/AnimatedToast.jsx'
 import {
   inputClass,
   labelClass,
-  primaryButtonClass,
   smallButtonClass,
   removeButtonClass,
 } from './shared.js'
 
 const SACK_CONDITION_CODES = ['BN', 'SH', 'US']
+
+// Must match DeleteButtonLabel's own "bin" phase hold time
+// (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
+const DELETE_ANIM_MS = 1000
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
 
 // Display-only, mirrors StockFormBase.jsx exactly - see that file for
@@ -98,6 +101,11 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [trialNumber, setTrialNumber] = useState('')
   const [unresolvedSiaHint, setUnresolvedSiaHint] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
+  // See StockFormBase.jsx's identical state/comment - blocks the
+  // Update/Delete buttons for the brief window between a delete
+  // finishing and the form switching back to a blank entry, so the
+  // Delete button's bin-lid completion animation has time to play.
+  const [deleteCompleting, setDeleteCompleting] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
   const { user } = useAuth()
   const isAdmin = user?.role === 'Admin'
@@ -1047,13 +1055,20 @@ const SackFormBase = forwardRef(function SackFormBase(
     toast.success(`${type} ${serialNo.trim()} deleted`)
 
     const freedSerial = serialNo.trim()
-    resetToBlankEntry(freedSerial)
-    scrollToTop()
+    // See StockFormBase.jsx's identical fix/comment - delays switching
+    // back to a blank entry until the Delete button's own bin-lid
+    // completion animation has had time to play.
+    setIsSaving(false)
+    setDeleteCompleting(true)
+    setTimeout(() => {
+      setDeleteCompleting(false)
+      resetToBlankEntry(freedSerial)
+      scrollToTop()
+    }, DELETE_ANIM_MS)
     } catch (err) {
       console.error(`${type} delete failed:`, err)
       logError(`${type} delete`, err, user)
       toast.error('Delete failed — please try again')
-    } finally {
       setIsSaving(false)
     }
   }
@@ -1628,7 +1643,7 @@ const SackFormBase = forwardRef(function SackFormBase(
             <button
               type="button"
               onClick={handleUpdate}
-              disabled={isSaving}
+              disabled={isSaving || deleteCompleting}
               className="relative flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
               <UpdateButtonContent isSaving={isSaving} />
@@ -1636,27 +1651,23 @@ const SackFormBase = forwardRef(function SackFormBase(
             <button
               type="button"
               onClick={() => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) }}
-              disabled={isSaving}
+              disabled={isSaving || deleteCompleting}
               className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
-              <DeleteButtonLabel incrementKey={deleteAnimKey} />
+              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving} />
             </button>
           </div>
         ) : (
           <div>
-            <button
-              type="button"
+            <SaveButton
               onClick={() => {
                 if (!canSave) { setShowSaveHint(true); return }
                 handleSave()
               }}
               disabled={isSaving}
-              className={`w-full rounded-xl py-3 text-sm font-semibold transition-all ${
-                canSave ? `${primaryButtonClass}` : 'border border-brand-neon/40 text-brand-neon/40'
-              }`}
-            >
-              <SaveButtonLabel isSaving={isSaving} />
-            </button>
+              canSave={canSave}
+              isSaving={isSaving}
+            />
             {showSaveHint && !canSave && (
               <p className="mt-1 text-center text-xs text-brand-amber">Please complete all required fields.</p>
             )}

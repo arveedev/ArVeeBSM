@@ -2973,4 +2973,38 @@
 //              to gate on manuallyCompleted/sheetStatus only, per
 //              explicit request: "the user should just mark complete
 //              the MO/TMO for it to be excluded in the selection."
-export const APP_VERSION = '1.9-169'
+//   1.9-170 - Rebuilt the Save/Update/Delete button animations in
+//            AnimatedButtonBits.jsx (shared by StockFormBase, SackFormBase,
+//            WTSForm), per several rounds of demo review:
+//            - Save now owns its full `<button>` (new SaveButton
+//              component, not just inner content) - outline when
+//              disabled, solid filled when enabled (matching Update's
+//              look), with a one-shot neon pulse-ring the moment it
+//              BECOMES enabled (save-enable-pulse, index.css). Tapping
+//              it shrinks the whole button to a small circle with a
+//              genuinely centered spinner inside (real bug fixed: the
+//              old checkmark was `absolute` with no centering offsets,
+//              so it sat off to one side, not the middle), then a
+//              centered check, then expands back.
+//            - Delete keeps its existing tap flourish (shake + dust,
+//              before the confirm dialog opens) but its post-confirm
+//              completion signal is now spinner -> a two-part animated
+//              bin icon (lid flips open, body gives a small drop
+//              bounce as it shuts - delete-bin-lid/delete-bin-drop in
+//              index.css) - never a checkmark, per explicit request.
+//              The button itself never shrinks or disappears through
+//              any of this.
+//            - Real timing bug fixed: handleDeleteConfirmed (all three
+//              forms) called resetToBlankEntry/resetForm immediately
+//              after a successful delete, which clears loadedTransaction
+//              and instantly swaps the whole Update/Delete row for the
+//              plain Save button - unmounting DeleteButtonLabel before
+//              its own completion animation ever got a frame. Now
+//              isSaving flips false right away (so the animation
+//              starts) but the actual view switch is deferred by
+//              DELETE_ANIM_MS (1000ms, matching the bin animation's own
+//              hold time) via a new `deleteCompleting` flag that also
+//              keeps both buttons disabled through that window, so a
+//              second tap can't re-trigger against an already-deleted
+//              record.
+export const APP_VERSION = '1.9-170'

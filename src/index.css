@@ -926,3 +926,37 @@ select {
   100% { transform: translate(var(--dust-x), var(--dust-y)) scale(0); opacity: 0; }
 }
 .animate-delete-dust { animation: delete-dust 0.5s ease-out forwards; }
+
+/* Delete button's completion flourish (AnimatedButtonBits.jsx) - plays
+   AFTER the confirmed delete actually finishes (once isSaving flips back
+   to false), never a checkmark - the lid flipping open and shut IS the
+   "it's gone" confirmation. Two separately-animated parts of one SVG:
+   the lid group rotates open then closed, the body group gives one small
+   downward bounce as the lid shuts, so it reads as something actually
+   dropping in rather than a flat icon swap - per explicit request (demo
+   option 2 of 3). */
+@keyframes delete-bin-lid {
+  0% { transform: rotate(0deg); }
+  30% { transform: rotate(-28deg); }
+  55% { transform: rotate(-28deg); }
+  100% { transform: rotate(0deg); }
+}
+.animate-delete-bin-lid { animation: delete-bin-lid 0.8s ease-out both; }
+
+@keyframes delete-bin-drop {
+  0%, 55% { transform: translateY(0); }
+  70% { transform: translateY(2px); }
+  100% { transform: translateY(0); }
+}
+.animate-delete-bin-drop { animation: delete-bin-drop 0.8s ease-out both; }
+
+/* Save button waking up from disabled -> enabled (a required field just
+   got filled in) - a quiet neon ring pulses outward once as it settles
+   into its filled state, so becoming savable reads as a distinct event
+   rather than a flat color swap. Settling INTO disabled gets no pulse -
+   only becoming enabled is the moment worth marking. */
+@keyframes save-enable-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 255, 163, 0.45); }
+  100% { box-shadow: 0 0 0 10px rgba(0, 255, 163, 0); }
+}
+.animate-save-enable-pulse { animation: save-enable-pulse 0.5s ease-out; }
