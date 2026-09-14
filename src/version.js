@@ -2941,4 +2941,36 @@
 //   1.9-168 - Removed the chevron icon from the Issued card, per
 //            explicit request - the card's own tap-to-expand affordance
 //            speaks for itself without it.
-export const APP_VERSION = '1.9-168'
+//   1.9-169 - Real performance bugs found and fixed, per reported
+//            slowness looking up serial numbers and a freeze after
+//            saving/updating/deleting a transaction:
+//            - `isSerialTaken`, `getMatchingTransaction`,
+//              `findTransactionBySerial`, and `recalculateSerialCounter`
+//              (src/utils/serialNumber.js) all scanned every transaction
+//              of that TYPE across EVERY warehouse in plain JS instead
+//              of using the existing `[type+warehouseId+serialNo]`
+//              compound index - suggestNextSerial was already fixed
+//              this way earlier; these four weren't. checkAndLoadSerial
+//              (which runs on every keystroke AND right after every
+//              save, to advance to the next serial) calls
+//              findTransactionBySerial up to 3 times, which is exactly
+//              what made typing a serial feel slow and what kept the
+//              UI locked for "a while" after the success toast already
+//              showed - the toast fires before this chain, which was
+//              running an unindexed app-wide scan underneath it.
+//            - StockFormBase.jsx/SackFormBase.jsx's MO/TMO pickers
+//              (used when starting a new transaction, e.g. entering a
+//              By Products receipt for a completed milling run) were
+//              filtering out any order where `o.fulfilled` was true -
+//              an auto-computed "looks done" kg/piece/trial-count
+//              signal meant only as an admin double-check hint on
+//              MillingMonitor.jsx's own list (see that file's own
+//              needsConfirmation comment), never a real completion
+//              signal. This silently hid a TMO from the picker the
+//              moment all 3 trials had a receipt, even though nobody
+//              had manually marked it complete - reported directly.
+//              Switched all four picker filters (MO/TMO in both forms)
+//              to gate on manuallyCompleted/sheetStatus only, per
+//              explicit request: "the user should just mark complete
+//              the MO/TMO for it to be excluded in the selection."
+export const APP_VERSION = '1.9-169'

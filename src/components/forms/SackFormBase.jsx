@@ -1340,7 +1340,15 @@ const SackFormBase = forwardRef(function SackFormBase(
           {isMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableMoOrders = millingOrderOptions
-              .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === moNumber)
+              // Gated on manuallyCompleted/sheetStatus only - NOT
+              // o.fulfilled, an auto-computed "looks done" kg/piece
+              // signal (millingOrderStatus.js) meant only as an admin
+              // double-check hint on MillingMonitor.jsx's own list, not
+              // a real completion signal. Using it here was a real bug:
+              // an MO/TMO whose math happened to compute as "fulfilled"
+              // silently vanished from this picker even though nobody
+              // had marked it complete - reported directly.
+              .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === moNumber)
               .filter((o) => !trimmedCustomerName || o.number === moNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'ESR'
@@ -1408,7 +1416,8 @@ const SackFormBase = forwardRef(function SackFormBase(
           {isTestMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableTmoNumbers = millingOrderOptions
-              .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
+              // Same manuallyCompleted-only gate as the MO picker above.
+              .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
               .filter((o) => !trimmedCustomerName || o.number === tmoNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const isDerived = type !== 'ESR'
             const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !tmoNumber

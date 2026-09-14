@@ -2723,12 +2723,23 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           {isMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableMoOrders = millingOrderOptions
-              // DONE/fulfilled orders are only hidden when creating a
-              // brand new transaction - editing an existing one shows
+              // Completed orders are only hidden when creating a brand
+              // new transaction - editing an existing one shows
               // everything for this miller regardless of completion
               // status, so the user can see and verify exactly which
               // MO was actually used, or correct it if needed.
-              .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === moNumber)
+              // Gated on manuallyCompleted/sheetStatus only - NOT
+              // o.fulfilled, which is an auto-computed "looks done"
+              // kg/piece signal (see millingOrderStatus.js) meant only
+              // as an admin double-check hint on MillingMonitor.jsx's
+              // own list, never a hard completion signal. Using it here
+              // was a real bug: an MO/TMO whose trials/kg math happened
+              // to compute as "fulfilled" silently vanished from this
+              // picker even though nobody had actually marked it
+              // complete - reported directly (a TMO disappeared from
+              // the By Products picker right after its 3rd trial
+              // receipt was logged, despite never being marked done).
+              .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === moNumber)
               // Only this miller's own orders - a selection for one
               // miller should never show every other miller's MOs.
               // Always includes the currently-selected order even if
@@ -2815,7 +2826,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           {isTestMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableTmoNumbers = millingOrderOptions
-              .filter((o) => loadedTransaction || (!o.fulfilled && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
+              // Same manuallyCompleted-only gate as the MO picker above
+              // - not o.fulfilled, the auto-computed "looks done" signal
+              // (see that filter's own comment for the reported bug this
+              // fixes: 3 trials received auto-flipped fulfilled to true
+              // and silently hid the TMO here).
+              .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
               .filter((o) => !trimmedCustomerName || o.number === tmoNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const isDerived = type !== 'WSR'
             const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !tmoNumber

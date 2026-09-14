@@ -217,10 +217,17 @@ export const recordSerialUsed = async (type, warehouseId, serialNo, cerealCatego
 export const recalculateSerialCounter = async (type, warehouseId, cerealCategory = null) => {
   if (!warehouseId) return
 
+  // Same [type+warehouseId+serialNo] range-query narrowing as
+  // suggestNextSerial's own fix - this genuinely needs every remaining
+  // serial in this (type, warehouse) pool to find the recency-best one,
+  // but there's no reason that pool should include every OTHER
+  // warehouse's transactions of this type too. Runs after every delete/
+  // un-void, so an unindexed app-wide scan here was a real contributor
+  // to the reported post-save freeze.
   const remaining = await db.transactions
-    .where('type')
-    .equals(type)
-    .and((tx) => tx.warehouseId === warehouseId && (cerealCategory == null || tx.cerealCategory === cerealCategory))
+    .where('[type+warehouseId+serialNo]')
+    .between([type, warehouseId, Dexie.minKey], [type, warehouseId, Dexie.maxKey])
+    .and((tx) => cerealCategory == null || tx.cerealCategory === cerealCategory)
     .toArray()
 
   // Keeps the most RECENT remaining transaction (by compareByRecency -
@@ -320,11 +327,16 @@ export const suggestNextSerial = async (type, warehouseId, fallback = '1', cerea
  */
 export const isSerialTaken = async (type, warehouseId, serialNo, excludeId = null, cerealCategory = null) => {
   if (!serialNo || !warehouseId) return false
+  // Uses the [type+warehouseId+serialNo] compound index (same fix as
+  // suggestNextSerial's own) instead of scanning every transaction of
+  // this type across every warehouse in JS - this runs on essentially
+  // every keystroke while typing a serial number, so an unindexed scan
+  // here was a real, directly-felt source of lag, confirmed reported as
+  // "so slow now looking up for serial number".
   const match = await db.transactions
-    .where('type')
-    .equals(type)
-    .and((tx) => tx.warehouseId === warehouseId && tx.serialNo === serialNo && tx.id !== excludeId
-      && (cerealCategory == null || tx.cerealCategory === cerealCategory))
+    .where('[type+warehouseId+serialNo]')
+    .equals([type, warehouseId, serialNo])
+    .and((tx) => tx.id !== excludeId && (cerealCategory == null || tx.cerealCategory === cerealCategory))
     .first()
   return Boolean(match)
 }
@@ -343,11 +355,11 @@ export const isSerialTaken = async (type, warehouseId, serialNo, excludeId = nul
  */
 export const getMatchingTransaction = async (type, warehouseId, serialNo, excludeId = null, cerealCategory = null) => {
   if (!serialNo || !warehouseId) return null
+  // Same compound-index fix as isSerialTaken above.
   return db.transactions
-    .where('type')
-    .equals(type)
-    .and((tx) => tx.warehouseId === warehouseId && tx.serialNo === serialNo && tx.id !== excludeId
-      && (cerealCategory == null || tx.cerealCategory === cerealCategory))
+    .where('[type+warehouseId+serialNo]')
+    .equals([type, warehouseId, serialNo])
+    .and((tx) => tx.id !== excludeId && (cerealCategory == null || tx.cerealCategory === cerealCategory))
     .first()
 }
 
@@ -363,11 +375,13 @@ export const getMatchingTransaction = async (type, warehouseId, serialNo, exclud
  */
 export const findTransactionBySerial = async (type, warehouseId, serialNo, cerealCategory = null) => {
   if (!serialNo || !warehouseId) return null
+  // Same compound-index fix as isSerialTaken above - this one runs on
+  // every keystroke while typing/stepping a serial number, so an
+  // unindexed full-type scan here was directly felt as lag.
   const matches = await db.transactions
-    .where('type')
-    .equals(type)
-    .and((tx) => tx.warehouseId === warehouseId && tx.serialNo === serialNo
-      && (cerealCategory == null || tx.cerealCategory === cerealCategory))
+    .where('[type+warehouseId+serialNo]')
+    .equals([type, warehouseId, serialNo])
+    .and((tx) => cerealCategory == null || tx.cerealCategory === cerealCategory)
     .toArray()
   if (matches.length <= 1) return matches[0] ?? null
 
