@@ -3103,4 +3103,32 @@
 //               `!border-brand-amber` class every required field already
 //               gets when empty/invalid, rather than threading a ref
 //               through nearly every field in three very large forms.
-export const APP_VERSION = '1.9-172'
+//   1.9-173 - Rebuilt the PC field-group layout again, after live
+//            screenshots showed 1.9-172's version was still wrong: a
+//            tint per already-existing single/paired-field div (Date
+//            alone, MC+MTS alone, etc.) looked scattered rather than
+//            grouped, even once row-aligned - "very ugly, very wrong
+//            grouping" per direct feedback. Redesigned into four real
+//            semantic groups instead - Document, Customer, Stock
+//            Details, Quantity (WSR/WSI/ESR/ESI - grouped by relevance,
+//            matching an earlier approved reference mockup; WTSForm
+//            uses a smaller Document/Details split alongside its two
+//            already color-coded Issued/Received cards, which don't
+//            need a generic tint layered on top of their own accent
+//            borders) - each one flat tinted box, same tint on every
+//            box, no title text. Every field stayed in its exact
+//            original DOM position - only wrapper <div>s were added
+//            around each existing contiguous run, nothing was cut or
+//            reordered, to avoid touching this file's extensive
+//            conditional business logic. Two more follow-ups from the
+//            same round of feedback: (1) the notification redesign
+//            settled on "C + glow" - the whole toast card tinted its
+//            own type color (not just a thin left border) with a soft
+//            glow-ring shadow around it, title text in that same color.
+//            (2) The live "Pile now" sidebar (StockFormBase only) now
+//            shows a card per pile on a multi-pile WSI (the primary
+//            pile plus every "Issue from another pile" addition that
+//            has a pile selected yet), each with its own accent color
+//            so they read as genuinely separate piles - no combined
+//            total card, per explicit request.
+export const APP_VERSION = '1.9-173'

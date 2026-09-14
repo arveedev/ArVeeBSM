@@ -63,16 +63,23 @@ function AnimatedToast({ t }) {
     ? 'animate-toast-pop-in'
     : 'animate-toast-pop-out'
 
+  // Variant "C + glow" (picked, per explicit request out of several
+  // demoed options): the WHOLE card is tinted the toast's own type
+  // color (not just a left border sliver), title text carries that
+  // color too, and a soft glow-ring shadow sits around the card so it
+  // reads as more noticeable at a glance - not just another gray box.
   return (
     <div
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      className={`flex items-center gap-2.5 rounded-xl border border-neutral-800 bg-neutral-900 shadow-lg ${
+      className={`flex items-center gap-2.5 rounded-xl ${
         isPC ? 'min-w-[26rem] max-w-lg px-5 py-4' : 'px-3.5 py-2.5'
       } ${t.visible ? entranceStyle : entranceStyle}`}
       style={{
-        borderLeft: `3px solid ${color}`,
+        backgroundColor: `${color}1a`,
+        border: `1px solid ${color}59`,
+        boxShadow: `0 0 0 1px ${color}26, 0 0 28px -6px ${color}8c`,
         transform: `translateX(${dragX}px)`,
         opacity: dragging ? Math.max(0.2, 1 - Math.abs(dragX) / 200) : 1,
         transition: dragging ? 'none' : 'transform 0.25s ease, opacity 0.25s ease',
@@ -89,7 +96,7 @@ function AnimatedToast({ t }) {
         )}
         <Icon size={isPC ? 26 : 20} className={t.type === 'loading' ? 'animate-toast-icon-spin' : motion} />
       </span>
-      <span className={`font-medium text-app-text ${isPC ? 'text-base' : 'text-sm'}`}>{resolveValue(t.message, t)}</span>
+      <span className={`font-medium ${isPC ? 'text-base' : 'text-sm'}`} style={{ color }}>{resolveValue(t.message, t)}</span>
     </div>
   )
 }
@@ -121,10 +128,15 @@ export function SavedReceipt({ title, stats }) {
     // later prop identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  // No color of its own - inherits AnimatedToast's outer accent-colored
+  // span (the "C + glow" variant colors the whole card's text, not just
+  // the icon), so the title reads in the same accent as everything else
+  // on the card. The stats line stays visually secondary via opacity
+  // rather than a separate hardcoded gray that would fight that color.
   return (
-    <span className="text-sm font-medium text-app-text">
+    <span className="text-sm font-medium">
       <span className="block">{title}</span>
-      <span className="block text-xs text-neutral-400">
+      <span className="block text-xs opacity-70">
         {stats.map((s, i) => (
           <span key={s.label}>
             {i > 0 && ' · '}

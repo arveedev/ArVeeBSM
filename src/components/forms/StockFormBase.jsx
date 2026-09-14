@@ -107,6 +107,7 @@ import {
   focusFirstInvalidField,
   useFieldGroupRowCount,
   columnDividerStyle,
+  groupBoxClass,
 } from './shared.js'
 
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
@@ -123,6 +124,13 @@ const DELETE_ANIM_MS = 1000
 // at a wide width should still get the mobile flow.
 const isTouchDevicePointer = () =>
   typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
+
+// One accent color per pile card in the live "Pile now" sidebar, so a
+// multi-pile WSI (primary pile + one or more "Issue from another pile"
+// additions) can tell its cards apart at a glance - per explicit
+// request, no combined total block, just each pile's own real figures
+// under its own accent.
+const PILE_SIDEBAR_ACCENTS = ['#00FFA3', '#378ADD', '#F5A524', '#D4537E']
 
 // A pile's stock limit is a real physical constraint, but the running
 // total it's checked against can carry a few grams of floating-point
@@ -2758,39 +2766,36 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               even though opacity already faded smoothly. transition-all
               covers every property this className swaps. */}
           {/* Grouping-box redesign (per explicit request, several rounds
-              of demo review): each field block gets a subtle alternating
-              tint background and its own rounded corners/padding, no
-              title text anywhere - achieved purely via nth-child on this
-              shared container rather than hand-wrapping every field
-              cluster, since nth-child counts only what actually rendered
-              (React's conditional fields that evaluate to null/false
-              contribute no DOM node, so the alternation stays correct
-              regardless of which optional fields are showing). Applies
-              identically on mobile (still one column, unchanged flow).
-              Real bug found on PC, twice over: CSS multi-column
-              (columns-2) balances by total content HEIGHT, filling
-              column 1 top-to-bottom before wrapping into column 2 - it
-              does NOT place items row-by-row, so unrelated groups ended
-              up scattered next to each other with nothing actually
-              aligned - reported directly ("the group layout is a
-              mess... everything must align per row"). A first fix to
-              plain CSS Grid (grid-cols-2, row-major) fixed the row
-              alignment but placed groups left-right-left-right (1,2 top
-              row / 3,4 bottom row) - per explicit follow-up, the reading/
-              tab order must instead run straight down the left column
-              first, THEN the right column (1,3 down the left / 2,4 down
-              the right - i.e. raster order 1,3,2,4). That needs
-              grid-auto-flow: column with an explicit row count (see
-              useFieldGroupRowCount's own comment for why that count is
-              measured from the real DOM rather than computed from a
-              JS array this deeply-conditional field list doesn't have).
-              columnDividerStyle draws the subtle center rule, per
-              explicit request. */}
+              of demo review, and a follow-up correction that the first
+              build - a tint per already-existing single/paired-field div,
+              alternating - was "very ugly, very wrong grouping"): each of
+              the FOUR real semantic groups below (Document, Customer,
+              Stock Details, Quantity - grouped by relevance, matching an
+              earlier approved reference mockup) is one flat tinted box
+              (groupBoxClass, shared.js), same tint on every box, no title
+              text on any of them. Every individual field inside stays in
+              its exact original DOM position/order - only wrapper <div>s
+              were added around each existing contiguous run, nothing was
+              cut or moved, to avoid touching this file's extensive
+              conditional business logic. One accepted deviation from the
+              approved mockup: Age/Unit/Condition land in the Quantity box
+              rather than Stock Details, since moving them earlier in the
+              DOM order isn't worth the risk for a label-only grouping
+              choice. Applies identically on mobile (one column, unchanged
+              flow) and PC (grid-auto-flow: column below - see
+              useFieldGroupRowCount's own comment for why the row count is
+              measured from the real DOM rather than computed from a JS
+              array this deeply-conditional field list doesn't have -
+              raster reading/tab order 1,3,2,4 down the left column then
+              the right, per explicit request). columnDividerStyle draws
+              the subtle center rule. */}
           <div
             ref={fieldGroupRef}
             style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
-            className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
+            className={`transition-all duration-300 ${isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
           >
+          {/* Group: Document */}
+          <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
@@ -2817,7 +2822,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               )}
             </div>
           </div>
+          </div>
 
+          {/* Group: Customer */}
+          <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Nature of Transaction</label>
             <select
@@ -3077,7 +3085,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               </div>
             </div>
           )}
+          </div>
 
+          {/* Group: Stock Details */}
+          <div className={groupBoxClass}>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Pile ID</label>
@@ -3188,7 +3199,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               {fmtWeight(availableKilos, weightUnit)}
             </div>
           )}
+          </div>
 
+          {/* Group: Quantity */}
+          <div className={groupBoxClass}>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Number of Bags</label>
@@ -3537,34 +3551,62 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           </div>
           </div>
           </div>
+          </div>
 
-          {isPC && (
-            <div
-              className="shrink-0 self-stretch overflow-hidden rounded-xl bg-neutral-900/60 transition-[flex-basis,opacity] duration-300 ease-out"
-              style={{
-                flexBasis: selectedPile ? '190px' : '0px',
-                width: selectedPile ? '190px' : '0px',
-                opacity: selectedPile ? 1 : 0,
-                pointerEvents: selectedPile ? 'auto' : 'none',
-              }}
-            >
-              {/* Fixed inner width regardless of the outer wrapper's
-                  own animated width - so the content doesn't visibly
-                  reflow/wrap mid-transition, it's simply revealed as
-                  the outer box widens. */}
-              <div className="w-[190px] p-3">
-                <p className="mb-2 text-[10px] uppercase tracking-wide text-neutral-500">Pile now (live)</p>
-                <div className="mb-2 rounded-lg bg-neutral-950 py-2 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
-                  <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(selectedPile?.currentBags ?? 0)}</p>
-                </div>
-                <div className="rounded-lg bg-neutral-950 py-2 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
-                  <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{fmtWeight(selectedPile?.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}</p>
+          {isPC && (() => {
+            // Primary pile first, then every additional pile from
+            // "Issue from another pile" that actually has one selected
+            // yet - each keeps its own accent (PILE_SIDEBAR_ACCENTS) so
+            // a multi-pile WSI reads as genuinely separate piles, not
+            // one blended figure. Per explicit request: no combined
+            // total card.
+            const sidebarPiles = selectedPile ? [selectedPile, ...extraAllocInfos.map((i) => i.pile).filter(Boolean)] : []
+            return (
+              <div
+                className="shrink-0 self-stretch overflow-hidden rounded-xl bg-neutral-900/60 transition-[flex-basis,opacity] duration-300 ease-out"
+                style={{
+                  flexBasis: selectedPile ? '190px' : '0px',
+                  width: selectedPile ? '190px' : '0px',
+                  opacity: selectedPile ? 1 : 0,
+                  pointerEvents: selectedPile ? 'auto' : 'none',
+                }}
+              >
+                {/* Fixed inner width regardless of the outer wrapper's
+                    own animated width - so the content doesn't visibly
+                    reflow/wrap mid-transition, it's simply revealed as
+                    the outer box widens. */}
+                <div className="w-[190px] p-3">
+                  <p className="mb-2 text-[10px] uppercase tracking-wide text-neutral-500">
+                    {sidebarPiles.length > 1 ? 'Piles now (live)' : 'Pile now (live)'}
+                  </p>
+                  {sidebarPiles.map((pile, i) => (
+                    <div
+                      key={pile.pileId}
+                      className="mb-2 rounded-lg bg-neutral-950 p-2 last:mb-0"
+                      style={{ borderLeft: `3px solid ${PILE_SIDEBAR_ACCENTS[i % PILE_SIDEBAR_ACCENTS.length]}` }}
+                    >
+                      {sidebarPiles.length > 1 && (
+                        <p className="mb-1 truncate text-[10px] text-neutral-500" title={pile.pileName}>{pile.pileName}</p>
+                      )}
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</span>
+                        <span className="text-sm font-bold tabular-nums text-app-text">{fmtBags(pile.currentBags ?? 0)}</span>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</span>
+                        <span
+                          className="text-sm font-bold tabular-nums"
+                          style={{ color: PILE_SIDEBAR_ACCENTS[i % PILE_SIDEBAR_ACCENTS.length] }}
+                        >
+                          {fmtWeight(pile.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
           </div>
 
           {isProcurement && (

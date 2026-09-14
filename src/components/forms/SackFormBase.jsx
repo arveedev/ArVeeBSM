@@ -64,6 +64,7 @@ import {
   focusFirstInvalidField,
   useFieldGroupRowCount,
   columnDividerStyle,
+  groupBoxClass,
 } from './shared.js'
 
 const SACK_CONDITION_CODES = ['BN', 'SH', 'US']
@@ -1337,19 +1338,20 @@ const SackFormBase = forwardRef(function SackFormBase(
             )}
           </div>
 
-          {/* Concept S (picked) + background-tint grouping, PC two-column
-              layout - see StockFormBase.jsx's identical fix/comment for
-              the full explanation (real CSS Grid + grid-auto-flow:
-              column so groups fill straight down the left column then
-              the right one, raster order 1,3,2,4 - not multi-column's
-              height-balanced flow, and not plain row-major grid-cols-2
-              either, both rejected per explicit feedback). No live pile
-              sidebar here (no Pile ID field on this form). */}
+          {/* Grouping-box redesign into four real semantic groups
+              (Document, Customer, Stock Details, Quantity) - see
+              StockFormBase.jsx's identical fix/comment for the full
+              explanation, including why every field stays in its exact
+              original DOM order (only wrapper <div>s added around each
+              existing contiguous run). No live pile sidebar here (no
+              Pile ID field on this form). */}
           <div
             ref={fieldGroupRef}
             style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
-            className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
+            className={`transition-all duration-300 ${isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
           >
+          {/* Group: Document */}
+          <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
@@ -1376,7 +1378,10 @@ const SackFormBase = forwardRef(function SackFormBase(
               )}
             </div>
           </div>
+          </div>
 
+          {/* Group: Customer */}
+          <div className={groupBoxClass}>
           <CustomerNameAutocomplete
             ref={customerNameRef}
             value={customerName}
@@ -1411,7 +1416,10 @@ const SackFormBase = forwardRef(function SackFormBase(
               ))}
             </select>
           </div>
+          </div>
 
+          {/* Group: Stock Details */}
+          <div className={groupBoxClass}>
           {isMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableMoOrders = millingOrderOptions
@@ -1576,7 +1584,10 @@ const SackFormBase = forwardRef(function SackFormBase(
               authorized figure as reference: <span className="font-mono">{unresolvedSiaHint}</span>
             </div>
           )}
+          </div>
 
+          {/* Group: Quantity */}
+          <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Sack Lines</label>
             <div className="mt-1 space-y-2">
@@ -1681,6 +1692,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                 Total pieces: {fmtBags(totalPieces)}
               </p>
             )}
+          </div>
           </div>
           </div>
 

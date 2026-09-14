@@ -49,7 +49,7 @@ import {
   round3,
 } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
-import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useFieldGroupRowCount, columnDividerStyle } from './shared.js'
+import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useFieldGroupRowCount, columnDividerStyle, groupBoxClass } from './shared.js'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 
@@ -1096,17 +1096,24 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
           </div>
         </div>
 
-        {/* Concept S (picked) + background-tint grouping, PC two-column
-            layout - see StockFormBase.jsx's identical fix/comment for
-            the full explanation (real CSS Grid + grid-auto-flow: column
-            so groups fill straight down the left column then the right
-            one, raster order 1,3,2,4). No live pile sidebar here - WTS
-            has two pile sections (issued/received), not one. */}
+        {/* Grouping-box redesign - see StockFormBase.jsx's identical
+            fix/comment for the full explanation of the grid mechanics.
+            WTS's own field list doesn't map cleanly onto the same
+            Document/Customer/Stock Details/Quantity split the other two
+            forms use (it's a dual-sided ledger, not a flat field list) -
+            so here it's just two tinted groups (Document, Details) plus
+            the two SidePanel cards, which are already well-grouped and
+            visually distinct on their own (amber vs neon accent borders
+            for Received vs Issued) - wrapping them in another generic
+            tint box on top of that would just compete with, not
+            reinforce, their existing color-coded separation. */}
         <div
           ref={fieldGroupRef}
           style={isPC ? { ...columnDividerStyle, gridTemplateRows: `repeat(${fieldGroupRowCount}, min-content)`, gridAutoFlow: 'column' } : undefined}
-          className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
+          className={`transition-all duration-300 ${isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''} ${isPC ? 'grid grid-cols-2 gap-3 items-start' : 'space-y-3'}`}
         >
+        {/* Group: Document */}
+        <div className={groupBoxClass}>
         <div>
           <label className={labelClass}>Date</label>
           <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
@@ -1126,7 +1133,10 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
             </button>
           </div>
         </div>
+        </div>
 
+        {/* Group: Details */}
+        <div className={groupBoxClass}>
         <div>
           <label className={labelClass}>Nature of Transaction</label>
           <select value={transactionTypeId} onChange={(e) => setTransactionTypeId(e.target.value)} className={`${inputClass} ${!transactionTypeId ? '!border-brand-amber' : ''}`}>
@@ -1140,6 +1150,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
           <input type="text" inputMode="decimal"
             value={moistureContent} onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
             className={`${inputClass} ${moistureContent === '' ? '!border-brand-amber' : ''}`} placeholder="13.90" />
+        </div>
         </div>
 
         <SidePanel
