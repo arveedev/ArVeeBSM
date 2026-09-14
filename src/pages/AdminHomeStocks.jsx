@@ -245,6 +245,17 @@ function AdminHomeStocks({ onWarehouseSelect }) {
 
           return (
             <>
+              {/* Real bug found, reported directly with a screenshot:
+                  the TOTAL row used to be a completely separate flex
+                  strip below this table (see its own removed comment
+                  further down), not an actual part of the table's own
+                  column grid - so its two figures could drift out of
+                  alignment with the real Rice/Palay columns above them
+                  whenever the two didn't happen to compute to the same
+                  widths. Moved into a real <tfoot> row instead, using
+                  the same Th/Td cells as every other row - guaranteed
+                  pixel-aligned with the columns above it, the same way
+                  every other table in this app already works. */}
               <div className="hidden sm:block">
                 <table className="w-full text-sm">
                   <thead>
@@ -266,6 +277,13 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-neutral-600">
+                      <Td><span className="text-sm font-bold uppercase tracking-wide text-app-text">TOTAL</span></Td>
+                      <Td right><span className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceBranchValue} format={fmt} /></span></Td>
+                      <Td right><span className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayBranchValue} format={fmt} /></span></Td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
 
@@ -296,21 +314,12 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           // own already-clamped values (computed once, above) - see that
           // computation's own comment for why this must never be
           // recomputed independently from the raw branch-wide figures.
-          // Same card shape as each province card above (grid-cols-2,
-          // Rice left/Palay right) so this reads as one more card in the
-          // same stack instead of a visually distinct summary block - a
-          // slightly brighter border is the only thing setting it apart.
+          // Desktop TOTAL now lives in the table's own <tfoot> above
+          // (guaranteed column-aligned) - only the mobile card version
+          // remains here.
           const unitLabel = weightUnit === 'mt' ? 'MT' : 'Net Bags'
           return (
             <>
-              <div className="mt-2 hidden items-center justify-between rounded-lg border border-neutral-600 bg-neutral-950 px-3 py-2 sm:flex">
-                <span className="text-sm font-bold uppercase tracking-wide text-app-text">TOTAL</span>
-                <div className="flex gap-8">
-                  <span className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceBranchValue} format={fmt} /></span>
-                  <span className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayBranchValue} format={fmt} /></span>
-                </div>
-              </div>
-
               <div className="mt-2 rounded-lg border border-neutral-600 bg-neutral-950/50 p-2.5 sm:hidden">
                 <p className="text-sm font-bold uppercase tracking-wide text-app-text">TOTAL</p>
                 <div className="mt-1.5 grid grid-cols-2 gap-2">

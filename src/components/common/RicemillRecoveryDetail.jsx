@@ -123,17 +123,21 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
         {label}{varietyName ? ` · ${varietyName}` : ''}
       </p>
 
-      {/* Real "card type" now, per direct follow-up - the previous
-          divide-y single list read as one continuous list, not
-          distinctly separate cards. Each entry is now its own bordered/
-          tinted tile (the same rounded-lg border-neutral-800
-          bg-neutral-950 treatment used elsewhere, e.g. the Sack Pieces
-          tiles), stacked with real gaps between them - at every screen
-          size, matching the width-filling reasoning from before (each
-          tile is still a plain full-width flex row internally). */}
-      <div ref={flipRef} className="space-y-2">
+      {/* Real "card type" - each entry its own bordered/tinted tile
+          (the same rounded-lg border-neutral-800 bg-neutral-950
+          treatment used elsewhere, e.g. the Sack Pieces tiles). Per
+          direct follow-up, this list now also auto-balances into up to
+          3 columns on large screens instead of staying single-column
+          and leaving a lot of empty width unused - real CSS
+          multi-column (not a fixed grid), since a flat list of dated
+          entries has no per-group heading to misalign the way the
+          Sacks warehouse list did. TOTAL stays OUTSIDE the columned
+          flow, as its own full-width tile below - multi-column can't
+          reliably keep a single "always last, always full-width" item
+          pinned in place the way a plain block below it can. */}
+      <div ref={flipRef} className="columns-1 gap-2 sm:columns-2 lg:columns-3">
         {entries.map((entry) => (
-          <div key={entry.authId} data-flip-key={entry.authId} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5">
+          <div key={entry.authId} data-flip-key={entry.authId} className="mb-2 flex items-center justify-between gap-3 break-inside-avoid-column rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5">
             <div className="min-w-0">
               <p className="text-base tabular-nums text-app-text">{shortDate(entry.date)}</p>
               {columns.includes('aiNumber') && (
@@ -146,13 +150,13 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
             </p>
           </div>
         ))}
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-2.5">
-          <span className="text-base font-semibold text-app-text">TOTAL</span>
-          <p className="text-right text-base tabular-nums">
-            <span className="font-semibold text-app-text">{fmtNetBags(totalBags)} bags</span>
-            <span className="text-neutral-400"> · {fmtWeight(totalKilos, weightUnit)}</span>
-          </p>
-        </div>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-2.5">
+        <span className="text-base font-semibold text-app-text">TOTAL</span>
+        <p className="text-right text-base tabular-nums">
+          <span className="font-semibold text-app-text">{fmtNetBags(totalBags)} bags</span>
+          <span className="text-neutral-400"> · {fmtWeight(totalKilos, weightUnit)}</span>
+        </p>
       </div>
     </div>
   )

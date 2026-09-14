@@ -11,7 +11,7 @@
 // actually in frame - reading as an endless list of bare "Condition"
 // rows with no sack type or pieces value in sight.
 
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight } from 'lucide-react'
 import { db } from '../db/dexie.js'
@@ -155,7 +155,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         tabIndex={0}
         onClick={() => onWarehouseSelect?.(warehouse)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onWarehouseSelect?.(warehouse) }}
-        className="mb-3 break-inside-avoid-column cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+        className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
       >
         <div className="flex items-center justify-between gap-2">
           {/* Warehouse name highlighted (accent color, not plain
@@ -234,50 +234,47 @@ function AdminHomeSacks({ onWarehouseSelect }) {
       {groupTab === 'Warehouse' && (
         <Section title="Sack Pieces by Warehouse">
           {sortedWarehouses.length === 0 ? <Empty /> : (
-            // Two real bugs found, reported directly with screenshots.
-            // (1) Confining each province to its OWN 2-column sub-grid
-            // wasted a ton of horizontal space whenever one province
-            // had far fewer warehouses than another. Fixed by sharing
-            // one grid across every warehouse regardless of province.
-            // (2) That fix still wasn't "balanced" - CSS Grid auto-fill
-            // packs strictly row by row, so a row that doesn't divide
-            // evenly leaves a sparse, lonely-looking last row (a single
-            // card stranded under five others) - the exact "make sure
-            // this always looks even" complaint. Switched to real CSS
-            // multi-column instead: it fills every column to a similar
-            // TOTAL HEIGHT, not a fixed row grid, which is what
-            // actually stays balanced regardless of how many warehouses
-            // or provinces exist at any given screen size. Each card
-            // (and each province heading) gets break-inside-avoid-
-            // column so a card is never visually split across the
-            // column break.
-            //
-            // Capped at 3 columns (was 4 at xl:) - reported directly:
-            // with only a handful of warehouses total, a 4th column
-            // left one column holding a single short card and a large
-            // dead gap below it, since CSS multi-column's own balance
-            // algorithm can't always split unevenly-sized content
-            // evenly across more columns than there's real content
-            // for. 3 columns leaves more cards per column, which
-            // balances noticeably better in practice.
-            <div key="warehouse" className="columns-1 gap-3 animate-flow-down sm:columns-2 lg:columns-3">
+            // Real bugs found across several rounds, all reported
+            // directly with screenshots. A single shared grid/multi-
+            // column flow across every province (tried twice) never
+            // worked: (a) a province heading only appears once,
+            // wherever CSS multi-column happens to place it in its own
+            // column - a card in a DIFFERENT column that belongs to the
+            // same province has no heading above it and starts higher
+            // up, so cards from different provinces visually don't line
+            // up with each other at all; (b) a province with few
+            // warehouses (Catanduanes) became visually indistinguishable
+            // from the province next to it, since nothing actually
+            // separated them once their cards were interleaved into the
+            // same flow. Each province is now its own clearly-bordered
+            // section (heading INSIDE its own box, not floating loose)
+            // with its own independent auto-filling grid of warehouse
+            // cards - no cross-province alignment problem (each grid is
+            // separate), no confusion about which province a card
+            // belongs to (each section is its own visually distinct
+            // box), and no wasted space (auto-fill sizes each section's
+            // own column count to how many warehouses IT actually has,
+            // not a shared fixed count).
+            <div key="warehouse" className="space-y-3 animate-flow-down">
               {sortedProvinces.map((province) => {
                 // Only warehouses that actually have something to show -
                 // a province where every warehouse is currently empty
-                // shouldn't render a heading over nothing.
+                // shouldn't render a section over nothing.
                 const provinceWarehouses = sortedWarehouses.filter(
                   (w) => w.provinceId === province.provinceId && sackTypeRows([w.warehouseId]).length > 0
                 )
                 if (provinceWarehouses.length === 0) return null
                 return (
-                  <Fragment key={province.provinceId}>
-                    <p className="mb-2 break-inside-avoid-column text-xs font-bold uppercase tracking-wide text-neutral-500">
+                  <div key={province.provinceId} className="rounded-xl border border-neutral-800 p-3">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
                       {province.code} <span className="font-medium normal-case text-neutral-600">{province.name}</span>
                     </p>
-                    {provinceWarehouses.map((warehouse) => (
-                      <WarehouseSackCard key={warehouse.warehouseId} warehouse={warehouse} />
-                    ))}
-                  </Fragment>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+                      {provinceWarehouses.map((warehouse) => (
+                        <WarehouseSackCard key={warehouse.warehouseId} warehouse={warehouse} />
+                      ))}
+                    </div>
+                  </div>
                 )
               })}
             </div>

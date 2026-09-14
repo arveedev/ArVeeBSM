@@ -3405,4 +3405,35 @@
 //               is now its own bordered/tinted tile with real gaps
 //               between them, matching the same tile treatment used
 //               elsewhere (e.g. Sack Pieces).
-export const APP_VERSION = '1.9-185'
+//   1.9-186 - Three more follow-up fixes, reported directly with
+//            screenshots:
+//            1. Real bug fixed: "Net Bags by Province & Category"'s
+//               TOTAL row was a completely separate flex strip below
+//               the real <table>, not an actual part of its column
+//               grid - so its two figures could visibly drift out of
+//               alignment with the real Rice/Palay columns above them.
+//               Moved into a real <tfoot> row using the same Th/Td
+//               cells as every other row - guaranteed pixel-aligned.
+//            2. Real bug fixed, reported across two rounds: the Sacks
+//               Warehouse tab's shared multi-column flow never actually
+//               worked for grouping by province - a province heading
+//               only appears once wherever CSS multi-column happens to
+//               place it in ITS column, so a card from the same
+//               province landing in a DIFFERENT column had no heading
+//               above it and started at a different height, and a
+//               small province (Catanduanes) became visually
+//               indistinguishable from its neighbor once their cards
+//               interleaved into the same flow. Each province is now
+//               its own clearly-bordered section with its own
+//               independent auto-filling grid - no cross-province
+//               alignment problem, no confusion about which province a
+//               card belongs to, and no wasted space (each section's
+//               own column count adapts to how many warehouses IT has).
+//            3. NFA expanded authority list (RicemillRecoveryDetail.jsx):
+//               now also auto-balances into up to 3 columns on large
+//               screens instead of staying single-column and leaving a
+//               lot of width unused, per explicit request. TOTAL stays
+//               outside the columned flow as its own full-width tile,
+//               since multi-column can't reliably keep one item pinned
+//               last and full-width the way a plain block below it can.
+export const APP_VERSION = '1.9-186'
