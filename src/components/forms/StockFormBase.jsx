@@ -3253,16 +3253,48 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           </div>
 
-          {/* Auto-compute + Net Kilos compacted onto one row, per
-              explicit request - applies on both mobile and PC (not
-              gated on isPC). The toggle keeps its own label-above
-              treatment (matching every other field here) instead of
-              the old label-left/switch-right bar, so its column reads
-              consistently with Net Kilos's column right next to it. */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          {/* Auto-compute, Net Kilos, Age and Unit compacted onto one
+              row together, per explicit follow-up request (the earlier
+              split - this row plus a separate Age/Unit/Condition row -
+              was reported as "ugly"). The toggle keeps its own
+              label-above treatment (matching every other field here)
+              instead of the old label-left/switch-right bar, so its
+              column reads consistently with the others next to it.
+              Months+Days mode needs an extra field (Months AND Days
+              instead of one Age value) - those two get their own short
+              row above, and Age's own slot in this row is dropped
+              (Unit alone takes its place) rather than growing this row
+              to 5 columns. Condition stays a separate full-width row
+              below (still needs room for all 5 flags). */}
+          {ageUnit === 'Months + Days' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Months</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={monthsValue}
+                  onChange={(e) => setMonthsValue(liveFormatNumber(e.target.value))}
+                  className={`${inputClass} ${monthsValue === '' ? '!border-brand-amber' : ''}`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Days</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={daysValue}
+                  onChange={(e) => setDaysValue(liveFormatNumber(e.target.value))}
+                  className={`${inputClass} ${daysValue === '' ? '!border-brand-amber' : ''}`}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className={`grid gap-2 ${ageUnit === 'Months + Days' ? 'grid-cols-3' : 'grid-cols-4'}`}>
+            <div className="min-w-0">
               <label className={labelClass}>Auto-compute Net Kilos</label>
-              <div className={`${inputClass} flex items-center justify-center`}>
+              <div className={`${inputClass} flex items-center justify-center px-2`}>
                 <button
                   type="button"
                   onClick={() => setAutoComputeNet((v) => !v)}
@@ -3280,10 +3312,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               </div>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <label className={labelClass}>Net Kilos</label>
               {autoComputeNet ? (
-                <div className={`${readOnlyClass} tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                <div className={`${readOnlyClass} truncate px-2 tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
                   {fmtWeight(netKilos, weightUnit)}
                 </div>
               ) : (
@@ -3292,10 +3324,39 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   inputMode="decimal"
                   value={manualNetKilos}
                   onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
-                  className={`${inputClass} ${overKilos ? 'border-brand-crimson' : ''}`}
+                  className={`${inputClass} px-2 ${overKilos ? 'border-brand-crimson' : ''}`}
                   placeholder="0.000"
                 />
               )}
+            </div>
+
+            {ageUnit !== 'Months + Days' && (
+              <div className="min-w-0">
+                <label className={labelClass}>Age</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={ageValue}
+                  onChange={(e) => setAgeValue(liveFormatNumber(e.target.value))}
+                  className={`${inputClass} px-2 ${ageValue === '' ? '!border-brand-amber' : ''}`}
+                  placeholder="0"
+                />
+              </div>
+            )}
+
+            <div className="min-w-0">
+              <label className={labelClass}>Unit</label>
+              <select
+                value={ageUnit}
+                onChange={(e) => setAgeUnit(e.target.value)}
+                className={`${inputClass} px-2`}
+              >
+                {AGE_UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           {overKilos && (
@@ -3482,85 +3543,26 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           )}
 
-          {/* Age/Unit/Condition compacted onto one row, per explicit
-              request - applies on both mobile and PC. Months+Days mode
-              needs an extra field (Months AND Days instead of one Age
-              value), so it gets its own short row above, with Unit and
-              Condition staying on the shared row either way. */}
-          {ageUnit === 'Months + Days' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>Months</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={monthsValue}
-                  onChange={(e) => setMonthsValue(liveFormatNumber(e.target.value))}
-                  className={`${inputClass} ${monthsValue === '' ? '!border-brand-amber' : ''}`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Days</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={daysValue}
-                  onChange={(e) => setDaysValue(liveFormatNumber(e.target.value))}
-                  className={`${inputClass} ${daysValue === '' ? '!border-brand-amber' : ''}`}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            {ageUnit !== 'Months + Days' && (
-              <div className="w-20 shrink-0">
-                <label className={labelClass}>Age</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={ageValue}
-                  onChange={(e) => setAgeValue(liveFormatNumber(e.target.value))}
-                  className={`${inputClass} px-2 ${ageValue === '' ? '!border-brand-amber' : ''}`}
-                  placeholder="0"
-                />
-              </div>
-            )}
-            <div className="w-24 shrink-0">
-              <label className={labelClass}>Unit</label>
-              <select
-                value={ageUnit}
-                onChange={(e) => setAgeUnit(e.target.value)}
-                className={`${inputClass} px-2`}
-              >
-                {AGE_UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="min-w-0 flex-1">
-              <label className={labelClass}>Condition</label>
-              <div className="mt-1 flex gap-1">
-                {CONDITION_FLAGS.map((flag) => {
-                  const active = condition === flag
-                  return (
-                    <button
-                      key={flag}
-                      type="button"
-                      onClick={() => setCondition(flag)}
-                      className={`flex-1 rounded-lg border px-0.5 py-2.5 text-[11px] font-medium transition-all active:scale-95 ${
-                        active
-                          ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
-                          : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-600'
-                      }`}
-                    >
-                      {flag}
-                    </button>
-                  )
-                })}
-              </div>
+          <div>
+            <label className={labelClass}>Condition</label>
+            <div className="mt-1 grid grid-cols-5 gap-2">
+              {CONDITION_FLAGS.map((flag) => {
+                const active = condition === flag
+                return (
+                  <button
+                    key={flag}
+                    type="button"
+                    onClick={() => setCondition(flag)}
+                    className={`rounded-lg border py-2.5 text-xs font-medium transition-all active:scale-95 ${
+                      active
+                        ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
+                        : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-600'
+                    }`}
+                  >
+                    {flag}
+                  </button>
+                )
+              })}
             </div>
           </div>
           </div>

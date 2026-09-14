@@ -3222,4 +3222,14 @@
 //            rendered outside every group box (it sits after Farmers
 //            Organization, right before the Save bar) - confirmed
 //            unchanged, no group tint or border wraps it.
-export const APP_VERSION = '1.9-178'
+//   1.9-179 - Follow-up correction to 1.9-178's compacting, reported
+//            directly as "ugly": Auto-compute Net Kilos, Net Kilos,
+//            Age, and Unit are now together on ONE shared row (4
+//            columns) instead of two separate two-column rows.
+//            Condition moved back to its own full-width row below,
+//            with its 5 flag buttons restored to their original
+//            comfortable size (no longer squeezed to fit alongside Age/
+//            Unit). Months + Days mode still gets its own short row
+//            above for the extra Months/Days fields, and the shared row
+//            drops to 3 columns in that case (Age's slot isn't needed).
+export const APP_VERSION = '1.9-179'
