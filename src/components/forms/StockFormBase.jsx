@@ -3167,7 +3167,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
 
             <div>
-              <label className={labelClass}>MTS — Sack Code &amp; Condition</label>
+              <label className={labelClass}>MTS</label>
               <select
                 value={sackSelection}
                 onChange={(e) => setSackSelection(e.target.value)}
@@ -3291,14 +3291,24 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           )}
 
-          <div className={`grid gap-2 ${ageUnit === 'Months + Days' ? 'grid-cols-3' : 'grid-cols-4'}`}>
+          {/* Toggle:Net Kilos sized 1:2 (per explicit request, "net kg
+              should occupy more space than the toggle") via an explicit
+              column-width ratio instead of an equal grid-cols split -
+              Age/Unit keep an even share of what's left. The toggle's
+              own label text was dropped per explicit request (the
+              switch alone is self-explanatory once it sits directly
+              next to the field it controls); an invisible placeholder
+              of the same height keeps its cell's input still lined up
+              with every label-having cell beside it. */}
+          <div className={`grid gap-2 ${ageUnit === 'Months + Days' ? 'grid-cols-[1fr_2fr_1fr]' : 'grid-cols-[1fr_2fr_1fr_1fr]'}`}>
             <div className="min-w-0">
-              <label className={labelClass}>Auto-compute Net Kilos</label>
+              <span className={`${labelClass} invisible block`} aria-hidden="true">Auto</span>
               <div className={`${inputClass} flex items-center justify-center px-2`}>
                 <button
                   type="button"
                   onClick={() => setAutoComputeNet((v) => !v)}
                   aria-pressed={autoComputeNet}
+                  aria-label="Auto-compute Net Kilos"
                   className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
                     autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
                   }`}
@@ -3415,13 +3425,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     </select>
                   </div>
 
-                  {/* Stacked, not side-by-side like the primary pile's own
-                      matching fields further down - this card sits nested
-                      inside a narrower bordered container, and the MTS
-                      label is long enough to wrap to two lines there,
-                      which pushed its select down out of alignment with
-                      the MC input next to it on small screens. */}
-                  <div className="space-y-2">
+                  {/* MC%/MTS now side by side, matching the primary
+                      pile's own compact layout - was stacked because
+                      the old, longer "MTS — Sack Code & Condition"
+                      label used to wrap to two lines here and push the
+                      select out of alignment with MC; now just "MTS",
+                      short enough to sit next to MC cleanly. */}
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className={labelClass}>MC % (Moisture Content)</label>
                       <input
@@ -3433,7 +3443,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>MTS — Sack Code &amp; Condition</label>
+                      <label className={labelClass}>MTS</label>
                       <select
                         value={alloc.sackSelection}
                         onChange={(e) => setExtraPileAllocations((rows) => {
@@ -3481,38 +3491,48 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5">
-                    <span className="text-xs text-neutral-400">Auto-compute Net Kilos</span>
-                    <button
-                      type="button"
-                      onClick={() => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, autoComputeNet: !r.autoComputeNet } : r)))}
-                      aria-pressed={alloc.autoComputeNet}
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                        alloc.autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
-                          alloc.autoComputeNet ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Net Kilos</label>
-                    {alloc.autoComputeNet ? (
-                      <div className={`${readOnlyClass} mt-0 tabular-nums ${info.overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
-                        {fmtWeight(info.netKilos, weightUnit)}
+                  {/* Toggle:Net Kilos in one row, 1:2 ratio, no toggle
+                      label - matches the primary pile's own compact
+                      layout further up. */}
+                  <div className="grid grid-cols-[1fr_2fr] gap-2">
+                    <div>
+                      <span className={`${labelClass} invisible block`} aria-hidden="true">Auto</span>
+                      <div className={`${inputClass} mt-0 flex items-center justify-center px-2`}>
+                        <button
+                          type="button"
+                          onClick={() => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, autoComputeNet: !r.autoComputeNet } : r)))}
+                          aria-pressed={alloc.autoComputeNet}
+                          aria-label="Auto-compute Net Kilos"
+                          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                            alloc.autoComputeNet ? 'bg-brand-neon' : 'bg-neutral-700'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+                              alloc.autoComputeNet ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
                       </div>
-                    ) : (
-                      <input
-                        type="text" inputMode="decimal" placeholder="0.000"
-                        value={alloc.manualKilos}
-                        onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, manualKilos: liveFormatNumber(e.target.value, 3) } : r)))}
-                        className={`${inputClass} mt-0 ${info.overKilos ? 'border-brand-crimson' : ''}`}
-                      />
-                    )}
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Net Kilos</label>
+                      {alloc.autoComputeNet ? (
+                        <div className={`${readOnlyClass} mt-0 truncate tabular-nums ${info.overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                          {fmtWeight(info.netKilos, weightUnit)}
+                        </div>
+                      ) : (
+                        <input
+                          type="text" inputMode="decimal" placeholder="0.000"
+                          value={alloc.manualKilos}
+                          onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, manualKilos: liveFormatNumber(e.target.value, 3) } : r)))}
+                          className={`${inputClass} mt-0 ${info.overKilos ? 'border-brand-crimson' : ''}`}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div>
                     {info.overKilos && (
                       <p className="mt-1 text-xs tabular-nums text-brand-crimson">
                         {info.pile?.pileName ?? 'This pile'} only has {fmtWeight(info.availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.

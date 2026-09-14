@@ -1331,17 +1331,15 @@ const SackFormBase = forwardRef(function SackFormBase(
             )}
           </div>
 
-          {/* Grouping-box redesign into four real semantic groups
-              (Document, Customer, Stock Details, Quantity) - see
-              StockFormBase.jsx's identical fix/comment for the full
-              explanation, including why every field stays in its exact
+          {/* Grouping-box redesign into three real semantic groups -
+              Document, Customer (now also holding the MO/TMO fields -
+              the old separate Stock Details group was usually
+              completely empty and rendered as a big blank box, since
+              only Milling/Test Milling types populate it), and
+              Quantity (Sack Lines). See StockFormBase.jsx's identical
+              fix/comment for why every field stays in its exact
               original DOM order (only wrapper <div>s added around each
-              existing contiguous run), and why the two-column
-              composition below is two independent flex columns (built
-              once as local consts, composed in different order per
-              screen width) rather than a shared-row CSS grid - a shared
-              row forced two very different-height groups to match
-              height, leaving dead gaps. No live pile sidebar here (no
+              existing contiguous run). No live pile sidebar here (no
               Pile ID field on this form). */}
           {(() => {
             const cancelledClass = isCancelled ? 'rounded-xl border-2 border-brand-crimson p-2 opacity-40' : ''
@@ -1414,11 +1412,7 @@ const SackFormBase = forwardRef(function SackFormBase(
               ))}
             </select>
           </div>
-          </div>
-            )
 
-            const stockDetailsGroup = (
-          <div className={groupBoxClass}>
           {isMilling && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableMoOrders = millingOrderOptions
@@ -1696,17 +1690,28 @@ const SackFormBase = forwardRef(function SackFormBase(
           </div>
             )
 
-            return isPC ? (
-              <div className={`flex gap-4 ${cancelledClass} ${flashClass}`}>
-                <div className="min-w-0 flex-1 space-y-3">{documentGroup}{stockDetailsGroup}</div>
-                <div className="min-w-0 flex-1 space-y-3 border-l border-white/10 pl-4">{customerGroup}{quantityGroup}</div>
-              </div>
-            ) : (
+            // Three groups instead of four, per explicit request: the
+            // old separate Stock Details group (MO/TMO fields) was
+            // usually completely empty (only Milling/Test Milling types
+            // populate it) and rendered as a big blank box - folded
+            // into Customer instead, since there's nothing else it
+            // belongs with. Document (Date + linked doc) renders as its
+            // own full-width row above the other two, on both mobile
+            // and PC, rather than sharing a column with either of them.
+            return (
               <div className={`space-y-3 ${cancelledClass} ${flashClass}`}>
                 {documentGroup}
-                {customerGroup}
-                {stockDetailsGroup}
-                {quantityGroup}
+                {isPC ? (
+                  <div className="flex gap-4">
+                    <div className="min-w-0 flex-1">{customerGroup}</div>
+                    <div className="min-w-0 flex-1 border-l border-white/10 pl-4">{quantityGroup}</div>
+                  </div>
+                ) : (
+                  <>
+                    {customerGroup}
+                    {quantityGroup}
+                  </>
+                )}
               </div>
             )
           })()}

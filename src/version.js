@@ -3232,4 +3232,31 @@
 //            Unit). Months + Days mode still gets its own short row
 //            above for the extra Months/Days fields, and the shared row
 //            drops to 3 columns in that case (Age's slot isn't needed).
-export const APP_VERSION = '1.9-179'
+//   1.9-180 - More compacting, per explicit follow-up request:
+//            1. StockFormBase (WSR/WSI/ESR/ESI): the Auto-compute Net
+//               Kilos toggle's own label text was removed (the switch
+//               alone is self-explanatory next to the field it
+//               controls) - an invisible same-height placeholder keeps
+//               its cell's toggle still lined up with its label-having
+//               neighbors. Its column is now sized narrower than Net
+//               Kilos's (1:2 ratio via an explicit column-width grid
+//               instead of an even split), so Net Kilos genuinely reads
+//               as the bigger, more important field. "MTS — Sack Code &
+//               Condition" shortened to just "MTS" everywhere it
+//               appears. The "Additional pile" (Issue from another
+//               pile) card gets the same treatment: MC%/MTS now sit
+//               side by side (used to be stacked only because the old,
+//               longer MTS label wrapped to two lines and broke
+//               alignment there - moot now that it's just "MTS"), and
+//               its own Auto-compute/Net Kilos pair compacted the same
+//               1:2 way.
+//            2. SackFormBase (ESR/ESI): reduced from four groups to
+//               three. The old separate Stock Details group (MO/TMO
+//               fields) was usually completely empty - only Milling/
+//               Test Milling transaction types populate it - and
+//               rendered as a big blank box; folded into Customer
+//               instead, since there's nothing else it belongs with.
+//               Document (Date + linked doc) now renders as its own
+//               full-width row above the other two groups, on both
+//               mobile and PC, instead of sharing a column with either.
+export const APP_VERSION = '1.9-180'
