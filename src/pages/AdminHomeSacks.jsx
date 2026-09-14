@@ -164,16 +164,18 @@ function AdminHomeSacks({ onWarehouseSelect }) {
           <p className="text-base font-bold text-app-text lg:text-brand-neon">{stripWarehouseCodePrefix(warehouse.name)}</p>
           <ChevronRight size={16} className="shrink-0 text-neutral-600" />
         </div>
-        {/* Real bug found, reported directly with a screenshot: a
-            per-warehouse card is already narrower than the province
-            card (several sit side by side at once), so cramming sack
-            types into 2 columns HERE wrapped labels/values onto
-            multiple lines and looked broken. Reverted to a single
-            stacked column - the 2-column treatment stays on the wider
-            Province card above, which actually has the room for it. */}
+        {/* Per explicit request ("put each sack type in their own box"):
+            each sack type inside a warehouse card is now its own
+            bordered/tinted tile instead of a divide-y stacked list - a
+            warehouse with more than one sack type (e.g. PPMG50 and
+            PPRE50) no longer reads as one continuous block, each type
+            is visually its own unit at a glance. */}
         <div className="mt-2 space-y-2">
-          {rows.map(({ sackType, conditions }, i) => (
-            <div key={sackType.sackTypeId} className={i > 0 ? 'border-t border-neutral-800 pt-2' : ''}>
+          {rows.map(({ sackType, conditions }) => (
+            <div
+              key={sackType.sackTypeId}
+              className="rounded-lg border border-neutral-800 bg-neutral-950/60 p-2.5"
+            >
               <p className="text-lg font-bold uppercase text-app-text">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (

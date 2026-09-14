@@ -3467,4 +3467,11 @@
 //               it's no longer confusable with the warehouse-name accent
 //               color and reads as clearly larger than the figures it
 //               labels.
-export const APP_VERSION = '1.9-187'
+//   1.9-188 - Sacks Warehouse tab: per direct request ("put each sack
+//            type in their own box, so it much better UX"), a warehouse
+//            card holding more than one sack type (e.g. PPMG50 and
+//            PPRE50 in the same warehouse) no longer stacks them as one
+//            continuous divide-y block - each sack type is now its own
+//            bordered/tinted tile inside the card, matching the tile
+//            treatment the Province tab's SackTypeCard already uses.
+export const APP_VERSION = '1.9-188'
