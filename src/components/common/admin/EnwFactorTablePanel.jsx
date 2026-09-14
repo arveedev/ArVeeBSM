@@ -6,24 +6,19 @@
 // Purchase Receipt's WSR's own Moisture Content picks the MC bracket
 // among those. See src/utils/sdoCalculations.js's lookupEnwFactor for
 // the actual runtime lookup this table drives.
+//
+// Displayed as a real grid (D&D/Purity down the side, MC bracket across
+// the top, factor in each cell) rather than 68 separate list rows -
+// matches the reference sheet's own layout and is how this was shown
+// during planning, confirmed directly as the wanted shape.
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
-import {
-  inputClass,
-  labelClass,
-  primaryButtonClass,
-  secondaryButtonClass,
-  listItemClass,
-  editIconClass,
-  deleteIconClass,
-} from './shared.js'
-
-const emptyForm = { purityLetter: '', ddMin: '', ddMax: '', mcMin: '', mcMax: '', factor: '' }
+import { secondaryButtonClass } from './shared.js'
 
 // The exact reference sheet already shared for this feature - 17 MC
 // brackets x 2 Purity letters x 2 D&D brackets. Seeded in one tap
@@ -45,13 +40,25 @@ const REFERENCE_ROWS = [
   { purityLetter: 'B', ddMin: 3.1, ddMax: 7, factors: [0.8665, 0.8481, 0.8297, 0.8113, 0.7929, 0.7745, 0.7561, 0.7376, 0.7192, 0.7008, 0.6824, 0.6619, 0.6613, 0.6508, 0.6403, 0.6297, 0.6192] },
 ]
 
+const rowKeyOf = (r) => `${r.ddMin}|${r.ddMax}|${r.purityLetter}`
+const colKeyOf = (r) => `${r.mcMin}|${r.mcMax}`
+
 function EnwFactorTablePanel() {
-  const [form, setForm] = useState(emptyForm)
-  const [editingId, setEditingId] = useState(null)
-  const [pendingDelete, setPendingDelete] = useState(null)
   const [confirmingSeed, setConfirmingSeed] = useState(false)
+  const [pendingDeleteRowKey, setPendingDeleteRowKey] = useState(null)
+  // New-bracket form - only needed to introduce a D&D/Purity combo or
+  // an MC bracket that doesn't exist in the grid yet; every other edit
+  // happens directly in a grid cell.
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newBracket, setNewBracket] = useState({ purityLetter: '', ddMin: '', ddMax: '', mcMin: '', mcMax: '', factor: '' })
 
   const rows = useLiveQuery(() => db.enwFactors.toArray(), []) ?? []
+
+  const cellByKey = new Map(rows.map((r) => [`${rowKeyOf(r)}::${colKeyOf(r)}`, r]))
+  const rowDefs = [...new Map(rows.map((r) => [rowKeyOf(r), { ddMin: r.ddMin, ddMax: r.ddMax, purityLetter: r.purityLetter }])).values()]
+    .sort((a, b) => a.ddMin - b.ddMin || a.purityLetter.localeCompare(b.purityLetter))
+  const colDefs = [...new Map(rows.map((r) => [colKeyOf(r), { mcMin: r.mcMin, mcMax: r.mcMax }])).values()]
+    .sort((a, b) => a.mcMin - b.mcMin)
 
   const handleSeed = async () => {
     setConfirmingSeed(false)
@@ -66,146 +73,151 @@ function EnwFactorTablePanel() {
     await db.enwFactors.bulkAdd(seedRows)
     toast.success(`Loaded ${seedRows.length} reference rows`)
   }
-  const sorted = [...rows].sort((a, b) =>
-    (a.purityLetter ?? '').localeCompare(b.purityLetter ?? '') || (a.mcMin ?? 0) - (b.mcMin ?? 0)
-  )
 
-  const updateField = (field, value) => setForm((f) => ({ ...f, [field]: value }))
-
-  const resetForm = () => {
-    setForm(emptyForm)
-    setEditingId(null)
+  const handleCellBlur = async (rowDef, colDef, rawValue) => {
+    const key = `${rowKeyOf(rowDef)}::${colKeyOf(colDef)}`
+    const existing = cellByKey.get(key)
+    const trimmed = rawValue.trim()
+    if (trimmed === '') {
+      if (existing) await db.enwFactors.delete(existing.id)
+      return
+    }
+    const factor = parseFloat(trimmed)
+    if (Number.isNaN(factor)) return
+    if (existing) {
+      if (existing.factor !== factor) await db.enwFactors.update(existing.id, { factor })
+    } else {
+      await db.enwFactors.add({
+        id: crypto.randomUUID(),
+        purityLetter: rowDef.purityLetter, ddMin: rowDef.ddMin, ddMax: rowDef.ddMax,
+        mcMin: colDef.mcMin, mcMax: colDef.mcMax,
+        factor,
+      })
+    }
   }
 
-  const handleSave = async () => {
-    const { purityLetter, ddMin, ddMax, mcMin, mcMax, factor } = form
+  const handleAddBracket = async () => {
+    const { purityLetter, ddMin, ddMax, mcMin, mcMax, factor } = newBracket
     if (!purityLetter.trim() || ddMin === '' || ddMax === '' || mcMin === '' || mcMax === '' || factor === '') {
       toast.error('All fields are required')
       return
     }
-    const record = {
+    await db.enwFactors.add({
+      id: crypto.randomUUID(),
       purityLetter: purityLetter.trim().toUpperCase(),
-      ddMin: parseFloat(ddMin),
-      ddMax: parseFloat(ddMax),
-      mcMin: parseFloat(mcMin),
-      mcMax: parseFloat(mcMax),
+      ddMin: parseFloat(ddMin), ddMax: parseFloat(ddMax),
+      mcMin: parseFloat(mcMin), mcMax: parseFloat(mcMax),
       factor: parseFloat(factor),
-    }
-    if (editingId) {
-      await db.enwFactors.update(editingId, record)
-      toast.success('ENW row updated')
-    } else {
-      await db.enwFactors.add({ id: crypto.randomUUID(), ...record })
-      toast.success('ENW row saved')
-    }
-    resetForm()
-  }
-
-  const handleEdit = (row) => {
-    setEditingId(row.id)
-    setForm({
-      purityLetter: row.purityLetter ?? '',
-      ddMin: String(row.ddMin ?? ''),
-      ddMax: String(row.ddMax ?? ''),
-      mcMin: String(row.mcMin ?? ''),
-      mcMax: String(row.mcMax ?? ''),
-      factor: String(row.factor ?? ''),
     })
+    setNewBracket({ purityLetter: '', ddMin: '', ddMax: '', mcMin: '', mcMax: '', factor: '' })
+    setShowAddForm(false)
+    toast.success('Bracket added')
   }
 
-  const confirmDelete = async () => {
-    const id = pendingDelete
-    setPendingDelete(null)
-    await db.enwFactors.delete(id)
-    if (editingId === id) resetForm()
-    toast.success('ENW row deleted')
+  const confirmDeleteRow = async () => {
+    const rowDef = pendingDeleteRowKey
+    setPendingDeleteRowKey(null)
+    const idsToDelete = rows.filter((r) => rowKeyOf(r) === rowKeyOf(rowDef)).map((r) => r.id)
+    await db.enwFactors.bulkDelete(idsToDelete)
+    toast.success('Row deleted')
   }
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <h2 className="text-base font-semibold text-app-text">ENW Factor Table</h2>
       <p className="mt-1 text-xs text-neutral-500">
-        Admin only — MC bracket × Purity letter × D&D bracket → factor.
+        Admin only — MC bracket × Purity letter × D&D bracket → factor. Tap a cell to edit its factor directly.
       </p>
 
-      <button
-        type="button"
-        onClick={() => setConfirmingSeed(true)}
-        className={`mt-3 w-full ${secondaryButtonClass}`}
-      >
-        Load Reference Table (17 MC brackets × 4 rows)
-      </button>
-
-      <div className="mt-4 space-y-3">
-        <div className="flex gap-2">
-          <div className="w-20">
-            <label className={labelClass}>Letter</label>
-            <input type="text" maxLength={1} value={form.purityLetter} onChange={(e) => updateField('purityLetter', e.target.value)} className={inputClass} placeholder="A" />
-          </div>
-          <div className="flex-1">
-            <label className={labelClass}>D&D min (%)</label>
-            <input type="number" value={form.ddMin} onChange={(e) => updateField('ddMin', e.target.value)} className={inputClass} placeholder="0" />
-          </div>
-          <div className="flex-1">
-            <label className={labelClass}>D&D max (%)</label>
-            <input type="number" value={form.ddMax} onChange={(e) => updateField('ddMax', e.target.value)} className={inputClass} placeholder="3" />
-          </div>
+      {rowDefs.length === 0 ? (
+        <button
+          type="button"
+          onClick={() => setConfirmingSeed(true)}
+          className={`mt-3 w-full ${secondaryButtonClass}`}
+        >
+          Load Reference Table (17 MC brackets × 4 rows)
+        </button>
+      ) : (
+        <div className="mt-4 overflow-x-auto rounded-xl border border-neutral-800">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 whitespace-nowrap bg-neutral-950 px-3 py-2 text-left font-semibold text-neutral-400">D&D / Purity</th>
+                {colDefs.map((c) => (
+                  <th key={colKeyOf(c)} className="whitespace-nowrap bg-neutral-950 px-2 py-2 text-center font-semibold text-neutral-400">
+                    {c.mcMin}–{c.mcMax}
+                  </th>
+                ))}
+                <th className="bg-neutral-950 px-2 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {rowDefs.map((rowDef) => (
+                <tr key={rowKeyOf(rowDef)} className="border-t border-neutral-800">
+                  <td className="sticky left-0 z-10 whitespace-nowrap bg-neutral-900 px-3 py-1.5 font-medium text-app-text">
+                    {rowDef.ddMin}–{rowDef.ddMax} / <span className="text-brand-neon">{rowDef.purityLetter}</span>
+                  </td>
+                  {colDefs.map((colDef) => {
+                    const cell = cellByKey.get(`${rowKeyOf(rowDef)}::${colKeyOf(colDef)}`)
+                    return (
+                      <td key={colKeyOf(colDef)} className="px-1 py-1">
+                        <input
+                          type="number"
+                          step="0.0001"
+                          defaultValue={cell?.factor ?? ''}
+                          key={cell?.factor ?? 'empty'}
+                          onBlur={(e) => handleCellBlur(rowDef, colDef, e.target.value)}
+                          className="w-16 rounded-md border border-neutral-800 bg-neutral-950 px-1.5 py-1 text-center text-app-text outline-none transition-colors focus:border-brand-neon"
+                        />
+                      </td>
+                    )
+                  })}
+                  <td className="px-1">
+                    <button type="button" onClick={() => setPendingDeleteRowKey(rowDef)} aria-label="Delete this D&D/Purity row" className="rounded-md p-1.5 text-brand-crimson transition-transform active:scale-90">
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className={labelClass}>MC min (%)</label>
-            <input type="number" value={form.mcMin} onChange={(e) => updateField('mcMin', e.target.value)} className={inputClass} placeholder="11" />
-          </div>
-          <div className="flex-1">
-            <label className={labelClass}>MC max (%)</label>
-            <input type="number" value={form.mcMax} onChange={(e) => updateField('mcMax', e.target.value)} className={inputClass} placeholder="14" />
-          </div>
-          <div className="flex-1">
-            <label className={labelClass}>Factor</label>
-            <input type="number" step="0.0001" value={form.factor} onChange={(e) => updateField('factor', e.target.value)} className={inputClass} placeholder="1.0000" />
-          </div>
-        </div>
+      )}
 
-        <div className="flex gap-2">
-          <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>
-            Save
+      <div className="mt-3 flex gap-2">
+        {rowDefs.length > 0 && (
+          <button type="button" onClick={() => setConfirmingSeed(true)} className={secondaryButtonClass}>
+            Reload Reference Table
           </button>
-          {editingId && (
-            <button type="button" onClick={resetForm} className={secondaryButtonClass}>
-              Cancel
-            </button>
-          )}
-        </div>
+        )}
+        <button type="button" onClick={() => setShowAddForm((v) => !v)} className={secondaryButtonClass}>
+          {showAddForm ? 'Cancel' : '+ New bracket'}
+        </button>
       </div>
 
-      {sorted.length > 0 && (
-        <ul className="mt-4 space-y-2">
-          {sorted.map((row) => (
-            <li key={row.id} className={listItemClass}>
-              <p className="text-sm text-app-text">
-                <span className="font-semibold text-brand-neon">{row.purityLetter}</span>
-                {' '}· D&D {row.ddMin}–{row.ddMax}% · MC {row.mcMin}–{row.mcMax}% ={' '}
-                <span className="font-mono font-semibold">{row.factor}</span>
-              </p>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => handleEdit(row)} aria-label="Edit" className={editIconClass}>
-                  <Pencil size={20} />
-                </button>
-                <button type="button" onClick={() => setPendingDelete(row.id)} aria-label="Delete" className={deleteIconClass}>
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+      {showAddForm && (
+        <div className="mt-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+          <p className="text-xs text-neutral-500">Adds a new D&D/Purity row or MC column the grid above doesn't have yet.</p>
+          <div className="grid grid-cols-3 gap-2">
+            <input type="text" maxLength={1} placeholder="Letter" value={newBracket.purityLetter} onChange={(e) => setNewBracket((f) => ({ ...f, purityLetter: e.target.value }))} className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon" />
+            <input type="number" placeholder="D&D min" value={newBracket.ddMin} onChange={(e) => setNewBracket((f) => ({ ...f, ddMin: e.target.value }))} className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon" />
+            <input type="number" placeholder="D&D max" value={newBracket.ddMax} onChange={(e) => setNewBracket((f) => ({ ...f, ddMax: e.target.value }))} className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon" />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <input type="number" placeholder="MC min" value={newBracket.mcMin} onChange={(e) => setNewBracket((f) => ({ ...f, mcMin: e.target.value }))} className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon" />
+            <input type="number" placeholder="MC max" value={newBracket.mcMax} onChange={(e) => setNewBracket((f) => ({ ...f, mcMax: e.target.value }))} className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon" />
+            <input type="number" step="0.0001" placeholder="Factor" value={newBracket.factor} onChange={(e) => setNewBracket((f) => ({ ...f, factor: e.target.value }))} className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon" />
+          </div>
+          <button type="button" onClick={handleAddBracket} className={`w-full ${secondaryButtonClass}`}>Add</button>
+        </div>
       )}
 
       <ConfirmDialog
-        open={pendingDelete !== null}
-        title="Delete this ENW row?"
-        description="This cannot be undone."
-        onConfirm={confirmDelete}
-        onCancel={() => setPendingDelete(null)}
+        open={pendingDeleteRowKey !== null}
+        title="Delete this row?"
+        description="Removes this D&D/Purity row's factor across every MC bracket. This cannot be undone."
+        onConfirm={confirmDeleteRow}
+        onCancel={() => setPendingDeleteRowKey(null)}
       />
 
       <ConfirmDialog

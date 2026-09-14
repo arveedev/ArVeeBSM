@@ -213,9 +213,18 @@ function SdoHome() {
             className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 text-xs text-neutral-300 outline-none transition-colors focus:border-brand-neon"
           >
             <option value="">All warehouses</option>
-            {[...(accessibleWarehouses ?? [])].sort((a, b) => a.name.localeCompare(b.name)).map((w) => (
-              <option key={w.warehouseId} value={w.warehouseId}>{w.code}</option>
-            ))}
+            {/* Deduped defensively by warehouseId - this list is already
+                scoped to exactly this SDO's own assignedWarehouses via
+                useWarehouse()'s shared accessibleWarehouses (the same
+                source every other page's warehouse picker uses), so a
+                warehouse this SDO isn't assigned to can't appear here;
+                if one seems to, the fix is that user's Assigned
+                Warehouses in Admin > Structure > Users, not this list. */}
+            {[...new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w])).values()]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((w) => (
+                <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>
+              ))}
           </select>
         )}
         <button type="button" onClick={() => setSortDesc((v) => !v)} aria-label="Toggle sort order" className="rounded-lg border border-neutral-800 bg-neutral-900 p-2 text-neutral-400 transition-all active:scale-95">

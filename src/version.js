@@ -3614,4 +3614,21 @@
 //              buttons - and now that all assigned warehouses show
 //              together at once, added a warehouse filter dropdown
 //              next to the existing search/sort.
-export const APP_VERSION = '1.10-5'
+//   1.10-6 - Two more fixes, reported directly with screenshots:
+//           1. SDO Home's warehouse filter was showing the bare numeric
+//              code (e.g. "050522") instead of the warehouse name, and
+//              apparent duplicates - fixed to show "code — name" (same
+//              convention already used in Settings/Users) and deduped
+//              defensively by warehouseId. The list itself was already
+//              scoped to only this SDO's own assignedWarehouses (same
+//              shared source every other warehouse picker in the app
+//              uses) - if a warehouse that shouldn't be there still
+//              shows, the fix is that user's Assigned Warehouses in
+//              Admin > Structure > Users, not this dropdown.
+//           2. ENW Factor Table rebuilt as a real grid - D&D/Purity
+//              rows down the side, MC brackets across the top, factor
+//              editable directly in each cell - matching the reference
+//              sheet's own layout and how this was shown during
+//              planning, instead of 68 separate list rows with a
+//              one-row-at-a-time add form.
+export const APP_VERSION = '1.10-6'
