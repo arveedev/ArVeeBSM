@@ -73,6 +73,7 @@ import {
   getMatchingTransaction,
   stepSerial,
   findTransactionBySerial,
+  findNextAvailableSerial,
   recordSerialUsed,
   recalculateSerialCounter,
   findAdjacentTransaction,
@@ -110,6 +111,14 @@ const GENDERS = ['Male', 'Female']
 // Must match DeleteButtonLabel's own "bin" phase hold time
 // (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
 const DELETE_ANIM_MS = 1000
+
+// Same (pointer: coarse) check used elsewhere (AnimatedToast.jsx,
+// Login.jsx, Piles.jsx) to distinguish a touch device from a PC - the
+// PC-only two-column layout + live pile sidebar (see isPC below) is
+// gated on this, never on viewport width alone, since a touch tablet
+// at a wide width should still get the mobile flow.
+const isTouchDevicePointer = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
 
 // A pile's stock limit is a real physical constraint, but the running
 // total it's checked against can carry a few grams of floating-point
@@ -279,6 +288,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
+  // True when the immediate next serial number (loadedTransaction's own
+  // serial + 1) is genuinely free - i.e. there's a gap before whatever
+  // real document comes after it. The forward button renders as "+" in
+  // that case (jump straight into the gap) instead of ">" (walk to the
+  // next real document, which would otherwise skip right past that
+  // free slot) - per explicit request.
+  const [forwardIsGap, setForwardIsGap] = useState(false)
   const [tabChangeFlash, setTabChangeFlash] = useState(false)
   const [warehouseChangeFlash, setWarehouseChangeFlash] = useState(false)
   const { user } = useAuth()
@@ -536,6 +552,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     })
     .sort((a, b) => byAlpha(a.pileName, b.pileName))
 
+  // Drives the PC-only two-column field layout and the live "Pile now"
+  // sidebar that grows in once a pile is actually selected - per
+  // several rounds of demo review. Checked once per mount (a device
+  // doesn't change pointer type mid-session).
+  const [isPC] = useState(isTouchDevicePointer() === false)
   const selectedPile = (piles ?? []).find((p) => p.pileId === pileId)
   const selectedVariety = sortedVarieties.find((v) => v.varietyId === varietyId)
   const isProcurement = isProcurementTypeName(selectedTransactionType?.name)
@@ -1060,7 +1081,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       && Boolean(customerName.trim())
       && (isFillersType || Boolean(pileId))
       && (isFillersType || Boolean(selectedPile) || Boolean(varietyId))
-      && (Boolean(numberOfBags) || Boolean(grossKilos))
+      // Real bug found: this was an OR, so once Bags was filled in,
+      // clearing Gross Kilos back out left canSave (and the Save
+      // button) still true - reported directly. Both are required,
+      // matching WTSForm.jsx's own equivalent check.
+      && Boolean(numberOfBags) && Boolean(grossKilos)
       && (isFillersType || Boolean(sackSelection))
       // MC is required for Rice/Palay, except on bag-repacking types
       // (see isMcExemptType above) and By Products, neither of which
@@ -1104,12 +1129,18 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       // A By Products pile can hold any mix of its cereal type's
       // varieties - don't assume this transaction is the same variety
       // the pile happened to be created with, leave it for the user to
-      // choose explicitly each time.
+      // choose explicitly each time. Variety is genuinely changing
+      // (to unknown) here, so clearing MTS along with it is correct.
       setVarietyId('')
       setSackSelection('')
     } else if (pile?.varietyId) {
+      // Real bug found: MTS (sack weight/condition) was cleared
+      // unconditionally on every pile change, even between two piles of
+      // the SAME variety - reported directly. Only clear it when the
+      // pile change actually implies a different variety; retain it
+      // otherwise.
+      if (pile.varietyId !== varietyId) setSackSelection('')
       setVarietyId(pile.varietyId)
-      setSackSelection('')
     }
     applyPileDefaults(value)
   }
@@ -1619,7 +1650,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // (findAdjacentTransaction, which can jump straight across a
     // series boundary to whatever document actually comes next - e.g.
     // from #2000 in an exhausted booklet to #5751 in the one that
-    // replaced it, even same-day) while an actual document is loaded.
+    // replaced it, even same-day) while an actual document is loaded -
+    // UNLESS the immediate next serial is a genuine gap (forwardIsGap),
+    // in which case the button is already showing "+" and this should
+    // land there directly instead of walking past it, per explicit
+    // request.
     //
     // findAdjacentTransaction only knows about transactions already
     // synced to THIS device - when it finds nothing, that does NOT
@@ -1634,8 +1669,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // navigation dead-end on data that genuinely existed, just not
     // locally yet.
     const wasLoaded = Boolean(loadedTransaction)
+    const jumpToGap = wasLoaded && forwardIsGap
     let nextSerial
-    if (wasLoaded) {
+    if (jumpToGap) {
+      nextSerial = stepSerial(serialNo.trim(), 1)
+    } else if (wasLoaded) {
       const adjacent = await findAdjacentTransaction(type, currentWarehouseId, serialNo.trim(), activeCategory, 1)
       nextSerial = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), 1)
     } else {
@@ -1646,7 +1684,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
     if (loaded || latestRequestedSerial.current !== nextSerial) return
-    if (wasLoaded) {
+    if (wasLoaded && !jumpToGap) {
       // Genuinely nothing next, locally OR on the Sheet - suggest the
       // real next-in-sequence serial (date-aware) instead of leaving
       // the numeric guess sitting in the field, which might belong to
@@ -1656,9 +1694,27 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       setSerialNo(suggested)
       resetToBlankEntry(suggested)
     } else {
+      // jumpToGap (or a blank starting point) already landed on the
+      // right serial - just confirm it as a fresh blank entry.
       resetToBlankEntry(nextSerial)
     }
   }
+
+  // Drives forwardIsGap (see its own declaration) - only meaningful
+  // while viewing a real loaded document, since a blank entry has no
+  // "current position" to check a gap ahead of.
+  useEffect(() => {
+    let cancelled = false
+    if (!loadedTransaction || !currentWarehouseId) {
+      setForwardIsGap(false)
+      return
+    }
+    const immediateNext = stepSerial(serialNo.trim(), 1)
+    isSerialTaken(type, currentWarehouseId, immediateNext, null, activeCategory).then((taken) => {
+      if (!cancelled) setForwardIsGap(!taken)
+    })
+    return () => { cancelled = true }
+  }, [loadedTransaction, serialNo, currentWarehouseId, type, activeCategory])
 
   const initialAgeDays = ageUnit === 'Months + Days'
     ? Math.round((parseFormattedNumber(monthsValue) || 0) * 30 + (parseFormattedNumber(daysValue) || 0))
@@ -2016,7 +2072,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // existing serial does.
     const next = await suggestNextSerial(type, currentWarehouseId, '1', activeCategory)
     const loaded = await checkAndLoadSerial(next)
-    if (!loaded && latestRequestedSerial.current === next) resetToBlankEntry(next)
+    if (loaded) {
+      // Real bug found: suggestNextSerial has no occupancy awareness of
+      // its own (it's always "recency-best + 1", blind) - when that
+      // collided with a REAL document, this used to silently drop the
+      // user into editing whatever record it collided with. Per
+      // explicit request, skip forward to the actual next genuinely
+      // free serial in this series instead, never load a stranger's
+      // record after a save.
+      if (latestRequestedSerial.current !== next) { scrollToTop(); return }
+      const available = await findNextAvailableSerial(type, currentWarehouseId, next, activeCategory)
+      if (latestRequestedSerial.current === next) resetToBlankEntry(available)
+    } else if (latestRequestedSerial.current === next) {
+      resetToBlankEntry(next)
+    }
     scrollToTop()
   }
 
@@ -2632,10 +2701,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   <button
                     type="button"
                     onClick={handleStepForward}
-                    aria-label="Next serial"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
+                    aria-label={forwardIsGap ? 'Next available serial' : 'Next serial'}
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-90 ${
+                      forwardIsGap
+                        ? 'border-brand-neon/50 bg-brand-neon/10 text-brand-neon hover:border-brand-neon hover:bg-brand-neon/20'
+                        : 'border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-neutral-600 hover:text-app-text'
+                    }`}
                   >
-                    <ChevronRight size={18} />
+                    {forwardIsGap ? <Plus size={18} /> : <ChevronRight size={18} />}
                   </button>
                 </>
               )}
@@ -2661,11 +2734,40 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             )}
           </div>
 
+          {/* PC-only live pile sidebar - per explicit request and
+              several rounds of demo review. Grows in beside the field
+              group below (not the Serial No. block above it, and not
+              the header/Save bar, both of which sit outside this
+              wrapper entirely) once a pile is actually selected, with
+              the fields narrowing to make room. Mobile never renders
+              any of this flex/sidebar behavior - isPC gates the whole
+              thing, not a CSS breakpoint, so a touch tablet at a wide
+              width still gets the plain mobile flow. */}
+          <div className={isPC ? 'flex items-start gap-3' : undefined}>
+          <div
+            className={isPC ? 'min-w-0 transition-[flex-basis] duration-300 ease-out' : 'min-w-0'}
+            style={isPC ? { flexBasis: selectedPile ? 'calc(100% - 206px)' : '100%' } : undefined}
+          >
           {/* Concept S (picked) - was transition-opacity only, so the
               border/padding change on Void applied as an instant snap
               even though opacity already faded smoothly. transition-all
-              covers every property this className swaps. */}
-          <div className={`space-y-3 rounded-xl transition-all duration-300 ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
+              covers every property this className swaps. columns-2 on
+              PC lets the browser balance the existing fields (unchanged
+              order/conditionals) across two columns automatically,
+              rather than hand-splitting this already-deeply-conditional
+              form into two separate JSX halves. */}
+          {/* Grouping-box redesign (per explicit request, several rounds
+              of demo review): each field block gets a subtle alternating
+              tint background and its own rounded corners/padding, no
+              title text anywhere - achieved purely via nth-child on this
+              shared container rather than hand-wrapping every field
+              cluster, since nth-child counts only what actually rendered
+              (React's conditional fields that evaluate to null/false
+              contribute no DOM node, so the alternation stays correct
+              regardless of which optional fields are showing). Applies
+              identically on mobile (still one column, unchanged flow)
+              and PC (now flowed into two columns via columns-2 below). */}
+          <div className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || tabChangeFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'columns-2 gap-4 [&>*]:mb-3 [&>*]:break-inside-avoid-column' : 'space-y-3'}`}>
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
@@ -3410,6 +3512,36 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               })}
             </div>
           </div>
+          </div>
+          </div>
+
+          {isPC && (
+            <div
+              className="shrink-0 self-stretch overflow-hidden rounded-xl bg-neutral-900/60 transition-[flex-basis,opacity] duration-300 ease-out"
+              style={{
+                flexBasis: selectedPile ? '190px' : '0px',
+                width: selectedPile ? '190px' : '0px',
+                opacity: selectedPile ? 1 : 0,
+                pointerEvents: selectedPile ? 'auto' : 'none',
+              }}
+            >
+              {/* Fixed inner width regardless of the outer wrapper's
+                  own animated width - so the content doesn't visibly
+                  reflow/wrap mid-transition, it's simply revealed as
+                  the outer box widens. */}
+              <div className="w-[190px] p-3">
+                <p className="mb-2 text-[10px] uppercase tracking-wide text-neutral-500">Pile now (live)</p>
+                <div className="mb-2 rounded-lg bg-neutral-950 py-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(selectedPile?.currentBags ?? 0)}</p>
+                </div>
+                <div className="rounded-lg bg-neutral-950 py-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums text-brand-neon">{fmtWeight(selectedPile?.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}</p>
+                </div>
+              </div>
+            </div>
+          )}
           </div>
 
           {isProcurement && (

@@ -84,7 +84,18 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
         // reached once WS/MPO suggestions are ruled out, for the same
         // reason as above.
         findCustomerByName(value, warehouseId).then((match) => {
-          if (!cancelled && match) onMatch(match)
+          if (cancelled || !match) return
+          // Real bug found: this only ever called onMatch (which
+          // back-fills Address/RSBSA/Gender/etc.), never onChange - so
+          // typing a known ALIAS directly (no dropdown click) left the
+          // alias text itself sitting in the field and saved verbatim
+          // to the transaction/Sheet, while only the side fields
+          // silently corrected to the real customer. handleSelect
+          // (the dropdown-click path) already does both calls - this
+          // matches it, so the visible/saved name is always the real
+          // one, never the alias.
+          onChange(match.name)
+          onMatch(match)
         })
       })
     })

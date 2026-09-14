@@ -35,6 +35,7 @@ import {
   getMatchingTransaction,
   stepSerial,
   findTransactionBySerial,
+  findNextAvailableSerial,
   recordSerialUsed,
   recalculateSerialCounter,
   findAdjacentTransaction,
@@ -66,6 +67,13 @@ const SACK_CONDITION_CODES = ['BN', 'SH', 'US']
 // Must match DeleteButtonLabel's own "bin" phase hold time
 // (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
 const DELETE_ANIM_MS = 1000
+
+// Same (pointer: coarse) check used elsewhere (StockFormBase.jsx,
+// AnimatedToast.jsx, Login.jsx) - gates the PC-only two-column field
+// layout below, never on viewport width alone.
+const isTouchDevicePointer = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
+
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
 
 // Display-only, mirrors StockFormBase.jsx exactly - see that file for
@@ -125,6 +133,8 @@ const SackFormBase = forwardRef(function SackFormBase(
   }, [])
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
   const [navFlash, setNavFlash] = useState(null)
+  // See StockFormBase.jsx's identical state/comment.
+  const [forwardIsGap, setForwardIsGap] = useState(false)
   const [warehouseChangeFlash, setWarehouseChangeFlash] = useState(false)
   const [showSaveHint, setShowSaveHint] = useState(false)
 
@@ -700,10 +710,14 @@ const SackFormBase = forwardRef(function SackFormBase(
     // checkAndLoadSerial below still does for real historical/imported
     // data this device hasn't preloaded, dead-ending forward
     // navigation on data that genuinely exists, just not locally yet.
-    // See StockFormBase.jsx's matching handler for the full reasoning.
+    // See StockFormBase.jsx's matching handler for the full reasoning,
+    // including forwardIsGap/jumpToGap (the "+" button).
     const wasLoaded = Boolean(loadedTransaction)
+    const jumpToGap = wasLoaded && forwardIsGap
     let nextSerial
-    if (wasLoaded) {
+    if (jumpToGap) {
+      nextSerial = stepSerial(serialNo.trim(), 1)
+    } else if (wasLoaded) {
       const adjacent = await findAdjacentTransaction(type, currentWarehouseId, serialNo.trim(), null, 1)
       nextSerial = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), 1)
     } else {
@@ -714,7 +728,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(nextSerial)
     if (loaded || latestRequestedSerial.current !== nextSerial) return
-    if (wasLoaded) {
+    if (wasLoaded && !jumpToGap) {
       const suggested = await suggestNextSerial(type, currentWarehouseId)
       if (latestRequestedSerial.current !== nextSerial) return
       setSerialNo(suggested)
@@ -723,6 +737,20 @@ const SackFormBase = forwardRef(function SackFormBase(
       resetToBlankEntry(nextSerial)
     }
   }
+
+  // Drives forwardIsGap - see StockFormBase.jsx's identical effect.
+  useEffect(() => {
+    let cancelled = false
+    if (!loadedTransaction || !currentWarehouseId) {
+      setForwardIsGap(false)
+      return
+    }
+    const immediateNext = stepSerial(serialNo.trim(), 1)
+    isSerialTaken(type, currentWarehouseId, immediateNext, null, null).then((taken) => {
+      if (!cancelled) setForwardIsGap(!taken)
+    })
+    return () => { cancelled = true }
+  }, [loadedTransaction, serialNo, currentWarehouseId, type])
 
   const buildCancelledPayload = (overrides = {}) => ({
     type,
@@ -938,7 +966,17 @@ const SackFormBase = forwardRef(function SackFormBase(
     // of reaching an existing serial does.
     const next = await suggestNextSerial(type, currentWarehouseId)
     const loaded = await checkAndLoadSerial(next)
-    if (!loaded && latestRequestedSerial.current === next) resetToBlankEntry(next)
+    if (loaded) {
+      // See StockFormBase.jsx's identical fix/comment - don't silently
+      // drop the user into editing whatever record the naive
+      // next-serial guess collided with; skip forward to the actual
+      // next genuinely free serial instead.
+      if (latestRequestedSerial.current !== next) { scrollToTop(); return }
+      const available = await findNextAvailableSerial(type, currentWarehouseId, next, null)
+      if (latestRequestedSerial.current === next) resetToBlankEntry(available)
+    } else if (latestRequestedSerial.current === next) {
+      resetToBlankEntry(next)
+    }
     scrollToTop()
   }
 
@@ -1144,6 +1182,11 @@ const SackFormBase = forwardRef(function SackFormBase(
     }
   }
 
+  // Drives the PC-only two-column field layout - see StockFormBase.jsx's
+  // identical state/comment. No live pile sidebar here - SackFormBase
+  // (ESR/ESI) has no Pile ID field at all.
+  const [isPC] = useState(isTouchDevicePointer() === false)
+
   const isEditMode = Boolean(loadedTransaction)
 
   // Gates the Save button - mirrors validateForm's synchronous checks
@@ -1259,10 +1302,14 @@ const SackFormBase = forwardRef(function SackFormBase(
                   <button
                     type="button"
                     onClick={handleStepForward}
-                    aria-label="Next serial"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
+                    aria-label={forwardIsGap ? 'Next available serial' : 'Next serial'}
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-90 ${
+                      forwardIsGap
+                        ? 'border-brand-neon/50 bg-brand-neon/10 text-brand-neon hover:border-brand-neon hover:bg-brand-neon/20'
+                        : 'border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-neutral-600 hover:text-app-text'
+                    }`}
                   >
-                    <ChevronRight size={18} />
+                    {forwardIsGap ? <Plus size={18} /> : <ChevronRight size={18} />}
                   </button>
                 </>
               )}
@@ -1288,8 +1335,11 @@ const SackFormBase = forwardRef(function SackFormBase(
             )}
           </div>
 
-          {/* Concept S (picked) - see StockFormBase.jsx's identical fix. */}
-          <div className={`space-y-3 rounded-xl transition-all duration-300 ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''}`}>
+          {/* Concept S (picked) + background-tint grouping, PC two-column
+              layout - see StockFormBase.jsx's identical fix/comment for
+              the full explanation. No live pile sidebar here (no Pile ID
+              field on this form). */}
+          <div className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash || warehouseChangeFlash ? 'stagger-fields' : ''} ${isPC ? 'columns-2 gap-4 [&>*]:mb-3 [&>*]:break-inside-avoid-column' : 'space-y-3'}`}>
           <div>
             <label className={labelClass}>Date</label>
             <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />

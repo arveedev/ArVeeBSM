@@ -14,6 +14,11 @@ import { APP_VERSION } from '../version.js'
 const PIN_LENGTH = 6
 const KEYPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 
+// Same (pointer: coarse) check used elsewhere (AnimatedToast.jsx,
+// Piles.jsx) to distinguish a touch device from a PC.
+const isTouchDevicePointer = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
+
 // Buttons fly outward first (FLY_MS), THEN the whole screen fades
 // (FADE_MS) - sequenced rather than simultaneous, so it reads as
 // "buttons fly outward, then the display fades" rather than everything
@@ -183,6 +188,29 @@ function Login() {
 
   const handleBackspace = () => setPin((prev) => prev.slice(0, -1))
   const handleClear = () => setPin('')
+
+  // PC only, per explicit request - a real physical keyboard should be
+  // able to type the PIN directly, regardless of what currently has
+  // focus (e.g. after clicking one of the on-screen keypad buttons,
+  // which steals focus away from the hidden text input the mobile path
+  // relies on). Mobile is unaffected - it keeps relying on the hidden
+  // input + native numeric keypad only, unchanged.
+  useEffect(() => {
+    if (isTouchDevicePointer()) return
+    const handleKeyDown = (e) => {
+      if (isSubmitting) return
+      if (/^[0-9]$/.test(e.key)) {
+        appendDigit(e.key)
+      } else if (e.key === 'Backspace') {
+        handleBackspace()
+      } else if (e.key === 'Escape') {
+        handleClear()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSubmitting, pin])
 
   const handleInputChange = async (e) => {
     const value = e.target.value.replace(/[^0-9]/g, '').slice(0, PIN_LENGTH)

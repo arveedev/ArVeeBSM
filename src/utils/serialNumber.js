@@ -342,6 +342,29 @@ export const isSerialTaken = async (type, warehouseId, serialNo, excludeId = nul
 }
 
 /**
+ * Scans forward from `fromSerial` (inclusive) for the first serial NOT
+ * already taken by a real transaction, in this (type, warehouse[,
+ * category]) pool - used to skip forward past a run of already-used
+ * serials to a genuinely free one, e.g. after a save's naive "recency-
+ * best + 1" suggestion collides with a real document (suggestNextSerial
+ * has no occupancy awareness of its own - see its own comment), or when
+ * stepping forward from a loaded document into a gap that's followed by
+ * more real data further on. Capped at a generous iteration limit as a
+ * safety net against ever looping indefinitely on a fully-saturated
+ * series.
+ */
+export const findNextAvailableSerial = async (type, warehouseId, fromSerial, cerealCategory = null, maxScan = 500) => {
+  let candidate = fromSerial
+  for (let i = 0; i < maxScan; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const taken = await isSerialTaken(type, warehouseId, candidate, null, cerealCategory)
+    if (!taken) return candidate
+    candidate = stepSerial(candidate, 1)
+  }
+  return candidate
+}
+
+/**
  * Same exact query as isSerialTaken, but returns the actual matched
  * record instead of a boolean - used to recover from a "serial
  * already taken" detection by loading the real record the check

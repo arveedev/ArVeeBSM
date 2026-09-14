@@ -24,7 +24,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { ChevronLeft, ChevronRight, X, AlertTriangle, Pencil } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, AlertTriangle, Pencil } from 'lucide-react'
 import { SaveButton, UpdateButtonContent, DeleteButtonLabel } from '../common/AnimatedButtonBits.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -38,7 +38,7 @@ import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import { SavedReceipt } from '../common/AnimatedToast.jsx'
-import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, recordSerialUsed, recalculateSerialCounter, findAdjacentTransaction } from '../../utils/serialNumber.js'
+import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, findNextAvailableSerial, recordSerialUsed, recalculateSerialCounter, findAdjacentTransaction } from '../../utils/serialNumber.js'
 import {
   liveFormatNumber,
   parseFormattedNumber,
@@ -58,6 +58,13 @@ const STOCK_CONDITIONS = ['Good', 'Part Damaged', 'Damaged']
 // Must match DeleteButtonLabel's own "bin" phase hold time
 // (AnimatedButtonBits.jsx) - see handleDeleteConfirmed's own comment.
 const DELETE_ANIM_MS = 1000
+
+// Same (pointer: coarse) check used elsewhere (StockFormBase.jsx,
+// SackFormBase.jsx, AnimatedToast.jsx, Login.jsx) - gates the PC-only
+// two-column field layout below, never on viewport width alone.
+const isTouchDevicePointer = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
+
 const SACK_CONDITIONS = ['BN', 'SH', 'US']
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
 
@@ -240,6 +247,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   }, [])
   const [navFlash, setNavFlash] = useState(null)
   const [showSaveHint, setShowSaveHint] = useState(false)
+  // See StockFormBase.jsx's identical state/comment.
+  const [forwardIsGap, setForwardIsGap] = useState(false)
+  // Drives the PC-only two-column field layout - see StockFormBase.jsx's
+  // identical state/comment. No live pile sidebar here - WTS has two
+  // pile sections (issued/received), not one, so that concept doesn't
+  // map cleanly and hasn't been designed for this form.
+  const [isPC] = useState(isTouchDevicePointer() === false)
 
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
@@ -451,10 +465,14 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // checkAndLoadSerial below still does for real historical/imported
     // data this device hasn't preloaded, dead-ending forward
     // navigation on data that genuinely exists, just not locally yet.
-    // See StockFormBase.jsx's matching handler for the full reasoning.
+    // See StockFormBase.jsx's matching handler for the full reasoning,
+    // including forwardIsGap/jumpToGap (the "+" button).
     const wasLoaded = Boolean(loadedTransaction)
+    const jumpToGap = wasLoaded && forwardIsGap
     let next
-    if (wasLoaded) {
+    if (jumpToGap) {
+      next = stepSerial(serialNo.trim(), 1)
+    } else if (wasLoaded) {
       const adjacent = await findAdjacentTransaction('WTS', currentWarehouseId, serialNo.trim(), null, 1)
       next = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), 1)
     } else {
@@ -465,7 +483,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     setTimeout(() => setNavFlash(null), 750)
     const loaded = await checkAndLoadSerial(next)
     if (loaded || latestRequestedSerial.current !== next) return
-    if (wasLoaded) {
+    if (wasLoaded && !jumpToGap) {
       const suggested = await suggestNextSerial('WTS', currentWarehouseId)
       if (latestRequestedSerial.current !== next) return
       setSerialNo(suggested)
@@ -474,6 +492,20 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       resetForm(next)
     }
   }
+
+  // Drives forwardIsGap - see StockFormBase.jsx's identical effect.
+  useEffect(() => {
+    let cancelled = false
+    if (!loadedTransaction || !currentWarehouseId) {
+      setForwardIsGap(false)
+      return
+    }
+    const immediateNext = stepSerial(serialNo.trim(), 1)
+    isSerialTaken('WTS', currentWarehouseId, immediateNext, null, null).then((taken) => {
+      if (!cancelled) setForwardIsGap(!taken)
+    })
+    return () => { cancelled = true }
+  }, [loadedTransaction, serialNo, currentWarehouseId])
 
   const handleSelectAuthority = (authority) => {
     setAiNumber(authority.aiNumber ?? '')
@@ -787,7 +819,20 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // suggestNextSerial (date-aware, per the just-recorded save above)
     // instead of a blind ±1 - see StockFormBase.jsx's matching change
     // for the full reasoning.
-    resetForm(await suggestNextSerial('WTS', currentWarehouseId))
+    const next = await suggestNextSerial('WTS', currentWarehouseId)
+    const loaded = await checkAndLoadSerial(next)
+    if (loaded) {
+      // See StockFormBase.jsx's identical fix/comment - don't silently
+      // drop the user into editing whatever record the naive
+      // next-serial guess collided with; skip forward to the actual
+      // next genuinely free serial instead.
+      if (latestRequestedSerial.current === next) {
+        const available = await findNextAvailableSerial('WTS', currentWarehouseId, next, null)
+        if (latestRequestedSerial.current === next) resetForm(available)
+      }
+    } else if (latestRequestedSerial.current === next) {
+      resetForm(next)
+    }
     scrollToTop()
     } catch (err) {
       console.error('WTS save failed:', err)
@@ -1034,17 +1079,24 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
                     className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash ? 'text-transparent' : 'text-app-text'}`} />
                   <SerialCrossfadeOverlay value={serialNo} navFlash={navFlash} />
                 </div>
-                <button type="button" onClick={handleStepForward} aria-label="Next WTS"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 active:scale-90">
-                  <ChevronRight size={18} />
+                <button type="button" onClick={handleStepForward} aria-label={forwardIsGap ? 'Next available WTS' : 'Next WTS'}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-90 ${
+                    forwardIsGap
+                      ? 'border-brand-neon/50 bg-brand-neon/10 text-brand-neon hover:border-brand-neon hover:bg-brand-neon/20'
+                      : 'border-neutral-800 bg-neutral-900 text-neutral-300 hover:border-neutral-600'
+                  }`}>
+                  {forwardIsGap ? <Plus size={18} /> : <ChevronRight size={18} />}
                 </button>
               </>
             )}
           </div>
         </div>
 
-        {/* Concept S (picked) - see StockFormBase.jsx's identical fix. */}
-        <div className={`space-y-3 rounded-xl transition-all duration-300 ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''}`}>
+        {/* Concept S (picked) + background-tint grouping, PC two-column
+            layout - see StockFormBase.jsx's identical fix/comment for
+            the full explanation. No live pile sidebar here - WTS has two
+            pile sections (issued/received), not one. */}
+        <div className={`rounded-xl transition-all duration-300 [&>*]:rounded-lg [&>*]:p-2.5 [&>*:nth-child(odd)]:bg-white/[0.025] ${isCancelled ? 'border-2 border-brand-crimson p-2 opacity-40' : ''} ${navFlash ? 'stagger-fields' : ''} ${isPC ? 'columns-2 gap-4 [&>*]:mb-3 [&>*]:break-inside-avoid-column' : 'space-y-3'}`}>
         <div>
           <label className={labelClass}>Date</label>
           <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />

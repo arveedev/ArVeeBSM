@@ -3007,4 +3007,55 @@
 //              keeps both buttons disabled through that window, so a
 //              second tap can't re-trigger against an already-deleted
 //              record.
-export const APP_VERSION = '1.9-170'
+//   1.9-171 - Several real bugs found and fixed, plus a PC-only entry-form
+//            redesign, per direct field report:
+//            1. Save's required-fields gate used OR instead of AND for
+//               Bags/Gross Kilos - clearing Gross Kilos back out after
+//               Bags was already filled left Save wrongly still enabled.
+//               Fixed to require both, matching WTSForm's own check.
+//            2. The Customer Name field's auto-detect-exact-match path
+//               only back-filled the side fields (Address/RSBSA/Gender)
+//               via onMatch, never called onChange - so typing a known
+//               ALIAS directly (no dropdown click) saved the alias text
+//               itself to the transaction and Sheet backup instead of
+//               the real customer name. The dropdown-click path already
+//               did both calls correctly; the typed-alias path now
+//               matches it.
+//            3. Changing a transaction's Pile unconditionally cleared
+//               MTS (sack weight/condition) even between two piles of
+//               the SAME variety - now only clears it when the pile
+//               change actually implies a different variety.
+//            4. Forward serial navigation ("<" / ">") now turns into a
+//               "+" button when the immediate next serial is a genuine
+//               gap (free, with real data further ahead) - jumps
+//               straight into that gap instead of walking past it to
+//               the next real document. Also, right after a Save, if
+//               the auto-suggested next serial collides with a REAL
+//               document, the form now skips forward to the actual next
+//               genuinely free serial instead of silently loading a
+//               stranger's record for editing. Applied to StockFormBase
+//               (WSR/WSI), SackFormBase (ESR/ESI), and WTSForm alike.
+//            5. Notifications (toasts) are now wider with larger text on
+//               PC only - unchanged on mobile.
+//            6. Login's PIN can now be typed with a physical keyboard on
+//               PC (digits, Backspace, Escape) - additive to the
+//               existing on-screen keypad, which still works everywhere.
+//            7. New PC-only entry-form layout, per several rounds of
+//               demo review - mobile is completely unchanged. Fields
+//               flow into two columns (CSS multi-column, auto-balancing
+//               the form's existing deeply-conditional field order
+//               rather than hand-splitting it) with a subtle alternating
+//               background tint grouping each field block, no header/
+//               title text anywhere - the look picked after comparing
+//               several titled and untitled variants. On StockFormBase
+//               (WSR/WSI/ESR/ESI) only, a live "Pile now" sidebar grows
+//               in from the side once a pile is selected, showing that
+//               pile's current Bags/Net Kg while the field columns
+//               narrow to make room - the header (Warehouse/cereal tabs/
+//               Close) and the Save bar both stay completely fixed
+//               throughout. SackFormBase and WTSForm get the same
+//               tint/column treatment without the sidebar (SackFormBase
+//               has no Pile ID field at all; WTSForm has two pile
+//               sections, issued and received, which the sidebar
+//               concept doesn't map onto and hasn't been designed for).
+export const APP_VERSION = '1.9-171'

@@ -23,12 +23,21 @@ const TYPE_STYLES = {
 
 const SWIPE_DISMISS_PX = 80
 
+// Same (pointer: coarse) check UpdateAvailableToast/Piles.jsx already
+// use elsewhere to distinguish a touch device from a PC - per explicit
+// request, notifications are wider with a larger font on PC (checked
+// once per toast instance, a device doesn't change pointer type
+// mid-session).
+const isTouchDevicePointer = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches)
+
 function AnimatedToast({ t }) {
   const cfg = TYPE_STYLES[t.type] ?? TYPE_STYLES.blank
   const { Icon, color, motion } = cfg
   const [dragX, setDragX] = useState(0)
   const [dragging, setDragging] = useState(false)
   const startXRef = useRef(null)
+  const [isPC] = useState(() => !isTouchDevicePointer())
 
   const handlePointerDown = (e) => {
     startXRef.current = e.clientX
@@ -59,7 +68,9 @@ function AnimatedToast({ t }) {
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      className={`flex items-center gap-2.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3.5 py-2.5 shadow-lg ${t.visible ? entranceStyle : entranceStyle}`}
+      className={`flex items-center gap-2.5 rounded-xl border border-neutral-800 bg-neutral-900 shadow-lg ${
+        isPC ? 'min-w-[26rem] max-w-lg px-5 py-4' : 'px-3.5 py-2.5'
+      } ${t.visible ? entranceStyle : entranceStyle}`}
       style={{
         borderLeft: `3px solid ${color}`,
         transform: `translateX(${dragX}px)`,
@@ -76,9 +87,9 @@ function AnimatedToast({ t }) {
             style={{ boxShadow: `0 0 0 0 ${color}` }}
           />
         )}
-        <Icon size={20} className={t.type === 'loading' ? 'animate-toast-icon-spin' : motion} />
+        <Icon size={isPC ? 26 : 20} className={t.type === 'loading' ? 'animate-toast-icon-spin' : motion} />
       </span>
-      <span className="text-sm font-medium text-app-text">{resolveValue(t.message, t)}</span>
+      <span className={`font-medium text-app-text ${isPC ? 'text-base' : 'text-sm'}`}>{resolveValue(t.message, t)}</span>
     </div>
   )
 }
