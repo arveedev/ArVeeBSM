@@ -3529,4 +3529,23 @@
 //           excluded, since syncing across devices is the entire point
 //           (an SDO's Purchase Receipts, cash ledger, and Buying Price
 //           must be visible to Admin/other devices, not stuck local-only).
-export const APP_VERSION = '1.10-1'
+//   1.10-2 - CRITICAL fix: v1.10-1's own fix for the sync outage was
+//           itself broken and caused a WORSE one - "The app's local
+//           database couldn't open" for every device, reported directly
+//           within minutes, with a real console error: UpgradeError
+//           "Not yet support for changing primary key". Root cause:
+//           v1.10-1 tried to redefine cashLedger's primary key in place
+//           (same table name, new key shape) - IndexedDB does not
+//           support changing an existing object store's keyPath at all,
+//           ever, so that upgrade transaction threw and the database
+//           failed to open completely for anyone reaching it. The only
+//           safe way to change a primary key is a NEW table: renamed to
+//           cashLedgerV2 (correct UUID key), old cashLedger left
+//           declared exactly as it always was (v33's original id++
+//           definition, completely untouched) so opening the database
+//           never attempts an invalid in-place key change again, and
+//           added to unsyncedTables since it's now dead/unused. Every
+//           file that wrote to cashLedger now uses cashLedgerV2 instead.
+//           No data was ever at risk - this table had zero real rows
+//           anywhere at any point, the whole feature was minutes old.
+export const APP_VERSION = '1.10-2'

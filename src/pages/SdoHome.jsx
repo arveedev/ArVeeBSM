@@ -67,7 +67,7 @@ function SdoHome() {
   const activePrByWsrId = new Map(activePrs.map((pr) => [pr.wsrTransactionId, pr]))
 
   const myActivePrs = useMemo(() => activePrs.filter((pr) => pr.sdoUid === user?.uid), [activePrs, user?.uid])
-  const ledgerEntries = useLiveQuery(() => user ? db.cashLedger.where('sdoUid').equals(user.uid).toArray() : [], [user?.uid]) ?? []
+  const ledgerEntries = useLiveQuery(() => user ? db.cashLedgerV2.where('sdoUid').equals(user.uid).toArray() : [], [user?.uid]) ?? []
   const cashOnHand = computeCashOnHand(ledgerEntries, myActivePrs.map((pr) => pr.totalAmount ?? 0))
 
   const buyingPrices = useLiveQuery(() => db.buyingPrices.toArray(), []) ?? []

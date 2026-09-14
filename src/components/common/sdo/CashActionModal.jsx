@@ -24,7 +24,7 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
     if (!canSave) return
     setSaving(true)
     try {
-      await db.cashLedger.add({
+      await db.cashLedgerV2.add({
         id: crypto.randomUUID(),
         sdoUid: user.uid,
         type: isReplenish ? 'replenish' : 'liquidate',

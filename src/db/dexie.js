@@ -883,10 +883,23 @@ db.version(33).stores({
 // keys on a synced table - two different devices working offline can
 // independently generate the exact same numeric id (both create their
 // first row as id 1), which breaks the global identity sync relies on.
-// This table had zero real rows anywhere (the feature had just shipped)
-// so redefining its primary key outright, no migration needed, is safe.
+//
+// A second, WORSE mistake was made fixing this the first time: this
+// version originally tried to redefine cashLedger's OWN primary key in
+// place (same table name, new keyPath) - IndexedDB does not support
+// changing an object store's keyPath after creation at all, so that
+// upgrade THREW ("Not yet support for changing primary key") and took
+// the local database down completely for anyone who'd already reached
+// v33 - a strictly worse outage than the sync issue it was meant to
+// fix. Corrected the only safe way to change a primary key: a NEW
+// table (cashLedgerV2) with the right key shape, old `cashLedger` left
+// declared exactly as v33 had it (untouched, so opening the database
+// never has to attempt an invalid in-place key change again) and added
+// to unsyncedTables below since its rows can never be trusted to sync
+// safely. No data migration needed - this table had zero real rows
+// anywhere, the entire feature was minutes old when this broke.
 db.version(34).stores({
-  cashLedger: 'id, sdoUid, type, date',
+  cashLedgerV2: 'id, sdoUid, type, date',
 })
 
 // Directly confirms whether this exact browser session is actually
@@ -939,12 +952,14 @@ db.cloud.configure({
   // sdoSerialCounterCache added: same per-device performance-cache
   // reasoning as serialCounterCache right next to it - the real source
   // of truth is purchaseReceipts.prId itself, this is just a fast
-  // local tracker for suggesting the next one. Every OTHER new SDO
-  // table (buyingPrices, purchaseReceipts, cashLedger,
-  // cashDenominationCounts, pricerEligibility, enwFactors) DOES sync -
-  // see v34 below for why cashLedger needed a real fix first, not just
-  // an exclusion, to make that safe.
-  unsyncedTables: ['serialCounterCache', 'sdoSerialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations'],
+  // local tracker for suggesting the next one. cashLedger (v33) is
+  // dead/superseded by cashLedgerV2 (v34, see its own comment) - its
+  // auto-incrementing key can never sync safely, and it always stays
+  // empty since every write goes to cashLedgerV2 now, but it's excluded
+  // here defensively regardless. Every OTHER new SDO table
+  // (buyingPrices, purchaseReceipts, cashLedgerV2,
+  // cashDenominationCounts, pricerEligibility, enwFactors) DOES sync.
+  unsyncedTables: ['serialCounterCache', 'sdoSerialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations', 'cashLedger'],
   // requireAuth MUST be false for an offline-first app. When true,
   // Dexie Cloud refuses to run ANY operation - including purely local
   // reads/writes that have nothing to do with syncing - until it has a

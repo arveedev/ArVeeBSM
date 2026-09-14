@@ -24,7 +24,7 @@ function AbstractExportModal({ onClose }) {
         db.provinces.toArray(),
         db.branches.toArray(),
         db.reportConfig.get('global'),
-        db.cashLedger.where('sdoUid').equals(user.uid).toArray(),
+        db.cashLedgerV2.where('sdoUid').equals(user.uid).toArray(),
         db.purchaseReceipts.where('[sdoUid+status]').equals([user.uid, 'Active']).toArray(),
       ])
 
