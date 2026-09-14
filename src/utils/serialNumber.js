@@ -483,3 +483,48 @@ export const findAdjacentTransaction = async (type, warehouseId, serialNo, cerea
   const adjacent = sorted[index + direction]
   return adjacent ?? null
 }
+
+// ── SDO Purchase Receipt series ─────────────────────────────────────────
+// A Purchase Receipt series belongs to the SDO who issues it, not a
+// warehouse - confirmed explicitly ("next in YOUR series"). Deliberately
+// separate, much simpler functions rather than generalizing the
+// warehouse-scoped ones above with an extra "or key by uid" branch -
+// this pool doesn't need cereal-category splitting, series navigation,
+// or any of the warehouse-series edge cases those exist for.
+
+/**
+ * Suggests the next Purchase Receipt number for this SDO: one higher
+ * than whichever PR (Active or Cancelled - a cancelled number is still
+ * "used", never reissued) they most recently issued, per the fast
+ * sdoSerialCounterCache tracker. Falls back to `fallback` if this SDO
+ * has never issued one yet.
+ */
+export const suggestNextPrSerial = async (sdoUid, fallback = '1') => {
+  if (!sdoUid) return fallback
+  const tracked = await db.sdoSerialCounterCache.get(sdoUid)
+  if (!tracked) return fallback
+  return formatSerial({ prefix: tracked.prefix, digits: tracked.digits, number: tracked.number + 1 })
+}
+
+/** Records that a PR number was just issued by this SDO - call right after a successful save. */
+export const recordPrSerialUsed = async (sdoUid, prNo) => {
+  const parsed = parseSerial(prNo)
+  if (!parsed || !sdoUid) return
+  await db.sdoSerialCounterCache.put({
+    uid: sdoUid,
+    prefix: parsed.prefix,
+    digits: parsed.digits,
+    number: parsed.number,
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+/** Whether this SDO has already issued a PR with this exact number. `excludePrId` lets an in-progress edit ignore its own prior value. */
+export const isPrSerialTaken = async (sdoUid, prNo, excludePrId = null) => {
+  if (!sdoUid || !prNo) return false
+  const match = await db.purchaseReceipts
+    .where('sdoUid').equals(sdoUid)
+    .and((pr) => pr.prNo === prNo && pr.prId !== excludePrId)
+    .first()
+  return Boolean(match)
+}

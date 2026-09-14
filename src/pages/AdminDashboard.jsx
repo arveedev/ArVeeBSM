@@ -26,6 +26,8 @@ import SheetSourcesPanel from '../components/common/admin/SheetSourcesPanel.jsx'
 import BackupPanel from '../components/common/admin/BackupPanel.jsx'
 import DataStartDatePanel from '../components/common/admin/DataStartDatePanel.jsx'
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
+import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
+import DisbursementSettingsPanel from '../components/common/admin/DisbursementSettingsPanel.jsx'
 
 const GROUPS = [
   {
@@ -55,6 +57,14 @@ const GROUPS = [
       { id: 'ricemillAllocations', label: 'Miller Allocations', Panel: RicemillAllocationsPanel },
       { id: 'txtypes', label: 'Transaction Types', Panel: TransactionTypesPanel },
       { id: 'authorities', label: 'AI / SIA', Panel: AuthoritiesInfoPanel },
+    ],
+  },
+  {
+    id: 'disbursement',
+    label: 'Disbursement',
+    tabs: [
+      { id: 'enw', label: 'ENW Table', Panel: EnwFactorTablePanel },
+      { id: 'disbursementSettings', label: 'Settings', Panel: DisbursementSettingsPanel },
     ],
   },
   {

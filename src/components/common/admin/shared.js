@@ -29,7 +29,7 @@ export const deleteIconClass = `${iconButtonClass} text-brand-crimson hover:drop
 export const ROLES = [
   'Admin', 'Warehouse Supervisor', 'Acting Warehouse Supervisor',
   'Warehouse Assistant', 'Acting Warehouse Assistant',
-  'MPO III', 'Acting MPO III',
+  'MPO III', 'Acting MPO III', 'SDO',
 ]
 
 // Every sack type has exactly these three conditions. Fixed, not

@@ -25,17 +25,29 @@ const PLACEHOLDER_BY_CATEGORY = {
   'By Products': 'DKA',
 }
 
+// Purity/D&D per Palay variety - confirmed these are fixed per
+// classification code, not measured per farmer ("we can set it by the
+// variety of the palay, example set PD1-A as 0-3 D&D and purity of
+// 95-100, only for the palay cereal type"). Selecting the variety on a
+// WSR already determines both, which is what lets a Purchase Receipt
+// compute its ENW factor without asking anyone to re-enter them.
+const emptyPalayClassification = { purityMin: '', purityMax: '', purityLetter: '', ddMin: '', ddMax: '' }
+
 function VarietyTypesPanel() {
   const [category, setCategory] = useState('Rice')
   const [name, setName] = useState('')
+  const [palay, setPalay] = useState(emptyPalayClassification)
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
 
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), [])
 
+  const updatePalayField = (field, value) => setPalay((p) => ({ ...p, [field]: value }))
+
   const resetForm = () => {
     setCategory('Rice')
     setName('')
+    setPalay(emptyPalayClassification)
     setEditingId(null)
   }
 
@@ -45,10 +57,20 @@ function VarietyTypesPanel() {
       return
     }
 
+    const palayFields = category === 'Palay'
+      ? {
+          purityMin: palay.purityMin === '' ? null : parseFloat(palay.purityMin),
+          purityMax: palay.purityMax === '' ? null : parseFloat(palay.purityMax),
+          purityLetter: palay.purityLetter.trim().toUpperCase() || null,
+          ddMin: palay.ddMin === '' ? null : parseFloat(palay.ddMin),
+          ddMax: palay.ddMax === '' ? null : parseFloat(palay.ddMax),
+        }
+      : { purityMin: null, purityMax: null, purityLetter: null, ddMin: null, ddMax: null }
+
     if (editingId) {
       const existing = varieties?.find((v) => v.varietyId === editingId)
       const categoryChanged = existing && existing.category !== category
-      await db.varietyTypes.update(editingId, { category, name: name.trim() })
+      await db.varietyTypes.update(editingId, { category, name: name.trim(), ...palayFields })
       if (categoryChanged) {
         // Every transaction stores its OWN cerealCategory at save time
         // (deliberately - so this edit doesn't rewrite what a report
@@ -77,6 +99,7 @@ function VarietyTypesPanel() {
         varietyId: crypto.randomUUID(),
         category,
         name: name.trim(),
+        ...palayFields,
       })
       toast.success('Variety saved')
     }
@@ -88,6 +111,13 @@ function VarietyTypesPanel() {
     setEditingId(variety.varietyId)
     setCategory(variety.category)
     setName(variety.name)
+    setPalay({
+      purityMin: variety.purityMin ?? '',
+      purityMax: variety.purityMax ?? '',
+      purityLetter: variety.purityLetter ?? '',
+      ddMin: variety.ddMin ?? '',
+      ddMax: variety.ddMax ?? '',
+    })
   }
 
   const confirmDelete = async () => {
@@ -136,6 +166,38 @@ function VarietyTypesPanel() {
           />
         </div>
 
+        {category === 'Palay' && (
+          <div className="space-y-2 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+            <p className="text-xs font-semibold uppercase text-neutral-500">
+              Classification — used to compute the ENW factor on a Purchase Receipt
+            </p>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className={labelClass}>Purity min (%)</label>
+                <input type="number" value={palay.purityMin} onChange={(e) => updatePalayField('purityMin', e.target.value)} className={inputClass} placeholder="95" />
+              </div>
+              <div className="flex-1">
+                <label className={labelClass}>Purity max (%)</label>
+                <input type="number" value={palay.purityMax} onChange={(e) => updatePalayField('purityMax', e.target.value)} className={inputClass} placeholder="100" />
+              </div>
+              <div className="w-20">
+                <label className={labelClass}>Letter</label>
+                <input type="text" maxLength={1} value={palay.purityLetter} onChange={(e) => updatePalayField('purityLetter', e.target.value)} className={inputClass} placeholder="A" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className={labelClass}>D&D min (%)</label>
+                <input type="number" value={palay.ddMin} onChange={(e) => updatePalayField('ddMin', e.target.value)} className={inputClass} placeholder="0" />
+              </div>
+              <div className="flex-1">
+                <label className={labelClass}>D&D max (%)</label>
+                <input type="number" value={palay.ddMax} onChange={(e) => updatePalayField('ddMax', e.target.value)} className={inputClass} placeholder="3" />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button type="button" onClick={handleSave} className={`flex-1 ${primaryButtonClass}`}>
             Save
@@ -158,7 +220,14 @@ function VarietyTypesPanel() {
               <ul className="mt-2 space-y-2">
                 {group.items.map((v) => (
                   <li key={v.varietyId} className={listItemClass}>
-                    <p className="font-medium text-app-text">{v.name}</p>
+                    <div>
+                      <p className="font-medium text-app-text">{v.name}</p>
+                      {v.category === 'Palay' && v.purityLetter && (
+                        <p className="text-xs text-neutral-500">
+                          Purity {v.purityMin}–{v.purityMax}% ({v.purityLetter}) · D&D {v.ddMin}–{v.ddMax}%
+                        </p>
+                      )}
+                    </div>
                     <div className="flex gap-3">
                       <button
                         type="button"

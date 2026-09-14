@@ -817,6 +817,61 @@ db.version(32).stores({
   errorLogs: 'id, timestamp',
 })
 
+// v33 — SDO (Disbursing Officer) feature. Purely additive: every existing
+// table is untouched, so this only ever adds new local/cloud stores on
+// top of what's already there.
+//
+// buyingPrices: versioned by effectiveFrom rather than a single mutable
+// row, so a Purchase Receipt created for an old WSR can still use the
+// price that was actually active on ITS OWN date, not whatever is
+// current today - the same reasoning as every other dated-history table
+// in this app (e.g. signatories aren't retroactively rewritten either).
+//
+// purchaseReceipts: `wsrTransactionId` links back to the exact WSR it
+// pays for - a WSR either has zero PRs (Unpaid) or exactly one Active
+// one (Paid); enforced in app logic, not the schema. `status` is
+// 'Active' | 'Cancelled', matching the app's existing Active/Cancelled
+// convention for transactions rather than inventing a new vocabulary.
+//
+// sdoSerialCounterCache: same fast-tracker shape as the existing
+// serialCounterCache (see serialNumber.js), but keyed by the SDO's own
+// `uid` instead of (warehouseId, type) - the Purchase Receipt series
+// belongs to the person, not a warehouse, confirmed explicitly ("next
+// in YOUR series").
+//
+// cashLedger: only ever holds 'replenish' | 'liquidate' rows. Cash on
+// Hand is deliberately never a stored running number - it's always
+// computed live as (sum of replenish) - (sum of liquidate) - (sum of
+// this SDO's own Active purchaseReceipts.totalAmount). That's what
+// makes cancelling or deleting a PR "revert the cash" automatic: the
+// instant its status leaves 'Active', it drops out of that live sum on
+// its own, with no separate reversal entry to write or get wrong.
+//
+// cashDenominationCounts: one row per SDO (`sdoUid` is the primary
+// key) - a physical reconciliation snapshot, not a ledger entry. It
+// never changes Cash on Hand; it only checks the SDO's actual counted
+// cash against what the ledger above already computes.
+//
+// pricerEligibility: per-SDO, Admin-only - confirmed explicitly this is
+// NOT a branch-wide switch ("it depends on a lot of things... it is
+// actually per SDO"). Off (or simply absent) is the normal, default
+// state for every SDO.
+//
+// enwFactors: one row per (purityLetter, D&D bracket, MC bracket) ->
+// factor, editable only from Admin. A Palay variety's own Purity
+// letter/D&D bracket (added to varietyTypes below, non-indexed - see
+// VarietyTypesPanel.jsx) already picks which rows apply; the WSR's own
+// moistureContent picks the MC bracket among those.
+db.version(33).stores({
+  buyingPrices: 'id, effectiveFrom',
+  purchaseReceipts: 'prId, sdoUid, wsrTransactionId, status, date, warehouseId, [sdoUid+status]',
+  sdoSerialCounterCache: 'uid',
+  cashLedger: 'id++, sdoUid, type, date',
+  cashDenominationCounts: 'sdoUid',
+  pricerEligibility: 'uid',
+  enwFactors: 'id, purityLetter',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the
@@ -864,7 +919,11 @@ db.cloud.configure({
   // simply "never registered"). Re-enabling this one would need a
   // schema migration to a single synthetic id first (with the compound
   // pair kept as a regular index instead), not just this one-line flip.
-  unsyncedTables: ['serialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations'],
+  // sdoSerialCounterCache added: same per-device performance-cache
+  // reasoning as serialCounterCache right next to it - the real source
+  // of truth is purchaseReceipts.prId itself, this is just a fast
+  // local tracker for suggesting the next one.
+  unsyncedTables: ['serialCounterCache', 'sdoSerialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations'],
   // requireAuth MUST be false for an offline-first app. When true,
   // Dexie Cloud refuses to run ANY operation - including purely local
   // reads/writes that have nothing to do with syncing - until it has a

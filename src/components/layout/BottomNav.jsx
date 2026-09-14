@@ -73,11 +73,17 @@ const useFabDodge = (column) => {
 // only ever sees one or the other.
 export const REGULAR_NAV_COLUMN = { '/': 0, '/piles': 1, '/monitoring': 1, '/reports': 3, '/settings': 4 }
 const VISITOR_NAV_COLUMN = { '/': 0, '/monitoring': 1 }
+// SDO has no warehouse-operations pages (Piles/Monitoring/Reports are
+// all denied - see App.jsx) and never opens a transaction form, so no
+// FAB either - same minimal two-column shape as Visitor, just Home +
+// Settings instead of Home + Monitor.
+const SDO_NAV_COLUMN = { '/': 0, '/settings': 1 }
 
 function BottomNav({ onFabClick, hidden = false }) {
   const { user } = useAuth() ?? {}
   const isAdmin = user?.role === 'Admin'
   const isVisitor = user?.role === 'Visitor'
+  const isSdo = user?.role === 'SDO'
   const [hasEntered, setHasEntered] = useState(false)
   const { pathname } = useLocation()
 
@@ -108,7 +114,7 @@ function BottomNav({ onFabClick, hidden = false }) {
   // by a CSS transition on transform means the browser always continues
   // from whatever the pill's actual current on-screen position is,
   // interruption or not - there is no "from" value to go stale.
-  const columnForSquash = (isVisitor ? VISITOR_NAV_COLUMN : REGULAR_NAV_COLUMN)[pathname] ?? 0
+  const columnForSquash = (isVisitor ? VISITOR_NAV_COLUMN : isSdo ? SDO_NAV_COLUMN : REGULAR_NAV_COLUMN)[pathname] ?? 0
   const squashRef = useSquashOnChange(columnForSquash)
   // Computed unconditionally (hooks can't run after an early return) -
   // the Visitor nav has no FAB at all, so fabRef simply never attaches
@@ -157,6 +163,31 @@ function BottomNav({ onFabClick, hidden = false }) {
           </div>
           <NavItem to="/" label="Home" Icon={Home} />
           <NavItem to="/monitoring" label="Monitor" Icon={Radar} />
+        </div>
+      </nav>
+    )
+  }
+
+  if (isSdo) {
+    const sdoColumn = SDO_NAV_COLUMN[pathname] ?? 0
+    return (
+      <nav style={slideStyle} className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
+        <div className="pointer-events-none absolute inset-x-0 bottom-full h-4 bg-gradient-to-t from-neutral-900 to-transparent" />
+        <div className="relative mx-auto grid h-16 max-w-md grid-cols-2 items-center">
+          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+            <div
+              className="absolute inset-y-2 w-1/2 transition-nav-elastic-edge"
+              style={{ transform: `translateX(${sdoColumn * 100}%)` }}
+            >
+              <div
+                ref={squashRef}
+                className="mx-1 h-full rounded-2xl bg-brand-neon"
+                style={{ transformOrigin: sdoColumn === 0 ? 'left center' : 'right center' }}
+              />
+            </div>
+          </div>
+          <NavItem to="/" label="Home" Icon={Home} />
+          <NavItem to="/settings" label="Settings" Icon={Settings} />
         </div>
       </nav>
     )

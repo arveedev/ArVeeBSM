@@ -4,6 +4,7 @@ import { Toaster, toast } from 'react-hot-toast'
 import Login from './pages/Login.jsx'
 import Home from './pages/Home.jsx'
 import AdminHome from './pages/AdminHome.jsx'
+import SdoHome from './pages/SdoHome.jsx'
 import Piles from './pages/Piles.jsx'
 import AdminMonitoring from './pages/AdminMonitoring.jsx'
 import Reports from './pages/Reports.jsx'
@@ -109,6 +110,7 @@ function App() {
 
   const isAdmin = user?.role === 'Admin'
   const isVisitor = user?.role === 'Visitor'
+  const isSdo = user?.role === 'SDO'
 
   // Theme defaults to dark (no .light class) - only toggled on when the
   // persisted preference explicitly says 'light'.
@@ -213,8 +215,8 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <SectionErrorBoundary user={user} fullPage label={isAdmin || isVisitor ? 'Admin dashboard' : 'Home'}>
-                {isAdmin || isVisitor ? <AdminHome /> : <Home />}
+              <SectionErrorBoundary user={user} fullPage label={isAdmin || isVisitor ? 'Admin dashboard' : isSdo ? 'SDO Home' : 'Home'}>
+                {isAdmin || isVisitor ? <AdminHome /> : isSdo ? <SdoHome /> : <Home />}
               </SectionErrorBoundary>
             </ProtectedRoute>
           }
@@ -222,7 +224,7 @@ function App() {
         <Route
           path="/piles"
           element={
-            <ProtectedRoute denyRoles={['Visitor']}>
+            <ProtectedRoute denyRoles={['Visitor', 'SDO']}>
               <SectionErrorBoundary user={user} fullPage label="Piles">
                 <Piles />
               </SectionErrorBoundary>
@@ -242,7 +244,7 @@ function App() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute denyRoles={['Visitor']}>
+            <ProtectedRoute denyRoles={['Visitor', 'SDO']}>
               <SectionErrorBoundary user={user} fullPage label="Reports">
                 <Reports />
               </SectionErrorBoundary>

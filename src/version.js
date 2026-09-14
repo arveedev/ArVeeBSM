@@ -3480,4 +3480,32 @@
 //            shipping in the built bundle since nothing referenced it,
 //            so this is pure dependency-hygiene cleanup with no runtime
 //            behavior change.
-export const APP_VERSION = '1.9-189'
+//   1.10-0 - New SDO (Disbursing Officer) feature, built from the plan/
+//           demo cycle: a new 'SDO' role with its own Home (Buying
+//           Price, live-computed Cash on Hand, a For Payment/Completed
+//           WSR list with search+sort), a Purchase Receipt reference
+//           screen that auto-fills from a WSR and computes its own ENW
+//           factor + Basic Cost (Equivalent Net Weight truncated to 4
+//           decimals, every peso amount truncated - never rounded - to
+//           2, exactly as specified) - it is a reference only, not an
+//           exported document, since the real PR stays hand-written.
+//           Purity/D&D for the ENW lookup come from the Palay variety
+//           itself (extended in the Varieties admin panel), not a
+//           per-transaction field. Cash on Hand is never stored - it's
+//           always Replenishments minus Liquidations minus this SDO's
+//           own Active Purchase Receipts, so cancelling a PR reverts
+//           its cash automatically and never touches the underlying
+//           WSR (only Warehouse staff can cancel that). Pricer is a
+//           per-SDO incentive Admin turns on individually (off by
+//           default for everyone), not a branch-wide switch. New Admin
+//           → Disbursement group: ENW Factor Table, Purity display
+//           format (range vs. letter), Pricer eligibility per SDO, and
+//           Abstract signatories. New Abstract of Cereal Purchases PDF
+//           export (its own isolated generator, landscape, paginated)
+//           matching the real report's exact columns (RSBSA No.,
+//           Gross/Sack/Net, Rate/Amount only when Pricer applies).
+//           Entirely additive - a new Dexie schema version, new files,
+//           and small isolated edits to Varieties/AdminDashboard/App/
+//           BottomNav - no existing table, page, or role's behavior
+//           changed.
+export const APP_VERSION = '1.10-0'
