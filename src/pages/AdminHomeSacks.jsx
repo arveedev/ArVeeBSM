@@ -104,17 +104,28 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         )}
         {/* Sack types flow into a wrapping grid on large screens instead
             of a single stacked column, per explicit request ("put the
-            sack types with each other on larger displays") - divider
-            lines only make sense when stacked, so they're swapped for
-            the tint each grid cell already gets from its own border/
-            bg below `lg`, and become plain bordered tiles at `lg`+. */}
-        <div className="mt-2 grid grid-cols-1 gap-3 rounded-xl border border-neutral-800 bg-neutral-950 p-3 lg:grid-cols-2 lg:gap-2 lg:border-none lg:bg-transparent lg:p-0">
-          {rows.map(({ sackType, conditions }, i) => (
+            sack types with each other on larger displays"). Real bug
+            found twice, reported directly with screenshots: the
+            previous version only applied the tile's bg/border classes
+            at the `lg:` breakpoint (lg:bg-neutral-950 etc) - this
+            theming system's light-mode overrides only ever map the
+            PLAIN class name, never a breakpoint-prefixed variant, so
+            those tiles stayed hard-coded near-black in light mode no
+            matter the breakpoint. Every sack-type block is now always
+            a plain bordered/tinted tile (the same bg-neutral-950/
+            border-neutral-800 classes already correctly overridden
+            elsewhere) at every screen size - only the column COUNT
+            changes at `lg:`, so there's no more breakpoint-only dark
+            class left to fall through the cracks. Sack type code
+            itself bumped to a brighter, bigger treatment (was a dim
+            gray label, easy to miss) per explicit request. */}
+        <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+          {rows.map(({ sackType, conditions }) => (
             <div
               key={sackType.sackTypeId}
-              className={`${i > 0 ? 'border-t border-neutral-800 pt-3' : ''} lg:rounded-lg lg:border lg:border-neutral-800 lg:bg-neutral-950 lg:p-3 lg:pt-3`}
+              className="rounded-lg border border-neutral-800 bg-neutral-950 p-3"
             >
-              <p className="text-sm font-semibold uppercase text-neutral-400">{sackType.code}</p>
+              <p className="text-base font-bold uppercase text-brand-neon">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (
                   <div key={r.condition.code} className="flex items-center justify-between">
@@ -144,7 +155,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         tabIndex={0}
         onClick={() => onWarehouseSelect?.(warehouse)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onWarehouseSelect?.(warehouse) }}
-        className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+        className="mb-3 break-inside-avoid-column cursor-pointer rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]"
       >
         <div className="flex items-center justify-between gap-2">
           {/* Warehouse name highlighted (accent color, not plain
@@ -163,7 +174,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
         <div className="mt-2 space-y-2">
           {rows.map(({ sackType, conditions }, i) => (
             <div key={sackType.sackTypeId} className={i > 0 ? 'border-t border-neutral-800 pt-2' : ''}>
-              <p className="text-sm font-semibold uppercase text-neutral-400">{sackType.code}</p>
+              <p className="text-sm font-bold uppercase text-brand-neon">{sackType.code}</p>
               <div className="mt-1 space-y-1">
                 {conditions.map((r) => (
                   <div key={r.condition.code} className="flex items-center justify-between">
@@ -223,22 +234,24 @@ function AdminHomeSacks({ onWarehouseSelect }) {
       {groupTab === 'Warehouse' && (
         <Section title="Sack Pieces by Warehouse">
           {sortedWarehouses.length === 0 ? <Empty /> : (
-            // Real bug found, reported directly with a screenshot:
-            // confining each province to its OWN 2-column sub-grid
+            // Two real bugs found, reported directly with screenshots.
+            // (1) Confining each province to its OWN 2-column sub-grid
             // wasted a ton of horizontal space whenever one province
-            // had far fewer warehouses than another (Catanduanes' one
-            // card sat squeezed into a narrow half-width column while
-            // Albay's five cards crowded a tight 2-wide stack right
-            // next to it, with the whole right side of the screen
-            // empty). Per explicit follow-up ("don't group them by
-            // province, just make sure the 2 provinces are divided but
-            // not like this"): every warehouse card now shares ONE
-            // wide auto-filling grid, sized to however many actually
-            // fit the real screen width - a province heading is still
-            // its own full-width row (col-span-full) marking where
-            // that province's cards start, dividing them without
-            // boxing them into a separate, narrower grid.
-            <div key="warehouse" className="grid grid-cols-1 gap-3 animate-flow-down lg:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+            // had far fewer warehouses than another. Fixed by sharing
+            // one grid across every warehouse regardless of province.
+            // (2) That fix still wasn't "balanced" - CSS Grid auto-fill
+            // packs strictly row by row, so a row that doesn't divide
+            // evenly leaves a sparse, lonely-looking last row (a single
+            // card stranded under five others) - the exact "make sure
+            // this always looks even" complaint. Switched to real CSS
+            // multi-column instead: it fills every column to a similar
+            // TOTAL HEIGHT, not a fixed row grid, which is what
+            // actually stays balanced regardless of how many warehouses
+            // or provinces exist at any given screen size. Each card
+            // (and each province heading) gets break-inside-avoid-
+            // column so a card is never visually split across the
+            // column break.
+            <div key="warehouse" className="columns-1 gap-3 animate-flow-down sm:columns-2 lg:columns-3 xl:columns-4">
               {sortedProvinces.map((province) => {
                 // Only warehouses that actually have something to show -
                 // a province where every warehouse is currently empty
@@ -249,7 +262,7 @@ function AdminHomeSacks({ onWarehouseSelect }) {
                 if (provinceWarehouses.length === 0) return null
                 return (
                   <Fragment key={province.provinceId}>
-                    <p className="col-span-full mb-1 text-xs font-bold uppercase tracking-wide text-neutral-500">
+                    <p className="mb-2 break-inside-avoid-column text-xs font-bold uppercase tracking-wide text-neutral-500">
                       {province.code} <span className="font-medium normal-case text-neutral-600">{province.name}</span>
                     </p>
                     {provinceWarehouses.map((warehouse) => (

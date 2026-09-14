@@ -6,17 +6,14 @@
 // documented history of exactly that kind of duplication causing
 // stale-field bugs once one copy gets fixed and the other doesn't.
 //
-// Desktop/tablet uses a real <table> with the same Th/Td helpers and
-// w-full/border-b row styling as AdminHomeStocks.jsx's Age Grouping
-// table - a previous version of this used a fixed-pixel-width CSS grid
-// sized to its own content ("w-fit"), which technically aligned its own
-// columns correctly but, per direct feedback against a live screenshot,
-// looked broken sitting as a narrow island in a sea of empty space on
-// a wide desktop window. A real table with w-full fills the available
-// width the same natural way Age Grouping's table already does, instead
-// of hand-rolling a second, different-looking pattern for tabular data.
-// Mobile (below `sm`) still gets its own stacked-row rendering of the
-// same entries, since a table this wide genuinely doesn't fit a phone.
+// Uses one card-style list of entries at every screen size, per
+// explicit request. This previously had a real <table> on desktop/
+// tablet (same Th/Td pattern as AdminHomeStocks.jsx's Age Grouping
+// table) and a separate stacked-card list on mobile - now unified on
+// the card list, since it already fills the available width as plain
+// full-width flex rows (unlike an even earlier fixed-pixel-width CSS
+// grid attempt that hugged its own content and looked broken as a
+// narrow island on a wide desktop window).
 //
 // Sort/filter (RicemillSortFilterModal) is local state here, not lifted
 // to the caller - each expanded Regional Authority Number already gets
@@ -27,7 +24,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { fmtWeight, fmtNetBags } from '../../utils/calculations.js'
-import { Th, Td } from '../../pages/AdminHomeShared.jsx'
 import RicemillSortFilterModal, { DEFAULT_SORT } from './RicemillSortFilterModal.jsx'
 
 // Issuance has no AI # (there's only ever one AI covering the whole
@@ -40,9 +36,6 @@ import RicemillSortFilterModal, { DEFAULT_SORT } from './RicemillSortFilterModal
 // place.
 const ISSUANCE_COLUMNS = ['date', 'netBags', 'netKgs']
 const RECEIPT_COLUMNS = ['date', 'aiNumber', 'netBags', 'netKgs']
-
-const COLUMN_LABEL = { date: 'Date', aiNumber: 'AI #', netBags: 'Net Bags', netKgs: 'Net Kgs' }
-const RIGHT_ALIGNED = new Set(['netBags', 'netKgs'])
 
 /** "2026-07-31" -> "Jul 31" - a short, unambiguous form that never needs
  * truncating regardless of column width or font size, unlike the raw
@@ -73,16 +66,6 @@ function applySortFilter(entries, { sortBy, dateFrom, dateTo }) {
     if (sortBy === 'kilos-asc') return (a.kilos ?? 0) - (b.kilos ?? 0)
     return (b.date ?? '').localeCompare(a.date ?? '') // date-desc, the default
   })
-}
-
-function cellContent(column, entry, weightUnit) {
-  switch (column) {
-    case 'date': return shortDate(entry.date)
-    case 'aiNumber': return entry.aiNumber ?? '—'
-    case 'netBags': return fmtNetBags(entry.bags)
-    case 'netKgs': return fmtWeight(entry.kilos, weightUnit)
-    default: return ''
-  }
 }
 
 // Total is always the sum of whatever entries are actually being shown
@@ -128,7 +111,6 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
   if (entries.length === 0) return null
   const totalBags = entries.reduce((s, e) => s + (e.bags ?? 0), 0)
   const totalKilos = entries.reduce((s, e) => s + (e.kilos ?? 0), 0)
-  const leadColSpan = columns.length - 2 // every column except Net Bags/Net Kgs, for the "Total" label
   // Every entry within one Regional Authority Number's Receipt list is
   // always the same variety - shown once here instead of repeated down
   // its own column. Issuance has no real per-row variety (every entry
@@ -141,59 +123,23 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
         {label}{varietyName ? ` · ${varietyName}` : ''}
       </p>
 
-      {/* Desktop/tablet: a real table, same pattern as AdminHomeStocks.jsx's
-          Age Grouping table - fills the available width instead of
-          hugging a fixed narrow size. */}
-      {/* Th/Td (shared with Age Grouping) hard-code a small text-xs on
-          the cell element itself, which wins over any font-size class
-          put on the <table> - a child's own explicit size always beats
-          an inherited one. Bumped to a bigger size here via a `text-sm`/
-          `text-base` span wrapped around each cell's actual content
-          instead of touching Th/Td themselves, so Age Grouping (and any
-          other shared consumer) keeps its own original small size. */}
-      <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-neutral-800">
-              {columns.map((col) => (
-                <Th key={col} right={RIGHT_ALIGNED.has(col)}>
-                  <span className="text-sm">{COLUMN_LABEL[col]}</span>
-                </Th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr key={entry.authId} className="border-b border-neutral-800/50">
-                {columns.map((col) => (
-                  <Td key={col} right={RIGHT_ALIGNED.has(col)}>
-                    <span className={`text-base ${RIGHT_ALIGNED.has(col) ? 'tabular-nums ' : ''}${col === 'netKgs' ? 'font-medium text-app-text' : col === 'date' || col === 'aiNumber' ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                      {cellContent(col, entry, weightUnit)}
-                    </span>
-                  </Td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-neutral-700">
-              <Td>
-                <span className="text-base font-bold text-app-text">TOTAL</span>
-              </Td>
-              {leadColSpan > 1 && Array.from({ length: leadColSpan - 1 }).map((_, i) => <Td key={`fill-${i}`} />)}
-              <Td right><span className="text-base font-bold tabular-nums text-app-text">{fmtNetBags(totalBags)}</span></Td>
-              <Td right><span className="text-base font-bold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit)}</span></Td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      {/* Mobile: one compact divider-separated row per entry (no nested
-          per-row box - a card-inside-a-card read as cluttered) - Date
-          (+ AI # underneath, for Receipt) on the left, Net Bags/Net Kgs
-          together on one line on the right, instead of a cramped wide
-          table. */}
-      <div ref={flipRef} className="divide-y divide-neutral-900 rounded-lg bg-neutral-950 sm:hidden">
+      {/* Card list, now used at every screen size - per explicit
+          request ("use the card type on the NFA tab when an authority
+          is expanded"). This file used to carry a separate desktop/
+          tablet <table> (same pattern as AdminHomeStocks.jsx's Age
+          Grouping table) specifically because an EARLIER card-ish
+          attempt used a fixed-pixel-width CSS grid that hugged its own
+          content and looked broken as a narrow island on a wide
+          desktop window (see this file's own header comment). This
+          card list doesn't have that problem - each row is a plain
+          full-width flex row (flex items-center justify-between), so
+          it already fills the available width the same natural way
+          the table did, without needing two parallel implementations
+          of the same data. One compact divider-separated row per entry
+          (no nested per-row box - a card-inside-a-card read as
+          cluttered) - Date (+ AI # underneath, for Receipt) on the
+          left, Net Bags/Net Kgs together on one line on the right. */}
+      <div ref={flipRef} className="divide-y divide-neutral-900 rounded-lg bg-neutral-950">
         {entries.map((entry) => (
           <div key={entry.authId} data-flip-key={entry.authId} className="flex items-center justify-between gap-3 px-3 py-2.5">
             <div className="min-w-0">

@@ -290,6 +290,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const [deleteCompleting, setDeleteCompleting] = useState(false)
   const [isCancelled, setIsCancelled] = useState(false)
   const [pendingVoidAction, setPendingVoidAction] = useState(null) // 'void' | 'unvoid' | null
+  // Per explicit request - removing an "Issue from another pile" line
+  // used to happen instantly on tap with zero confirmation, an easy
+  // accidental-tap loss of a partly-filled line. Index of the pending
+  // removal (or null); the actual removal only runs from the confirm
+  // dialog below.
+  const [pendingRemoveAllocIndex, setPendingRemoveAllocIndex] = useState(null)
   const [navFlash, setNavFlash] = useState(null)
   // True when the immediate next serial number (loadedTransaction's own
   // serial + 1) is genuinely free - i.e. there's a gap before whatever
@@ -3303,18 +3309,22 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               keeps Net Kilos's own label lined up with Bags/Gross
               Kilos's labels above it. */}
           <div className="grid grid-cols-2 gap-3">
-            {/* Toggle moved to the RIGHT of Net Kilos (was left), and
-                sits in a fixed-height wrapper matching the input's own
-                height so it's genuinely centered against the input
-                itself - not just bottom-aligned against the whole
-                label+input column, which is what "not centered" was
-                actually about. Both per explicit follow-up request. */}
-            <div className="grid min-w-0 grid-cols-[1fr_auto] items-end gap-2">
-              <div className="min-w-0">
-                <label className={labelClass}>Net Kilos</label>
+            {/* Real bug found, reported again: matching the toggle's
+                wrapper height to the input's own height (the previous
+                attempt) still wasn't reliably centered - a guessed
+                pixel height can't perfectly match the input's real
+                rendered height. Fixed properly this time: the toggle
+                now sits INSIDE the same flex row as the input itself
+                (items-center on that row directly), so it's centered
+                against the input's true height, not a guess. Also
+                dropped the redundant "kg" unit suffix from the value -
+                the field is already labeled "Net Kilos". */}
+            <div className="min-w-0">
+              <label className={labelClass}>Net Kilos</label>
+              <div className="mt-1 flex items-center gap-2">
                 {autoComputeNet ? (
-                  <div className={`${readOnlyClass} truncate px-2 tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
-                    {fmtWeight(netKilos, weightUnit)}
+                  <div className={`${readOnlyClass} mt-0 min-w-0 flex-1 truncate px-2 tabular-nums ${overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                    {fmtWeight(netKilos, weightUnit).replace(/\s*(kg|MT)$/, '')}
                   </div>
                 ) : (
                   <input
@@ -3322,12 +3332,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     inputMode="decimal"
                     value={manualNetKilos}
                     onChange={(e) => setManualNetKilos(liveFormatNumber(e.target.value, 3))}
-                    className={`${inputClass} px-2 ${overKilos ? 'border-brand-crimson' : ''}`}
+                    className={`${inputClass} mt-0 min-w-0 flex-1 px-2 ${overKilos ? 'border-brand-crimson' : ''}`}
                     placeholder="0.000"
                   />
                 )}
-              </div>
-              <div className="flex h-[42px] shrink-0 items-center">
                 <button
                   type="button"
                   onClick={() => setAutoComputeNet((v) => !v)}
@@ -3413,7 +3421,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     <span className="text-xs font-semibold text-neutral-400">Additional pile {i + 1}</span>
                     <button
                       type="button"
-                      onClick={() => setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== i))}
+                      onClick={() => setPendingRemoveAllocIndex(i)}
                       aria-label="Remove pile"
                       className="rounded-lg p-1 text-neutral-500 transition-colors hover:text-brand-crimson"
                     >
@@ -3504,27 +3512,27 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     </div>
                   </div>
 
-                  {/* Toggle+Net Kilos share the Bags column's width - a
-                      bare switch (no bordered box), on the right of Net
-                      Kilos and centered against the input's own height,
-                      matching the primary pile's own layout further up. */}
-                  <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-                    <div>
-                      <label className={labelClass}>Net Kilos</label>
+                  {/* Toggle sits inside Net Kilos's own flex row
+                      (items-center directly against the input), not a
+                      separately height-matched column - a guessed
+                      pixel height never reliably matched the input's
+                      real rendered height. "kg" unit suffix dropped -
+                      the field is already labeled "Net Kilos". */}
+                  <div>
+                    <label className={labelClass}>Net Kilos</label>
+                    <div className="mt-1 flex items-center gap-2">
                       {alloc.autoComputeNet ? (
-                        <div className={`${readOnlyClass} mt-0 truncate tabular-nums ${info.overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
-                          {fmtWeight(info.netKilos, weightUnit)}
+                        <div className={`${readOnlyClass} mt-0 min-w-0 flex-1 truncate tabular-nums ${info.overKilos ? 'border-brand-crimson text-brand-crimson' : ''}`}>
+                          {fmtWeight(info.netKilos, weightUnit).replace(/\s*(kg|MT)$/, '')}
                         </div>
                       ) : (
                         <input
                           type="text" inputMode="decimal" placeholder="0.000"
                           value={alloc.manualKilos}
                           onChange={(e) => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, manualKilos: liveFormatNumber(e.target.value, 3) } : r)))}
-                          className={`${inputClass} mt-0 ${info.overKilos ? 'border-brand-crimson' : ''}`}
+                          className={`${inputClass} mt-0 min-w-0 flex-1 ${info.overKilos ? 'border-brand-crimson' : ''}`}
                         />
                       )}
-                    </div>
-                    <div className="flex h-[42px] shrink-0 items-center">
                       <button
                         type="button"
                         onClick={() => setExtraPileAllocations((rows) => rows.map((r, idx) => (idx === i ? { ...r, autoComputeNet: !r.autoComputeNet } : r)))}
@@ -3867,6 +3875,18 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
         confirmDisabled={isSaving}
+      />
+
+      <ConfirmDialog
+        open={pendingRemoveAllocIndex != null}
+        title={`Remove additional pile ${pendingRemoveAllocIndex != null ? pendingRemoveAllocIndex + 1 : ''}?`}
+        description="Clears whatever's already filled in for this pile line. This doesn't affect anything already saved until you press Save/Update."
+        confirmLabel="Remove"
+        onConfirm={() => {
+          setExtraPileAllocations((rows) => rows.filter((_, idx) => idx !== pendingRemoveAllocIndex))
+          setPendingRemoveAllocIndex(null)
+        }}
+        onCancel={() => setPendingRemoveAllocIndex(null)}
       />
 
       <ConfirmDialog

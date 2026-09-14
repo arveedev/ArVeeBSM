@@ -3343,4 +3343,43 @@
 //               against the whole label+input column. Applied to both
 //               the primary pile section and the "Issue from another
 //               pile" card.
-export const APP_VERSION = '1.9-183'
+//   1.9-184 - More follow-up fixes, reported directly with screenshots:
+//            1. StockFormBase: the toggle-centering fix from 1.9-183
+//               (matching a guessed pixel height) still wasn't reliably
+//               centered. Fixed properly this time - the toggle now
+//               sits INSIDE the same flex row as the Net Kilos input
+//               itself (items-center directly against it), guaranteed
+//               centered regardless of the input's real rendered
+//               height. Also dropped the redundant "kg" unit suffix
+//               from the Net Kilos value (the field is already
+//               labeled "Net Kilos"). Both the primary pile section and
+//               the "Issue from another pile" card.
+//            2. StockFormBase: removing an "Issue from another pile"
+//               line now asks for confirmation first - it used to
+//               delete instantly on tap, an easy way to accidentally
+//               lose a partly-filled line.
+//            3. AdminHomeSacks.jsx: real bug fixed (found twice) - the
+//               Province tab's sack-type tiles only applied their
+//               background/border classes at the `lg:` breakpoint
+//               (lg:bg-neutral-950 etc), and this app's light-mode
+//               override system only ever maps the PLAIN class name,
+//               never a breakpoint-prefixed variant - so those tiles
+//               stayed hard-coded near-black in light mode regardless
+//               of breakpoint. Every sack-type tile is now always a
+//               plain bordered/tinted tile (already-covered classes) at
+//               every screen size; only the column count changes at
+//               `lg:`. Sack type codes also bumped to a bigger, accent-
+//               colored treatment - they were a dim gray label, easy to
+//               miss.
+//            4. AdminHomeSacks.jsx: the Warehouse tab's shared grid
+//               (from 1.9-183) still didn't look "balanced" - CSS Grid
+//               auto-fill packs strictly row by row, so an uneven count
+//               left a sparse, lonely last row. Switched to real CSS
+//               multi-column instead, which balances every column to a
+//               similar total height regardless of how many warehouses
+//               or provinces exist at any given screen size.
+//            5. RicemillRecoveryDetail.jsx (NFA tab's expanded
+//               authority Issuance/Receipt list): now uses the same
+//               card-style list at every screen size instead of a
+//               separate dense desktop table, per explicit request.
+export const APP_VERSION = '1.9-184'
