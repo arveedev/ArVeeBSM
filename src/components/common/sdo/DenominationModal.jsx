@@ -15,6 +15,12 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   const { user } = useAuth()
   const saved = useLiveQuery(() => user ? db.cashDenominationCounts.get(user.uid) : null, [user?.uid])
   const [counts, setCounts] = useState({})
+  const [entered, setEntered] = useState(false)
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEntered(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   useEffect(() => {
     if (saved?.counts) setCounts(saved.counts)
@@ -37,8 +43,15 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-t-2xl border border-neutral-800 bg-neutral-950 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 transition-opacity duration-200 sm:items-center ${entered ? 'opacity-100' : 'opacity-0'}`}
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-t-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] sm:rounded-2xl"
+        style={{ transform: entered ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
           <h2 className="text-base font-semibold text-app-text">Denomination Count</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>

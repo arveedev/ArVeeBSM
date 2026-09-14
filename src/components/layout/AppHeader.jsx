@@ -294,24 +294,29 @@ function AppHeader({ hidden = false }) {
                 icon. The highlight itself slides between the two
                 halves (same sliding-pill technique as the app's other
                 tab pairs) instead of each label just snapping its own
-                background color on/off in place. */}
-            <button
-              type="button"
-              onClick={() => updateSetting?.('weightUnit', isMt ? 'kg' : 'mt')}
-              aria-label="Toggle KG/MT weight unit"
-              className="relative flex items-center overflow-hidden rounded-full bg-neutral-950 text-xs font-bold"
-            >
-              <span
-                className="absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-brand-neon transition-transform duration-300 ease-out"
-                style={{ transform: isMt ? 'translateX(100%)' : 'translateX(0%)' }}
-              />
-              <span className={`relative z-10 px-2 py-2.5 transition-colors ${!isMt ? 'text-brand-contrast' : 'text-neutral-400'}`}>
-                KG
-              </span>
-              <span className={`relative z-10 px-2 py-2.5 transition-colors ${isMt ? 'text-brand-contrast' : 'text-neutral-400'}`}>
-                MT
-              </span>
-            </button>
+                background color on/off in place.
+                Hidden for SDO - that role's whole world is pesos and
+                bags/kilos of palay bought, not warehouse stock weight
+                unit preference; the toggle has nothing there to affect. */}
+            {user?.role !== 'SDO' && (
+              <button
+                type="button"
+                onClick={() => updateSetting?.('weightUnit', isMt ? 'kg' : 'mt')}
+                aria-label="Toggle KG/MT weight unit"
+                className="relative flex items-center overflow-hidden rounded-full bg-neutral-950 text-xs font-bold"
+              >
+                <span
+                  className="absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-brand-neon transition-transform duration-300 ease-out"
+                  style={{ transform: isMt ? 'translateX(100%)' : 'translateX(0%)' }}
+                />
+                <span className={`relative z-10 px-2 py-2.5 transition-colors ${!isMt ? 'text-brand-contrast' : 'text-neutral-400'}`}>
+                  KG
+                </span>
+                <span className={`relative z-10 px-2 py-2.5 transition-colors ${isMt ? 'text-brand-contrast' : 'text-neutral-400'}`}>
+                  MT
+                </span>
+              </button>
+            )}
 
             {/* Dark/light theme toggle - glows when light mode is active,
                 as a clear visual cue of the current state. */}

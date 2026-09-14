@@ -475,6 +475,11 @@ function Settings() {
   }, [])
 
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  // SDO has no warehouse-operations work here - no pile/sack beginning
+  // balances to enter, no per-warehouse Classifier, no age-monitoring
+  // preference (that's a Home dashboard concern for warehouse roles).
+  // This screen for them is just the profile card + sync status above.
+  const isSdo = user?.role === 'SDO'
 
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
@@ -596,6 +601,8 @@ function Settings() {
         </div>
       )}
 
+      {!isSdo && (
+        <>
       <div ref={warehouseSectionRef}>
         {sortedWarehouses.length > 1 ? (
           <div className="mt-4">
@@ -703,6 +710,8 @@ function Settings() {
         warehouseId={currentWarehouseId}
         onClose={() => setBalancePile(null)}
       />
+        </>
+      )}
     </div>
   )
 }

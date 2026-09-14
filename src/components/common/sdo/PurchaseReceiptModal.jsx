@@ -28,6 +28,12 @@ function PurchaseReceiptModal({ wsr, onClose }) {
   const [cancelReason, setCancelReason] = useState('')
   const [confirmingCancel, setConfirmingCancel] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [entered, setEntered] = useState(false)
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEntered(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   const variety = useLiveQuery(() => wsr.varietyId ? db.varietyTypes.get(wsr.varietyId) : null, [wsr.varietyId])
   const sackType = useLiveQuery(() => wsr.mtsSackTypeId ? db.sackTypes.get(wsr.mtsSackTypeId) : null, [wsr.mtsSackTypeId])
@@ -143,9 +149,13 @@ function PurchaseReceiptModal({ wsr, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
+    <div
+      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 transition-opacity duration-200 sm:items-center ${entered ? 'opacity-100' : 'opacity-0'}`}
+      onClick={onClose}
+    >
       <div
-        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-neutral-800 bg-neutral-950 sm:rounded-2xl"
+        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] sm:rounded-2xl"
+        style={{ transform: entered ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">

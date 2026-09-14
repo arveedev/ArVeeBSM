@@ -3563,4 +3563,35 @@
 //           clears the cache directly, bypassing that entire stuck
 //           update flow, so this specific trap can't strand anyone
 //           again.
-export const APP_VERSION = '1.10-3'
+//   1.10-4 - SDO Home/Settings usability fixes, reported directly after
+//           first real use:
+//           1. No more warehouse selector on SDO Home - every warehouse
+//              the SDO is assigned to is now aggregated into one list,
+//              same as Admin's own dashboards never needing a selector.
+//              Each WSR card now shows which warehouse it's from since
+//              multiple can appear together. Each warehouse's own
+//              reportingCutoffDate (combined with the global Data Start
+//              Date override) is applied per row - the same rule
+//              Reports.jsx already uses everywhere else, now respected
+//              here too.
+//           2. Settings for an SDO was showing the full warehouse-
+//              operations screen (Active Warehouse, Auto Age
+//              Monitoring, Classifier, Beginning Balances) - none of
+//              that applies to this role. Now just the profile card,
+//              same as every role gets.
+//           3. Cash on Hand had no way to seed a starting balance -
+//              Replenish now has an "opening balance" option that
+//              skips requiring a real check number, since Cash on Hand
+//              is always derived (never a stored starting number) and
+//              Replenish already is how any cash enters the sum.
+//           4. KG/MT toggle removed from the header for SDO - nothing
+//              in this role's own screens uses a stock weight unit.
+//           5. Buying Price cards are now tap-anywhere to edit, not a
+//              small pencil icon.
+//           6. Removed the "· N" counts beside For Payment/Completed.
+//           7. Every sdo/* modal now gets the same fade+scale entrance
+//              transition already used elsewhere in the app (e.g.
+//              ConfirmDialog) - they were rendering instantly before,
+//              which read as out of place next to how smooth everything
+//              else in the app is.
+export const APP_VERSION = '1.10-4'

@@ -1,7 +1,7 @@
 // Abstract of Cereal Purchases export — free period (no preset range),
 // same idea as the existing Stock Statement export on Reports.jsx.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
@@ -14,6 +14,12 @@ function AbstractExportModal({ onClose }) {
   const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().slice(0, 10))
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [generating, setGenerating] = useState(false)
+  const [entered, setEntered] = useState(false)
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEntered(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   const handleExport = async () => {
     setGenerating(true)
@@ -88,8 +94,15 @@ function AbstractExportModal({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-t-2xl border border-neutral-800 bg-neutral-950 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 transition-opacity duration-200 sm:items-center ${entered ? 'opacity-100' : 'opacity-0'}`}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-t-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] sm:rounded-2xl"
+        style={{ transform: entered ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
           <h2 className="text-base font-semibold text-app-text">Export Abstract of Cereal Purchases</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
