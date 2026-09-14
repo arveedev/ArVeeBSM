@@ -8,8 +8,23 @@
 // boundaries) ever gets to render.
 import { AlertTriangle } from 'lucide-react'
 import { db } from '../../db/dexie.js'
+import { forceRefresh } from '../../services/appUpdate.js'
 
 const DbOpenErrorScreen = ({ error }) => {
+  // Confirmed, reported real trap (see forceRefresh's own comment in
+  // appUpdate.js): a service worker serving an OLD, broken bundle keeps
+  // re-serving that exact same broken bundle on every plain reload,
+  // forever - the fixed code sitting on the server is never fetched,
+  // because nothing in the broken bundle's own update flow ever gets a
+  // chance to run (UpdateChecker.jsx, which normally drives that, lives
+  // inside <App/>, and <App/> never mounts here). This screen is
+  // reached BEFORE <App/> mounts, so it's exactly where that trap was
+  // most likely to strand someone with no way out except knowing to
+  // manually clear site data - this button does that for them.
+  const handleForceUpdate = async () => {
+    await forceRefresh()
+  }
+
   const handleReset = async () => {
     const confirmed = window.confirm(
       'This clears this device\'s local app data and reloads. Data already ' +
@@ -32,8 +47,9 @@ const DbOpenErrorScreen = ({ error }) => {
       <div className="max-w-sm">
         <p className="text-sm font-medium">The app's local database couldn't open.</p>
         <p className="mt-2 text-xs text-neutral-400">
-          This usually clears up after a reset. Your warehouse data isn't lost -
-          most of it already lives in the cloud and will re-download.
+          This usually clears up on its own once your browser fetches the latest
+          version - try "Get Latest Version" first. Your warehouse data isn't lost
+          either way - most of it already lives in the cloud and will re-download.
         </p>
         {error?.message && (
           <p className="mt-3 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-[11px] text-neutral-500">
@@ -41,13 +57,20 @@ const DbOpenErrorScreen = ({ error }) => {
           </p>
         )}
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap justify-center gap-2">
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="rounded-lg border border-neutral-700 px-4 py-2 text-xs text-neutral-300"
         >
           Reload
+        </button>
+        <button
+          type="button"
+          onClick={handleForceUpdate}
+          className="rounded-lg bg-brand-neon px-4 py-2 text-xs font-medium text-brand-contrast"
+        >
+          Get Latest Version
         </button>
         <button
           type="button"

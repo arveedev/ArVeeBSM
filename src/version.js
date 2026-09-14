@@ -3548,4 +3548,19 @@
 //           file that wrote to cashLedger now uses cashLedgerV2 instead.
 //           No data was ever at risk - this table had zero real rows
 //           anywhere at any point, the whole feature was minutes old.
-export const APP_VERSION = '1.10-2'
+//   1.10-3 - Wired the existing forceRefresh() escape hatch (already
+//           built in appUpdate.js, never actually used anywhere) into
+//           DbOpenErrorScreen as a "Get Latest Version" button - a
+//           device stuck on a broken cached bundle whose local
+//           database also fails to open was in a genuine dead end
+//           before this: <App/> (and UpdateChecker.jsx inside it, the
+//           only thing that normally drives updating to a fixed build)
+//           never gets to mount when the database itself fails to
+//           open, so a plain Reload kept re-serving the exact same
+//           broken service-worker-cached bundle forever, no matter how
+//           many times a fixed version had already shipped to the
+//           server. This button unregisters the service worker and
+//           clears the cache directly, bypassing that entire stuck
+//           update flow, so this specific trap can't strand anyone
+//           again.
+export const APP_VERSION = '1.10-3'
