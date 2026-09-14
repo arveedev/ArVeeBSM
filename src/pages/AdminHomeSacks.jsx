@@ -251,7 +251,16 @@ function AdminHomeSacks({ onWarehouseSelect }) {
             // (and each province heading) gets break-inside-avoid-
             // column so a card is never visually split across the
             // column break.
-            <div key="warehouse" className="columns-1 gap-3 animate-flow-down sm:columns-2 lg:columns-3 xl:columns-4">
+            //
+            // Capped at 3 columns (was 4 at xl:) - reported directly:
+            // with only a handful of warehouses total, a 4th column
+            // left one column holding a single short card and a large
+            // dead gap below it, since CSS multi-column's own balance
+            // algorithm can't always split unevenly-sized content
+            // evenly across more columns than there's real content
+            // for. 3 columns leaves more cards per column, which
+            // balances noticeably better in practice.
+            <div key="warehouse" className="columns-1 gap-3 animate-flow-down sm:columns-2 lg:columns-3">
               {sortedProvinces.map((province) => {
                 // Only warehouses that actually have something to show -
                 // a province where every warehouse is currently empty

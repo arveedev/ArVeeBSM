@@ -123,25 +123,17 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
         {label}{varietyName ? ` · ${varietyName}` : ''}
       </p>
 
-      {/* Card list, now used at every screen size - per explicit
-          request ("use the card type on the NFA tab when an authority
-          is expanded"). This file used to carry a separate desktop/
-          tablet <table> (same pattern as AdminHomeStocks.jsx's Age
-          Grouping table) specifically because an EARLIER card-ish
-          attempt used a fixed-pixel-width CSS grid that hugged its own
-          content and looked broken as a narrow island on a wide
-          desktop window (see this file's own header comment). This
-          card list doesn't have that problem - each row is a plain
-          full-width flex row (flex items-center justify-between), so
-          it already fills the available width the same natural way
-          the table did, without needing two parallel implementations
-          of the same data. One compact divider-separated row per entry
-          (no nested per-row box - a card-inside-a-card read as
-          cluttered) - Date (+ AI # underneath, for Receipt) on the
-          left, Net Bags/Net Kgs together on one line on the right. */}
-      <div ref={flipRef} className="divide-y divide-neutral-900 rounded-lg bg-neutral-950">
+      {/* Real "card type" now, per direct follow-up - the previous
+          divide-y single list read as one continuous list, not
+          distinctly separate cards. Each entry is now its own bordered/
+          tinted tile (the same rounded-lg border-neutral-800
+          bg-neutral-950 treatment used elsewhere, e.g. the Sack Pieces
+          tiles), stacked with real gaps between them - at every screen
+          size, matching the width-filling reasoning from before (each
+          tile is still a plain full-width flex row internally). */}
+      <div ref={flipRef} className="space-y-2">
         {entries.map((entry) => (
-          <div key={entry.authId} data-flip-key={entry.authId} className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <div key={entry.authId} data-flip-key={entry.authId} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2.5">
             <div className="min-w-0">
               <p className="text-base tabular-nums text-app-text">{shortDate(entry.date)}</p>
               {columns.includes('aiNumber') && (
@@ -154,7 +146,7 @@ function RecoverySection({ label, entries, weightUnit, columns }) {
             </p>
           </div>
         ))}
-        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-2.5">
           <span className="text-base font-semibold text-app-text">TOTAL</span>
           <p className="text-right text-base tabular-nums">
             <span className="font-semibold text-app-text">{fmtNetBags(totalBags)} bags</span>

@@ -322,7 +322,18 @@ function VarietyCard({
         <button
           type="button"
           onClick={onToggle}
-          className="mt-0.5 flex w-full justify-center py-1"
+          // Real bug found, reported directly with a screenshot: on a
+          // wide screen the shared grid's name column (minmax(0,1fr))
+          // stretches to fill all the extra width, and this button was
+          // centered across the FULL row - the chevron ended up
+          // floating alone in that dead space, disconnected from both
+          // the pile name and the figures. Centered under just the
+          // number columns instead (sm:justify-end, matching
+          // STOCK_GRID_COLS's own right-aligned number tracks), so it
+          // reads as attached to the row's own data rather than
+          // floating in empty space. Mobile (below sm, no wide gap to
+          // begin with) keeps the original centered look.
+          className="mt-0.5 flex w-full justify-center py-1 sm:justify-end"
           aria-label={isExpanded ? 'Hide details' : 'Show details'}
         >
           {/* The rotate only starts once the 300ms height-slide above

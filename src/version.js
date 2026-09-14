@@ -3382,4 +3382,27 @@
 //               authority Issuance/Receipt list): now uses the same
 //               card-style list at every screen size instead of a
 //               separate dense desktop table, per explicit request.
-export const APP_VERSION = '1.9-184'
+//   1.9-185 - Three more follow-up fixes, reported directly:
+//            1. HomeStocks.jsx: real bug fixed - on a wide screen the
+//               shared grid's name column stretches to fill the extra
+//               width, and the per-variety expand chevron was centered
+//               across the FULL row width, leaving it floating alone in
+//               that dead space, disconnected from both the pile name
+//               and the figures. Now aligned under the number columns
+//               (sm:justify-end) instead, reading as attached to the
+//               row's own data. Mobile is unaffected.
+//            2. AdminHomeSacks.jsx (Sack Pieces, Warehouse tab): capped
+//               at 3 columns (was 4 at xl:) - with only a handful of
+//               warehouses total, the 4th column often left one column
+//               holding a single short card and a large dead gap below
+//               it, since CSS multi-column's balance algorithm can't
+//               always split unevenly-sized content evenly across more
+//               columns than there's real content for.
+//            3. RicemillRecoveryDetail.jsx (NFA expanded authority
+//               list): the "card type" from 1.9-184 was still one
+//               continuous divide-y list, not genuinely separate cards
+//               - per direct follow-up, each entry (and the TOTAL row)
+//               is now its own bordered/tinted tile with real gaps
+//               between them, matching the same tile treatment used
+//               elsewhere (e.g. Sack Pieces).
+export const APP_VERSION = '1.9-185'
