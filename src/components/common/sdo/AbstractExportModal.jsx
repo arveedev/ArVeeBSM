@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
+import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import { generateSdoAbstract } from '../../../utils/sdoAbstractPdfGenerator.js'
 import { computeCashOnHand } from '../../../utils/sdoCalculations.js'
 
@@ -121,13 +122,15 @@ function AbstractExportModal({ onClose }) {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] font-semibold uppercase text-neutral-500">From</label>
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none focus:border-brand-neon" />
+              <div className="mt-1">
+                <CalendarDatePicker value={dateFrom} onChange={setDateFrom} valueClassName="text-sm" />
+              </div>
             </div>
             <div>
               <label className="text-[10px] font-semibold uppercase text-neutral-500">To</label>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none focus:border-brand-neon" />
+              <div className="mt-1">
+                <CalendarDatePicker value={dateTo} onChange={setDateTo} valueClassName="text-sm" />
+              </div>
             </div>
           </div>
           <button type="button" onClick={handleExport} disabled={generating}

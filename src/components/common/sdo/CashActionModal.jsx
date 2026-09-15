@@ -15,6 +15,7 @@ import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
+import CalendarDatePicker from '../CalendarDatePicker.jsx'
 
 function CashActionModal({ mode, currentCashOnHand, onClose }) {
   const { user } = useAuth()
@@ -94,8 +95,9 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
           )}
           <div>
             <label className="text-[10px] font-semibold uppercase text-neutral-500">Date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none transition-colors focus:border-brand-neon" />
+            <div className="mt-1">
+              <CalendarDatePicker value={date} onChange={setDate} />
+            </div>
           </div>
           <div className={`rounded-xl border p-3 text-sm transition-colors ${isReplenish ? 'border-brand-neon/40 bg-brand-neon/5' : 'border-brand-amber/40 bg-brand-amber/5'}`}>
             New Cash on Hand will be{' '}

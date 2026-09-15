@@ -14,6 +14,7 @@ import toast from 'react-hot-toast'
 import { X, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
+import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import { getPalayMoistureState, fmtBags, fmtKilos } from '../../../utils/calculations.js'
 import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken } from '../../../utils/serialNumber.js'
 import {
@@ -25,6 +26,10 @@ import ConfirmDialog from '../ConfirmDialog.jsx'
 function PurchaseReceiptModal({ wsr, onClose }) {
   const { user } = useAuth()
   const [prNo, setPrNo] = useState('')
+  // Defaults to today, not the WSR's own (often earlier, backlogged)
+  // date - this is genuinely when the SDO is paying, and it's what the
+  // Buying Price lookup should use too, not the WSR's encoding date.
+  const [datePaid, setDatePaid] = useState(() => new Date().toISOString().slice(0, 10))
   const [pricerRate, setPricerRate] = useState('')
   const [cancelReason, setCancelReason] = useState('')
   const [confirmingCancel, setConfirmingCancel] = useState(false)
@@ -61,7 +66,7 @@ function PurchaseReceiptModal({ wsr, onClose }) {
     : '—'
 
   const moistureState = getPalayMoistureState(variety?.name, wsr.cerealCategory)
-  const priceRow = resolveBuyingPrice(buyingPrices, wsr.date)
+  const priceRow = resolveBuyingPrice(buyingPrices, isReadOnly ? existingPr.date : datePaid)
   const unitCost = resolveUnitCost(priceRow, moistureState)
   const factor = lookupEnwFactor(enwFactors, variety, wsr.moistureContent)
   const netKilos = wsr.netKilos ?? 0
@@ -94,7 +99,7 @@ function PurchaseReceiptModal({ wsr, onClose }) {
         wsrTransactionId: wsr.id,
         warehouseId: wsr.warehouseId,
         status: 'Active',
-        date: wsr.date,
+        date: datePaid,
         payeeName: wsr.customerName,
         payeeAddress: wsr.customerAddress,
         rsbsa: wsr.farmerRsbsa ?? null,
@@ -187,18 +192,30 @@ function PurchaseReceiptModal({ wsr, onClose }) {
             WSR {wsr.serialNo}
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-            <label className="text-xs font-semibold uppercase text-neutral-500">Purchase Receipt No.</label>
-            {isReadOnly ? (
-              <p className="mt-1 font-mono text-lg font-semibold text-app-text">{existingPr.prNo}</p>
-            ) : (
-              <input
-                type="text"
-                value={prNo}
-                onChange={(e) => setPrNo(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 font-mono text-lg text-app-text outline-none focus:border-brand-neon"
-              />
-            )}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+              <label className="text-xs font-semibold uppercase text-neutral-500">Purchase Receipt No.</label>
+              {isReadOnly ? (
+                <p className="mt-1 font-mono text-lg font-semibold text-app-text">{existingPr.prNo}</p>
+              ) : (
+                <input
+                  type="text"
+                  value={prNo}
+                  onChange={(e) => setPrNo(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 font-mono text-lg text-app-text outline-none focus:border-brand-neon"
+                />
+              )}
+            </div>
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+              <label className="text-xs font-semibold uppercase text-neutral-500">Date Paid</label>
+              {isReadOnly ? (
+                <p className="mt-1 text-base font-semibold text-app-text">{existingPr.date}</p>
+              ) : (
+                <div className="mt-1">
+                  <CalendarDatePicker value={datePaid} onChange={setDatePaid} valueClassName="text-base" />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-base">

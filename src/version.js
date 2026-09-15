@@ -3710,4 +3710,16 @@
 //            its own Bundles and Pcs inputs; a saved count from before
 //            this existed still loads correctly (read as loose pieces,
 //            0 bundles).
-export const APP_VERSION = '1.10-10'
+//   1.10-11 - Every native date input in the SDO feature (Replenish/
+//            Liquidate, Abstract export's From/To) replaced with the
+//            app's own CalendarDatePicker, matching every other date
+//            field in the app. Added a new "Date Paid" picker to the
+//            Purchase Receipt reference screen, defaulting to today -
+//            previously the PR silently used the WSR's own (often
+//            earlier, backlogged) encoding date with no way to say
+//            "I'm actually paying this today." The Buying Price lookup
+//            now uses this date too, which is the genuinely correct
+//            fix for the earlier "no price set" issue - resolving by
+//            the real payment date instead of the fallback-to-earliest
+//            workaround from before.
+export const APP_VERSION = '1.10-11'
