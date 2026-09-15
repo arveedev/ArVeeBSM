@@ -32,6 +32,15 @@ const PAGE_H_IN = 8.5
 const pageW = PAGE_W_IN * 25.4
 const pageH = PAGE_H_IN * 25.4
 
+// The Abstract's Variety column shows only the base classifier (PD1,
+// PD2, PW1, PW2) - confirmed directly: a variety code like "PD1m-A"
+// carries a moisture-state modifier letter (m/s) and a Purity-grade
+// suffix (-A/-B) that matter for the ENW lookup, but shouldn't print
+// here. Falls back to the full name unchanged if it doesn't match the
+// expected P + D/W + digits shape, rather than silently blanking
+// something unexpected.
+const baseVarietyCode = (name) => name?.match(/^P[DW]\d+/)?.[0] ?? name ?? ''
+
 const fmtBags = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-PH'))
 const fmtKilos = (n, d = 3) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d }))
 const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
@@ -82,7 +91,7 @@ export const generateSdoAbstract = ({
 
   const body = purchaseReceipts.map((pr) => [
     pr.date, pr.warehouseCode ?? '', pr.payeeName, pr.rsbsa ?? '', pr.payeeAddress,
-    pr.prNo, pr.wsrSerialNo ?? '', fmtBags(pr.numberOfBags), pr.classification, pr.moistureContent, purityText(pr),
+    pr.prNo, pr.wsrSerialNo ?? '', fmtBags(pr.numberOfBags), baseVarietyCode(pr.classification), pr.moistureContent, purityText(pr),
     fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
     pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 3), fmtKilos(pr.unitCost, 2), fmtPeso(pr.basicCost),
     ...(pricerEnabled ? [fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),

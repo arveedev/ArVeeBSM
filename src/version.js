@@ -3738,4 +3738,9 @@
 //            title, relabeled "Date Paid" to just "Date", and moved it
 //            above the PR No. field on small screens (still side by
 //            side once there's room).
-export const APP_VERSION = '1.10-12'
+//   1.10-13 - Abstract export's Variety column now shows only the base
+//            classifier (PD1, PD2, PW1, PW2) - the full variety name
+//            (e.g. "PD1m-A") carries a moisture-state modifier letter
+//            and a Purity-grade suffix that matter for the ENW lookup
+//            but shouldn't print on the export itself.
+export const APP_VERSION = '1.10-13'
