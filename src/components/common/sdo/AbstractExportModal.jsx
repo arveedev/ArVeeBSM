@@ -56,9 +56,14 @@ function AbstractExportModal({ onClose }) {
       const wsrs = await db.transactions.where('id').anyOf(wsrIds).toArray()
       const wsrById = new Map(wsrs.map((w) => [w.id, w]))
 
+      // The Whse column shows the warehouse's own NAME (short form, its
+      // province-code prefix stripped - e.g. "ALB-BSI B" -> "BSI B"),
+      // not the opaque numeric warehouse.code ("050501") - confirmed
+      // directly against a real sample, and matches how every other
+      // warehouse label in this app already strips that same prefix.
       const enriched = allPrs.map((pr) => ({
         ...pr,
-        warehouseCode: warehouseMap.get(pr.warehouseId)?.code ?? '',
+        warehouseCode: (warehouseMap.get(pr.warehouseId)?.name ?? '').replace(/^[A-Z]{2,5}-/, ''),
         wsrSerialNo: wsrById.get(pr.wsrTransactionId)?.serialNo ?? '',
       }))
 

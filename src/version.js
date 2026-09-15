@@ -3827,4 +3827,10 @@
 //            those already use. Denomination counts are still saved as
 //            plain numbers, not the comma-formatted display strings -
 //            only how they're edited on screen changed.
-export const APP_VERSION = '1.10-18'
+//   1.10-19 - Abstract export's Whse column was showing the opaque
+//            numeric warehouse code ("050501") instead of the
+//            warehouse's own name - fixed to show the short name
+//            (province-code prefix stripped, e.g. "ALB-BSI B" ->
+//            "BSI B"), matching how every other warehouse label in the
+//            app already displays.
+export const APP_VERSION = '1.10-19'
