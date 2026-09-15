@@ -3838,4 +3838,53 @@
 //            BuyingPriceModal.jsx), with larger font sizes, matching
 //            the established sdo/* modal pattern (portaled, entrance
 //            animation, safe-area bottom padding).
-export const APP_VERSION = '1.10-20'
+//   1.10-21 - SDO feature audit fixes, following a full review of the
+//            whole feature:
+//            1. Duplicate-PR protection: issuing now re-checks for an
+//               existing Active PR inside one atomic Dexie transaction
+//               right before writing (closes a same-device double-tap/
+//               race), plus a synchronous ref guard against a fast
+//               double-submit. If two PRs still land on the same WSR
+//               (two offline devices syncing later - can't be closed
+//               client-side), SdoHome now detects it and shows a
+//               banner, and the PR screen lists every duplicate with
+//               its own Cancel button to resolve it.
+//            2. ENW Factor Table's "Reload/Load Reference Table" is now
+//               idempotent - updates a cell that differs, leaves one
+//               that matches, and collapses any stray duplicates from
+//               before - instead of blindly appending a second row
+//               every time it's tapped (its own confirm dialog used to
+//               have to warn "adds duplicates, so use it once").  Also
+//               added overlap validation on the "+ New bracket" form,
+//               since lookupEnwFactor's first-match lookup depends on
+//               MC brackets never overlapping.
+//            3. Pricer Rate/Amount/Basic Cost now reflect each PR's OWN
+//               stored pricerAmount, not the SDO's CURRENT Pricer
+//               eligibility toggle - both on the PR reference screen
+//               (a re-opened PR) and the Abstract export (every PR in
+//               the period). Before this, toggling Pricer off after a
+//               PR was issued made that PR's own pricer breakdown
+//               silently vanish, even though Total Amount still
+//               included it.
+//            4. New Cash History view (View cash history, next to the
+//               denomination link) - Replenish/Liquidate entries had no
+//               way to be reviewed or corrected before. A mistaken
+//               entry can now be Voided (with a required reason); a
+//               voided entry stays on record but no longer counts
+//               toward Cash on Hand.
+//            5. Buying Price's "current price" resolution had two
+//               separate implementations (Home's own inline sort vs.
+//               resolveBuyingPrice) that could disagree on a same-day
+//               correction; unified onto resolveBuyingPrice, which now
+//               also breaks same-day ties on save time (createdAt)
+//               instead of incidental array order.
+//            6. Smaller fixes: Pricer Rate input now uses the same
+//               live comma-formatting every other money field in this
+//               app uses; a non-blocking warning appears when issuing a
+//               PR or liquidating cash would exceed current Cash on
+//               Hand; the Abstract's Cash Reconciliation box overflow
+//               check is now sized to its actual row count instead of
+//               a flat 40mm guess; the "Completed" list now loads in
+//               pages of 50 with a Load More button instead of
+//               rendering every paid WSR at once.
+export const APP_VERSION = '1.10-21'

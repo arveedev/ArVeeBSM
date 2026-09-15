@@ -27,8 +27,8 @@ export const roundTo = (n, decimals) => {
 
 export const roundPeso2 = (n) => roundTo(n, 2)
 
-/** Decimal places ENW truncates to for a given factor - 3 when the factor is exactly 1, 4 otherwise. */
-export const enwDecimalsForFactor = (factor) => (Number(factor) === 1 ? 3 : 4)
+/** Decimal places ENW truncates to for a given factor - 3 when the factor is exactly 1, 4 otherwise. Tolerance-compared, not strict ===, in case a factor is ever derived rather than hand-entered (float drift like 0.9999999 must still read as 1). */
+export const enwDecimalsForFactor = (factor) => (Math.abs(Number(factor) - 1) < 0.0001 ? 3 : 4)
 
 /**
  * Finds the ENW factor row that applies to this Palay variety's own
@@ -86,9 +86,18 @@ export const computePricerAmount = (enw, rate) => roundPeso2(enw * (rate || 0))
  * "no price set") treats it as the price that's effectively been in
  * force since the beginning - the sensible reading when nothing more
  * specific was ever recorded for that period.
+ *
+ * Ties on effectiveFrom (the price was corrected more than once on the
+ * same day) break on `createdAt` - whichever row was actually saved
+ * most recently wins, instead of depending on incidental array order.
+ * Rows saved before `createdAt` existed fall back to 0, so an old row
+ * never outranks a newer one that does carry a real timestamp.
  */
 export const resolveBuyingPrice = (buyingPrices, asOfDate) => {
-  const sorted = [...(buyingPrices ?? [])].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))
+  const sorted = [...(buyingPrices ?? [])].sort((a, b) => {
+    if (a.effectiveFrom !== b.effectiveFrom) return a.effectiveFrom < b.effectiveFrom ? 1 : -1
+    return (b.createdAt ?? 0) - (a.createdAt ?? 0)
+  })
   const applicable = sorted.find((p) => p.effectiveFrom <= asOfDate)
   return applicable ?? sorted[sorted.length - 1] ?? null
 }
@@ -103,13 +112,16 @@ export const resolveUnitCost = (priceRow, moistureState) => {
  * Cash on Hand is never a stored running number - always this live
  * sum, so cancelling or deleting a Purchase Receipt "reverts the cash"
  * automatically: the instant its status leaves 'Active', it drops out
- * of `activePrTotal` on its own.
+ * of `activePrTotal` on its own. A voided ledger entry (see
+ * CashHistoryModal.jsx) is excluded the same way - it stays in the
+ * table as a visible, explained record, it just no longer counts.
  */
 export const computeCashOnHand = (ledgerEntries, activePrTotals) => {
-  const replenished = (ledgerEntries ?? [])
+  const live = (ledgerEntries ?? []).filter((e) => !e.voided)
+  const replenished = live
     .filter((e) => e.type === 'replenish')
     .reduce((s, e) => s + e.amount, 0)
-  const liquidated = (ledgerEntries ?? [])
+  const liquidated = live
     .filter((e) => e.type === 'liquidate')
     .reduce((s, e) => s + e.amount, 0)
   const disbursed = (activePrTotals ?? []).reduce((s, amt) => s + amt, 0)

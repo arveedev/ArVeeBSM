@@ -67,9 +67,6 @@ function AbstractExportModal({ onClose }) {
         wsrSerialNo: wsrById.get(pr.wsrTransactionId)?.serialNo ?? '',
       }))
 
-      const eligibility = await db.pricerEligibility.get(user.uid)
-      const pricerEnabled = eligibility?.enabled ?? false
-
       const fundBalance = computeCashOnHand(
         ledgerEntries.filter((e) => e.date < dateFrom),
         activePrsAll.filter((pr) => pr.date < dateFrom).map((pr) => pr.totalAmount ?? 0)
@@ -82,7 +79,6 @@ function AbstractExportModal({ onClose }) {
         dateTo,
         purchaseReceipts: enriched,
         purityDisplayFormat: config?.purityDisplayFormat ?? 'range',
-        pricerEnabled,
         reconciliation: {
           fundBalance,
           addLabel: 'Fund available',

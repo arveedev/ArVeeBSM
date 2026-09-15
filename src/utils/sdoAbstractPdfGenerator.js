@@ -106,16 +106,25 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
  * live data after being issued, so a later Buying Price or variety
  * edit can't silently reshape an already-issued document).
  * `purityDisplayFormat`: 'range' | 'letter'.
- * `pricerEnabled`: whether THIS SDO has Pricer on - the Rate/Amount
- * columns are omitted entirely (not blanked) when false, per explicit
- * instruction.
  * `reconciliation`: { fundBalance, addLabel, addAmount, lessEntries: [{label, amount}] }
  * `signatories`: { preparedBy: {name, position}, verifiedBy, notedBy }
+ *
+ * Whether the Rate/Amount/Basic Cost columns print is decided from the
+ * PRs' OWN pricerAmount snapshot, not from the SDO's current Pricer
+ * eligibility - eligibility can be toggled by Admin after a PR was
+ * issued, and a period can genuinely mix PRs issued while Pricer was on
+ * and off. Deciding this per-export from a single live flag used to
+ * make Basic Cost/Total Amount silently stop reconciling for whichever
+ * PRs didn't match today's toggle state; deciding it from each PR's own
+ * data (blank cells for a PR that had no pricer amount, same as
+ * fmtPeso/fmtKilos already do for any null) keeps every row honest
+ * regardless of what Admin does afterward.
  */
 export const generateSdoAbstract = ({
   branchLabel, dateFrom, dateTo, purchaseReceipts, purityDisplayFormat = 'range',
-  pricerEnabled, reconciliation, signatories,
+  reconciliation, signatories,
 }) => {
+  const pricerEnabled = purchaseReceipts.some((pr) => pr.pricerAmount != null)
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
   const periodLabel = fmtPeriodLabel(dateFrom, dateTo)
 
@@ -214,8 +223,35 @@ export const generateSdoAbstract = ({
   // page it ran 18mm PAST the right edge of the sheet entirely. Every
   // width below is now derived from the actual page width, so the
   // footer always fits inside the margins regardless of paper size.
+  //
+  // The reconciliation rows are built BEFORE deciding whether a new
+  // page is needed, so the overflow check below is sized to however
+  // many LESS deductions this export actually has (today always
+  // exactly one - "This period's disbursements" - but nothing here
+  // assumes that), instead of a flat 40mm guess that only happened to
+  // be enough for the current one-deduction shape.
+  const fundBalance = reconciliation?.fundBalance ?? 0
+  const addAmount = reconciliation?.addAmount ?? 0
+  let running = fundBalance + addAmount
+  const reconRows = [
+    { label: 'COH — Fund Balance', amt: fundBalance },
+    { label: reconciliation?.addLabel ?? 'ADD', amt: addAmount },
+    { label: 'TOTAL', amt: running, bold: true },
+  ]
+  for (const e of reconciliation?.lessEntries ?? []) {
+    running -= e.amount ?? 0
+    reconRows.push({ label: e.label, amt: e.amount })
+    reconRows.push({ label: 'TOTAL', amt: running, bold: true })
+  }
+  // The box itself starts 4mm ABOVE `y` (see `ry = y - 4` below), so its
+  // true bottom relative to `y` is 3mm plus one 7mm row per reconRows
+  // entry, not `y` plus the header bar.
+  const reconBoxH = 3 + reconRows.length * 7
+  const sigBoxH = 28 // role line at y, signature line at y+16, name/position through y+24
+  const footerH = Math.max(reconBoxH, sigBoxH)
+
   let y = doc.lastAutoTable.finalY + 10
-  if (y > pageH - 40) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel }); y = 40 }
+  if (y + footerH > pageH - margin) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel }); y = 40 }
 
   const usableW = pageW - margin * 2
   const reconW = 78
@@ -258,20 +294,7 @@ export const generateSdoAbstract = ({
   // LESS deduction - confirmed directly against a real sample of this
   // document, and something this generator was missing entirely before
   // ("we are missing a total on the cash reconciliation part").
-  const fundBalance = reconciliation?.fundBalance ?? 0
-  const addAmount = reconciliation?.addAmount ?? 0
-  let running = fundBalance + addAmount
-  const rows = [
-    { label: 'COH — Fund Balance', amt: fundBalance },
-    { label: reconciliation?.addLabel ?? 'ADD', amt: addAmount },
-    { label: 'TOTAL', amt: running, bold: true },
-  ]
-  for (const e of reconciliation?.lessEntries ?? []) {
-    running -= e.amount ?? 0
-    rows.push({ label: e.label, amt: e.amount })
-    rows.push({ label: 'TOTAL', amt: running, bold: true })
-  }
-  rows.forEach(({ label, amt, bold }) => {
+  reconRows.forEach(({ label, amt, bold }) => {
     if (bold) {
       doc.setFillColor(238, 238, 238)
       doc.rect(reconX, ry, reconW, 7, 'F')

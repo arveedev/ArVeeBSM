@@ -12,12 +12,15 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate } from '../utils/calculations.js'
-import { computeCashOnHand } from '../utils/sdoCalculations.js'
+import { computeCashOnHand, resolveBuyingPrice } from '../utils/sdoCalculations.js'
 import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.jsx'
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import DenominationModal from '../components/common/sdo/DenominationModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
 import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
+import CashHistoryModal from '../components/common/sdo/CashHistoryModal.jsx'
+
+const LIST_PAGE_SIZE = 50
 
 function useDebounced(value, delay = 250) {
   const [debounced, setDebounced] = useState(value)
@@ -38,11 +41,19 @@ function SdoHome() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounced(search)
   const [sortDesc, setSortDesc] = useState(true)
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE)
   const [activeWsr, setActiveWsr] = useState(null)
-  const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | 'denomination' | null
+  const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | 'denomination' | 'history' | null
   const [editingPrice, setEditingPrice] = useState(false)
   const [showAbstractExport, setShowAbstractExport] = useState(false)
   const [mounted, setMounted] = useState(false)
+
+  // A page/filter/search/sort change invalidates how far the list was
+  // paged - back to the first LIST_PAGE_SIZE rows of whatever the new
+  // list actually is, rather than an unrelated stale count.
+  useEffect(() => {
+    setVisibleCount(LIST_PAGE_SIZE)
+  }, [listTab, warehouseFilter, debouncedSearch, sortDesc])
 
   useEffect(() => {
     setPageHeader?.({ title: 'Disbursing Officer', subtitle: `Welcome back, ${user?.nickname ?? ''}.` })
@@ -98,14 +109,32 @@ function SdoHome() {
   })
 
   const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), []) ?? []
-  const activePrByWsrId = new Map(activePrs.map((pr) => [pr.wsrTransactionId, pr]))
+  // Normally exactly one Active PR per WSR. More than one can only mean
+  // two PRs were issued for the same WSR - concurrent taps, or two
+  // devices issuing offline before syncing - so this is tracked
+  // separately from the plain id->PR map, to surface it instead of
+  // silently keeping whichever PR happened to sort first.
+  const activePrsByWsrId = useMemo(() => {
+    const map = new Map()
+    for (const pr of activePrs) {
+      const list = map.get(pr.wsrTransactionId) ?? []
+      list.push(pr)
+      map.set(pr.wsrTransactionId, list)
+    }
+    return map
+  }, [activePrs])
+  const activePrByWsrId = new Map([...activePrsByWsrId].map(([wsrId, list]) => [wsrId, list[0]]))
+  const duplicatePrWsrIds = useMemo(
+    () => new Set([...activePrsByWsrId].filter(([, list]) => list.length > 1).map(([wsrId]) => wsrId)),
+    [activePrsByWsrId]
+  )
 
   const myActivePrs = useMemo(() => activePrs.filter((pr) => pr.sdoUid === user?.uid), [activePrs, user?.uid])
   const ledgerEntries = useLiveQuery(() => user ? db.cashLedgerV2.where('sdoUid').equals(user.uid).toArray() : [], [user?.uid]) ?? []
   const cashOnHand = computeCashOnHand(ledgerEntries, myActivePrs.map((pr) => pr.totalAmount ?? 0))
 
   const buyingPrices = useLiveQuery(() => db.buyingPrices.toArray(), []) ?? []
-  const currentPriceRow = [...buyingPrices].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))[0] ?? null
+  const currentPriceRow = resolveBuyingPrice(buyingPrices, new Date().toISOString().slice(0, 10))
 
   const unpaid = visibleWsrTransactions.filter((t) => !activePrByWsrId.has(t.id))
   const paid = visibleWsrTransactions.filter((t) => activePrByWsrId.has(t.id))
@@ -121,12 +150,13 @@ function SdoHome() {
   }
 
   const applySort = (list) =>
-    [...list].sort((a, b) => (sortDesc ? 1 : -1) * ((a.date ?? '').localeCompare(b.date ?? '')) * -1)
+    [...list].sort((a, b) => (sortDesc ? -1 : 1) * ((a.date ?? '').localeCompare(b.date ?? '')))
 
   const applyWarehouseFilter = (list) =>
     warehouseFilter ? list.filter((t) => t.warehouseId === warehouseFilter) : list
 
-  const visibleList = applySort(applySearch(applyWarehouseFilter(listTab === 'payment' ? unpaid : paid)))
+  const fullList = applySort(applySearch(applyWarehouseFilter(listTab === 'payment' ? unpaid : paid)))
+  const visibleList = fullList.slice(0, visibleCount)
 
   return (
     <div className={`min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
@@ -152,9 +182,14 @@ function SdoHome() {
       <div className="mt-4 rounded-2xl border border-brand-neon/40 bg-brand-neon/5 p-4 transition-all">
         <p className="text-[10px] font-bold uppercase text-brand-neon">Cash on Hand</p>
         <p className="mt-1 text-2xl font-bold text-app-text">₱{cashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-        <button type="button" onClick={() => setCashModal('denomination')} className="mt-1 text-xs text-neutral-400 underline transition-colors hover:text-app-text">
-          View / update denomination count
-        </button>
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+          <button type="button" onClick={() => setCashModal('denomination')} className="text-xs text-neutral-400 underline transition-colors hover:text-app-text">
+            View / update denomination count
+          </button>
+          <button type="button" onClick={() => setCashModal('history')} className="text-xs text-neutral-400 underline transition-colors hover:text-app-text">
+            View cash history
+          </button>
+        </div>
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={() => setCashModal('replenish')} className="flex-1 rounded-lg bg-brand-neon px-3 py-2 text-xs font-bold text-brand-contrast transition-all active:scale-95">+ Replenish</button>
           <button type="button" onClick={() => setCashModal('liquidate')} className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-app-text transition-all active:scale-95">Liquidate</button>
@@ -242,6 +277,11 @@ function SdoHome() {
                   <span className="rounded-full bg-brand-amber/10 px-2.5 py-1 text-xs font-bold uppercase text-brand-amber">Unpaid</span>
                 )}
               </div>
+              {duplicatePrWsrIds.has(t.id) && (
+                <p className="mt-1.5 rounded-lg bg-brand-crimson/10 px-2 py-1 text-xs font-semibold text-brand-crimson">
+                  More than one active PR exists for this WSR — open it and cancel the extra one.
+                </p>
+              )}
               <p className="mt-1 text-base font-semibold text-app-text">{t.customerName}</p>
               {warehouse && <p className="text-sm text-neutral-500">{warehouse.code} — {warehouse.name}</p>}
               <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
@@ -251,13 +291,23 @@ function SdoHome() {
             </div>
           )
         })}
+        {fullList.length > visibleList.length && (
+          <button
+            type="button"
+            onClick={() => setVisibleCount((v) => v + LIST_PAGE_SIZE)}
+            className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2.5 text-xs font-semibold text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-app-text active:scale-[0.99]"
+          >
+            Load more ({fullList.length - visibleList.length} more)
+          </button>
+        )}
       </div>
 
-      {activeWsr && <PurchaseReceiptModal wsr={activeWsr} onClose={() => setActiveWsr(null)} />}
+      {activeWsr && <PurchaseReceiptModal wsr={activeWsr} cashOnHand={cashOnHand} onClose={() => setActiveWsr(null)} />}
       {(cashModal === 'replenish' || cashModal === 'liquidate') && (
         <CashActionModal mode={cashModal} currentCashOnHand={cashOnHand} onClose={() => setCashModal(null)} />
       )}
       {cashModal === 'denomination' && <DenominationModal currentCashOnHand={cashOnHand} onClose={() => setCashModal(null)} />}
+      {cashModal === 'history' && <CashHistoryModal onClose={() => setCashModal(null)} />}
       {showAbstractExport && <AbstractExportModal onClose={() => setShowAbstractExport(false)} />}
       {editingPrice && <BuyingPriceModal currentPriceRow={currentPriceRow} onClose={() => setEditingPrice(false)} />}
     </div>

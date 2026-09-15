@@ -103,6 +103,9 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
           <div className={`rounded-xl border p-3 text-sm transition-colors ${isReplenish ? 'border-brand-neon/40 bg-brand-neon/5' : 'border-brand-amber/40 bg-brand-amber/5'}`}>
             New Cash on Hand will be{' '}
             <span className="font-bold text-app-text">₱{preview.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            {!isReplenish && preview < 0 && (
+              <p className="mt-1 text-brand-crimson">This is more than your current Cash on Hand — double-check the amount before saving.</p>
+            )}
           </div>
           <button type="button" onClick={handleSave} disabled={!canSave}
             className="w-full rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none">

@@ -40,6 +40,7 @@ function BuyingPriceModal({ currentPriceRow, onClose }) {
         wetPrice: wetNum,
         effectiveFrom: new Date().toISOString().slice(0, 10),
         setByUid: user.uid,
+        createdAt: Date.now(),
       })
       onClose()
     } finally {

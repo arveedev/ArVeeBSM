@@ -60,18 +60,45 @@ function EnwFactorTablePanel() {
   const colDefs = [...new Map(rows.map((r) => [colKeyOf(r), { mcMin: r.mcMin, mcMax: r.mcMax }])).values()]
     .sort((a, b) => a.mcMin - b.mcMin)
 
+  // Idempotent by (purityLetter, ddMin, ddMax, mcMin, mcMax): an
+  // existing cell is updated in place (or left alone if the factor
+  // already matches) instead of getting a second row added next to it.
+  // This used to be a genuine footgun - the seed button stayed visible
+  // and re-runnable even with rows already present, and its own confirm
+  // text had to warn "re-running this adds duplicates, so use it once"
+  // because lookupEnwFactor's plain `.find()` would then silently pick
+  // whichever duplicate happened to sort first. Safe to tap any number
+  // of times now.
   const handleSeed = async () => {
     setConfirmingSeed(false)
     const seedRows = REFERENCE_ROWS.flatMap(({ purityLetter, ddMin, ddMax, factors }) =>
       factors.map((factor, i) => ({
-        id: crypto.randomUUID(),
         purityLetter, ddMin, ddMax,
         mcMin: MC_BRACKETS[i][0], mcMax: MC_BRACKETS[i][1],
         factor,
       }))
     )
-    await db.enwFactors.bulkAdd(seedRows)
-    toast.success(`Loaded ${seedRows.length} reference rows`)
+    let added = 0
+    let updated = 0
+    for (const seed of seedRows) {
+      const key = `${rowKeyOf(seed)}::${colKeyOf(seed)}`
+      const matches = rows.filter((r) => `${rowKeyOf(r)}::${colKeyOf(r)}` === key)
+      if (matches.length === 0) {
+        await db.enwFactors.add({ id: crypto.randomUUID(), ...seed })
+        added += 1
+      } else {
+        // Any stray duplicates already on this cell collapse down to
+        // one row, keeping the first and clearing the rest, so a prior
+        // bad reseed self-heals the next time this runs.
+        const [keep, ...extra] = matches
+        if (extra.length > 0) await db.enwFactors.bulkDelete(extra.map((r) => r.id))
+        if (keep.factor !== seed.factor) {
+          await db.enwFactors.update(keep.id, { factor: seed.factor })
+          updated += 1
+        }
+      }
+    }
+    toast.success(added > 0 || updated > 0 ? `${added} added, ${updated} updated` : 'Already up to date')
   }
 
   const handleCellBlur = async (rowDef, colDef, rawValue) => {
@@ -100,6 +127,18 @@ function EnwFactorTablePanel() {
     const { purityLetter, ddMin, ddMax, mcMin, mcMax, factor } = newBracket
     if (!purityLetter.trim() || ddMin === '' || ddMax === '' || mcMin === '' || mcMax === '' || factor === '') {
       toast.error('All fields are required')
+      return
+    }
+    const mcMinNum = parseFloat(mcMin)
+    const mcMaxNum = parseFloat(mcMax)
+    // lookupEnwFactor matches inclusively and takes the FIRST row that
+    // fits an MC value - two brackets overlapping (even partially) makes
+    // that pick order-dependent instead of a real rule, so this is
+    // blocked here rather than left as a silent footgun for whoever
+    // types the next bracket.
+    const overlapsExisting = colDefs.some((c) => !(mcMaxNum < c.mcMin || mcMinNum > c.mcMax) && !(mcMinNum === c.mcMin && mcMaxNum === c.mcMax))
+    if (overlapsExisting) {
+      toast.error('This MC range overlaps an existing bracket — use the exact same range to reuse it, or a non-overlapping one')
       return
     }
     await db.enwFactors.add({
@@ -223,7 +262,7 @@ function EnwFactorTablePanel() {
       <ConfirmDialog
         open={confirmingSeed}
         title="Load the reference ENW table?"
-        description="Adds 68 rows (17 MC brackets × Purity A/B × D&D 0-3%/3.1-7%) from the reference sheet already provided for this feature. One value (D&D 3.1-7%, Purity A, MC 24.1-25%) was corrected from 0.07417 to 0.7417 to match the sheet's own decreasing trend either side of it - worth a quick check against the physical sheet. Existing rows are kept, not replaced - re-running this adds duplicates, so use it once."
+        description="Loads 68 rows (17 MC brackets × Purity A/B × D&D 0-3%/3.1-7%) from the reference sheet already provided for this feature. One value (D&D 3.1-7%, Purity A, MC 24.1-25%) was corrected from 0.07417 to 0.7417 to match the sheet's own decreasing trend either side of it - worth a quick check against the physical sheet. Safe to re-run: a cell that already matches is left alone, a cell that differs is updated to the reference value, nothing is duplicated."
         confirmLabel="Load Table"
         onConfirm={handleSeed}
         onCancel={() => setConfirmingSeed(false)}
