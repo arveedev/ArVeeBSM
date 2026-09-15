@@ -3761,4 +3761,22 @@
 //               missing entirely before.
 //            SDO Home: WSR/PR numbers on the transaction list are now
 //            larger and more prominent, general list font sizes bumped.
-export const APP_VERSION = '1.10-14'
+//   1.10-15 - Real, serious performance bug fixed: marking an AI/SIA
+//            authority (or a milling order) complete/pending triggered
+//            a severe frame drop. Root cause: the row's exit animation
+//            (row-complete-out/row-revert-out, shared by
+//            AuthorityMonitor, MillingMonitor, AdminMonitoring, and
+//            both Completed*Modal panels) animated max-height/margin/
+//            padding together with transform, to make the rows below
+//            slide up smoothly as the space reclaimed itself. Those are
+//            layout properties, not compositor ones - animating them
+//            forces a full reflow of the surrounding list on every
+//            single frame for the whole 0.7s (~42 forced layouts, not
+//            one), far worse on the lower-end phones this app targets.
+//            Now only opacity, background-color, and transform animate
+//            - compositor/paint-only, no per-frame reflow. Trade-off:
+//            rows below no longer slide up smoothly during the glow,
+//            they snap into place in one (effectively instant) reflow
+//            once the row actually leaves the list - a fair trade for
+//            eliminating a genuinely serious, widely-shared jank bug.
+export const APP_VERSION = '1.10-15'

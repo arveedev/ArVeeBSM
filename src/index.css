@@ -713,27 +713,38 @@ select {
 /* Authority list row completing/reverting - a glowing color pulse
    (green for "marked done", red for "sent back to pending") that
    HOLDS long enough to actually read, then the row visually flattens
-   (scaleY toward 0, anchored at the top edge) while its max-height/
-   margin collapse in step - so it looks like the box itself is being
-   pressed flat, not just fading out, and the rows below slide up as a
-   natural consequence of the shrinking space rather than the list
-   snapping to a shorter length the instant the row disappears.
+   (scaleY toward 0, anchored at the top edge) before it's removed from
+   the list for real.
+   Real, reported bug fixed here: this used to also animate max-height/
+   margin/padding in step with the flatten, to make the rows below
+   slide up smoothly as the space reclaimed itself. Those are layout
+   properties, not compositor ones - animating them forces the browser
+   to recompute the layout of the entire surrounding list on every
+   single frame for the whole 0.7s (~42 forced reflows at 60fps, not
+   one), which is exactly what a "very serious frame drop" describes,
+   worse on the lower-end phones this app targets. Now only opacity,
+   background-color (paint, not layout), and transform animate - all
+   compositor/paint-only, no per-frame reflow. The tradeoff: the rows
+   below no longer slide up smoothly DURING the 0.7s glow - they jump
+   into place in one frame once the row actually leaves the list (React
+   unmounting it after the real DB write) - but that single reflow is
+   effectively instant, not a rolling janky one.
    Per-keyframe animation-timing-function: eases OUT into the glow
    (quick, snappy appearance) then eases IN through the flatten
    (accelerating collapse, like something folding down under its own
    weight) - a single easing across the whole 0.7s made the glow read
    as an abrupt flicker rather than a hold. */
 @keyframes row-complete-out {
-  0%   { opacity: 1; background-color: transparent; transform: scaleY(1); max-height: 220px; margin-bottom: 0.5rem; animation-timing-function: ease-out; }
-  22%  { opacity: 1; background-color: rgba(0, 255, 163, 0.3); transform: scaleY(1); max-height: 220px; margin-bottom: 0.5rem; }
-  55%  { opacity: 1; background-color: rgba(0, 255, 163, 0.3); transform: scaleY(1); max-height: 220px; margin-bottom: 0.5rem; animation-timing-function: ease-in; }
-  100% { opacity: 0; background-color: rgba(0, 255, 163, 0.12); transform: scaleY(0); max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
+  0%   { opacity: 1; background-color: transparent; transform: scaleY(1); animation-timing-function: ease-out; }
+  22%  { opacity: 1; background-color: rgba(0, 255, 163, 0.3); transform: scaleY(1); }
+  55%  { opacity: 1; background-color: rgba(0, 255, 163, 0.3); transform: scaleY(1); animation-timing-function: ease-in; }
+  100% { opacity: 0; background-color: rgba(0, 255, 163, 0.12); transform: scaleY(0); }
 }
 @keyframes row-revert-out {
-  0%   { opacity: 1; background-color: transparent; transform: scaleY(1); max-height: 220px; margin-bottom: 0.5rem; animation-timing-function: ease-out; }
-  22%  { opacity: 1; background-color: rgba(239, 68, 68, 0.3); transform: scaleY(1); max-height: 220px; margin-bottom: 0.5rem; }
-  55%  { opacity: 1; background-color: rgba(239, 68, 68, 0.3); transform: scaleY(1); max-height: 220px; margin-bottom: 0.5rem; animation-timing-function: ease-in; }
-  100% { opacity: 0; background-color: rgba(239, 68, 68, 0.12); transform: scaleY(0); max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
+  0%   { opacity: 1; background-color: transparent; transform: scaleY(1); animation-timing-function: ease-out; }
+  22%  { opacity: 1; background-color: rgba(239, 68, 68, 0.3); transform: scaleY(1); }
+  55%  { opacity: 1; background-color: rgba(239, 68, 68, 0.3); transform: scaleY(1); animation-timing-function: ease-in; }
+  100% { opacity: 0; background-color: rgba(239, 68, 68, 0.12); transform: scaleY(0); }
 }
 .animate-row-complete-out {
   animation: row-complete-out 0.7s both;
