@@ -365,7 +365,7 @@ function TransactionGroups({ txs, categoryOf, renderRow }) {
               {groupByCategory(list).map(([category, catTxs]) => (
                 <div key={category}>
                   <p className={`text-sm font-semibold ${categoryColor(category)}`}>{category}</p>
-                  <ul className="mt-1 space-y-2">{catTxs.map(renderRow)}</ul>
+                  <ul className="mt-1 space-y-2 [contain:layout]">{catTxs.map(renderRow)}</ul>
                 </div>
               ))}
             </div>
@@ -843,7 +843,7 @@ function MillingMonitor({ isAdmin = false, active = true }) {
       )}
 
       {isExpanded && (
-      <ul className="mt-3 animate-flow-down" key={topTab}>
+      <ul className="mt-3 animate-flow-down [contain:layout]" key={topTab}>
         {filtered.length === 0 && (
           <p className="py-4 text-center text-xs text-neutral-500">
             No pending {topTab} operations.

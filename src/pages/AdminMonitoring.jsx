@@ -331,7 +331,7 @@ function AdminMonitoring() {
         )
       })()}
 
-      <ul className="mt-4 animate-flow-down" key={`${activeTab}-${regionalAuthFilter}`}>
+      <ul className="mt-4 animate-flow-down [contain:layout]" key={`${activeTab}-${regionalAuthFilter}`}>
         {filtered.length === 0 && (
           <p className="mt-4 text-center text-xs text-neutral-500">
             No pending {activeTab} records {query ? 'match that search.' : 'yet.'}

@@ -330,7 +330,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
                 No completed {type} records match that search.
               </p>
             )}
-          <ul>
+          <ul className="[contain:layout]">
             {preSearchFiltered.map(({ a, completedDate }) => {
               const variety = type === 'AI' ? varietyMap.get(a.varietyId) : null
               const warehouse = warehouseMap.get(a.assignedWarehouse)

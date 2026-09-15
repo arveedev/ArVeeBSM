@@ -190,7 +190,7 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
             {orders.every((o) => !matchesQuery(o)) && (
               <p className="py-2 text-center text-xs text-neutral-500">No completed {type} operations match that search.</p>
             )}
-          <ul>
+          <ul className="[contain:layout]">
             {orders.map((o) => (
               <MillingOrderRow
                 key={o.orderId}

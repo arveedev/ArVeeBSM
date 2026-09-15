@@ -3779,4 +3779,20 @@
 //            they snap into place in one (effectively instant) reflow
 //            once the row actually leaves the list - a fair trade for
 //            eliminating a genuinely serious, widely-shared jank bug.
-export const APP_VERSION = '1.10-15'
+//   1.10-16 - Reverted v1.10-15's animation fix - confirmed on video
+//            it traded the frame drop for a worse-looking bug: the
+//            row's reserved space just sat there frozen for the whole
+//            0.7s (no smooth shrink), then the list jumped/snapped the
+//            instant it was removed, reading as broken rather than
+//            smooth. Restored the original max-height/margin collapse
+//            animation. Fixed the actual reflow cost the right way
+//            instead: added `contain: layout` to every list that uses
+//            this animation (AuthorityMonitor, MillingMonitor x2,
+//            AdminMonitoring, CompletedAuthorityModal,
+//            CompletedMillingModal) - this scopes the browser's reflow
+//            work to just that list's own box, so animating a row's
+//            height no longer also forces a reflow of everything
+//            OUTSIDE the list (the rest of the page), which is the
+//            more likely real source of a "very serious" drop than one
+//            small list reflowing itself.
+export const APP_VERSION = '1.10-16'

@@ -236,7 +236,14 @@ function AuthorityMonitor() {
         </button>
       </div>
 
-      <ul className="mt-2 space-y-2 animate-flow-down" key={topTab}>
+      {/* contain:layout scopes the row-complete-out/row-revert-out
+          animation's reflow cost to just this list - without it, the
+          browser also reflows everything OUTSIDE the list (the rest of
+          Home) on every animation frame, which is the more likely
+          source of a "very serious" frame drop than one small list
+          reflowing itself (see index.css's own comment on those
+          keyframes for the full incident). */}
+      <ul className="mt-2 space-y-2 animate-flow-down [contain:layout]" key={topTab}>
         {filtered.length === 0 && (
           <p className="py-3 text-center text-sm text-neutral-500">
             No pending {topTab} records.
