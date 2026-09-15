@@ -15,17 +15,24 @@ import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
+import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
 
 const DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.25, 0.1, 0.05, 0.01]
 const BUNDLE_SIZE = 100
 
 // A denomination's saved entry is either the current { bundles, pcs }
 // shape, a bare number left over from before bundles existed (treated
-// as loose pieces, bundles 0), or missing entirely.
+// as loose pieces, bundles 0), or missing entirely. Returned bundles/
+// pcs are always display strings (comma-formatted, matching what's in
+// each input) - parseFormattedNumber turns them back into real numbers
+// wherever the actual value is needed (rowTotal, saving).
 const normalizeEntry = (raw) => {
   if (raw == null) return { bundles: '', pcs: '' }
-  if (typeof raw === 'number') return { bundles: '', pcs: raw }
-  return { bundles: raw.bundles ?? '', pcs: raw.pcs ?? '' }
+  if (typeof raw === 'number') return { bundles: '', pcs: liveFormatNumber(String(raw), 0) }
+  return {
+    bundles: raw.bundles === '' || raw.bundles == null ? '' : liveFormatNumber(String(raw.bundles), 0),
+    pcs: raw.pcs === '' || raw.pcs == null ? '' : liveFormatNumber(String(raw.pcs), 0),
+  }
 }
 
 function DenominationModal({ currentCashOnHand, onClose }) {
@@ -44,21 +51,30 @@ function DenominationModal({ currentCashOnHand, onClose }) {
     setCounts(Object.fromEntries(DENOMINATIONS.map((d) => [d, normalizeEntry(saved.counts[d])])))
   }, [saved])
 
-  const setField = (d, field, v) =>
-    setCounts((c) => ({ ...c, [d]: { ...normalizeEntry(c[d]), [field]: v === '' ? '' : Number(v) } }))
+  const setField = (d, field, rawValue) =>
+    setCounts((c) => ({ ...c, [d]: { ...normalizeEntry(c[d]), [field]: liveFormatNumber(rawValue, 0) } }))
 
   const rowTotal = (d) => {
     const { bundles, pcs } = normalizeEntry(counts[d])
-    return ((Number(bundles) || 0) * BUNDLE_SIZE + (Number(pcs) || 0)) * d
+    return (parseFormattedNumber(bundles) * BUNDLE_SIZE + parseFormattedNumber(pcs)) * d
   }
 
   const total = DENOMINATIONS.reduce((s, d) => s + rowTotal(d), 0)
   const diff = total - currentCashOnHand
 
   const handleSave = async () => {
+    // Saved as plain numbers, not the comma-formatted display strings
+    // the inputs hold - the stored shape stays exactly what it always
+    // was, only how it's edited on screen changed.
+    const cleanCounts = Object.fromEntries(
+      DENOMINATIONS.map((d) => {
+        const { bundles, pcs } = normalizeEntry(counts[d])
+        return [d, { bundles: bundles === '' ? '' : parseFormattedNumber(bundles), pcs: pcs === '' ? '' : parseFormattedNumber(pcs) }]
+      })
+    )
     await db.cashDenominationCounts.put({
       sdoUid: user.uid,
-      counts,
+      counts: cleanCounts,
       countedTotal: total,
       updatedAt: new Date().toISOString(),
     })
@@ -97,16 +113,16 @@ function DenominationModal({ currentCashOnHand, onClose }) {
               <div key={d} className="grid grid-cols-[52px_1fr_1fr_1fr] items-center gap-2 border-b border-neutral-900 pb-2 text-sm">
                 <span className="font-semibold text-app-text">₱{d}</span>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={bundles}
                   onChange={(e) => setField(d, 'bundles', e.target.value)}
                   placeholder="0"
                   className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-center text-app-text outline-none focus:border-brand-neon"
                 />
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={pcs}
                   onChange={(e) => setField(d, 'pcs', e.target.value)}
                   placeholder="0"

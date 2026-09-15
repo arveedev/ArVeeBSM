@@ -16,6 +16,7 @@ import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
+import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
 
 function CashActionModal({ mode, currentCashOnHand, onClose }) {
   const { user } = useAuth()
@@ -32,7 +33,7 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  const amountNum = parseFloat(amount) || 0
+  const amountNum = parseFormattedNumber(amount)
   const preview = isReplenish ? currentCashOnHand + amountNum : currentCashOnHand - amountNum
   const canSave = amountNum > 0 && (isOpeningBalance || refNo.trim()) && date && !saving
 
@@ -77,7 +78,7 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
         <div className="space-y-3 px-4 py-4">
           <div>
             <label className="text-[10px] font-semibold uppercase text-neutral-500">Amount</label>
-            <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}
+            <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(liveFormatNumber(e.target.value, 2))}
               className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-base text-app-text outline-none transition-colors focus:border-brand-neon" placeholder="0.00" />
           </div>
           {isReplenish && (

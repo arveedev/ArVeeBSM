@@ -3817,4 +3817,14 @@
 //               each LESS deduction) - confirmed against a real sample
 //               of the document. Added, with a light gray fill to set
 //               each TOTAL apart from the plain rows above it.
-export const APP_VERSION = '1.10-17'
+//   1.10-18 - Live comma-separator formatting added to the SDO cash
+//            inputs (Replenish/Liquidate's Amount, Denomination
+//            Count's Bundles/Pcs) - these were still plain `type=
+//            "number"` inputs, which can't ever show commas as the
+//            user types, unlike every other numeric field in the app
+//            (Number of Bags, Net Kilos, etc). Switched to the same
+//            text + liveFormatNumber/parseFormattedNumber pattern
+//            those already use. Denomination counts are still saved as
+//            plain numbers, not the comma-formatted display strings -
+//            only how they're edited on screen changed.
+export const APP_VERSION = '1.10-18'
