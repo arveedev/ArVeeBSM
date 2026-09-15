@@ -3833,4 +3833,9 @@
 //            (province-code prefix stripped, e.g. "ALB-BSI B" ->
 //            "BSI B"), matching how every other warehouse label in the
 //            app already displays.
-export const APP_VERSION = '1.10-19'
+//   1.10-20 - Buying Price editing moved from an inline expanding panel
+//            under the price cards into its own centered modal (new
+//            BuyingPriceModal.jsx), with larger font sizes, matching
+//            the established sdo/* modal pattern (portaled, entrance
+//            animation, safe-area bottom padding).
+export const APP_VERSION = '1.10-20'

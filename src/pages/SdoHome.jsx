@@ -17,6 +17,7 @@ import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import DenominationModal from '../components/common/sdo/DenominationModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
+import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
 
 function useDebounced(value, delay = 250) {
   const [debounced, setDebounced] = useState(value)
@@ -41,8 +42,6 @@ function SdoHome() {
   const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | 'denomination' | null
   const [editingPrice, setEditingPrice] = useState(false)
   const [showAbstractExport, setShowAbstractExport] = useState(false)
-  const [dryPrice, setDryPrice] = useState('')
-  const [wetPrice, setWetPrice] = useState('')
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -60,7 +59,7 @@ function SdoHome() {
   // without this, the fixed header/nav sat on top of the modal and the
   // page's own scroll plus the modal's own internal scroll produced two
   // visible scrollbars at once.
-  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport
+  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || editingPrice
   useEffect(() => {
     setChromeHidden?.(anyModalOpen)
     document.body.style.overflow = anyModalOpen ? 'hidden' : ''
@@ -108,29 +107,6 @@ function SdoHome() {
   const buyingPrices = useLiveQuery(() => db.buyingPrices.toArray(), []) ?? []
   const currentPriceRow = [...buyingPrices].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))[0] ?? null
 
-  useEffect(() => {
-    if (editingPrice && currentPriceRow) {
-      setDryPrice(String(currentPriceRow.dryPrice))
-      setWetPrice(String(currentPriceRow.wetPrice))
-    }
-  }, [editingPrice])
-
-  const savePrice = async () => {
-    const dry = parseFloat(dryPrice)
-    const wet = parseFloat(wetPrice)
-    if (!(dry > 0) || !(wet > 0)) return
-    await db.buyingPrices.add({
-      id: crypto.randomUUID(),
-      dryPrice: dry,
-      wetPrice: wet,
-      effectiveFrom: new Date().toISOString().slice(0, 10),
-      setByUid: user.uid,
-    })
-    setEditingPrice(false)
-    setDryPrice('')
-    setWetPrice('')
-  }
-
   const unpaid = visibleWsrTransactions.filter((t) => !activePrByWsrId.has(t.id))
   const paid = visibleWsrTransactions.filter((t) => activePrByWsrId.has(t.id))
 
@@ -172,18 +148,6 @@ function SdoHome() {
           <p className="mt-1.5 text-xl font-bold text-app-text">{currentPriceRow ? `₱${currentPriceRow.wetPrice.toFixed(2)}` : '—'}<span className="text-xs font-semibold text-neutral-500">/kg</span></p>
         </button>
       </div>
-
-      {editingPrice && (
-        <div className="mt-2 animate-flow-down space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <input type="number" step="0.01" value={dryPrice} onChange={(e) => setDryPrice(e.target.value)} placeholder="Dry ₱/kg"
-              className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-sm text-app-text outline-none transition-colors focus:border-brand-neon" />
-            <input type="number" step="0.01" value={wetPrice} onChange={(e) => setWetPrice(e.target.value)} placeholder="Wet ₱/kg"
-              className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-sm text-app-text outline-none transition-colors focus:border-brand-neon" />
-          </div>
-          <button type="button" onClick={savePrice} className="w-full rounded-lg bg-brand-neon px-3 py-2 text-sm font-semibold text-brand-contrast transition-all active:scale-95">Save New Price</button>
-        </div>
-      )}
 
       <div className="mt-4 rounded-2xl border border-brand-neon/40 bg-brand-neon/5 p-4 transition-all">
         <p className="text-[10px] font-bold uppercase text-brand-neon">Cash on Hand</p>
@@ -295,6 +259,7 @@ function SdoHome() {
       )}
       {cashModal === 'denomination' && <DenominationModal currentCashOnHand={cashOnHand} onClose={() => setCashModal(null)} />}
       {showAbstractExport && <AbstractExportModal onClose={() => setShowAbstractExport(false)} />}
+      {editingPrice && <BuyingPriceModal currentPriceRow={currentPriceRow} onClose={() => setEditingPrice(false)} />}
     </div>
   )
 }
