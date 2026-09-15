@@ -3631,4 +3631,36 @@
 //              sheet's own layout and how this was shown during
 //              planning, instead of 68 separate list rows with a
 //              one-row-at-a-time add form.
-export const APP_VERSION = '1.10-6'
+//   1.10-7 - Real bug fixed: every SDO modal (Purchase Receipt,
+//           Replenish/Liquidate, Denomination Count, Abstract export)
+//           rendered small and off-center instead of a proper full-
+//           width centered overlay - root cause was the same one
+//           ConfirmDialog.jsx already documented and fixed for itself:
+//           a plain `fixed` element inside App.jsx's page wrapper (which
+//           applies a CSS transform for the page-slide animation) gets
+//           constrained to that ancestor's own box instead of the real
+//           viewport. All four now portal straight to document.body,
+//           same as ConfirmDialog already does.
+//           Two more real fixes: (1) the ENW factor lookup used strict
+//           === for D&D bracket/purity-letter matching, which could
+//           silently fail on a type/whitespace mismatch even when the
+//           same values were visibly correct in both the variety and
+//           the ENW grid - now compares numerically with tolerance,
+//           case/whitespace-insensitive for the letter. (2) Buying
+//           Price resolution required a price row dated on/before the
+//           WSR's own date, so a price set today for the first time
+//           found nothing for an already-encoded older WSR ("no price
+//           set" despite one existing) - now falls back to the earliest
+//           price on record instead of reporting none.
+//           Also: Admin Dashboard's group tab bar (Structure/Inventory/
+//           Operations/Disbursement/System) was built assuming exactly
+//           4 equal-width groups and broke on narrow screens now that
+//           Disbursement made it 5 - converted to the same scrollable-
+//           pill style the sub-tab row below it already uses. SDO
+//           Home's warehouse filter now drops to its own row below
+//           search+sort on small screens instead of competing for the
+//           same cramped row. Stock entry forms (WSR/WSI/ESR/ESI) now
+//           stack Net Kilos+toggle and Age+Unit as two full rows on
+//           small screens instead of squeezing both into one row's
+//           worth of space (PC keeps them side by side).
+export const APP_VERSION = '1.10-7'

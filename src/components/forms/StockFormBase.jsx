@@ -3308,7 +3308,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               styled container; an invisible label placeholder still
               keeps Net Kilos's own label lined up with Bags/Gross
               Kilos's labels above it. */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Net Kilos+toggle and Age+Unit stack as two separate full-
+              width rows on small displays (side by side was cramped -
+              two already-compact groups squeezed to ~45% width each) -
+              PC keeps the side-by-side grid, same isPC split already
+              used throughout this field group for exactly this
+              reason. */}
+          <div className={isPC ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
             {/* Real bug found, reported again: matching the toggle's
                 wrapper height to the input's own height (the previous
                 attempt) still wasn't reliably centered - a guessed

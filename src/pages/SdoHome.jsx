@@ -199,18 +199,27 @@ function SdoHome() {
         </button>
       </div>
 
-      <div className="mt-2 flex gap-2">
-        <div className="flex flex-1 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 transition-colors focus-within:border-brand-neon">
-          <Search size={14} className="text-neutral-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search farmer, WSR, PR no."
-            className="w-full bg-transparent text-xs text-app-text outline-none placeholder:text-neutral-500" />
+      {/* Search+sort stay their own row at every width; the warehouse
+          filter drops to its own full-width row below them on small
+          screens (three controls competing for one narrow row was
+          cramped) and rejoins the same row once there's room, sm+. */}
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <div className="flex gap-2">
+          <div className="flex flex-1 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 transition-colors focus-within:border-brand-neon">
+            <Search size={14} className="text-neutral-500" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search farmer, WSR, PR no."
+              className="w-full bg-transparent text-xs text-app-text outline-none placeholder:text-neutral-500" />
+          </div>
+          <button type="button" onClick={() => setSortDesc((v) => !v)} aria-label="Toggle sort order" className="shrink-0 rounded-lg border border-neutral-800 bg-neutral-900 p-2 text-neutral-400 transition-all active:scale-95 sm:hidden">
+            <ArrowUpDown size={14} />
+          </button>
         </div>
         {(accessibleWarehouses ?? []).length > 1 && (
           <select
             value={warehouseFilter}
             onChange={(e) => setWarehouseFilter(e.target.value)}
             aria-label="Filter by warehouse"
-            className="rounded-lg border border-neutral-800 bg-neutral-900 px-2 text-xs text-neutral-300 outline-none transition-colors focus:border-brand-neon"
+            className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-2 text-xs text-neutral-300 outline-none transition-colors focus:border-brand-neon sm:w-auto sm:py-0"
           >
             <option value="">All warehouses</option>
             {/* Deduped defensively by warehouseId - this list is already
@@ -227,7 +236,7 @@ function SdoHome() {
               ))}
           </select>
         )}
-        <button type="button" onClick={() => setSortDesc((v) => !v)} aria-label="Toggle sort order" className="rounded-lg border border-neutral-800 bg-neutral-900 p-2 text-neutral-400 transition-all active:scale-95">
+        <button type="button" onClick={() => setSortDesc((v) => !v)} aria-label="Toggle sort order" className="hidden shrink-0 rounded-lg border border-neutral-800 bg-neutral-900 p-2 text-neutral-400 transition-all active:scale-95 sm:block">
           <ArrowUpDown size={14} />
         </button>
       </div>

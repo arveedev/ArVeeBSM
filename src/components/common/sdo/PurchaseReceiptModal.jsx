@@ -8,6 +8,7 @@
 // or deleting a PR here can never touch that record, only this one.
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { X, Trash2 } from 'lucide-react'
@@ -148,9 +149,15 @@ function PurchaseReceiptModal({ wsr, onClose }) {
     onClose()
   }
 
-  return (
+  // Portaled straight to document.body - see ConfirmDialog.jsx's own
+  // comment for why: a plain `fixed` element inside App.jsx's page
+  // wrapper (which applies a CSS transform for the page-slide
+  // animation) gets constrained to that ancestor's box instead of the
+  // real viewport, which is exactly what made this render small and
+  // off-center instead of a real centered/full-width overlay.
+  return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 transition-opacity duration-200 sm:items-center ${entered ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 transition-opacity duration-200 sm:items-center sm:p-4 ${entered ? 'opacity-100' : 'opacity-0'}`}
       onClick={onClose}
     >
       <div
@@ -297,7 +304,8 @@ function PurchaseReceiptModal({ wsr, onClose }) {
           className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon"
         />
       </ConfirmDialog>
-    </div>
+    </div>,
+    document.body
   )
 }
 

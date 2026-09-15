@@ -23,15 +23,27 @@ export const truncPeso2 = (n) => truncTo(n, 2)
  * Boundary handling is inclusive on both ends of an MC bracket - admin-
  * entered brackets must not overlap, or the first matching row wins.
  */
+// Numeric fields are compared with Number() coercion and a small
+// tolerance rather than strict === - real, reported case: a match that
+// should have worked (same values visibly in both the variety's own
+// classification and the ENW grid) still failed, most plausibly a
+// string-vs-number mismatch somewhere upstream (a form field read as
+// text before being saved) that strict equality can't forgive but a
+// numeric comparison can. Purity letter is compared case/whitespace-
+// insensitively for the same reason.
+const numClose = (a, b) => Math.abs(Number(a) - Number(b)) < 0.001
+const letterEq = (a, b) => String(a ?? '').trim().toUpperCase() === String(b ?? '').trim().toUpperCase()
+
 export const lookupEnwFactor = (enwFactors, variety, mcValue) => {
   if (!variety || mcValue == null) return null
+  const mc = Number(mcValue)
   const row = (enwFactors ?? []).find(
     (r) =>
-      r.purityLetter === variety.purityLetter &&
-      r.ddMin === variety.ddMin &&
-      r.ddMax === variety.ddMax &&
-      mcValue >= r.mcMin &&
-      mcValue <= r.mcMax
+      letterEq(r.purityLetter, variety.purityLetter) &&
+      numClose(r.ddMin, variety.ddMin) &&
+      numClose(r.ddMax, variety.ddMax) &&
+      mc >= Number(r.mcMin) &&
+      mc <= Number(r.mcMax)
   )
   return row?.factor ?? null
 }
@@ -50,12 +62,20 @@ export const computePricerAmount = (enw, rate) => truncPeso2(enw * (rate || 0))
  * effectiveFrom is on or before that date, not necessarily today's
  * price. A PR for an older, backlogged WSR must use the price that was
  * actually in effect on the WSR's own date.
+ *
+ * Real, reported case this falls back for: a price set TODAY for the
+ * first time, being used to pay a WSR encoded BEFORE today - strictly,
+ * no price row has an effectiveFrom on or before that older date, so
+ * the rule above finds nothing even though a price clearly exists.
+ * Falling back to the EARLIEST price on record (rather than reporting
+ * "no price set") treats it as the price that's effectively been in
+ * force since the beginning - the sensible reading when nothing more
+ * specific was ever recorded for that period.
  */
 export const resolveBuyingPrice = (buyingPrices, asOfDate) => {
-  const applicable = (buyingPrices ?? [])
-    .filter((p) => p.effectiveFrom <= asOfDate)
-    .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))
-  return applicable[0] ?? null
+  const sorted = [...(buyingPrices ?? [])].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))
+  const applicable = sorted.find((p) => p.effectiveFrom <= asOfDate)
+  return applicable ?? sorted[sorted.length - 1] ?? null
 }
 
 /** Picks Dry or Wet price from a resolved buying-price row, by the variety's moisture state. */

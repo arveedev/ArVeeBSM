@@ -2,6 +2,7 @@
 // same idea as the existing Stock Statement export on Reports.jsx.
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
@@ -96,9 +97,10 @@ function AbstractExportModal({ onClose }) {
     }
   }
 
-  return (
+  // Portaled to document.body - see PurchaseReceiptModal.jsx's own comment.
+  return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 transition-opacity duration-200 sm:items-center ${entered ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 transition-opacity duration-200 sm:items-center sm:p-4 ${entered ? 'opacity-100' : 'opacity-0'}`}
       onClick={onClose}
     >
       <div
@@ -129,7 +131,8 @@ function AbstractExportModal({ onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

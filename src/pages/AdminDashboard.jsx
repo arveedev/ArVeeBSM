@@ -85,7 +85,6 @@ function AdminDashboard({ onClose }) {
   const { setPageHeader } = usePageHeader() ?? {}
   const [activeGroupId, setActiveGroupId] = useState(GROUPS[0].id)
   const activeGroup = GROUPS.find((g) => g.id === activeGroupId) ?? GROUPS[0]
-  const activeGroupIndex = GROUPS.indexOf(activeGroup)
 
   const [activeTabId, setActiveTabId] = useState(activeGroup.tabs[0].id)
 
@@ -157,21 +156,22 @@ function AdminDashboard({ onClose }) {
           </button>
         </div>
 
-        <div className="relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
-          <div
-            className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-            style={{
-              width: `calc(${100 / GROUPS.length}% - ${(GROUPS.length - 1) / GROUPS.length * 0.5}rem)`,
-              transform: `translateX(calc(${activeGroupIndex * 100}% + ${activeGroupIndex * 0.5}rem))`,
-            }}
-          />
+        {/* Horizontally-scrollable pills, same pattern as the sub-tab row
+            below - the previous equal-width sliding-highlight layout
+            (fixed at GROUPS.length columns) assumed exactly 4 groups
+            and broke on narrow screens once Disbursement made it 5:
+            5 flex-1 columns at text-base with labels like
+            "Disbursement" simply don't fit a phone width, wrapping and
+            overflowing instead of shrinking gracefully. A scrollable
+            row has no such ceiling on group count. */}
+        <div className="relative mt-4 flex gap-2 overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-900 p-1">
           {GROUPS.map((group) => (
             <button
               key={group.id}
               type="button"
               onClick={() => handleGroupChange(group.id)}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-colors ${
-                activeGroupId === group.id ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'
+              className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-all active:scale-95 sm:text-base ${
+                activeGroupId === group.id ? 'bg-brand-neon font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-app-text'
               }`}
             >
               {group.label}

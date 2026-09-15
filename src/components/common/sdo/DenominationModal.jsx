@@ -3,6 +3,7 @@
 // counted cash against what the ledger already computes.
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
@@ -42,9 +43,10 @@ function DenominationModal({ currentCashOnHand, onClose }) {
     onClose()
   }
 
-  return (
+  // Portaled to document.body - see PurchaseReceiptModal.jsx's own comment.
+  return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 transition-opacity duration-200 sm:items-center ${entered ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 transition-opacity duration-200 sm:items-center sm:p-4 ${entered ? 'opacity-100' : 'opacity-0'}`}
       onClick={onClose}
     >
       <div
@@ -87,7 +89,8 @@ function DenominationModal({ currentCashOnHand, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
