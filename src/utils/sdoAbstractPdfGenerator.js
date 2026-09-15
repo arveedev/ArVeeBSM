@@ -24,7 +24,13 @@ import autoTable from 'jspdf-autotable'
 const BLACK = [0, 0, 0]
 const HEADER_BG = [232, 232, 232]
 const margin = 12
-const pageW = 297 // A4 landscape width mm
+// 8.5 x 13 in (the physical paper this is actually printed on -
+// confirmed directly, not A4), landscape: width/height swapped, both
+// converted from inches to mm since the rest of this file works in mm.
+const PAGE_W_IN = 13
+const PAGE_H_IN = 8.5
+const pageW = PAGE_W_IN * 25.4
+const pageH = PAGE_H_IN * 25.4
 
 const fmtBags = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-PH'))
 const fmtKilos = (n, d = 3) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d }))
@@ -63,7 +69,7 @@ export const generateSdoAbstract = ({
   branchLabel, periodLabel, purchaseReceipts, purityDisplayFormat = 'range',
   pricerEnabled, reconciliation, signatories,
 }) => {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
 
   const purityText = (pr) => purityDisplayFormat === 'letter' ? (pr.purityLetter ?? '') : `${pr.purityMin ?? ''}–${pr.purityMax ?? ''}`
 
@@ -110,63 +116,74 @@ export const generateSdoAbstract = ({
     body,
     foot,
     theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 6.5, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1 },
-    headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 6 },
-    footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 6.5 },
+    styles: { font: 'helvetica', fontSize: 8, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.3 },
+    headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7.5 },
+    footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 8 },
     columnStyles: { 2: { halign: 'left' }, 4: { halign: 'left' } },
     didDrawPage: () => drawBranchHeader(doc, { branchLabel, periodLabel }),
   })
 
   // Footer (signatories lower-left, reconciliation lower-right) prints
   // exactly once, right after the table's true final row - wherever
-  // that landed, not necessarily page 1.
+  // that landed, not necessarily page 1. Real bug fixed here: the
+  // reconciliation box's x position + width used to be computed from a
+  // hardcoded signature-column width that assumed A4's 297mm - on that
+  // page it ran 18mm PAST the right edge of the sheet entirely. Every
+  // width below is now derived from the actual page width, so the
+  // footer always fits inside the margins regardless of paper size.
   let y = doc.lastAutoTable.finalY + 10
-  if (y > 180) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel }); y = 40 }
+  if (y > pageH - 40) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel }); y = 40 }
 
-  const sigW = 70
+  const usableW = pageW - margin * 2
+  const reconW = 78
+  const gapBeforeRecon = 10
+  const sigGap = 6
+  const sigAreaW = usableW - reconW - gapBeforeRecon
+  const sigW = (sigAreaW - sigGap * 2) / 3
+
   const sigCols = [
     { role: 'Prepared By', person: signatories?.preparedBy },
     { role: 'Verified By', person: signatories?.verifiedBy },
     { role: 'Noted By', person: signatories?.notedBy },
   ]
   sigCols.forEach((c, i) => {
-    const x = margin + i * (sigW + 6)
+    const x = margin + i * (sigW + sigGap)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.text(c.role, x, y)
     doc.setLineWidth(0.3)
-    doc.line(x, y + 14, x + sigW, y + 14)
+    doc.line(x, y + 16, x + sigW, y + 16)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.text(c.person?.name ?? '', x, y + 18)
+    doc.setFontSize(9)
+    doc.text(c.person?.name ?? '', x, y + 20)
     doc.setTextColor(90, 90, 90)
-    doc.text(c.person?.position ?? '', x, y + 22)
+    doc.text(c.person?.position ?? '', x, y + 24)
     doc.setTextColor(...BLACK)
   })
 
-  const reconX = margin + 3 * (sigW + 6) + 10
+  const reconX = margin + sigAreaW + gapBeforeRecon
   let ry = y - 4
   doc.setFillColor(...BLACK)
-  doc.rect(reconX, ry, 65, 6, 'F')
+  doc.rect(reconX, ry, reconW, 7, 'F')
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.text('Cash Reconciliation', reconX + 32.5, ry + 4, { align: 'center' })
+  doc.setFontSize(9)
+  doc.text('Cash Reconciliation', reconX + reconW / 2, ry + 5, { align: 'center' })
   doc.setTextColor(...BLACK)
-  ry += 6
+  ry += 7
   const rows = [
     ['COH — Fund Balance', fmtPeso(reconciliation?.fundBalance)],
     [reconciliation?.addLabel ?? 'ADD', fmtPeso(reconciliation?.addAmount)],
     ...(reconciliation?.lessEntries ?? []).map((e) => [e.label, fmtPeso(e.amount)]),
   ]
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
+  doc.setFontSize(8.5)
   rows.forEach(([label, amt]) => {
-    doc.text(label, reconX + 1, ry + 4)
-    doc.text(amt, reconX + 64, ry + 4, { align: 'right' })
+    doc.text(label, reconX + 1.5, ry + 4.5)
+    doc.text(amt, reconX + reconW - 1.5, ry + 4.5, { align: 'right' })
     doc.setDrawColor(200, 200, 200)
-    doc.line(reconX, ry + 6, reconX + 65, ry + 6)
-    ry += 6
+    doc.line(reconX, ry + 7, reconX + reconW, ry + 7)
+    ry += 7
   })
 
   return doc

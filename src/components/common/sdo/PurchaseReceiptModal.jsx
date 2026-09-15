@@ -171,10 +171,7 @@ function PurchaseReceiptModal({ wsr, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <div>
-            <h2 className="text-lg font-semibold text-app-text">Purchase Receipt</h2>
-            <p className="text-sm text-neutral-500">Reference for the hand-written PR — not a document</p>
-          </div>
+          <h2 className="text-lg font-semibold text-app-text">Purchase Receipt</h2>
           <div className="flex gap-2">
             {isReadOnly && (
               <button type="button" onClick={() => setConfirmingCancel(true)} aria-label="Cancel receipt" className="rounded-lg bg-brand-crimson/10 p-1.5 text-brand-crimson">
@@ -192,7 +189,19 @@ function PurchaseReceiptModal({ wsr, onClose }) {
             WSR {wsr.serialNo}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          {/* Date sits above PR No. on small screens (DOM order) and
+              rejoins it side by side once there's room, sm+. */}
+          <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2">
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+              <label className="text-xs font-semibold uppercase text-neutral-500">Date</label>
+              {isReadOnly ? (
+                <p className="mt-1 text-base font-semibold text-app-text">{existingPr.date}</p>
+              ) : (
+                <div className="mt-1">
+                  <CalendarDatePicker value={datePaid} onChange={setDatePaid} valueClassName="text-base" />
+                </div>
+              )}
+            </div>
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
               <label className="text-xs font-semibold uppercase text-neutral-500">Purchase Receipt No.</label>
               {isReadOnly ? (
@@ -204,16 +213,6 @@ function PurchaseReceiptModal({ wsr, onClose }) {
                   onChange={(e) => setPrNo(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 font-mono text-lg text-app-text outline-none focus:border-brand-neon"
                 />
-              )}
-            </div>
-            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-              <label className="text-xs font-semibold uppercase text-neutral-500">Date Paid</label>
-              {isReadOnly ? (
-                <p className="mt-1 text-base font-semibold text-app-text">{existingPr.date}</p>
-              ) : (
-                <div className="mt-1">
-                  <CalendarDatePicker value={datePaid} onChange={setDatePaid} valueClassName="text-base" />
-                </div>
               )}
             </div>
           </div>

@@ -3722,4 +3722,20 @@
 //            fix for the earlier "no price set" issue - resolving by
 //            the real payment date instead of the fallback-to-earliest
 //            workaround from before.
-export const APP_VERSION = '1.10-11'
+//   1.10-12 - Real bug fixed in the Abstract of Cereal Purchases export:
+//            the reconciliation box's position was computed from a
+//            hardcoded signature-column width that assumed A4's
+//            297mm - on the actual page it ran 18mm PAST the right
+//            edge of the sheet, which is what "it does not fit" was
+//            actually describing. Fixed at the source: paper size
+//            changed to the real one this is printed on (8.5 x 13 in,
+//            not A4), and every footer width (signature columns, the
+//            reconciliation box) is now derived from the real page
+//            width instead of a hardcoded value, so it can't run off
+//            the edge on any paper size again. Table/footer font sizes
+//            bumped up for readability on the larger sheet.
+//            Purchase Receipt screen: removed the subtitle under the
+//            title, relabeled "Date Paid" to just "Date", and moved it
+//            above the PR No. field on small screens (still side by
+//            side once there's room).
+export const APP_VERSION = '1.10-12'
