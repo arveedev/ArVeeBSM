@@ -19,7 +19,7 @@ import { getPalayMoistureState, fmtBags, fmtKilos } from '../../../utils/calcula
 import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken } from '../../../utils/serialNumber.js'
 import {
   lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost, computePricerAmount,
-  resolveBuyingPrice, resolveUnitCost, amountInWords,
+  resolveBuyingPrice, resolveUnitCost, amountInWords, enwDecimalsForFactor,
 } from '../../../utils/sdoCalculations.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 
@@ -248,8 +248,13 @@ function PurchaseReceiptModal({ wsr, onClose }) {
               <p>Bags <span className="font-semibold tabular-nums text-app-text">{fmtBags(wsr.numberOfBags)}</span></p>
               <p>Gross <span className="font-semibold tabular-nums text-app-text">{fmtKilos(wsr.grossKilos)}</span></p>
               <p>Net <span className="font-semibold tabular-nums text-app-text">{fmtKilos(netKilos)}</span></p>
-              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—'}</span></p>
+              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: enwDecimalsForFactor(displayed.factor), maximumFractionDigits: enwDecimalsForFactor(displayed.factor) }) : '—'}</span></p>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-base">
+            <p className="text-xs font-semibold uppercase text-neutral-500">ENW Factor</p>
+            <p className="mt-1 font-mono text-lg font-bold text-app-text">{displayed.factor != null ? displayed.factor.toFixed(4) : '—'}</p>
           </div>
 
           {pricerEnabled && (

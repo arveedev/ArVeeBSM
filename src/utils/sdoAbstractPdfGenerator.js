@@ -72,6 +72,12 @@ const fmtBags = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-PH'))
 const fmtKilos = (n, d = 3) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d }))
 const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
+// Duplicated locally rather than imported from sdoCalculations.js, per
+// this file's own house rule (see the top comment) of staying self-
+// contained - same rule the SDO reference screen uses: ENW shows 3
+// decimals when its factor is exactly 1, 4 otherwise.
+const enwDecimalsForFactor = (factor) => (Number(factor) === 1 ? 3 : 4)
+
 const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(12)
@@ -130,10 +136,15 @@ export const generateSdoAbstract = ({
   // didDrawCell below, instead.
   const marks = purchaseReceipts.map((pr) => (pr.mtsCondition ?? '').toLowerCase())
 
+  // Basic Cost is only meaningfully DIFFERENT from Total Amount when
+  // Pricer adds something on top of it - "the basic cost is part of
+  // the pricers" - so with Pricer disabled it's the same figure as
+  // Total Amount twice over, and the column is dropped entirely rather
+  // than repeat it.
   const head = [[
     dateHeader, 'Whse', 'Name of Farmer', 'RSBSA No.', 'Address', 'PR No.', 'WSR No.', 'Qty Bags', 'Variety', 'MC', 'Pur.',
-    'Gross', 'Sack', 'Net', 'ENW Factor', 'Equiv. Net Wt.', 'Unit Cost', 'Basic Cost',
-    ...(pricerEnabled ? ['Rate', 'Amount'] : []),
+    'Gross', 'Sack', 'Net', 'ENW Factor', 'Equiv. Net Wt.', 'Unit Cost',
+    ...(pricerEnabled ? ['Basic Cost', 'Rate', 'Amount'] : []),
     'Total Amount',
   ]]
 
@@ -141,8 +152,8 @@ export const generateSdoAbstract = ({
     fmtRowDate(pr.date), pr.warehouseCode ?? '', pr.payeeName, pr.rsbsa ?? '', pr.payeeAddress,
     pr.prNo, pr.wsrSerialNo ?? '', fmtBags(pr.numberOfBags), baseVarietyCode(pr.classification), pr.moistureContent, purityText(pr),
     fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
-    pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 3), fmtKilos(pr.unitCost, 2), fmtPeso(pr.basicCost),
-    ...(pricerEnabled ? [fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),
+    pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, enwDecimalsForFactor(pr.enwFactor)), fmtKilos(pr.unitCost, 2),
+    ...(pricerEnabled ? [fmtPeso(pr.basicCost), fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),
     fmtPeso(pr.totalAmount),
   ])
 
@@ -161,8 +172,8 @@ export const generateSdoAbstract = ({
     { content: 'TOTAL', colSpan: 7 },
     fmtBags(totals.bags), '', '', '',
     fmtKilos(totals.gross), fmtKilos(totals.sack), fmtKilos(totals.net),
-    '', fmtKilos(totals.enw, 3), '', fmtPeso(totals.basic),
-    ...(pricerEnabled ? ['', fmtPeso(totals.pricer)] : []),
+    '', fmtKilos(totals.enw, 4), '',
+    ...(pricerEnabled ? [fmtPeso(totals.basic), '', fmtPeso(totals.pricer)] : []),
     fmtPeso(totals.total),
   ]]
 
@@ -243,17 +254,34 @@ export const generateSdoAbstract = ({
   doc.text('Cash Reconciliation', reconX + reconW / 2, ry + 5, { align: 'center' })
   doc.setTextColor(...BLACK)
   ry += 7
+  // A running TOTAL after the initial COH+ADD, then again after EVERY
+  // LESS deduction - confirmed directly against a real sample of this
+  // document, and something this generator was missing entirely before
+  // ("we are missing a total on the cash reconciliation part").
+  const fundBalance = reconciliation?.fundBalance ?? 0
+  const addAmount = reconciliation?.addAmount ?? 0
+  let running = fundBalance + addAmount
   const rows = [
-    ['COH — Fund Balance', fmtPeso(reconciliation?.fundBalance)],
-    [reconciliation?.addLabel ?? 'ADD', fmtPeso(reconciliation?.addAmount)],
-    ...(reconciliation?.lessEntries ?? []).map((e) => [e.label, fmtPeso(e.amount)]),
+    { label: 'COH — Fund Balance', amt: fundBalance },
+    { label: reconciliation?.addLabel ?? 'ADD', amt: addAmount },
+    { label: 'TOTAL', amt: running, bold: true },
   ]
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  rows.forEach(([label, amt]) => {
+  for (const e of reconciliation?.lessEntries ?? []) {
+    running -= e.amount ?? 0
+    rows.push({ label: e.label, amt: e.amount })
+    rows.push({ label: 'TOTAL', amt: running, bold: true })
+  }
+  rows.forEach(({ label, amt, bold }) => {
+    if (bold) {
+      doc.setFillColor(238, 238, 238)
+      doc.rect(reconX, ry, reconW, 7, 'F')
+    }
+    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+    doc.setFontSize(8.5)
     doc.text(label, reconX + 1.5, ry + 4.5)
-    doc.text(amt, reconX + reconW - 1.5, ry + 4.5, { align: 'right' })
-    doc.setDrawColor(200, 200, 200)
+    doc.text(fmtPeso(amt), reconX + reconW - 1.5, ry + 4.5, { align: 'right' })
+    doc.setDrawColor(bold ? 0 : 200, bold ? 0 : 200, bold ? 0 : 200)
+    doc.setLineWidth(bold ? 0.3 : 0.1)
     doc.line(reconX, ry + 7, reconX + reconW, ry + 7)
     ry += 7
   })

@@ -1,12 +1,17 @@
 // SDO (Disbursing Officer) — Purchase Receipt computation helpers.
 //
 // Two explicit rounding rules, both confirmed directly and both
-// corrected once already from an earlier stated version - this is the
-// settled shape: Equivalent Net Weight is truncated (never rounded) to
-// 3 decimals (corrected from an earlier "4 decimals"); any peso amount
-// (Basic Cost, Pricer Amount, Total Amount, Cash on Hand) is standard-
-// ROUNDED to 2 decimals, not truncated (corrected from an earlier
-// "truncated/3rd decimal dropped").
+// corrected at least once from an earlier stated version - this is the
+// settled shape: any peso amount (Basic Cost, Pricer Amount, Total
+// Amount, Cash on Hand) is standard-ROUNDED to 2 decimals, not
+// truncated (corrected from an earlier "truncated/3rd decimal
+// dropped"). Equivalent Net Weight is truncated (never rounded), but
+// to HOW MANY decimals depends on the ENW factor itself - confirmed
+// directly: when the factor is exactly 1 (1.0000), ENW truncates to 3
+// decimals; for any other factor, it truncates to 4. A factor of
+// exactly 1 means the classification needed no moisture adjustment at
+// all (dry, top grade), which is apparently precise enough at 3;
+// anything actually adjusted by the factor table keeps the extra digit.
 
 /** Truncates (never rounds) `n` to `decimals` places - used only for Equivalent Net Weight. */
 export const truncTo = (n, decimals) => {
@@ -20,8 +25,10 @@ export const roundTo = (n, decimals) => {
   return Math.round((n + Number.EPSILON) * f) / f
 }
 
-export const truncKilos3 = (n) => truncTo(n, 3)
 export const roundPeso2 = (n) => roundTo(n, 2)
+
+/** Decimal places ENW truncates to for a given factor - 3 when the factor is exactly 1, 4 otherwise. */
+export const enwDecimalsForFactor = (factor) => (Number(factor) === 1 ? 3 : 4)
 
 /**
  * Finds the ENW factor row that applies to this Palay variety's own
@@ -56,8 +63,8 @@ export const lookupEnwFactor = (enwFactors, variety, mcValue) => {
   return row?.factor ?? null
 }
 
-/** Equivalent Net Weight = Net Kilos × ENW factor, truncated to 3 decimals. */
-export const computeEquivalentNetWeight = (netKilos, factor) => truncKilos3(netKilos * factor)
+/** Equivalent Net Weight = Net Kilos × ENW factor, truncated to 3 decimals when factor is exactly 1, 4 otherwise. */
+export const computeEquivalentNetWeight = (netKilos, factor) => truncTo(netKilos * factor, enwDecimalsForFactor(factor))
 
 /** Basic Cost = Equivalent Net Weight × Unit Cost, rounded to 2 decimals. */
 export const computeBasicCost = (enw, unitCost) => roundPeso2(enw * unitCost)

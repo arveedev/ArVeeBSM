@@ -3795,4 +3795,26 @@
 //            OUTSIDE the list (the rest of the page), which is the
 //            more likely real source of a "very serious" drop than one
 //            small list reflowing itself.
-export const APP_VERSION = '1.10-16'
+//   1.10-17 - Four more SDO fixes, reported directly:
+//            1. Equivalent Net Weight's decimal rule now depends on the
+//               ENW factor itself, confirmed directly: 3 decimals when
+//               the factor is exactly 1 (1.0000), 4 decimals for any
+//               other factor. Applied at the source (sdoCalculations.
+//               computeEquivalentNetWeight) and in both display spots
+//               (PR reference screen, Abstract export's per-row and
+//               TOTAL columns).
+//            2. ENW Factor now shown as its own field on the Purchase
+//               Receipt reference screen - it was only ever implied by
+//               the classification badge before, never displayed
+//               directly.
+//            3. Abstract export: Basic Cost is only shown as its own
+//               column when Pricer is enabled - "the basic cost is
+//               part of the pricers" - with Pricer off it's identical
+//               to Total Amount, so showing both was a redundant
+//               column rather than useful information.
+//            4. Abstract export's Cash Reconciliation box was missing
+//               every running TOTAL row entirely (COH+ADD, and after
+//               each LESS deduction) - confirmed against a real sample
+//               of the document. Added, with a light gray fill to set
+//               each TOTAL apart from the plain rows above it.
+export const APP_VERSION = '1.10-17'
