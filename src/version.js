@@ -3702,4 +3702,12 @@
 //           table lookup value, e.g. 0.6824) is unrelated and still
 //           shown at its own 4 decimals - only the weight quantity it's
 //           multiplied against was ever 3.
-export const APP_VERSION = '1.10-9'
+//   1.10-10 - Denomination Count now tracks bundles separately from
+//            loose pieces, per your reference sheet's own "7 Bundle
+//            1000" style entries - a bundle is a fixed 100 pieces, so
+//            a ₱1,000-bill bundle is worth ₱100,000, not one more
+//            piece counted at face value. Each denomination row now has
+//            its own Bundles and Pcs inputs; a saved count from before
+//            this existed still loads correctly (read as loose pieces,
+//            0 bundles).
+export const APP_VERSION = '1.10-10'
