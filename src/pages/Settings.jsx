@@ -5,13 +5,14 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, ShieldCheck, User, Clock, Check, X, Trash2 } from 'lucide-react'
+import { Pencil, ShieldCheck, User, Clock, Check, X, Trash2, Wallet, History } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { fmtBags, fmtWeight } from '../utils/calculations.js'
+import { computeCashOnHand } from '../utils/sdoCalculations.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, editIconClass, deleteIconClass } from '../components/common/admin/shared.js'
 import { SacksBeginningBalances } from '../components/common/admin/BeginningBalancesPanel.jsx'
@@ -21,6 +22,8 @@ import AvatarPickerModal from '../components/common/AvatarPickerModal.jsx'
 import CreateEditPileModal from '../components/common/CreateEditPileModal.jsx'
 import EditBeginningBalanceModal from '../components/common/EditBeginningBalanceModal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
+import DenominationModal from '../components/common/sdo/DenominationModal.jsx'
+import CashHistoryModal from '../components/common/sdo/CashHistoryModal.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
@@ -115,6 +118,55 @@ function SdoPositionSection({ userRecord, uid }) {
         className={`${inputClass} mt-3`}
         disabled={isSaving}
       />
+    </section>
+  )
+}
+
+// Cash Balance (denomination count) + Cash History - moved here from
+// SdoHome.jsx per explicit request: Home stays focused on today's
+// actions (Replenish/Liquidate against a live Cash on Hand figure),
+// while reviewing/correcting past entries is an account-settings
+// concern, same as everything else on this page. Needs its own Cash on
+// Hand figure (not passed down from Home, which no longer renders this)
+// - computed the same way SdoHome.jsx does, from this SDO's own ledger
+// and Active Purchase Receipts.
+function SdoCashSection({ uid }) {
+  const [openModal, setOpenModal] = useState(null) // 'denomination' | 'history' | null
+
+  const activePrs = useLiveQuery(
+    () => db.purchaseReceipts.where('[sdoUid+status]').equals([uid, 'Active']).toArray(),
+    [uid]
+  ) ?? []
+  const ledgerEntries = useLiveQuery(() => db.cashLedgerV2.where('sdoUid').equals(uid).toArray(), [uid]) ?? []
+  const cashOnHand = computeCashOnHand(ledgerEntries, activePrs.map((pr) => pr.totalAmount ?? 0))
+
+  return (
+    <section className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+      <h2 className="text-base font-semibold text-app-text">Cash Balance</h2>
+      <p className="mt-1 text-xs text-neutral-500">Current Cash on Hand and every Replenish/Liquidate entry behind it.</p>
+      <p className="mt-2 text-2xl font-bold text-app-text">₱{cashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setOpenModal('denomination')}
+          className="flex flex-col items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-3 text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.97]"
+        >
+          <Wallet size={20} className="text-brand-neon" />
+          <span className="text-xs font-semibold">Denomination Count</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpenModal('history')}
+          className="flex flex-col items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-3 text-app-text transition-all hover:border-brand-neon/50 active:scale-[0.97]"
+        >
+          <History size={20} className="text-brand-neon" />
+          <span className="text-xs font-semibold">Cash History</span>
+        </button>
+      </div>
+
+      {openModal === 'denomination' && <DenominationModal currentCashOnHand={cashOnHand} onClose={() => setOpenModal(null)} />}
+      {openModal === 'history' && <CashHistoryModal onClose={() => setOpenModal(null)} />}
     </section>
   )
 }
@@ -645,6 +697,7 @@ function Settings() {
       )}
 
       {isSdo && <SdoPositionSection userRecord={userRecord} uid={user.uid} />}
+      {isSdo && <SdoCashSection uid={user.uid} />}
 
       {!isSdo && (
         <>

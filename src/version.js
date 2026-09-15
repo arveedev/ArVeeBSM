@@ -3887,4 +3887,16 @@
 //               a flat 40mm guess; the "Completed" list now loads in
 //               pages of 50 with a Load More button instead of
 //               rendering every paid WSR at once.
-export const APP_VERSION = '1.10-21'
+//   1.10-22 - Denomination Count and Cash History moved from SDO Home
+//            into Settings (new "Cash Balance" section, with icon
+//            buttons), leaving Home focused on today's actions
+//            (Replenish/Liquidate). Cash History now also has:
+//            1. An Edit action per Replenish/Liquidate entry (amount,
+//               ref no., date), alongside the existing Void - there was
+//               previously no way to correct an entry directly, only
+//               void it and add a new one.
+//            2. A year selector, offering only years that actually
+//               have at least one entry (defaults to the current
+//               year), with the existing 50-per-page Load More applying
+//               within whichever year is selected.
+export const APP_VERSION = '1.10-22'

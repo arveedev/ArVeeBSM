@@ -15,10 +15,8 @@ import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate } from '.
 import { computeCashOnHand, resolveBuyingPrice } from '../utils/sdoCalculations.js'
 import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.jsx'
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
-import DenominationModal from '../components/common/sdo/DenominationModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
 import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
-import CashHistoryModal from '../components/common/sdo/CashHistoryModal.jsx'
 
 const LIST_PAGE_SIZE = 50
 
@@ -43,7 +41,7 @@ function SdoHome() {
   const [sortDesc, setSortDesc] = useState(true)
   const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE)
   const [activeWsr, setActiveWsr] = useState(null)
-  const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | 'denomination' | 'history' | null
+  const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | null
   const [editingPrice, setEditingPrice] = useState(false)
   const [showAbstractExport, setShowAbstractExport] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -182,14 +180,10 @@ function SdoHome() {
       <div className="mt-4 rounded-2xl border border-brand-neon/40 bg-brand-neon/5 p-4 transition-all">
         <p className="text-[10px] font-bold uppercase text-brand-neon">Cash on Hand</p>
         <p className="mt-1 text-2xl font-bold text-app-text">₱{cashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-          <button type="button" onClick={() => setCashModal('denomination')} className="text-xs text-neutral-400 underline transition-colors hover:text-app-text">
-            View / update denomination count
-          </button>
-          <button type="button" onClick={() => setCashModal('history')} className="text-xs text-neutral-400 underline transition-colors hover:text-app-text">
-            View cash history
-          </button>
-        </div>
+        {/* Denomination count and full cash history moved to Settings -
+            SDO Home stays focused on today's actions (Replenish/
+            Liquidate), the review/correction tools live where the rest
+            of an SDO's account-level settings already do. */}
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={() => setCashModal('replenish')} className="flex-1 rounded-lg bg-brand-neon px-3 py-2 text-xs font-bold text-brand-contrast transition-all active:scale-95">+ Replenish</button>
           <button type="button" onClick={() => setCashModal('liquidate')} className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-app-text transition-all active:scale-95">Liquidate</button>
@@ -306,8 +300,6 @@ function SdoHome() {
       {(cashModal === 'replenish' || cashModal === 'liquidate') && (
         <CashActionModal mode={cashModal} currentCashOnHand={cashOnHand} onClose={() => setCashModal(null)} />
       )}
-      {cashModal === 'denomination' && <DenominationModal currentCashOnHand={cashOnHand} onClose={() => setCashModal(null)} />}
-      {cashModal === 'history' && <CashHistoryModal onClose={() => setCashModal(null)} />}
       {showAbstractExport && <AbstractExportModal onClose={() => setShowAbstractExport(false)} />}
       {editingPrice && <BuyingPriceModal currentPriceRow={currentPriceRow} onClose={() => setEditingPrice(false)} />}
     </div>
