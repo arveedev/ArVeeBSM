@@ -232,7 +232,7 @@ function PurchaseReceiptModal({ wsr, onClose }) {
               <p>Bags <span className="font-semibold tabular-nums text-app-text">{fmtBags(wsr.numberOfBags)}</span></p>
               <p>Gross <span className="font-semibold tabular-nums text-app-text">{fmtKilos(wsr.grossKilos)}</span></p>
               <p>Net <span className="font-semibold tabular-nums text-app-text">{fmtKilos(netKilos)}</span></p>
-              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—'}</span></p>
+              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—'}</span></p>
             </div>
           </div>
 

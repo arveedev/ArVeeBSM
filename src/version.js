@@ -3694,4 +3694,12 @@
 //              printed as the Abstract export's "Prepared By" position
 //              instead of a hardcoded "Disbursing Officer" label, read
 //              live so an edit shows up on the very next export.
-export const APP_VERSION = '1.10-8'
+//   1.10-9 - Correction: Equivalent Net Weight truncates to 3 decimals,
+//           not 4 - fixed at the source (computeEquivalentNetWeight)
+//           and in both display spots that formatted it to 4 (the
+//           Purchase Receipt reference screen, the Abstract export's
+//           per-row and TOTAL columns). The ENW *factor* itself (the
+//           table lookup value, e.g. 0.6824) is unrelated and still
+//           shown at its own 4 decimals - only the weight quantity it's
+//           multiplied against was ever 3.
+export const APP_VERSION = '1.10-9'

@@ -1,12 +1,12 @@
 // SDO (Disbursing Officer) — Purchase Receipt computation helpers.
 //
-// Two explicit rounding rules, both confirmed directly - the peso rule
-// was corrected once already ("i made a mistake, the amount was
-// rounded up to 2 decimals, the 3rd decimal is not dropped"), so this
-// is the settled version: Equivalent Net Weight is truncated (never
-// rounded) to 4 decimals; any peso amount (Basic Cost, Pricer Amount,
-// Total Amount, Cash on Hand) is standard-ROUNDED to 2 decimals, not
-// truncated.
+// Two explicit rounding rules, both confirmed directly and both
+// corrected once already from an earlier stated version - this is the
+// settled shape: Equivalent Net Weight is truncated (never rounded) to
+// 3 decimals (corrected from an earlier "4 decimals"); any peso amount
+// (Basic Cost, Pricer Amount, Total Amount, Cash on Hand) is standard-
+// ROUNDED to 2 decimals, not truncated (corrected from an earlier
+// "truncated/3rd decimal dropped").
 
 /** Truncates (never rounds) `n` to `decimals` places - used only for Equivalent Net Weight. */
 export const truncTo = (n, decimals) => {
@@ -20,7 +20,7 @@ export const roundTo = (n, decimals) => {
   return Math.round((n + Number.EPSILON) * f) / f
 }
 
-export const truncKilos4 = (n) => truncTo(n, 4)
+export const truncKilos3 = (n) => truncTo(n, 3)
 export const roundPeso2 = (n) => roundTo(n, 2)
 
 /**
@@ -56,8 +56,8 @@ export const lookupEnwFactor = (enwFactors, variety, mcValue) => {
   return row?.factor ?? null
 }
 
-/** Equivalent Net Weight = Net Kilos × ENW factor, truncated to 4 decimals. */
-export const computeEquivalentNetWeight = (netKilos, factor) => truncKilos4(netKilos * factor)
+/** Equivalent Net Weight = Net Kilos × ENW factor, truncated to 3 decimals. */
+export const computeEquivalentNetWeight = (netKilos, factor) => truncKilos3(netKilos * factor)
 
 /** Basic Cost = Equivalent Net Weight × Unit Cost, rounded to 2 decimals. */
 export const computeBasicCost = (enw, unitCost) => roundPeso2(enw * unitCost)

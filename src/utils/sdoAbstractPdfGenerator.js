@@ -78,7 +78,7 @@ export const generateSdoAbstract = ({
     pr.date, pr.warehouseCode ?? '', pr.payeeName, pr.rsbsa ?? '', pr.payeeAddress,
     pr.prNo, pr.wsrSerialNo ?? '', fmtBags(pr.numberOfBags), pr.classification, pr.moistureContent, purityText(pr),
     fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
-    pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 4), fmtKilos(pr.unitCost, 2), fmtPeso(pr.basicCost),
+    pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 3), fmtKilos(pr.unitCost, 2), fmtPeso(pr.basicCost),
     ...(pricerEnabled ? [fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),
     fmtPeso(pr.totalAmount), (pr.mtsCondition ?? '').toLowerCase(),
   ])
@@ -98,7 +98,7 @@ export const generateSdoAbstract = ({
     { content: 'TOTAL', colSpan: 7 },
     fmtBags(totals.bags), '', '', '',
     fmtKilos(totals.gross), fmtKilos(totals.sack), fmtKilos(totals.net),
-    '', fmtKilos(totals.enw, 4), '', fmtPeso(totals.basic),
+    '', fmtKilos(totals.enw, 3), '', fmtPeso(totals.basic),
     ...(pricerEnabled ? ['', fmtPeso(totals.pricer)] : []),
     fmtPeso(totals.total), '',
   ]]
