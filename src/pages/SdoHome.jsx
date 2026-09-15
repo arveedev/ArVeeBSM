@@ -269,20 +269,20 @@ function SdoHome() {
           const pr = activePrByWsrId.get(t.id)
           const warehouse = warehouseMap.get(t.warehouseId)
           return (
-            <div key={t.id} onClick={() => setActiveWsr(t)} className="cursor-pointer rounded-xl border border-neutral-800 bg-neutral-900 p-3 transition-all hover:border-brand-neon/50 active:scale-[0.99]">
+            <div key={t.id} onClick={() => setActiveWsr(t)} className="cursor-pointer rounded-xl border border-neutral-800 bg-neutral-900 p-3.5 transition-all hover:border-brand-neon/50 active:scale-[0.99]">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-app-text">WSR {t.serialNo}</span>
+                <span className="font-mono text-lg font-bold text-app-text">WSR {t.serialNo}</span>
                 {pr ? (
-                  <span className="rounded-full bg-brand-neon/10 px-2 py-0.5 text-[9px] font-bold uppercase text-brand-neon">PR {pr.prNo}</span>
+                  <span className="rounded-full bg-brand-neon/10 px-2.5 py-1 text-sm font-bold uppercase text-brand-neon">PR {pr.prNo}</span>
                 ) : (
-                  <span className="rounded-full bg-brand-amber/10 px-2 py-0.5 text-[9px] font-bold uppercase text-brand-amber">Unpaid</span>
+                  <span className="rounded-full bg-brand-amber/10 px-2.5 py-1 text-xs font-bold uppercase text-brand-amber">Unpaid</span>
                 )}
               </div>
-              <p className="mt-1 text-sm font-semibold text-app-text">{t.customerName}</p>
-              {warehouse && <p className="text-[11px] text-neutral-500">{warehouse.code} — {warehouse.name}</p>}
-              <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-xs">
+              <p className="mt-1 text-base font-semibold text-app-text">{t.customerName}</p>
+              {warehouse && <p className="text-sm text-neutral-500">{warehouse.code} — {warehouse.name}</p>}
+              <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
                 <span className="text-neutral-400">{fmtBags(t.numberOfBags)} bags · {fmtKilos(t.netKilos)} kg net</span>
-                {pr && <span className="font-bold text-brand-neon">₱{(pr.totalAmount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>}
+                {pr && <span className="text-base font-bold text-brand-neon">₱{(pr.totalAmount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>}
               </div>
             </div>
           )

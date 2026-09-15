@@ -3743,4 +3743,22 @@
 //            (e.g. "PD1m-A") carries a moisture-state modifier letter
 //            and a Purity-grade suffix that matter for the ENW lookup
 //            but shouldn't print on the export itself.
-export const APP_VERSION = '1.10-13'
+//   1.10-14 - Abstract export polish pass, reported directly against a
+//            real export:
+//            1. Period line now reads "September 15, 2026", not raw
+//               ISO ("2026-09-15").
+//            2. Table headers centered.
+//            3. DATE column's year moved into the header (second line,
+//               only when every row shares one year - same convention
+//               the existing NFA stock report already uses), rows show
+//               just "Sep 15" instead of repeating the year on every
+//               line.
+//            4. The BN/SH mark is no longer a table column - drawn as
+//               small, light gray text just past the table's right
+//               edge instead, not part of the bordered grid.
+//            5. Added the rule between the org header block and the
+//               report title, matching the reference layout - it was
+//               missing entirely before.
+//            SDO Home: WSR/PR numbers on the transaction list are now
+//            larger and more prominent, general list font sizes bumped.
+export const APP_VERSION = '1.10-14'

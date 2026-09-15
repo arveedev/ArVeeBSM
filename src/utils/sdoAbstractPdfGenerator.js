@@ -22,6 +22,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 const BLACK = [0, 0, 0]
+const GRAY_TEXT = [140, 140, 140]
 const HEADER_BG = [232, 232, 232]
 const margin = 12
 // 8.5 x 13 in (the physical paper this is actually printed on -
@@ -31,6 +32,32 @@ const PAGE_W_IN = 13
 const PAGE_H_IN = 8.5
 const pageW = PAGE_W_IN * 25.4
 const pageH = PAGE_H_IN * 25.4
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** "2026-09-15" -> "September 15, 2026" - the period line's own format. */
+const fmtDateLong = (iso) => {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-').map(Number)
+  return `${MONTHS[m - 1]} ${d}, ${y}`
+}
+
+/** "2026-09-15" -> "Sep 15" - the DATE column's per-row format once the year moves into the header. */
+const fmtDateShort = (iso) => {
+  if (!iso) return ''
+  const [, m, d] = iso.split('-').map(Number)
+  return `${MONTHS[m - 1].slice(0, 3)} ${d}`
+}
+
+/** The period line: a single date, or a range - both in the long "Month D, YYYY" form, not raw ISO. */
+const fmtPeriodLabel = (dateFrom, dateTo) =>
+  dateFrom === dateTo ? fmtDateLong(dateFrom) : `${fmtDateLong(dateFrom)} to ${fmtDateLong(dateTo)}`
+
+/** The year shared by every row's date, or null if the rows span more than one year - lets DATE move the year up into its own header instead of repeating it on every row. */
+const commonYear = (dates) => {
+  const years = new Set(dates.filter(Boolean).map((iso) => iso.slice(0, 4)))
+  return years.size === 1 ? [...years][0] : null
+}
 
 // The Abstract's Variety column shows only the base classifier (PD1,
 // PD2, PW1, PW2) - confirmed directly: a variety code like "PD1m-A"
@@ -53,12 +80,17 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.text(branchLabel, pageW / 2, 17, { align: 'center' })
+  // Rule between the org block and the report title - present on the
+  // reference layout, missing here before.
+  doc.setDrawColor(...BLACK)
+  doc.setLineWidth(0.3)
+  doc.line(margin, 20, pageW - margin, 20)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
-  doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 24, { align: 'center' })
+  doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 26, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-  doc.text(`For the period ${periodLabel}`, pageW / 2, 29, { align: 'center' })
+  doc.text(`For the period ${periodLabel}`, pageW / 2, 31, { align: 'center' })
 }
 
 /**
@@ -75,27 +107,43 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
  * `signatories`: { preparedBy: {name, position}, verifiedBy, notedBy }
  */
 export const generateSdoAbstract = ({
-  branchLabel, periodLabel, purchaseReceipts, purityDisplayFormat = 'range',
+  branchLabel, dateFrom, dateTo, purchaseReceipts, purityDisplayFormat = 'range',
   pricerEnabled, reconciliation, signatories,
 }) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
+  const periodLabel = fmtPeriodLabel(dateFrom, dateTo)
 
   const purityText = (pr) => purityDisplayFormat === 'letter' ? (pr.purityLetter ?? '') : `${pr.purityMin ?? ''}–${pr.purityMax ?? ''}`
 
+  // DATE's own year moves into the column header (second line) instead
+  // of repeating on every row, same convention the existing NFA stock
+  // report already uses - only when every row actually shares one year;
+  // a period that genuinely crosses a year boundary keeps the full date
+  // per row so nothing is lost.
+  const year = commonYear(purchaseReceipts.map((pr) => pr.date))
+  const dateHeader = year ? { content: `Date\n${year}`, styles: { valign: 'middle' } } : 'Date'
+  const fmtRowDate = (iso) => (year ? fmtDateShort(iso) : fmtDateLong(iso))
+
+  // The BN/SH mark is deliberately NOT a table column - "must not be in
+  // a table, just a text on that side" - tracked in its own array by
+  // row index and drawn just past the table's right edge via
+  // didDrawCell below, instead.
+  const marks = purchaseReceipts.map((pr) => (pr.mtsCondition ?? '').toLowerCase())
+
   const head = [[
-    'Date', 'Whse', 'Name of Farmer', 'RSBSA No.', 'Address', 'PR No.', 'WSR No.', 'Qty Bags', 'Variety', 'MC', 'Pur.',
+    dateHeader, 'Whse', 'Name of Farmer', 'RSBSA No.', 'Address', 'PR No.', 'WSR No.', 'Qty Bags', 'Variety', 'MC', 'Pur.',
     'Gross', 'Sack', 'Net', 'ENW Factor', 'Equiv. Net Wt.', 'Unit Cost', 'Basic Cost',
     ...(pricerEnabled ? ['Rate', 'Amount'] : []),
-    'Total Amount', '',
+    'Total Amount',
   ]]
 
   const body = purchaseReceipts.map((pr) => [
-    pr.date, pr.warehouseCode ?? '', pr.payeeName, pr.rsbsa ?? '', pr.payeeAddress,
+    fmtRowDate(pr.date), pr.warehouseCode ?? '', pr.payeeName, pr.rsbsa ?? '', pr.payeeAddress,
     pr.prNo, pr.wsrSerialNo ?? '', fmtBags(pr.numberOfBags), baseVarietyCode(pr.classification), pr.moistureContent, purityText(pr),
     fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
     pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 3), fmtKilos(pr.unitCost, 2), fmtPeso(pr.basicCost),
     ...(pricerEnabled ? [fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),
-    fmtPeso(pr.totalAmount), (pr.mtsCondition ?? '').toLowerCase(),
+    fmtPeso(pr.totalAmount),
   ])
 
   const totals = purchaseReceipts.reduce((a, pr) => ({
@@ -115,21 +163,36 @@ export const generateSdoAbstract = ({
     fmtKilos(totals.gross), fmtKilos(totals.sack), fmtKilos(totals.net),
     '', fmtKilos(totals.enw, 3), '', fmtPeso(totals.basic),
     ...(pricerEnabled ? ['', fmtPeso(totals.pricer)] : []),
-    fmtPeso(totals.total), '',
+    fmtPeso(totals.total),
   ]]
 
+  const lastColIndex = head[0].length - 1
+
   autoTable(doc, {
-    startY: 34,
-    margin: { left: margin, right: margin, top: 34 },
+    startY: 36,
+    margin: { left: margin, right: margin, top: 36 },
     head,
     body,
     foot,
     theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 8, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.3 },
-    headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7.5 },
-    footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 8 },
+    styles: { font: 'helvetica', fontSize: 8, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.3, halign: 'center' },
+    headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center', valign: 'middle' },
+    footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 8, halign: 'center' },
     columnStyles: { 2: { halign: 'left' }, 4: { halign: 'left' } },
     didDrawPage: () => drawBranchHeader(doc, { branchLabel, periodLabel }),
+    // Draws each row's BN/SH mark just past the table's own right edge
+    // once that row's last real column has been placed - small, light
+    // gray, never part of the bordered grid itself.
+    didDrawCell: (data) => {
+      if (data.section !== 'body' || data.column.index !== lastColIndex) return
+      const mark = marks[data.row.index]
+      if (!mark) return
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...GRAY_TEXT)
+      doc.text(mark, data.cell.x + data.cell.width + 2, data.cell.y + data.cell.height / 2 + 1)
+      doc.setTextColor(...BLACK)
+    },
   })
 
   // Footer (signatories lower-left, reconciliation lower-right) prints

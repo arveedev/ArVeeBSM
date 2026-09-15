@@ -73,7 +73,8 @@ function AbstractExportModal({ onClose }) {
 
       const doc = generateSdoAbstract({
         branchLabel,
-        periodLabel: dateFrom === dateTo ? dateFrom : `${dateFrom} to ${dateTo}`,
+        dateFrom,
+        dateTo,
         purchaseReceipts: enriched,
         purityDisplayFormat: config?.purityDisplayFormat ?? 'range',
         pricerEnabled,
