@@ -61,11 +61,11 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
   // wrapper instead of the real viewport.
   return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 transition-opacity duration-200 sm:items-center sm:p-4 ${entered ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-200 ${entered ? 'opacity-100' : 'opacity-0'}`}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-t-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] sm:rounded-2xl"
+        className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 pb-[env(safe-area-inset-bottom)] transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         style={{ transform: entered ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)' }}
         onClick={(e) => e.stopPropagation()}
       >

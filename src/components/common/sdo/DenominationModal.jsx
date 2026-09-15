@@ -46,19 +46,19 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   // Portaled to document.body - see PurchaseReceiptModal.jsx's own comment.
   return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 transition-opacity duration-200 sm:items-center sm:p-4 ${entered ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-200 ${entered ? 'opacity-100' : 'opacity-0'}`}
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-t-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] sm:rounded-2xl"
+        className="flex max-h-[85vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         style={{ transform: entered ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3">
           <h2 className="text-base font-semibold text-app-text">Denomination Count</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
         </div>
-        <div className="space-y-2 px-4 py-4">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           {DENOMINATIONS.map((d) => (
             <div key={d} className="grid grid-cols-[1fr_80px_1fr] items-center gap-2 border-b border-neutral-900 pb-2 text-sm">
               <span className="font-semibold text-app-text">₱{d}</span>

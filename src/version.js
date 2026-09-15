@@ -3663,4 +3663,35 @@
 //           stack Net Kilos+toggle and Age+Unit as two full rows on
 //           small screens instead of squeezing both into one row's
 //           worth of space (PC keeps them side by side).
-export const APP_VERSION = '1.10-7'
+//   1.10-8 - Correction + a full pass on the SDO modals, reported directly:
+//           1. Peso-amount rounding rule corrected: "the amount was
+//              rounded up to 2 decimals, the 3rd decimal is not
+//              dropped" - every peso amount (Basic Cost, Pricer Amount,
+//              Total Amount, Cash on Hand) now standard-rounds to 2
+//              decimals instead of truncating. Equivalent Net Weight's
+//              own truncate-to-4-decimals rule is unchanged - only the
+//              peso side was wrong.
+//           2. Modals switched from bottom-sheet-on-mobile to always
+//              centered (matching ConfirmDialog's own established
+//              pattern), with real internal scroll regions and safe-
+//              area-aware bottom padding so tall content can't get cut
+//              off by a phone's home-indicator/gesture bar.
+//           3. SDO Home's search+sort cluster now actually grows to
+//              fill the row on wide screens - it was missing flex-1 at
+//              the outer wrapper level, so the whole search/filter/sort
+//              row sat stranded on the left with empty space filling
+//              the rest of a wide display.
+//           4. Header/bottom nav now hide (and page scroll locks) while
+//              any sdo/* modal is open, same chromeHidden switch
+//              App.jsx already uses for transaction forms - previously
+//              they stayed visible above the modal and produced two
+//              visible scrollbars at once.
+//           5. Purchase Receipt reference screen: WSR chip enlarged and
+//              the word "From" dropped, every numeric value (bags,
+//              gross, net, equivalent net weight, pricer amount) now
+//              comma-formatted, and text sizes bumped throughout.
+//           6. New "Position / Role" field in the SDO's own Settings -
+//              printed as the Abstract export's "Prepared By" position
+//              instead of a hardcoded "Disbursing Officer" label, read
+//              live so an edit shows up on the very next export.
+export const APP_VERSION = '1.10-8'

@@ -30,7 +30,7 @@ function useDebounced(value, delay = 250) {
 function SdoHome() {
   const { user } = useAuth()
   const { accessibleWarehouses } = useWarehouse() ?? {}
-  const { setPageHeader } = usePageHeader() ?? {}
+  const { setPageHeader, setChromeHidden } = usePageHeader() ?? {}
 
   const [listTab, setListTab] = useState('payment')
   const [warehouseFilter, setWarehouseFilter] = useState('')
@@ -53,6 +53,22 @@ function SdoHome() {
     const frame = requestAnimationFrame(() => setMounted(true))
     return () => cancelAnimationFrame(frame)
   }, [])
+
+  // Hides the header/bottom nav (same chromeHidden switch App.jsx
+  // already uses for transaction forms) and locks the page behind the
+  // modal from also scrolling, whenever any sdo/* modal is open -
+  // without this, the fixed header/nav sat on top of the modal and the
+  // page's own scroll plus the modal's own internal scroll produced two
+  // visible scrollbars at once.
+  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport
+  useEffect(() => {
+    setChromeHidden?.(anyModalOpen)
+    document.body.style.overflow = anyModalOpen ? 'hidden' : ''
+    return () => {
+      setChromeHidden?.(false)
+      document.body.style.overflow = ''
+    }
+  }, [anyModalOpen])
 
   const warehouseIds = useMemo(() => (accessibleWarehouses ?? []).map((w) => w.warehouseId), [accessibleWarehouses])
   const warehouseMap = useMemo(() => new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w])), [accessibleWarehouses])
@@ -204,7 +220,13 @@ function SdoHome() {
           screens (three controls competing for one narrow row was
           cramped) and rejoins the same row once there's room, sm+. */}
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-        <div className="flex gap-2">
+        {/* flex-1 here (not just on the search box inside it) is what
+            makes this whole cluster actually grow to fill the row on
+            wide screens - without it, this wrapper only ever took its
+            own content width, leaving the rest of the row (and the
+            warehouse filter/sort next to it) stranded on the left with
+            empty space filling the remaining width. */}
+        <div className="flex flex-1 gap-2">
           <div className="flex flex-1 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 transition-colors focus-within:border-brand-neon">
             <Search size={14} className="text-neutral-500" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search farmer, WSR, PR no."

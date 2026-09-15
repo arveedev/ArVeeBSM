@@ -76,6 +76,49 @@ function Toggle({ label, description, value, onChange, icon: Icon }) {
   )
 }
 
+// SDO's own position/role (e.g. "Disbursing Officer II") - printed as
+// the "Prepared By" position on the Abstract of Cereal Purchases export
+// (AbstractExportModal.jsx), which always reads it live from this
+// user's own record rather than a hardcoded label, so a person who
+// holds a different title than the generic default sees their actual
+// one on the document.
+function SdoPositionSection({ userRecord, uid }) {
+  const [position, setPosition] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    setPosition(userRecord?.position ?? '')
+  }, [userRecord?.position])
+
+  const handleBlur = async () => {
+    if (position === (userRecord?.position ?? '')) return
+    setIsSaving(true)
+    try {
+      await db.users.update(uid, { position: position.trim() })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+      <h2 className="text-base font-semibold text-app-text">Position / Role</h2>
+      <p className="mt-1 text-xs text-neutral-500">
+        Printed as your position on the Abstract of Cereal Purchases export.
+      </p>
+      <input
+        type="text"
+        value={position}
+        onChange={(e) => setPosition(e.target.value)}
+        onBlur={handleBlur}
+        placeholder="Disbursing Officer"
+        className={`${inputClass} mt-3`}
+        disabled={isSaving}
+      />
+    </section>
+  )
+}
+
 // Classifier is a signatory-only name (not a login user) shown as
 // "Prepared by" on the Pile Layout report. Any user with access to this
 // warehouse can set it, not just admins.
@@ -600,6 +643,8 @@ function Settings() {
           </div>
         </div>
       )}
+
+      {isSdo && <SdoPositionSection userRecord={userRecord} uid={user.uid} />}
 
       {!isSdo && (
         <>

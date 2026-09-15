@@ -1,19 +1,27 @@
 // SDO (Disbursing Officer) — Purchase Receipt computation helpers.
 //
-// Two explicit, non-negotiable rounding rules (confirmed directly, not
-// a guess): Equivalent Net Weight is truncated (never rounded) to 4
-// decimals; any peso amount (Basic Cost, Pricer Amount, Total Amount)
-// is truncated (never rounded) to 2 decimals - "they don't round the
-// paid amount, they drop the 3rd decimal."
+// Two explicit rounding rules, both confirmed directly - the peso rule
+// was corrected once already ("i made a mistake, the amount was
+// rounded up to 2 decimals, the 3rd decimal is not dropped"), so this
+// is the settled version: Equivalent Net Weight is truncated (never
+// rounded) to 4 decimals; any peso amount (Basic Cost, Pricer Amount,
+// Total Amount, Cash on Hand) is standard-ROUNDED to 2 decimals, not
+// truncated.
 
-/** Truncates (never rounds) `n` to `decimals` places. */
+/** Truncates (never rounds) `n` to `decimals` places - used only for Equivalent Net Weight. */
 export const truncTo = (n, decimals) => {
   const f = 10 ** decimals
   return Math.floor((n + Number.EPSILON) * f) / f
 }
 
+/** Standard-rounds (not truncates) `n` to `decimals` places - used for every peso amount. */
+export const roundTo = (n, decimals) => {
+  const f = 10 ** decimals
+  return Math.round((n + Number.EPSILON) * f) / f
+}
+
 export const truncKilos4 = (n) => truncTo(n, 4)
-export const truncPeso2 = (n) => truncTo(n, 2)
+export const roundPeso2 = (n) => roundTo(n, 2)
 
 /**
  * Finds the ENW factor row that applies to this Palay variety's own
@@ -51,11 +59,11 @@ export const lookupEnwFactor = (enwFactors, variety, mcValue) => {
 /** Equivalent Net Weight = Net Kilos × ENW factor, truncated to 4 decimals. */
 export const computeEquivalentNetWeight = (netKilos, factor) => truncKilos4(netKilos * factor)
 
-/** Basic Cost = Equivalent Net Weight × Unit Cost, truncated to 2 decimals. */
-export const computeBasicCost = (enw, unitCost) => truncPeso2(enw * unitCost)
+/** Basic Cost = Equivalent Net Weight × Unit Cost, rounded to 2 decimals. */
+export const computeBasicCost = (enw, unitCost) => roundPeso2(enw * unitCost)
 
-/** Pricer Amount = Equivalent Net Weight × Pricer Rate, truncated to 2 decimals. */
-export const computePricerAmount = (enw, rate) => truncPeso2(enw * (rate || 0))
+/** Pricer Amount = Equivalent Net Weight × Pricer Rate, rounded to 2 decimals. */
+export const computePricerAmount = (enw, rate) => roundPeso2(enw * (rate || 0))
 
 /**
  * The Buying Price active on `asOfDate` - the latest row whose
@@ -98,7 +106,7 @@ export const computeCashOnHand = (ledgerEntries, activePrTotals) => {
     .filter((e) => e.type === 'liquidate')
     .reduce((s, e) => s + e.amount, 0)
   const disbursed = (activePrTotals ?? []).reduce((s, amt) => s + amt, 0)
-  return truncPeso2(replenished - liquidated - disbursed)
+  return roundPeso2(replenished - liquidated - disbursed)
 }
 
 const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',

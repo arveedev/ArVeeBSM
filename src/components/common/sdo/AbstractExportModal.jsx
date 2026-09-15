@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
@@ -12,6 +13,10 @@ import { computeCashOnHand } from '../../../utils/sdoCalculations.js'
 
 function AbstractExportModal({ onClose }) {
   const { user } = useAuth()
+  // Read live, not from the AuthContext snapshot - `user` is only set
+  // once at login, so a Position edited in Settings just now wouldn't
+  // show up here until next login if this read it from `user` instead.
+  const userRecord = useLiveQuery(() => user?.uid ? db.users.get(user.uid) : null, [user?.uid])
   const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().slice(0, 10))
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [generating, setGenerating] = useState(false)
@@ -81,7 +86,7 @@ function AbstractExportModal({ onClose }) {
           // Always the SDO who actually generated this export, not an
           // admin-set fixed name - "the prepared by should always be
           // the disbursing officer", confirmed directly.
-          preparedBy: { name: user.name, position: 'Disbursing Officer' },
+          preparedBy: { name: user.name, position: userRecord?.position?.trim() || 'Disbursing Officer' },
           verifiedBy: config?.disbursementVerifiedBy,
           notedBy: config?.disbursementNotedBy,
         },
@@ -100,11 +105,11 @@ function AbstractExportModal({ onClose }) {
   // Portaled to document.body - see PurchaseReceiptModal.jsx's own comment.
   return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 transition-opacity duration-200 sm:items-center sm:p-4 ${entered ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-200 ${entered ? 'opacity-100' : 'opacity-0'}`}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-t-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] sm:rounded-2xl"
+        className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 pb-[env(safe-area-inset-bottom)] transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         style={{ transform: entered ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)' }}
         onClick={(e) => e.stopPropagation()}
       >

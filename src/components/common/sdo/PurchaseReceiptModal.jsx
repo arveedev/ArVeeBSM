@@ -14,7 +14,7 @@ import toast from 'react-hot-toast'
 import { X, Trash2 } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
-import { getPalayMoistureState } from '../../../utils/calculations.js'
+import { getPalayMoistureState, fmtBags, fmtKilos } from '../../../utils/calculations.js'
 import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken } from '../../../utils/serialNumber.js'
 import {
   lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost, computePricerAmount,
@@ -157,18 +157,18 @@ function PurchaseReceiptModal({ wsr, onClose }) {
   // off-center instead of a real centered/full-width overlay.
   return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 transition-opacity duration-200 sm:items-center sm:p-4 ${entered ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-200 ${entered ? 'opacity-100' : 'opacity-0'}`}
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] sm:rounded-2xl"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         style={{ transform: entered ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3">
           <div>
-            <h2 className="text-base font-semibold text-app-text">Purchase Receipt</h2>
-            <p className="text-xs text-neutral-500">Reference for the hand-written PR — not a document</p>
+            <h2 className="text-lg font-semibold text-app-text">Purchase Receipt</h2>
+            <p className="text-sm text-neutral-500">Reference for the hand-written PR — not a document</p>
           </div>
           <div className="flex gap-2">
             {isReadOnly && (
@@ -182,104 +182,104 @@ function PurchaseReceiptModal({ wsr, onClose }) {
           </div>
         </div>
 
-        <div className="space-y-3 px-4 py-4">
-          <div className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-400 inline-block">
-            From WSR <span className="font-mono text-app-text">{wsr.serialNo}</span>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <div className="inline-block rounded-full border border-neutral-800 bg-neutral-900 px-3.5 py-2 font-mono text-base font-bold text-app-text">
+            WSR {wsr.serialNo}
           </div>
 
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-            <label className="text-[10px] font-semibold uppercase text-neutral-500">Purchase Receipt No.</label>
+            <label className="text-xs font-semibold uppercase text-neutral-500">Purchase Receipt No.</label>
             {isReadOnly ? (
-              <p className="mt-1 font-mono text-base font-semibold text-app-text">{existingPr.prNo}</p>
+              <p className="mt-1 font-mono text-lg font-semibold text-app-text">{existingPr.prNo}</p>
             ) : (
               <input
                 type="text"
                 value={prNo}
                 onChange={(e) => setPrNo(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 font-mono text-base text-app-text outline-none focus:border-brand-neon"
+                className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 font-mono text-lg text-app-text outline-none focus:border-brand-neon"
               />
             )}
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm">
-            <p className="text-[10px] font-semibold uppercase text-neutral-500">Payee</p>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-base">
+            <p className="text-xs font-semibold uppercase text-neutral-500">Payee</p>
             <p className="mt-1 font-medium text-app-text">{wsr.customerName}</p>
-            {wsr.farmerRsbsa && <p className="text-xs text-neutral-400">RSBSA {wsr.farmerRsbsa}</p>}
-            <p className="text-xs text-neutral-400">{wsr.customerAddress}</p>
+            {wsr.farmerRsbsa && <p className="text-sm text-neutral-400">RSBSA {wsr.farmerRsbsa}</p>}
+            <p className="text-sm text-neutral-400">{wsr.customerAddress}</p>
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm">
-            <p className="text-[10px] font-semibold uppercase text-neutral-500">Classification</p>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-base">
+            <p className="text-xs font-semibold uppercase text-neutral-500">Classification</p>
             <div className="mt-1 flex items-center justify-between">
-              <span className="font-mono text-base font-bold text-brand-neon">{variety?.name ?? '—'}</span>
-              <span className="text-xs text-neutral-400">MC {wsr.moistureContent}% · Pur. {purityDisplay}</span>
+              <span className="font-mono text-lg font-bold text-brand-neon">{variety?.name ?? '—'}</span>
+              <span className="text-sm text-neutral-400">MC {wsr.moistureContent}% · Pur. {purityDisplay}</span>
             </div>
             {factor == null && (
-              <p className="mt-1.5 text-xs text-brand-crimson">
+              <p className="mt-1.5 text-sm text-brand-crimson">
                 No ENW factor configured for this classification at this MC — set one in Admin → Disbursement → ENW Table.
               </p>
             )}
             {unitCost == null && (
-              <p className="mt-1.5 text-xs text-brand-crimson">No Buying Price set yet — set one on Home.</p>
+              <p className="mt-1.5 text-sm text-brand-crimson">No Buying Price set yet — set one on Home.</p>
             )}
           </div>
 
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm">
-            <p className="text-[10px] font-semibold uppercase text-neutral-500">
-              Weight in Kilos {wsr.mtsCondition && <span className="ml-1 rounded bg-neutral-800 px-1.5 py-0.5 text-[9px] font-bold text-neutral-500">{wsr.mtsCondition}</span>}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-base">
+            <p className="text-xs font-semibold uppercase text-neutral-500">
+              Weight in Kilos {wsr.mtsCondition && <span className="ml-1 rounded bg-neutral-800 px-1.5 py-0.5 text-xs font-bold text-neutral-500">{wsr.mtsCondition}</span>}
             </p>
-            <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
-              <p>Bags <span className="font-semibold text-app-text">{wsr.numberOfBags}</span></p>
-              <p>Gross <span className="font-semibold text-app-text">{wsr.grossKilos}</span></p>
-              <p>Net <span className="font-semibold text-app-text">{netKilos}</span></p>
-              <p>Equiv. Net Wt <span className="font-semibold text-brand-neon">{displayed.enw != null ? displayed.enw.toFixed(4) : '—'}</span></p>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              <p>Bags <span className="font-semibold tabular-nums text-app-text">{fmtBags(wsr.numberOfBags)}</span></p>
+              <p>Gross <span className="font-semibold tabular-nums text-app-text">{fmtKilos(wsr.grossKilos)}</span></p>
+              <p>Net <span className="font-semibold tabular-nums text-app-text">{fmtKilos(netKilos)}</span></p>
+              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—'}</span></p>
             </div>
           </div>
 
           {pricerEnabled && (
-            <div className="rounded-xl border border-brand-neon/40 bg-brand-neon/5 p-3 text-sm">
-              <p className="text-[10px] font-semibold uppercase text-brand-neon">Pricer Incentive — enabled for you</p>
+            <div className="rounded-xl border border-brand-neon/40 bg-brand-neon/5 p-3 text-base">
+              <p className="text-xs font-semibold uppercase text-brand-neon">Pricer Incentive — enabled for you</p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-neutral-500">Rate (₱/kg)</label>
+                  <label className="text-xs text-neutral-500">Rate (₱/kg)</label>
                   {isReadOnly ? (
-                    <p className="text-sm font-semibold text-app-text">{existingPr.pricerRate}</p>
+                    <p className="text-base font-semibold tabular-nums text-app-text">{existingPr.pricerRate}</p>
                   ) : (
                     <input
                       type="number"
                       step="0.01"
                       value={pricerRate}
                       onChange={(e) => setPricerRate(e.target.value)}
-                      className="mt-0.5 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1 text-sm text-app-text outline-none focus:border-brand-neon"
+                      className="mt-0.5 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-base text-app-text outline-none focus:border-brand-neon"
                     />
                   )}
                 </div>
                 <div>
-                  <label className="text-[10px] text-neutral-500">Amount</label>
-                  <p className="mt-0.5 text-sm font-semibold text-app-text">₱{(displayed.pricerAmount ?? 0).toFixed(2)}</p>
+                  <label className="text-xs text-neutral-500">Amount</label>
+                  <p className="mt-0.5 text-base font-semibold tabular-nums text-app-text">₱{(displayed.pricerAmount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
           )}
 
           <div className="rounded-xl border border-brand-neon/40 bg-brand-neon/5 p-3">
-            <p className="text-[10px] font-semibold uppercase text-brand-neon">Total Amount</p>
-            <p className="mt-1 text-xl font-bold text-app-text">
+            <p className="text-xs font-semibold uppercase text-brand-neon">Total Amount</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">
               {displayed.totalAmount != null ? `₱${displayed.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
             </p>
             {displayed.totalAmount != null && (
-              <p className="mt-1 text-xs italic text-neutral-400">{amountInWords(displayed.totalAmount)}</p>
+              <p className="mt-1 text-sm italic text-neutral-400">{amountInWords(displayed.totalAmount)}</p>
             )}
           </div>
         </div>
 
         {!isReadOnly && (
-          <div className="border-t border-neutral-800 px-4 py-3">
+          <div className="shrink-0 border-t border-neutral-800 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
             <button
               type="button"
               onClick={handleIssue}
               disabled={!canIssue}
-              className="w-full rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+              className="w-full rounded-xl bg-brand-neon px-3 py-3 text-base font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
             >
               Save &amp; Issue
             </button>
