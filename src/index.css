@@ -850,6 +850,68 @@ select {
 }
 .animate-pin-dots-shake { animation: pin-dots-shake 0.4s ease-out; }
 
+/* Login entrance (concept "Magnetic Snap" + "Scan Reveal", picked after
+   reviewing several rounds of demos) - logo/title/subtitle/dots each
+   pull in fast from a different direction with a real elastic
+   overshoot; the keypad buttons reveal via a scan line sweeping down
+   each one instead of sliding in. Deliberately NO forwards/both
+   fill-mode on any of these, same reasoning as pin-dot-pop above: the
+   exit fly-out (Login.jsx's own flyTransform/isExiting branch) needs to
+   freely apply its own inline-style transform on these same elements
+   afterward, which a held animation fill would silently keep
+   overriding. `backwards` IS used (safe here, unlike forwards) so a
+   delayed element shows its FIRST keyframe (hidden/offset) during its
+   own stagger delay instead of flashing at rest before animating in. */
+@keyframes login-logo-in {
+  from { opacity: 0; transform: translateY(-110px) scale(.7); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-login-logo-in { animation: login-logo-in 420ms cubic-bezier(0.34, 1.76, 0.64, 1); }
+
+@keyframes login-title-in {
+  from { opacity: 0; transform: translateX(-100px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-login-title-in { animation: login-title-in 380ms cubic-bezier(0.34, 1.76, 0.64, 1) 90ms backwards; }
+
+@keyframes login-subtitle-in {
+  from { opacity: 0; transform: translateX(100px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-login-subtitle-in { animation: login-subtitle-in 380ms cubic-bezier(0.34, 1.76, 0.64, 1) 140ms backwards; }
+
+@keyframes login-dots-in {
+  from { opacity: 0; transform: translateY(70px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-login-dots-in { animation: login-dots-in 360ms cubic-bezier(0.34, 1.76, 0.64, 1) 210ms backwards; }
+
+/* Keypad "Scan Reveal" - each button's own bounding box (rounded
+   corners preserved via the `round` clip-path param, matching its
+   `rounded-2xl`) wipes open top-to-bottom, timed to a bright scan line
+   (a plain child <span>, styled via Tailwind classes in Login.jsx)
+   traveling down in lockstep. Staggered per button via --key-i (set
+   inline per button in Login.jsx, in the same reading order the old
+   fly-out animation already indexed by). */
+@keyframes login-key-reveal {
+  from { clip-path: inset(0 0 100% 0 round 1rem); }
+  to   { clip-path: inset(0 0 0% 0 round 1rem); }
+}
+.animate-login-key-reveal {
+  animation: login-key-reveal 420ms cubic-bezier(0.3, 0.6, 0.25, 1) backwards;
+  animation-delay: calc(260ms + var(--key-i, 0) * 34ms);
+}
+
+@keyframes login-key-scanline {
+  from { top: 0%; opacity: 1; }
+  88%  { opacity: 1; }
+  to   { top: 100%; opacity: 0; }
+}
+.animate-login-key-scanline {
+  animation: login-key-scanline 420ms cubic-bezier(0.3, 0.6, 0.25, 1) backwards;
+  animation-delay: calc(260ms + var(--key-i, 0) * 34ms);
+}
+
 /* BootScreen (concept W, picked) - shown the instant the page loads,
    before db.open() even starts, replacing what used to be a blank
    flash while the database opens. A soft breathing pulse rather than a

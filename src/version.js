@@ -4009,4 +4009,17 @@
 //               note added to that same entry the moment a later retry
 //               actually lands, instead of just vanishing silently or
 //               leaving a permanently alarming-looking entry behind.
-export const APP_VERSION = '1.10-27'
+//   1.10-28 - New login entrance animation, picked after several rounds
+//            of demos: "Magnetic Snap" for the logo/title/subtitle/PIN
+//            dots (each pulls in fast from a different direction with a
+//            real elastic overshoot) + "Scan Reveal" for the keypad (a
+//            bright line sweeps down each button, revealing it
+//            progressively behind it, like a document coming off a
+//            scanner). Implemented as real CSS @keyframes (index.css),
+//            replacing the old transition-based "reverse of the exit"
+//            approach - deliberately with no forwards/both fill-mode on
+//            any of them, so the unchanged fly-out exit animation (on a
+//            successful login) can still freely apply its own inline-
+//            style transform afterward without a held animation frame
+//            silently overriding it.
+export const APP_VERSION = '1.10-28'

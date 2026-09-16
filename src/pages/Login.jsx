@@ -77,7 +77,6 @@ function Login() {
   const [pin, setPin] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExiting, setIsExiting] = useState(false)
-  const [hasEntered, setHasEntered] = useState(false)
   // Bumped on a wrong PIN, purely to force the dots row to remount and
   // replay its shake keyframe every time (a plain CSS class toggle
   // wouldn't retrigger on a second consecutive wrong attempt, since the
@@ -87,28 +86,27 @@ function Login() {
   const navigate = useNavigate()
   const { user, login } = useAuth()
 
-  // Entrance animation - the reverse of the exit: everything starts in
-  // its flown-out position (same transforms used on exit) and animates
-  // inward to its normal spot right after mount. Needs a tick of delay
-  // (requestAnimationFrame) so the browser actually paints the
-  // flown-out starting state first, before the transition to the
-  // normal position is applied - otherwise both states could land in
-  // the same paint and the transition wouldn't visibly animate at all.
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setHasEntered(true))
-    return () => cancelAnimationFrame(frame)
-  }, [])
+  // Entrance animation ("Magnetic Snap" + "Scan Reveal", picked after
+  // several rounds of demos) - real @keyframes (animate-login-*-in /
+  // animate-login-key-reveal, index.css), not the transition-based
+  // reverse-of-the-exit approach this used to be. No hasEntered state
+  // needed any more: these keyframes just play automatically on mount,
+  // with their own built-in delays/durations, and (deliberately, see
+  // index.css's own comment) no forwards/both fill-mode - once each one
+  // finishes it fully releases the transform/opacity properties it
+  // touched, so the UNCHANGED exit code below (isExiting) can still
+  // freely apply its own inline-style fly-out afterward without a held
+  // animation frame silently fighting it.
 
-  // Lock body scroll during any fly animation (entrance or exit) -
-  // flying elements can extend beyond the viewport (vw/vh-based
-  // translation) and trigger the browser's own scrollbar to appear
-  // during the animation, regardless of this page's own overflow
-  // setting, since that's a property of the document, not this element.
+  // Lock body scroll only while the exit is flying - its vw/vh-based
+  // translations can genuinely extend past the viewport and trigger the
+  // browser's own scrollbar mid-animation. The entrance's own
+  // translations are all small, in-bounds pixel offsets (see index.css),
+  // so it never needs this.
   useEffect(() => {
-    const isAnimating = isExiting || !hasEntered
-    document.body.style.overflow = isAnimating ? 'hidden' : ''
+    document.body.style.overflow = isExiting ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [isExiting, hasEntered])
+  }, [isExiting])
 
   // Auto-focus on mount so the device's native number pad opens immediately.
   useEffect(() => {
@@ -229,7 +227,7 @@ function Login() {
   }
 
   return (
-    <div className={`relative flex min-h-screen flex-col items-center justify-center px-6 ${(isExiting || !hasEntered) ? 'overflow-hidden' : ''}`}>
+    <div className={`relative flex min-h-screen flex-col items-center justify-center px-6 ${isExiting ? 'overflow-hidden' : ''}`}>
       {/* "by ArVee" and the version sit as one tight block, not two
           independently-positioned lines - on a short viewport that
           used to mean only one of them was ever visible at once.
@@ -245,7 +243,7 @@ function Login() {
       <div
         style={{
           transition: 'transform 1400ms, opacity 1400ms',
-          ...((isExiting || !hasEntered) ? flyTransformDown : restTransformCentered),
+          ...(isExiting ? flyTransformDown : restTransformCentered),
         }}
         className="pointer-events-none fixed bottom-8 left-1/2 z-10 flex select-none flex-col items-center gap-0.5 px-4 text-center"
       >
@@ -256,18 +254,18 @@ function Login() {
         <img
           src="/logo.svg"
           alt="BSM App logo"
-          style={(isExiting || !hasEntered) ? flyTransformUp : undefined}
-          className="mx-auto mb-4 h-20 w-20 rounded-2xl transition-all duration-[1400ms]"
+          style={isExiting ? flyTransformUp : undefined}
+          className={`mx-auto mb-4 h-20 w-20 rounded-2xl transition-all duration-[1400ms] ${!isExiting ? 'animate-login-logo-in' : ''}`}
         />
         <h1
-          style={(isExiting || !hasEntered) ? flyTransformUp : undefined}
-          className="text-center text-2xl font-semibold text-app-text transition-all duration-[1400ms]"
+          style={isExiting ? flyTransformUp : undefined}
+          className={`text-center text-2xl font-semibold text-app-text transition-all duration-[1400ms] ${!isExiting ? 'animate-login-title-in' : ''}`}
         >
           BSM App
         </h1>
         <p
-          style={(isExiting || !hasEntered) ? flyTransformUp : undefined}
-          className="mt-1 text-center text-sm text-neutral-400 transition-all duration-[1400ms]"
+          style={isExiting ? flyTransformUp : undefined}
+          className={`mt-1 text-center text-sm text-neutral-400 transition-all duration-[1400ms] ${!isExiting ? 'animate-login-subtitle-in' : ''}`}
         >
           Enter your access PIN
         </p>
@@ -292,7 +290,17 @@ function Login() {
             wrong PIN, replaying animate-pin-dots-shake even on repeated
             wrong attempts in a row (a plain class toggle wouldn't
             retrigger if the class were already present). */}
-        <div key={shakeKey} className={`mt-8 flex justify-center gap-3 ${shakeKey > 0 ? 'animate-pin-dots-shake' : ''}`}>
+        {/* Real conflict avoided here: animate-login-dots-in and
+            animate-pin-dots-shake are two separate classes each setting
+            their own `animation` shorthand - an element only has one
+            `animation` property, so having BOTH present at once would
+            let whichever class sits later in index.css's cascade order
+            silently win outright rather than the two combining, which
+            would have broken the wrong-PIN shake the very first time it
+            fired alongside a remount. The entrance class is gated to
+            shakeKey === 0 (the very first mount only) specifically so
+            it never coexists with the shake class on the same element. */}
+        <div key={shakeKey} className={`mt-8 flex justify-center gap-3 ${shakeKey > 0 ? 'animate-pin-dots-shake' : (!isExiting ? 'animate-login-dots-in' : '')}`}>
           {Array.from({ length: PIN_LENGTH }).map((_, i) => (
             <div
               // Remounts each dot exactly when ITS OWN filled-state
@@ -303,7 +311,7 @@ function Login() {
               key={i < pin.length ? `filled-${i}` : `empty-${i}`}
               style={{
                 transition: 'transform 1400ms, opacity 1400ms, border-color 150ms, background-color 150ms',
-                ...((isExiting || !hasEntered) ? flyTransformHorizontal(i) : {}),
+                ...(isExiting ? flyTransformHorizontal(i) : {}),
               }}
               className={`h-4 w-4 rounded-full border ${
                 i < pin.length
@@ -316,7 +324,16 @@ function Login() {
 
         {/* Custom numeric keypad - on a successful login, each button
             flies outward from the grid's own center (like a door/portal
-            opening), then the whole screen fades before navigating. */}
+            opening), then the whole screen fades before navigating.
+            On entrance instead (unrelated, unless isExiting is also
+            true - never both at once), each button reveals via a scan
+            line sweeping down it (animate-login-key-reveal on the
+            button + animate-login-key-scanline on its own child <span>,
+            both keyed to the same --key-i stagger, index.css). relative
+            overflow-hidden is new here too - overflow-hidden keeps the
+            scanline's glow contained to the button's own rounded rect
+            while it travels, and does not affect the button's fly-out
+            exit in any way (that's a transform, not a layout overflow). */}
         <div className="mt-10 grid grid-cols-3 gap-4">
           {KEYPAD_DIGITS.map((digit, i) => (
             <button
@@ -325,12 +342,13 @@ function Login() {
               disabled={isSubmitting}
               onClick={() => appendDigit(digit)}
               style={{
-                transition: `transform ${(isExiting || !hasEntered) ? '1400ms' : '100ms'}, opacity 1400ms, background-color 150ms, border-color 150ms, box-shadow 150ms`,
-                ...((isExiting || !hasEntered) ? flyTransform(i) : {}),
+                transition: `transform ${isExiting ? '1400ms' : '100ms'}, opacity 1400ms, background-color 150ms, border-color 150ms, box-shadow 150ms`,
+                ...(isExiting ? flyTransform(i) : { '--key-i': i }),
               }}
-              className="rounded-2xl border border-neutral-800 bg-neutral-900 py-4 text-xl font-medium text-app-text hover:border-neutral-600 hover:bg-neutral-800 hover:shadow-[0_0_12px_rgba(255,255,255,0.08)] active:scale-95 disabled:opacity-50"
+              className={`relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 py-4 text-xl font-medium text-app-text hover:border-neutral-600 hover:bg-neutral-800 hover:shadow-[0_0_12px_rgba(255,255,255,0.08)] active:scale-95 disabled:opacity-50 ${!isExiting ? 'animate-login-key-reveal' : ''}`}
             >
               {digit}
+              {!isExiting && <span className="animate-login-key-scanline pointer-events-none absolute left-0 right-0 h-0.5 bg-brand-neon opacity-0 shadow-[0_0_8px_1px_rgba(0,255,163,0.8)]" />}
             </button>
           ))}
 
@@ -339,12 +357,13 @@ function Login() {
             disabled={isSubmitting}
             onClick={handleClear}
             style={{
-              transition: `transform ${(isExiting || !hasEntered) ? '1400ms' : '100ms'}, opacity 1400ms, background-color 150ms, border-color 150ms, color 150ms`,
-              ...((isExiting || !hasEntered) ? flyTransform(9) : {}),
+              transition: `transform ${isExiting ? '1400ms' : '100ms'}, opacity 1400ms, background-color 150ms, border-color 150ms, color 150ms`,
+              ...(isExiting ? flyTransform(9) : { '--key-i': 9 }),
             }}
-            className="rounded-2xl border border-neutral-800 bg-neutral-900 py-4 text-sm font-medium text-neutral-400 hover:border-neutral-600 hover:text-app-text active:scale-95 disabled:opacity-50"
+            className={`relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 py-4 text-sm font-medium text-neutral-400 hover:border-neutral-600 hover:text-app-text active:scale-95 disabled:opacity-50 ${!isExiting ? 'animate-login-key-reveal' : ''}`}
           >
             Clear
+            {!isExiting && <span className="animate-login-key-scanline pointer-events-none absolute left-0 right-0 h-0.5 bg-brand-neon opacity-0 shadow-[0_0_8px_1px_rgba(0,255,163,0.8)]" />}
           </button>
 
           <button
@@ -352,12 +371,13 @@ function Login() {
             disabled={isSubmitting}
             onClick={() => appendDigit('0')}
             style={{
-              transition: `transform ${(isExiting || !hasEntered) ? '1400ms' : '100ms'}, opacity 1400ms, background-color 150ms, border-color 150ms, box-shadow 150ms`,
-              ...((isExiting || !hasEntered) ? flyTransform(10) : {}),
+              transition: `transform ${isExiting ? '1400ms' : '100ms'}, opacity 1400ms, background-color 150ms, border-color 150ms, box-shadow 150ms`,
+              ...(isExiting ? flyTransform(10) : { '--key-i': 10 }),
             }}
-            className="rounded-2xl border border-neutral-800 bg-neutral-900 py-4 text-xl font-medium text-app-text hover:border-neutral-600 hover:bg-neutral-800 hover:shadow-[0_0_12px_rgba(255,255,255,0.08)] active:scale-95 disabled:opacity-50"
+            className={`relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 py-4 text-xl font-medium text-app-text hover:border-neutral-600 hover:bg-neutral-800 hover:shadow-[0_0_12px_rgba(255,255,255,0.08)] active:scale-95 disabled:opacity-50 ${!isExiting ? 'animate-login-key-reveal' : ''}`}
           >
             0
+            {!isExiting && <span className="animate-login-key-scanline pointer-events-none absolute left-0 right-0 h-0.5 bg-brand-neon opacity-0 shadow-[0_0_8px_1px_rgba(0,255,163,0.8)]" />}
           </button>
 
           <button
@@ -366,12 +386,13 @@ function Login() {
             onClick={handleBackspace}
             aria-label="Backspace"
             style={{
-              transition: `transform ${(isExiting || !hasEntered) ? '1400ms' : '100ms'}, opacity 1400ms, background-color 150ms`,
-              ...((isExiting || !hasEntered) ? flyTransform(11) : {}),
+              transition: `transform ${isExiting ? '1400ms' : '100ms'}, opacity 1400ms, background-color 150ms`,
+              ...(isExiting ? flyTransform(11) : { '--key-i': 11 }),
             }}
-            className="rounded-2xl border border-neutral-800 bg-neutral-900 py-4 text-xl font-medium text-app-text active:bg-neutral-800 disabled:opacity-50"
+            className={`relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 py-4 text-xl font-medium text-app-text active:bg-neutral-800 disabled:opacity-50 ${!isExiting ? 'animate-login-key-reveal' : ''}`}
           >
             ⌫
+            {!isExiting && <span className="animate-login-key-scanline pointer-events-none absolute left-0 right-0 h-0.5 bg-brand-neon opacity-0 shadow-[0_0_8px_1px_rgba(0,255,163,0.8)]" />}
           </button>
         </div>
       </div>
