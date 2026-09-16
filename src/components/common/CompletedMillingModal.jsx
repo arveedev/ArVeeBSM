@@ -119,10 +119,23 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
     setPendingUncomplete(null)
     setRevertingId(order.orderId)
     setTimeout(() => {
-      db.millingOrders.update(order.orderId, { manuallyCompleted: false })
-      // Best-effort, fire-and-forget - clears the Sheet's STATUS cell
-      // back to blank so it doesn't keep showing DONE there after
-      // being reverted to pending in the app.
+      // Clears the LOCAL sheetStatus cache too, not just
+      // manuallyCompleted - isOrderCompleted (MillingMonitor.jsx) is
+      // `manuallyCompleted || sheetStatus === 'DONE'`, an OR of both
+      // flags, so leaving the cached sheetStatus at 'DONE' kept the
+      // order stuck in Completed even with manuallyCompleted correctly
+      // cleared - a real, reported case: reverted here, confirmed the
+      // Sheet itself no longer said DONE, but the order still didn't
+      // move back to Pending, because the stale LOCAL copy of
+      // sheetStatus (only ever refreshed by the next full
+      // syncMillingOrdersFromSheets pull, see runMillingOrdersSync in
+      // googleSheetsBridge.js) still read 'DONE' in the meantime.
+      // Setting it to null here immediately makes the app's own state
+      // consistent without waiting on that next sync.
+      db.millingOrders.update(order.orderId, { manuallyCompleted: false, sheetStatus: null })
+      // Best-effort, fire-and-forget - clears the Sheet's own STATUS
+      // cell too, so the two stay in agreement once the next sync does
+      // run (and so anyone viewing the Sheet directly sees it blank).
       markMillingOrderDone(order.type, order.number, '')
     }, ROW_EXIT_MS)
   }

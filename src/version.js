@@ -3922,4 +3922,12 @@
 //            the Sheet directly) had no revert button anywhere in the
 //            app. Now offered for sheetStatus 'DONE' too, so an admin
 //            can un-stick an already-affected MO/TMO from here.
-export const APP_VERSION = '1.10-23'
+//   1.10-24 - Fixed the revert-to-pending fix itself: unchecking a
+//            completed MO/TMO cleared manuallyCompleted but left the
+//            LOCAL cached sheetStatus still reading 'DONE' - only the
+//            next full background sync would have refreshed it, so the
+//            order stayed stuck in Completed even after the Sheet
+//            itself was confirmed no longer DONE. Now clears sheetStatus
+//            locally in the same update, so reverting moves an order
+//            back to Pending immediately.
+export const APP_VERSION = '1.10-24'
