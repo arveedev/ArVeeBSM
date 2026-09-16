@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import { dangerButtonClass } from './shared.js'
@@ -80,7 +80,9 @@ function ErrorLogPanel() {
                     onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                     className="flex flex-1 items-start gap-2 px-3 py-2.5 text-left"
                   >
-                    <AlertTriangle size={15} className="mt-0.5 shrink-0 text-brand-crimson" />
+                    {entry.resolved
+                      ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-brand-neon" />
+                      : <AlertTriangle size={15} className="mt-0.5 shrink-0 text-brand-crimson" />}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-medium text-app-text">{entry.context}</span>
@@ -93,6 +95,16 @@ function ErrorLogPanel() {
                         {entry.deviceLabel ?? 'Unknown device'}
                       </p>
                       <p className="mt-1 break-words text-xs text-neutral-400">{entry.message}</p>
+                      {/* Only ever present on a sync-failure entry
+                          (logSyncFailure/resolveSyncFailure, see
+                          errorLog.js) - the record this failure was
+                          about later synced successfully on its own,
+                          on a subsequent automatic retry. */}
+                      {entry.resolved && (
+                        <p className="mt-1.5 rounded-md bg-brand-neon/10 px-2 py-1 text-xs font-medium text-brand-neon">
+                          ✓ Resolved — this record synced successfully{entry.resolvedAt ? ` on ${fmtTimestamp(entry.resolvedAt)}` : ''}.
+                        </p>
+                      )}
                       {isExpanded && (
                         <>
                           {entry.deviceId && (

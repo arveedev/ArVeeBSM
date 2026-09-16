@@ -13,6 +13,7 @@ import { db } from '../db/dexie.js'
 import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
 import { preloadTransactionsForUser } from './transactionPreload.js'
 import { pauseTransactionSync, resumeTransactionSync, isTransactionSyncPaused } from './syncPauseState.js'
+import { logSyncFailure, resolveSyncFailure } from '../utils/errorLog.js'
 
 // Re-exported so every existing form import (`from
 // '../../services/syncWorker.js'`) keeps working unchanged - see
@@ -127,18 +128,32 @@ const runSyncQueue = async () => {
         )
 
         if (result.ok) {
-          await db.transactions.update(tx.id, { isSynced: true, hasBeenBackedUp: true })
+          await db.transactions.update(tx.id, { isSynced: true, hasBeenBackedUp: true, syncFailureLogged: false })
           synced += 1
+          // This record had a logged failure from an earlier cycle -
+          // it just synced, so that entry gets marked resolved instead
+          // of sitting in the admin log looking permanently broken.
+          if (tx.syncFailureLogged) await resolveSyncFailure(tx.id)
         } else {
           console.error(
             `Sheets backup ${tx.hasBeenBackedUp ? 'update' : 'append'} failed for ${tx.type} ${tx.serialNo}:`,
             result
           )
           failed += 1
+          // Logged once per genuinely-persistent failure, not on every
+          // 30s retry cycle - see syncFailureLogged's own comment above.
+          if (!tx.syncFailureLogged) {
+            await logSyncFailure('Sheet sync', `${tx.type} ${tx.serialNo} failed to push to the Sheet - will keep retrying automatically every 30s.`, tx.id)
+            await db.transactions.update(tx.id, { syncFailureLogged: true })
+          }
         }
       } catch (err) {
         console.error(`Sheets backup failed for transaction ${tx.id} (${tx.type} ${tx.serialNo}):`, err)
         failed += 1
+        if (!tx.syncFailureLogged) {
+          await logSyncFailure('Sheet sync', `${tx.type} ${tx.serialNo} failed to push to the Sheet (${err?.message ?? err}) - will keep retrying automatically every 30s.`, tx.id)
+          await db.transactions.update(tx.id, { syncFailureLogged: true })
+        }
       }
     }
 
@@ -158,13 +173,22 @@ const runSyncQueue = async () => {
           }
           await db.pendingSheetDeletions.delete(deletion.id)
           synced += 1
+          if (deletion.syncFailureLogged) await resolveSyncFailure(deletion.id)
         } else {
           console.error(`Sheets delete-backup failed for ${deletion.type} ${deletion.serialNo}:`, result)
           failed += 1
+          if (!deletion.syncFailureLogged) {
+            await logSyncFailure('Sheet sync', `Delete of ${deletion.type} ${deletion.serialNo} failed to push to the Sheet - will keep retrying automatically every 30s.`, deletion.id)
+            await db.pendingSheetDeletions.update(deletion.id, { syncFailureLogged: true })
+          }
         }
       } catch (err) {
         console.error(`Sheets delete-backup failed for serial ${deletion.serialNo}:`, err)
         failed += 1
+        if (!deletion.syncFailureLogged) {
+          await logSyncFailure('Sheet sync', `Delete of ${deletion.type} ${deletion.serialNo} failed to push to the Sheet (${err?.message ?? err}) - will keep retrying automatically every 30s.`, deletion.id)
+          await db.pendingSheetDeletions.update(deletion.id, { syncFailureLogged: true })
+        }
       }
     }
   } finally {
@@ -283,7 +307,16 @@ export const startSyncWorker = (onSyncComplete) => {
   }
 }
 
-const AUTHORITY_SYNC_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+// Was 5 minutes - reported directly as too slow for a new AI/SIA
+// authority (or any Sheet edit) to actually show up in the app. Both
+// syncAuthoritiesFromSheets and syncMillingOrdersFromSheets are already
+// full-table re-fetches designed to run forever on a fixed cadence (see
+// their own comments - a cheap enough operation at this data's real
+// scale), so there's no technical reason to hold this at 5 minutes; 1
+// minute matches the app's other periodic pulls (BACKUP_QUEUE_RETRY_
+// INTERVAL_MS, TRANSACTION_SYNC_INTERVAL_MS) far more closely while
+// still well short of hammering the Apps Script backend.
+const AUTHORITY_SYNC_INTERVAL_MS = 60 * 1000
 
 /**
  * Periodically pulls fresh AI/SIA allocation data from the configured

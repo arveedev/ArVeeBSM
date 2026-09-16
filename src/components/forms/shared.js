@@ -100,7 +100,19 @@ export const attachCenterFocusScroll = (containerEl) => {
     // fixed header/keyboard) still gets the original center-scroll.
     const rect = el.getBoundingClientRect()
     const margin = 80
-    const comfortablyVisible = rect.top >= margin && rect.bottom <= window.innerHeight - margin
+    // visualViewport.height, not window.innerHeight, for the bottom
+    // bound - real regression, reported directly ("no more auto-focus
+    // on the entry forms"): on a phone, opening the on-screen keyboard
+    // shrinks the VISUAL viewport but window.innerHeight commonly stays
+    // the LAYOUT viewport's full height in most mobile browsers, so this
+    // check was reading a field as "comfortably visible" (against the
+    // full, keyboard-ignoring height) and skipping the scroll exactly
+    // when the keyboard was actually covering it - the tapped field
+    // never came into view, reading as focus not working at all.
+    // visualViewport is undefined on desktop/older browsers, where
+    // innerHeight is already correct and this falls back to it.
+    const viewportH = window.visualViewport?.height ?? window.innerHeight
+    const comfortablyVisible = rect.top >= margin && rect.bottom <= viewportH - margin
     if (comfortablyVisible) return
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }

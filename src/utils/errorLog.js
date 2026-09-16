@@ -113,3 +113,59 @@ export const logError = async (context, error, user) => {
     console.error('[errorLog] failed to record error:', loggingErr)
   }
 }
+
+/**
+ * Records a background SHEET SYNC failure - distinct from logError's
+ * crash-report shape, this one is for the "failed to sync" case
+ * specifically: the app already retries a failed push forever (every
+ * BACKUP_QUEUE_RETRY_INTERVAL_MS, see syncWorker.js) until it lands, so
+ * a plain "sync failed" toast on every transient hiccup was reported as
+ * alarming/concerning for no real reason most of the time - the thing
+ * usually fixes itself moments later. This writes to the same
+ * errorLogs table instead (admin-only, silent to the regular user),
+ * carrying `refId` (the specific record this failure is about) and
+ * starting `resolved: false`, so resolveSyncFailure below can find and
+ * update THIS SAME entry once that record's next retry actually
+ * succeeds - the log then tells the whole story (failed, then synced)
+ * instead of leaving a permanently alarming-looking entry for something
+ * that's actually fine now.
+ */
+export const logSyncFailure = async (context, message, refId) => {
+  try {
+    await db.errorLogs.add({
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      context,
+      message,
+      stack: null,
+      userName: null,
+      userRole: null,
+      deviceId: getDeviceId(),
+      deviceLabel: getDeviceLabel(),
+      refId,
+      resolved: false,
+    })
+    const count = await db.errorLogs.count()
+    if (count > MAX_ENTRIES) {
+      const oldest = await db.errorLogs.orderBy('timestamp').limit(count - MAX_ENTRIES).toArray()
+      await db.errorLogs.bulkDelete(oldest.map((e) => e.id))
+    }
+  } catch (loggingErr) {
+    console.error('[errorLog] failed to record sync failure:', loggingErr)
+  }
+}
+
+/**
+ * Marks every still-unresolved sync-failure log entry for `refId` as
+ * resolved - call the moment that same record's push finally succeeds
+ * on a later retry.
+ */
+export const resolveSyncFailure = async (refId) => {
+  if (!refId) return
+  try {
+    const matches = await db.errorLogs.filter((e) => e.refId === refId && e.resolved !== true).toArray()
+    await Promise.all(matches.map((e) => db.errorLogs.update(e.id, { resolved: true, resolvedAt: new Date().toISOString() })))
+  } catch (loggingErr) {
+    console.error('[errorLog] failed to resolve sync failure:', loggingErr)
+  }
+}

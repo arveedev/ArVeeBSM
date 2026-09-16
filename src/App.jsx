@@ -159,9 +159,17 @@ function App() {
       if (result.synced > 0) {
         toast.success(`Synced ${result.synced} record${result.synced === 1 ? '' : 's'} to cloud`)
       }
-      if (result.failed > 0) {
-        toast.error(`${result.failed} record${result.failed === 1 ? '' : 's'} failed to sync`)
-      }
+      // No toast on result.failed anymore - reported directly as
+      // alarming/concerning to see on a device someone's just using
+      // day to day, for something the app already retries automatically
+      // every 30s (see BACKUP_QUEUE_RETRY_INTERVAL_MS in syncWorker.js)
+      // until it lands - most "failures" are a transient connection
+      // blip that's already fixed itself moments later. A genuinely
+      // persistent failure is now logged to the admin-only Error Log
+      // instead (see logSyncFailure in syncWorker.js's runSyncQueue),
+      // with a matching "resolved" note once that same record does
+      // finally sync - visible to whoever should actually act on it,
+      // without frightening whoever's just standing at the tablet.
     })
 
     return cleanup

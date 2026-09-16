@@ -3976,4 +3976,37 @@
 //            6. Every place that displays a saved trial number now
 //               shows "Trials 1, 2 and 3" for that All-Trials case, not
 //               the raw dropdown option text "All Trials".
-export const APP_VERSION = '1.10-26'
+//   1.10-27 - Three more fixes, reported directly:
+//            1. Fixed a real regression from 1.10-26's own focus-jitter
+//               fix: the "skip the scroll if the field looks visible"
+//               check used window.innerHeight for the bottom bound,
+//               which most mobile browsers do NOT shrink when the
+//               on-screen keyboard opens (only the visual viewport
+//               does) - so a tapped field near the bottom half of the
+//               screen was judged "comfortably visible" against the
+//               full, keyboard-ignoring height and never got scrolled
+//               above the keyboard, reading as "no more auto-focus."
+//               Now uses window.visualViewport's real height when
+//               available, falling back to innerHeight elsewhere.
+//            2. New AI/SIA authorities (and any other Sheet edit) were
+//               reported as taking too long to reach the app - the
+//               periodic pull was every 5 minutes. Both
+//               syncAuthoritiesFromSheets and syncMillingOrdersFromSheets
+//               are already cheap, full-table re-fetches designed to run
+//               forever on a fixed cadence, so there was no real reason
+//               to hold this that far back - dropped to 1 minute,
+//               matching the app's other periodic pulls far more
+//               closely.
+//            3. The background "N record(s) failed to sync" toast is
+//               gone - reported directly as alarming/concerning to see
+//               on a device someone's just using day to day, for
+//               something the app already retries automatically every
+//               30s until it lands (most "failures" are a transient
+//               blip already fixed by the time anyone reads the toast).
+//               A genuinely persistent failure is now logged to the
+//               admin-only Error Log instead (which record, which
+//               device), and gets a "Resolved — synced successfully"
+//               note added to that same entry the moment a later retry
+//               actually lands, instead of just vanishing silently or
+//               leaving a permanently alarming-looking entry behind.
+export const APP_VERSION = '1.10-27'
