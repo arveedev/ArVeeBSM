@@ -170,8 +170,19 @@ function Login() {
       toast.error('Invalid access PIN')
       setPin('')
       setShakeKey((k) => k + 1)
-      inputRef.current?.focus()
       setIsSubmitting(false)
+      // Deferred, not called inline: the hidden input is still
+      // `disabled` (from isSubmitting) in the actual DOM right here -
+      // the setIsSubmitting(false) above hasn't been rendered yet, React
+      // only commits it after this handler finishes - and a disabled
+      // element silently refuses focus(). That left the input neither
+      // focused nor re-focusable afterward (no blur event ever fires to
+      // trigger handlePinInputBlur's own refocus, since focus never
+      // actually landed), so physical keyboard typing stopped working
+      // after any wrong PIN - reported directly. setTimeout(0) waits for
+      // the re-render to actually commit (enabling the input) before
+      // focusing it, same pattern handlePinInputBlur already uses below.
+      setTimeout(() => inputRef.current?.focus(), 0)
     }
   }
 

@@ -3930,4 +3930,15 @@
 //            itself was confirmed no longer DONE. Now clears sheetStatus
 //            locally in the same update, so reverting moves an order
 //            back to Pending immediately.
-export const APP_VERSION = '1.10-24'
+//   1.10-25 - Fixed physical keyboard PIN entry breaking after a wrong
+//            PIN on the login page. The error handler called the hidden
+//            PIN input's focus() while it was still `disabled` in the
+//            actual DOM (the setIsSubmitting(false) that re-enables it
+//            hadn't been rendered yet at that point in the handler), so
+//            the browser silently refused the focus - leaving nothing
+//            focused, and no later blur event to trigger the existing
+//            refocus-on-blur logic either, since focus never actually
+//            landed. Deferred the focus() with setTimeout(0), same
+//            pattern already used elsewhere on this page, so it runs
+//            after the input is actually re-enabled.
+export const APP_VERSION = '1.10-25'
