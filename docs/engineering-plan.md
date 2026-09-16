@@ -211,10 +211,67 @@ fixes across every earlier phase.
   cross-device error capture) as operational/support tooling, added
   once the app was in daily real use and needed to be supportable
   remotely.
+- This cadence continued past Phase 8: an MO/TMO completion regression
+  (a form save was still auto-writing DONE to the Sheet despite an
+  earlier fix that only ever addressed the local "looks done" display
+  signal, not this actual write path — the same bug, reintroduced via a
+  second, previously-missed code path), a mobile keyboard/focus
+  regression from an unrelated jitter fix (§ design-brief.md's own
+  note on `visualViewport`), and a sync-latency/alarming-toast
+  complaint that led to the Error Log's `resolved`/`refId` fields
+  (backend-schema.md §7) — each a reminder that this phase never
+  formally ends for an app in continuous field use.
 
 **Milestone**: the app is in daily production use across multiple
 warehouses with no open data-integrity bug, and every NFA report type
 has been validated against a real signed paper counterpart.
+
+## Phase 8 — Disbursing Officer (SDO)
+
+**Goal**: a fourth, structurally separate role — cash payment to farmers
+for Palay already received — built and shipped without touching any
+existing warehouse-operations screen or table.
+
+- Followed an explicit plan → interactive demo → build cycle: extensive
+  codebase exploration, then HTML/CSS demo artifacts iterated through
+  several rounds of feedback, before any real code was written, per
+  direct instruction to keep this feature contained in its own space.
+- `sdoCalculations.js` centralizes every payment formula (ENW, Basic
+  Cost, Pricer, Cash on Hand) as pure functions, mirroring how
+  `pileLedger.js` centralizes apply/reverse for the warehouse side (TDD
+  §2.7) — one place these rules live, not re-implemented per screen.
+- **A self-inflicted production incident, and its correct fix**: an
+  early schema change (`cashLedger` using a Dexie native auto-increment
+  key, the only such key anywhere in this schema) broke Dexie Cloud
+  sync for the *entire app*, not just this feature — every user, not
+  just SDO users. The first attempted emergency fix (redefining the
+  same table's primary key in place across versions) made it
+  categorically worse: IndexedDB does not support changing an existing
+  object store's primary key in place, and the attempt crashed every
+  user's local database outright. The real fix — a genuinely new table
+  name (`cashLedgerV2`) rather than redefining the old one, with the
+  dead table left declared exactly as-is and added to `unsyncedTables`
+  — is now the standing rule for any future primary-key change (TDD
+  §3.4 already stated this for `serialCounterCache`; this incident
+  confirmed it the hard way a second time).
+- Duplicate-PR protection: a same-device double-tap/race is closed by
+  making the existing-PR check and the write one atomic Dexie
+  transaction; a cross-device race (two offline devices, both issuing
+  before either syncs) can't be closed client-side, so it's made
+  *detectable and recoverable* instead — surfaced as a banner, resolved
+  by cancelling the extra PR — rather than silently producing a
+  duplicate payment with no way to notice it.
+- A large volume of live-device-testing rounds followed shipping,
+  following the same pattern as Phase 7's field-testing cadence:
+  UI/UX fixes, several business-rule corrections (each superseding an
+  earlier stated version of the same rule — the standing instruction
+  is to always follow the *latest* correction), and PDF layout fixes
+  against real printed samples.
+
+**Milestone**: an SDO can pay a farmer end-to-end (issue a Purchase
+Receipt, track Cash on Hand, export a period's Abstract of Cereal
+Purchases) with zero changes required to any existing warehouse
+role's own screens or data.
 
 ## Testing and Rollout Approach
 

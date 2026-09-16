@@ -36,6 +36,12 @@ keypad is the fastest, most reliable path into the app on a shared device.
   signatory/reporting purposes.
 - **MPO III** / **Acting MPO III** — same access pattern, for staff whose
   formal title differs from the two roles above.
+- **SDO (Disbursing Officer)** — structurally separate from the four
+  warehouse-operations roles above: an SDO has no `assignedWarehouses`
+  of their own. They pay farmers, in cash, for Palay already received
+  into any warehouse via WSR — see §10. Their Home/Settings are their
+  own dedicated screens, not a restricted view of the warehouse-role
+  screens.
 - **Visitor** — a single shared, admin-set 6-digit access code (not a real
   user account) grants a strictly read-only cross-warehouse view (Home and
   Monitor only). A Visitor session can never reach a transaction form, the
@@ -148,6 +154,19 @@ the NFA-owned mechanism below), `ricemillAllocations` (regionalAuthorityNumber,
 totalNetKgs authorized, millingInputCapacityBags — the mill's own daily
 processing rate). NFA-owned Ricemills and Mechanical Dryers use ONLY the
 Regional Authority Number mechanism, never MO/TMO numbers.
+
+**Disbursing (SDO)** — `buyingPrices` (versioned by effectiveFrom, never
+mutated in place — an older PR still resolves against whatever price was
+actually in effect on its own date), `purchaseReceipts` (the PR reference
+screen's own snapshot — classification/weight/cost fields are captured
+at issuance and never re-read live afterward, so a later Buying Price or
+variety edit can't reshape an already-issued document), `enwFactors`
+(admin-maintained ENW lookup table: Purity letter × D&D bracket × MC
+bracket → factor), `pricerEligibility` (per-SDO admin toggle),
+`cashLedgerV2` (Replenish/Liquidate entries; a voided entry stays on
+record with its reason, simply excluded from the Cash on Hand sum),
+`cashDenominationCounts` (one row per SDO, a physical-cash reconciliation
+snapshot — never itself a source for Cash on Hand). See §10.
 
 **Directories and aliasing** — `customers` (autocomplete directory built
 as forms are saved), `customerAliases` (maps a short AI/SIA nickname to a
@@ -263,8 +282,62 @@ millers are authorized completely differently:
   Net Bags/Net Kgs land in the same position whether or not a row has a
   per-item AI number or variety to show — with a running Issuance vs.
   allocation total and a recovery percentage.
+- **Completion is manual-only, always.** An MO/TMO's own kg/piece
+  recovery math (and, for Test Milling, whether all 3 trials have any
+  recovery yet) is purely an informational "looks done" signal — it is
+  never allowed to write a completion status anywhere on its own. The
+  only way an MO/TMO is ever marked DONE is an admin/supervisor
+  explicitly tapping complete on it in the Milling Operations monitor.
+  A Test Milling trial selector also supports one combined receipt
+  covering all 3 trials at once ("All Trials"), displayed everywhere
+  else as "Trials 1, 2 and 3."
 
-## 10. Reporting
+## 10. Disbursing Officer (SDO)
+
+A fourth role, structurally separate from the warehouse-operations roles
+in §2 — an SDO is never assigned a warehouse the way a Supervisor/
+Assistant is; instead they pay farmers, in cash, for Palay already
+received into a warehouse via WSR, computed from an NFA-published
+Equivalent Net Weight (ENW) factor table.
+
+- **Payment computation**: Equivalent Net Weight = Net Kilos × the ENW
+  factor looked up by the WSR's own classification (Purity letter, D&D
+  bracket — both fixed per Palay variety, admin-configured) and Moisture
+  Content at the time of payment. Basic Cost = ENW × the Buying Price (Dry
+  or Wet, whichever the variety's moisture state calls for) active on the
+  payment's own date — not necessarily today's price, and not the WSR's
+  own (often earlier, backlogged) encoding date. An optional per-SDO
+  Pricer incentive (admin-toggled eligibility, never a branch-wide
+  switch) adds a Rate × ENW amount on top.
+- **Cash on Hand is always derived live** — Replenishments minus
+  Liquidations minus the sum of this SDO's own Active Purchase Receipts —
+  never a stored running number, so cancelling or voiding a Purchase
+  Receipt (or a cash entry) reverts the cash automatically the instant it
+  stops counting.
+- **A Purchase Receipt is a reference screen, not the real paper
+  document** — the actual PR is hand-written NFA paper; the app only
+  auto-computes what the SDO copies onto it and records the payment so
+  the underlying WSR shows as Paid. A WSR's paid status is derived purely
+  from an Active Purchase Receipt existing against it (never a flag
+  written onto the WSR itself), so cancelling a PR can never touch the
+  original stock record.
+- **Abstract of Cereal Purchases** exports as a PDF matching the real NFA
+  paper form exactly (8.5 × 13 in landscape, not A4), including a Cash
+  Reconciliation block with a running TOTAL after the opening balance and
+  after every deduction, and a Basic Cost column shown only when Pricer
+  applies to at least one Purchase Receipt in the exported period —
+  decided per-export from each PR's own stored data, not the SDO's
+  current-moment eligibility toggle, so a period that genuinely mixes
+  Pricer-on and Pricer-off receipts still reconciles correctly regardless
+  of what Admin has since changed.
+- **Settings-level cash review**: a "Cash Balance" section (Denomination
+  Count + Cash History) lives on the SDO's own Settings page, not Home —
+  Home stays focused on today's actions (issuing a PR, Replenish/
+  Liquidate). Cash History supports editing or voiding a past
+  Replenish/Liquidate entry directly, with a year selector limited to
+  years that actually have data.
+
+## 11. Reporting
 
 Full NFA-format paper report set, matching the real forms exactly
 (REGION/PROVINCE/CODE/WHSE header block, five-signatory sign-off layout):
@@ -279,7 +352,7 @@ WTS's two-sided structure. PDF export never truncates a field — long
 values wrap instead, with every wrapped line's height reserved correctly
 in the layout.
 
-## 11. Data Integrity Principles
+## 12. Data Integrity Principles
 
 - A transaction is never physically deleted — only marked Cancelled — so
   historical reconstruction (reports, pile state as of a date) is always
@@ -295,7 +368,7 @@ in the layout.
 - PINs are one-way hashed before storage or comparison; nothing in the
   app ever displays or pre-fills a stored PIN.
 
-## 12. Technical Foundation
+## 13. Technical Foundation
 
 Vite + React, Tailwind CSS. Dexie.js (IndexedDB) as the only data layer
 every screen reads from; Dexie Cloud for sync. jsPDF + jspdf-autotable for
@@ -313,7 +386,7 @@ caught form save/update/delete/void failure and page-level crash
 on which device, so a field-reported bug can be diagnosed centrally without
 needing physical access to the device it happened on.
 
-## 13. Target Users
+## 14. Target Users
 
 - **Warehouse Supervisor / Acting Warehouse Supervisor** — the primary
   daily user. Records WSR/WSI/WTS/ESR/ESI transactions for their assigned
@@ -336,7 +409,7 @@ needing physical access to the device it happened on.
   Android phone or a shared warehouse tablet, frequently with poor or no
   signal — this shapes nearly every other decision in this document.
 
-## 14. Out of Scope
+## 15. Out of Scope
 
 The following are deliberately **not** part of this app, now or in any
 currently planned phase:
@@ -359,7 +432,7 @@ currently planned phase:
 - Direct printer integration — reports are exported as PDF/image files
   for the user to print or share through their device's own OS.
 
-## 15. Success Criteria
+## 16. Success Criteria
 
 - A warehouse Supervisor can record a full day's WSR/WSI/WTS/ESR/ESI
   activity, including printing/exporting that day's reports, with zero

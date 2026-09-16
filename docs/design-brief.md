@@ -232,6 +232,26 @@ one-off `@keyframes` block. Representative patterns already established:
   distinct rotate+zoom entrance and a slide+fade exit, differentiating
   a genuinely modal, edge-to-edge experience from the app's ordinary
   page-slide navigation.
+- **Login's entrance** ("Magnetic Snap" + "Scan Reveal"): the logo,
+  title, subtitle, and PIN dots each pull in fast from a different
+  direction (top/left/right/bottom) with a real elastic overshoot; the
+  keypad's own buttons reveal via a bright scan line sweeping down each
+  one instead of sliding in. Implemented as real CSS `@keyframes`, with
+  no `forwards`/`both` fill-mode on any of them — a held fill-mode
+  animation takes precedence over any later inline-style transform on
+  the same property (this is what the exit's own fly-out relies on),
+  so an entrance meant to play once and let go must never hold its
+  final frame. The one exception is `backwards`, used to hold a
+  staggered element's *first* frame during its own delay — that
+  direction is safe, since it never persists after the animation ends.
+- **A field's own "scroll into view on focus"** only fires when the
+  field genuinely isn't visible, using `window.visualViewport`'s
+  height (not `window.innerHeight`, which most mobile browsers do not
+  shrink when the on-screen keyboard opens) to judge "visible" — so the
+  fix for one bug (unconditional scrolling read as a jittery shake when
+  tabbing between already-visible fields) never reintroduces the
+  original problem it was solving (a field left hidden under the
+  keyboard) on a phone specifically.
 
 ## 7. Iconography
 

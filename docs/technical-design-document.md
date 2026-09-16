@@ -237,6 +237,71 @@ query every overlapping source and merge results, so an authority issued
 in December still has real remaining balance to issue against in
 January without the app ever losing track of it.
 
+### 2.9 SDO's cash tables are a new, dead-table-cautionary case, not an exception to 2.5's discipline
+
+**Decision**: `cashLedgerV2` replaced an early `cashLedger` design that
+used a Dexie native auto-increment key — the only such key anywhere in
+this schema. The dead `cashLedger` table stays declared, forever,
+exactly as it shipped, and is added to `unsyncedTables` defensively even
+though nothing writes to it any more.
+
+**Rationale**: an auto-increment key can't guarantee global uniqueness
+across offline devices before it reaches the sync server, which broke
+Dexie Cloud sync for the entire app, not just this one feature — the
+same class of risk 3.4 already documents for `serialCounterCache`,
+confirmed a second time via a real production incident. The recovery
+path is the same rule stated there: a structural primary-key change is
+a **new table name** in a later schema version, never an in-place
+redefinition of an existing one — IndexedDB rejects that outright at
+the database layer (a harder failure than the Dexie Cloud sync-request
+rejection 3.4 describes, since it prevents the local database from even
+opening), and the first emergency attempt at this exact fix demonstrated
+that concretely.
+
+### 2.10 Sheet-sync failures are logged, never toasted, to the regular user
+
+**Decision**: a push to the Google Sheets backup log that's still
+failing after one immediate inline retry is written to the admin-only
+`errorLogs` table (`refId` identifying the specific record, `resolved`
+starting false) instead of surfacing a `toast.error` to whichever user
+happens to be using the device at that moment. The moment that same
+record's push succeeds on a later automatic retry, the same log entry
+is updated (`resolved: true`, `resolvedAt`) rather than a new one
+being added or the original simply vanishing.
+
+**Rationale**: the sync worker already retries a failed push
+indefinitely, automatically, every `BACKUP_QUEUE_RETRY_INTERVAL_MS`
+(30s) — most "failures" a regular user would see were a transient
+connection blip already resolved by the time they read the toast,
+which trained the alarm to be ignored while still causing real,
+reported worry each time it fired. Moving this to a channel only an
+admin actively looks at (and only when they're actually diagnosing
+something) removes the false alarm without removing the underlying
+information — the admin can still see exactly which record failed, on
+which device, and whether it ultimately self-corrected.
+
+### 2.11 CSS entrance animations must release, not hold, the properties they touch
+
+**Decision**: any `@keyframes` animation meant to play once on mount
+(a page/element entrance) is written with **no `forwards` or `both`
+fill-mode** unless that element will never again need its `transform`/
+`opacity` set by anything else afterward. `backwards` remains safe to
+use (it only affects the state *before* a delayed animation starts, not
+after it ends).
+
+**Rationale**: a CSS Animation's held final-frame value (under
+`forwards`/`both`) sits at a higher cascade priority than an ordinary
+inline `style` or CSS transition on the same property, and silently
+wins over it — discovered directly when a page's exit animation (an
+inline-style `transform` applied on a later user action) stopped taking
+effect on an element whose entrance animation had finished with a held
+fill-mode still technically "active." The fix generalizes past that one
+screen: any entrance/exit pair sharing a transform-driven element on
+this app must be designed with which one, if either, actually needs to
+hold its final state — and default to neither holding, since letting an
+animation naturally release control back to the base cascade is what
+lets a later, unrelated piece of code still move that same element.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability
@@ -316,6 +381,12 @@ January without the app ever losing track of it.
   avoided in favor of the app's own custom-styled equivalents for visual
   and behavioral consistency across the Android/iOS/desktop browsers
   this PWA can be installed on.
+- Any "is this field currently visible" check must use
+  `window.visualViewport`'s height where available, not
+  `window.innerHeight` — most mobile browsers do not shrink the layout
+  viewport when the on-screen keyboard opens, only the visual one, so a
+  check against the wrong one can misjudge a field as visible while the
+  keyboard is actually covering it.
 
 ## 4. Deployment and Operations
 

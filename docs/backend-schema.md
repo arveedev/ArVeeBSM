@@ -4,22 +4,24 @@
 specifies the Dexie (IndexedDB) schema every table shall have, as a data
 model design — current final shape, not a version history (the
 version-by-version rationale already lives as inline comments in
-`src/db/dexie.js`, currently at schema version 32). Field lists describe
+`src/db/dexie.js`, currently at schema version 34). Field lists describe
 the meaningful application fields on each record; every table also
 carries whatever bookkeeping fields Dexie Cloud sync itself requires.*
 
 ## 1. Sync Model
 
-Every table syncs via Dexie Cloud **except** the four listed in
-`unsyncedTables`, which are deliberately per-device or structurally
-incompatible with sync:
+Every table syncs via Dexie Cloud **except** the six listed in
+`unsyncedTables`, which are deliberately per-device, structurally
+incompatible with sync, or dead:
 
 | Table | Why excluded |
 |---|---|
 | `serialCounterCache` | Per-device performance cache over the real source of truth (actual transaction history); its primary key has changed shape historically, which Dexie Cloud treats as an illegal schema change on an already-registered table if left syncing. |
+| `sdoSerialCounterCache` | Same per-device fast-tracker shape as `serialCounterCache` above, for Purchase Receipt numbers — real source of truth is `purchaseReceipts.prId` itself. |
 | `preloadState` | Per-device bookkeeping of what's already been pulled from the Sheets backup onto *this* device; meaningless to share across devices. |
 | `millingOrders` | A pure read-only cache re-fetched fresh from the Sheet by every device independently; nothing is lost by not syncing it. |
 | `privateMillerAllocations` | Its primary key is a compound key (`[regionalAuthorityNumber+ricemillName]`); Dexie Cloud sync does not support multi-part primary keys. Re-enabling would require migrating to a synthetic single-field id first. |
+| `cashLedger` | Dead/superseded by `cashLedgerV2` — an early version used a Dexie native auto-increment key (`id++`), the only such key anywhere in this schema, which broke Dexie Cloud sync for the *entire app* (not just this table) the moment it registered, since sync requires every synced primary key to already be globally unique before it reaches the server. Excluded defensively even though it's empty going forward — a version's own table declaration can never be removed outright once shipped. |
 
 Every other table listed below is a real, synced table. Primary keys on
 synced tables are application-generated (`crypto.randomUUID()` or a
@@ -240,7 +242,55 @@ sack documents and vice versa.
 | `[regionalAuthorityNumber+ricemillName]` (PK, compound) | | A Regional Authority Number shared across several private millers, each with its own, not-necessarily-equal share |
 | `regionalAuthorityNumber` | indexed | |
 
-## 6. Directories, Aliasing, and Configuration
+## 6. Disbursing (SDO)
+
+### `buyingPrices`
+| Field | Type | Notes |
+|---|---|---|
+| `id` (PK) | string | |
+| `effectiveFrom` | string (ISO date) | Indexed. Append-only — a correction is a NEW row, never an edit to an existing one, so an already-issued Purchase Receipt keeps resolving against whatever price was actually in effect on its own date (`resolveBuyingPrice()`) |
+| `dryPrice`, `wetPrice` | number | ₱/kg |
+| `createdAt` | number (epoch ms) | Same-day tie-break when two corrections share one `effectiveFrom` — the later `createdAt` wins |
+
+### `purchaseReceipts`
+| Field | Type | Notes |
+|---|---|---|
+| `prId` (PK) | string | Indexed |
+| `sdoUid` | string (FK → `users.uid`) | Indexed |
+| `wsrTransactionId` | string (FK → `transactions.id`) | Indexed. At most one Active row per WSR in practice — see TDD's SDO decision for how that's enforced |
+| `status` | string | Indexed. `'Active'` \| `'Cancelled'` |
+| Classification/weight/cost snapshot | | `classification`, `purityLetter`, `enwFactor`, `enw`, `unitCost`, `basicCost`, `pricerRate`, `pricerAmount`, `totalAmount`, etc. — captured once at issuance and never re-read live afterward, so a later Buying Price/ENW-table/variety edit can never reshape an already-issued PR |
+| `prNo` | string | Indexed. Unique per SDO, not globally — each SDO issues from their own numbered pad |
+
+### `enwFactors`
+| Field | Type | Notes |
+|---|---|---|
+| `id` (PK) | string | |
+| `purityLetter`, `ddMin`, `ddMax`, `mcMin`, `mcMax` | | Admin-maintained lookup key; MC brackets must not overlap (the app validates this on manual entry) — the first matching row wins otherwise |
+| `factor` | number | |
+
+### `pricerEligibility`
+| Field | Type | Notes |
+|---|---|---|
+| `uid` (PK, FK → `users.uid`) | string | |
+| `enabled` | boolean | Per-SDO admin toggle, never a branch-wide switch |
+
+### `cashLedgerV2`
+| Field | Type | Notes |
+|---|---|---|
+| `id` (PK) | string | |
+| `sdoUid` | string (FK) | Indexed |
+| `type` | string | Indexed. `'replenish'` \| `'liquidate'` |
+| `amount`, `refNo`, `date` | | |
+| `voided` | boolean | A voided entry stays on record (with `voidReason`) — simply excluded from the Cash on Hand sum, never deleted |
+
+### `cashDenominationCounts`
+| Field | Type | Notes |
+|---|---|---|
+| `sdoUid` (PK) | string | One row per SDO |
+| `counts` | object | Per-denomination `{ bundles, pcs }` — a physical reconciliation snapshot only, never itself a source for Cash on Hand |
+
+## 7. Directories, Aliasing, and Configuration
 
 ### `customers`
 | Field | Type | Notes |
@@ -321,8 +371,10 @@ autocomplete + auto-fill on every Customer Name field.
 | `id` (PK) | string | `crypto.randomUUID()` |
 | `timestamp` | string (ISO) | Indexed |
 | Error detail, user, device | | Captures form save/update/delete/void failures and `SectionErrorBoundary`-caught page crashes; deliberately synced (unlike the per-device caches above) so an admin can review what broke on any device from anywhere |
+| `refId` | string, optional | Only present on a background sheet-sync-failure entry (`logSyncFailure()`) — the specific `transactions`/`pendingSheetDeletions` row this failure is about, so a later successful retry can find and update this exact entry rather than leaving it stale |
+| `resolved`, `resolvedAt` | boolean, string (ISO) | Set the moment that same record's push finally succeeds on a later automatic retry — a sync failure is never shown to the regular user as an alarming toast (see app-flow.md §8); this is the only place it surfaces, and it tells the whole story (failed, then synced) rather than just disappearing |
 
-## 7. Entity-Relationship Summary
+## 8. Entity-Relationship Summary
 
 ```
 branches ──< provinces ──< warehouses ──< piles ──< transactions (WSR/WSI/WTS)
@@ -344,6 +396,10 @@ ricemillAllocations ──(regionalAuthorityNumber)── authorities
 
 customers ──< transactions (customerName, loose reference by value)
 warehouseAliases / customerAliases / userAliases → canonical warehouses / customers / users
+
+users (role: SDO) ──< purchaseReceipts ──(wsrTransactionId)── transactions (WSR)
+users (role: SDO) ──< cashLedgerV2, cashDenominationCounts
+buyingPrices, enwFactors, pricerEligibility — global/per-SDO config, not tied to any one warehouse
 
 reportConfig, googleSheetsConfig, settings — global singletons
 sheetSources — one-or-many, date-ranged

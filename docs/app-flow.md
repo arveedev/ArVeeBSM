@@ -54,13 +54,22 @@ rather than the app navigating away and back.
 4. **Match**: the login screen plays its exit animation (buttons fly
    outward, then the screen fades), the authenticated shell fades in,
    and the user lands on `/` — `Home` for an assigned-warehouse role,
-   `AdminHome` for Admin or Visitor.
+   `AdminHome` for Admin or Visitor, `SdoHome` for an SDO.
 5. **No match**: an inline error shows, the dots clear, and the keypad
    is ready for another attempt — no lockout, no "forgot PIN" flow (an
    admin resets a user's PIN directly from the Users panel in Admin
-   Dashboard).
-6. On successful login, three background workers start silently: the
-   Sheets backup sync queue, the AI/SIA + MO/TMO authority sync, and (for
+   Dashboard). The hidden physical-keyboard input re-focuses itself
+   automatically once re-enabled, so typing a new attempt works
+   immediately without needing to tap back into the field first.
+6. On mount, the screen plays its own entrance — logo/title/subtitle/PIN
+   dots each pull in fast from a different direction with an elastic
+   overshoot ("Magnetic Snap"), and the keypad's own buttons reveal via
+   a scan line sweeping down each one ("Scan Reveal") — entirely
+   separate motion from the exit animation in step 4, sharing none of
+   its transform values.
+7. On successful login, three background workers start silently: the
+   Sheets backup sync queue, the AI/SIA + MO/TMO authority sync (every
+   1 minute), and (for
    the first login on a device, or the first time a given warehouse/type
    combination is touched) a transaction history preload — none of these
    block the user from immediately opening a form.
@@ -238,8 +247,8 @@ reliability is built around.
    the header's sync-status icon shows a static "pending" state rather
    than actively animating.
 2. Connectivity returns (browser `online` event, or the periodic
-   background retry timer fires regardless of that event, since mobile
-   network transitions are not always reported reliably).
+   background retry timer fires every 30s regardless of that event,
+   since mobile network transitions are not always reported reliably).
 3. The sync worker acquires a cross-tab lock (Web Locks API, falling
    back to a same-tab in-memory flag where unsupported) so only one tab
    of the same device runs a sync pass at a time.
@@ -254,11 +263,53 @@ reliability is built around.
    database with every other device sharing the same shared service
    account identity, in the background, with no explicit user action.
 7. The header's sync icon animates (pulses, then briefly shows a
-   checkmark ripple) once a push completes; a toast summarizes how many
-   records synced or failed. A failed push is retried on the next sync
-   pass rather than requiring the user to manually resend it.
+   checkmark ripple) once a push completes; a toast confirms how many
+   records synced. A failed push is never surfaced to the regular user
+   as an alarming toast — it's retried automatically on the next 30s
+   sync pass, and a genuinely persistent failure (still failing after
+   one immediate inline retry) is logged instead to the admin-only
+   Error Log, identifying which record and which device. The instant a
+   later retry succeeds, that same log entry gets a "Resolved — synced
+   successfully" note added to it, rather than either vanishing
+   silently or sitting there looking permanently broken.
 8. `isCloudSyncCaughtUp()` gates one specific risky operation — importing
    a placeholder copy of a transaction from the Sheet backup when a
    serial lookup finds nothing locally — so a device whose initial
    cloud pull hasn't fully landed yet never wrongly concludes a record
    doesn't exist and creates a second, duplicate copy of it.
+
+## 9. Disbursing Officer (SDO) Payment Flow
+
+*See `docs/updated-prd.md` §10 for the underlying rules; this section is
+the step-by-step journey.*
+
+1. `SdoHome` aggregates every WSR across every warehouse the SDO's own
+   history has touched (no warehouse selector, same reasoning as the
+   Admin dashboards) into a For Payment / Completed pill toggle.
+2. Tapping an unpaid WSR opens the Purchase Receipt reference screen,
+   auto-computing classification, ENW, Basic Cost, Pricer amount (if
+   eligible), and Total Amount live from the WSR's own recorded data
+   plus the Buying Price active on today's date (editable before
+   saving). Saving is a single atomic check-then-write — a fresh check
+   for an existing Active PR against the same WSR happens immediately
+   before the write, closing the same-device race a fast double-tap
+   could otherwise cause.
+3. If two Active PRs ever do end up against the same WSR anyway (two
+   devices, both offline, both issuing before either synced — the one
+   case the atomic check above can't reach), SdoHome surfaces a banner
+   on that WSR and the PR screen lists every duplicate with its own
+   Cancel button, rather than leaving it silently wrong.
+4. Cancelling a PR (available from its own screen once issued) requires
+   a reason, reverts its amount from Cash on Hand automatically (Cash on
+   Hand is always derived live — see PRD §10), and returns the
+   underlying WSR to Unpaid — the WSR record itself is never touched.
+5. Replenish/Liquidate (SdoHome) record a cash-ledger entry against
+   today's balance. Reviewing or correcting a past entry — editing its
+   amount/reference/date, voiding a mistake — happens from Settings'
+   own "Cash Balance" section, not Home, via a year-scoped Cash History
+   list.
+6. Exporting the Abstract of Cereal Purchases (SdoHome) prompts for a
+   date range, gathers every Active PR issued in that period across
+   every warehouse, and renders the NFA-format PDF (8.5 × 13 in
+   landscape) — Basic Cost/Rate/Amount columns appear only if at least
+   one PR in the exported period actually has pricer data on it.
