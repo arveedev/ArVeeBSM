@@ -3899,4 +3899,27 @@
 //               have at least one entry (defaults to the current
 //               year), with the existing 50-per-page Load More applying
 //               within whichever year is selected.
-export const APP_VERSION = '1.10-22'
+//   1.10-23 - Real fix for MO/TMO auto-completion (reported again after
+//            a previous partial fix): StockFormBase.jsx and
+//            SackFormBase.jsx were still auto-writing DONE straight to
+//            the MO/TMO Sheet the instant recovery math looked complete
+//            (all 3 Test Milling trials recovered, or an MO's recovery %
+//            met) - a real case, reported directly: all 3 rice recovery
+//            trials were encoded, the TMO auto-completed, and the still-
+//            pending by-products receipt for that same TMO had nowhere
+//            left to pick it from, since the entry-form picker already
+//            (correctly) hides anything with sheetStatus 'DONE'. The
+//            earlier fix only stopped the LOCAL "fulfilled" flag from
+//            hiding orders; it never removed this actual auto-write side
+//            effect, which produced the identical symptom once synced
+//            back. Both auto-write blocks are removed - completion is
+//            now exclusively the Milling Operations monitor's manual
+//            checkbox, as intended.
+//            Also fixed: the Completed list's "uncheck" control only
+//            ever appeared for orders completed via that manual
+//            checkbox (manuallyCompleted) - an order that ended up DONE
+//            any other way (the auto-write above, or someone editing
+//            the Sheet directly) had no revert button anywhere in the
+//            app. Now offered for sheetStatus 'DONE' too, so an admin
+//            can un-stick an already-affected MO/TMO from here.
+export const APP_VERSION = '1.10-23'

@@ -77,36 +77,37 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
     if (!stillHere) setRevertingId(null)
   }, [orders, revertingId])
 
-  // Only ever offered for orders completed by the MANUAL checkbox.
+  // Offered for anything showing as completed here - manuallyCompleted
+  // OR sheetStatus === 'DONE' (same isOrderCompleted the list itself
+  // uses, MillingMonitor.jsx) - not manuallyCompleted alone.
   //
-  // Deliberately NOT also excluding o.fulfilled here (a previous
-  // version did, on the theory that a genuinely-fulfilled order isn't
-  // "done by mistake"). That assumed o.fulfilled is a trustworthy
-  // "actually done" signal, the same way it is for AI/SIA Authorities
-  // - but per explicit request, MO/TMO completion is manual-only now,
-  // specifically because o.fulfilled's kg/piece math only ever tracks
-  // primary stock, never By Products (entered too inconsistently for
-  // the app to verify) - it's advisory (see needsConfirmation in
-  // MillingMonitor.jsx's amber-border cue), never authoritative. It
-  // no longer drives list membership either (see isOrderCompleted in
-  // MillingMonitor.jsx), so trusting it here to BLOCK an admin's own
-  // uncheck would be inconsistent with not trusting it to complete the
-  // order in the first place.
+  // Deliberately NOT excluding o.fulfilled here (a previous version
+  // did, on the theory that a genuinely-fulfilled order isn't "done by
+  // mistake"). That assumed o.fulfilled is a trustworthy "actually
+  // done" signal, the same way it is for AI/SIA Authorities - but per
+  // explicit request, MO/TMO completion is manual-only now, specifically
+  // because o.fulfilled's kg/piece math only ever tracks primary stock,
+  // never By Products (entered too inconsistently for the app to
+  // verify) - it's advisory (see needsConfirmation in MillingMonitor.
+  // jsx's amber-border cue), never authoritative.
   //
-  // Deliberately NOT also excluding o.sheetStatus === 'DONE' here (a
-  // previous version did) - marking an order complete via this same
-  // checkbox writes 'DONE' back to the Sheet's STATUS column
-  // (markMillingOrderDone, see toggleManualComplete in
-  // MillingMonitor.jsx), so after the next sync pulls that same write
-  // back in, sheetStatus reads 'DONE' for every order the admin JUST
-  // manually completed through the app - which silently made the
-  // uncheck control disappear the moment it was used, locking out the
-  // very feature it gates. manuallyCompleted is already the correct,
-  // app-authoritative signal for "this was done via the app's own
-  // checkbox" - no need to also trust sheetStatus, which can no longer
-  // reliably distinguish "typed DONE directly on the Sheet" from "the
-  // app wrote DONE because the admin already completed it here."
-  const canUncomplete = (o) => isAdmin && o.manuallyCompleted
+  // sheetStatus === 'DONE' WAS deliberately excluded here (an earlier
+  // version reasoned it "can no longer reliably distinguish 'typed DONE
+  // directly on the Sheet' from 'the app wrote DONE because the admin
+  // already completed it here'") - but that left NO way to undo an
+  // order that ended up DONE any other way, and StockFormBase.jsx/
+  // SackFormBase.jsx used to auto-write DONE straight to the Sheet the
+  // instant recovery math looked complete (now removed - see their own
+  // comments). An order that auto-completed under the old behavior
+  // never got manuallyCompleted set, so the old canUncomplete could
+  // never revert it - exactly the real, reported case that left a TMO
+  // stuck DONE with its by-products receipt unable to reference it, and
+  // no button anywhere in the app to undo it. Now that the app itself
+  // never silently writes DONE outside this one checkbox, sheetStatus
+  // reading DONE only ever means the checkbox (already covered by
+  // manuallyCompleted) or someone editing the Sheet directly - and an
+  // admin should be able to revert either from here.
+  const canUncomplete = (o) => isAdmin && (o.manuallyCompleted || o.sheetStatus === 'DONE')
 
   const requestUncomplete = (order, e) => {
     e.stopPropagation()

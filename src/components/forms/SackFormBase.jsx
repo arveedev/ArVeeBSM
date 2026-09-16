@@ -41,7 +41,7 @@ import {
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName, buildCustomerAliasMap, normalizeCustomerName } from '../../utils/customerDirectory.js'
-import { fetchTransactionBySerial, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, fetchSerialFloorFromSheet, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
@@ -917,44 +917,15 @@ const SackFormBase = forwardRef(function SackFormBase(
       })
     }
 
-    // Test Milling: no confirmation prompt - completion is manual-only
-    // via the Milling Operations monitor's own toggle (manuallyCompleted).
-    // This just auto-writes DONE to the sheet once all 3 trials have
-    // some recovery, same as the ESR/MO case just below.
-    if (type === 'ESR' && isTestMilling && tmoNumber.trim()) {
-      const trialTx = await db.transactions
-        .where('tmoNumber').equals(tmoNumber.trim())
-        .and((t) => t.type === 'ESR' && t.status === 'Active')
-        .toArray()
-      const recoveredTrials = new Set(
-        trialTx.filter((t) => (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0) > 0).map((t) => t.trialNumber)
-      )
-      if (['1', '2', '3'].every((n) => recoveredTrials.has(n))) {
-        // Fire-and-forget - the transaction itself is already saved
-        // locally; marking the Sheet's TMO row DONE is a best-effort
-        // side effect that shouldn't make the user wait on the network.
-        markMillingOrderDone('TMO', tmoNumber.trim())
-      }
-    }
-
-    if (type === 'ESR' && isMilling && moNumber.trim()) {
-      const order = await db.millingOrders.where('orderId').equals(`MO::${moNumber.trim()}`).first()
-      if (order?.recoveryPercent != null) {
-        const moTx = await db.transactions
-          .where('moNumber').equals(moNumber.trim())
-          .and((t) => t.status === 'Active')
-          .toArray()
-        const sumPieces = (t) => (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
-        const issuedPieces = moTx.filter((t) => t.type === 'ESI').reduce((s, t) => s + sumPieces(t), 0)
-        const receivedPieces = moTx.filter((t) => t.type === 'ESR').reduce((s, t) => s + sumPieces(t), 0)
-        const expectedPieces = issuedPieces * (order.recoveryPercent / 100)
-        if (expectedPieces > 0 && receivedPieces >= expectedPieces) {
-          // Fire-and-forget - same reasoning as the TMO case above.
-          markMillingOrderDone('MO', moNumber.trim())
-        }
-      }
-    }
-
+    // Completion is manual-only, via the Milling Operations monitor's
+    // own toggle (manuallyCompleted) - NEVER auto-triggered from a save
+    // here. See StockFormBase.jsx's identical fix/comment: this used to
+    // auto-write DONE straight to the Sheet the instant all 3 TMO
+    // trials (or an MO's recovery %) were met, which synced back and
+    // silently hid the MO/TMO from every entry-form picker - a real,
+    // reported case (rice's 3 recovery trials auto-completed the TMO,
+    // leaving nowhere to pick it from for the still-pending by-products
+    // receipt). The "fulfilled" math stays purely informational.
     toast.success(<SavedReceipt title={`${type} saved — ${serialNo.trim()}`} stats={[{ label: 'pieces', value: totalPieces }]} />)
 
     // See StockFormBase.jsx's identical fix/comment for the full

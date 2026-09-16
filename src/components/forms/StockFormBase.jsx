@@ -79,7 +79,7 @@ import {
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionToPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
-import { fetchTransactionBySerial, fetchSerialFloorFromSheet, markMillingOrderDone, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
+import { fetchTransactionBySerial, fetchSerialFloorFromSheet, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName, buildCustomerAliasMap, normalizeCustomerName } from '../../utils/customerDirectory.js'
@@ -2034,46 +2034,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       })
     }
 
-    // Test Milling: same pattern as the Milling (MO) case just below -
-    // check if this save is the one that completes recovery, and write
-    // DONE if so. No confirmation prompt: completion is manual-only via
-    // the Milling Operations monitor's own toggle (manuallyCompleted),
-    // matching how regular Milling orders already work - this fulfilled
-    // math is just the informational signal that feeds that screen, not
-    // a gate the user has to answer here.
-    if (type === 'WSR' && isTestMilling && tmoNumber.trim()) {
-      const trialTx = await db.transactions
-        .where('tmoNumber').equals(tmoNumber.trim())
-        .and((t) => t.type === 'WSR' && t.status === 'Active' && (t.netKilos ?? 0) > 0)
-        .toArray()
-      const recoveredTrials = new Set(trialTx.map((t) => t.trialNumber))
-      if (['1', '2', '3'].every((n) => recoveredTrials.has(n))) {
-        // Fire-and-forget - the transaction itself is already saved
-        // locally; marking the Sheet's TMO row DONE is a best-effort
-        // side effect that shouldn't make the user wait on the network.
-        markMillingOrderDone('TMO', tmoNumber.trim())
-      }
-    }
-
-    // Milling: check if this MO's recovery has now been fully met by
-    // this save, and write DONE if so.
-    if (type === 'WSR' && isMilling && moNumber.trim()) {
-      const order = await db.millingOrders.where('orderId').equals(`MO::${moNumber.trim()}`).first()
-      if (order?.recoveryPercent != null) {
-        const moTx = await db.transactions
-          .where('moNumber').equals(moNumber.trim())
-          .and((t) => t.status === 'Active')
-          .toArray()
-        const issuedKg = moTx.filter((t) => t.type === 'WSI').reduce((s, t) => s + (t.netKilos ?? 0), 0)
-        const receivedKg = moTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
-        const expectedKg = issuedKg * (order.recoveryPercent / 100)
-        if (expectedKg > 0 && receivedKg >= expectedKg) {
-          // Fire-and-forget - same reasoning as the TMO case above.
-          markMillingOrderDone('MO', moNumber.trim())
-        }
-      }
-    }
-
+    // Completion is manual-only, via the Milling Operations monitor's
+    // own toggle (manuallyCompleted) - NEVER auto-triggered from a save
+    // here, even when this save is the one that makes the recovery math
+    // work out. This used to auto-write DONE straight to the Sheet the
+    // instant all 3 TMO trials (or an MO's recovery %) were met, which
+    // synced back as sheetStatus 'DONE' and silently hid the MO/TMO
+    // from every entry-form picker - a real, reported case: all 3 Test
+    // Milling trials for rice were encoded, the TMO auto-completed, and
+    // the still-pending by-products receipt (ESR) for that same TMO had
+    // nowhere left to pick it from. The "fulfilled" math this used to
+    // gate on (see millingOrderStatus.js) stays purely informational -
+    // it feeds the monitor's progress display, it does not write
+    // anything back to the Sheet.
     toast.success(<SavedReceipt title={`${type} saved — ${serialNo.trim()}`} stats={[{ label: 'bags', value: bagsNum }, { label: 'kg', value: netKilos }]} />)
 
     // Real bug found, reported directly with a concrete example: this
