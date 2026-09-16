@@ -87,6 +87,21 @@ export const attachCenterFocusScroll = (containerEl) => {
     const el = e.target
     if (!(el instanceof HTMLElement)) return
     if (!['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(el.tagName)) return
+    // Real bug found, reported directly: this used to re-center EVERY
+    // focused field unconditionally, so tabbing/clicking between fields
+    // that were already comfortably on screen still triggered a fresh
+    // smooth-scroll each time - each one interrupting whatever the
+    // previous one was still doing, which read as a jittery shake
+    // rather than a deliberate scroll. Only actually scroll when the
+    // field isn't already reasonably visible (a comfortable margin from
+    // each edge, not just barely-clipped) - a field already in view now
+    // simply keeps focus with no scroll at all, and only a field that's
+    // genuinely off-screen (or hard up against an edge, e.g. under a
+    // fixed header/keyboard) still gets the original center-scroll.
+    const rect = el.getBoundingClientRect()
+    const margin = 80
+    const comfortablyVisible = rect.top >= margin && rect.bottom <= window.innerHeight - margin
+    if (comfortablyVisible) return
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
   containerEl.addEventListener('focusin', handleFocusIn)

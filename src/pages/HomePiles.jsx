@@ -52,9 +52,9 @@ function HomePiles() {
 
   const [openMenuPileId, setOpenMenuPileId] = useState(null)
   const [editingAgePile, setEditingAgePile] = useState(null)
-  // Which Rice/Palay piles have their breakdown expanded - By Products
-  // always shows its breakdown (no collapse), so this only ever gates
-  // Rice/Palay's optional expand-arrow.
+  // Which multi-group piles have their breakdown expanded - shared by
+  // both Rice/Palay's multi-sack-weight breakdown and By Products'
+  // multi-variety breakdown, collapsed by default either way.
   const [expandedPileIds, setExpandedPileIds] = useState(() => new Set())
   const toggleExpanded = (pileId) => setExpandedPileIds((prev) => {
     const next = new Set(prev)
@@ -219,37 +219,62 @@ function HomePiles() {
                       </div>
 
                       {isByProducts && isMultiGroup ? (
-                        <div className="mt-2 space-y-2">
-                          {p.groupRows.map((row) => (
-                            <div key={row.key} className="border-t border-neutral-800 pt-1.5">
-                              <p className="text-sm font-semibold text-brand-byproduct">{groupHeading(row)}</p>
-                              {row.lastReceivedDate && (
-                                <div className="flex justify-between text-sm text-neutral-400">
-                                  <span>Received</span>
-                                  <span className="text-app-text">{fmtGroupDate(row.lastReceivedDate)}</span>
-                                </div>
-                              )}
-                              <div className="flex justify-between text-base tabular-nums">
-                                <span className="text-neutral-400">Bags</span>
-                                <span className="font-medium text-app-text">{fmtBags(row.bags)}</span>
-                              </div>
-                              <div className="flex justify-between text-base tabular-nums">
-                                <span className="text-neutral-400">Net Kg</span>
-                                <span className="font-medium text-app-text">{fmtWeight(row.kilos, weightUnit)}</span>
-                              </div>
+                        // Same primary Bags/Net Kg tile pair as every
+                        // other pile card gets, showing the pile's real
+                        // TOTAL - real bug, reported directly ("why does
+                        // the by products look like this instead of how
+                        // the other cereal type looks"): a multi-variety
+                        // By Products pile used to skip this tile pair
+                        // entirely and dump straight into a wall of
+                        // per-variety text, unlike every Rice/Palay pile
+                        // (which always shows this tile pair up front,
+                        // with its own multi-group breakdown as an
+                        // OPTIONAL expandable extra below it, not the
+                        // primary view). The per-variety breakdown here
+                        // now follows that exact same convention.
+                        <>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <div className="rounded-lg bg-neutral-950 px-2.5 py-2 text-center">
+                              <p className="text-[10px] uppercase text-neutral-500">Bags</p>
+                              <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(totalBags)}</p>
                             </div>
-                          ))}
-                          <div className="border-t-2 border-brand-byproduct pt-1.5">
-                            <div className="flex justify-between text-base tabular-nums">
-                              <span className="font-bold text-brand-byproduct">TOTAL Bags</span>
-                              <span className="font-bold text-app-text">{fmtBags(totalBags)}</span>
-                            </div>
-                            <div className="flex justify-between text-base tabular-nums">
-                              <span className="font-bold text-brand-byproduct">TOTAL Net Kg</span>
-                              <span className="font-bold text-app-text">{fmtWeight(totalKilos, weightUnit)}</span>
+                            <div className="rounded-lg bg-neutral-950 px-2.5 py-2 text-center">
+                              <p className="text-[10px] uppercase text-neutral-500">Net Kg</p>
+                              <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtWeight(totalKilos, weightUnit).replace(/\s*(kg|MT)$/, '')}</p>
                             </div>
                           </div>
-                        </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(p.pileId)}
+                            className="mt-1 flex w-full justify-center py-0.5"
+                            aria-label={isExpanded ? 'Hide variety breakdown' : 'Show variety breakdown'}
+                          >
+                            <ChevronDown size={16} className={`text-brand-byproduct transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                          {isExpanded && (
+                            <div className="space-y-2">
+                              {p.groupRows.map((row) => (
+                                <div key={row.key} className="border-t border-neutral-800 pt-1.5">
+                                  <p className="text-sm font-semibold text-brand-byproduct">{groupHeading(row)}</p>
+                                  {row.lastReceivedDate && (
+                                    <div className="flex justify-between text-sm text-neutral-400">
+                                      <span>Received</span>
+                                      <span className="text-app-text">{fmtGroupDate(row.lastReceivedDate)}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between text-base tabular-nums">
+                                    <span className="text-neutral-400">Bags</span>
+                                    <span className="font-medium text-app-text">{fmtBags(row.bags)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-base tabular-nums">
+                                    <span className="text-neutral-400">Net Kg</span>
+                                    <span className="font-medium text-app-text">{fmtWeight(row.kilos, weightUnit)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <>
                           <div className="mt-2 grid grid-cols-2 gap-2">

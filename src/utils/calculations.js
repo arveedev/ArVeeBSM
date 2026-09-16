@@ -402,19 +402,37 @@ export const isProcurementTypeName = (name) => (name ?? '').trim().toUpperCase()
 
 export const isSalesTypeName = (name) => (name ?? '').trim().toUpperCase() === 'SALES'
 
+// Test Milling's Trial selector sentinel for "this one receipt covers
+// all 3 trials at once" (e.g. one combined recovery reading for a
+// variety, rather than a separate transaction per trial) - stored as a
+// literal trialNumber value, same field, same shape as '1'/'2'/'3'.
+export const TRIAL_ALL = 'all'
+
+/** A saved trialNumber ('1'/'2'/'3'/TRIAL_ALL/null) -> which trial numbers it actually covers, for fulfillment/recovery math. TRIAL_ALL counts as all three; anything else is itself or nothing. */
+export const expandTrialNumbers = (trialNumber) =>
+  trialNumber === TRIAL_ALL ? ['1', '2', '3'] : trialNumber ? [trialNumber] : []
+
+/** A saved trialNumber -> its display label - "Trial 2", or "Trials 1, 2 and 3" for TRIAL_ALL (never the raw selector option text "All Trials", which only makes sense as a compact dropdown choice, not a standalone label read out of context elsewhere in the app). */
+export const formatTrialLabel = (trialNumber) => {
+  if (!trialNumber) return null
+  if (trialNumber === TRIAL_ALL) return 'Trials 1, 2 and 3'
+  return `Trial ${trialNumber}`
+}
+
 /**
- * "Dens Marketing Corp, Batch 3" / "Dens Marketing Corp, Trial 2" -
- * appends the batch or trial number for Milling/Re-Milling and Test
- * Milling/Test Re-Milling transactions specifically, so a statement or
- * exported report shows which run a given row belongs to instead of
- * the same bare customer name repeated across every batch/trial of the
- * same miller. No suffix for any other transaction type, or when the
- * transaction genuinely has no batch/trial number recorded.
+ * "Dens Marketing Corp, Batch 3" / "Dens Marketing Corp, Trial 2" /
+ * "Dens Marketing Corp, Trials 1, 2 and 3" - appends the batch or trial
+ * reference for Milling/Re-Milling and Test Milling/Test Re-Milling
+ * transactions specifically, so a statement or exported report shows
+ * which run a given row belongs to instead of the same bare customer
+ * name repeated across every batch/trial of the same miller. No suffix
+ * for any other transaction type, or when the transaction genuinely has
+ * no batch/trial number recorded.
  */
 export const customerNameWithMillingRef = (customerName, transactionTypeName, batchNumber, trialNumber) => {
   const name = customerName ?? ''
   if (isMillingTypeName(transactionTypeName) && batchNumber) return `${name}, Batch ${batchNumber}`
-  if (isTestMillingTypeName(transactionTypeName) && trialNumber) return `${name}, Trial ${trialNumber}`
+  if (isTestMillingTypeName(transactionTypeName) && trialNumber) return `${name}, ${formatTrialLabel(trialNumber)}`
   return name
 }
 

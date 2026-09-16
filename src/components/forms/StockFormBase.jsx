@@ -66,6 +66,8 @@ import {
   isProcurementTypeName,
   isSalesTypeName,
   isBagRepackingTypeName,
+  TRIAL_ALL,
+  expandTrialNumbers,
 } from '../../utils/calculations.js'
 import {
   suggestNextSerial,
@@ -78,7 +80,7 @@ import {
   recalculateSerialCounter,
   findAdjacentTransaction,
 } from '../../utils/serialNumber.js'
-import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionToPile, getOrCreateAccountabilityPile } from '../../utils/pileLedger.js'
+import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionToPile, getOrCreateAccountabilityPile, computePileStockBreakdown } from '../../utils/pileLedger.js'
 import { fetchTransactionBySerial, fetchSerialFloorFromSheet, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
 import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -122,6 +124,77 @@ const DELETE_ANIM_MS = 1000
 // request, no combined total block, just each pile's own real figures
 // under its own accent.
 const PILE_SIDEBAR_ACCENTS = ['#00FFA3', '#378ADD', '#F5A524', '#D4537E']
+
+// Live "Pile now" sidebar figures for one pile card. A plain Rice/Palay
+// pile still just shows its own flat currentBags/currentKilos (a single
+// variety, unchanged). A By Products pile, which can genuinely mix more
+// than one variety, used to show that SAME flat total with no way to
+// tell which variety was which - reported directly ("the by products
+// are not showing all the variety"). Reads the real per-variety
+// breakdown (computePileStockBreakdown, the same helper HomeStocks.jsx/
+// HomePiles.jsx already use for this exact problem) and lists every
+// variety with real stock as its own row instead of one blended figure.
+function SidebarPileFigures({ pile, accent, weightUnit, varietyMap }) {
+  const isByProducts = pile.cerealType === 'By Products'
+  const breakdown = useLiveQuery(
+    () => isByProducts ? computePileStockBreakdown(pile.pileId) : null,
+    [pile.pileId, isByProducts]
+  )
+
+  if (isByProducts && breakdown) {
+    const byVariety = new Map()
+    for (const g of breakdown) {
+      const key = g.varietyId ?? ''
+      const entry = byVariety.get(key) ?? { bags: 0, kilos: 0 }
+      entry.bags += g.bags
+      entry.kilos += g.kilos
+      byVariety.set(key, entry)
+    }
+    const rows = [...byVariety.entries()]
+      .map(([varietyId, totals]) => ({ name: (varietyId && varietyMap.get(varietyId)?.name) || '—', ...totals }))
+      .filter((r) => r.bags > 0 || r.kilos > 0)
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    if (rows.length === 0) {
+      return (
+        <p className="rounded-lg bg-neutral-950 px-2 py-2 text-center text-xs text-neutral-500">No stock yet</p>
+      )
+    }
+
+    return (
+      <div className="space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.name} className="rounded-lg bg-neutral-950 px-2 py-1.5">
+            <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-brand-byproduct">{row.name}</p>
+            <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs">
+              <span className="text-neutral-500">Bags</span>
+              <span className="font-bold tabular-nums text-app-text">{fmtBags(row.bags)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="text-neutral-500">Net Kg</span>
+              <span className="font-bold tabular-nums" style={{ color: accent }}>{fmtWeight(row.kilos, weightUnit).replace(/\s*(kg|MT)$/, '')}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="mb-2 rounded-lg bg-neutral-950 py-2 text-center">
+        <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
+        <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(pile.currentBags ?? 0)}</p>
+      </div>
+      <div className="rounded-lg bg-neutral-950 py-2 text-center">
+        <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
+        <p className="mt-0.5 text-lg font-bold tabular-nums" style={{ color: accent }}>
+          {fmtWeight(pile.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}
+        </p>
+      </div>
+    </>
+  )
+}
 
 // A pile's stock limit is a real physical constraint, but the running
 // total it's checked against can carry a few grams of floating-point
@@ -465,7 +538,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       // this is just the informational signal, same as Milling's own
       // fulfilled math just above.
       const recoveredTrials = new Set(
-        forThisOrder.filter((t) => t.type === 'WSR' && (t.netKilos ?? 0) > 0).map((t) => t.trialNumber)
+        forThisOrder.filter((t) => t.type === 'WSR' && (t.netKilos ?? 0) > 0).flatMap((t) => expandTrialNumbers(t.trialNumber))
       )
       const fulfilled = ['1', '2', '3'].every((n) => recoveredTrials.has(n))
       return { ...order, recoveredTrials: [...recoveredTrials], fulfilled }
@@ -3029,6 +3102,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     {['1', '2', '3'].map((n) => (
                       <option key={n} value={n}>Trial {n}</option>
                     ))}
+                    {/* One combined receipt covering all 3 trials at
+                        once - stored as TRIAL_ALL, expanded back out to
+                        ['1','2','3'] wherever recovery/fulfillment is
+                        computed (expandTrialNumbers), and displayed
+                        elsewhere as "Trials 1, 2 and 3" (formatTrialLabel),
+                        never this compact dropdown-only label. */}
+                    <option value={TRIAL_ALL}>All Trials</option>
                   </select>
                 </div>
                 </div>
@@ -3610,6 +3690,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             // total card.
             const sidebarPiles = selectedPile ? [selectedPile, ...extraAllocInfos.map((i) => i.pile).filter(Boolean)] : []
             const sidebarWidth = 210
+            const sidebarVarietyMap = new Map((varieties ?? []).map((v) => [v.varietyId, v]))
             return (
               <div
                 className="shrink-0 self-stretch overflow-hidden rounded-xl bg-neutral-900/60 transition-[flex-basis,opacity] duration-300 ease-out"
@@ -3644,16 +3725,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                         {sidebarPiles.length > 1 && (
                           <p className="mb-1.5 truncate px-1 text-[10px] font-semibold text-neutral-400" title={pile.pileName}>{pile.pileName}</p>
                         )}
-                        <div className="mb-2 rounded-lg bg-neutral-950 py-2 text-center">
-                          <p className="text-[10px] uppercase tracking-wide text-neutral-500">Bags</p>
-                          <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text">{fmtBags(pile.currentBags ?? 0)}</p>
-                        </div>
-                        <div className="rounded-lg bg-neutral-950 py-2 text-center">
-                          <p className="text-[10px] uppercase tracking-wide text-neutral-500">Net Kg</p>
-                          <p className="mt-0.5 text-lg font-bold tabular-nums" style={{ color: accent }}>
-                            {fmtWeight(pile.currentKilos ?? 0, weightUnit).replace(/\s*(kg|MT)$/, '')}
-                          </p>
-                        </div>
+                        <SidebarPileFigures pile={pile} accent={accent} weightUnit={weightUnit} varietyMap={sidebarVarietyMap} />
                       </div>
                     )
                   })}

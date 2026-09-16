@@ -15,6 +15,7 @@
 // via the monitor's own manuallyCompleted toggle.
 
 import { db } from '../db/dexie.js'
+import { expandTrialNumbers } from './calculations.js'
 
 const sumStockKilos = (tx) => tx.reduce((s, t) => s + (t.netKilos ?? 0), 0)
 const sumSackPieces = (tx) => tx.reduce((s, t) => s + (t.sackLines ?? []).reduce((ls, l) => ls + (l.pieces ?? 0), 0), 0)
@@ -79,7 +80,7 @@ export const computeMillingOrderStatuses = async (orderType) => {
       const recovered = new Set(
         receiptTx
           .filter((t) => (t.type === 'WSR' ? (t.netKilos ?? 0) > 0 : sumSackPieces([t]) > 0))
-          .map((t) => t.trialNumber)
+          .flatMap((t) => expandTrialNumbers(t.trialNumber))
       )
       recoveredTrials = [...recovered]
       fulfilled = ['1', '2', '3'].every((n) => recovered.has(n))

@@ -3941,4 +3941,39 @@
 //            landed. Deferred the focus() with setTimeout(0), same
 //            pattern already used elsewhere on this page, so it runs
 //            after the input is actually re-enabled.
-export const APP_VERSION = '1.10-25'
+//   1.10-26 - Six more fixes, reported directly:
+//            1. Home Stocks: By Products rows with any unwithdrawn AI
+//               stock used to always show their Unwithdrawn/Potential
+//               block, with no way to collapse it - now behind the same
+//               on-demand expand arrow Rice/Palay already uses. Also
+//               bumped variety/figure text one size up at the lg
+//               breakpoint (within the same column widths already sized
+//               for that size on the TOTAL row, so nothing overflows).
+//            2. Pile List: a multi-variety By Products pile used to skip
+//               the primary Bags/Net Kg tile pair every other pile card
+//               shows and dump straight into a wall of per-variety text
+//               - now shows that same tile pair (the pile's real total)
+//               up front, with the per-variety breakdown as an optional
+//               expandable extra below it, matching Rice/Palay's own
+//               multi-sack-weight breakdown convention exactly.
+//            3. The entry form's live "Pile now" sidebar showed a By
+//               Products pile's flat total only, never broken out by
+//               variety - now reads the same per-variety breakdown
+//               HomeStocks.jsx/HomePiles.jsx already use, one row per
+//               variety with real stock.
+//            4. Fixed a focus-shift jitter/shake on the entry form: the
+//               "keep the focused field visible" logic used to
+//               re-center EVERY focused field unconditionally, even one
+//               already comfortably on screen - tabbing through several
+//               fields kept re-triggering competing smooth-scrolls.
+//               Only actually scrolls now when the field isn't already
+//               reasonably visible.
+//            5. Test Milling's Trial selector gained an "All Trials"
+//               option for one combined receipt covering all 3 trials
+//               at once (stored as a real sentinel value, expanded back
+//               out to trials 1/2/3 wherever recovery/fulfillment math
+//               reads it, so it still correctly completes an order).
+//            6. Every place that displays a saved trial number now
+//               shows "Trials 1, 2 and 3" for that All-Trials case, not
+//               the raw dropdown option text "All Trials".
+export const APP_VERSION = '1.10-26'

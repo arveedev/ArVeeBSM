@@ -156,6 +156,8 @@ function VarietyCard({
     const amt = unwithdrawnAmount(uw, effectiveShowNetBags)
     return amt >= (effectiveShowNetBags ? 0.005 : 1)
   })
+  const flatUnwithdrawnAmt = flatUnwithdrawn ? unwithdrawnAmount(flatUnwithdrawn, false) : 0
+  const hasFlatUnwithdrawn = isByProducts && flatUnwithdrawnAmt >= 1
   // Previously required MORE THAN one age bucket to be expandable at
   // all, so a variety whose entire stock sat in a single bucket (e.g.
   // only ever received within the last 0-3 months, no older stock yet)
@@ -165,10 +167,16 @@ function VarietyCard({
   // see which age group the variety's stock actually belongs to.
   // By Products never expands into age buckets at all - its own AI
   // ageGroup free text essentially never resolves to a real bucket (see
-  // computeUnwithdrawnByVarietyAge's own comment), so there's nothing
-  // genuine to drill into there; it shows its flat unwithdrawn/potential
-  // figure directly below the main row instead (see hasFlatUnwithdrawn).
-  const hasExpandableDetail = !isByProducts && (hasAnyBucketUnwithdrawn || bucketEntries.length > 0)
+  // computeUnwithdrawnByVarietyAge's own comment) - it has its own flat
+  // unwithdrawn/potential figure instead (see hasFlatUnwithdrawn below),
+  // behind the SAME on-demand expand arrow as Rice/Palay's bucket detail
+  // rather than always showing - real bug, reported directly with a
+  // screenshot: every By Products row with any unwithdrawn stock used to
+  // render its Unwithdrawn/Potential block unconditionally, with no way
+  // to collapse it, cluttering the list the instant any AI existed.
+  const hasExpandableDetail = isByProducts
+    ? hasFlatUnwithdrawn
+    : (hasAnyBucketUnwithdrawn || bucketEntries.length > 0)
 
   // The detail region's HEIGHT animates (via CSS grid-template-rows
   // 0fr -> 1fr), not just its opacity/translateY - a transform-based
@@ -181,8 +189,6 @@ function VarietyCard({
   const shouldRenderDetail = useDelayedUnmount(isExpanded, 300)
 
   const varietyTotalAmt = effectiveShowNetBags ? varietyKilos / 50 : varietyBags
-  const flatUnwithdrawnAmt = flatUnwithdrawn ? unwithdrawnAmount(flatUnwithdrawn, false) : 0
-  const hasFlatUnwithdrawn = isByProducts && flatUnwithdrawnAmt >= 1
 
   return (
     <div className="mt-3 rounded-lg border border-neutral-800/80 bg-neutral-800/30 px-2.5 py-2">
@@ -213,11 +219,11 @@ function VarietyCard({
             row, per explicit request ("looks better and more readable
             at a glance"). */}
         <div className="hidden items-baseline gap-x-2 sm:grid" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
-          <span className="truncate text-base font-semibold text-app-text">{varietyName}</span>
-          <span className="text-right text-base font-bold tabular-nums text-app-text">
+          <span className="truncate text-base font-semibold text-app-text lg:text-lg">{varietyName}</span>
+          <span className="text-right text-base font-bold tabular-nums text-app-text lg:text-lg">
             <CountUpNumber value={Math.max(0, varietyTotalAmt)} format={(v) => formatAmount(v, effectiveShowNetBags)} />
           </span>
-          <span className="text-right text-sm font-semibold tabular-nums text-app-text">
+          <span className="text-right text-sm font-semibold tabular-nums text-app-text lg:text-base">
             <CountUpNumber value={Math.max(0, varietyKilos)} format={(v) => fmtWeightPlain(v, weightUnit)} />
           </span>
         </div>
@@ -241,23 +247,32 @@ function VarietyCard({
       </div>
 
       {hasFlatUnwithdrawn && (
-        <div className="mt-1.5 space-y-0.5 border-t border-neutral-800/50 pt-1.5">
-          <button
-            type="button"
-            onClick={() => onOpenDetail({ varietyIds: [varietyId], title: `${varietyName} — Unwithdrawn`, subtitle: `${cerealType} · Unwithdrawn`, rawBags: true })}
-            className="grid w-full items-center gap-x-2 rounded-md bg-red-400/10 px-1.5 py-1 text-left transition-colors hover:bg-red-400/20 active:scale-[0.99]"
-            style={{ gridTemplateColumns: STOCK_GRID_COLS }}
-          >
-            <span className="text-[10px] font-medium text-red-400/90">Unwithdrawn ›</span>
-            <span className="text-right text-sm font-bold tabular-nums text-red-400">{formatAmount(flatUnwithdrawn.bags, false)}</span>
-            <span className="text-right text-xs font-semibold tabular-nums text-red-400/90">{fmtWeightPlain(flatUnwithdrawn.kilos, weightUnit)}</span>
-          </button>
-          <div className="grid items-center gap-x-2 px-1.5" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
-            <span className="text-[10px] font-medium text-brand-amber/80">Potential</span>
-            <span className="text-right text-sm font-semibold tabular-nums text-brand-amber">{formatAmount(Math.max(0, varietyBags - flatUnwithdrawn.bags), false)}</span>
-            <span className="text-right text-xs font-medium tabular-nums text-brand-amber/90">{fmtWeightPlain(Math.max(0, varietyKilos - flatUnwithdrawn.kilos), weightUnit)}</span>
-          </div>
+      <div
+        className="grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          {shouldRenderDetail && (
+            <div className="mt-1.5 space-y-0.5 border-t border-neutral-800/50 pt-1.5">
+              <button
+                type="button"
+                onClick={() => onOpenDetail({ varietyIds: [varietyId], title: `${varietyName} — Unwithdrawn`, subtitle: `${cerealType} · Unwithdrawn`, rawBags: true })}
+                className="grid w-full items-center gap-x-2 rounded-md bg-red-400/10 px-1.5 py-1 text-left transition-colors hover:bg-red-400/20 active:scale-[0.99]"
+                style={{ gridTemplateColumns: STOCK_GRID_COLS }}
+              >
+                <span className="text-[10px] font-medium text-red-400/90">Unwithdrawn ›</span>
+                <span className="text-right text-sm font-bold tabular-nums text-red-400">{formatAmount(flatUnwithdrawn.bags, false)}</span>
+                <span className="text-right text-xs font-semibold tabular-nums text-red-400/90">{fmtWeightPlain(flatUnwithdrawn.kilos, weightUnit)}</span>
+              </button>
+              <div className="grid items-center gap-x-2 px-1.5" style={{ gridTemplateColumns: STOCK_GRID_COLS }}>
+                <span className="text-[10px] font-medium text-brand-amber/80">Potential</span>
+                <span className="text-right text-sm font-semibold tabular-nums text-brand-amber">{formatAmount(Math.max(0, varietyBags - flatUnwithdrawn.bags), false)}</span>
+                <span className="text-right text-xs font-medium tabular-nums text-brand-amber/90">{fmtWeightPlain(Math.max(0, varietyKilos - flatUnwithdrawn.kilos), weightUnit)}</span>
+              </div>
+            </div>
+          )}
         </div>
+      </div>
       )}
 
       {!isByProducts && (
@@ -748,7 +763,7 @@ function HomeStocks({ warehouseId, active = true } = {}) {
             key={cerealType}
             className={`mt-4 first:mt-0 ${i > 0 ? 'border-t-2 border-neutral-700 pt-4' : ''}`}
           >
-            <p className={`text-lg font-bold uppercase ${color}`}>{cerealType}</p>
+            <p className={`text-lg font-bold uppercase lg:text-xl ${color}`}>{cerealType}</p>
             {(() => {
               // A variety split across multiple sack-weight lines (see
               // weightsByVariety above) would otherwise have its
@@ -834,14 +849,14 @@ function HomeStocks({ warehouseId, active = true } = {}) {
               // right next to it.
               const cerealPotentialAmt = Math.max(0, cerealEffectiveShowNetBags ? cerealKilos / 50 - cerealUnwithdrawnAmt : cerealBags - cerealUnwithdrawnAmt)
               const cerealPotentialKilos = Math.max(0, cerealKilos - cerealUnwithdrawn.kilos)
-              // By Products variety cards have no expand/collapse state
-              // any more (see VarietyCard's own comment - age buckets
-              // never genuinely applied there), so gating the Total's
-              // own unwithdrawn/potential reveal on "some variety is
-              // expanded" would mean it could never show at all for
-              // that category. Only Rice/Palay still ties its Total
-              // reveal to a variety being expanded.
-              const hasCerealUnwithdrawn = (isByProducts || categoryHasExpanded) && cerealUnwithdrawnAmt >= (cerealEffectiveShowNetBags ? 0.005 : 1)
+              // By Products variety cards now collapse/expand the same
+              // way Rice/Palay's do (see VarietyCard's own comment on
+              // hasExpandableDetail) - this used to unconditionally show
+              // for By Products regardless of any variety being
+              // expanded, which was the same always-on clutter bug at
+              // the Total level. categoryHasExpanded already tracks both
+              // cereal types identically now.
+              const hasCerealUnwithdrawn = categoryHasExpanded && cerealUnwithdrawnAmt >= (cerealEffectiveShowNetBags ? 0.005 : 1)
               const cerealUnitLabel = cerealEffectiveShowNetBags ? 'net bags' : 'bags'
               return (
                 <CerealTotal

@@ -11,7 +11,7 @@ import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw, Check, Search } f
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
-import { fmtBags, fmtWeight, fmtNetBags, calculateCurrentAge, AGE_BUCKETS } from '../../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtNetBags, calculateCurrentAge, AGE_BUCKETS, formatTrialLabel, expandTrialNumbers } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
@@ -396,7 +396,7 @@ function StockRow({ t, warehouseMap, varietyMap, pileMap, pileRecordMap, weightU
     <li className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-app-text">
-          {t.type} # {t.serialNo}{t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
+          {t.type} # {t.serialNo}{t.trialNumber ? ` · ${formatTrialLabel(t.trialNumber)}` : ''}
         </span>
         <span className="text-neutral-500">{fmtDate(t.date)}</span>
       </div>
@@ -441,7 +441,7 @@ function SackRow({ t, warehouseMap, sackTypeMap }) {
     <li className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-app-text">
-          {t.type} # {t.serialNo}{t.trialNumber ? ` · Trial ${t.trialNumber}` : ''}
+          {t.type} # {t.serialNo}{t.trialNumber ? ` · ${formatTrialLabel(t.trialNumber)}` : ''}
         </span>
         <span className="text-neutral-500">{fmtDate(t.date)}</span>
       </div>
@@ -482,7 +482,7 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
   // glimpse without opening the detail. MO is completely unaffected,
   // keeping the kg-based calculation below exactly as it was.
   const issuedTrialsCount = o.type === 'TMO'
-    ? new Set((o.issueTx ?? []).map((t) => t.trialNumber).filter(Boolean)).size
+    ? new Set((o.issueTx ?? []).flatMap((t) => expandTrialNumbers(t.trialNumber))).size
     : null
   const receivedTrialsCount = o.type === 'TMO' ? (o.recoveredTrials ?? []).length : null
 

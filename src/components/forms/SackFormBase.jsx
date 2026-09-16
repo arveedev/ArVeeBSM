@@ -45,7 +45,7 @@ import { fetchTransactionBySerial, fetchSerialFloorFromSheet, resolveCanonicalAu
 import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
-import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName, isAuthorityComplete } from '../../utils/calculations.js'
+import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName, isAuthorityComplete, TRIAL_ALL, expandTrialNumbers } from '../../utils/calculations.js'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
@@ -234,7 +234,7 @@ const SackFormBase = forwardRef(function SackFormBase(
       // itself is manual-only (see MillingMonitor's manuallyCompleted
       // toggle) - this is just the informational signal.
       const recoveredTrials = new Set(
-        forThisOrder.filter((t) => t.type === 'ESR' && sumPieces(t) > 0).map((t) => t.trialNumber)
+        forThisOrder.filter((t) => t.type === 'ESR' && sumPieces(t) > 0).flatMap((t) => expandTrialNumbers(t.trialNumber))
       )
       const fulfilled = ['1', '2', '3'].every((n) => recoveredTrials.has(n))
       return { ...order, recoveredTrials: [...recoveredTrials], fulfilled }
@@ -1534,6 +1534,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                       {['1', '2', '3'].map((n) => (
                         <option key={n} value={n}>Trial {n}</option>
                       ))}
+                      <option value={TRIAL_ALL}>All Trials</option>
                     </select>
                   </div>
                 )}
