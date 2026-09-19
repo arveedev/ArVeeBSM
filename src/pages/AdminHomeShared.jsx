@@ -40,3 +40,20 @@ export function Empty() {
     </div>
   )
 }
+
+// Distinct from Empty above on purpose - a branch-wide figure that's
+// still being computed (warehouseCategoryStock's batched per-warehouse
+// pass, AdminHomeStocks.jsx) looked IDENTICAL to one that's genuinely
+// zero, which is exactly what made the real reported bug (iOS PWA:
+// stock computation silently returning incomplete data) so hard to
+// pin down - the screen matched "no data" either way. This gives the
+// still-loading case its own visual state so a real zero and "still
+// working on it" are never confused again.
+export function LoadingRows() {
+  return (
+    <div className="flex flex-col items-center gap-2 py-3">
+      <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-700 border-t-brand-neon" />
+      <p className="text-xs text-neutral-500">Computing branch totals…</p>
+    </div>
+  )
+}

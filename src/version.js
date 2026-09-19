@@ -4022,4 +4022,28 @@
 //            successful login) can still freely apply its own inline-
 //            style transform afterward without a held animation frame
 //            silently overriding it.
-export const APP_VERSION = '1.10-28'
+//   1.10-29 - Fixed a real, reported bug: the Admin Dashboard's Home
+//            (province/warehouse stock totals) showed a flat zero every
+//            single time on an installed iOS PWA, even with local data
+//            confirmed present and Dexie Cloud confirmed connected
+//            (checked directly via Settings' own Sync Identity
+//            diagnostic panel). Root cause: AdminHomeStocks.jsx's
+//            warehouseCategoryStock computation fired every warehouse's
+//            own (already-substantial, several-queries-per-pile) work
+//            all at once via a single Promise.all - for a branch with
+//            several warehouses, that's dozens of concurrent IndexedDB
+//            transactions at once. WKWebView (what an installed/
+//            standalone iOS PWA runs IndexedDB through, not the same
+//            engine as a plain Safari tab) is documented to silently
+//            drop or hang transactions once too many fire simultaneously
+//            - the computation was resolving to empty data on that
+//            device specifically, not a sync or data problem at all.
+//            Fixed by processing warehouses in small batches (3 at a
+//            time) instead of all at once - still purely local reads, so
+//            no meaningful slowdown. Also gave "still computing" its own
+//            loading state (AdminHomeShared.jsx's new LoadingRows),
+//            separate from the existing "genuinely nothing to show"
+//            Empty state - the two looked identical before, which is
+//            exactly what made this bug so hard to distinguish from a
+//            real data-sync issue while investigating it.
+export const APP_VERSION = '1.10-29'

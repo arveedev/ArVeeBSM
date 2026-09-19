@@ -14,7 +14,7 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtBags, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
 import { computeCurrentPileStatesBatch } from '../utils/pileLedger.js'
-import { Section, Th, Td, Empty } from './AdminHomeShared.jsx'
+import { Section, Th, Td, Empty, LoadingRows } from './AdminHomeShared.jsx'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 import { computeUnwithdrawnByCategoryAge, UNSPECIFIED_AGE } from '../utils/unwithdrawnStock.js'
 import { computeWarehouseCategoryStock } from '../utils/warehouseCategoryStock.js'
@@ -24,6 +24,31 @@ import CountUpNumber from '../components/common/CountUpNumber.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const BREAKDOWN_TABS = ['Breakdown', 'Age Grouping']
+
+// Runs `fn` over `items` with at most `limit` in flight at once, instead
+// of firing every item's work simultaneously via one Promise.all.
+// Confirmed, reported bug: on an installed iOS PWA, warehouseCategoryStock
+// below used to fan a whole branch's worth of warehouses out in parallel
+// - each warehouse's own computeWarehouseCategoryStock already runs
+// several queries per pile, so a branch with several warehouses fired
+// dozens of concurrent IndexedDB transactions at once. WKWebView's
+// IndexedDB implementation (what an installed/standalone PWA uses on
+// iOS, distinct from - and less reliable than - Safari-as-a-tab) is
+// documented to silently drop or hang transactions once too many fire
+// at once; this computation was resolving to empty data on that device
+// even though the underlying local data was confirmed present and fully
+// synced (checked via Settings' own Sync Identity diagnostic panel).
+// These are all local IndexedDB reads, not network calls, so keeping
+// concurrency low instead of one-at-a-time still finishes in well under
+// a second for a normal branch's warehouse count.
+const runInBatches = async (items, limit, fn) => {
+  const results = []
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit)
+    results.push(...(await Promise.all(batch.map(fn))))
+  }
+  return results
+}
 
 function AdminHomeStocks({ onWarehouseSelect }) {
   const { autoAgeMonitoring, weightUnit } = useSettings() ?? {}
@@ -98,14 +123,21 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // Grouping still uses its own per-age-bucket computation further down
   // (a different shape - per bucket, not per warehouse total).
   const sackTypesForStock = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
-  const warehouseCategoryStock = useLiveQuery(async () => {
+  // Deliberately NOT defaulted with `?? new Map()` here - undefined
+  // (still computing) needs to stay distinguishable from a real, empty
+  // Map (computed, genuinely nothing to show), so the two render
+  // differently below instead of both reading as "0" - see this
+  // section's own Loading/Empty gate.
+  const warehouseCategoryStockRaw = useLiveQuery(async () => {
     if (warehouses.length === 0) return new Map()
     const result = new Map()
-    await Promise.all(warehouses.map(async (w) => {
+    await runInBatches(warehouses, 3, async (w) => {
       result.set(w.warehouseId, await computeWarehouseCategoryStock(w.warehouseId, { varieties, sackTypes: sackTypesForStock }))
-    }))
+    })
     return result
-  }, [warehouses, varieties, sackTypesForStock]) ?? new Map()
+  }, [warehouses, varieties, sackTypesForStock])
+  const isStockLoading = warehouseCategoryStockRaw === undefined
+  const warehouseCategoryStock = warehouseCategoryStockRaw ?? new Map()
 
   // Age Grouping shows POTENTIAL (actual minus unwithdrawn) instead of
   // raw actual inventory - warehouseId -> category -> Map(bucketLabel
@@ -226,7 +258,9 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             on the now-different figures instead of them silently
             swapping in place. */}
         <div key={`${weightUnit}-${topCardShowPotential}`} className="animate-flow-down">
-        {sortedProvinces.length === 0 ? (
+        {isStockLoading ? (
+          <LoadingRows />
+        ) : sortedProvinces.length === 0 ? (
           <Empty />
         ) : (() => {
           // Computed once, rendered twice below (a plain table at sm+,
@@ -370,7 +404,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
         {/* Keyed on both the weight unit and this tab's own Actual/
             Potential toggle - see the top card's identical comment. */}
         <div key={`${weightUnit}-${breakdownShowPotential}`} className="animate-flow-down">
-        {sortedWarehouses.length === 0 ? <Empty /> : (() => {
+        {isStockLoading ? <LoadingRows /> : sortedWarehouses.length === 0 ? <Empty /> : (() => {
           // Per explicit request - grouped by province, one heading
           // above that province's own warehouses, instead of repeating
           // the province code on every single warehouse card. A
