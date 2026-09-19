@@ -352,6 +352,24 @@ guaranteed to eventually run even if the underlying traffic never truly
 goes quiet, and it does so on a cadence loose enough not to itself become
 the performance problem.
 
+A third confirmed instance, in `NfaMillingMonitor.jsx`'s admin-wide
+Ricemill recovery computation, surfaced a fourth failure mode the
+debounce/maxWait fix alone doesn't cover: a component that intentionally
+stays mounted in the background across tab switches (to preserve its own
+local state, e.g. an open search or expanded row) keeps recomputing on
+its debounced cadence even while a *different* tab is the one actually
+being looked at — and since that background write can be triggered by
+the very action the user is performing on the visible tab (marking an
+authority complete is itself a `db.authorities` write, which
+`NfaMillingMonitor` also reads), the two land on the main thread at the
+same moment, reported as dropped frames on the visible tab's own
+animation. Any caller of `useDebouncedLiveCompute` that stays mounted
+while inactive must freeze its own `changeSignal` to a constant while
+inactive (not pass a fixed `active` flag into the hook itself, which
+doesn't know about visibility) — see `MillingMonitor.jsx`'s and
+`NfaMillingMonitor.jsx`'s own `active`-gated `changeSignal` for the
+established shape of this.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

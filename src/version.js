@@ -4148,4 +4148,29 @@
 //            once every 30s even under continuous sync churn, and the
 //            debounced quiet-window wait still fires promptly the
 //            moment things actually settle.
-export const APP_VERSION = '1.10-34'
+//   1.10-35 - Fixed a real, video-confirmed regression the previous fix
+//            didn't cover: dropped frames/stutter specifically while
+//            marking an authority complete on Admin Monitoring's AI/SIA
+//            tab. Root cause, found by tracing what else mounts on that
+//            page: MillingMonitor.jsx and NfaMillingMonitor.jsx both
+//            stay mounted in the background the whole time any
+//            Monitoring tab is open (by design, to preserve their own
+//            state across tab switches), and NfaMillingMonitor's own
+//            recoverySummaryByNumber computation reads db.authorities
+//            across every ricemill - the SAME table a "mark authority
+//            complete" write touches. That background computation was
+//            retriggering on the main thread at the exact moment the
+//            mark-complete row's glow+collapse animation was trying to
+//            play smoothly on the AI/SIA tab the user was actually
+//            looking at. Converted NfaMillingMonitor.jsx's
+//            recoverySummaryByNumber to the same shared
+//            useDebouncedLiveCompute fix (a third confirmed instance of
+//            the TDD §2.12 pattern), and - the more direct fix for this
+//            specific symptom - both MillingMonitor.jsx and
+//            NfaMillingMonitor.jsx now freeze their own recompute
+//            trigger entirely while their `active` prop is false, so
+//            neither one does ANY background work while a different
+//            Monitoring tab is the one actually being interacted with;
+//            each simply keeps showing its last-known data and picks
+//            back up the moment its own tab is looked at again.
+export const APP_VERSION = '1.10-35'

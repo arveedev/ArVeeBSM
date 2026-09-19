@@ -25,6 +25,7 @@ import ShrinkFilterRow from './ShrinkFilterRow.jsx'
 import { nfaAllocationMatchesQuery } from '../../utils/monitoringSearch.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
+import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
 
 // `active` - true by default (the facility Home page usage, warehouseId
 // passed, is the only view in that context so it's always active).
@@ -81,7 +82,29 @@ function NfaMillingMonitor({ warehouseId, active = true } = {}) {
   // record in practice is one lump-sum authorization, not a day-by-day
   // log, so it can't answer "how much went in on this specific day" on
   // its own.
-  const recoverySummaryByNumber = useLiveQuery(async () => {
+  // Confirmed, reported real bug: same expensive-computation-directly-
+  // inside-useLiveQuery shape as AdminHomeStocks.jsx/MillingMonitor.jsx
+  // (docs/technical-design-document.md §2.12) - reads db.authorities
+  // (every ricemill's, when no warehouseId scopes it) plus
+  // db.varietyTypes/db.warehouses, so ANY write to db.authorities
+  // retriggered this admin-wide computation. This is directly
+  // implicated in a reported real jank: marking an authority complete
+  // ON THE AI/SIA TAB IS ITSELF a db.authorities write, and this
+  // component stays mounted in the background the whole time (see this
+  // file's own top comment) - so that exact write was retriggering this
+  // recompute on the main thread at the same moment the mark-complete
+  // row animation was trying to play smoothly on a different tab
+  // entirely. Uses the same shared useDebouncedLiveCompute fix, frozen
+  // while `active` is false so it doesn't even try to recompute in the
+  // background while a different Monitoring tab is the one actually
+  // being looked at.
+  const authorityCountForRecovery = useLiveQuery(() => db.authorities.count(), []) ?? 0
+  const varietyCountForRecovery = useLiveQuery(() => db.varietyTypes.count(), []) ?? 0
+  const warehouseCountForRecovery = useLiveQuery(() => db.warehouses.count(), []) ?? 0
+  const recoveryChangeSignal = active
+    ? `${warehouseId}:${allocations.length}:${authorityCountForRecovery}:${varietyCountForRecovery}:${warehouseCountForRecovery}`
+    : `frozen:${warehouseId}`
+  const recoverySummaryByNumber = useDebouncedLiveCompute(async () => {
     let ricemillIds
     if (warehouseId) {
       ricemillIds = [warehouseId]
@@ -145,7 +168,7 @@ function NfaMillingMonitor({ warehouseId, active = true } = {}) {
       })
     }
     return summary
-  }, [warehouseId, allocations]) ?? new Map()
+  }, recoveryChangeSignal, new Map(), { maxWaitMs: 30000 }) ?? new Map()
 
   return (
     <div ref={containerRef} className={warehouseId ? '' : 'mt-4'}>

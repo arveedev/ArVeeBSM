@@ -622,10 +622,27 @@ function MillingMonitor({ isAdmin = false, active = true }) {
   // previous result while a new one computed, making this page feel
   // sluggish/frozen under real sync traffic. Uses the same shared
   // useDebouncedLiveCompute fix.
+  //
+  // Confirmed, reported real bug: this component stays mounted the
+  // whole time a Monitoring tab is open (see this file's own comment
+  // further down), so even with the debounce/maxWait fix, the recompute
+  // was still firing on its own cadence in the background while the
+  // user was actively on a DIFFERENT Monitoring tab (e.g. marking an
+  // authority complete on AI/SIA) - visible as dropped frames/stutter
+  // on that other tab's own animation, since this recompute still
+  // shares the same single JS main thread. The change signal is frozen
+  // to a constant while `active` is false, so no new debounce/maxWait
+  // timer ever gets scheduled until this tab is genuinely being looked
+  // at again - `orders` simply keeps showing its last-known value while
+  // inactive (never cleared), so switching back to this tab shows real
+  // data immediately, then refreshes shortly after if anything changed
+  // while it was frozen.
   const millingTxCount = useLiveQuery(() => db.transactions.count(), []) ?? 0
   const millingOrderCount = useLiveQuery(() => db.millingOrders.count(), []) ?? 0
   const authorityCountForOrders = useLiveQuery(() => db.authorities.count(), []) ?? 0
-  const ordersChangeSignal = `${topTab}:${millingTxCount}:${millingOrderCount}:${authorityCountForOrders}`
+  const ordersChangeSignal = active
+    ? `${topTab}:${millingTxCount}:${millingOrderCount}:${authorityCountForOrders}`
+    : `frozen:${topTab}`
   const ordersRaw = useDebouncedLiveCompute(
     () => computeMillingOrderStatuses(topTab),
     ordersChangeSignal,
