@@ -313,10 +313,27 @@ fixes across every earlier phase.
   changed on the sheet. Closed with a Dexie schema migration (v35,
   `dexie.js`) clearing every device's sync watermark once, the same
   shape already used once before (v17) for an identical class of
-  problem. The throughline worth naming: every wrong turn in this chain
-  was caught by getting real evidence (an Executions log, a Network tab,
-  a function log) before the next attempt, rather than compounding one
-  guess on top of another.
+  problem. Even after the migration landed, real-device logs still
+  showed real failures - 10+ requests landing on Apps Script in the same
+  ~30-second window. Rather than tune retry counts a second time,
+  investigated the "continuous sync churn" item flagged and deferred
+  twice earlier in the project and found it was never benign background
+  noise: `AUTHORITY_SYNC_INTERVAL_MS` (60s) is an exact 2x multiple of
+  `TRANSACTION_SYNC_INTERVAL_MS` (30s), and both periodic workers fire
+  their first run immediately on login, in the same render tick. A plain
+  `setInterval` never drifts once started, so every other transaction
+  cycle permanently coincided with an authority cycle for the rest of a
+  session - a deterministic, self-inflicted thundering-herd burst of
+  every periodic sync request this device makes landing on the same
+  Apps Script project simultaneously, forever, worse across however many
+  staff devices are open in the field at once. Fixed with a self-
+  rescheduling jittered timer (`scheduleJittered`, `syncWorker.js`)
+  replacing the fixed interval on both workers, plus a 5-10s stagger on
+  the authority worker's very first run, so the two drift apart instead
+  of staying phase-locked. The throughline worth naming: every wrong
+  turn in this chain was caught by getting real evidence (an Executions
+  log, a Network tab, a function log) before the next attempt, rather
+  than compounding one guess on top of another.
 
 **Milestone**: the app is in daily production use across multiple
 warehouses with no open data-integrity bug, and every NFA report type
