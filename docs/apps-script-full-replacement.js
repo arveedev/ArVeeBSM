@@ -434,6 +434,15 @@ function doGet(e) {
       row['Source Warehouse'] = sourceWarehouse != null && sourceWarehouse !== ''
         ? String(sourceWarehouse).trim()
         : null;
+      // Date - Column A (index 0), same raw-position reasoning as
+      // Regional Authority Number above, confirmed directly against the
+      // live sheet rather than guessed from header text. Reported real
+      // bug: matching by header name (any "DATE"-prefixed header) never
+      // worked reliably for this column - read by position instead,
+      // like every other field on this sheet whose column position (not
+      // header wording) was actually confirmed.
+      const dateColA = dataRows[i] ? dataRows[i][0] : null;
+      row['Date Column A'] = dateColA instanceof Date ? dateColA.toISOString() : (dateColA || null);
     });
 
     const modifiedSince = e.parameter.modifiedSince;

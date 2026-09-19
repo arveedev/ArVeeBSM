@@ -4382,4 +4382,19 @@
 //            (1.10-46, reduces how often multiple requests burst at
 //            once) instead of adding another layer on top of a layer.
 //            api/sheets-proxy.js is left in the repo, unused.
-export const APP_VERSION = '1.10-47'
+//   1.10-48 - Fixed the AI date for real, from ground truth instead of
+//            another guess: user confirmed directly against the live
+//            sheet that the date is Column A. Header-name matching was
+//            never going to work reliably for it regardless of pattern
+//            (confirmed literal "DATE (2026)", then a broader "any
+//            date-prefixed header" match, neither actually fixed it).
+//            Switched to the SAME raw-column-position technique this
+//            sheet's own Regional Authority Number/Source Warehouse
+//            fields already use, for the same reason. Server
+//            (docs/apps-script-full-replacement.js, needs redeploying
+//            to API.gs) now adds row['Date Column A'] directly; the
+//            client reads that instead of guessing at header text. SIA
+//            is untouched - its real header is confirmed, actually and
+//            reliably named "DATE" (column B, not A - different sheet
+//            layout), and was already displaying correctly.
+export const APP_VERSION = '1.10-48'

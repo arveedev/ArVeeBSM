@@ -853,23 +853,16 @@ const runAuthoritiesSync = async () => {
     // Reported, real bug: no date was ever showing on AI/SIA authorities
     // (pending list or Completed list) despite the UI already having code
     // to display `a.date` when present - the sync itself was never
-    // successfully reading it. Root cause: the AI sheet's date column
-    // header has the CURRENT year baked directly into it ("DATE (2026)"),
-    // the exact same header-drift shape already found twice for
-    // regionalAuthorityNumber ("AUTHORITY" vs the documented name) and
-    // ageGroup ("Age Group" vs "Note3") - and since each Sheet Source is
-    // explicitly a fresh copy started every year (TDD §2.8), a literal
-    // year string here goes stale on a fixed schedule, not just once.
-    // Matches ANY header starting with "date" (case-insensitive) instead
-    // of one specific literal, so a year-suffixed rename in any future
-    // year keeps working with no code change required - this also covers
-    // whatever the CURRENT actual header text turns out to be, without
-    // needing to know it in advance.
-    const findDateValue = (row) => {
-      const key = Object.keys(row).find((k) => /^date/i.test(k.trim()))
-      return key ? row[key] : undefined
-    }
-
+    // successfully reading it. First attempted fix (matching any header
+    // starting with "date") was still wrong - confirmed directly by the
+    // user reading the live sheet: the date is Column A, and matching by
+    // header NAME at all is inherently unreliable for it, the same
+    // reason `Regional Authority Number`/`Source Warehouse` below are
+    // read by raw column position rather than header text. The server
+    // (docs/apps-script-full-replacement.js's fetchAuthorities action)
+    // now adds `row['Date Column A']` the same way it already adds
+    // those two fields - read that directly instead of guessing at
+    // header text.
     let aiCount = 0
     let siaCount = 0
 
@@ -887,9 +880,9 @@ const runAuthoritiesSync = async () => {
 
         // Skip anything dated before this source's Date From - this is
         // the actual mechanism behind "ignore old experiments in the
-        // sheet". See findDateValue's own comment above for why this
-        // matches any "date"-prefixed header rather than one literal.
-        const aiDateRaw = findDateValue(row)
+        // sheet". Read from Column A by raw position - see this loop's
+        // own top comment for why header-name matching was dropped.
+        const aiDateRaw = row['Date Column A']
         const aiDate = aiDateRaw ? String(aiDateRaw).slice(0, 10) : null
         if (aiDate && aiDate < source.dateFrom) continue
 
@@ -945,9 +938,14 @@ const runAuthoritiesSync = async () => {
         const siaNum = String(row['SIA'] ?? '').trim()
         if (!siaNum || !row['CUSTOMER']) continue
 
-        // Same Date From filter as AI, above (and the same findDateValue
-        // header-matching, for the same reason).
-        const siaDateRaw = findDateValue(row)
+        // Same Date From filter as AI, above - but NOT the same fix. The
+        // SIA sheet's own layout is different from AI's: confirmed
+        // directly (1.10-45's diagnostic log) that column A here holds
+        // the SIA number itself, with DATE in column B under a header
+        // that's actually and reliably named "DATE" - unlike AI, where
+        // matching by header name never worked. Read directly by that
+        // confirmed-correct header key rather than by position.
+        const siaDateRaw = row['DATE']
         const siaDate = siaDateRaw ? String(siaDateRaw).slice(0, 10) : null
         if (siaDate && siaDate < source.dateFrom) continue
 
