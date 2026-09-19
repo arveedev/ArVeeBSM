@@ -160,7 +160,14 @@ const fetchMillingOrderRows = async (source, type) => {
   url.searchParams.set('sheet', sheetName)
   url.searchParams.set('type', type)
 
-  const response = await fetchWithTimeout(url.toString())
+  // Confirmed, reported real bug: this fetches an entire MO/TMO sheet's
+  // worth of rows (same shape as fetchTransactionsBulk above), but was
+  // missed when the 1.10-33 fix gave that function - and markRowsSeen -
+  // the longer BULK_FETCH_TIMEOUT_MS budget. Left on the 8s single-row
+  // FETCH_TIMEOUT_MS, this aborted under real load exactly like the
+  // other two did before that fix (AbortError, "signal is aborted
+  // without reason", surfaced as syncMillingOrdersFromSheets failing).
+  const response = await fetchWithTimeout(url.toString(), {}, BULK_FETCH_TIMEOUT_MS)
   if (!response.ok) {
     throw new Error(`Sheet request failed (${response.status})`)
   }
@@ -184,7 +191,10 @@ const fetchAuthorityRows = async (source, type) => {
     url.searchParams.set('modifiedSince', source.lastSyncedAt)
   }
 
-  const response = await fetchWithTimeout(url.toString())
+  // Same gap, same fix as fetchMillingOrderRows above - a full AI/SIA
+  // sheet fetch is bulk-shaped even on a delta (modifiedSince) request,
+  // and was likewise left on the 8s single-row timeout budget.
+  const response = await fetchWithTimeout(url.toString(), {}, BULK_FETCH_TIMEOUT_MS)
   if (!response.ok) {
     throw new Error(`Sheet request failed (${response.status})`)
   }

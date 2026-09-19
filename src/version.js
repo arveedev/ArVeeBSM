@@ -4199,4 +4199,20 @@
 //            the resulting heavy filter/dedupe/sort re-render at lower
 //            priority, so it no longer blocks the same frame as the
 //            completingId-driven row animation.
-export const APP_VERSION = '1.10-36'
+//   1.10-37 - Fixed a real gap the 1.10-33 bulk-fetch-timeout fix missed:
+//            fetchMillingOrderRows (MO/TMO sheet sync, behind
+//            syncMillingOrdersFromSheets) and fetchAuthorityRows (AI/SIA
+//            sheet sync) both fetch an entire sheet's worth of rows -
+//            the same bulk shape as fetchTransactionsBulk and
+//            markRowsSeen, which 1.10-33 already moved to the 45s
+//            BULK_FETCH_TIMEOUT_MS budget - but were left on the 8s
+//            single-row FETCH_TIMEOUT_MS, aborting under real load with
+//            the exact same "AbortError: signal is aborted without
+//            reason" symptom 1.10-33 fixed for the other two. Reported
+//            directly: syncMillingOrdersFromSheets failing in the
+//            console alongside a still-erroring fetchTransactionsBulk
+//            call - the latter's fix was already shipped in 1.10-33, so
+//            if it persists after updating to this build, the device is
+//            most likely still running a stale cached PWA bundle rather
+//            than a new gap.
+export const APP_VERSION = '1.10-37'
