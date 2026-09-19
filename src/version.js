@@ -4056,4 +4056,28 @@
 //            own local database via the console). Logs each warehouse's
 //            own computed result and surfaces any thrown error instead
 //            of letting it fail silently. Remove once root-caused.
-export const APP_VERSION = '1.10-30'
+//   1.10-31 - Root-caused via 1.10-30's diagnostic logs: warehouseCategoryStock
+//            WAS computing correctly the whole time (confirmed real,
+//            non-zero totals in the logs) - the actual problem was that
+//            it lived inside a useLiveQuery, which makes Dexie auto-track
+//            every table the computation touches (db.transactions, read
+//            for every pile across all warehouses). On a device actively
+//            receiving Dexie Cloud sync traffic, EVERY incoming
+//            transaction record retriggered a full re-computation across
+//            every warehouse - the logs showed dozens of back-to-back
+//            recomputes in quick succession. Since useLiveQuery keeps
+//            showing its previous result while a new one computes, the
+//            "still computing" loading state only ever appeared once (the
+//            very first computation) and never came back for any of the
+//            silent recomputes after it, so a page that was legitimately
+//            still settling looked frozen with no loading indicator at
+//            all - eventually correct, but only after a long, invisible
+//            wait. Fixed by decoupling the heavy computation from Dexie's
+//            automatic per-write reactivity: a cheap transaction/pile
+//            row-count liveQuery now acts as the change signal, debounced
+//            700ms so a burst of incoming sync writes collapses into one
+//            recompute after things go quiet, and the actual computation
+//            runs in a plain effect that explicitly resets to "loading"
+//            every time it starts - not just the first time. Removed the
+//            temporary diagnostic logging from 1.10-30.
+export const APP_VERSION = '1.10-31'

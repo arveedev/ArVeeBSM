@@ -7,7 +7,7 @@
 // pile.currentKilos read directly - see computeCurrentPileStatesBatch's
 // own comment for why this page used to bypass that override entirely.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
@@ -123,32 +123,55 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // Grouping still uses its own per-age-bucket computation further down
   // (a different shape - per bucket, not per warehouse total).
   const sackTypesForStock = useLiveQuery(() => db.sackTypes.toArray(), []) ?? []
+  // warehouseCategoryStock used to be computed directly inside a
+  // useLiveQuery, which made Dexie auto-track every table the
+  // computation touches - db.transactions, read for every pile across
+  // all 16 warehouses. Confirmed, reported real bug: on a device
+  // actively receiving Dexie Cloud sync traffic (or the Google Sheets
+  // preload's own per-row writes), EVERY incoming transaction record
+  // retriggered a full 16-warehouse recompute, sometimes dozens of
+  // times in a row - the eventual totals were correct (confirmed via
+  // diagnostic logging), but it took a long time to settle AND, since
+  // useLiveQuery keeps showing its previous emission while a new one
+  // computes, the loading indicator only ever appeared on the very
+  // first computation and never came back for the many silent recomputes
+  // after it, making a legitimately-still-computing page look frozen.
+  // Decoupled below: a cheap row-count liveQuery (txCount/pileCount)
+  // acts as the change signal, debounced so a burst of incoming sync
+  // writes collapses into one recompute after things go quiet, and the
+  // actual heavy computation runs in a plain effect that explicitly
+  // resets to "loading" every time it starts, not just the first time.
+  const txCount = useLiveQuery(() => db.transactions.count(), []) ?? 0
+  const pileCountForStock = useLiveQuery(() => db.piles.count(), []) ?? 0
+  const [stockRecomputeTrigger, setStockRecomputeTrigger] = useState(0)
+  useEffect(() => {
+    const timer = setTimeout(() => setStockRecomputeTrigger((v) => v + 1), 700)
+    return () => clearTimeout(timer)
+  }, [txCount, pileCountForStock])
   // Deliberately NOT defaulted with `?? new Map()` here - undefined
   // (still computing) needs to stay distinguishable from a real, empty
   // Map (computed, genuinely nothing to show), so the two render
   // differently below instead of both reading as "0" - see this
   // section's own Loading/Empty gate.
-  const warehouseCategoryStockRaw = useLiveQuery(async () => {
-    // TEMPORARY DIAGNOSTIC LOGGING - investigating a reported case where
-    // this query resolves to an empty/zero result on a specific device
-    // despite the underlying data and this same computation both being
-    // confirmed correct when run directly. Remove once root-caused.
-    console.log('[ADMIN-HOME-DIAG] warehouseCategoryStock starting, warehouses:', warehouses.length, 'varieties:', varieties.length, 'sackTypes:', sackTypesForStock.length)
-    if (warehouses.length === 0) return new Map()
-    const result = new Map()
-    try {
+  const [warehouseCategoryStockRaw, setWarehouseCategoryStockRaw] = useState(undefined)
+  useEffect(() => {
+    if (warehouses.length === 0) {
+      setWarehouseCategoryStockRaw(new Map())
+      return
+    }
+    let cancelled = false
+    setWarehouseCategoryStockRaw(undefined)
+    ;(async () => {
+      const result = new Map()
       await runInBatches(warehouses, 3, async (w) => {
         const stock = await computeWarehouseCategoryStock(w.warehouseId, { varieties, sackTypes: sackTypesForStock })
-        console.log('[ADMIN-HOME-DIAG]', w.code, '->', JSON.stringify([...stock.entries()]))
         result.set(w.warehouseId, stock)
       })
-    } catch (err) {
-      console.error('[ADMIN-HOME-DIAG] THREW:', err)
-      throw err
-    }
-    console.log('[ADMIN-HOME-DIAG] DONE, result has entries for', result.size, 'warehouses')
-    return result
-  }, [warehouses, varieties, sackTypesForStock])
+      if (!cancelled) setWarehouseCategoryStockRaw(result)
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouses, varieties, sackTypesForStock, stockRecomputeTrigger])
   const isStockLoading = warehouseCategoryStockRaw === undefined
   const warehouseCategoryStock = warehouseCategoryStockRaw ?? new Map()
 
