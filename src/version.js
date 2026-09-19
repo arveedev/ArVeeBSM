@@ -4273,4 +4273,25 @@
 //            instead of requesting a sheet's entire filtered history in
 //            one response, so a page never gets large enough to trip
 //            that mechanism at all.
-export const APP_VERSION = '1.10-41'
+//   1.10-42 - Corrected 1.10-41's root-cause theory after real evidence
+//            disproved it: pagination did NOT actually fix the
+//            fetchTransactionsBulk 404s. A direct Network-tab inspection
+//            showed the true mechanism - Apps Script Web Apps route
+//            EVERY GET response through a 302 redirect to a
+//            script.googleusercontent.com/macros/echo?... content-
+//            hosting URL when fetched via a plain fetch() client,
+//            regardless of payload size (confirmed directly: a tiny,
+//            0.1kB paginated response still went through the exact same
+//            redirect, and 404'd on some attempts while succeeding on
+//            others with no code or data change in between). This is a
+//            transient-failure class of bug, not a size problem - the
+//            same shape already fixed once before for POST requests via
+//            postToSheetsWithRetry. Added a GET-flavored equivalent
+//            (fetchWithRetry, 3 attempts with a short increasing delay)
+//            and applied it to fetchTransactionsBulk, fetchAuthorityRows,
+//            and fetchMillingOrderRows - all three go through the same
+//            echo-redirect layer and are equally exposed to this
+//            flakiness. Pagination (1.10-41) is kept regardless, since
+//            smaller responses are still good practice even though they
+//            weren't the actual fix here.
+export const APP_VERSION = '1.10-42'

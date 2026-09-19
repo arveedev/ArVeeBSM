@@ -149,6 +149,41 @@ const BULK_FETCH_TIMEOUT_MS = 45000
 // in pages of this size instead, well under whatever size threshold
 // triggers that mechanism, so it's avoided entirely rather than raced.
 const BULK_FETCH_PAGE_SIZE = 500
+
+// Confirmed, reported real bug: pagination alone did NOT fix the
+// fetchTransactionsBulk 404s - a direct Network-tab inspection showed
+// the real mechanism is that Apps Script Web Apps route EVERY GET
+// response through a 302 redirect to a script.googleusercontent.com/
+// macros/echo?... content-hosting URL when fetched via a plain fetch()
+// client (this happens regardless of payload size - confirmed directly:
+// a tiny, 0.1kB paginated response still went through this same
+// redirect), and that echo step is simply unreliable - it 404s
+// intermittently, then succeeds on a later identical request with no
+// code or data change in between. This is a transient-failure class of
+// bug, the same shape already fixed once before for POST requests via
+// postToSheetsWithRetry - a GET-flavored equivalent for bulk fetch
+// pages, since the earlier page-size theory was wrong and retrying is
+// the fix that actually matches the evidence.
+const fetchWithRetry = async (url, timeoutMs, maxAttempts = 3) => {
+  let lastError = null
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetchWithTimeout(url, {}, timeoutMs)
+      if (response.ok) return { ok: true, response }
+      lastError = { ok: false, httpStatus: response.status }
+    } catch (err) {
+      lastError = { ok: false, error: err }
+    }
+    if (attempt < maxAttempts) {
+      // Same short, increasing delay as postToSheetsWithRetry (300ms,
+      // 600ms) - long enough to ride out the echo redirect's momentary
+      // flakiness, short enough not to make a preload noticeably slower
+      // on the common case where the very first attempt just works.
+      await new Promise((resolve) => setTimeout(resolve, attempt * 300))
+    }
+  }
+  return lastError
+}
 const fetchWithTimeout = (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) => {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -178,10 +213,15 @@ const fetchMillingOrderRows = async (source, type) => {
   // FETCH_TIMEOUT_MS, this aborted under real load exactly like the
   // other two did before that fix (AbortError, "signal is aborted
   // without reason", surfaced as syncMillingOrdersFromSheets failing).
-  const response = await fetchWithTimeout(url.toString(), {}, BULK_FETCH_TIMEOUT_MS)
-  if (!response.ok) {
-    throw new Error(`Sheet request failed (${response.status})`)
+  // Also retried on failure - same reason as fetchTransactionsBulk's own
+  // fetchWithRetry: Apps Script's echo-redirect response layer is
+  // intermittently flaky for a plain fetch() client, regardless of
+  // payload size, and clears up on a same-request retry.
+  const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS)
+  if (!attempt.ok) {
+    throw new Error(`Sheet request failed (${attempt.httpStatus})`)
   }
+  const response = attempt.response
 
   const payload = await response.json()
   if (payload.status !== 'SUCCESS' || !Array.isArray(payload.orders)) {
@@ -204,11 +244,14 @@ const fetchAuthorityRows = async (source, type) => {
 
   // Same gap, same fix as fetchMillingOrderRows above - a full AI/SIA
   // sheet fetch is bulk-shaped even on a delta (modifiedSince) request,
-  // and was likewise left on the 8s single-row timeout budget.
-  const response = await fetchWithTimeout(url.toString(), {}, BULK_FETCH_TIMEOUT_MS)
-  if (!response.ok) {
-    throw new Error(`Sheet request failed (${response.status})`)
+  // and was likewise left on the 8s single-row timeout budget. Also
+  // retried on failure for the same reason as fetchTransactionsBulk's
+  // own fetchWithRetry - see its comment.
+  const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS)
+  if (!attempt.ok) {
+    throw new Error(`Sheet request failed (${attempt.httpStatus})`)
   }
+  const response = attempt.response
 
   const payload = await response.json()
   if (payload.status !== 'SUCCESS' || !Array.isArray(payload.rows)) {
@@ -1714,12 +1757,12 @@ export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSinc
       url.searchParams.set('limit', String(BULK_FETCH_PAGE_SIZE))
 
       try {
-        const response = await fetchWithTimeout(url.toString(), {}, BULK_FETCH_TIMEOUT_MS)
-        if (!response.ok) {
-          console.error(`fetchTransactionsBulk: HTTP ${response.status} for ${type} on sheet "${sheetName}" (offset ${offset})`)
+        const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS)
+        if (!attempt.ok) {
+          console.error(`fetchTransactionsBulk: HTTP ${attempt.httpStatus} for ${type} on sheet "${sheetName}" (offset ${offset}, after retries)`)
           return { sourceId: source.id, ok: false, rows: [] }
         }
-        const payload = await response.json()
+        const payload = await attempt.response.json()
         if (payload.status !== 'SUCCESS') {
           console.error(`fetchTransactionsBulk: non-SUCCESS response for ${type} on sheet "${sheetName}" (offset ${offset}):`, payload)
           return { sourceId: source.id, ok: false, rows: [] }
