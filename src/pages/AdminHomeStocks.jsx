@@ -7,7 +7,7 @@
 // pile.currentKilos read directly - see computeCurrentPileStatesBatch's
 // own comment for why this page used to bypass that override entirely.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
@@ -136,18 +136,56 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // computes, the loading indicator only ever appeared on the very
   // first computation and never came back for the many silent recomputes
   // after it, making a legitimately-still-computing page look frozen.
-  // Decoupled below: a cheap row-count liveQuery (txCount/pileCount)
-  // acts as the change signal, debounced so a burst of incoming sync
-  // writes collapses into one recompute after things go quiet, and the
-  // actual heavy computation runs in a plain effect that explicitly
-  // resets to "loading" every time it starts, not just the first time.
+  //
+  // First attempt at a fix (simple 700ms debounce keyed on live
+  // warehouses/varieties/sackTypesForStock references) was itself a real
+  // reported regression: on a device with genuinely continuous sync
+  // traffic (confirmed via console - pushing/pulling cycling back-to-back
+  // with no gap), the underlying tables never actually go quiet, so a
+  // pure "wait for quiet" debounce livelocked - the computation effect
+  // kept getting cancelled and restarted (its dependency array included
+  // those live arrays, whose identity changes on every table write)
+  // before a single pass could ever finish, leaving the loading spinner
+  // stuck forever with nothing underneath it. Fixed by two changes below:
+  // (1) the heavy computation effect now depends ONLY on the debounced
+  // trigger number, reading warehouses/varieties/sackTypes from refs
+  // (kept fresh every render but not used as dependencies) instead of
+  // the live values directly, so unstable array identity can no longer
+  // restart it mid-flight; (2) the debounce has a hard maxWait alongside
+  // its normal quiet-period wait, so a recompute is guaranteed to fire on
+  // a bounded schedule even if sync traffic never actually goes quiet.
+  const warehousesRef = useRef(warehouses)
+  useEffect(() => { warehousesRef.current = warehouses }, [warehouses])
+  const varietiesRef = useRef(varieties)
+  useEffect(() => { varietiesRef.current = varieties }, [varieties])
+  const sackTypesForStockRef = useRef(sackTypesForStock)
+  useEffect(() => { sackTypesForStockRef.current = sackTypesForStock }, [sackTypesForStock])
+
   const txCount = useLiveQuery(() => db.transactions.count(), []) ?? 0
   const pileCountForStock = useLiveQuery(() => db.piles.count(), []) ?? 0
+  const stockChangeSignal = `${txCount}:${pileCountForStock}:${warehouses.length}:${varieties.length}:${sackTypesForStock.length}`
   const [stockRecomputeTrigger, setStockRecomputeTrigger] = useState(0)
+  const stockDebounceTimerRef = useRef(null)
+  const stockMaxWaitTimerRef = useRef(null)
   useEffect(() => {
-    const timer = setTimeout(() => setStockRecomputeTrigger((v) => v + 1), 700)
-    return () => clearTimeout(timer)
-  }, [txCount, pileCountForStock])
+    const fire = () => {
+      setStockRecomputeTrigger((v) => v + 1)
+      if (stockMaxWaitTimerRef.current) {
+        clearTimeout(stockMaxWaitTimerRef.current)
+        stockMaxWaitTimerRef.current = null
+      }
+    }
+    if (stockDebounceTimerRef.current) clearTimeout(stockDebounceTimerRef.current)
+    stockDebounceTimerRef.current = setTimeout(fire, 700)
+    // maxWait: only armed once per burst (not re-armed on every quiet-
+    // window reset above) - guarantees a recompute at least every 5s
+    // even while stockChangeSignal keeps changing continuously.
+    if (!stockMaxWaitTimerRef.current) {
+      stockMaxWaitTimerRef.current = setTimeout(fire, 5000)
+    }
+    return () => { if (stockDebounceTimerRef.current) clearTimeout(stockDebounceTimerRef.current) }
+  }, [stockChangeSignal])
+
   // Deliberately NOT defaulted with `?? new Map()` here - undefined
   // (still computing) needs to stay distinguishable from a real, empty
   // Map (computed, genuinely nothing to show), so the two render
@@ -155,23 +193,39 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // section's own Loading/Empty gate.
   const [warehouseCategoryStockRaw, setWarehouseCategoryStockRaw] = useState(undefined)
   useEffect(() => {
-    if (warehouses.length === 0) {
+    const currentWarehouses = warehousesRef.current
+    if (currentWarehouses.length === 0) {
       setWarehouseCategoryStockRaw(new Map())
       return
     }
     let cancelled = false
     setWarehouseCategoryStockRaw(undefined)
     ;(async () => {
-      const result = new Map()
-      await runInBatches(warehouses, 3, async (w) => {
-        const stock = await computeWarehouseCategoryStock(w.warehouseId, { varieties, sackTypes: sackTypesForStock })
-        result.set(w.warehouseId, stock)
-      })
-      if (!cancelled) setWarehouseCategoryStockRaw(result)
+      try {
+        const result = new Map()
+        await runInBatches(currentWarehouses, 3, async (w) => {
+          const stock = await computeWarehouseCategoryStock(w.warehouseId, {
+            varieties: varietiesRef.current,
+            sackTypes: sackTypesForStockRef.current,
+          })
+          result.set(w.warehouseId, stock)
+        })
+        if (!cancelled) setWarehouseCategoryStockRaw(result)
+      } catch (err) {
+        console.error('[AdminHomeStocks] warehouseCategoryStock computation failed:', err)
+        // Surface something rather than leaving the spinner stuck
+        // forever with no explanation - an empty result at least lets
+        // the page settle into its normal Empty state instead of
+        // spinning indefinitely on a failure.
+        if (!cancelled) setWarehouseCategoryStockRaw(new Map())
+      }
     })()
     return () => { cancelled = true }
+    // Deliberately depends ONLY on the trigger - see this section's own
+    // comment above for why the live warehouses/varieties/sackTypes
+    // arrays are read via ref instead of as dependencies here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [warehouses, varieties, sackTypesForStock, stockRecomputeTrigger])
+  }, [stockRecomputeTrigger])
   const isStockLoading = warehouseCategoryStockRaw === undefined
   const warehouseCategoryStock = warehouseCategoryStockRaw ?? new Map()
 

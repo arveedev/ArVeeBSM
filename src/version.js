@@ -4080,4 +4080,25 @@
 //            runs in a plain effect that explicitly resets to "loading"
 //            every time it starts - not just the first time. Removed the
 //            temporary diagnostic logging from 1.10-30.
-export const APP_VERSION = '1.10-31'
+//   1.10-32 - Fixed a real regression 1.10-31 introduced: on a device with
+//            genuinely continuous Dexie Cloud sync traffic (confirmed via
+//            console - pushing/pulling cycling back-to-back with no real
+//            gap), a plain "wait 700ms for quiet" debounce never actually
+//            got its quiet window, and the heavy computation effect's own
+//            dependency array (the live warehouses/varieties/sackTypes
+//            arrays, whose identity changes on every table write) kept
+//            cancelling and restarting it before a single pass could ever
+//            finish - Admin Home's stock totals showed nothing but a
+//            spinner for 15+ minutes on both an iPhone and an Android
+//            device. Fixed by making the computation effect depend ONLY
+//            on the debounced trigger number (reading warehouses/
+//            varieties/sackTypes from refs kept fresh every render,
+//            instead of as effect dependencies), so unstable array
+//            identity can no longer restart it mid-flight; also added a
+//            hard 5s maxWait alongside the quiet-period debounce, so a
+//            recompute is guaranteed on a bounded schedule even if sync
+//            traffic never truly goes quiet, plus a try/catch around the
+//            computation so a real failure surfaces in the console and
+//            settles the page instead of leaving the spinner stuck
+//            forever with no explanation.
+export const APP_VERSION = '1.10-32'
