@@ -370,6 +370,31 @@ doesn't know about visibility) — see `MillingMonitor.jsx`'s and
 `NfaMillingMonitor.jsx`'s own `active`-gated `changeSignal` for the
 established shape of this.
 
+A fifth confirmed instance, in `AdminMonitoring.jsx`'s own top-level
+`db.authorities.toArray()` query (the AI/SIA tabs' data source), needed a
+genuinely different fix rather than another application of
+`useDebouncedLiveCompute`. That hook's change-detection signal is a row
+**count**, which only changes on insert/delete — but almost every
+meaningful write to `db.authorities` is a field mutation on an *existing*
+row (an issuance decrementing totals, a completion toggle), so a
+count-based signal would silently go stale on exactly the interactions
+this page most needs to reflect immediately (the admin's own "mark
+complete" tap chief among them). Fixed instead with React's
+`useDeferredValue`: the query itself stays a plain, always-fresh
+`useLiveQuery`, so data freshness is unaffected — but the array is wrapped
+in `useDeferredValue` before any of the page's own heavy
+filter/dedupe/sort derivation runs on it, so React schedules that
+re-render work at lower priority instead of synchronously in the same
+frame as a higher-priority update (the `completingId`-driven row
+animation). This decouples render *priority* from data *freshness*,
+which is the right tool specifically when the data must stay immediately
+consistent (ruling out debounce) but the derived render work is
+expensive enough to compete with an animation for frame budget — a third
+distinct remedy for the same underlying `useLiveQuery`-reactivity family,
+alongside batching (§2.12 point 1) and `useDebouncedLiveCompute`
+(everywhere else in this section). Requires `ReactDOM.createRoot` (React
+18 concurrent rendering), already in use app-wide.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

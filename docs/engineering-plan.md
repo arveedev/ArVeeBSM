@@ -256,7 +256,29 @@ fixes across every earlier phase.
   confirmation the pattern was general enough to warrant its own shared
   implementation (`useDebouncedLiveCompute`, TDD §2.12) rather than a
   second bespoke fix living only in the page that happened to report the
-  symptom first.
+  symptom first. A fifth round, video-confirmed, surfaced a distinct
+  failure mode the debounce/maxWait fix alone didn't cover:
+  `NfaMillingMonitor.jsx` had the same un-decoupled computation (a third
+  confirmed instance), and even once converted to
+  `useDebouncedLiveCompute`, it kept recomputing in the background on its
+  own cadence while a *different* Admin Monitoring tab was the one being
+  interacted with — since the component intentionally stays mounted
+  across tab switches to preserve its own local state — landing on the
+  main thread at the same moment as the visible tab's own row-completion
+  animation. Fixed by freezing the component's `changeSignal` to a
+  constant whenever its `active` prop is false, so a backgrounded tab
+  does zero background work, not just debounced work. A sixth round then
+  found the fifth round's fix hadn't covered every case: frame drops
+  persisted, confirmed admin-only (the user-side `AuthorityMonitor.jsx`
+  stayed smooth throughout), traced to `AdminMonitoring.jsx`'s own
+  top-level `db.authorities.toArray()` query — unscoped across every
+  warehouse nationwide, unlike the user-side component's
+  warehouse-scoped equivalent. `useDebouncedLiveCompute` wasn't the
+  right fix this time: its count-based change signal would go stale on
+  the field mutations (a completion toggle, an issuance) this page most
+  needs to reflect immediately. Fixed instead with `useDeferredValue`,
+  decoupling render *priority* from data *freshness* rather than
+  trading away freshness for a debounce (TDD §2.12).
 
 **Milestone**: the app is in daily production use across multiple
 warehouses with no open data-integrity bug, and every NFA report type
