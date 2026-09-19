@@ -190,6 +190,20 @@ const fetchWithTimeout = (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) => {
   return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer))
 }
 
+// Confirmed, reported real bug: fetchWithRetry alone did not eliminate
+// the echo-redirect 404s - some sheets failed often enough to exhaust
+// three retries. A direct top-level browser navigation to the exact
+// same Apps Script URL never showed the 302-to-echo redirect at all,
+// pointing at something specific to a browser-issued fetch() rather
+// than the request itself. Every GET (read-only) call to Apps Script
+// now goes through api/sheets-proxy.js instead - a Vercel serverless
+// function that makes the same request server-to-server, which should
+// never exhibit whatever browser-fetch()-specific behavior triggers
+// this in the first place. Only wraps GET (doGet) actions - the doPost
+// write actions (postToSheetsWithRetry) have no reported symptom of
+// this and are left calling the Apps Script URL directly.
+const viaProxy = (targetUrl) => `/api/sheets-proxy?url=${encodeURIComponent(targetUrl)}`
+
 /**
  * Fetches AI or SIA rows from one sheet source, using its own
  * lastSyncedAt for a delta request when available (first sync for a
@@ -217,7 +231,7 @@ const fetchMillingOrderRows = async (source, type) => {
   // fetchWithRetry: Apps Script's echo-redirect response layer is
   // intermittently flaky for a plain fetch() client, regardless of
   // payload size, and clears up on a same-request retry.
-  const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS)
+  const attempt = await fetchWithRetry(viaProxy(url.toString()), BULK_FETCH_TIMEOUT_MS)
   if (!attempt.ok) {
     throw new Error(`Sheet request failed (${attempt.httpStatus})`)
   }
@@ -247,7 +261,7 @@ const fetchAuthorityRows = async (source, type) => {
   // and was likewise left on the 8s single-row timeout budget. Also
   // retried on failure for the same reason as fetchTransactionsBulk's
   // own fetchWithRetry - see its comment.
-  const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS)
+  const attempt = await fetchWithRetry(viaProxy(url.toString()), BULK_FETCH_TIMEOUT_MS)
   if (!attempt.ok) {
     throw new Error(`Sheet request failed (${attempt.httpStatus})`)
   }
@@ -1647,7 +1661,7 @@ export const fetchTransactionBySerial = async (type, warehouseName, serialNo) =>
     url.searchParams.set('warehouseValue', warehouseName ?? '')
 
     try {
-      const response = await fetchWithTimeout(url.toString())
+      const response = await fetchWithTimeout(viaProxy(url.toString()))
       if (!response.ok) {
         console.error(`fetchTransactionBySerial: HTTP ${response.status} for ${type} #${serialNo} on sheet "${sheetName}"`)
         continue
@@ -1696,7 +1710,7 @@ export const fetchSerialFloorFromSheet = async (type, warehouseName) => {
     url.searchParams.set('warehouseValue', warehouseName ?? '')
 
     try {
-      const response = await fetchWithTimeout(url.toString())
+      const response = await fetchWithTimeout(viaProxy(url.toString()))
       if (!response.ok) {
         console.error(`fetchSerialFloorFromSheet: HTTP ${response.status} for ${type} on sheet "${sheetName}"`)
         continue
@@ -1757,7 +1771,7 @@ export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSinc
       url.searchParams.set('limit', String(BULK_FETCH_PAGE_SIZE))
 
       try {
-        const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS)
+        const attempt = await fetchWithRetry(viaProxy(url.toString()), BULK_FETCH_TIMEOUT_MS)
         if (!attempt.ok) {
           console.error(`fetchTransactionsBulk: HTTP ${attempt.httpStatus} for ${type} on sheet "${sheetName}" (offset ${offset}, after retries)`)
           return { sourceId: source.id, ok: false, rows: [] }

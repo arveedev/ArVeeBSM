@@ -4294,4 +4294,22 @@
 //            flakiness. Pagination (1.10-41) is kept regardless, since
 //            smaller responses are still good practice even though they
 //            weren't the actual fix here.
-export const APP_VERSION = '1.10-42'
+//   1.10-43 - Retry alone (1.10-42) didn't eliminate the Sheets sync
+//            404s - some sheets (WSI/ESR/ESI especially) still exhausted
+//            all three attempts often enough to matter. Built the real
+//            structural fix: a new Vercel serverless function,
+//            api/sheets-proxy.js, that makes every GET (read-only) call
+//            to the Apps Script Web App server-to-server instead of the
+//            browser calling it directly. A direct top-level browser
+//            navigation to the exact same Apps Script URL never showed
+//            the echo-redirect 404 at all, pointing squarely at
+//            something specific to a browser-issued fetch() - a
+//            server-to-server request from Vercel's Node runtime should
+//            not exhibit that same behavior. Every GET call in
+//            googleSheetsBridge.js (fetchTransactionsBulk,
+//            fetchAuthorityRows, fetchMillingOrderRows,
+//            fetchTransactionBySerial, fetchSerialFloorFromSheet) now
+//            routes through this proxy via the new viaProxy() helper.
+//            The doPost write actions are unaffected - no reported
+//            symptom there, left calling Apps Script directly.
+export const APP_VERSION = '1.10-43'
