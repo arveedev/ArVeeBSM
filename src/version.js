@@ -4369,4 +4369,17 @@
 //            staggered the authority worker's very first run 5-10s behind
 //            the transaction worker's, so the two drift apart instead of
 //            staying phase-locked.
-export const APP_VERSION = '1.10-46'
+//   1.10-47 - Reverted 1.10-43's Vercel proxy. It didn't fully eliminate
+//            the original echo-redirect flakiness and introduced a
+//            separate, new failure mode of its own: Vercel's own routing
+//            to a newly-added serverless function intermittently 404ing
+//            under this device's request volume, confirmed directly in
+//            Vercel's own request logs (a mix of 200s and 404s for the
+//            identical route within the same few minutes - not a missing
+//            or failed deployment). Simplified back to calling Apps
+//            Script directly from the browser for every GET action,
+//            relying on fetchWithRetry (1.10-42) plus the jitter fix
+//            (1.10-46, reduces how often multiple requests burst at
+//            once) instead of adding another layer on top of a layer.
+//            api/sheets-proxy.js is left in the repo, unused.
+export const APP_VERSION = '1.10-47'
