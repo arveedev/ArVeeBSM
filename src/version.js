@@ -4423,4 +4423,17 @@
 //            migration (dexie.js), the exact same lastSyncedAt-clearing
 //            shape as v17/v35, forcing one more full pull now that the
 //            header is genuinely readable.
-export const APP_VERSION = '1.10-50'
+//   1.10-51 - Restored real visibility into the authorities sync path,
+//            which had NONE at all - unlike syncMillingOrdersFromSheets'
+//            own success log, a failed syncAuthoritiesFromSheets pass was
+//            completely silent in the console, indistinguishable from
+//            "hasn't run yet." Five minutes of real-device testing after
+//            1.10-50 still showed no date, with no way to tell from the
+//            console whether the sync was still failing outright or
+//            succeeding while resolving the date wrong. Added TEMPORARY
+//            diagnostic logging: a success/failure log for the whole
+//            sync pass, and a one-time-per-pass log of exactly what the
+//            first real AI row's date resolves to and from which source
+//            (header match vs Column A fallback) - answers definitively
+//            instead of guessing a sixth time.
+export const APP_VERSION = '1.10-51'

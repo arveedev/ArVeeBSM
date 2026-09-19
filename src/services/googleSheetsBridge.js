@@ -934,6 +934,16 @@ const runAuthoritiesSync = async () => {
           sourceId: source.id,
         }, aiCache)
         aiCount += 1
+        // TEMPORARY diagnostic - the fix chain (header restored, hybrid
+        // header-name/position read) hasn't yet been confirmed actually
+        // resolving a real date, and this whole sync path had NO success/
+        // failure visibility at all (see the equally-temporary log added
+        // where this function returns, below). Logs once, for the first
+        // AI row actually processed each sync pass, exactly what got
+        // resolved and from where.
+        if (aiCount === 1) {
+          console.log('[AUTHORITY-SYNC-DIAG] first AI row - aiDateRaw:', aiDateRaw, 'aiDate:', aiDate, 'row[DATE]:', row['DATE'], 'row[Date Column A]:', row['Date Column A'])
+        }
       }
 
       // Parse each SIA row individually first (same validation/skip
@@ -1053,8 +1063,14 @@ const runAuthoritiesSync = async () => {
       await db.sheetSources.update(source.id, { lastSyncedAt: new Date().toISOString() })
     }
 
+    // TEMPORARY diagnostic - this function had no success/failure
+    // visibility at all before this, unlike syncMillingOrdersFromSheets'
+    // own console.log - meaning a failed sync here was completely
+    // silent, indistinguishable from "hasn't run yet" in the console.
+    console.log('[AUTHORITY-SYNC-DIAG] sync succeeded - aiCount:', aiCount, 'siaCount:', siaCount)
     return { ok: true, aiCount, siaCount }
   } catch (error) {
+    console.error('[AUTHORITY-SYNC-DIAG] sync FAILED:', error.message)
     return { ok: false, reason: 'request_failed', error: error.message }
   } finally {
     syncInProgress = false
