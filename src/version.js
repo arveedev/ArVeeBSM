@@ -4241,4 +4241,14 @@
 //            year-suffixed rename in any future year keeps working with no
 //            code change required. Also applied to SIA, which had no
 //            year-suffix fallback at all before this fix.
-export const APP_VERSION = '1.10-39'
+//   1.10-40 - TEMPORARY diagnostic build: 1.10-39's findDateValue fix
+//            (matching any "date"-prefixed header) was reported as NOT
+//            fixing the missing-date symptom - screenshot confirmed, real
+//            authorities, still no date line anywhere. Rather than guess
+//            at a third literal header string, added a one-time-per-sync
+//            console.log of the AI/SIA sheet's actual raw row keys and a
+//            full sample row, so the real header text (or the real
+//            absence of any date value for these specific rows) is
+//            confirmed directly from the live data instead of guessed at
+//            again.
+export const APP_VERSION = '1.10-40'
