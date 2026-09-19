@@ -923,6 +923,24 @@ db.version(35).stores({}).upgrade(async (tx) => {
   }
 })
 
+// v36 — same fix as v35, needed a second time for a different reason:
+// v35's forced full pull ran BEFORE the AI sheet's date column header
+// was actually fixed (it had been deleted entirely - see 1.10-49), so
+// that pull correctly found no date to read and saved `date: null`
+// again, same as every sync before it - the header simply wasn't
+// readable yet. Editing only a header cell afterward doesn't help on
+// its own: the sheet's own onEdit trigger explicitly skips row 1, so no
+// data row's Last Modified was touched by fixing the header, meaning a
+// normal delta sync has nothing telling it to revisit any existing row.
+// Clearing lastSyncedAt again forces one more full pull, now that the
+// header is genuinely fixed, so it actually succeeds this time.
+db.version(36).stores({}).upgrade(async (tx) => {
+  const sources = await tx.table('sheetSources').toArray()
+  for (const source of sources) {
+    await tx.table('sheetSources').update(source.id, { lastSyncedAt: null })
+  }
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

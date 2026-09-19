@@ -4412,4 +4412,15 @@
 //            blanked out again in the future degrades gracefully instead
 //            of silently breaking the same way twice. SIA untouched -
 //            already correct.
-export const APP_VERSION = '1.10-49'
+//   1.10-50 - Fixed why the date still didn't show even after the header
+//            was fixed: v35's forced full pull (1.10-45) ran BEFORE the
+//            header existed, so it correctly found nothing and saved
+//            date: null - then stamped the sync as done. Editing only
+//            the header cell afterward didn't help on its own, since the
+//            sheet's onEdit trigger explicitly skips row 1, so no data
+//            row's Last Modified changed and a normal delta sync had
+//            nothing telling it to revisit anything. Added a v36 schema
+//            migration (dexie.js), the exact same lastSyncedAt-clearing
+//            shape as v17/v35, forcing one more full pull now that the
+//            header is genuinely readable.
+export const APP_VERSION = '1.10-50'
