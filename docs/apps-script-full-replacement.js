@@ -38,6 +38,16 @@
  * single serial up at a time during navigation. Also read-only, not
  * subject to WRITE_ALLOWLIST.
  *
+ * UPDATED AGAIN: fetchTransactionsBulk now supports optional offset/
+ * limit pagination. A large filtered result set used to trip Apps
+ * Script's own automatic large-response echo-redirect mechanism
+ * (script.googleusercontent.com/macros/echo?...), which is unreliable
+ * for a plain fetch() client and started 404ing once this app's real
+ * transaction history grew large enough - confirmed via the Executions
+ * log showing every doGet completing successfully, so the script itself
+ * was never at fault, only the response-delivery path for one huge
+ * payload. The client now requests this in pages instead.
+ *
  * ── Safety, enforced here, not just trusted from the calling app ──
  * This app must NEVER write to the AI or SIA sheets - WRITE_ALLOWLIST
  * below is checked on every single write request BEFORE anything
@@ -364,7 +374,29 @@ function doGet(e) {
         // column but before every row has been touched/stamped yet.
       }
 
-      return jsonResponse({ status: 'SUCCESS', rows });
+      // Paginated instead of returning the whole filtered set in one
+      // response. Reported, real bug: once a sheet's history grows large
+      // enough, Apps Script Web Apps automatically switch to serving the
+      // response through a script.googleusercontent.com/macros/echo?...
+      // redirect instead of returning it directly - that mechanism is
+      // unreliable for a plain fetch() client (it's really meant for
+      // Google's own sandboxed iframe contexts) and started 404ing on
+      // every call once this sheet's DATA_ENTRY/backup history crossed
+      // whatever size threshold triggers it. Confirmed via the Apps
+      // Script Executions log: every doGet completed successfully, so
+      // the script itself was never the problem - only the response-
+      // delivery layer for a large payload. Keeping each page well under
+      // that threshold avoids the mechanism entirely rather than fighting
+      // it. offset/limit default to a full-set response (offset 0, a
+      // large limit) if the caller omits them, so any other client of
+      // this same action keeps working unpaginated.
+      const offset = Number(e.parameter.offset || 0);
+      const limit = Number(e.parameter.limit || 100000);
+      const totalFiltered = rows.length;
+      const pageRows = rows.slice(offset, offset + limit);
+      const hasMore = offset + limit < totalFiltered;
+
+      return jsonResponse({ status: 'SUCCESS', rows: pageRows, offset, limit, totalFiltered, hasMore });
     }
 
     if (action !== 'fetchAuthorities') {

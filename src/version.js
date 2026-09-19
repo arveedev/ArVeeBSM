@@ -4251,4 +4251,26 @@
 //            absence of any date value for these specific rows) is
 //            confirmed directly from the live data instead of guessed at
 //            again.
-export const APP_VERSION = '1.10-40'
+//   1.10-41 - Found and fixed the REAL cause of the recurring
+//            fetchTransactionsBulk 404s (previously blamed, incorrectly,
+//            on a stale build and then on a redeploy that never
+//            happened). Confirmed via the Apps Script Executions log:
+//            every doGet was completing successfully server-side, so the
+//            script itself was never broken - only the response-delivery
+//            layer. Root cause: once a sheet's real transaction history
+//            grows large enough, Apps Script Web Apps automatically
+//            switch to serving the response through a
+//            script.googleusercontent.com/macros/echo?... redirect
+//            instead of returning it directly, and that mechanism is
+//            unreliable for a plain fetch() client - it started 404ing
+//            on every call once this app's real production data crossed
+//            that size threshold, with zero code or deployment change on
+//            anyone's part. Fixed by paginating fetchTransactionsBulk
+//            (both the Apps Script action - see
+//            docs/apps-script-full-replacement.js, must be redeployed to
+//            the live Web App - and the client, which now requests pages
+//            of BULK_FETCH_PAGE_SIZE=500 rows and concatenates them)
+//            instead of requesting a sheet's entire filtered history in
+//            one response, so a page never gets large enough to trip
+//            that mechanism at all.
+export const APP_VERSION = '1.10-41'

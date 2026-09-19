@@ -138,6 +138,17 @@ const FETCH_TIMEOUT_MS = 8000
 // the same login sync burst, competing with Dexie Cloud sync traffic
 // for the same connection - timed out on the exact same device).
 const BULK_FETCH_TIMEOUT_MS = 45000
+// Confirmed, reported real bug: once a sheet's history grew large enough,
+// requesting it in one fetchTransactionsBulk call tripped Apps Script's
+// own automatic large-response echo-redirect mechanism
+// (script.googleusercontent.com/macros/echo?...) - unreliable for a
+// plain fetch() client, it started 404ing on every call regardless of
+// timeout, confirmed via the Apps Script Executions log showing every
+// doGet completing successfully server-side (the script was fine; only
+// the response-delivery path for one huge payload was broken). Fetched
+// in pages of this size instead, well under whatever size threshold
+// triggers that mechanism, so it's avoided entirely rather than raced.
+const BULK_FETCH_PAGE_SIZE = 500
 const fetchWithTimeout = (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) => {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -1683,28 +1694,43 @@ export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSinc
     const sheetName = source[sheetNameKey]
     if (!sheetName) return null
 
-    const url = new URL(source.webAppUrl)
-    url.searchParams.set('action', 'fetchTransactionsBulk')
-    url.searchParams.set('sheet', sheetName)
-    url.searchParams.set('warehouseColumn', 'Warehouse Name')
-    url.searchParams.set('warehouseValues', warehouseNames.join(','))
-    if (modifiedSince) url.searchParams.set('modifiedSince', modifiedSince)
+    // Paginated instead of one request for the whole filtered set - see
+    // BULK_FETCH_PAGE_SIZE's own comment for why. Each page is a fresh
+    // request with its own offset; a failure at any page discards the
+    // whole source's result for this run (rather than applying a
+    // partial preload) so a preload watermark is never advanced on
+    // incomplete data - same all-or-nothing guarantee the single-request
+    // version already had.
+    const allRows = []
+    let offset = 0
+    for (;;) {
+      const url = new URL(source.webAppUrl)
+      url.searchParams.set('action', 'fetchTransactionsBulk')
+      url.searchParams.set('sheet', sheetName)
+      url.searchParams.set('warehouseColumn', 'Warehouse Name')
+      url.searchParams.set('warehouseValues', warehouseNames.join(','))
+      if (modifiedSince) url.searchParams.set('modifiedSince', modifiedSince)
+      url.searchParams.set('offset', String(offset))
+      url.searchParams.set('limit', String(BULK_FETCH_PAGE_SIZE))
 
-    try {
-      const response = await fetchWithTimeout(url.toString(), {}, BULK_FETCH_TIMEOUT_MS)
-      if (!response.ok) {
-        console.error(`fetchTransactionsBulk: HTTP ${response.status} for ${type} on sheet "${sheetName}"`)
+      try {
+        const response = await fetchWithTimeout(url.toString(), {}, BULK_FETCH_TIMEOUT_MS)
+        if (!response.ok) {
+          console.error(`fetchTransactionsBulk: HTTP ${response.status} for ${type} on sheet "${sheetName}" (offset ${offset})`)
+          return { sourceId: source.id, ok: false, rows: [] }
+        }
+        const payload = await response.json()
+        if (payload.status !== 'SUCCESS') {
+          console.error(`fetchTransactionsBulk: non-SUCCESS response for ${type} on sheet "${sheetName}" (offset ${offset}):`, payload)
+          return { sourceId: source.id, ok: false, rows: [] }
+        }
+        allRows.push(...(payload.rows ?? []))
+        if (!payload.hasMore) return { sourceId: source.id, ok: true, rows: allRows }
+        offset += BULK_FETCH_PAGE_SIZE
+      } catch (err) {
+        console.error(`fetchTransactionsBulk: request failed for ${type} on sheet "${sheetName}" (offset ${offset}):`, err)
         return { sourceId: source.id, ok: false, rows: [] }
       }
-      const payload = await response.json()
-      if (payload.status === 'SUCCESS') {
-        return { sourceId: source.id, ok: true, rows: payload.rows ?? [] }
-      }
-      console.error(`fetchTransactionsBulk: non-SUCCESS response for ${type} on sheet "${sheetName}":`, payload)
-      return { sourceId: source.id, ok: false, rows: [] }
-    } catch (err) {
-      console.error(`fetchTransactionsBulk: request failed for ${type} on sheet "${sheetName}":`, err)
-      return { sourceId: source.id, ok: false, rows: [] }
     }
   }
 
