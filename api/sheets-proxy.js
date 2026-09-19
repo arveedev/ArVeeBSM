@@ -28,13 +28,20 @@
 // an open proxy to an arbitrary destination.
 const ALLOWED_TARGET = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec(\?.*)?$/
 
-// Vercel Serverless Functions have a maximum execution duration that
-// varies by plan (as low as 10s on Hobby) - kept well under the
-// client's own BULK_FETCH_TIMEOUT_MS (45s) so a slow upstream response
-// surfaces as a clean timeout here (which the client's retry already
-// handles) rather than Vercel killing the function mid-request with a
-// less informative error.
-const UPSTREAM_TIMEOUT_MS = 25000
+// Confirmed, reported real bug: this was originally set to 25000
+// (defensively guessed low, assuming a 10s Hobby-plan function limit)
+// - but this project's actual Vercel function budget is 5 MINUTES
+// (confirmed directly in the Function Invocation panel of a failed
+// request's logs), and the client itself was already willing to wait
+// 45s (googleSheetsBridge.js's BULK_FETCH_TIMEOUT_MS). A 25s internal
+// timeout here meant this function was aborting itself and returning a
+// 502 BEFORE the client's own, more generous timeout ever had a chance
+// to matter - the actual logged error was a plain AbortError from this
+// file's own controller, not anything Apps Script or Google returned.
+// Raised well above the client's own timeout (see that constant's
+// comment for why they need to stay in this order) so this proxy is
+// never the tighter constraint.
+const UPSTREAM_TIMEOUT_MS = 60000
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {

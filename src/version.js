@@ -4312,4 +4312,21 @@
 //            routes through this proxy via the new viaProxy() helper.
 //            The doPost write actions are unaffected - no reported
 //            symptom there, left calling Apps Script directly.
-export const APP_VERSION = '1.10-43'
+//   1.10-44 - Fixed the real cause of 1.10-43's new proxy consistently
+//            502ing: Vercel's own function logs showed the actual error
+//            was a plain AbortError from api/sheets-proxy.js's OWN
+//            internal timeout (25s) firing - not Google rejecting or
+//            rate-limiting the server-to-server request, which was the
+//            worse possibility this looked like at first. That 25s
+//            figure was a defensive guess (assuming a 10s Hobby-plan
+//            function limit); the actual confirmed budget for this
+//            project is 5 minutes, and the client itself was already
+//            willing to wait 45s (BULK_FETCH_TIMEOUT_MS) - so the proxy
+//            was aborting and returning 502 before the client's own,
+//            more generous timeout ever got a chance to matter. Raised
+//            the proxy's internal timeout to 60s and the client's bulk
+//            timeout to 55s, keeping the proxy's budget safely above
+//            the client's so the proxy is never the tighter constraint,
+//            with headroom for the extra hop's own latency now that
+//            every bulk GET routes through it.
+export const APP_VERSION = '1.10-44'

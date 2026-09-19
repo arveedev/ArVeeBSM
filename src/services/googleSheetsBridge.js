@@ -137,7 +137,15 @@ const FETCH_TIMEOUT_MS = 8000
 // requests succeeding while ESR/ESI's - queued and running later in
 // the same login sync burst, competing with Dexie Cloud sync traffic
 // for the same connection - timed out on the exact same device).
-const BULK_FETCH_TIMEOUT_MS = 45000
+// Confirmed, reported real bug: raised from 45000 to stay safely BELOW
+// api/sheets-proxy.js's own UPSTREAM_TIMEOUT_MS (60s) now that every
+// bulk GET routes through that proxy - a client timeout shorter than
+// the proxy's would just move the same "gave up too early" problem
+// from the proxy to the client instead of fixing it, and every proxied
+// call now carries a real extra hop's worth of latency (browser to
+// Vercel, Vercel to Apps Script, and back) on top of Apps Script's own
+// processing time.
+const BULK_FETCH_TIMEOUT_MS = 55000
 // Confirmed, reported real bug: once a sheet's history grew large enough,
 // requesting it in one fetchTransactionsBulk call tripped Apps Script's
 // own automatic large-response echo-redirect mechanism
