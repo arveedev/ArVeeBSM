@@ -4215,4 +4215,16 @@
 //            if it persists after updating to this build, the device is
 //            most likely still running a stale cached PWA bundle rather
 //            than a new gap.
-export const APP_VERSION = '1.10-37'
+//   1.10-38 - Fixed a real reported bug: the Completed AI/SIA list wasn't
+//            actually sorted by "latest series first" - it was sorting by
+//            each record's completedDate (its last matching WSI/ESI
+//            transaction's date), not by the AI/SIA number itself. Two
+//            authorities completed the same week can have very different
+//            numbers, so this read as effectively unsorted against the
+//            actual expectation. Sorted by reference number instead,
+//            descending, matching the same numeric-aware convention
+//            (`numeric: true`) CompletedMillingModal already uses for
+//            MO/TMO number. Shared by both AdminMonitoring.jsx and
+//            AuthorityMonitor.jsx (user side), which both render the same
+//            CompletedAuthorityModal.jsx, so one fix covers both.
+export const APP_VERSION = '1.10-38'

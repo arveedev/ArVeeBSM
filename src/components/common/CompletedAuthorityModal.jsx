@@ -182,7 +182,21 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
     })
     .filter(({ a }) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
     .filter(({ a }) => !warehouseFilter || a.assignedWarehouse === warehouseFilter)
-    .sort((x, y) => (y.completedDate ?? '').localeCompare(x.completedDate ?? ''))
+    // Reported, real bug: was sorting by each record's last-matching-
+    // transaction date (completedDate, still used for the month/year
+    // filter and the "Completed <date>" display text above/below), not
+    // by the AI/SIA number itself - two authorities completed the same
+    // week can have wildly different numbers, so this read as
+    // effectively unsorted from the actual "latest series first"
+    // expectation. Sorted by reference number instead, descending, the
+    // same convention (and same `numeric: true` so "...-10" correctly
+    // sorts before "...-9") CompletedMillingModal already uses for
+    // MO/TMO number.
+    .sort((x, y) => {
+      const xRef = type === 'AI' ? x.a.aiNumber : x.a.siaNumber
+      const yRef = type === 'AI' ? y.a.aiNumber : y.a.siaNumber
+      return (yRef ?? '').localeCompare(xRef ?? '', undefined, { numeric: true, sensitivity: 'base' })
+    })
   const filtered = preSearchFiltered.filter(matchesQuery)
 
   // Portaled straight to document.body - opened from AuthorityMonitor,
