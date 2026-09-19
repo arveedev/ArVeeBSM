@@ -129,11 +129,24 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // differently below instead of both reading as "0" - see this
   // section's own Loading/Empty gate.
   const warehouseCategoryStockRaw = useLiveQuery(async () => {
+    // TEMPORARY DIAGNOSTIC LOGGING - investigating a reported case where
+    // this query resolves to an empty/zero result on a specific device
+    // despite the underlying data and this same computation both being
+    // confirmed correct when run directly. Remove once root-caused.
+    console.log('[ADMIN-HOME-DIAG] warehouseCategoryStock starting, warehouses:', warehouses.length, 'varieties:', varieties.length, 'sackTypes:', sackTypesForStock.length)
     if (warehouses.length === 0) return new Map()
     const result = new Map()
-    await runInBatches(warehouses, 3, async (w) => {
-      result.set(w.warehouseId, await computeWarehouseCategoryStock(w.warehouseId, { varieties, sackTypes: sackTypesForStock }))
-    })
+    try {
+      await runInBatches(warehouses, 3, async (w) => {
+        const stock = await computeWarehouseCategoryStock(w.warehouseId, { varieties, sackTypes: sackTypesForStock })
+        console.log('[ADMIN-HOME-DIAG]', w.code, '->', JSON.stringify([...stock.entries()]))
+        result.set(w.warehouseId, stock)
+      })
+    } catch (err) {
+      console.error('[ADMIN-HOME-DIAG] THREW:', err)
+      throw err
+    }
+    console.log('[ADMIN-HOME-DIAG] DONE, result has entries for', result.size, 'warehouses')
     return result
   }, [warehouses, varieties, sackTypesForStock])
   const isStockLoading = warehouseCategoryStockRaw === undefined

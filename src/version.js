@@ -4046,4 +4046,14 @@
 //            Empty state - the two looked identical before, which is
 //            exactly what made this bug so hard to distinguish from a
 //            real data-sync issue while investigating it.
-export const APP_VERSION = '1.10-29'
+//   1.10-30 - TEMPORARY diagnostic build: added direct console logging
+//            inside AdminHomeStocks.jsx's warehouseCategoryStock
+//            computation (1.10-29's fix), to investigate a still-open
+//            reported case where Admin Home continues to show a flat
+//            zero on a specific device even though the underlying data
+//            and this exact computation were both independently
+//            confirmed correct (checked directly against that device's
+//            own local database via the console). Logs each warehouse's
+//            own computed result and surfaces any thrown error instead
+//            of letting it fail silently. Remove once root-caused.
+export const APP_VERSION = '1.10-30'
