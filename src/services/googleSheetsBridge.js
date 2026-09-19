@@ -877,17 +877,6 @@ const runAuthoritiesSync = async () => {
         fetchAuthorityRows(source, 'SIA'),
       ])
 
-      // TEMPORARY diagnostic - 1.10-39's findDateValue (matching any
-      // "date"-prefixed header) was reported as NOT actually fixing the
-      // missing-date symptom, so guessing at yet another literal header
-      // string would repeat the same mistake a third time. Logs the raw
-      // column names this specific live sheet is actually sending, once
-      // per sync (not per row), so the real header text - or the real
-      // absence of any date value for these rows - is confirmed directly
-      // instead of guessed at again.
-      if (aiRows.length > 0) console.log('[AUTHORITY-SYNC-DIAG] AI row keys:', Object.keys(aiRows[0]), 'sample row:', aiRows[0])
-      if (siaRows.length > 0) console.log('[AUTHORITY-SYNC-DIAG] SIA row keys:', Object.keys(siaRows[0]), 'sample row:', siaRows[0])
-
       for (const row of aiRows) {
         // Skip reserved-but-unused authority numbers - only the number
         // itself is present, no actual allocation data yet.

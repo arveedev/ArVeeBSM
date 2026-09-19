@@ -902,6 +902,27 @@ db.version(34).stores({
   cashLedgerV2: 'id, sdoUid, type, date',
 })
 
+// v35 — same shape as v17's fix, for the same reason: an authority
+// record's `date` field was never actually populated before 1.10-39
+// (findDateValue in googleSheetsBridge.js) - the AI sheet's own date
+// column header has the current year baked into it ("DATE (2026)"),
+// which the sync code never matched until that fix. Every AI/SIA
+// authority already synced onto a device before that fix carries a
+// permanently-null `date`, and a normal delta (modifiedSince) sync will
+// never revisit them, since nothing on the sheet itself has actually
+// changed since they were last pulled - the fix only changes how a
+// value that was ALREADY there gets read, not the value itself.
+// Clearing lastSyncedAt makes the very next sync fetch every row fresh
+// again, so upsertAuthority/upsertSiaAuthority's own merge logic
+// finally backfills `date` onto every existing record, not just ones
+// synced after this version.
+db.version(35).stores({}).upgrade(async (tx) => {
+  const sources = await tx.table('sheetSources').toArray()
+  for (const source of sources) {
+    await tx.table('sheetSources').update(source.id, { lastSyncedAt: null })
+  }
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

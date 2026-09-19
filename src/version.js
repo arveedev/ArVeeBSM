@@ -4329,4 +4329,23 @@
 //            the client's so the proxy is never the tighter constraint,
 //            with headroom for the extra hop's own latency now that
 //            every bulk GET routes through it.
-export const APP_VERSION = '1.10-44'
+//   1.10-45 - Confirmed the whole Sheets-sync saga (1.10-37 through
+//            1.10-44) actually resolved: real-device log showed zero
+//            404s/502s/AbortErrors across a full sync cycle. But the AI
+//            tab still showed no date, confirmed by screenshot on real
+//            authorities. Root cause: not a remaining sync bug at all -
+//            every AI/SIA authority already synced onto a device before
+//            1.10-39's findDateValue fix has a permanently-null `date`
+//            field cached locally, and a normal delta (modifiedSince)
+//            sync will never revisit an unchanged row to backfill it,
+//            since nothing on the sheet itself actually changed - only
+//            how the existing value gets READ changed. Added a Dexie
+//            schema migration (v35, dexie.js) that clears every
+//            sheetSource's lastSyncedAt once, the same shape already
+//            used once before (v17) for an identical class of problem -
+//            forces the very next sync on every device to pull every
+//            row fresh, letting the upsert merge logic finally backfill
+//            `date` onto every existing record, not just newly-synced
+//            ones. Also removed 1.10-40's TEMPORARY [AUTHORITY-SYNC-DIAG]
+//            logging now that it's served its purpose.
+export const APP_VERSION = '1.10-45'
