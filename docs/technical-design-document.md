@@ -305,36 +305,52 @@ lets a later, unrelated piece of code still move that same element.
 ### 2.12 Reactive live-query computations are decoupled from Dexie's per-write auto-tracking once they're expensive
 
 **Decision**: a `useLiveQuery` wrapping a computation that reads tables
-beyond the one it conceptually "owns" — most notably a rollup that walks
-every pile's own transaction history across every warehouse — is not
-left to re-run directly off Dexie's automatic per-write dependency
-tracking once that computation is expensive enough to matter. Instead, a
-lightweight row-count signal (e.g. `db.transactions.count()`) drives a
-debounced recompute: the live table data is read through a ref, kept
-current every render but never used as the triggering effect's own
-dependency, and the debounce is paired with a hard maxWait so a recompute
-is guaranteed on a bounded schedule no matter how continuous the
-underlying write traffic is.
+beyond the one it conceptually "owns" — a rollup that walks every pile's
+own transaction history across every warehouse, or a scan across every
+warehouse's own MO/TMO orders — is not left to re-run directly off
+Dexie's automatic per-write dependency tracking once that computation is
+expensive enough to matter. Instead, the shared
+`useDebouncedLiveCompute` hook (`src/utils/useDebouncedLiveCompute.js`)
+takes over: a lightweight row-count signal (e.g. `db.transactions.count()`
+combined with whatever other counts the computation's own result
+actually depends on) drives a debounced recompute, the computation
+function itself is re-captured fresh on every render (so it always reads
+the latest live data without the caller needing its own manual "keep
+this in a ref" plumbing), and the debounce is paired with a **generous**
+hard maxWait — tens of seconds, not single-digit seconds — so a
+recompute is guaranteed on a bounded schedule no matter how continuous
+the underlying write traffic is, without turning into a near-continuous
+background recompute loop of its own.
 
 **Rationale**: `useLiveQuery` re-invokes its querier function on every
 write to *any* table the function touches during execution, not only the
 table the query is conceptually about — Admin Home's warehouse stock
-rollup re-ran in full on every single incoming Dexie Cloud sync write,
-sometimes dozens of times in a row during a sync burst, while the
+rollup, and separately MillingMonitor's admin-wide order-fulfillment
+scan, both re-ran in full on every single incoming Dexie Cloud sync
+write, sometimes dozens of times in a row during a sync burst, while the
 loading indicator (`state === undefined`) only ever showed once, since
 `useLiveQuery` keeps rendering its previous result while a new one
 computes; a legitimately-still-settling page looked frozen instead. A
 device with genuinely continuous sync traffic (confirmed directly on
-both iPhone and Android) exposed a second failure mode in the first
-attempted fix: a plain "wait for quiet" debounce, if its own effect
-depends on the live table data directly, never gets its quiet window at
-all, because the data's changing identity restarts the debounce before
-it can elapse — a full livelock, not merely a slow settle. Reading the
-live data via a ref instead of as a dependency, plus a hard maxWait
-alongside the quiet-period wait, closes both failure modes at once: the
-computation can no longer be cancelled-and-restarted mid-flight by
-unrelated table churn, and it is guaranteed to eventually run even if
-the underlying traffic never truly goes quiet.
+both iPhone and Android) exposed two further failure modes, each from an
+earlier attempted fix, before the current shape was settled: (1) a plain
+"wait for quiet" debounce whose own effect depends on the live table
+data directly never gets its quiet window at all, because the data's
+changing identity restarts the debounce before it can elapse — a full
+livelock, not merely a slow settle; (2) an initial 5-second maxWait,
+while it did close that livelock, turned out to be its own regression —
+on a device whose sync traffic never truly goes quiet, a 5-second maxWait
+means the expensive computation fires on an effectively permanent
+5-second loop for as long as that page stays open, reported as the whole
+app "freezing"/slow to respond to taps (real contention: the same main
+thread and IndexedDB connection every tap needs). A single shared hook,
+reading live data through a ref that's re-captured every render instead
+of as an effect dependency, plus a hard-but-generous maxWait, closes all
+three failure modes at once: the computation can no longer be
+cancelled-and-restarted mid-flight by unrelated table churn, it is
+guaranteed to eventually run even if the underlying traffic never truly
+goes quiet, and it does so on a cadence loose enough not to itself become
+the performance problem.
 
 ## 3. Non-Functional Requirements
 

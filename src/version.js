@@ -4120,4 +4120,32 @@
 //            login-sync load - these two now get a separate, longer
 //            45s budget appropriate for genuinely larger bulk requests,
 //            while every small lookup keeps the original 8s ceiling.
-export const APP_VERSION = '1.10-33'
+//   1.10-34 - Fixed a real regression the previous fix's own 5s maxWait
+//            introduced: reported as the app "freezing"/slow to respond
+//            on taps, specifically on Admin Home and Admin Monitor, and
+//            specifically for admin users (whose pages compute across
+//            every warehouse, unlike a regular user's own
+//            warehouse-scoped Home). Root cause: this device's sync
+//            traffic essentially never goes fully quiet, so the 5s
+//            maxWait meant AdminHomeStocks.jsx's full 16-warehouse
+//            ledger replay was firing on an effectively permanent
+//            5-second loop the entire time an admin stayed on that
+//            page - not merely slow to first load, but continuously
+//            busy recomputing in the background, competing for the
+//            same main thread and IndexedDB connection every tap needs.
+//            Also found the exact same bug, not yet fixed, in
+//            MillingMonitor.jsx (used by Admin Monitor):
+//            computeMillingOrderStatuses reads db.transactions/
+//            db.millingOrders/db.authorities across every warehouse's
+//            own MO/TMO orders, called directly inside a useLiveQuery -
+//            same retrigger-on-every-sync-write shape. Extracted the
+//            now-twice-needed fix into a shared
+//            src/utils/useDebouncedLiveCompute.js hook (documented as
+//            the standing pattern in docs/technical-design-document.md
+//            §2.12) and applied it to both pages, with maxWaitMs bumped
+//            from 5s to a much more generous 30s - a stock total or an
+//            order-fulfillment list doesn't need to refresh more than
+//            once every 30s even under continuous sync churn, and the
+//            debounced quiet-window wait still fires promptly the
+//            moment things actually settle.
+export const APP_VERSION = '1.10-34'

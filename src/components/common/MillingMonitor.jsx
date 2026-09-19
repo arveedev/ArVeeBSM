@@ -11,6 +11,7 @@ import { AlertTriangle, ChevronRight, ChevronUp, X, RefreshCw, Check, Search } f
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
+import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
 import { fmtBags, fmtWeight, fmtNetBags, calculateCurrentAge, AGE_BUCKETS, formatTrialLabel, expandTrialNumbers } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
@@ -612,7 +613,26 @@ function MillingMonitor({ isAdmin = false, active = true }) {
   // confirms the order has actually left the pending list).
   const [completingId, setCompletingId] = useState(null)
 
-  const orders = useLiveQuery(() => computeMillingOrderStatuses(topTab), [topTab]) ?? []
+  // computeMillingOrderStatuses reads db.millingOrders/db.transactions/
+  // db.authorities across every warehouse's own MO/TMO orders - the
+  // same expensive-computation-directly-inside-useLiveQuery shape
+  // AdminHomeStocks.jsx already hit (docs/technical-design-document.md
+  // §2.12): any incoming Dexie Cloud sync write to db.transactions
+  // retriggered this admin-wide scan, and useLiveQuery kept showing its
+  // previous result while a new one computed, making this page feel
+  // sluggish/frozen under real sync traffic. Uses the same shared
+  // useDebouncedLiveCompute fix.
+  const millingTxCount = useLiveQuery(() => db.transactions.count(), []) ?? 0
+  const millingOrderCount = useLiveQuery(() => db.millingOrders.count(), []) ?? 0
+  const authorityCountForOrders = useLiveQuery(() => db.authorities.count(), []) ?? 0
+  const ordersChangeSignal = `${topTab}:${millingTxCount}:${millingOrderCount}:${authorityCountForOrders}`
+  const ordersRaw = useDebouncedLiveCompute(
+    () => computeMillingOrderStatuses(topTab),
+    ordersChangeSignal,
+    [],
+    { maxWaitMs: 30000 }
+  )
+  const orders = ordersRaw ?? []
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
