@@ -4227,4 +4227,18 @@
 //            MO/TMO number. Shared by both AdminMonitoring.jsx and
 //            AuthorityMonitor.jsx (user side), which both render the same
 //            CompletedAuthorityModal.jsx, so one fix covers both.
-export const APP_VERSION = '1.10-38'
+//   1.10-39 - Fixed a real reported bug: no date was ever showing on AI/SIA
+//            authorities anywhere (pending list or Completed list), despite
+//            the UI already having code to display it when present. Root
+//            cause: the AI sheet's date column header has the CURRENT year
+//            baked directly into it ("DATE (2026)"), the same header-drift
+//            shape already found twice before for regionalAuthorityNumber
+//            and ageGroup - and since each Sheet Source is explicitly a
+//            fresh copy started every year (TDD §2.8), a literal year
+//            string goes stale on a fixed yearly schedule, not just once.
+//            Fixed by matching any header starting with "date"
+//            (case-insensitive) instead of one specific literal, so a
+//            year-suffixed rename in any future year keeps working with no
+//            code change required. Also applied to SIA, which had no
+//            year-suffix fallback at all before this fix.
+export const APP_VERSION = '1.10-39'

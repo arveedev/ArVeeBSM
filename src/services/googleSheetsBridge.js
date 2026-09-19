@@ -772,6 +772,26 @@ const runAuthoritiesSync = async () => {
       return customerNameByAlias.get(trimmed.toLowerCase().replace(/\s+/g, ' ')) ?? trimmed
     }
 
+    // Reported, real bug: no date was ever showing on AI/SIA authorities
+    // (pending list or Completed list) despite the UI already having code
+    // to display `a.date` when present - the sync itself was never
+    // successfully reading it. Root cause: the AI sheet's date column
+    // header has the CURRENT year baked directly into it ("DATE (2026)"),
+    // the exact same header-drift shape already found twice for
+    // regionalAuthorityNumber ("AUTHORITY" vs the documented name) and
+    // ageGroup ("Age Group" vs "Note3") - and since each Sheet Source is
+    // explicitly a fresh copy started every year (TDD §2.8), a literal
+    // year string here goes stale on a fixed schedule, not just once.
+    // Matches ANY header starting with "date" (case-insensitive) instead
+    // of one specific literal, so a year-suffixed rename in any future
+    // year keeps working with no code change required - this also covers
+    // whatever the CURRENT actual header text turns out to be, without
+    // needing to know it in advance.
+    const findDateValue = (row) => {
+      const key = Object.keys(row).find((k) => /^date/i.test(k.trim()))
+      return key ? row[key] : undefined
+    }
+
     let aiCount = 0
     let siaCount = 0
 
@@ -789,11 +809,9 @@ const runAuthoritiesSync = async () => {
 
         // Skip anything dated before this source's Date From - this is
         // the actual mechanism behind "ignore old experiments in the
-        // sheet" (checking row['DATE'] first since the admin was asked
-        // to rename the AI sheet's date column away from the year-
-        // specific "DATE (2026)", but falling back to the old name in
-        // case that rename hasn't happened yet).
-        const aiDateRaw = row['DATE'] ?? row['DATE (2026)']
+        // sheet". See findDateValue's own comment above for why this
+        // matches any "date"-prefixed header rather than one literal.
+        const aiDateRaw = findDateValue(row)
         const aiDate = aiDateRaw ? String(aiDateRaw).slice(0, 10) : null
         if (aiDate && aiDate < source.dateFrom) continue
 
@@ -849,8 +867,9 @@ const runAuthoritiesSync = async () => {
         const siaNum = String(row['SIA'] ?? '').trim()
         if (!siaNum || !row['CUSTOMER']) continue
 
-        // Same Date From filter as AI, above.
-        const siaDateRaw = row['DATE']
+        // Same Date From filter as AI, above (and the same findDateValue
+        // header-matching, for the same reason).
+        const siaDateRaw = findDateValue(row)
         const siaDate = siaDateRaw ? String(siaDateRaw).slice(0, 10) : null
         if (siaDate && siaDate < source.dateFrom) continue
 
