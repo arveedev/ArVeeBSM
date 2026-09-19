@@ -279,6 +279,44 @@ fixes across every earlier phase.
   needs to reflect immediately. Fixed instead with `useDeferredValue`,
   decoupling render *priority* from data *freshness* rather than
   trading away freshness for a debounce (TDD §2.12).
+- A separate, unrelated saga surfaced from a simple report ("no date
+  shows on AI/SIA authorities") that turned into the project's longest
+  single root-cause chase: nine dated point releases (1.10-37 through
+  1.10-45) across two genuinely different bug classes, stacked on top
+  of each other. First, the AI sheet's date column header carries the
+  current year in its literal text ("DATE (2026)") — the third instance
+  of a header-drift bug already hit twice before (`regionalAuthorityNumber`,
+  `ageGroup`) — fixed by matching any header starting with "date" instead
+  of one literal string. Fixing that alone didn't resolve it, which led
+  to discovering `fetchTransactionsBulk`/`fetchAuthorityRows`/
+  `fetchMillingOrderRows` were failing with `AbortError`s the whole time,
+  chased through three wrong theories before the right one: not a bulk-
+  fetch timeout gap (real, but not this bug), not response size tripping
+  Apps Script's automatic large-response redirect (disproved directly —
+  a tiny paginated response hit the exact same failure), and client-side
+  retry alone didn't fully close it either. The actual cause, confirmed
+  only by asking the user to check Apps Script's own Executions log
+  (ruling out a server-side script error) and then the browser's Network
+  tab (showing the real redirect chain): Apps Script Web Apps route every
+  GET response through a `script.googleusercontent.com/macros/echo`
+  content-hosting redirect for a plain `fetch()` caller — normal
+  behavior, not size-triggered — and that redirect step is simply
+  unreliable. Fixed with a new Vercel serverless proxy
+  (`api/sheets-proxy.js`) making the same request server-to-server
+  instead, which itself then needed one more correction (its own internal
+  timeout, defensively guessed low, was firing before the client's more
+  patient one ever got a chance — confirmed via Vercel's own function
+  logs rather than assumed). With the sync genuinely fixed, the date was
+  *still* missing — because every authority already synced onto a device
+  before the header fix has a permanently cached `date: null`, and a
+  normal delta sync has no reason to revisit a row that hasn't actually
+  changed on the sheet. Closed with a Dexie schema migration (v35,
+  `dexie.js`) clearing every device's sync watermark once, the same
+  shape already used once before (v17) for an identical class of
+  problem. The throughline worth naming: every wrong turn in this chain
+  was caught by getting real evidence (an Executions log, a Network tab,
+  a function log) before the next attempt, rather than compounding one
+  guess on top of another.
 
 **Milestone**: the app is in daily production use across multiple
 warehouses with no open data-integrity bug, and every NFA report type
