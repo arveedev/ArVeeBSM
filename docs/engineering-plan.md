@@ -241,7 +241,22 @@ fixes across every earlier phase.
   point release, `src/version.js` 1.10-30) is what actually separated
   "the data/logic is wrong" from "the reactive scheduling around correct
   data is wrong" — a distinction that direct code review alone hadn't
-  settled.
+  settled. A fourth round followed the livelock fix's own 5-second
+  maxWait: reported as the whole app feeling like it "froze" on taps,
+  specific to Admin Home and Admin Monitor and specific to admin users,
+  whose pages compute across every warehouse rather than one user's
+  assigned few — the maxWait, while it correctly closed the livelock,
+  was tight enough that the expensive recompute ran on a near-permanent
+  loop for as long as an admin stayed on the page, real contention for
+  the same main thread and IndexedDB connection every tap needs. The
+  exact same shape of bug (an expensive admin-wide computation called
+  directly inside a `useLiveQuery`) turned up a second time in the
+  process, in `MillingMonitor.jsx`'s own MO/TMO fulfillment scan,
+  unrelated to Admin Home's own code but identical in cause —
+  confirmation the pattern was general enough to warrant its own shared
+  implementation (`useDebouncedLiveCompute`, TDD §2.12) rather than a
+  second bespoke fix living only in the page that happened to report the
+  symptom first.
 
 **Milestone**: the app is in daily production use across multiple
 warehouses with no open data-integrity bug, and every NFA report type
