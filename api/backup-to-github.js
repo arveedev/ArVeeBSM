@@ -24,6 +24,26 @@
 // shared timestamp in db.reportConfig - this endpoint itself has no
 // concept of "once a day," it just writes whatever it's given.
 
+import zlib from 'node:zlib'
+
+// Vercel Serverless Functions enforce a hard, non-configurable 4.5MB
+// request body limit at the platform level - rejected with a 413
+// before this handler's own code ever runs, so nothing inside this
+// file could have caught or worked around it. Confirmed, reported real
+// bug: a full daily database dump already runs to several MB of raw
+// JSON (see RETENTION_COUNT's own comment on ~6MB/day) and started
+// exceeding that limit as real transaction volume grew, silently
+// failing the automatic backup every single day. Client-side gzip
+// (backupWorker.js) compresses the JSON payload before sending -
+// repetitive JSON like this typically shrinks 80-90%, comfortably
+// under the 4.5MB wire limit even as the uncompressed dump keeps
+// growing. bodyParser is disabled here so the raw (possibly gzipped)
+// bytes always reach this handler unmodified - Vercel's automatic
+// body parser assumes JSON and would either choke on binary gzip
+// bytes or silently strip them, and once it's consumed the request
+// stream there's no way to fall back to reading it manually.
+export const config = { api: { bodyParser: false } }
+
 const APP_SHARED_KEY = process.env.VITE_APP_SHARED_KEY
 const GITHUB_TOKEN = process.env.GITHUB_BACKUP_TOKEN
 const GITHUB_OWNER = process.env.GITHUB_BACKUP_OWNER || 'arveedev'
@@ -41,14 +61,14 @@ const BRANCH = process.env.GITHUB_BACKUP_BRANCH || 'backups'
 const RETENTION_COUNT = 30
 
 async function readJsonBody(req) {
-  // Same defensive parsing as dexie-cloud-tokens.js - Vercel's
-  // automatic req.body parsing has been unreliable in some dev
-  // configurations.
-  if (req.body && typeof req.body === 'object') return req.body
   const chunks = []
   for await (const chunk of req) chunks.push(chunk)
-  const raw = Buffer.concat(chunks).toString('utf8')
-  return raw ? JSON.parse(raw) : {}
+  let raw = Buffer.concat(chunks)
+  if (req.headers['content-encoding'] === 'gzip') {
+    raw = zlib.gunzipSync(raw)
+  }
+  const text = raw.toString('utf8')
+  return text ? JSON.parse(text) : {}
 }
 
 const githubHeaders = {

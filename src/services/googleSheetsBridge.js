@@ -124,6 +124,20 @@ const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== 
 // goes through this wrapper so no single call can hang longer than
 // TIMEOUT_MS, regardless of what the server does.
 const FETCH_TIMEOUT_MS = 8000
+// Confirmed, reported real bug: fetchTransactionsBulk and markRowsSeen
+// were using this same 8s budget - sized for a single-row lookup
+// during navigation (fetchTransactionBySerial, fetchSerialFloorFromSheet
+// above), never meant to also cover a full multi-warehouse historical
+// preload or a batch "mark as seen" write touching potentially
+// thousands of serials at once. Apps Script cold-starts and per-row
+// server-side search cost scale with how much work a single call asks
+// for, so the exact same 8s ceiling that's appropriately tight for a
+// quick lookup was too tight for these two bulk operations, aborting
+// them mid-flight under real load (observed: WSR/WSI's smaller
+// requests succeeding while ESR/ESI's - queued and running later in
+// the same login sync burst, competing with Dexie Cloud sync traffic
+// for the same connection - timed out on the exact same device).
+const BULK_FETCH_TIMEOUT_MS = 45000
 const fetchWithTimeout = (url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) => {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -1637,7 +1651,7 @@ export const fetchTransactionsBulk = async (type, warehouseNames, { modifiedSinc
     if (modifiedSince) url.searchParams.set('modifiedSince', modifiedSince)
 
     try {
-      const response = await fetchWithTimeout(url.toString())
+      const response = await fetchWithTimeout(url.toString(), {}, BULK_FETCH_TIMEOUT_MS)
       if (!response.ok) {
         console.error(`fetchTransactionsBulk: HTTP ${response.status} for ${type} on sheet "${sheetName}"`)
         return { sourceId: source.id, ok: false, rows: [] }
@@ -1695,7 +1709,7 @@ export const markRowsSeen = async (type, sourceId, serialNumbers) => {
         matchColumn,
         values: serialNumbers,
       }),
-    })
+    }, BULK_FETCH_TIMEOUT_MS)
   } catch (err) {
     // Best-effort - see function comment. Logged for visibility only.
     console.error(`markRowsSeen: failed for ${type} on source ${sourceId}:`, err)

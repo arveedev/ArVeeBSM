@@ -4101,4 +4101,23 @@
 //            computation so a real failure surfaces in the console and
 //            settles the page instead of leaving the spinner stuck
 //            forever with no explanation.
-export const APP_VERSION = '1.10-32'
+//   1.10-33 - Fixed two separate, real bugs surfaced alongside the Admin
+//            Home investigation above, both console-visible on the same
+//            device: (1) the automatic GitHub backup was failing every
+//            single day with HTTP 413 (Content Too Large) - the daily
+//            full-database dump had grown past Vercel Serverless
+//            Functions' hard, non-configurable 4.5MB request body
+//            limit as real transaction volume increased. Fixed by
+//            gzip-compressing the dump client-side (browser-native
+//            CompressionStream, no new dependency) before it's sent,
+//            with the endpoint decompressing server-side - repetitive
+//            JSON like this typically shrinks 80-90%, comfortably
+//            clearing the limit again. (2) fetchTransactionsBulk and
+//            markRowsSeen (the Sheets preload's own bulk multi-
+//            warehouse fetch and batch "mark as seen" write) were using
+//            the same tight 8s fetch timeout built for a single quick
+//            lookup during navigation, aborting mid-flight under real
+//            login-sync load - these two now get a separate, longer
+//            45s budget appropriate for genuinely larger bulk requests,
+//            while every small lookup keeps the original 8s ceiling.
+export const APP_VERSION = '1.10-33'

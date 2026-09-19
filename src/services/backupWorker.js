@@ -30,6 +30,25 @@ const BACKUP_TOAST_ID = 'auto-backup-progress'
 const BACKUP_CHECK_INTERVAL_MS = 5 * 60 * 1000 // cheap check; the real work below only runs once BACKUP_THROTTLE_MS has actually elapsed
 const BACKUP_THROTTLE_MS = 24 * 60 * 60 * 1000
 
+// Confirmed, reported real bug: the raw JSON dump already runs to
+// several MB (see api/backup-to-github.js's own comment) and started
+// exceeding Vercel's hard, non-configurable 4.5MB Serverless Function
+// request body limit as real transaction volume grew - every automatic
+// backup was failing with HTTP 413 (Content Too Large), silently,
+// since this runs unattended in the background. CompressionStream is
+// a standard, no-dependency browser API (Chrome/Edge/Android WebView,
+// and Safari 16.4+) - gzip typically shrinks repetitive JSON 80-90%,
+// comfortably clearing the limit even as the uncompressed dump keeps
+// growing. Falls back to sending the plain JSON string on a browser
+// old enough to lack CompressionStream - the backup will still fail
+// past the size limit on such a device, exactly as it did before this
+// fix, rather than silently sending corrupt/truncated data.
+const gzipCompress = async (jsonString) => {
+  if (typeof CompressionStream === 'undefined') return null
+  const stream = new Blob([jsonString]).stream().pipeThrough(new CompressionStream('gzip'))
+  return await new Response(stream).blob()
+}
+
 const buildFullDump = async () => {
   const allTables = db.tables.map((t) => t.name)
   const dump = {}
@@ -67,13 +86,16 @@ const runAutoBackupIfDue = async () => {
     toast.loading(createElement(SyncProgressToast, { label: 'Backing up database…', phase: 'progress' }), { id: BACKUP_TOAST_ID })
 
     const payload = await buildFullDump()
+    const jsonString = JSON.stringify(payload)
+    const compressed = await gzipCompress(jsonString)
     const response = await fetch('/api/backup-to-github', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(compressed ? { 'Content-Encoding': 'gzip' } : {}),
         'x-bsm-app-key': import.meta.env.VITE_APP_SHARED_KEY ?? '',
       },
-      body: JSON.stringify(payload),
+      body: compressed ?? jsonString,
     })
     if (!response.ok) {
       throw new Error(`Backup upload failed: HTTP ${response.status}`)
