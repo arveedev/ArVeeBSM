@@ -4348,4 +4348,25 @@
 //            `date` onto every existing record, not just newly-synced
 //            ones. Also removed 1.10-40's TEMPORARY [AUTHORITY-SYNC-DIAG]
 //            logging now that it's served its purpose.
-export const APP_VERSION = '1.10-45'
+//   1.10-46 - Investigated the "continuous sync churn" open item flagged
+//            and deferred twice earlier this session, prompted by
+//            real-device evidence (Vercel logs) showing 10+ Apps Script
+//            requests landing in the same ~30-second window, some
+//            failing even through the new retry+proxy path. Found a
+//            real, structural cause: AUTHORITY_SYNC_INTERVAL_MS (60s) is
+//            an exact 2x multiple of TRANSACTION_SYNC_INTERVAL_MS (30s),
+//            and both workers fire their first run immediately on login,
+//            in the same tick - a plain setInterval never drifts, so
+//            every OTHER transaction cycle permanently coincided with an
+//            authority cycle for the rest of the session, a deterministic
+//            burst of every periodic sync request this device makes
+//            landing on Apps Script simultaneously, forever - not random
+//            flakiness, a self-inflicted thundering-herd pattern, worse
+//            across however many staff devices are open in the field at
+//            once. Fixed with scheduleJittered (syncWorker.js) - a
+//            self-rescheduling timer with ±20% randomized jitter each
+//            cycle, replacing the fixed setInterval on both workers - and
+//            staggered the authority worker's very first run 5-10s behind
+//            the transaction worker's, so the two drift apart instead of
+//            staying phase-locked.
+export const APP_VERSION = '1.10-46'

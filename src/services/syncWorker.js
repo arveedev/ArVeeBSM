@@ -20,6 +20,42 @@ import { logSyncFailure, resolveSyncFailure } from '../utils/errorLog.js'
 // syncPauseState.js for why the actual state now lives there instead.
 export { pauseTransactionSync, resumeTransactionSync }
 
+// Confirmed, reported real bug (traced through an extended Apps Script
+// 404/502 saga - see docs/engineering-plan.md Phase 7): AUTHORITY_SYNC_
+// INTERVAL_MS (60s, below) is an exact 2x multiple of TRANSACTION_SYNC_
+// INTERVAL_MS (30s), and both workers fire their very first run
+// immediately on login, in the same tick. A plain setInterval never
+// drifts on its own, so from that moment on, every OTHER transaction
+// cycle permanently coincides with an authority cycle - a deterministic,
+// self-inflicted burst of every periodic sync request this device makes
+// (transactions + authorities + milling orders, easily 10+ HTTP calls)
+// landing on the same Apps Script project at the same instant, forever,
+// for as long as the session stays open. Multiplied across however many
+// staff devices are open in the field at once, this is a real
+// contributor to hitting Apps Script's own concurrent-execution ceiling
+// during those aligned spikes - not random flakiness, a structural
+// thundering-herd pattern. scheduleJittered replaces a fixed setInterval
+// with a self-rescheduling timer whose delay is randomized ±20% each
+// cycle, so two workers that start in the same tick drift apart over
+// time instead of staying phase-locked forever.
+const scheduleJittered = (fn, baseIntervalMs, jitterRatio = 0.2) => {
+  let timerId = null
+  let cancelled = false
+  const tick = async () => {
+    if (cancelled) return
+    await fn()
+    if (cancelled) return
+    const jitter = baseIntervalMs * jitterRatio * (Math.random() * 2 - 1)
+    timerId = setTimeout(tick, Math.max(1000, baseIntervalMs + jitter))
+  }
+  const jitter = baseIntervalMs * jitterRatio * (Math.random() * 2 - 1)
+  timerId = setTimeout(tick, Math.max(1000, baseIntervalMs + jitter))
+  return () => {
+    cancelled = true
+    if (timerId) clearTimeout(timerId)
+  }
+}
+
 let isSyncing = false
 
 // Real bug found: a single transient failure (a dropped connection, an
@@ -341,14 +377,25 @@ export const startAuthoritySyncWorker = () => {
     await syncMillingOrdersFromSheets()
   }
 
-  runSync()
+  // Staggered a few seconds behind the transaction worker's own
+  // immediate first call (App.jsx mounts both effects in the same
+  // render) - see scheduleJittered's comment: without this, this
+  // worker's very first run always landed in the same tick as the
+  // transaction worker's, at every single login, before either had a
+  // chance to drift apart.
+  const initialDelayMs = 5000 + Math.random() * 5000
+  const initialTimer = setTimeout(runSync, initialDelayMs)
 
-  const intervalId = setInterval(runSync, AUTHORITY_SYNC_INTERVAL_MS)
+  // scheduleJittered instead of a fixed setInterval - this worker's 60s
+  // cadence is an exact 2x multiple of the transaction worker's 30s one,
+  // which would otherwise stay permanently phase-locked.
+  const stopSchedule = scheduleJittered(runSync, AUTHORITY_SYNC_INTERVAL_MS)
   window.addEventListener('online', runSync)
 
   return () => {
     cancelled = true
-    clearInterval(intervalId)
+    clearTimeout(initialTimer)
+    stopSchedule()
     window.removeEventListener('online', runSync)
   }
 }
@@ -393,12 +440,17 @@ export const startTransactionSyncWorker = (user) => {
 
   runSync()
 
-  const intervalId = setInterval(runSync, TRANSACTION_SYNC_INTERVAL_MS)
+  // scheduleJittered instead of a fixed setInterval - see that helper's
+  // own comment for why: this worker's 30s cadence is an exact 2x
+  // divisor of the authority worker's 60s one, and both fire their first
+  // run in the same tick at login, so a plain setInterval would keep
+  // them permanently phase-locked into synchronized request bursts.
+  const stopSchedule = scheduleJittered(runSync, TRANSACTION_SYNC_INTERVAL_MS)
   window.addEventListener('online', runSync)
 
   return () => {
     cancelled = true
-    clearInterval(intervalId)
+    stopSchedule()
     window.removeEventListener('online', runSync)
   }
 }
