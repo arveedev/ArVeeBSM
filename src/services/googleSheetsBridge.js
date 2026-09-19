@@ -853,16 +853,24 @@ const runAuthoritiesSync = async () => {
     // Reported, real bug: no date was ever showing on AI/SIA authorities
     // (pending list or Completed list) despite the UI already having code
     // to display `a.date` when present - the sync itself was never
-    // successfully reading it. First attempted fix (matching any header
-    // starting with "date") was still wrong - confirmed directly by the
-    // user reading the live sheet: the date is Column A, and matching by
-    // header NAME at all is inherently unreliable for it, the same
-    // reason `Regional Authority Number`/`Source Warehouse` below are
-    // read by raw column position rather than header text. The server
-    // (docs/apps-script-full-replacement.js's fetchAuthorities action)
-    // now adds `row['Date Column A']` the same way it already adds
-    // those two fields - read that directly instead of guessing at
-    // header text.
+    // successfully reading it. Root cause, confirmed directly by the
+    // user reading the live sheet: the header cell for this column had
+    // been deleted - no header text existed at all, so no amount of
+    // pattern-matching against header text could ever have found it.
+    // Header text is now restored ("DATE"), so header-name matching is
+    // the primary path again (self-documenting, survives a year-suffix
+    // rename the way a fixed column index wouldn't) - but tried FIRST
+    // against `Date Column A`, a raw-position fallback the server
+    // (docs/apps-script-full-replacement.js) adds unconditionally the
+    // same way it already does for `Regional Authority Number`/`Source
+    // Warehouse`, so a header getting blanked out again in the future
+    // degrades gracefully instead of silently breaking this a second
+    // time.
+    const findDateValue = (row) => {
+      const key = Object.keys(row).find((k) => /^date/i.test(k.trim()))
+      return key ? row[key] : undefined
+    }
+
     let aiCount = 0
     let siaCount = 0
 
@@ -880,9 +888,9 @@ const runAuthoritiesSync = async () => {
 
         // Skip anything dated before this source's Date From - this is
         // the actual mechanism behind "ignore old experiments in the
-        // sheet". Read from Column A by raw position - see this loop's
-        // own top comment for why header-name matching was dropped.
-        const aiDateRaw = row['Date Column A']
+        // sheet". Header-name match first, raw column-A position as a
+        // fallback - see this loop's own top comment for why both exist.
+        const aiDateRaw = findDateValue(row) ?? row['Date Column A']
         const aiDate = aiDateRaw ? String(aiDateRaw).slice(0, 10) : null
         if (aiDate && aiDate < source.dateFrom) continue
 

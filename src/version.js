@@ -4397,4 +4397,19 @@
 //            is untouched - its real header is confirmed, actually and
 //            reliably named "DATE" (column B, not A - different sheet
 //            layout), and was already displaying correctly.
-export const APP_VERSION = '1.10-48'
+//   1.10-49 - Found the true root cause, from the user directly: the AI
+//            sheet's date column header cell had been deleted - no
+//            header text existed at all, so no pattern-matching attempt
+//            could ever have found it, explaining both prior failed
+//            fixes at once. Header restored ("DATE"). Restored header-
+//            name matching (findDateValue) as the primary read, per
+//            explicit request ("better that we are looking for a header
+//            name, just in case anything happens") - self-documenting
+//            and survives a future year-suffix rename the way a fixed
+//            column index wouldn't - but tried FIRST against
+//            `Date Column A` (1.10-48's raw-position fallback, which the
+//            server already adds unconditionally), so a header getting
+//            blanked out again in the future degrades gracefully instead
+//            of silently breaking the same way twice. SIA untouched -
+//            already correct.
+export const APP_VERSION = '1.10-49'
