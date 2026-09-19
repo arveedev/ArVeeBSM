@@ -221,6 +221,27 @@ fixes across every earlier phase.
   complaint that led to the Error Log's `resolved`/`refId` fields
   (backend-schema.md §7) — each a reminder that this phase never
   formally ends for an app in continuous field use.
+- Admin Home's warehouse stock totals went through a three-round
+  root-cause chase, reported as a single symptom (a flat zero, then a
+  spinner with nothing ever appearing underneath it) that turned out to
+  be three genuinely different defects stacked on top of each other: a
+  WKWebView/iOS-PWA IndexedDB concurrency limit (fixed by batching the
+  per-warehouse computation instead of firing it all via one
+  `Promise.all`), followed by a computation that was actually correct
+  the whole time but was retriggering on every single incoming Dexie
+  Cloud sync write because it lived inside a `useLiveQuery` (TDD §2.12)
+  — and the first attempted fix for *that* regressed into a genuine
+  livelock (spinner stuck for 15+ minutes, confirmed on both iPhone and
+  Android) on a device whose sync traffic never truly goes quiet, before
+  landing on decoupling the computation from Dexie's live-query
+  reactivity entirely. A pattern worth naming alongside Phase 4's own
+  note: the reported symptom and the actual defect were in different
+  layers of the stack each time, and the second-round diagnostic build
+  (temporary `console.log` instrumentation shipped as its own dated
+  point release, `src/version.js` 1.10-30) is what actually separated
+  "the data/logic is wrong" from "the reactive scheduling around correct
+  data is wrong" — a distinction that direct code review alone hadn't
+  settled.
 
 **Milestone**: the app is in daily production use across multiple
 warehouses with no open data-integrity bug, and every NFA report type

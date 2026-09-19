@@ -302,6 +302,40 @@ hold its final state — and default to neither holding, since letting an
 animation naturally release control back to the base cascade is what
 lets a later, unrelated piece of code still move that same element.
 
+### 2.12 Reactive live-query computations are decoupled from Dexie's per-write auto-tracking once they're expensive
+
+**Decision**: a `useLiveQuery` wrapping a computation that reads tables
+beyond the one it conceptually "owns" — most notably a rollup that walks
+every pile's own transaction history across every warehouse — is not
+left to re-run directly off Dexie's automatic per-write dependency
+tracking once that computation is expensive enough to matter. Instead, a
+lightweight row-count signal (e.g. `db.transactions.count()`) drives a
+debounced recompute: the live table data is read through a ref, kept
+current every render but never used as the triggering effect's own
+dependency, and the debounce is paired with a hard maxWait so a recompute
+is guaranteed on a bounded schedule no matter how continuous the
+underlying write traffic is.
+
+**Rationale**: `useLiveQuery` re-invokes its querier function on every
+write to *any* table the function touches during execution, not only the
+table the query is conceptually about — Admin Home's warehouse stock
+rollup re-ran in full on every single incoming Dexie Cloud sync write,
+sometimes dozens of times in a row during a sync burst, while the
+loading indicator (`state === undefined`) only ever showed once, since
+`useLiveQuery` keeps rendering its previous result while a new one
+computes; a legitimately-still-settling page looked frozen instead. A
+device with genuinely continuous sync traffic (confirmed directly on
+both iPhone and Android) exposed a second failure mode in the first
+attempted fix: a plain "wait for quiet" debounce, if its own effect
+depends on the live table data directly, never gets its quiet window at
+all, because the data's changing identity restarts the debounce before
+it can elapse — a full livelock, not merely a slow settle. Reading the
+live data via a ref instead of as a dependency, plus a hard maxWait
+alongside the quiet-period wait, closes both failure modes at once: the
+computation can no longer be cancelled-and-restarted mid-flight by
+unrelated table churn, and it is guaranteed to eventually run even if
+the underlying traffic never truly goes quiet.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability
