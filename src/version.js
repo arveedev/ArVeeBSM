@@ -4173,4 +4173,30 @@
 //            Monitoring tab is the one actually being interacted with;
 //            each simply keeps showing its last-known data and picks
 //            back up the moment its own tab is looked at again.
-export const APP_VERSION = '1.10-35'
+//   1.10-36 - Fixed a real regression 1.10-35 didn't cover: frame drops on
+//            Admin Monitoring, confirmed still happening AND confirmed
+//            admin-only (the user-side AuthorityMonitor.jsx stays smooth).
+//            A fifth confirmed instance of the TDD §2.12 shape, but not the
+//            same failure mode as the first four: AdminMonitoring.jsx's own
+//            AI/SIA data is a plain, unscoped useLiveQuery(() => db
+//            .authorities.toArray()) - every authority in the whole system,
+//            re-fetched synchronously on every single write to that table
+//            (this page's own completion toggle, CompletedAuthorityModal's
+//            un-complete, every WSI/ESI issuance anywhere, every incoming
+//            Dexie Cloud sync write). AuthorityMonitor.jsx never hits this
+//            because its own query is scoped to just the logged-in user's
+//            accessible warehouse(s), a tiny slice of the nationwide table -
+//            this page has no such scope, since an admin genuinely needs
+//            every warehouse's data. useDebouncedLiveCompute (the fix for
+//            the first four instances) isn't the right tool here: its
+//            change-detection signal is a row COUNT, which only changes on
+//            insert/delete, but almost every meaningful update to this
+//            table is a field mutation on an existing row - a count-based
+//            signal would silently go stale on exactly the actions this
+//            page most needs to reflect immediately. Fixed instead with
+//            useDeferredValue: the data stays fully, immediately
+//            consistent (no staleness trade-off), but React now schedules
+//            the resulting heavy filter/dedupe/sort re-render at lower
+//            priority, so it no longer blocks the same frame as the
+//            completingId-driven row animation.
+export const APP_VERSION = '1.10-36'

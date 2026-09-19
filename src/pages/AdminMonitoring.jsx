@@ -14,7 +14,7 @@
 // Search finds a specific AI/SIA number; tapping a matched row opens the
 // reconciliation panel showing every WSI/ESI document that used it.
 
-import { useEffect, useState } from 'react'
+import { useDeferredValue, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Search, X, Check } from 'lucide-react'
 import { db } from '../db/dexie.js'
@@ -84,7 +84,35 @@ function AdminMonitoring() {
     if (searchQuery.trim()) window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [searchQuery])
 
-  const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
+  // Reported, still-happening after 1.10-35: frame drops on this page,
+  // confirmed admin-only (the user side - AuthorityMonitor.jsx - stays
+  // smooth). Root cause is a FIFTH instance of the same underlying shape
+  // TDD §2.12 documents, but a different failure mode than the previous
+  // four: this is a plain, unscoped useLiveQuery(() => db.authorities
+  // .toArray()) - EVERY authority record in the whole system, re-fetched
+  // synchronously on every single write to db.authorities (this page's
+  // own completion toggle below, CompletedAuthorityModal's un-complete,
+  // every WSI/ESI issuance anywhere, and every incoming Dexie Cloud sync
+  // write). AuthorityMonitor.jsx never hits this because its own query
+  // is scoped to just the logged-in user's accessible warehouse(s) - a
+  // tiny slice of the nationwide table; this page has no such scope to
+  // lean on, since an admin genuinely needs every warehouse's data.
+  //
+  // useDebouncedLiveCompute (the fix used for the previous four
+  // instances) is NOT the right tool here: its change-detection signal
+  // is a row-COUNT, which only changes on insert/delete - but almost
+  // every meaningful update to this table is a field mutation on an
+  // EXISTING row (an issuance decrementing totals, a completion toggle),
+  // so a count-based signal would silently go stale exactly on the
+  // actions this page most needs to reflect immediately. Deferred
+  // instead: the data itself stays fully, immediately consistent (same
+  // as before), but React schedules the resulting heavy
+  // filter/dedupe/sort re-render (below) at lower priority via
+  // useDeferredValue, so it no longer blocks the same frame as the
+  // completingId-driven row animation - closing the jank without any
+  // staleness trade-off.
+  const authoritiesLive = useLiveQuery(() => db.authorities.toArray(), []) ?? []
+  const authorities = useDeferredValue(authoritiesLive)
 
   useEffect(() => {
     if (!completingId) return
