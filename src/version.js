@@ -4496,4 +4496,26 @@
 //            both already pre-built this sync run) - an already-known
 //            authority now always goes through and gets its date (and
 //            every other field) refreshed, regardless of age.
-export const APP_VERSION = '1.10-55'
+//   1.10-56 - 1.10-55 fixed the date bug (confirmed on a real device:
+//            AI's Completed list now shows dates), but immediately
+//            surfaced a second, more serious problem via the Admin
+//            Dashboard's own Sync Identity diagnostic panel: SYNC
+//            STATUS error/error, "HTTP 400: Too many changes in a
+//            single sync request (maximum 1000 allowed)" - a
+//            device-wide Dexie Cloud sync stall, not limited to
+//            authorities. Root cause: upsertAuthority/upsertSiaAuthority
+//            called db.authorities.update() unconditionally on every
+//            matching row every sync pass, regardless of whether any
+//            field actually differed from what was already stored.
+//            Combined with 1.10-53's full-pull-always fetch and 1.10-55
+//            letting old records back into the write path, this meant
+//            literally every authority (1269 AI + 229 SIA, confirmed on
+//            the diagnostic panel) got rewritten to Dexie on every
+//            single pass - comfortably over Dexie Cloud's 1000-change-
+//            per-push cap. Added a real "did anything change" check
+//            (patchFieldsChanged / sackLinesEqual) before either upsert
+//            calls db.authorities.update() - a write now only happens
+//            when a field genuinely differs, so a steady-state sync
+//            (the common case) costs close to zero Dexie Cloud changes
+//            instead of ~1500 every time.
+export const APP_VERSION = '1.10-56'

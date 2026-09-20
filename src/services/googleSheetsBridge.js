@@ -367,6 +367,35 @@ export const resolveCanonicalAuthority = async (matchField, matchValue, type) =>
 // single sync is exactly the "duplicate row" case the dedup logic
 // below exists to catch. Falls back to a live query when no cache is
 // passed, so this function still works correctly on its own.
+// Shallow "did anything actually change" check, shared by both upsert
+// functions below. Every sync pass now does a full pull with no
+// modifiedSince filtering (1.10-53) and no longer skips a row just for
+// being old (1.10-55) - both correct fixes on their own - but combined
+// with an update call that ran unconditionally, that meant EVERY
+// authority (1269 AI + 229 SIA on one real device, confirmed via the
+// Admin Dashboard's Sync Identity diagnostic) got rewritten to Dexie on
+// every single pass, whether or not its data actually differed. Dexie
+// Cloud caps a single sync push at 1000 changes - this is exactly what
+// tripped "HTTP 400: Too many changes in a single sync request" right
+// after 1.10-55 let the previously-skipped old records back into the
+// write path. Only a genuine field difference should cost a write.
+const patchFieldsChanged = (existing, patch) =>
+  Object.entries(patch).some(([key, value]) => existing?.[key] !== value)
+
+const sackLinesEqual = (a, b) => {
+  if (a.length !== b.length) return false
+  return a.every((line, i) => {
+    const other = b[i]
+    return (
+      other &&
+      line.sackTypeId === other.sackTypeId &&
+      line.condition === other.condition &&
+      line.totalAllocationBags === other.totalAllocationBags &&
+      line.totalIssuedBags === other.totalIssuedBags
+    )
+  })
+}
+
 const upsertAuthority = async (incoming, cacheByAiNumber = null) => {
   // Every record sharing this AI number - previously only the first
   // matching record was ever updated, silently leaving any OTHER
@@ -393,12 +422,17 @@ const upsertAuthority = async (incoming, cacheByAiNumber = null) => {
       totalIssuedKilos: existing.totalIssuedKilos ?? 0,
       manuallyCompleted: existing.manuallyCompleted ?? false,
     }
-    await db.authorities.update(existing.authId, {
-      ...incoming,
-      totalIssuedBags: existing.totalIssuedBags ?? 0,
-      totalIssuedKilos: existing.totalIssuedKilos ?? 0,
-      manuallyCompleted: existing.manuallyCompleted ?? false,
-    })
+    // totalIssuedBags/Kilos/manuallyCompleted are always re-derived from
+    // `existing` itself above, so they can never differ - only `incoming`
+    // needs checking against what's already stored.
+    if (patchFieldsChanged(existing, incoming)) {
+      await db.authorities.update(existing.authId, {
+        ...incoming,
+        totalIssuedBags: existing.totalIssuedBags ?? 0,
+        totalIssuedKilos: existing.totalIssuedKilos ?? 0,
+        manuallyCompleted: existing.manuallyCompleted ?? false,
+      })
+    }
   } else {
     final = {
       authId: crypto.randomUUID(),
@@ -466,15 +500,20 @@ const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null) => {
       sackLines: mergedLines,
       sourceId: incoming.sourceId,
     }
-    await db.authorities.update(existing.authId, {
+    const scalarPatch = {
       date: incoming.date,
       assignedWarehouse: incoming.assignedWarehouse,
       customerName: incoming.customerName,
       transactionTypeName: incoming.transactionTypeName,
       remarks: incoming.remarks,
-      sackLines: mergedLines,
       sourceId: incoming.sourceId,
-    })
+    }
+    if (patchFieldsChanged(existing, scalarPatch) || !sackLinesEqual(existing.sackLines ?? [], mergedLines)) {
+      await db.authorities.update(existing.authId, {
+        ...scalarPatch,
+        sackLines: mergedLines,
+      })
+    }
   } else {
     final = {
       authId: crypto.randomUUID(),
