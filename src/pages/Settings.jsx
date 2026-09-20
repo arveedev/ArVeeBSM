@@ -577,43 +577,84 @@ function Settings() {
       return null
     }
   }, [])
-  // A pending mutation carrying any of these keys represents real local
-  // business data (issuance progress entered through a WSI/ESI form, or
-  // an authority manually marked complete) that has NOT yet reached
-  // Dexie Cloud or any other device - never safe to discard. Everything
-  // else our own sync code ever writes to an authority is purely
-  // re-derived from the Google Sheet on the next sync pass regardless,
-  // so losing a QUEUED (not yet pushed) copy of it costs nothing - the
-  // Sheet is still there and every device, including this one, will
-  // naturally re-arrive at the same values.
-  const AUTHORITY_BUSINESS_FIELDS = ['totalIssuedBags', 'totalIssuedKilos', 'manuallyCompleted', 'status', 'sackLines']
+  // These are the only fields our own sync code never overwrites from
+  // the Sheet - a real local write (a WSI/ESI form recording issuance,
+  // or an authority manually marked complete) touches one of these with
+  // a value that genuinely differs from what's already there. Everything
+  // else on an authority is purely re-derived from the Sheet, so losing
+  // a QUEUED (not yet pushed) copy of a Sheet-derived value costs
+  // nothing - the Sheet is still there and every device, including this
+  // one, re-arrives at the same value on its own.
+  //
+  // First pass at this classifier (1.10-59) checked only whether a
+  // patch's KEYS included one of these fields - and found 0 of 22,470
+  // entries safe. Root cause: the code that generated this backlog (any
+  // pass before 1.10-56) always included totalIssuedBags/
+  // totalIssuedKilos/manuallyCompleted in EVERY update call, unconditionally
+  // re-echoing whatever `existing` already held - so every single old
+  // entry LOOKED like it touched a business field, even though none of
+  // them ever changed the actual value. Fixed by comparing the patch's
+  // VALUE for each business field against the authority's CURRENT local
+  // value (passed in as `authorityMap`, built once from a single
+  // bulkGet rather than one lookup per mutation) - only a genuine value
+  // difference counts as a real write now.
+  const AUTHORITY_BUSINESS_FIELDS = ['totalIssuedBags', 'totalIssuedKilos', 'manuallyCompleted', 'status']
+  const sackLineKey = (l) => `${l?.sackTypeId}::${l?.condition}`
+  const sackLinesUnchanged = (patchLines, currentLines) => {
+    if (!Array.isArray(patchLines)) return false
+    const currentByKey = new Map((currentLines ?? []).map((l) => [sackLineKey(l), l]))
+    return patchLines.every((line) => {
+      const match = currentByKey.get(sackLineKey(line))
+      return match && match.totalIssuedBags === line.totalIssuedBags
+    })
+  }
   // Confirmed against dexie-cloud-addon's own mutation-tracking source: a
   // single-key `db.authorities.update(key, patch)` call (exactly what
   // upsertAuthority/upsertSiaAuthority always do) is recorded as
   // `{ type: 'update', keys: [key], changeSpecs: [patch] }`. Only that
   // exact, unambiguous shape is ever classified as safe - an `insert`
-  // (a whole new authority), a `delete` (stale-duplicate cleanup), or
-  // anything this function doesn't recognize is always treated as
-  // must-keep. Failing closed here matters more than clearing every
-  // last noise entry.
-  const isPureSyncNoiseMutation = (mut) => {
-    if (mut?.type !== 'update' || !Array.isArray(mut.changeSpecs)) return false
-    return mut.changeSpecs.every(
-      (spec) => spec && typeof spec === 'object' && Object.keys(spec).every((key) => !AUTHORITY_BUSINESS_FIELDS.includes(key)),
-    )
+  // (a whole new authority), a `delete` (stale-duplicate cleanup), a
+  // row not found in `authorityMap` (can't verify), or anything this
+  // function doesn't recognize is always treated as must-keep. Failing
+  // closed here matters more than clearing every last noise entry.
+  const isPureSyncNoiseMutation = (mut, authorityMap) => {
+    if (mut?.type !== 'update' || !Array.isArray(mut.changeSpecs) || !Array.isArray(mut.keys)) return false
+    return mut.keys.every((key, i) => {
+      const spec = mut.changeSpecs[i]
+      if (!spec || typeof spec !== 'object') return false
+      const current = authorityMap.get(key)
+      if (!current) return false
+      for (const field of AUTHORITY_BUSINESS_FIELDS) {
+        if (field in spec && spec[field] !== current[field]) return false
+      }
+      if ('sackLines' in spec && !sackLinesUnchanged(spec.sackLines, current.sackLines)) return false
+      return true
+    })
   }
   const [backlogReport, setBacklogReport] = useState(null)
   const [inspectingBacklog, setInspectingBacklog] = useState(false)
   const [confirmClearBacklog, setConfirmClearBacklog] = useState(false)
   const [clearingBacklog, setClearingBacklog] = useState(false)
+  const buildAuthorityMap = async (mutations) => {
+    const uniqueKeys = new Set()
+    for (const mut of mutations) {
+      if (Array.isArray(mut?.keys)) mut.keys.forEach((k) => uniqueKeys.add(k))
+    }
+    const keyList = [...uniqueKeys]
+    const rows = await db.authorities.bulkGet(keyList)
+    const map = new Map()
+    keyList.forEach((key, i) => { if (rows[i]) map.set(key, rows[i]) })
+    return map
+  }
   const inspectBacklog = async () => {
     setInspectingBacklog(true)
     try {
       const all = await db.table('$authorities_mutations').toArray()
+      const authorityMap = await buildAuthorityMap(all)
       let safeToClear = 0
       let mustKeep = 0
       for (const mut of all) {
-        if (isPureSyncNoiseMutation(mut)) safeToClear += 1
+        if (isPureSyncNoiseMutation(mut, authorityMap)) safeToClear += 1
         else mustKeep += 1
       }
       setBacklogReport({ total: all.length, safeToClear, mustKeep })
@@ -624,7 +665,11 @@ function Settings() {
   const clearSafeBacklog = async () => {
     setClearingBacklog(true)
     try {
-      const removed = await db.table('$authorities_mutations').filter(isPureSyncNoiseMutation).delete()
+      const all = await db.table('$authorities_mutations').toArray()
+      const authorityMap = await buildAuthorityMap(all)
+      const removed = await db.table('$authorities_mutations')
+        .filter((mut) => isPureSyncNoiseMutation(mut, authorityMap))
+        .delete()
       toast.success(`Cleared ${removed} sync-noise entries. Real pending writes were left untouched.`)
       await inspectBacklog()
     } catch (err) {

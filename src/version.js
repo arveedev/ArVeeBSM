@@ -4596,4 +4596,21 @@
 //            device's local copy of corrections the Sheet will simply
 //            re-derive and re-send on its next sync pass anyway - it
 //            never touches other devices or the Sheet itself.
-export const APP_VERSION = '1.10-59'
+//   1.10-60 - 1.10-59's classifier came back with 0 of 22,470 entries
+//            safe to clear - suspicious, and investigated rather than
+//            accepted. Root cause: it only checked whether a patch's
+//            KEYS included a business field, but the pre-1.10-56 code
+//            that generated this whole backlog always included
+//            totalIssuedBags/totalIssuedKilos/manuallyCompleted in
+//            EVERY update call, unconditionally re-echoing whatever
+//            `existing` already held at that moment - so every old
+//            entry LOOKED like it touched real data, even though none
+//            of them ever actually changed the value. Fixed by comparing
+//            each patch's business-field VALUES against the authority's
+//            current local value (one batched bulkGet building an
+//            authorityMap, not a lookup per mutation) - only a genuine
+//            value difference from what's there now counts as a real,
+//            must-keep write. SIA's sackLines gets the same per-line
+//            totalIssuedBags comparison, matched by (sackTypeId,
+//            condition) since array order isn't guaranteed stable.
+export const APP_VERSION = '1.10-60'
