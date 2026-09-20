@@ -4763,4 +4763,27 @@
 //            with the real seeded data (up to ₱111,000) before
 //            shipping: no truncation, no overlap, everything within
 //            the card's bounds.
-export const APP_VERSION = '1.10-69'
+//   1.10-70 - Two SDO fixes. (1) The exported "Abstract of Cereal
+//            Purchases" PDF's Cash Reconciliation box always showed
+//            "Fund available" as 0.00 - AbstractExportModal.jsx had it
+//            hardcoded (`addAmount: 0`, never derived from anything),
+//            and "COH — Fund Balance" could ALSO show 0.00 whenever a
+//            replenishment landed on or after the report's own dateFrom
+//            (that opening-balance calc only looks strictly before
+//            dateFrom by design) - a mid-period replenishment then fell
+//            into neither line, uncounted anywhere in the report even
+//            though the live on-screen Cash Balance was correct. Fixed
+//            by deriving "Fund available" from the same replenish/
+//            liquidate cashLedgerV2 entries computeCashOnHand already
+//            uses, scoped to the report's own [dateFrom, dateTo] window
+//            instead of "before it" - fundBalance + addAmount - this
+//            period's disbursements now reconciles correctly. (2) Added
+//            a "For Encashment/Replenishment" field to the Denomination
+//            Count modal - a check the SDO is physically holding but
+//            hasn't deposited yet, per explicit request: still real
+//            cash on hand even though it's not a bill or coin, so it
+//            now feeds into Counted total the same as every
+//            denomination row, and persists on the existing
+//            cashDenominationCounts record (no schema change needed -
+//            only sdoUid is indexed on that table).
+export const APP_VERSION = '1.10-70'

@@ -39,6 +39,13 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   const { user } = useAuth()
   const saved = useLiveQuery(() => user ? db.cashDenominationCounts.get(user.uid) : null, [user?.uid])
   const [counts, setCounts] = useState({})
+  // A check the SDO is physically holding but hasn't deposited/encashed
+  // yet - still real cash on hand (the bank just hasn't processed it),
+  // so it has to count toward the reconciliation total the same as
+  // actual bills and coins, even though it's not one of the 13
+  // denominations above. Plain field on the existing cashDenominationCounts
+  // record - no Dexie schema change needed since only sdoUid is indexed.
+  const [forEncashment, setForEncashment] = useState('')
   const [entered, setEntered] = useState(false)
 
   useEffect(() => {
@@ -49,6 +56,7 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   useEffect(() => {
     if (!saved?.counts) return
     setCounts(Object.fromEntries(DENOMINATIONS.map((d) => [d, normalizeEntry(saved.counts[d])])))
+    setForEncashment(saved.forEncashment ? liveFormatNumber(String(saved.forEncashment), 2) : '')
   }, [saved])
 
   const setField = (d, field, rawValue) =>
@@ -74,7 +82,9 @@ function DenominationModal({ currentCashOnHand, onClose }) {
       : { maximumFractionDigits: 0 })
   }
 
-  const total = DENOMINATIONS.reduce((s, d) => s + rowTotal(d), 0)
+  const denominationsTotal = DENOMINATIONS.reduce((s, d) => s + rowTotal(d), 0)
+  const forEncashmentValue = parseFormattedNumber(forEncashment)
+  const total = denominationsTotal + forEncashmentValue
   const diff = total - currentCashOnHand
 
   const handleSave = async () => {
@@ -90,6 +100,7 @@ function DenominationModal({ currentCashOnHand, onClose }) {
     await db.cashDenominationCounts.put({
       sdoUid: user.uid,
       counts: cleanCounts,
+      forEncashment: forEncashment === '' ? '' : forEncashmentValue,
       countedTotal: total,
       updatedAt: new Date().toISOString(),
     })
@@ -167,6 +178,25 @@ function DenominationModal({ currentCashOnHand, onClose }) {
                 </Fragment>
               )
             })}
+          </div>
+
+          {/* A check the SDO is physically holding but hasn't deposited/
+              encashed yet - real cash on hand even though it's not a bill
+              or coin, so it has to feed into the same Counted total the
+              denominations above do, not sit next to it uncounted. */}
+          <div className="mt-1 flex items-center justify-between gap-2 border-t border-neutral-800 pt-2.5 text-sm">
+            <span className="text-neutral-400">For Encashment/Replenishment</span>
+            <div className="flex items-center gap-1">
+              <span className="text-neutral-500">₱</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={forEncashment}
+                onChange={(e) => setForEncashment(liveFormatNumber(e.target.value, 2))}
+                placeholder="0.00"
+                className="w-28 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-right tabular-nums text-app-text outline-none focus:border-brand-neon"
+              />
+            </div>
           </div>
         </div>
 

@@ -67,10 +67,28 @@ function AbstractExportModal({ onClose }) {
         wsrSerialNo: wsrById.get(pr.wsrTransactionId)?.serialNo ?? '',
       }))
 
+      // Opening balance: everything that happened strictly BEFORE this
+      // period started - unchanged, already correct.
       const fundBalance = computeCashOnHand(
         ledgerEntries.filter((e) => e.date < dateFrom),
         activePrsAll.filter((pr) => pr.date < dateFrom).map((pr) => pr.totalAmount ?? 0)
       )
+      // Reported real bug: "Fund available" always printed 0.00 - `addAmount`
+      // was a hardcoded literal, never derived from anything. A
+      // replenishment/liquidation dated ON OR AFTER dateFrom (e.g. the
+      // period's own opening replenishment) fell into neither this line
+      // NOR fundBalance (which only looks strictly before dateFrom) - it
+      // was silently uncounted anywhere in the report. Fixed by summing
+      // the SAME replenish/liquidate ledger entries computeCashOnHand
+      // uses, scoped to this period's own date window instead of "before
+      // it", with no PR disbursement subtracted here since that's already
+      // its own separate "This period's disbursements" line below -
+      // fundBalance + addAmount - periodTotal now correctly reconciles to
+      // the live, on-screen Cash on Hand as of dateTo.
+      const periodLedgerEntries = ledgerEntries.filter((e) => !e.voided && e.date >= dateFrom && e.date <= dateTo)
+      const periodReplenished = periodLedgerEntries.filter((e) => e.type === 'replenish').reduce((s, e) => s + e.amount, 0)
+      const periodLiquidated = periodLedgerEntries.filter((e) => e.type === 'liquidate').reduce((s, e) => s + e.amount, 0)
+      const addAmount = periodReplenished - periodLiquidated
       const periodTotal = enriched.reduce((s, pr) => s + (pr.totalAmount ?? 0), 0)
 
       const doc = generateSdoAbstract({
@@ -82,7 +100,7 @@ function AbstractExportModal({ onClose }) {
         reconciliation: {
           fundBalance,
           addLabel: 'Fund available',
-          addAmount: 0,
+          addAmount,
           lessEntries: [{ label: 'This period’s disbursements', amount: periodTotal }],
         },
         signatories: {
