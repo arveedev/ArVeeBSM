@@ -233,11 +233,22 @@ export const generateSdoAbstract = ({
   const fundBalance = reconciliation?.fundBalance ?? 0
   const addAmount = reconciliation?.addAmount ?? 0
   let running = fundBalance + addAmount
-  const reconRows = [
-    { label: 'COH — Fund Balance', amt: fundBalance },
-    { label: reconciliation?.addLabel ?? 'ADD', amt: addAmount },
-    { label: 'TOTAL', amt: running, bold: true },
-  ]
+  // Reported real bug: a separate "Fund available" ADD row (even once
+  // it was actually computing a real number, not the hardcoded 0 it
+  // used to be) read as TWO fund balances on the page - the SDO's own
+  // convention is one COH — Fund Balance figure, already inclusive of
+  // any replenishment during the period. The caller now folds that in
+  // before calling this, so addAmount is 0 for the current export - the
+  // ADD row (and its own redundant TOTAL) is skipped whenever there's
+  // nothing in it, collapsing back to the single-line figure. Kept
+  // conditional rather than deleted outright so a genuinely separate
+  // mid-period addition can still be shown distinctly if some future
+  // export needs that shape.
+  const reconRows = [{ label: 'COH — Fund Balance', amt: fundBalance }]
+  if (addAmount) {
+    reconRows.push({ label: reconciliation?.addLabel ?? 'ADD', amt: addAmount })
+    reconRows.push({ label: 'TOTAL', amt: running, bold: true })
+  }
   for (const e of reconciliation?.lessEntries ?? []) {
     running -= e.amount ?? 0
     reconRows.push({ label: e.label, amt: e.amount })

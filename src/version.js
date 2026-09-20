@@ -4786,4 +4786,18 @@
 //            denomination row, and persists on the existing
 //            cashDenominationCounts record (no schema change needed -
 //            only sdoUid is indexed on that table).
-export const APP_VERSION = '1.10-70'
+//   1.10-71 - 1.10-70's Abstract PDF fix was functionally correct
+//            (numbers reconciled properly) but showed two lines - "COH
+//            — Fund Balance" and a separate "Fund available" - where
+//            the SDO's own convention is one figure. Per explicit
+//            correction: the ₱200,000 replenishment belongs directly in
+//            "COH — Fund Balance", not next to it as a second number.
+//            Folded opening balance + this period's replenish/liquidate
+//            into one fundBalance in AbstractExportModal.jsx, and made
+//            sdoAbstractPdfGenerator.js's ADD row conditional on
+//            addAmount being non-zero (kept, not deleted, in case a
+//            genuinely separate mid-period addition needs its own line
+//            some future export) - so the box now reads exactly one
+//            COH — Fund Balance figure, followed by disbursements and
+//            the final total.
+export const APP_VERSION = '1.10-71'
