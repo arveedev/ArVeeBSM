@@ -100,8 +100,14 @@ function DenominationModal({ currentCashOnHand, onClose }) {
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
         </div>
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <div className="grid grid-cols-[52px_1fr_1fr_1fr] gap-2 px-1 text-[10px] font-semibold uppercase text-neutral-500">
+        {/* Compact rows + sticky summary (chosen from three redesign demos) -
+            the list is the ONLY scrollable region now; the totals/diff/Save
+            button live in their own shrink-0 footer below it instead of
+            inside the scroll, so they're always visible without scrolling
+            past all 13 denominations first. Zero-subtotal rows dim instead
+            of being hidden, so the grid stays a consistent shape. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3">
+          <div className="grid grid-cols-[40px_1fr_1fr_68px] gap-2 px-1 pb-1.5 text-[10px] font-semibold uppercase text-neutral-500">
             <span />
             <span className="text-center">Bundles</span>
             <span className="text-center">Pcs</span>
@@ -109,8 +115,12 @@ function DenominationModal({ currentCashOnHand, onClose }) {
           </div>
           {DENOMINATIONS.map((d) => {
             const { bundles, pcs } = normalizeEntry(counts[d])
+            const isZero = rowTotal(d) === 0
             return (
-              <div key={d} className="grid grid-cols-[52px_1fr_1fr_1fr] items-center gap-2 border-b border-neutral-900 pb-2 text-sm">
+              <div
+                key={d}
+                className={`grid grid-cols-[40px_1fr_1fr_68px] items-center gap-2 border-b border-neutral-900 py-1.5 text-sm transition-opacity ${isZero ? 'opacity-45' : ''}`}
+              >
                 <span className="font-semibold text-app-text">₱{d}</span>
                 <input
                   type="text"
@@ -132,10 +142,13 @@ function DenominationModal({ currentCashOnHand, onClose }) {
               </div>
             )
           })}
-          <div className="flex justify-between pt-1 text-sm font-semibold text-app-text">
+        </div>
+
+        <div className="shrink-0 space-y-1.5 border-t border-neutral-800 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2.5">
+          <div className="flex justify-between text-sm font-semibold text-app-text">
             <span>Counted total</span><span>₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
-          <div className="flex justify-between border-t border-neutral-800 pt-2 text-sm font-bold text-brand-neon">
+          <div className="flex justify-between text-sm font-bold text-brand-neon">
             <span>System Cash on Hand</span><span>₱{currentCashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           {Math.abs(diff) > 0.001 && (
@@ -144,7 +157,7 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             </p>
           )}
           <button type="button" onClick={handleSave}
-            className="mt-2 w-full rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95">
+            className="w-full rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95">
             Save Count
           </button>
         </div>

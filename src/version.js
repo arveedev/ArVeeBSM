@@ -4656,4 +4656,15 @@
 //            user-facing Monitoring page) and AdminMonitoring.jsx (its
 //            admin-side mirror, built to stay visually consistent with
 //            it) both updated the same way.
-export const APP_VERSION = '1.10-63'
+//   1.10-64 - Denomination Count modal (SDO Cash on Hand reconciliation)
+//            redesigned per explicit request: shown three demo directions
+//            first (compact+sticky, bills-first-coins-collapsed, tap-to-
+//            select), picked "A". Implemented: the totals/System Cash on
+//            Hand/diff banner/Save button now live in their own fixed
+//            footer below the denomination list, not inside the same
+//            scrolling region as the 13 rows - previously you had to
+//            scroll past every denomination to even see the diff or
+//            reach Save. Rows are tighter (smaller padding/columns), and
+//            a denomination with a zero subtotal dims instead of looking
+//            identical to one that's actually been counted.
+export const APP_VERSION = '1.10-64'
