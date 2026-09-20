@@ -4452,4 +4452,21 @@
 //            row count BEFORE filtering, and the first raw AI row
 //            unfiltered, so this is confirmed directly instead of
 //            guessed.
-export const APP_VERSION = '1.10-52'
+//   1.10-53 - Found it: aiRows.length was 0 at the SERVER response level
+//            (before any client-side date/dateFrom filtering), while
+//            siaRows.length was 467 - the same class of staleness bug
+//            already hit twice this session (v17/v35/v36's fix), a third
+//            time: once ANY sync pass succeeds (even with 0 AI rows, for
+//            any transient reason), lastSyncedAt gets stamped, and since
+//            a header-only edit never re-stamps any data row's own Last
+//            Modified (the sheet's onEdit trigger skips row 1), every
+//            later pass keeps asking "what changed since then" and
+//            getting nothing back, permanently. Removed modifiedSince
+//            entirely for the authorities fetch - always does a full
+//            pull now, trading a small amount of bandwidth (SIA already
+//            pulls several hundred rows with no apparent cost) for
+//            eliminating this whole recurring bug class. lastSyncedAt is
+//            still written for display (SheetSourcesPanel.jsx) and its
+//            existing "Force Resync" button - just no longer read as a
+//            filter.
+export const APP_VERSION = '1.10-53'

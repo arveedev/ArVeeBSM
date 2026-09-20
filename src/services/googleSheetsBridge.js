@@ -262,9 +262,23 @@ const fetchAuthorityRows = async (source, type) => {
   url.searchParams.set('action', 'fetchAuthorities')
   url.searchParams.set('sheet', sheetName)
   url.searchParams.set('type', type)
-  if (source.lastSyncedAt) {
-    url.searchParams.set('modifiedSince', source.lastSyncedAt)
-  }
+  // Confirmed, reported real bug: modifiedSince (delta sync, only rows
+  // the sheet's own "Last Modified" column shows as changed since last
+  // time) has now caused real, hard-to-diagnose staleness THREE times
+  // in this project - a header-only edit never re-stamps any data row's
+  // Last Modified (the sheet's own onEdit trigger explicitly skips row
+  // 1), so once one sync pass succeeds (even with 0 rows, for any
+  // reason - a transient echo-redirect failure that still returned a
+  // technically-successful empty response, in the incident that found
+  // this), every later pass keeps asking "what changed since then" and
+  // getting nothing back, permanently, until someone manually forces a
+  // resync. Given the real data volume here is modest (SIA alone
+  // already pulls several hundred rows with no apparent cost), always
+  // doing a full pull trades a small amount of bandwidth for
+  // eliminating this whole recurring bug class. lastSyncedAt is still
+  // written after a successful sync (SheetSourcesPanel.jsx displays it,
+  // and its own "Force Resync" button already existed as the manual
+  // escape hatch for this exact symptom) - just no longer read here.
 
   // Same gap, same fix as fetchMillingOrderRows above - a full AI/SIA
   // sheet fetch is bulk-shaped even on a delta (modifiedSince) request,
@@ -879,16 +893,6 @@ const runAuthoritiesSync = async () => {
         fetchAuthorityRows(source, 'AI'),
         fetchAuthorityRows(source, 'SIA'),
       ])
-      // TEMPORARY diagnostic - aiCount/siaCount (logged where this
-      // function returns) is 0 either because the sheet legitimately
-      // returned zero rows, or because every returned row is being
-      // filtered out below (missing AI#/customer, or the Date From
-      // cutoff). This distinguishes the two directly instead of
-      // guessing which.
-      console.log('[AUTHORITY-SYNC-DIAG] raw rows fetched - aiRows.length:', aiRows.length, 'siaRows.length:', siaRows.length, 'source.dateFrom:', source.dateFrom)
-      if (aiRows.length > 0) {
-        console.log('[AUTHORITY-SYNC-DIAG] first raw AI row (before any filtering):', aiRows[0])
-      }
 
       for (const row of aiRows) {
         // Skip reserved-but-unused authority numbers - only the number
