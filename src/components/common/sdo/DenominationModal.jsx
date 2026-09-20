@@ -59,6 +59,21 @@ function DenominationModal({ currentCashOnHand, onClose }) {
     return (parseFormattedNumber(bundles) * BUNDLE_SIZE + parseFormattedNumber(pcs)) * d
   }
 
+  // Per-row subtotal only, not the footer's Counted total/Cash on Hand -
+  // those stay full 2-decimal precision always, since they're the figures
+  // actually compared and saved. Dropping a meaningless ".00" here is what
+  // makes true equal-width columns fit: every bill denomination (₱1000
+  // down to ₱1) is structurally always a whole-peso multiple, so this only
+  // ever shortens those rows - the coin rows (₱0.25 and below) are the
+  // only ones that can be genuinely fractional, and they're never the
+  // widest value in the list, so this can't ever hide real cents.
+  const fmtRowSubtotal = (v) => {
+    const hasFraction = Math.abs(v % 1) > 0.001
+    return '₱' + v.toLocaleString('en-PH', hasFraction
+      ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+      : { maximumFractionDigits: 0 })
+  }
+
   const total = DENOMINATIONS.reduce((s, d) => s + rowTotal(d), 0)
   const diff = total - currentCashOnHand
 
@@ -107,26 +122,18 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             past all 13 denominations first. Zero-subtotal rows dim instead
             of being hidden, so the grid stays a consistent shape. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3">
-          {/* Fixed pixel guesses kept failing on the real device even after
-              measuring against the real Inter font locally - some
-              combination of device font metrics / OS text-scaling this
-              session can't fully reproduce kept making a "measured-safe"
-              number still too narrow. Switched to a structurally different
-              fix instead of guessing a fourth number: the label column is
-              now `auto` - sized by the browser to whatever the label
-              actually needs on THAT device, which makes truncation
-              mathematically impossible regardless of font/zoom/scaling,
-              no measuring required ever again. Bdl/Pcs stay equal to each
-              other (50px) since they're fixed-size input boxes, not
-              variable-width text; Subtotal stays flexible.
-              This requires every row to share ONE grid (not each row its
-              own separate 4-column grid) so `auto` computes from the
-              WIDEST label across ALL rows and every row's columns stay
-              aligned - each row is a Fragment (no box of its own) whose
-              four children are direct items of this single outer grid;
-              the border/opacity that used to live on a row wrapper now
-              applies to each of the four cells individually instead. */}
-          <div className="grid grid-cols-[auto_50px_50px_minmax(0,1fr)] items-center gap-x-1.5 gap-y-1 text-sm">
+          {/* True equal columns, as explicitly requested - made to actually
+              fit by shrinking the one thing that didn't: the per-row
+              subtotal's unnecessary ".00" (fmtRowSubtotal, above). Every
+              bill denomination (₱1000 down to ₱1) is structurally always a
+              whole peso amount, so stripping trailing zeros there shortens
+              exactly the values that needed the most room, without ever
+              touching the coin rows' real cents. Still one shared grid
+              (not each row its own) so all four columns line up across
+              every denomination - each row is a Fragment, and the border/
+              dim styling that used to live on a row wrapper applies to
+              each of the four cells individually. */}
+          <div className="grid grid-cols-4 items-center gap-x-1.5 gap-y-1 text-sm">
             <span className="pb-1.5 text-[10px] font-semibold uppercase text-neutral-500" />
             <span className="pb-1.5 text-center text-[10px] font-semibold uppercase text-neutral-500">Bdl</span>
             <span className="pb-1.5 text-center text-[10px] font-semibold uppercase text-neutral-500">Pcs</span>
@@ -156,7 +163,7 @@ function DenominationModal({ currentCashOnHand, onClose }) {
                     placeholder="0"
                     className={`${cellClass} min-w-0 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon`}
                   />
-                  <span className={`${cellClass} text-right tabular-nums text-neutral-400`}>₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className={`${cellClass} truncate text-right tabular-nums text-neutral-400`}>{fmtRowSubtotal(rowTotal(d))}</span>
                 </Fragment>
               )
             })}

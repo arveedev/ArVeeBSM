@@ -4743,4 +4743,24 @@
 //            against the real Inter font AND a deliberate 125% text-
 //            scaling stress test (well beyond anything measured
 //            before) - zero truncation, zero overlap, zero overflow.
-export const APP_VERSION = '1.10-68'
+//   1.10-69 - 1.10-68 fixed the overlap/truncation bug (confirmed on
+//            the real device - every label and subtotal showed in
+//            full), but the user's explicit, reiterated ask was
+//            literal equal columns, which had been avoided because the
+//            widest subtotal ("₱111,000.00") measured wider than an
+//            equal quarter-share. Fixed the actual cause of that width
+//            instead of the symptom: added fmtRowSubtotal, which drops
+//            the unnecessary ".00" on a whole-peso amount. Every bill
+//            denomination (₱1000 down to ₱1) is structurally always a
+//            whole-peso multiple, so this only ever shortens exactly
+//            the rows that needed the most room ("₱111,000.00" ->
+//            "₱111,000") - the coin rows (₱0.25 and below) are the only
+//            ones that can be genuinely fractional, and they're never
+//            the widest value, so real cents are never hidden. The
+//            footer's Counted total/System Cash on Hand keep full
+//            2-decimal precision always. With that shrink, true
+//            grid-cols-4 fits cleanly - verified in the browser pane
+//            with the real seeded data (up to ₱111,000) before
+//            shipping: no truncation, no overlap, everything within
+//            the card's bounds.
+export const APP_VERSION = '1.10-69'
