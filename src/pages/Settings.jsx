@@ -577,6 +577,63 @@ function Settings() {
       return null
     }
   }, [])
+  // A pending mutation carrying any of these keys represents real local
+  // business data (issuance progress entered through a WSI/ESI form, or
+  // an authority manually marked complete) that has NOT yet reached
+  // Dexie Cloud or any other device - never safe to discard. Everything
+  // else our own sync code ever writes to an authority is purely
+  // re-derived from the Google Sheet on the next sync pass regardless,
+  // so losing a QUEUED (not yet pushed) copy of it costs nothing - the
+  // Sheet is still there and every device, including this one, will
+  // naturally re-arrive at the same values.
+  const AUTHORITY_BUSINESS_FIELDS = ['totalIssuedBags', 'totalIssuedKilos', 'manuallyCompleted', 'status', 'sackLines']
+  // Confirmed against dexie-cloud-addon's own mutation-tracking source: a
+  // single-key `db.authorities.update(key, patch)` call (exactly what
+  // upsertAuthority/upsertSiaAuthority always do) is recorded as
+  // `{ type: 'update', keys: [key], changeSpecs: [patch] }`. Only that
+  // exact, unambiguous shape is ever classified as safe - an `insert`
+  // (a whole new authority), a `delete` (stale-duplicate cleanup), or
+  // anything this function doesn't recognize is always treated as
+  // must-keep. Failing closed here matters more than clearing every
+  // last noise entry.
+  const isPureSyncNoiseMutation = (mut) => {
+    if (mut?.type !== 'update' || !Array.isArray(mut.changeSpecs)) return false
+    return mut.changeSpecs.every(
+      (spec) => spec && typeof spec === 'object' && Object.keys(spec).every((key) => !AUTHORITY_BUSINESS_FIELDS.includes(key)),
+    )
+  }
+  const [backlogReport, setBacklogReport] = useState(null)
+  const [inspectingBacklog, setInspectingBacklog] = useState(false)
+  const [confirmClearBacklog, setConfirmClearBacklog] = useState(false)
+  const [clearingBacklog, setClearingBacklog] = useState(false)
+  const inspectBacklog = async () => {
+    setInspectingBacklog(true)
+    try {
+      const all = await db.table('$authorities_mutations').toArray()
+      let safeToClear = 0
+      let mustKeep = 0
+      for (const mut of all) {
+        if (isPureSyncNoiseMutation(mut)) safeToClear += 1
+        else mustKeep += 1
+      }
+      setBacklogReport({ total: all.length, safeToClear, mustKeep })
+    } finally {
+      setInspectingBacklog(false)
+    }
+  }
+  const clearSafeBacklog = async () => {
+    setClearingBacklog(true)
+    try {
+      const removed = await db.table('$authorities_mutations').filter(isPureSyncNoiseMutation).delete()
+      toast.success(`Cleared ${removed} sync-noise entries. Real pending writes were left untouched.`)
+      await inspectBacklog()
+    } catch (err) {
+      toast.error(`Could not clear backlog: ${err.message}`)
+    } finally {
+      setClearingBacklog(false)
+      setConfirmClearBacklog(false)
+    }
+  }
   const [syncErrorDetail, setSyncErrorDetail] = useState(lastSyncErrorDetail.value)
   useEffect(() => {
     const interval = setInterval(() => setSyncErrorDetail(lastSyncErrorDetail.value), 1000)
@@ -703,6 +760,43 @@ function Settings() {
                 <p className={`select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm ${pendingAuthorityMutations > 300 ? 'text-brand-crimson' : 'text-app-text'}`}>
                   {pendingAuthorityMutations}
                 </p>
+              </div>
+            )}
+            {pendingAuthorityMutations > 300 && (
+              <div className="rounded-lg border border-brand-crimson/30 bg-neutral-950 p-2.5">
+                <p className="text-xs uppercase text-neutral-600">Stuck Backlog Cleanup</p>
+                <p className="mt-1 text-xs text-neutral-400">
+                  Inspects every pending entry and separates real local writes (issuance progress,
+                  manually-completed authorities) from pure Sheet-sync noise. Only the noise can be
+                  cleared - anything touching real data is always left alone. Clearing forgets this
+                  device's copy of those sync corrections, not the data itself; the next sync pass
+                  re-derives them from the Sheet the same way it already did once.
+                </p>
+                <button
+                  type="button"
+                  onClick={inspectBacklog}
+                  disabled={inspectingBacklog}
+                  className="mt-2 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-app-text active:scale-[0.98]"
+                >
+                  {inspectingBacklog ? 'Inspecting…' : 'Inspect Backlog'}
+                </button>
+                {backlogReport && (
+                  <div className="mt-2 space-y-1 text-xs">
+                    <p className="text-neutral-400">Total pending: <span className="font-mono text-app-text">{backlogReport.total}</span></p>
+                    <p className="text-neutral-400">Safe sync noise (clearable): <span className="font-mono text-brand-neon">{backlogReport.safeToClear}</span></p>
+                    <p className="text-neutral-400">Real writes (always kept): <span className="font-mono text-brand-amber">{backlogReport.mustKeep}</span></p>
+                    {backlogReport.safeToClear > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmClearBacklog(true)}
+                        disabled={clearingBacklog}
+                        className="mt-1 rounded-lg bg-brand-crimson/20 px-3 py-1.5 text-xs font-semibold text-brand-crimson active:scale-[0.98]"
+                      >
+                        Clear {backlogReport.safeToClear} Safe Entries
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {syncErrorDetail && (
@@ -837,6 +931,14 @@ function Settings() {
       />
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmClearBacklog}
+        title={`Clear ${backlogReport?.safeToClear ?? 0} safe sync-noise entries?`}
+        description="These entries never carried any real local write - only Sheet-derived fields that will simply be re-fetched and re-written the next time this device syncs. Real writes (issuance progress, manually-completed authorities) were already excluded and stay queued. This only affects this device's local sync queue - no other device is touched."
+        onConfirm={clearSafeBacklog}
+        onCancel={() => setConfirmClearBacklog(false)}
+      />
     </div>
   )
 }

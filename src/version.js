@@ -4573,4 +4573,27 @@
 //            should now fetch, process, and write close to nothing most
 //            passes - not the ~1500-row full reprocessing that caused
 //            this incident.
-export const APP_VERSION = '1.10-58'
+//   1.10-59 - 1.10-58 stopped the backlog from growing further, but the
+//            already-stuck 22,470 entries on the affected device don't
+//            self-heal - dexie-cloud-addon has no built-in way to
+//            partially push or trim it. User confirmed real transactions
+//            (WSI/ESI/authority completions) were entered on that same
+//            device during the incident, so a blanket clear of the
+//            local sync queue was ruled out - it would risk silently
+//            discarding real, not-yet-synced business data alongside
+//            the sync noise. Added a real, evidence-based cleanup tool
+//            instead: the Admin Dashboard's Sync Identity panel can now
+//            inspect every pending authority mutation and classify it
+//            precisely (confirmed against dexie-cloud-addon's own
+//            mutation-tracking source: a single-key `.update()` call is
+//            recorded as `{type: 'update', keys, changeSpecs}`) - an
+//            entry is only ever "safe to clear" if EVERY key in its
+//            patch is a pure Sheet-derived field, never
+//            totalIssuedBags/totalIssuedKilos/manuallyCompleted/status/
+//            sackLines (which mixes issuance data). Anything of a
+//            different mutation type, or that fails to parse cleanly,
+//            is always treated as must-keep. Clearing only removes this
+//            device's local copy of corrections the Sheet will simply
+//            re-derive and re-send on its next sync pass anyway - it
+//            never touches other devices or the Sheet itself.
+export const APP_VERSION = '1.10-59'
