@@ -284,8 +284,13 @@ function AuthorityMonitor() {
           return (
             <li
               key={a.authId}
-              className={`flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 transition-all hover:border-brand-neon/50 ${isCompleting ? 'animate-row-complete-out pointer-events-none' : ''}`}
+              className={`relative flex items-stretch gap-2 rounded-xl border border-neutral-800 bg-neutral-900 transition-all hover:border-brand-neon/50 ${isCompleting ? 'animate-row-complete-out pointer-events-none' : ''}`}
             >
+              {a.date && (
+                <span className="pointer-events-none absolute right-3 top-2 whitespace-nowrap text-xs text-neutral-500">
+                  {String(a.date).slice(0, 10)}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={(e) => toggleManualComplete(a, e)}
@@ -344,9 +349,6 @@ function AuthorityMonitor() {
                       ? a.sackLines.map((l) => `${sackTypeMap.get(l.sackTypeId)?.code ?? '?'} ${l.condition ?? ''}`).join(', ')
                       : ''}
                   </p>
-                  {a.date && (
-                    <p className="break-words text-sm text-neutral-600">{String(a.date).slice(0, 10)}</p>
-                  )}
                   {authorityExtraDetails(a).length > 0 && (
                     <p className="break-words text-sm text-neutral-600">
                       {authorityExtraDetails(a).map((d) => `${d.label}: ${d.value}`).join(' · ')}

@@ -4646,4 +4646,14 @@
 //            write uses exactly this `.update(authId, patch)` form, so
 //            this is the shape that actually matters. classifyMutation
 //            rewritten against this confirmed shape.
-export const APP_VERSION = '1.10-62'
+//   1.10-63 - Sync incident fully resolved and confirmed (in-sync/
+//            connected, 0 pending) - moved on to the follow-up request:
+//            the date, now finally displaying reliably, moved from a
+//            buried line five rows down (only visible once you'd
+//            already read past warehouse/customer/variety) to a small
+//            label in the card's own upper-right corner, visible at a
+//            glance for every authority - AuthorityMonitor.jsx (the
+//            user-facing Monitoring page) and AdminMonitoring.jsx (its
+//            admin-side mirror, built to stay visually consistent with
+//            it) both updated the same way.
+export const APP_VERSION = '1.10-63'
