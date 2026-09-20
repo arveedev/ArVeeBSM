@@ -4478,4 +4478,22 @@
 //            nothing in correctness and only add a few seconds in the
 //            worst case, and give real additional headroom against a
 //            run of bad luck on this one action.
-export const APP_VERSION = '1.10-54'
+//   1.10-55 - Sync itself was finally confirmed working (1.10-54's retry
+//            budget did the trick: aiCount 207, siaCount 127, no 404s),
+//            and the diagnostic log proved date extraction is correct
+//            (aiDate: 2026-08-04, straight from row['DATE']) - but the
+//            AI Completed list still showed specific old authorities
+//            with no date. Root cause: the Date From cutoff filter (`if
+//            (aiDate && aiDate < source.dateFrom) continue`, added back
+//            in 1.10-48/1.10-49 to "ignore old experiments in the
+//            sheet") ran unconditionally, before upsertAuthority was
+//            ever called - so an authority that already existed locally
+//            with date: null (synced back when the header was blank)
+//            got permanently skipped by every later sync the moment its
+//            real date turned out to predate the cutoff, and could never
+//            backfill. Fixed by only applying the cutoff to genuinely
+//            NEW records (`!aiCache.has(aiNum)` / `!siaCache.has(siaNum)`,
+//            both already pre-built this sync run) - an already-known
+//            authority now always goes through and gets its date (and
+//            every other field) refreshed, regardless of age.
+export const APP_VERSION = '1.10-55'

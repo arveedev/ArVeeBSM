@@ -910,9 +910,20 @@ const runAuthoritiesSync = async () => {
         // the actual mechanism behind "ignore old experiments in the
         // sheet". Header-name match first, raw column-A position as a
         // fallback - see this loop's own top comment for why both exist.
+        //
+        // BUT only for a genuinely new record. This filter used to run
+        // unconditionally, which meant an already-synced completed AI
+        // (created back when the date column's header was blank, so its
+        // local `date` is still null) got permanently skipped by every
+        // later sync the moment its real date turned out to be before
+        // dateFrom - the exact case the user was seeing: sync succeeding,
+        // but specific old Completed-tab records never backfilling a
+        // date no matter how many retries ran. An existing record must
+        // always be allowed through so its fields (date included) can
+        // still be refreshed.
         const aiDateRaw = findDateValue(row) ?? row['Date Column A']
         const aiDate = aiDateRaw ? String(aiDateRaw).slice(0, 10) : null
-        if (aiDate && aiDate < source.dateFrom) continue
+        if (aiDate && aiDate < source.dateFrom && !aiCache.has(aiNum)) continue
 
         await upsertAuthority({
           type: 'AI',
@@ -983,9 +994,13 @@ const runAuthoritiesSync = async () => {
         // that's actually and reliably named "DATE" - unlike AI, where
         // matching by header name never worked. Read directly by that
         // confirmed-correct header key rather than by position.
+        // Same "only skip a genuinely new record" fix as the AI loop
+        // above - an already-synced SIA with a still-null local date
+        // must stay eligible for backfill regardless of its real date's
+        // age.
         const siaDateRaw = row['DATE']
         const siaDate = siaDateRaw ? String(siaDateRaw).slice(0, 10) : null
-        if (siaDate && siaDate < source.dateFrom) continue
+        if (siaDate && siaDate < source.dateFrom && !siaCache.has(siaNum)) continue
 
         // Multi-row convention: this row is exactly one sack type + one
         // condition + its own piece count. The condition sometimes
