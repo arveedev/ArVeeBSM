@@ -879,6 +879,16 @@ const runAuthoritiesSync = async () => {
         fetchAuthorityRows(source, 'AI'),
         fetchAuthorityRows(source, 'SIA'),
       ])
+      // TEMPORARY diagnostic - aiCount/siaCount (logged where this
+      // function returns) is 0 either because the sheet legitimately
+      // returned zero rows, or because every returned row is being
+      // filtered out below (missing AI#/customer, or the Date From
+      // cutoff). This distinguishes the two directly instead of
+      // guessing which.
+      console.log('[AUTHORITY-SYNC-DIAG] raw rows fetched - aiRows.length:', aiRows.length, 'siaRows.length:', siaRows.length, 'source.dateFrom:', source.dateFrom)
+      if (aiRows.length > 0) {
+        console.log('[AUTHORITY-SYNC-DIAG] first raw AI row (before any filtering):', aiRows[0])
+      }
 
       for (const row of aiRows) {
         // Skip reserved-but-unused authority numbers - only the number

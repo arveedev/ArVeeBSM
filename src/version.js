@@ -4436,4 +4436,20 @@
 //            first real AI row's date resolves to and from which source
 //            (header match vs Column A fallback) - answers definitively
 //            instead of guessing a sixth time.
-export const APP_VERSION = '1.10-51'
+//   1.10-52 - 1.10-51's logging showed real progress: the authority sync
+//            is succeeding now (no more errors), but importing 0 AI and
+//            0 SIA rows. Likely explanation, not yet confirmed: when
+//            date-parsing was broken, it always resolved to null, which
+//            silently BYPASSED the Date From cutoff filter (`if (aiDate
+//            && aiDate < source.dateFrom) continue` never fires on a
+//            null aiDate) - every row always got processed regardless of
+//            its real date. Now that the date resolves correctly, real
+//            dates earlier than the configured Date From (currently Aug
+//            1, 2026) would - correctly, by that filter's own design -
+//            get excluded for the first time, which could explain zero
+//            rows importing if the sheet's real current data predates
+//            that cutoff. Added one more TEMPORARY diagnostic: the raw
+//            row count BEFORE filtering, and the first raw AI row
+//            unfiltered, so this is confirmed directly instead of
+//            guessed.
+export const APP_VERSION = '1.10-52'
