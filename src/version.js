@@ -4681,4 +4681,21 @@
 //            (bundles, pcs, subtotal, counted total, cash on hand) so
 //            digits stay aligned instead of jittering column width as
 //            they change.
-export const APP_VERSION = '1.10-65'
+//   1.10-66 - 1.10-65's fixed-width grid columns still overlapped/
+//            overflowed: a bare <input> carries a browser-default
+//            intrinsic minimum width (as if sized ~20 characters), and
+//            a CSS Grid item honors that minimum UNLESS `min-width:0`
+//            is set on it - so even with explicit 44px tracks, the
+//            inputs were forcing the row (and the whole modal) wider
+//            than intended, which is what pushed the label under the
+//            Bdl input and forced a sideways scrollbar. Added `min-w-0`
+//            to every grid child (label, both inputs, subtotal) so each
+//            can actually shrink to its assigned column instead of
+//            demanding its own default minimum - the standard fix for
+//            this exact, well-known Grid behavior. Verified this time
+//            before shipping: built a standalone reproduction of the
+//            same markup/classes and rendered it at a real 375px mobile
+//            viewport in the browser pane - confirmed no horizontal
+//            overflow and no label/input overlap, instead of shipping
+//            on the same untested assumption twice in a row.
+export const APP_VERSION = '1.10-66'

@@ -108,17 +108,23 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             of being hidden, so the grid stays a consistent shape. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3">
           {/* Bundles/Pcs never need more than 3 digits in practice, so those
-              columns are fixed-narrow instead of flexible - the mistake in
-              the first pass was the reverse (fixed-narrow subtotal, flexible
-              inputs), which let a wide subtotal like ₱111,000.00 overflow
-              the row and force the whole modal to scroll sideways. Subtotal
-              now takes the remaining space via minmax(0,1fr), which can
-              shrink instead of blowing out the grid. */}
-          <div className="grid grid-cols-[36px_44px_44px_minmax(0,1fr)] gap-2 px-1 pb-1.5 text-[10px] font-semibold uppercase text-neutral-500">
-            <span />
-            <span className="text-center">Bdl</span>
-            <span className="text-center">Pcs</span>
-            <span className="text-right">Subtotal</span>
+              columns are fixed-narrow instead of flexible - the previous
+              pass had the reverse (fixed-narrow subtotal, flexible inputs),
+              which let a wide subtotal like ₱111,000.00 overflow the row.
+              This pass hit a second, classic Grid bug: a bare <input> has a
+              browser-default intrinsic minimum width (as if sized ~20
+              characters) that a Grid item honors UNLESS min-width:0 is set
+              on it - so even with an explicit 44px track, the input itself
+              was forcing the column (and the whole row/modal) wider,
+              which is what caused the overlap with the label and the
+              sideways scrollbar. `min-w-0` on every grid child is the fix -
+              it lets each item actually shrink to its assigned track
+              width instead of demanding its own default minimum. */}
+          <div className="grid grid-cols-[42px_44px_44px_minmax(0,1fr)] gap-1.5 px-1 pb-1.5 text-[10px] font-semibold uppercase text-neutral-500">
+            <span className="min-w-0" />
+            <span className="min-w-0 text-center">Bdl</span>
+            <span className="min-w-0 text-center">Pcs</span>
+            <span className="min-w-0 text-right">Subtotal</span>
           </div>
           {DENOMINATIONS.map((d) => {
             const { bundles, pcs } = normalizeEntry(counts[d])
@@ -126,9 +132,9 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             return (
               <div
                 key={d}
-                className={`grid grid-cols-[36px_44px_44px_minmax(0,1fr)] items-center gap-2 border-b border-neutral-900 py-1.5 text-sm transition-opacity ${isZero ? 'opacity-45' : ''}`}
+                className={`grid grid-cols-[42px_44px_44px_minmax(0,1fr)] items-center gap-1.5 border-b border-neutral-900 py-1.5 text-sm transition-opacity ${isZero ? 'opacity-45' : ''}`}
               >
-                <span className="font-semibold text-app-text">₱{d}</span>
+                <span className="min-w-0 whitespace-nowrap font-semibold text-app-text">₱{d}</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -136,7 +142,7 @@ function DenominationModal({ currentCashOnHand, onClose }) {
                   value={bundles}
                   onChange={(e) => setField(d, 'bundles', e.target.value)}
                   placeholder="0"
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
+                  className="min-w-0 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
                 />
                 <input
                   type="text"
@@ -145,9 +151,9 @@ function DenominationModal({ currentCashOnHand, onClose }) {
                   value={pcs}
                   onChange={(e) => setField(d, 'pcs', e.target.value)}
                   placeholder="0"
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
+                  className="min-w-0 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
                 />
-                <span className="truncate text-right tabular-nums text-neutral-400">₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="min-w-0 truncate text-right tabular-nums text-neutral-400">₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             )
           })}
