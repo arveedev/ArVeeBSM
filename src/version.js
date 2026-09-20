@@ -4518,4 +4518,36 @@
 //            when a field genuinely differs, so a steady-state sync
 //            (the common case) costs close to zero Dexie Cloud changes
 //            instead of ~1500 every time.
-export const APP_VERSION = '1.10-56'
+//   1.10-57 - 1.10-56 shipped but the Sync Identity diagnostic still
+//            showed error/error on the SAME device, now with a
+//            different symptom: HTTP 413 "request entity too large"
+//            instead of the earlier HTTP 400. Investigated
+//            dexie-cloud-addon's own source directly rather than
+//            guessing again: it has NO built-in chunking for a sync
+//            push - every attempt always bundles 100% of the local
+//            unsynced backlog into one request (confirmed via
+//            listClientChanges()'s call site in the addon bundle, no
+//            limit passed). This device's local backlog - the
+//            legitimate ~1000-record date backfill from 1.10-55, queued
+//            before the write-skip fix landed - is a fixed, already-
+//            recorded set of mutations that will keep retrying as the
+//            same oversized request forever; it cannot self-heal by
+//            waiting or reconnecting, and there is no documented
+//            dexie-cloud-addon option to cap push size from our side.
+//            Two real, in-our-control improvements landed instead of
+//            another guess at a full fix: (1) upsertAuthority/
+//            upsertSiaAuthority now send only the field(s) that
+//            genuinely changed (`diffPatch`) instead of the whole
+//            ~15-field record on every write, so any FUTURE bulk
+//            correction stays small instead of recreating this same
+//            failure mode at a smaller scale; (2) the Admin Dashboard's
+//            existing Sync Identity diagnostic panel now shows a
+//            read-only count of this device's actual pending unsynced
+//            authority writes (`$authorities_mutations` table, read via
+//            db.table().count()) so the backlog size is visible
+//            directly instead of inferred from an HTTP status code.
+//            Unsticking this specific device's existing backlog likely
+//            needs either Dexie Cloud raising this database's per-
+//            request size limit or a support conversation with them -
+//            not something fixable from the app's own code alone.
+export const APP_VERSION = '1.10-57'

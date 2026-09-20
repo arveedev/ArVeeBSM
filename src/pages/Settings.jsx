@@ -560,6 +560,23 @@ function Settings() {
   const localUsersCount = useLiveQuery(() => db.users.count(), [])
   const localPilesCount = useLiveQuery(() => db.piles.count(), [])
   const localVarietiesCount = useLiveQuery(() => db.varietyTypes.count(), [])
+  // Read-only count of this device's own not-yet-pushed authority writes.
+  // dexie-cloud-addon keeps them in an internal `$authorities_mutations`
+  // table (confirmed against its own source - getMutationTable() returns
+  // `$${tableName}_mutations`) and, per that same source, always pushes
+  // the ENTIRE backlog in one request with no chunking - so a device that
+  // ever queues more than the server's per-request size allows gets stuck
+  // retrying that same oversized push forever ("HTTP 413: request entity
+  // too large", first seen right after 1.10-55's legitimate ~1000-record
+  // date backfill). This number is what actually explains that error,
+  // instead of guessing at it again from the outside.
+  const pendingAuthorityMutations = useLiveQuery(async () => {
+    try {
+      return await db.table('$authorities_mutations').count()
+    } catch {
+      return null
+    }
+  }, [])
   const [syncErrorDetail, setSyncErrorDetail] = useState(lastSyncErrorDetail.value)
   useEffect(() => {
     const interval = setInterval(() => setSyncErrorDetail(lastSyncErrorDetail.value), 1000)
@@ -678,6 +695,16 @@ function Settings() {
                 {cloudSyncState ? `${cloudSyncState.phase} / ${cloudSyncState.status}` : '(not yet available)'}
               </p>
             </div>
+            {pendingAuthorityMutations != null && (
+              <div>
+                <p className="text-xs uppercase text-neutral-600">
+                  Pending Unsynced Authority Writes (large + stuck = the actual cause of a 413)
+                </p>
+                <p className={`select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm ${pendingAuthorityMutations > 300 ? 'text-brand-crimson' : 'text-app-text'}`}>
+                  {pendingAuthorityMutations}
+                </p>
+              </div>
+            )}
             {syncErrorDetail && (
               <div>
                 <p className="text-xs uppercase text-neutral-600">Last Captured Sync Error (the actual reason, not just "error")</p>

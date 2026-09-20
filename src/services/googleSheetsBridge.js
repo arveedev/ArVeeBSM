@@ -367,20 +367,26 @@ export const resolveCanonicalAuthority = async (matchField, matchValue, type) =>
 // single sync is exactly the "duplicate row" case the dedup logic
 // below exists to catch. Falls back to a live query when no cache is
 // passed, so this function still works correctly on its own.
-// Shallow "did anything actually change" check, shared by both upsert
+// "Did anything actually change" patch builder, shared by both upsert
 // functions below. Every sync pass now does a full pull with no
 // modifiedSince filtering (1.10-53) and no longer skips a row just for
 // being old (1.10-55) - both correct fixes on their own - but combined
-// with an update call that ran unconditionally, that meant EVERY
-// authority (1269 AI + 229 SIA on one real device, confirmed via the
-// Admin Dashboard's Sync Identity diagnostic) got rewritten to Dexie on
-// every single pass, whether or not its data actually differed. Dexie
-// Cloud caps a single sync push at 1000 changes - this is exactly what
-// tripped "HTTP 400: Too many changes in a single sync request" right
+// with an update call that ran unconditionally, sending the WHOLE
+// incoming record every time, that meant EVERY authority (1269 AI + 229
+// SIA on one real device, confirmed via the Admin Dashboard's Sync
+// Identity diagnostic) got rewritten to Dexie on every single pass,
+// whether or not its data actually differed. Dexie Cloud has no
+// automatic chunking for a sync push (confirmed by reading
+// dexie-cloud-addon's own source - it always sends 100% of the local
+// unsynced backlog in one request) and caps how much a single push can
+// carry - this combination is exactly what tripped first "HTTP 400: Too
+// many changes" and then "HTTP 413: request entity too large" right
 // after 1.10-55 let the previously-skipped old records back into the
-// write path. Only a genuine field difference should cost a write.
-const patchFieldsChanged = (existing, patch) =>
-  Object.entries(patch).some(([key, value]) => existing?.[key] !== value)
+// write path. Returns only the fields that genuinely differ - an empty
+// object means no write is needed at all, and a non-empty one is the
+// smallest possible patch, not the whole record.
+const diffPatch = (existing, patch) =>
+  Object.fromEntries(Object.entries(patch).filter(([key, value]) => existing?.[key] !== value))
 
 const sackLinesEqual = (a, b) => {
   if (a.length !== b.length) return false
@@ -424,14 +430,11 @@ const upsertAuthority = async (incoming, cacheByAiNumber = null) => {
     }
     // totalIssuedBags/Kilos/manuallyCompleted are always re-derived from
     // `existing` itself above, so they can never differ - only `incoming`
-    // needs checking against what's already stored.
-    if (patchFieldsChanged(existing, incoming)) {
-      await db.authorities.update(existing.authId, {
-        ...incoming,
-        totalIssuedBags: existing.totalIssuedBags ?? 0,
-        totalIssuedKilos: existing.totalIssuedKilos ?? 0,
-        manuallyCompleted: existing.manuallyCompleted ?? false,
-      })
+    // needs checking against what's already stored, and only the fields
+    // that actually differ need to be sent at all.
+    const aiChangedFields = diffPatch(existing, incoming)
+    if (Object.keys(aiChangedFields).length > 0) {
+      await db.authorities.update(existing.authId, aiChangedFields)
     }
   } else {
     final = {
@@ -508,10 +511,12 @@ const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null) => {
       remarks: incoming.remarks,
       sourceId: incoming.sourceId,
     }
-    if (patchFieldsChanged(existing, scalarPatch) || !sackLinesEqual(existing.sackLines ?? [], mergedLines)) {
+    const siaChangedFields = diffPatch(existing, scalarPatch)
+    const sackLinesChanged = !sackLinesEqual(existing.sackLines ?? [], mergedLines)
+    if (Object.keys(siaChangedFields).length > 0 || sackLinesChanged) {
       await db.authorities.update(existing.authId, {
-        ...scalarPatch,
-        sackLines: mergedLines,
+        ...siaChangedFields,
+        ...(sackLinesChanged ? { sackLines: mergedLines } : {}),
       })
     }
   } else {
