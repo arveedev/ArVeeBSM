@@ -611,25 +611,42 @@ function Settings() {
   // Confirmed against dexie-cloud-addon's own mutation-tracking source: a
   // single-key `db.authorities.update(key, patch)` call (exactly what
   // upsertAuthority/upsertSiaAuthority always do) is recorded as
-  // `{ type: 'update', keys: [key], changeSpecs: [patch] }`. Only that
-  // exact, unambiguous shape is ever classified as safe - an `insert`
-  // (a whole new authority), a `delete` (stale-duplicate cleanup), a
-  // row not found in `authorityMap` (can't verify), or anything this
-  // function doesn't recognize is always treated as must-keep. Failing
-  // closed here matters more than clearing every last noise entry.
-  const isPureSyncNoiseMutation = (mut, authorityMap) => {
-    if (mut?.type !== 'update' || !Array.isArray(mut.changeSpecs) || !Array.isArray(mut.keys)) return false
-    return mut.keys.every((key, i) => {
+  // `{ type: 'update', keys: [key], changeSpecs: [patch] }`.
+  //
+  // 1.10-60's value-comparison fix still reported 0/22,470 safe - a
+  // second suspicious result, investigated again rather than shipped.
+  // classifyMutation now returns WHY, not just yes/no, so the real
+  // breakdown is visible instead of a single opaque number. Working
+  // theory this version tests: `pickCanonicalAuthority` +
+  // `bulkDelete(staleDuplicateIds)` runs on every sync pass across this
+  // whole incident, so a queued mutation's authId may no longer exist in
+  // `db.authorities` at all (its record was later deemed a stale
+  // duplicate and deleted) - `authorityMap.get(key)` returns undefined
+  // for those, and the previous "can't verify -> must-keep" fail-safe
+  // silently swallowed them into the same bucket as genuine business
+  // writes. An orphaned mutation - one whose row is already gone - can
+  // never represent actionable data (the dedup step already decided a
+  // DIFFERENT record holds the real merged state), so it's tracked and
+  // surfaced separately rather than assumed either way.
+  const classifyMutation = (mut, authorityMap) => {
+    if (mut?.type !== 'update' || !Array.isArray(mut.changeSpecs) || !Array.isArray(mut.keys)) {
+      return 'unrecognized'
+    }
+    let anyOrphaned = false
+    for (let i = 0; i < mut.keys.length; i++) {
       const spec = mut.changeSpecs[i]
-      if (!spec || typeof spec !== 'object') return false
-      const current = authorityMap.get(key)
-      if (!current) return false
-      for (const field of AUTHORITY_BUSINESS_FIELDS) {
-        if (field in spec && spec[field] !== current[field]) return false
+      if (!spec || typeof spec !== 'object') return 'unrecognized'
+      const current = authorityMap.get(mut.keys[i])
+      if (!current) {
+        anyOrphaned = true
+        continue
       }
-      if ('sackLines' in spec && !sackLinesUnchanged(spec.sackLines, current.sackLines)) return false
-      return true
-    })
+      for (const field of AUTHORITY_BUSINESS_FIELDS) {
+        if (field in spec && spec[field] !== current[field]) return 'business-differs'
+      }
+      if ('sackLines' in spec && !sackLinesUnchanged(spec.sackLines, current.sackLines)) return 'business-differs'
+    }
+    return anyOrphaned ? 'orphaned' : 'safe'
   }
   const [backlogReport, setBacklogReport] = useState(null)
   const [inspectingBacklog, setInspectingBacklog] = useState(false)
@@ -651,24 +668,35 @@ function Settings() {
     try {
       const all = await db.table('$authorities_mutations').toArray()
       const authorityMap = await buildAuthorityMap(all)
-      let safeToClear = 0
-      let mustKeep = 0
+      const counts = { safe: 0, orphaned: 0, 'business-differs': 0, unrecognized: 0 }
       for (const mut of all) {
-        if (isPureSyncNoiseMutation(mut, authorityMap)) safeToClear += 1
-        else mustKeep += 1
+        counts[classifyMutation(mut, authorityMap)] += 1
       }
-      setBacklogReport({ total: all.length, safeToClear, mustKeep })
+      setBacklogReport({
+        total: all.length,
+        safeToClear: counts.safe,
+        orphaned: counts.orphaned,
+        mustKeep: counts['business-differs'],
+        unrecognized: counts.unrecognized,
+      })
     } finally {
       setInspectingBacklog(false)
     }
   }
+  // Orphaned entries clear alongside safe ones: a mutation whose row no
+  // longer exists locally at all can never be actionable business data -
+  // pickCanonicalAuthority already decided a DIFFERENT record holds the
+  // real merged state when it deleted this one as a stale duplicate.
   const clearSafeBacklog = async () => {
     setClearingBacklog(true)
     try {
       const all = await db.table('$authorities_mutations').toArray()
       const authorityMap = await buildAuthorityMap(all)
       const removed = await db.table('$authorities_mutations')
-        .filter((mut) => isPureSyncNoiseMutation(mut, authorityMap))
+        .filter((mut) => {
+          const verdict = classifyMutation(mut, authorityMap)
+          return verdict === 'safe' || verdict === 'orphaned'
+        })
         .delete()
       toast.success(`Cleared ${removed} sync-noise entries. Real pending writes were left untouched.`)
       await inspectBacklog()
@@ -829,15 +857,19 @@ function Settings() {
                   <div className="mt-2 space-y-1 text-xs">
                     <p className="text-neutral-400">Total pending: <span className="font-mono text-app-text">{backlogReport.total}</span></p>
                     <p className="text-neutral-400">Safe sync noise (clearable): <span className="font-mono text-brand-neon">{backlogReport.safeToClear}</span></p>
+                    <p className="text-neutral-400">Orphaned - row already deleted (clearable): <span className="font-mono text-brand-neon">{backlogReport.orphaned}</span></p>
                     <p className="text-neutral-400">Real writes (always kept): <span className="font-mono text-brand-amber">{backlogReport.mustKeep}</span></p>
-                    {backlogReport.safeToClear > 0 && (
+                    {backlogReport.unrecognized > 0 && (
+                      <p className="text-neutral-400">Unrecognized shape (always kept): <span className="font-mono text-brand-amber">{backlogReport.unrecognized}</span></p>
+                    )}
+                    {(backlogReport.safeToClear + backlogReport.orphaned) > 0 && (
                       <button
                         type="button"
                         onClick={() => setConfirmClearBacklog(true)}
                         disabled={clearingBacklog}
                         className="mt-1 rounded-lg bg-brand-crimson/20 px-3 py-1.5 text-xs font-semibold text-brand-crimson active:scale-[0.98]"
                       >
-                        Clear {backlogReport.safeToClear} Safe Entries
+                        Clear {backlogReport.safeToClear + backlogReport.orphaned} Safe Entries
                       </button>
                     )}
                   </div>
@@ -979,8 +1011,8 @@ function Settings() {
 
       <ConfirmDialog
         open={confirmClearBacklog}
-        title={`Clear ${backlogReport?.safeToClear ?? 0} safe sync-noise entries?`}
-        description="These entries never carried any real local write - only Sheet-derived fields that will simply be re-fetched and re-written the next time this device syncs. Real writes (issuance progress, manually-completed authorities) were already excluded and stay queued. This only affects this device's local sync queue - no other device is touched."
+        title={`Clear ${(backlogReport?.safeToClear ?? 0) + (backlogReport?.orphaned ?? 0)} safe sync-noise entries?`}
+        description="These entries never carried any real local write that's still actionable - either only Sheet-derived fields that will simply be re-fetched and re-written the next time this device syncs, or a row that's already been deleted locally as a duplicate. Real writes (issuance progress, manually-completed authorities) were already excluded and stay queued. This only affects this device's local sync queue - no other device is touched."
         onConfirm={clearSafeBacklog}
         onCancel={() => setConfirmClearBacklog(false)}
       />

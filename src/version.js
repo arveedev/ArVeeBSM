@@ -4613,4 +4613,21 @@
 //            must-keep write. SIA's sackLines gets the same per-line
 //            totalIssuedBags comparison, matched by (sackTypeId,
 //            condition) since array order isn't guaranteed stable.
-export const APP_VERSION = '1.10-60'
+//   1.10-61 - 1.10-60's value-comparison fix STILL reported 0/22,470
+//            safe - a second suspicious result, investigated again
+//            rather than accepted. Classifier now returns WHY each
+//            mutation was kept, not just yes/no. Working theory: this
+//            whole incident ran many sync passes, each calling
+//            pickCanonicalAuthority + bulkDelete(staleDuplicateIds) -
+//            so a queued mutation's authId may no longer exist in
+//            db.authorities at all (deleted later as a stale
+//            duplicate). The previous "row not found -> can't verify,
+//            must-keep" fail-safe silently folded every one of these
+//            orphaned entries into the same bucket as genuine business
+//            writes, which could plausibly explain the whole 22,470.
+//            Orphaned entries are now tracked and surfaced as their own
+//            category (clearable, same as pure sync noise) rather than
+//            assumed either way - a mutation for a row that's already
+//            been deleted can never be actionable, since the dedup step
+//            already decided a different record holds the real state.
+export const APP_VERSION = '1.10-61'
