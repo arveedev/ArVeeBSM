@@ -4469,4 +4469,13 @@
 //            still written for display (SheetSourcesPanel.jsx) and its
 //            existing "Force Resync" button - just no longer read as a
 //            filter.
-export const APP_VERSION = '1.10-53'
+//   1.10-54 - Two consecutive manual "Force Resync" failures confirmed
+//            via the restored diagnostic log: sync FAILED: Sheet request
+//            failed (404), the same echo-redirect flakiness, losing all
+//            3 of fetchWithRetry's default attempts twice in a row on
+//            fetchAuthorityRows specifically. Raised its own retry
+//            budget to 6 attempts - six idempotent read requests cost
+//            nothing in correctness and only add a few seconds in the
+//            worst case, and give real additional headroom against a
+//            run of bad luck on this one action.
+export const APP_VERSION = '1.10-54'

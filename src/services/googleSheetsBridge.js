@@ -284,8 +284,14 @@ const fetchAuthorityRows = async (source, type) => {
   // sheet fetch is bulk-shaped even on a delta (modifiedSince) request,
   // and was likewise left on the 8s single-row timeout budget. Also
   // retried on failure for the same reason as fetchTransactionsBulk's
-  // own fetchWithRetry - see its comment.
-  const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS)
+  // own fetchWithRetry - see its comment. Confirmed, reported real bug:
+  // three attempts (fetchWithRetry's default) wasn't enough headroom for
+  // THIS specific action - it kept losing the echo-redirect coin flip on
+  // consecutive manual "Force Resync" taps, unlike the other bulk fetches
+  // on the same connection. Given six requests here cost nothing extra
+  // in correctness (idempotent reads) and only add a few seconds in the
+  // worst case, given six chances instead of three.
+  const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS, 6)
   if (!attempt.ok) {
     throw new Error(`Sheet request failed (${attempt.httpStatus})`)
   }
