@@ -107,24 +107,27 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             past all 13 denominations first. Zero-subtotal rows dim instead
             of being hidden, so the grid stays a consistent shape. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3">
-          {/* Bundles/Pcs never need more than 3 digits in practice, so those
-              columns are fixed-narrow instead of flexible - the previous
-              pass had the reverse (fixed-narrow subtotal, flexible inputs),
-              which let a wide subtotal like ₱111,000.00 overflow the row.
-              This pass hit a second, classic Grid bug: a bare <input> has a
-              browser-default intrinsic minimum width (as if sized ~20
-              characters) that a Grid item honors UNLESS min-width:0 is set
-              on it - so even with an explicit 44px track, the input itself
-              was forcing the column (and the whole row/modal) wider,
-              which is what caused the overlap with the label and the
-              sideways scrollbar. `min-w-0` on every grid child is the fix -
-              it lets each item actually shrink to its assigned track
-              width instead of demanding its own default minimum. */}
-          <div className="grid grid-cols-[42px_44px_44px_minmax(0,1fr)] gap-1.5 px-1 pb-1.5 text-[10px] font-semibold uppercase text-neutral-500">
-            <span className="min-w-0" />
-            <span className="min-w-0 text-center">Bdl</span>
-            <span className="min-w-0 text-center">Pcs</span>
-            <span className="min-w-0 text-right">Subtotal</span>
+          {/* Bdl/Pcs/label at a measured-equal 50px, Subtotal flexible -
+              NOT all four forced equal (grid-cols-4). That was tried and
+              measured directly against the real Inter font: the widest
+              subtotal ("₱111,000.00") needs ~90px, but an equal 1/4 share
+              of this modal's width is only ~80px, so it silently
+              truncated to "₱111,00…" - hiding the exact peso figure this
+              tool exists to show. The earlier overlap bug (label under the
+              Bdl input) was ALSO a font-measurement miss, not a
+              structural one: a local test page's system-ui fallback
+              measured "₱1000" far narrower than Inter actually renders it
+              (43px vs an assumed ~40px column). Re-verified this pass by
+              loading the real Inter font and measuring every label/
+              subtotal's actual rendered width before picking column
+              sizes, instead of estimating again - 50px covers the widest
+              label with margin, and the flexible remaining space
+              comfortably covers the widest subtotal with room to spare. */}
+          <div className="grid grid-cols-[50px_50px_50px_minmax(0,1fr)] gap-1.5 px-1 pb-1.5 text-[10px] font-semibold uppercase text-neutral-500">
+            <span />
+            <span className="text-center">Bdl</span>
+            <span className="text-center">Pcs</span>
+            <span className="text-right">Subtotal</span>
           </div>
           {DENOMINATIONS.map((d) => {
             const { bundles, pcs } = normalizeEntry(counts[d])
@@ -132,9 +135,9 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             return (
               <div
                 key={d}
-                className={`grid grid-cols-[42px_44px_44px_minmax(0,1fr)] items-center gap-1.5 border-b border-neutral-900 py-1.5 text-sm transition-opacity ${isZero ? 'opacity-45' : ''}`}
+                className={`grid grid-cols-[50px_50px_50px_minmax(0,1fr)] items-center gap-1.5 border-b border-neutral-900 py-1.5 text-sm transition-opacity ${isZero ? 'opacity-45' : ''}`}
               >
-                <span className="min-w-0 whitespace-nowrap font-semibold text-app-text">₱{d}</span>
+                <span className="truncate font-semibold text-app-text">₱{d}</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -153,7 +156,7 @@ function DenominationModal({ currentCashOnHand, onClose }) {
                   placeholder="0"
                   className="min-w-0 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
                 />
-                <span className="min-w-0 truncate text-right tabular-nums text-neutral-400">₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="truncate text-right tabular-nums text-neutral-400">₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             )
           })}

@@ -4698,4 +4698,27 @@
 //            viewport in the browser pane - confirmed no horizontal
 //            overflow and no label/input overlap, instead of shipping
 //            on the same untested assumption twice in a row.
-export const APP_VERSION = '1.10-66'
+//   1.10-67 - 1.10-66 was confirmed still broken on the real device
+//            (user was genuinely on that version - not a cache issue).
+//            Real root cause, found by actually measuring against the
+//            real Inter font this time (not the system-ui fallback a
+//            local test page had been using without realizing it): "₱1000"
+//            renders at ~43px in Inter, not the ~40px a narrow fixed
+//            column assumed, so the label was still visually overflowing
+//            onto the Bundles input (a Grid track doesn't clip a child's
+//            overflowing content by default - min-width:0 only stops the
+//            TRACK from being forced wider, it does nothing about text
+//            painting past its own cell edge). Tried true equal-4
+//            columns next per explicit request, but measured that too:
+//            the widest subtotal ("₱111,000.00") needs ~90px against
+//            only ~80px in an equal quarter-share, so it silently
+//            truncated to "₱111,00…" - hiding a real peso figure, not
+//            acceptable for a cash reconciliation tool. Landed on
+//            measured widths: Bdl/Pcs/label equal at 50px (covers the
+//            widest label with margin), Subtotal flexible (comfortably
+//            covers the widest realistic amount). Verified in the
+//            browser pane with the real Inter font loaded and real
+//            375px mobile viewport before shipping - zero truncation,
+//            zero overlap, zero overflow, confirmed programmatically
+//            (scrollWidth checks) and visually (screenshot).
+export const APP_VERSION = '1.10-67'
