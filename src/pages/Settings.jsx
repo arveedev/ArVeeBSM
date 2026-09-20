@@ -608,35 +608,43 @@ function Settings() {
       return match && match.totalIssuedBags === line.totalIssuedBags
     })
   }
-  // Confirmed against dexie-cloud-addon's own mutation-tracking source: a
-  // single-key `db.authorities.update(key, patch)` call (exactly what
-  // upsertAuthority/upsertSiaAuthority always do) is recorded as
-  // `{ type: 'update', keys: [key], changeSpecs: [patch] }`.
+  // 1.10-60's value-comparison fix still reported 0/22,470 safe, and
+  // this version's own first attempt (assuming a canonicalized
+  // `{type: 'update', keys, changeSpecs}` shape, matching what
+  // dexie-cloud-addon's PUSH-time code builds) reported 22,470
+  // "unrecognized" - every single entry. That was the real tell: this
+  // reads the RAW table, not what gets built transiently at push time.
+  // Traced into Dexie CORE's own source (not the addon) to find the
+  // actual mechanism: `Table.prototype.update(key, changes)` is
+  // implemented as `this.where(':id').equals(key).modify(changes)` -
+  // ALWAYS a criteria-based `modify`, never a plain `update`/`put`. The
+  // addon's mutation tracker records that as
+  // `{ type: 'modify', keys, criteria, changeSpec }` - `changeSpec`
+  // SINGULAR (one shared patch, not one per key) and `criteria` present
+  // (canonicalized to `index: null` when it's on the primary key, exactly
+  // what `.where(':id').equals(key)` produces). Every
+  // upsertAuthority/upsertSiaAuthority write in this codebase uses this
+  // exact `.update(authId, patch)` form, so this is the one shape that
+  // actually matters here.
   //
-  // 1.10-60's value-comparison fix still reported 0/22,470 safe - a
-  // second suspicious result, investigated again rather than shipped.
-  // classifyMutation now returns WHY, not just yes/no, so the real
-  // breakdown is visible instead of a single opaque number. Working
-  // theory this version tests: `pickCanonicalAuthority` +
-  // `bulkDelete(staleDuplicateIds)` runs on every sync pass across this
-  // whole incident, so a queued mutation's authId may no longer exist in
-  // `db.authorities` at all (its record was later deemed a stale
-  // duplicate and deleted) - `authorityMap.get(key)` returns undefined
-  // for those, and the previous "can't verify -> must-keep" fail-safe
-  // silently swallowed them into the same bucket as genuine business
-  // writes. An orphaned mutation - one whose row is already gone - can
-  // never represent actionable data (the dedup step already decided a
-  // DIFFERENT record holds the real merged state), so it's tracked and
-  // surfaced separately rather than assumed either way.
+  // classifyMutation returns WHY, not just yes/no: 'safe' (every
+  // business field unchanged from the authority's current value),
+  // 'orphaned' (the row no longer exists locally at all - most likely
+  // deleted later as a stale duplicate by pickCanonicalAuthority +
+  // bulkDelete, which ran on every pass across this incident; a mutation
+  // for an already-deleted row can never be actionable, since dedup
+  // already decided a different record holds the real state),
+  // 'business-differs' (a real write - always kept), or 'unrecognized'
+  // (anything that doesn't match the one confirmed shape - always kept,
+  // fail closed).
   const classifyMutation = (mut, authorityMap) => {
-    if (mut?.type !== 'update' || !Array.isArray(mut.changeSpecs) || !Array.isArray(mut.keys)) {
+    if (mut?.type !== 'modify' || !Array.isArray(mut.keys) || !mut.changeSpec || typeof mut.changeSpec !== 'object') {
       return 'unrecognized'
     }
+    const spec = mut.changeSpec
     let anyOrphaned = false
-    for (let i = 0; i < mut.keys.length; i++) {
-      const spec = mut.changeSpecs[i]
-      if (!spec || typeof spec !== 'object') return 'unrecognized'
-      const current = authorityMap.get(mut.keys[i])
+    for (const key of mut.keys) {
+      const current = authorityMap.get(key)
       if (!current) {
         anyOrphaned = true
         continue

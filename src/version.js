@@ -4630,4 +4630,20 @@
 //            assumed either way - a mutation for a row that's already
 //            been deleted can never be actionable, since the dedup step
 //            already decided a different record holds the real state.
-export const APP_VERSION = '1.10-61'
+//   1.10-62 - 1.10-61 reported 22,470/22,470 "unrecognized" - every
+//            single entry, a third suspicious result in a row,
+//            investigated instead of shipped as-is. Root cause: the
+//            classifier assumed dexie-cloud-addon's PUSH-time
+//            canonicalized shape (`{type: 'update', keys, changeSpecs}`)
+//            for what's stored in the RAW `$authorities_mutations`
+//            table - wrong table-vs-transient-shape assumption. Traced
+//            into Dexie CORE's own source (not the addon) this time:
+//            `Table.update(key, changes)` is implemented as
+//            `.where(':id').equals(key).modify(changes)` - always a
+//            criteria-based modify, recorded as `{type: 'modify', keys,
+//            criteria, changeSpec}` with a SINGULAR changeSpec, not the
+//            assumed array. Every upsertAuthority/upsertSiaAuthority
+//            write uses exactly this `.update(authId, patch)` form, so
+//            this is the shape that actually matters. classifyMutation
+//            rewritten against this confirmed shape.
+export const APP_VERSION = '1.10-62'
