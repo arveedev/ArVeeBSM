@@ -4550,4 +4550,27 @@
 //            needs either Dexie Cloud raising this database's per-
 //            request size limit or a support conversation with them -
 //            not something fixable from the app's own code alone.
-export const APP_VERSION = '1.10-57'
+//   1.10-58 - User's own correction to the whole approach since 1.10-53:
+//            "we don't need to get every authority, just what changed,
+//            and it must also respect the override date, so there is
+//            not so much to fetch." Restored `modifiedSince` on the
+//            client for fetchAuthorityRows - the Apps Script server side
+//            never lost its support for it, only the client stopped
+//            sending it, so no redeploy was needed. This directly
+//            targets the real root cause behind the 22,470-mutation
+//            backlog: a full pull-and-diff of ~1500 authorities every 5
+//            minutes, for as long as this bug was being chased, none of
+//            which ever successfully pushed. The staleness trap that
+//            got modifiedSince removed in the first place (a header-only
+//            edit never re-stamps a data row's Last Modified, so once
+//            one pass succeeds the delta filter legitimately - but
+//            wrongly, for a code-side parsing fix - returns nothing
+//            forever) is covered by the EXISTING "Force Resync" button,
+//            which already clears lastSyncedAt before syncing, giving a
+//            full pull on demand without waiting on the periodic
+//            background pass. Combined with 1.10-56's write-skip and
+//            1.10-57's minimal-patch fixes, a healthy periodic sync
+//            should now fetch, process, and write close to nothing most
+//            passes - not the ~1500-row full reprocessing that caused
+//            this incident.
+export const APP_VERSION = '1.10-58'

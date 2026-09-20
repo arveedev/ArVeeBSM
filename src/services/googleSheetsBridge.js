@@ -262,23 +262,35 @@ const fetchAuthorityRows = async (source, type) => {
   url.searchParams.set('action', 'fetchAuthorities')
   url.searchParams.set('sheet', sheetName)
   url.searchParams.set('type', type)
-  // Confirmed, reported real bug: modifiedSince (delta sync, only rows
-  // the sheet's own "Last Modified" column shows as changed since last
-  // time) has now caused real, hard-to-diagnose staleness THREE times
-  // in this project - a header-only edit never re-stamps any data row's
-  // Last Modified (the sheet's own onEdit trigger explicitly skips row
-  // 1), so once one sync pass succeeds (even with 0 rows, for any
-  // reason - a transient echo-redirect failure that still returned a
-  // technically-successful empty response, in the incident that found
-  // this), every later pass keeps asking "what changed since then" and
-  // getting nothing back, permanently, until someone manually forces a
-  // resync. Given the real data volume here is modest (SIA alone
-  // already pulls several hundred rows with no apparent cost), always
-  // doing a full pull trades a small amount of bandwidth for
-  // eliminating this whole recurring bug class. lastSyncedAt is still
-  // written after a successful sync (SheetSourcesPanel.jsx displays it,
-  // and its own "Force Resync" button already existed as the manual
-  // escape hatch for this exact symptom) - just no longer read here.
+  // modifiedSince restored (1.10-58) after being removed in 1.10-53 over
+  // real, repeated staleness (a header-only edit never re-stamps any
+  // data row's Last Modified, since the sheet's onEdit trigger skips row
+  // 1 - three separate incidents this project). Always doing a full pull
+  // instead traded that away for a worse problem: EVERY authority got
+  // rewritten to local Dexie on EVERY pass, and while this bug was being
+  // chased, none of those pushes to Dexie Cloud ever succeeded - so they
+  // kept stacking in the local queue (22,470 pending mutations, confirmed
+  // via the Admin Dashboard's own diagnostic) until Dexie Cloud started
+  // rejecting the backlog outright (HTTP 400 "too many changes", then
+  // HTTP 413 "too large") with no way to self-heal. Real fetch volume
+  // over the wire and processing/write volume locally both need to stay
+  // small for the common case - a full pull-and-diff every 5 minutes was
+  // never that, regardless of how cheaply Dexie itself absorbed it.
+  // Server-side modifiedSince support (docs/apps-script-full-replacement.js)
+  // was never removed, only the client stopped sending it - no Apps
+  // Script redeploy needed to restore this. The staleness trap itself is
+  // covered by the EXISTING "Force Resync" button (SheetSourcesPanel.jsx)
+  // clearing this source's lastSyncedAt before calling this - so a
+  // periodic background pass stays a cheap delta fetch, while a manual
+  // Force Resync (or a version-gated Dexie migration clearing
+  // lastSyncedAt, the same pattern already used at v17/v35/v36) always
+  // still gets everything, exactly the escape hatch this project already
+  // relies on whenever our own PARSING logic changes rather than the
+  // sheet's data - the one case modifiedSince structurally can't help
+  // with, since nothing on the sheet itself changed.
+  if (source.lastSyncedAt) {
+    url.searchParams.set('modifiedSince', source.lastSyncedAt)
+  }
 
   // Same gap, same fix as fetchMillingOrderRows above - a full AI/SIA
   // sheet fetch is bulk-shaped even on a delta (modifiedSince) request,
