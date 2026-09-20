@@ -4667,4 +4667,18 @@
 //            reach Save. Rows are tighter (smaller padding/columns), and
 //            a denomination with a zero subtotal dims instead of looking
 //            identical to one that's actually been counted.
-export const APP_VERSION = '1.10-64'
+//   1.10-65 - 1.10-64 made the Denomination Count modal worse, not
+//            better: the row grid had a FIXED, too-narrow subtotal
+//            column (68px) while Bundles/Pcs stayed flexible - a
+//            subtotal like ₱111,000.00 doesn't fit in 68px, so the row
+//            (and the whole modal) overflowed horizontally, forcing a
+//            sideways scrollbar that didn't exist before. Fixed by
+//            inverting it: Bundles/Pcs are now fixed-narrow (44px,
+//            maxLength 3 - neither ever needs more than 3 digits in
+//            practice) and Subtotal takes the remaining space via
+//            minmax(0,1fr), which can shrink instead of blowing out the
+//            grid. Also added tabular-nums to every input and amount
+//            (bundles, pcs, subtotal, counted total, cash on hand) so
+//            digits stay aligned instead of jittering column width as
+//            they change.
+export const APP_VERSION = '1.10-65'

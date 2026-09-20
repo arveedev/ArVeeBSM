@@ -107,9 +107,16 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             past all 13 denominations first. Zero-subtotal rows dim instead
             of being hidden, so the grid stays a consistent shape. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3">
-          <div className="grid grid-cols-[40px_1fr_1fr_68px] gap-2 px-1 pb-1.5 text-[10px] font-semibold uppercase text-neutral-500">
+          {/* Bundles/Pcs never need more than 3 digits in practice, so those
+              columns are fixed-narrow instead of flexible - the mistake in
+              the first pass was the reverse (fixed-narrow subtotal, flexible
+              inputs), which let a wide subtotal like ₱111,000.00 overflow
+              the row and force the whole modal to scroll sideways. Subtotal
+              now takes the remaining space via minmax(0,1fr), which can
+              shrink instead of blowing out the grid. */}
+          <div className="grid grid-cols-[36px_44px_44px_minmax(0,1fr)] gap-2 px-1 pb-1.5 text-[10px] font-semibold uppercase text-neutral-500">
             <span />
-            <span className="text-center">Bundles</span>
+            <span className="text-center">Bdl</span>
             <span className="text-center">Pcs</span>
             <span className="text-right">Subtotal</span>
           </div>
@@ -119,26 +126,28 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             return (
               <div
                 key={d}
-                className={`grid grid-cols-[40px_1fr_1fr_68px] items-center gap-2 border-b border-neutral-900 py-1.5 text-sm transition-opacity ${isZero ? 'opacity-45' : ''}`}
+                className={`grid grid-cols-[36px_44px_44px_minmax(0,1fr)] items-center gap-2 border-b border-neutral-900 py-1.5 text-sm transition-opacity ${isZero ? 'opacity-45' : ''}`}
               >
                 <span className="font-semibold text-app-text">₱{d}</span>
                 <input
                   type="text"
                   inputMode="numeric"
+                  maxLength={3}
                   value={bundles}
                   onChange={(e) => setField(d, 'bundles', e.target.value)}
                   placeholder="0"
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-center text-app-text outline-none focus:border-brand-neon"
+                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
                 />
                 <input
                   type="text"
                   inputMode="numeric"
+                  maxLength={3}
                   value={pcs}
                   onChange={(e) => setField(d, 'pcs', e.target.value)}
                   placeholder="0"
-                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-center text-app-text outline-none focus:border-brand-neon"
+                  className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
                 />
-                <span className="text-right text-neutral-400">₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="truncate text-right tabular-nums text-neutral-400">₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             )
           })}
@@ -146,10 +155,10 @@ function DenominationModal({ currentCashOnHand, onClose }) {
 
         <div className="shrink-0 space-y-1.5 border-t border-neutral-800 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2.5">
           <div className="flex justify-between text-sm font-semibold text-app-text">
-            <span>Counted total</span><span>₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span>Counted total</span><span className="tabular-nums">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           <div className="flex justify-between text-sm font-bold text-brand-neon">
-            <span>System Cash on Hand</span><span>₱{currentCashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span>System Cash on Hand</span><span className="tabular-nums">₱{currentCashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           {Math.abs(diff) > 0.001 && (
             <p className="rounded-lg bg-neutral-900 px-2.5 py-2 text-xs text-neutral-400">
