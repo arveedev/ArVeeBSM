@@ -4721,4 +4721,26 @@
 //            375px mobile viewport before shipping - zero truncation,
 //            zero overlap, zero overflow, confirmed programmatically
 //            (scrollWidth checks) and visually (screenshot).
-export const APP_VERSION = '1.10-67'
+//   1.10-68 - 1.10-67 was confirmed still broken on the real device
+//            too - now truncating labels ("₱1…", "₱0.…") instead of
+//            overlapping. Three fixed-pixel guesses in a row each
+//            worked on this session's own testing but not on the real
+//            device, which points at some real device/font-scaling
+//            difference this session can't fully reproduce - so this
+//            pass stopped guessing a fourth number and changed the
+//            approach structurally instead: the label column is now
+//            `auto` (browser-computed from actual rendered content),
+//            making truncation mathematically impossible regardless of
+//            font metrics, zoom, or OS text-scaling, on any device.
+//            Required merging all 13 rows into ONE shared grid (each
+//            row is now a key'd Fragment, not its own nested grid) so
+//            `auto` sizes from the WIDEST label across every row and
+//            columns stay aligned top to bottom - the border/dimming
+//            that lived on a row wrapper now applies to each of the
+//            four cells individually. Bdl/Pcs stay equal to each other
+//            at 50px (fixed-size input boxes, not variable text);
+//            Subtotal stays flexible. Verified in the browser pane
+//            against the real Inter font AND a deliberate 125% text-
+//            scaling stress test (well beyond anything measured
+//            before) - zero truncation, zero overlap, zero overflow.
+export const APP_VERSION = '1.10-68'

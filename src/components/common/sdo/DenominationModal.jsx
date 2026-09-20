@@ -8,7 +8,7 @@
 // more piece, so bundles are tracked separately and multiplied by
 // BUNDLE_SIZE rather than folded into the piece count.
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
@@ -107,59 +107,60 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             past all 13 denominations first. Zero-subtotal rows dim instead
             of being hidden, so the grid stays a consistent shape. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3">
-          {/* Bdl/Pcs/label at a measured-equal 50px, Subtotal flexible -
-              NOT all four forced equal (grid-cols-4). That was tried and
-              measured directly against the real Inter font: the widest
-              subtotal ("₱111,000.00") needs ~90px, but an equal 1/4 share
-              of this modal's width is only ~80px, so it silently
-              truncated to "₱111,00…" - hiding the exact peso figure this
-              tool exists to show. The earlier overlap bug (label under the
-              Bdl input) was ALSO a font-measurement miss, not a
-              structural one: a local test page's system-ui fallback
-              measured "₱1000" far narrower than Inter actually renders it
-              (43px vs an assumed ~40px column). Re-verified this pass by
-              loading the real Inter font and measuring every label/
-              subtotal's actual rendered width before picking column
-              sizes, instead of estimating again - 50px covers the widest
-              label with margin, and the flexible remaining space
-              comfortably covers the widest subtotal with room to spare. */}
-          <div className="grid grid-cols-[50px_50px_50px_minmax(0,1fr)] gap-1.5 px-1 pb-1.5 text-[10px] font-semibold uppercase text-neutral-500">
-            <span />
-            <span className="text-center">Bdl</span>
-            <span className="text-center">Pcs</span>
-            <span className="text-right">Subtotal</span>
+          {/* Fixed pixel guesses kept failing on the real device even after
+              measuring against the real Inter font locally - some
+              combination of device font metrics / OS text-scaling this
+              session can't fully reproduce kept making a "measured-safe"
+              number still too narrow. Switched to a structurally different
+              fix instead of guessing a fourth number: the label column is
+              now `auto` - sized by the browser to whatever the label
+              actually needs on THAT device, which makes truncation
+              mathematically impossible regardless of font/zoom/scaling,
+              no measuring required ever again. Bdl/Pcs stay equal to each
+              other (50px) since they're fixed-size input boxes, not
+              variable-width text; Subtotal stays flexible.
+              This requires every row to share ONE grid (not each row its
+              own separate 4-column grid) so `auto` computes from the
+              WIDEST label across ALL rows and every row's columns stay
+              aligned - each row is a Fragment (no box of its own) whose
+              four children are direct items of this single outer grid;
+              the border/opacity that used to live on a row wrapper now
+              applies to each of the four cells individually instead. */}
+          <div className="grid grid-cols-[auto_50px_50px_minmax(0,1fr)] items-center gap-x-1.5 gap-y-1 text-sm">
+            <span className="pb-1.5 text-[10px] font-semibold uppercase text-neutral-500" />
+            <span className="pb-1.5 text-center text-[10px] font-semibold uppercase text-neutral-500">Bdl</span>
+            <span className="pb-1.5 text-center text-[10px] font-semibold uppercase text-neutral-500">Pcs</span>
+            <span className="pb-1.5 text-right text-[10px] font-semibold uppercase text-neutral-500">Subtotal</span>
+            {DENOMINATIONS.map((d) => {
+              const { bundles, pcs } = normalizeEntry(counts[d])
+              const isZero = rowTotal(d) === 0
+              const cellClass = `border-b border-neutral-900 py-1.5 transition-opacity ${isZero ? 'opacity-45' : ''}`
+              return (
+                <Fragment key={d}>
+                  <span className={`${cellClass} whitespace-nowrap font-semibold text-app-text`}>₱{d}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={3}
+                    value={bundles}
+                    onChange={(e) => setField(d, 'bundles', e.target.value)}
+                    placeholder="0"
+                    className={`${cellClass} min-w-0 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon`}
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={3}
+                    value={pcs}
+                    onChange={(e) => setField(d, 'pcs', e.target.value)}
+                    placeholder="0"
+                    className={`${cellClass} min-w-0 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon`}
+                  />
+                  <span className={`${cellClass} text-right tabular-nums text-neutral-400`}>₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </Fragment>
+              )
+            })}
           </div>
-          {DENOMINATIONS.map((d) => {
-            const { bundles, pcs } = normalizeEntry(counts[d])
-            const isZero = rowTotal(d) === 0
-            return (
-              <div
-                key={d}
-                className={`grid grid-cols-[50px_50px_50px_minmax(0,1fr)] items-center gap-1.5 border-b border-neutral-900 py-1.5 text-sm transition-opacity ${isZero ? 'opacity-45' : ''}`}
-              >
-                <span className="truncate font-semibold text-app-text">₱{d}</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={3}
-                  value={bundles}
-                  onChange={(e) => setField(d, 'bundles', e.target.value)}
-                  placeholder="0"
-                  className="min-w-0 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
-                />
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={3}
-                  value={pcs}
-                  onChange={(e) => setField(d, 'pcs', e.target.value)}
-                  placeholder="0"
-                  className="min-w-0 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-1 py-1 text-center tabular-nums text-app-text outline-none focus:border-brand-neon"
-                />
-                <span className="truncate text-right tabular-nums text-neutral-400">₱{rowTotal(d).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </div>
-            )
-          })}
         </div>
 
         <div className="shrink-0 space-y-1.5 border-t border-neutral-800 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2.5">
