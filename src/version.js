@@ -4932,4 +4932,17 @@
 //            only non-arbitrary choice once its true original category
 //            can no longer be recovered, and the correct one in the
 //            common case of a warehouse dealing in a single cereal type.
-export const APP_VERSION = '1.10-78'
+//   1.10-79 - Same fix as 1.10-78, applied to the on-screen Reports
+//            list (Reports.jsx's own groupStock), which had the
+//            identical bug: an orphaned-category Cancelled record
+//            appeared under its own separate "UNKNOWN" heading, plus a
+//            second, near-blank entry right before it. Display-only
+//            grouping into the real category with the most activity in
+//            the current list (never written back to the record's own
+//            stored cerealCategory - purely which on-screen group it
+//            renders under), and each cancelled row now shows a red
+//            border, dimmed/disabled look, and a plain "CANCELLED"
+//            label instead of trying to fill in the blank fields a void
+//            deliberately clears - so it's clearly part of the list,
+//            never mistaken for a genuine confirmed entry.
+export const APP_VERSION = '1.10-79'

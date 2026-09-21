@@ -164,10 +164,30 @@ function Reports() {
   const currentList = mainTab === 'stocks' ? currentStockList : currentSackList
 
   // Group by cereal type → variety (for stocks) or by transaction type → sack type (for sacks)
+  //
+  // Same fix as pdfGenerator.js's addStockSummaryPage - a Cancelled
+  // record with no resolvable category (a legacy one voided before
+  // category preservation existed) used to group under its own literal
+  // "Unknown" heading, duplicated away from the real list it actually
+  // belongs near. Display-only: nothing here ever writes back to the
+  // record's own stored cerealCategory, only which on-screen group it
+  // renders under - it's placed in whichever real category already has
+  // the most activity in this exact list (the same non-arbitrary
+  // "closest real group" choice the PDF makes), visually marked as
+  // cancelled (red border, dimmed) by the row itself so it's never
+  // mistaken for a genuine, confirmed entry of that category.
   const groupStock = (txList) => {
+    const realCats = new Set(txList.filter((t) => t.status !== 'Cancelled').map((t) => t.cerealCategory))
+    const counts = new Map()
+    for (const t of txList) {
+      if (realCats.has(t.cerealCategory)) counts.set(t.cerealCategory, (counts.get(t.cerealCategory) ?? 0) + 1)
+    }
+    const fallbackCat = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+    const effectiveCat = (t) => (realCats.has(t.cerealCategory) ? t.cerealCategory : (fallbackCat ?? t.cerealCategory))
+
     const groups = {}
     for (const t of txList) {
-      const cat = t.cerealCategory
+      const cat = effectiveCat(t)
       const variety = t.varietyName || '—'
       if (!groups[cat]) groups[cat] = {}
       if (!groups[cat][variety]) groups[cat][variety] = []
@@ -540,40 +560,67 @@ function Reports() {
                   <div key={varietyName} className="mb-3">
                     <p className="mb-1.5 text-xs font-medium text-neutral-400">{varietyName}</p>
                     <ul className="space-y-2">
-                      {rows.map((t) => (
+                      {rows.map((t) => {
+                        const isCancelled = t.status === 'Cancelled'
+                        return (
                         <li key={t.id}>
                           <button type="button" onClick={() => handleStockRowTap(t)}
-                            className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-left transition-all hover:border-brand-neon/40 active:scale-[0.99]">
+                            className={`w-full rounded-xl border px-3 py-2.5 text-left transition-all active:scale-[0.99] ${
+                              isCancelled
+                                ? 'border-red-400/40 bg-red-400/5 opacity-60 hover:border-red-400/60'
+                                : 'border-neutral-800 bg-neutral-900 hover:border-brand-neon/40'
+                            }`}>
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono text-sm font-bold text-app-text">{t.serialNo}</span>
                                   <span className="text-xs text-neutral-500">{t.date}</span>
-                                  <span className="text-xs tabular-nums text-neutral-500">MC {t.moistureContent ?? '—'}%</span>
-                                  {(t.type === 'WSI' || t.wtsSide === 'issued') && (t.aiNumber || t.linkedDocNo) && (
+                                  {!isCancelled && (
+                                    <span className="text-xs tabular-nums text-neutral-500">MC {t.moistureContent ?? '—'}%</span>
+                                  )}
+                                  {!isCancelled && (t.type === 'WSI' || t.wtsSide === 'issued') && (t.aiNumber || t.linkedDocNo) && (
                                     <span className="rounded bg-brand-neon/10 px-2 py-0.5 text-xs font-semibold text-brand-neon">
                                       AI {t.aiNumber || t.linkedDocNo}
                                     </span>
                                   )}
-                                  {t.type === 'WSR' && t.linkedDocNo && (
+                                  {!isCancelled && t.type === 'WSR' && t.linkedDocNo && (
                                     <span className="rounded bg-brand-amber/10 px-2 py-0.5 text-xs font-semibold text-brand-amber">
                                       WSI {t.linkedDocNo}
                                     </span>
                                   )}
                                 </div>
-                                <p className="mt-0.5 truncate text-sm font-medium text-app-text">
-                                  {customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber)}
-                                </p>
-                                <p className="text-xs text-neutral-500">{t.transactionTypeName} · {t.condition}</p>
+                                {/* A cancelled record's own detail fields
+                                    (customer/AI/variety/etc.) are wiped at
+                                    void time, on purpose - showing "CANCELLED"
+                                    here instead of trying to fill in blanks
+                                    matches the exported Statement's own
+                                    treatment of the same row. */}
+                                {isCancelled ? (
+                                  <p className="mt-0.5 text-sm font-semibold text-red-400">CANCELLED</p>
+                                ) : (
+                                  <>
+                                    <p className="mt-0.5 truncate text-sm font-medium text-app-text">
+                                      {customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber)}
+                                    </p>
+                                    <p className="text-xs text-neutral-500">{t.transactionTypeName} · {t.condition}</p>
+                                  </>
+                                )}
                               </div>
                               <div className="shrink-0 text-right">
-                                <p className="text-lg font-bold tabular-nums text-app-text">{fmtBags(t.numberOfBags)}</p>
-                                <p className="text-xs tabular-nums text-neutral-400">Net {fmtWeight(t.netKilos, weightUnit)}</p>
+                                {isCancelled ? (
+                                  <p className="text-lg font-bold tabular-nums text-neutral-600">—</p>
+                                ) : (
+                                  <>
+                                    <p className="text-lg font-bold tabular-nums text-app-text">{fmtBags(t.numberOfBags)}</p>
+                                    <p className="text-xs tabular-nums text-neutral-400">Net {fmtWeight(t.netKilos, weightUnit)}</p>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </button>
                         </li>
-                      ))}
+                        )
+                      })}
                     </ul>
                   </div>
                 ))}
