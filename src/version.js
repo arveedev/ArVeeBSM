@@ -5268,4 +5268,21 @@
 //            already claimed it could be. No app-side code changed -
 //            this is a redeploy-only fix for whoever pastes the script
 //            into a spreadsheet's Apps Script project next.
-export const APP_VERSION = '1.10-98'
+//   1.10-99 - Per explicit correction: a Cancelled Purchase Receipt must
+//            never appear on the SUMMARY Sheet at all - the original
+//            version of this feature was writing it as a blanked
+//            "CANCELLED" placeholder row (matching the Abstract PDF's
+//            own convention), but the user confirmed the Sheet itself
+//            should follow the SAME convention already used for every
+//            other cancelled document's backup: removed outright, never
+//            shown. syncWorker.js's PR-sync loop now deletes (not
+//            updates) a Cancelled PR's row - only if it was actually
+//            backed up while Active; a placeholder PR that was
+//            cancelled from the moment it was created (never issued)
+//            has nothing to remove. A gap in the PR Number sequence is
+//            still explained on the Abstract PDF, same as always - only
+//            the Sheet backup's behavior changed. A v39 Dexie migration
+//            resets isSynced on any already-cancelled-and-backed-up PR,
+//            so existing "CANCELLED" rows already sitting on real
+//            Sheets get cleaned up by the very next sync automatically.
+export const APP_VERSION = '1.10-99'

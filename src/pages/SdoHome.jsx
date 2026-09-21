@@ -210,7 +210,12 @@ function SdoHome() {
     // placeholder that never had a real WSR to begin with.
     const wsr = deletePrTarget.wsrTransactionId ? await db.transactions.get(deletePrTarget.wsrTransactionId) : null
     await db.purchaseReceipts.delete(deletePrTarget.prId)
-    queuePrDeletion(deletePrTarget.prNo, wsr?.date ?? deletePrTarget.date)
+    // This PR was already Cancelled, so its Sheet row (if it ever had
+    // one) was already removed by the sync worker's own Cancel handling
+    // - expectMissing suppresses the "no matching row found" toast for
+    // that guaranteed, expected outcome, same as an un-voided
+    // transaction's own delete elsewhere in this app.
+    queuePrDeletion(deletePrTarget.prNo, wsr?.date ?? deletePrTarget.date, { expectMissing: true })
     toast.success(`PR ${deletePrTarget.prNo} deleted`)
     setDeletePrTarget(null)
   }

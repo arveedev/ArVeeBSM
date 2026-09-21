@@ -273,6 +273,35 @@ const runSyncQueue = async () => {
           farmerGender: wsr?.farmerGender ?? null,
         }
 
+        // Per explicit decision, a Cancelled PR must never appear on the
+        // SUMMARY sheet at all - not even as a blanked "CANCELLED"
+        // placeholder row (same convention already used for every other
+        // cancelled document's Sheet backup). If it was already backed
+        // up while Active, remove that row outright instead of updating
+        // it; if it never made it to the Sheet in the first place (e.g.
+        // a pre-registered placeholder Cancelled PR that was never
+        // issued), there's nothing to push at all.
+        if (pr.status === 'Cancelled') {
+          const sourceDate = context.wsrDate ?? pr.date
+          const result = pr.hasBeenBackedUp
+            ? await withOneRetry(() => deletePrBackup(pr.prNo, sourceDate))
+            : { ok: true }
+
+          if (result.ok) {
+            await db.purchaseReceipts.update(pr.prId, { isSynced: true, hasBeenBackedUp: false, syncFailureLogged: false })
+            synced += 1
+            if (pr.syncFailureLogged) await resolveSyncFailure(pr.prId)
+          } else {
+            console.error(`Sheets backup removal failed for cancelled PR ${pr.prNo}:`, result)
+            failed += 1
+            if (!pr.syncFailureLogged) {
+              await logSyncFailure('Sheet sync', `Cancelled PR ${pr.prNo} failed to be removed from the Sheet - will keep retrying automatically every 30s.`, pr.prId)
+              await db.purchaseReceipts.update(pr.prId, { syncFailureLogged: true })
+            }
+          }
+          continue
+        }
+
         const result = await withOneRetry(() =>
           pr.hasBeenBackedUp ? updatePrBackup(pr, context) : pushPrBackup(pr, context)
         )

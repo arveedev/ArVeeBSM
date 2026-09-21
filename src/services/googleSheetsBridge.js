@@ -1661,9 +1661,13 @@ export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => 
 // new row.
 const PR_SUMMARY_MATCH_COLUMN = 'PR NO.'
 
+// Only ever called for an Active PR - see the syncWorker's own PR-sync
+// loop, which never pushes/updates a Cancelled one (a Cancelled PR's
+// row is deleted outright instead, same as any other cancelled
+// document's backup - per explicit decision, the SUMMARY sheet should
+// never show a "CANCELLED" placeholder row at all).
 const buildPrSummaryRow = (pr, context) => {
   const { warehouseName, sdoName, wsrSerialNo, wsrDate, isFarmersAssociation, farmerMembersText, farmerGender } = context
-  const isCancelled = pr.status === 'Cancelled'
   // The sheet's own WSR column is a plain number, not a string - sent as
   // one whenever the serial actually parses as one (it always should),
   // falling back to the raw string rather than silently dropping it.
@@ -1673,32 +1677,31 @@ const buildPrSummaryRow = (pr, context) => {
     // pr.date (when the SDO happened to record the payment) - per
     // explicit correction, "PALAY DELIVERIES" means the delivery date,
     // and it's also what determines which month's spreadsheet this row
-    // belongs in at all (see getSourceDateForPr below). A placeholder
-    // Cancelled PR with no real WSR has nothing else to fall back to.
+    // belongs in at all (see getSourceDateForPr below).
     'DATE': wsrDate ?? pr.date,
     'PR NO.': pr.prNo,
     'WSR': wsrNum != null ? wsrNum : (wsrSerialNo ?? null),
     'RSBSA NO.': pr.rsbsa ?? null,
-    'NAME': isCancelled ? 'CANCELLED' : (pr.payeeName ?? null),
-    'ADDRESS': isCancelled ? '' : (pr.payeeAddress ?? null),
-    'I / FA': isCancelled ? '' : (isFarmersAssociation ? 'FA' : 'I'),
+    'NAME': pr.payeeName ?? null,
+    'ADDRESS': pr.payeeAddress ?? null,
+    'I / FA': isFarmersAssociation ? 'FA' : 'I',
     'WHSE': warehouseName ?? '',
-    'BAGS': isCancelled ? '' : (pr.numberOfBags ?? null),
-    'VARIETY': isCancelled ? '' : (pr.classification ?? null),
-    'MC': isCancelled ? '' : (pr.moistureContent ?? null),
-    'GROSS': isCancelled ? '' : (pr.grossKilos ?? null),
-    'SACK': isCancelled ? '' : (pr.sackKilos ?? null),
-    'NET KG': isCancelled ? '' : (pr.netKilos ?? null),
-    'ENW': isCancelled ? '' : (pr.enwFactor ?? null),
-    'ENW KG': isCancelled ? '' : (pr.enw ?? null),
-    'BASIC COST': isCancelled ? '' : (pr.basicCost ?? null),
-    'BUYING PRICE': isCancelled ? '' : (pr.unitCost ?? null),
-    'PRICER COST': isCancelled ? '' : (pr.pricerAmount ?? null),
-    'GRAND TOTAL': isCancelled ? '' : (pr.totalAmount ?? null),
+    'BAGS': pr.numberOfBags ?? null,
+    'VARIETY': pr.classification ?? null,
+    'MC': pr.moistureContent ?? null,
+    'GROSS': pr.grossKilos ?? null,
+    'SACK': pr.sackKilos ?? null,
+    'NET KG': pr.netKilos ?? null,
+    'ENW': pr.enwFactor ?? null,
+    'ENW KG': pr.enw ?? null,
+    'BASIC COST': pr.basicCost ?? null,
+    'BUYING PRICE': pr.unitCost ?? null,
+    'PRICER COST': pr.pricerAmount ?? null,
+    'GRAND TOTAL': pr.totalAmount ?? null,
     'SDO': sdoName ?? '',
     'RSBSA NO': pr.rsbsa ?? null,
-    'FARMER MEMBER': isCancelled ? '' : (farmerMembersText ?? null),
-    'GENDER': isCancelled ? '' : (farmerGender ?? null),
+    'FARMER MEMBER': farmerMembersText ?? null,
+    'GENDER': farmerGender ?? null,
   }
 }
 
@@ -1734,7 +1737,7 @@ export const pushPrBackup = async (pr, context = {}) => {
   })
 }
 
-/** Updates an existing SUMMARY row in place, found by its own PR No. within whichever monthly source covers the underlying WSR's own date - used both for a real edit and for a Cancel (blanks the figures, keeps the row). */
+/** Updates an existing SUMMARY row in place, found by its own PR No. within whichever monthly source covers the underlying WSR's own date - used for a real edit to an Active PR. Never called for a Cancel (see deletePrBackup instead - a Cancelled PR's row is removed outright, not blanked in place). */
 export const updatePrBackup = async (pr, context = {}) => {
   if (!PR_WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
   const source = await getPrSheetSourceForDate(resolvePrSourceDate(pr, context.wsrDate))
@@ -1751,7 +1754,7 @@ export const updatePrBackup = async (pr, context = {}) => {
   })
 }
 
-/** Deletes a SUMMARY row outright, found by PR No. within whichever monthly source covers the given date - used only for a genuine (permanent) Delete, never a Cancel, which keeps the row (see updatePrBackup). `date` should be the underlying WSR's own date when one exists (the caller resolves this - there is no `pr` object left by delete time to derive it from), falling back to the deleted PR's own date otherwise. */
+/** Deletes a SUMMARY row outright, found by PR No. within whichever monthly source covers the given date - used both for a genuine (permanent) hard Delete AND for a Cancel (per explicit decision, a Cancelled PR should never appear on the SUMMARY sheet at all, not even as a blanked placeholder row - same convention as every other cancelled document's Sheet backup). `date` should be the underlying WSR's own date when one exists (the caller resolves this - there is no `pr` object left by delete time to derive it from), falling back to the deleted PR's own date otherwise. */
 export const deletePrBackup = async (prNo, date) => {
   if (!PR_WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
   const source = await getPrSheetSourceForDate(date)

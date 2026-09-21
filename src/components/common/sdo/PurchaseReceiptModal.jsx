@@ -214,10 +214,12 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
       cancelReason: cancelReason.trim() || null,
       cancelledAt: Date.now(),
       cancelledByUid: user.uid,
-      // Re-pushes an UPDATE to the SUMMARY Sheet row (blanked figures,
-      // NAME becomes CANCELLED) rather than leaving the last-synced
-      // Active version sitting there stale - the row itself is never
-      // removed by Cancel, only by a genuine Delete (see handleDelete).
+      // Triggers the sync worker to remove this PR's SUMMARY row
+      // outright (never left as a stale Active-looking row, and never
+      // shown as a "CANCELLED" placeholder either - per explicit
+      // decision, a Cancelled PR should never appear on the sheet at
+      // all). See syncWorker.js's own PR-sync loop for the actual
+      // delete-on-cancel logic.
       isSynced: false,
     })
     toast.success(`Purchase Receipt ${cancelTarget.prNo} cancelled — cash reverted`)

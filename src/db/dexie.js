@@ -967,6 +967,26 @@ db.version(38).stores({
   prSheetSources: 'id, dateFrom, dateTo',
 })
 
+// v39 — Per explicit decision, a Cancelled Purchase Receipt should
+// never appear on the SUMMARY Sheet at all (not even as a blanked
+// "CANCELLED" placeholder row, which the original version of this
+// feature wrote) - syncWorker.js now deletes rather than updates a
+// Cancelled PR's row. Any PR that was ALREADY cancelled-and-backed-up
+// under the old behavior has isSynced: true, so the sync worker's own
+// `isSynced !== true` pending-check would never revisit it and clean up
+// its now-unwanted Sheet row on its own. Resetting isSynced: false here
+// (only for the ones that actually need it - hasBeenBackedUp: true)
+// puts them back in the queue exactly once, so the very next sync run
+// removes them for good.
+db.version(39).stores({}).upgrade(async (tx) => {
+  const cancelledPrs = await tx.table('purchaseReceipts').where('status').equals('Cancelled').toArray()
+  for (const pr of cancelledPrs) {
+    if (pr.hasBeenBackedUp) {
+      await tx.table('purchaseReceipts').update(pr.prId, { isSynced: false })
+    }
+  }
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

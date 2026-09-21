@@ -11,9 +11,13 @@
 //   the SDO, not a warehouse - see serialNumber.js).
 // Either way it then prints on the Abstract PDF as a CANCELLED row
 // (sdoAbstractPdfGenerator.js), so a gap in the PR Number sequence is
-// always explained. isPrSerialTaken's own duplicate check already scans
-// every purchaseReceipts row regardless of status, so a cancelled
-// number stays protected against reuse the same way an issued one is.
+// always explained THERE. The SUMMARY Sheet backup deliberately does
+// NOT follow the same convention - per explicit decision, a Cancelled
+// PR should never appear on that sheet at all (see syncWorker.js's own
+// PR-sync loop, which removes rather than blanks a Cancelled PR's row).
+// isPrSerialTaken's own duplicate check already scans every
+// purchaseReceipts row regardless of status, so a cancelled number
+// stays protected against reuse the same way an issued one is.
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
@@ -65,9 +69,9 @@ function CancelPrModal({ onClose }) {
           status: 'Cancelled',
           cancelledAt: Date.now(),
           cancelledByUid: user.uid,
-          // Re-pushes an UPDATE to the SUMMARY Sheet row (blanked
-          // figures, NAME becomes CANCELLED) instead of leaving the
-          // last-synced Active version sitting there stale.
+          // Triggers the sync worker to remove this PR's SUMMARY row
+          // outright instead of leaving the last-synced Active version
+          // sitting there stale (see syncWorker.js).
           isSynced: false,
         })
         toast.success(`PR ${trimmedPrNo} cancelled — cash reverted`)
@@ -108,9 +112,11 @@ function CancelPrModal({ onClose }) {
           createdByUid: user.uid,
           cancelledAt: Date.now(),
           cancelledByUid: user.uid,
-          // Drives the SUMMARY Sheet backup (syncWorker.js) - still
-          // synced even though it's Cancelled from the start, so a
-          // never-issued voided number still explains its own gap.
+          // isSynced still set so the sync worker's PR loop picks this
+          // record up - but since it's Cancelled from the start and
+          // hasBeenBackedUp is false, that loop does nothing but mark it
+          // synced (no Sheet write at all). A never-issued voided number
+          // only explains its own gap on the Abstract PDF, not the Sheet.
           isSynced: false,
           hasBeenBackedUp: false,
         })
