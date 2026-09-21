@@ -146,14 +146,17 @@ function DailySummaryCard({ dateFrom, dateTo }) {
 
   return (
     <div className="mt-2">
+      {/* Solid, filled button (was a subtle outlined ghost button) -
+          matches Reports.jsx's Export PDF button now, so the two export
+          actions on this page carry the same visual weight. */}
       <div className="flex items-center justify-end">
         <button
           type="button"
           onClick={handleExport}
           disabled={exporting}
-          className="flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-95 disabled:opacity-40"
+          className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none"
         >
-          {exporting ? <Loader size={13} className="animate-spin" /> : <Camera size={13} />}
+          {exporting ? <Loader size={15} className="animate-spin" /> : <Camera size={15} />}
           {exporting ? 'Exporting…' : 'Save as image'}
         </button>
       </div>

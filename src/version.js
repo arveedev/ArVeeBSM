@@ -5035,4 +5035,16 @@
 //            actually has milling activity to switch to). Removed the
 //            now-unused collapse/expand state and animation that used
 //            to belong to the old Milling accordion button.
-export const APP_VERSION = '1.10-83'
+//   1.10-84 - Reports' date fields and its month-nav/preset picker
+//            stacked as two separate rows even on wide screens, per
+//            direct correction - now sit side by side from the lg
+//            breakpoint up (dates fixed-width, preset picker filling
+//            the rest), still stacked below it where there isn't room
+//            for both. Applied to both the Summary and Statement tabs'
+//            period controls, matching the merged segment row's own
+//            same-shape responsiveness. Also: Reports' Export PDF
+//            button and the Summary card's Save as image button were
+//            both subtle outlined ghost buttons easy to miss - both
+//            now solid, filled brand-neon buttons with real visual
+//            weight, matching each other.
+export const APP_VERSION = '1.10-84'

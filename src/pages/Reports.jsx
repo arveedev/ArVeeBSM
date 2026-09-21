@@ -545,22 +545,30 @@ function Reports() {
           animation on its own, so it replays every time this panel
           becomes visible again without needing to remount anything. */}
       <div className={`mt-5 animate-flow-down ${pageTab === 'summary' ? '' : 'hidden'}`}>
-        <div className="mt-2 grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-neutral-500">From</label>
-            <CalendarDatePicker
-              value={summaryFrom}
-              label="Start Date"
-              onChange={(iso) => { setSummaryFrom(iso); summaryToPickerRef.current?.open() }}
-              valueClassName="text-base font-semibold"
-            />
+        {/* Date fields and the month-nav/preset picker stack on narrow
+            screens (each needs the full width to stay usable) but sit
+            side by side from the lg breakpoint up, where there's room
+            for both without either feeling cramped. */}
+        <div className="mt-2 lg:flex lg:items-start lg:gap-6">
+          <div className="grid grid-cols-2 gap-3 lg:w-80 lg:shrink-0">
+            <div>
+              <label className="mb-1 block text-xs text-neutral-500">From</label>
+              <CalendarDatePicker
+                value={summaryFrom}
+                label="Start Date"
+                onChange={(iso) => { setSummaryFrom(iso); summaryToPickerRef.current?.open() }}
+                valueClassName="text-base font-semibold"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-neutral-500">To</label>
+              <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} label="End Date" onChange={setSummaryTo} valueClassName="text-base font-semibold" />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-neutral-500">To</label>
-            <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} label="End Date" onChange={setSummaryTo} valueClassName="text-base font-semibold" />
+          <div className="lg:flex-1">
+            <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} currentFrom={summaryFrom} currentTo={summaryTo} />
           </div>
         </div>
-        <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} currentFrom={summaryFrom} currentTo={summaryTo} />
         <div key={currentWarehouseId} className="animate-pop-in">
           <DailySummaryCard dateFrom={summaryFrom} dateTo={summaryTo} />
         </div>
@@ -568,36 +576,46 @@ function Reports() {
 
       {/* ── Stock Statement ─────────────────────────────────────────────── */}
       <div className={`mt-5 animate-flow-down ${pageTab === 'statement' ? '' : 'hidden'}`}>
+        {/* Solid, filled button (was a subtle outlined ghost button) -
+            exporting the statement is the primary action on this tab,
+            so it gets the same visual weight as other primary CTAs
+            elsewhere in the app rather than blending into the header row. */}
         <div className="flex items-center justify-end">
           <button type="button" onClick={handleExportPdf}
             disabled={isExporting || needsDates}
-            className="flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-brand-neon transition-all hover:border-brand-neon/50 active:scale-95 disabled:opacity-40">
+            className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
             {isExporting ? (
-              <Loader size={13} className="animate-spin" />
+              <Loader size={15} className="animate-spin" />
             ) : justExported ? (
-              <CheckCircle2 size={13} className="animate-toast-icon-check" />
+              <CheckCircle2 size={15} className="animate-toast-icon-check" />
             ) : (
-              <FileDown size={13} />
+              <FileDown size={15} />
             )}
             {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export PDF'}
           </button>
         </div>
 
-        <div className="mt-2 grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-neutral-500">Period From *</label>
-            <CalendarDatePicker
-              value={stmtFrom}
-              label="Start Date"
-              onChange={(iso) => { setStmtFrom(iso); stmtToPickerRef.current?.open() }}
-            />
+        {/* Date fields and the month-nav/preset picker stack on narrow
+            screens but sit side by side from the lg breakpoint up. */}
+        <div className="mt-2 lg:flex lg:items-start lg:gap-6">
+          <div className="grid grid-cols-2 gap-3 lg:w-80 lg:shrink-0">
+            <div>
+              <label className="mb-1 block text-xs text-neutral-500">Period From *</label>
+              <CalendarDatePicker
+                value={stmtFrom}
+                label="Start Date"
+                onChange={(iso) => { setStmtFrom(iso); stmtToPickerRef.current?.open() }}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-neutral-500">Period To *</label>
+              <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} label="End Date" onChange={setStmtTo} />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-neutral-500">Period To *</label>
-            <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} label="End Date" onChange={setStmtTo} />
+          <div className="lg:flex-1">
+            <PeriodPresetPicker onSelectRange={(from, to) => { setStmtFrom(from); setStmtTo(to) }} currentFrom={stmtFrom} currentTo={stmtTo} />
           </div>
         </div>
-        <PeriodPresetPicker onSelectRange={(from, to) => { setStmtFrom(from); setStmtTo(to) }} currentFrom={stmtFrom} currentTo={stmtTo} />
         {needsDates && (
           <p className="mt-1 text-xs text-brand-amber">
             Both dates required to view transactions and export PDF.
