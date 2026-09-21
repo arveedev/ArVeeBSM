@@ -133,9 +133,6 @@ function CancelPrModal({ onClose }) {
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400 transition-all active:scale-90">✕</button>
         </div>
         <div className="space-y-4 px-4 py-4">
-          <p className="text-sm text-neutral-500">
-            Type any PR number to cancel it - an already-issued one is cancelled in place, a number never issued (a form spoiled before it was filled out) is reserved as cancelled directly. Either way it still prints on the Abstract as CANCELLED.
-          </p>
           <div>
             <label className="text-sm font-semibold uppercase text-neutral-500">PR No.</label>
             <input

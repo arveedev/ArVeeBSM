@@ -24,6 +24,7 @@ import EditBeginningBalanceModal from '../components/common/EditBeginningBalance
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import DenominationModal from '../components/common/sdo/DenominationModal.jsx'
 import CashHistoryModal from '../components/common/sdo/CashHistoryModal.jsx'
+import CancelPrModal from '../components/common/sdo/CancelPrModal.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
@@ -131,7 +132,7 @@ function SdoPositionSection({ userRecord, uid }) {
 // - computed the same way SdoHome.jsx does, from this SDO's own ledger
 // and Active Purchase Receipts.
 function SdoCashSection({ uid }) {
-  const [openModal, setOpenModal] = useState(null) // 'denomination' | 'history' | null
+  const [openModal, setOpenModal] = useState(null) // 'denomination' | 'history' | 'cancelPr' | null
 
   const activePrs = useLiveQuery(
     () => db.purchaseReceipts.where('[sdoUid+status]').equals([uid, 'Active']).toArray(),
@@ -165,8 +166,22 @@ function SdoCashSection({ uid }) {
         </button>
       </div>
 
+      {/* Per explicit request, moved here from SdoHome.jsx - cancels a
+          PR by number alone, no reason required: an issued PR is
+          cancelled in place, a never-issued number is reserved straight
+          as cancelled. Either way it prints on the Abstract as CANCELLED. */}
+      <button
+        type="button"
+        onClick={() => setOpenModal('cancelPr')}
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-3 text-brand-crimson transition-all hover:border-brand-crimson/50 active:scale-[0.97]"
+      >
+        <Trash2 size={20} />
+        <span className="text-xs font-semibold">Cancel PR</span>
+      </button>
+
       {openModal === 'denomination' && <DenominationModal currentCashOnHand={cashOnHand} onClose={() => setOpenModal(null)} />}
       {openModal === 'history' && <CashHistoryModal onClose={() => setOpenModal(null)} />}
+      {openModal === 'cancelPr' && <CancelPrModal onClose={() => setOpenModal(null)} />}
     </section>
   )
 }

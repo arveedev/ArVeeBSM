@@ -5178,4 +5178,9 @@
 //              "Cancelled PRs" section (Cancelled PRs have no WSR to
 //              attach to) with a Delete button per entry, since a
 //              cancelled PR needs somewhere to be purged from entirely.
-export const APP_VERSION = '1.10-91'
+//   1.10-92 - Per direct feedback: removed CancelPrModal.jsx's
+//            explanatory paragraph, and moved its trigger from
+//            SdoHome.jsx to Settings.jsx's Cash Balance section (next to
+//            Denomination Count/Cash History) - the "Cancelled PRs" list
+//            + Delete on SdoHome.jsx's Completed tab is unaffected.
+export const APP_VERSION = '1.10-92'

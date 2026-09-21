@@ -18,7 +18,6 @@ import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
 import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
-import CancelPrModal from '../components/common/sdo/CancelPrModal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 
 const LIST_PAGE_SIZE = 50
@@ -74,7 +73,6 @@ function SdoHome() {
   const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | null
   const [editingPrice, setEditingPrice] = useState(false)
   const [showAbstractExport, setShowAbstractExport] = useState(false)
-  const [showCancelPr, setShowCancelPr] = useState(false)
   const [mounted, setMounted] = useState(false)
   // Per explicit request: a Cancelled PR must have somewhere to be
   // permanently deleted from - it has no WSR to hang off of when it's a
@@ -104,7 +102,7 @@ function SdoHome() {
   // without this, the fixed header/nav sat on top of the modal and the
   // page's own scroll plus the modal's own internal scroll produced two
   // visible scrollbars at once.
-  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || editingPrice || showCancelPr || Boolean(deletePrTarget)
+  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || editingPrice || Boolean(deletePrTarget)
   useEffect(() => {
     setChromeHidden?.(anyModalOpen)
     document.body.style.overflow = anyModalOpen ? 'hidden' : ''
@@ -254,12 +252,6 @@ function SdoHome() {
         <button type="button" onClick={() => setShowAbstractExport(true)} aria-label="Export Abstract of Cereal Purchases" className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-neutral-400 transition-all active:scale-95">
           Export
         </button>
-        {/* Per explicit request: cancels a PR by number alone - either
-            an already-issued one (in place) or a number never issued at
-            all (a physical form spoiled before it was filled out). */}
-        <button type="button" onClick={() => setShowCancelPr(true)} aria-label="Cancel a PR number" className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-brand-crimson transition-all active:scale-95">
-          Cancel PR
-        </button>
       </div>
 
       {/* Search+sort stay their own row at every width; the warehouse
@@ -397,7 +389,6 @@ function SdoHome() {
       )}
       {showAbstractExport && <AbstractExportModal onClose={() => setShowAbstractExport(false)} />}
       {editingPrice && <BuyingPriceModal currentPriceRow={currentPriceRow} onClose={() => setEditingPrice(false)} />}
-      {showCancelPr && <CancelPrModal onClose={() => setShowCancelPr(false)} />}
     </div>
   )
 }
