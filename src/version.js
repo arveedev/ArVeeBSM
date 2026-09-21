@@ -4861,4 +4861,30 @@
 //            filter, plus the live existingPileIds set - so the real
 //            cause can be confirmed from console evidence next export
 //            instead of theorized further.
-export const APP_VERSION = '1.10-74'
+//   1.10-75 - Root cause of the beginning/ending balance mismatch found
+//            and confirmed - NOT a code bug in the date-comparison logic
+//            itself, which has always correctly matched its own
+//            documented design. The real cause: this warehouse's
+//            "Reports Start Date" (WarehousesPanel.jsx's per-warehouse
+//            cutoff) was set to a specific date, and its OLD label/help
+//            text read as inclusive ("Start Date" - the first day
+//            counted), but the actual, always-documented rule is
+//            exclusive - data dated ON OR BEFORE that date is excluded
+//            everywhere (live stock, BIN Cards, every future report's
+//            beginning balance), while a plain date-range list (Reports'
+//            own current-period Receipts/Issues tabs) has no cutoff
+//            filter at all and shows it normally - which is exactly
+//            what made this look like two reports disagreeing with each
+//            other, when it was one misconfigured date plus a genuinely
+//            confusing field name. Reworded both WarehousesPanel.jsx's
+//            per-warehouse field (now "Ignore Data On/Before") and
+//            DataStartDatePanel.jsx's global override (whose OLD wording
+//            actually contradicted its own code, saying "before" when
+//            the real rule is "on or before") with explicit, worked
+//            examples, so this exact misconfiguration is far harder to
+//            repeat. Removed the temporary diagnostic added in 1.10-74
+//            now that the cause is confirmed. 1.10-73's Cancelled-
+//            transaction exclusion from report totals remains - a real,
+//            separate, correct fix, just not the cause of this specific
+//            report.
+export const APP_VERSION = '1.10-75'

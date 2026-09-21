@@ -242,7 +242,25 @@ function WarehousesPanel() {
         </div>
 
         <div>
-          <label className={labelClass}>Reports Start Date</label>
+          {/* Reported real bug (not a code defect - confirmed against this
+              field's own documented behavior, unchanged below): the old
+              label "Reports Start Date" reads as inclusive ("start
+              date" = the first day counted), but the actual rule is the
+              opposite - the date entered is EXCLUDED, only days strictly
+              AFTER it count. An admin who wanted "Sept 1 onward" to count
+              and typed "Sept 1" here (the natural reading of the old
+              label) got Sept 1 itself silently dropped from live stock,
+              BIN Cards, and every future report's beginning balance -
+              while still showing normally in a plain date-range list
+              (no cutoff filter there), which is what made it look like
+              conflicting reports rather than one misconfigured date.
+              Relabeled and reworded with a concrete worked example so
+              the exclusive, day-after semantics can't be misread again -
+              the underlying date comparison itself is untouched, since
+              it matches this field's own long-documented design and
+              other correctly-configured warehouses depend on it staying
+              exclusive. */}
+          <label className={labelClass}>Ignore Data On/Before</label>
           <div className="flex items-center gap-2">
             <div className="flex-1">
               <CalendarDatePicker
@@ -263,8 +281,10 @@ function WarehousesPanel() {
             )}
           </div>
           <p className="mt-1 text-xs text-neutral-500">
-            Any data dated on or before this is ignored everywhere in the app - live stock,
-            sacks, BIN Cards, and reports (beginning balances still always count). Nothing is
+            Data dated on or before this date is excluded everywhere in the app - live stock,
+            sacks, BIN Cards, and reports (beginning balances still always count). The date you
+            pick here does NOT count itself - to start counting fresh from a specific day (e.g.
+            Sept 1), set this to the day BEFORE it (Aug 31), not that day itself. Nothing is
             deleted, it just stops being counted. Leave blank to include all data regardless of date.
           </p>
         </div>

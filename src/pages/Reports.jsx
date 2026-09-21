@@ -279,25 +279,20 @@ function Reports() {
       const existingPileIds = new Set(warehousePiles.map((p) => p.pileId))
       const resolvePileId = (t) => (t.wtsSide ? (t.wtsSide === 'received' ? t.receivedPileId : t.issuedPileId) : t.pileId)
       const stockBeginningBals = new Map()
-      const priorStockRawBeforeCutoff = await db.transactions
+      // Root cause found and confirmed (not a code bug here): this
+      // warehouse's "Ignore Data On/Before" cutoff was set to a date
+      // that excluded a genuinely real, active transaction dated exactly
+      // on it - the field's own OLD wording read as inclusive ("Reports
+      // Start Date") when the actual rule has always been exclusive.
+      // See WarehousesPanel.jsx/DataStartDatePanel.jsx for the wording
+      // fix that should prevent this exact misconfiguration going
+      // forward. This query's own date filter is correct and unchanged.
+      const priorStockRaw = (await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
         .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active' &&
           (t.isInitialBalance || t.date < stmtFrom))
-        .toArray()
-      const priorStockRaw = priorStockRawBeforeCutoff
+        .toArray())
         .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
-      // TEMPORARY diagnostic - reported real bug: two consecutive weekly
-      // reports' beginning/ending balances didn't agree with each other.
-      // Logs exactly what this "beginning balance" query finds for this
-      // export's own stmtFrom, so the real cause can be confirmed from
-      // evidence instead of guessed a fourth time.
-      console.log('[STOCK-REPORT-DIAG] stmtFrom:', stmtFrom, 'reportingCutoffDate:', reportingCutoffDate,
-        'existingPileIds:', [...existingPileIds],
-        'priorStockRawBeforeCutoff:', priorStockRawBeforeCutoff.map((t) => ({
-          type: t.type, date: t.date, isInitialBalance: t.isInitialBalance, status: t.status,
-          pileId: t.pileId, varietyId: t.varietyId, numberOfBags: t.numberOfBags, netKilos: t.netKilos,
-        })),
-        'priorStockRaw (after cutoff filter):', priorStockRaw.length)
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {
         if (!existingPileIds.has(resolvePileId(t))) return

@@ -67,13 +67,32 @@ function DataStartDatePanel() {
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+      {/* Reported real bug (wording, not logic - the actual exclusion
+          below is unchanged and matches WarehousesPanel's own per-
+          warehouse cutoff exactly, both real): this panel's own
+          description used to say "before it" / "nothing before X is
+          shown", which reads as INCLUSIVE of the date itself - but the
+          real, shared comparison (effectiveCutoffDate -> every
+          `t.date > cutoff` check across pileLedger.js/Reports.jsx) is
+          EXCLUSIVE - the date entered is itself also excluded. An admin
+          following this panel's own old wording would set exactly the
+          wrong date, one day late, and silently lose a real day of data
+          everywhere (live stock, BIN Cards, every future report's
+          beginning balance) while it still showed normally in a plain
+          date-range list (no cutoff filter there) - confirmed live,
+          real transactions on the cutoff date itself vanished from
+          balances but not from statements. Reworded to state the
+          exclusive rule directly and give a worked example, matching
+          what the code has always actually done. */}
       <h2 className="text-base font-semibold text-app-text">Data Start Date</h2>
       <p className="mt-1 text-xs text-neutral-400">
-        A single date that overrides every warehouse's own "Reports Start Date" at once - everything
-        dated before it is excluded everywhere across the app (Reports, Home Stocks, Pile List/Layout,
-        BIN Card export, Unwithdrawn stock), the same way each warehouse's individual setting already
-        works, just app-wide with one change. A pile's real total on or after this date still comes
-        from whatever beginning balance is entered for it in Settings &gt; Beginning Balances - this
+        A single date that overrides every warehouse's own "Ignore Data On/Before" at once - data
+        dated ON OR BEFORE it is excluded everywhere across the app (Reports, Home Stocks, Pile
+        List/Layout, BIN Card export, Unwithdrawn stock), the same way each warehouse's individual
+        setting already works, just app-wide with one change. The date you pick does NOT count
+        itself - to start counting fresh from a specific day (e.g. Sept 1), set this to the day
+        BEFORE it (Aug 31), not that day itself. A pile's real total afterward still comes from
+        whatever beginning balance is entered for it in Settings &gt; Beginning Balances - this
         does not calculate one automatically.
       </p>
 
@@ -81,7 +100,7 @@ function DataStartDatePanel() {
         <div className="mt-3 flex items-center justify-between rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2.5">
           <div className="flex items-center gap-2 text-sm text-brand-amber">
             <AlertTriangle size={16} className="shrink-0" />
-            Currently active: nothing before <span className="font-semibold">{currentlySet}</span> is shown anywhere.
+            Currently active: nothing on or before <span className="font-semibold">{currentlySet}</span> is shown anywhere.
           </div>
         </div>
       )}
@@ -120,7 +139,7 @@ function DataStartDatePanel() {
         open={pendingDate !== null}
         icon={AlertTriangle}
         title={`Set the data start date to ${pendingDate}?`}
-        description="Every warehouse will immediately stop showing anything dated before this in Reports, Home Stocks, Pile List/Layout, BIN Cards, and Unwithdrawn stock. Make sure every pile's beginning balance as of this date is already entered in Beginning Balances first."
+        description="Every warehouse will immediately stop showing anything dated on or before this in Reports, Home Stocks, Pile List/Layout, BIN Cards, and Unwithdrawn stock - this date itself is excluded too, not just what's before it. Make sure every pile's beginning balance as of this date is already entered in Beginning Balances first."
         confirmLabel="Set Override"
         onConfirm={handleConfirmSave}
         onCancel={() => setPendingDate(null)}
