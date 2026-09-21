@@ -4887,4 +4887,20 @@
 //            transaction exclusion from report totals remains - a real,
 //            separate, correct fix, just not the cause of this specific
 //            report.
-export const APP_VERSION = '1.10-75'
+//   1.10-76 - Reported real bug: a Cancelled transaction with no
+//            resolvable cereal category (an older record voided before
+//            StockFormBase.jsx's category-preservation fix existed, or
+//            a multi-pile group's "extra" record) fell back to
+//            'Unknown' the same as any other transaction when building
+//            the exported Stock Report's list of cereal types - and
+//            since nothing else ever legitimately uses 'Unknown' as a
+//            real category, this spawned a whole phantom "LOCAL
+//            UNKNOWN" page set (Summary with every figure dashed out,
+//            plus a Statement listing just that one cancelled row) for
+//            a category that never had any real stock activity at all.
+//            A Cancelled row WITH a known category was never the
+//            problem - it already correctly folds into that category's
+//            own real statement page, unchanged. Fixed by only counting
+//            Active transactions toward which cereal types get a page
+//            in the first place.
+export const APP_VERSION = '1.10-76'

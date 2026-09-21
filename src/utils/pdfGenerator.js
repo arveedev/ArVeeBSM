@@ -955,7 +955,23 @@ export const generateNfaReport = ({
   // with a beginning balance (from piles' isInitialBalance seeds) - a
   // warehouse with stock but zero transactions in this period must still
   // get a summary page showing beginning = ending balance.
-  const allStockTx = [...receipts, ...issues]
+  //
+  // Reported real bug: an older Cancelled record (voided before
+  // StockFormBase.jsx's cerealCategory-preservation fix existed, or one
+  // of a multi-pile group's "extra" records - both leave cerealCategory
+  // null) fell back to `?? 'Unknown'` here the same as every other
+  // transaction, and since a whole PHANTOM "Unknown" cereal type gets
+  // its own full Summary + Statement + Recap page set - for a single
+  // cancelled row with no real stock activity behind it at all. A
+  // Cancelled record with a genuinely known category was never the
+  // problem (it already correctly folds into that category's own real
+  // statement, same as any other row there) - only ones with NO
+  // resolvable category spawn this phantom page set, since nothing
+  // else ever legitimately uses 'Unknown' as a real cereal type. Only
+  // counting Active transactions toward which cereal types get a page
+  // fixes this without touching how a properly-categorized Cancelled
+  // row displays.
+  const allStockTx = [...receipts, ...issues].filter((t) => t.status !== 'Cancelled')
   const cerealTypes = [...new Set([
     ...allStockTx.map(t => t.cerealCategory ?? 'Unknown'),
     ...(stockBeginningBals ? [...stockBeginningBals.keys()] : []),
