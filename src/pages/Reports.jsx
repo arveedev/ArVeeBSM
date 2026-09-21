@@ -279,12 +279,25 @@ function Reports() {
       const existingPileIds = new Set(warehousePiles.map((p) => p.pileId))
       const resolvePileId = (t) => (t.wtsSide ? (t.wtsSide === 'received' ? t.receivedPileId : t.issuedPileId) : t.pileId)
       const stockBeginningBals = new Map()
-      const priorStockRaw = (await db.transactions
+      const priorStockRawBeforeCutoff = await db.transactions
         .where('warehouseId').equals(currentWarehouseId)
         .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active' &&
           (t.isInitialBalance || t.date < stmtFrom))
-        .toArray())
+        .toArray()
+      const priorStockRaw = priorStockRawBeforeCutoff
         .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
+      // TEMPORARY diagnostic - reported real bug: two consecutive weekly
+      // reports' beginning/ending balances didn't agree with each other.
+      // Logs exactly what this "beginning balance" query finds for this
+      // export's own stmtFrom, so the real cause can be confirmed from
+      // evidence instead of guessed a fourth time.
+      console.log('[STOCK-REPORT-DIAG] stmtFrom:', stmtFrom, 'reportingCutoffDate:', reportingCutoffDate,
+        'existingPileIds:', [...existingPileIds],
+        'priorStockRawBeforeCutoff:', priorStockRawBeforeCutoff.map((t) => ({
+          type: t.type, date: t.date, isInitialBalance: t.isInitialBalance, status: t.status,
+          pileId: t.pileId, varietyId: t.varietyId, numberOfBags: t.numberOfBags, netKilos: t.netKilos,
+        })),
+        'priorStockRaw (after cutoff filter):', priorStockRaw.length)
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
       const addToBeginningBal = (t, sign) => {
         if (!existingPileIds.has(resolvePileId(t))) return

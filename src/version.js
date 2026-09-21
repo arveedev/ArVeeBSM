@@ -4842,4 +4842,23 @@
 //            now takes an `expectMissing` flag, passed as true whenever
 //            the caller (StockFormBase/SackFormBase/WTSForm, both
 //            Delete and Un-void) already knows the record was Cancelled.
-export const APP_VERSION = '1.10-73'
+//   1.10-74 - The Cancelled-status fix (1.10-73) was confirmed real and
+//            worth keeping, but re-exporting both weekly reports showed
+//            the exact same numbers - it wasn't the cause of THIS
+//            specific discrepancy. User-supplied on-screen evidence
+//            (Beginning Balances panel + the Receipts/Issues tabs for
+//            both periods) narrowed it further: the raw pile seeds
+//            (91+490+740 = 1,321 bags / 65,371.610 kg) exactly match
+//            what the Sep 8-15 report shows as ITS Beginning Balance -
+//            meaning that period's "prior balance" query isn't
+//            reflecting the 490 bags of real, Active WSI issues dated
+//            Sep 1 and Sep 3, even though both dates are unambiguously
+//            before Sep 8. Rather than guess a fourth theory, added a
+//            TEMPORARY diagnostic logging exactly what
+//            Reports.jsx's own prior-balance query finds for a given
+//            stmtFrom - every matching transaction's date/type/pileId/
+//            varietyId/bags, before and after the reportingCutoffDate
+//            filter, plus the live existingPileIds set - so the real
+//            cause can be confirmed from console evidence next export
+//            instead of theorized further.
+export const APP_VERSION = '1.10-74'
