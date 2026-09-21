@@ -976,10 +976,24 @@ export const generateNfaReport = ({
     ...allStockTx.map(t => t.cerealCategory ?? 'Unknown'),
     ...(stockBeginningBals ? [...stockBeginningBals.keys()] : []),
   ])].sort()
+  const cerealTypesSet = new Set(cerealTypes)
+  // A Cancelled record's own category only matters here if it's one of
+  // the real types above - otherwise (an orphaned legacy record voided
+  // before category preservation existed) it must still land on a real
+  // statement rather than spawning its own phantom 'Unknown' page OR
+  // silently disappearing, both reported as wrong. There's no way to
+  // recover its true original category any more, so it's attached to
+  // the first real cereal type this export actually has - the only
+  // non-arbitrary choice left, and in the common case (a warehouse
+  // dealing in one cereal type) it's also the correct one.
+  const effectiveCategory = (t) => {
+    const own = t.cerealCategory ?? 'Unknown'
+    return cerealTypesSet.has(own) ? own : (cerealTypes[0] ?? own)
+  }
 
   for (const cerealType of cerealTypes) {
-    const catRec = receipts.filter(t => (t.cerealCategory ?? 'Unknown') === cerealType)
-    const catIss = issues.filter(t => (t.cerealCategory ?? 'Unknown') === cerealType)
+    const catRec = receipts.filter(t => effectiveCategory(t) === cerealType)
+    const catIss = issues.filter(t => effectiveCategory(t) === cerealType)
 
     const catVars = varieties.filter(v => v.category === cerealType)
     const beginBalMap = stockBeginningBals?.get(cerealType) ?? new Map()

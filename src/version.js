@@ -4903,4 +4903,33 @@
 //            own real statement page, unchanged. Fixed by only counting
 //            Active transactions toward which cereal types get a page
 //            in the first place.
-export const APP_VERSION = '1.10-76'
+//   1.10-77 - Admin Home's Stock Age Grouping tab used to always show
+//            Potential (actual minus unwithdrawn AI-authorized stock)
+//            with no way to see raw Actual inventory by age bucket, and
+//            no visibility into WHICH AIs made up the subtraction. Per
+//            explicit request: added the same Actual/Potential PillToggle
+//            the top card and Breakdown tab already use (same default -
+//            Actual). When Potential is selected, any warehouse row with
+//            real unwithdrawn stock now shows a tappable "X unwithdrawn"
+//            button that opens the existing UnwithdrawnDetailModal
+//            (already used by the Breakdown tab) scoped to that
+//            warehouse + cereal category - the full list of contributing
+//            AIs, each with its own allocated/withdrawn/unwithdrawn
+//            split and every WSI/WTS document issued against it, instead
+//            of the subtraction being an opaque number with nothing
+//            behind it.
+//   1.10-78 - 1.10-76's phantom-"Unknown"-page fix went one step too
+//            far per direct correction: excluding Cancelled records
+//            from which cereal types get a page meant an orphaned one
+//            (broken/missing category - a legacy record voided before
+//            category preservation existed) now vanished from the
+//            export entirely, instead of showing correctly folded into
+//            a real category's statement the way a properly-categorized
+//            Cancelled row already does. Fixed by keeping such a record
+//            OUT of which categories get a page (still no phantom
+//            "Unknown" page), but routing it INTO the first real cereal
+//            type's own statement listing instead of dropping it - the
+//            only non-arbitrary choice once its true original category
+//            can no longer be recovered, and the correct one in the
+//            common case of a warehouse dealing in a single cereal type.
+export const APP_VERSION = '1.10-78'

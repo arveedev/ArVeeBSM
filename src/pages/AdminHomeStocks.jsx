@@ -79,6 +79,11 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // before the unwithdrawn feature existed.
   const [topCardShowPotential, setTopCardShowPotential] = useState(false)
   const [breakdownShowPotential, setBreakdownShowPotential] = useState(false)
+  // Age Grouping used to always show Potential with no toggle of its
+  // own - per explicit request, it now gets the same Actual/Potential
+  // control as the top card and Breakdown tab, defaulting to Actual for
+  // the same reason those do.
+  const [ageGroupingShowPotential, setAgeGroupingShowPotential] = useState(false)
 
   // netBags is bags-of-50kg. When the toggle is set to MT, it converts
   // back to kilos (× 50, the confirmed inverse of bags = kilos / 50)
@@ -590,17 +595,26 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                 (p) => p.warehouseId === warehouse.warehouseId && p.cerealType === cat
               )
               if (wCatPiles.length === 0) return null
+              // unwithdrawnTotal is always computed (not just when the
+              // toggle is on) so the drill-down button's own figure and
+              // the row's Actual-vs-Potential difference stay available
+              // regardless of which mode is currently displayed.
+              let unwithdrawnTotal = 0
               const bucketTotals = buckets.map((b) => {
                 const actual = wCatPiles.filter((p) => b.test(p.age)).reduce((s, p) => s + p.netBags, 0)
                 const uw = unwithdrawnAgeByWarehouse.get(warehouse.warehouseId)?.get(cat)?.get(b.label) ?? 0
-                return Math.max(0, actual - uw)
+                unwithdrawnTotal += uw
+                return ageGroupingShowPotential ? Math.max(0, actual - uw) : actual
               })
               // Unwithdrawn stock whose age couldn't be determined (no
               // parseable ageGroup) can't be attributed to one specific
               // bucket column - only reduces the row total.
               const unspecified = unwithdrawnAgeByWarehouse.get(warehouse.warehouseId)?.get(cat)?.get(UNSPECIFIED_AGE) ?? 0
-              const total = Math.max(0, bucketTotals.reduce((a, b) => a + b, 0) - unspecified)
-              return { warehouse, bucketTotals, total }
+              unwithdrawnTotal += unspecified
+              const total = ageGroupingShowPotential
+                ? Math.max(0, bucketTotals.reduce((a, b) => a + b, 0) - unspecified)
+                : bucketTotals.reduce((a, b) => a + b, 0)
+              return { warehouse, bucketTotals, total, unwithdrawnTotal }
             })
             .filter(Boolean)
           const columnTotals = buckets.map((_, i) => rows.reduce((s, r) => s + r.bucketTotals[i], 0))
@@ -610,16 +624,27 @@ function AdminHomeStocks({ onWarehouseSelect }) {
         const catColor = (cat) => cat === 'Rice' ? 'text-blue-400' : cat === 'Palay' ? 'text-brand-neon' : 'text-brand-byproduct'
 
         return (
-        <Section title="Stock Age Grouping">
+        <Section
+          title="Stock Age Grouping"
+          headerRight={(
+            <PillToggle
+              options={[{ value: false, label: 'Actual' }, { value: true, label: 'Potential' }]}
+              value={ageGroupingShowPotential}
+              onChange={setAgeGroupingShowPotential}
+            />
+          )}
+        >
           <p className="mb-3 text-xs text-neutral-500">
-            Potential stock (actual minus unwithdrawn AI-authorized stock), not raw actual inventory.
+            {ageGroupingShowPotential
+              ? 'Potential stock (actual minus unwithdrawn AI-authorized stock) - tap "unwithdrawn" on any warehouse for the full list.'
+              : 'Raw actual inventory, by age bucket.'}
           </p>
 
-          {/* Keyed on the weight unit, same reasoning as the top card
-              and Breakdown tab above - this tab has no Actual/Potential
-              toggle of its own (it always shows potential), but its
-              figures still change when KG/MT is switched. */}
-          <div key={weightUnit} className="animate-flow-down">
+          {/* Keyed on the weight unit AND the toggle, same reasoning as
+              the top card and Breakdown tab above - switching either
+              replays the entrance animation on the now-different
+              figures instead of them silently swapping in place. */}
+          <div key={`${weightUnit}-${ageGroupingShowPotential}`} className="animate-flow-down">
 
           {/* Total Branch - per-cereal, per-age-group totals aggregated
               across every province, shown before the province breakdown.
@@ -691,6 +716,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                       )
                       if (!hasData) return null
                       const { buckets, rows, columnTotals, grandTotal } = computeRows(provinceWarehouses, cat)
+                      const catVarietyIds = varieties.filter((v) => v.category === cat).map((v) => v.varietyId)
                       return (
                         <div key={cat} className="mt-3 first:mt-0">
                           <p className={`mb-1 text-base font-bold uppercase ${catColor(cat)}`}>
@@ -713,7 +739,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                 </tr>
                               </thead>
                               <tbody>
-                                {rows.map(({ warehouse, bucketTotals, total }) => (
+                                {rows.map(({ warehouse, bucketTotals, total, unwithdrawnTotal }) => (
                                   <tr key={warehouse.warehouseId} className="border-b border-neutral-800/50">
                                     <Td>
                                       <button
@@ -724,6 +750,28 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                         {warehouse.name}
                                         <ChevronRight size={12} className="text-neutral-600" />
                                       </button>
+                                      {/* Per explicit request: Potential mode
+                                          gets the same drill-down into the
+                                          full list of contributing AIs the
+                                          Breakdown tab already offers,
+                                          instead of the subtraction being an
+                                          opaque number with no way to see
+                                          what's behind it. */}
+                                      {ageGroupingShowPotential && unwithdrawnTotal > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setDetailContext({
+                                            warehouseId: warehouse.warehouseId,
+                                            varietyIds: catVarietyIds,
+                                            title: `${cat} — Unwithdrawn`,
+                                            subtitle: stripWarehouseCodePrefix(warehouse.name),
+                                            rawBags: cat === 'By Products',
+                                          })}
+                                          className="mt-0.5 block whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-400/25 active:scale-95"
+                                        >
+                                          {fmt(unwithdrawnTotal)} unwithdrawn
+                                        </button>
+                                      )}
                                     </Td>
                                     {/* Per-warehouse figures bumped up a
                                         size on large screens - per direct
@@ -781,7 +829,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                        renders at sm+, where the columns
                                        have room. */}
                           <div className="space-y-2 sm:hidden">
-                            {rows.map(({ warehouse, bucketTotals, total }) => {
+                            {rows.map(({ warehouse, bucketTotals, total, unwithdrawnTotal }) => {
                               const rowKey = `${warehouse.warehouseId}::${cat}`
                               const isExpanded = expandedAgeRows.has(rowKey)
                               // Last bucket is always the oldest (see
@@ -823,6 +871,21 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                                     <p className="mt-1 text-sm tabular-nums text-red-400">
                                       {fmt(oldestAmount)} at {buckets[oldestIdx].label.replace(/\s*months?$/i, '')} mo
                                     </p>
+                                  )}
+                                  {ageGroupingShowPotential && unwithdrawnTotal > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailContext({
+                                        warehouseId: warehouse.warehouseId,
+                                        varietyIds: catVarietyIds,
+                                        title: `${cat} — Unwithdrawn`,
+                                        subtitle: stripWarehouseCodePrefix(warehouse.name),
+                                        rawBags: cat === 'By Products',
+                                      })}
+                                      className="mt-1.5 whitespace-nowrap rounded-md bg-red-400/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-400 transition-colors active:scale-95"
+                                    >
+                                      {fmt(unwithdrawnTotal)} unwithdrawn
+                                    </button>
                                   )}
                                   {isExpanded && (
                                     <div className="mt-2 grid grid-cols-3 gap-2 border-t border-neutral-800 pt-2">
