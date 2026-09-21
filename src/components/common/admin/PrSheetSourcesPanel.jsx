@@ -15,9 +15,10 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, RefreshCw } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { todayLocalISO } from '../../../utils/calculations.js'
+import { processSyncQueue } from '../../../services/syncWorker.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import {
@@ -43,6 +44,7 @@ function PrSheetSourcesPanel() {
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [syncing, setSyncing] = useState(false)
 
   const sources = useLiveQuery(() => db.prSheetSources.toArray(), []) ?? []
   const sortedSources = [...sources].sort((a, b) => byAlpha(b.dateFrom, a.dateFrom))
@@ -132,16 +134,53 @@ function PrSheetSourcesPanel() {
     return source.dateFrom <= today && (!source.dateTo || today <= source.dateTo)
   }
 
+  // On-demand push for Purchase Receipts sitting locally but not yet on
+  // any Sheet - most relevant right after adding a new month's source,
+  // when there can already be a real backlog of PRs dated into that
+  // month (issued before the source existed to back them up to, or from
+  // before this feature shipped at all). Runs the exact same queue the
+  // background worker drains automatically every 30s - this button just
+  // triggers it immediately instead of waiting.
+  const handleSyncNow = async () => {
+    setSyncing(true)
+    const result = await processSyncQueue()
+    setSyncing(false)
+    if (result.offline) {
+      toast.error('No connection — try again once online')
+    } else if (result.skipped) {
+      toast('A sync is already running - try again shortly', { icon: 'ℹ️' })
+    } else if (result.failed > 0) {
+      toast.error(`Synced ${result.synced}, ${result.failed} failed — will keep retrying automatically`)
+    } else if (result.synced > 0) {
+      toast.success(`Synced ${result.synced} record(s) to the Sheet(s)`)
+    } else {
+      toast.success('Everything is already synced')
+    }
+  }
+
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-base font-semibold text-app-text">PR Sheet Sources (Palay Deliveries)</h2>
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="text-base font-semibold text-app-text">PR Sheet Sources (Palay Deliveries)</h2>
+        <button
+          type="button"
+          onClick={handleSyncNow}
+          disabled={syncing}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300 transition-all hover:border-brand-neon hover:text-brand-neon active:scale-95 disabled:opacity-50"
+        >
+          <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+          Sync Now
+        </button>
+      </div>
       <p className="mt-1 text-xs text-neutral-400">
         Where SDO Purchase Receipts back up to - a different set of
         spreadsheets than Sheet Sources above. A fresh spreadsheet is
         typically created every month; add one entry per month here as
         needed. A Purchase Receipt lands in whichever entry's date range
         covers its underlying WSR's delivery date - ranges must not
-        overlap.
+        overlap. "Sync Now" pushes any Purchase Receipt not yet written
+        to a Sheet immediately, instead of waiting for the automatic
+        background sync.
       </p>
 
       <div className="mt-4 space-y-3">

@@ -245,7 +245,14 @@ const runSyncQueue = async () => {
     // block (not a shared code path) since a PR is a structurally
     // different record, resolved against its own related WSR (for
     // WSR#/I-FA/Gender/Farmer Member) rather than being self-contained.
-    const pendingPrs = await db.purchaseReceipts.filter((pr) => pr.isSynced === false).toArray()
+    // `!== true` (not `=== false`) so a Purchase Receipt issued BEFORE
+    // this backup feature shipped - which has no isSynced field at all,
+    // i.e. undefined, not false - still gets picked up and backed up.
+    // db.transactions doesn't need this same care above since every
+    // transaction has always had isSynced explicitly set since it was
+    // first introduced; purchaseReceipts is newer and has real pre-
+    // existing rows with the field entirely absent.
+    const pendingPrs = await db.purchaseReceipts.filter((pr) => pr.isSynced !== true).toArray()
     for (const pr of pendingPrs) {
       try {
         const warehouse = pr.warehouseId ? await db.warehouses.get(pr.warehouseId) : null

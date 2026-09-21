@@ -5241,4 +5241,16 @@
 //            configuring one can never redirect the other. The panel
 //            groups its entries by year for easier scanning as more
 //            months get added over time.
-export const APP_VERSION = '1.10-96'
+//   1.10-97 - Added a "Sync Now" button to PR Sheet Sources, for pushing
+//            any Purchase Receipt not yet backed up to a Sheet
+//            immediately (most useful right after adding a new month's
+//            source, when there's already a real local backlog dated
+//            into it). Also fixed a real bug found in the process: the
+//            background sync's own PR-pending query used
+//            `pr.isSynced === false`, which never matches `undefined` -
+//            every Purchase Receipt issued before this backup feature
+//            shipped has no isSynced field at all, so none of them were
+//            ever being picked up automatically. Changed to
+//            `pr.isSynced !== true`, which correctly treats "never set"
+//            the same as "not yet synced".
+export const APP_VERSION = '1.10-97'
