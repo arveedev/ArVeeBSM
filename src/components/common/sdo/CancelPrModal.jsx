@@ -65,6 +65,10 @@ function CancelPrModal({ onClose }) {
           status: 'Cancelled',
           cancelledAt: Date.now(),
           cancelledByUid: user.uid,
+          // Re-pushes an UPDATE to the SUMMARY Sheet row (blanked
+          // figures, NAME becomes CANCELLED) instead of leaving the
+          // last-synced Active version sitting there stale.
+          isSynced: false,
         })
         toast.success(`PR ${trimmedPrNo} cancelled — cash reverted`)
       } else {
@@ -104,6 +108,11 @@ function CancelPrModal({ onClose }) {
           createdByUid: user.uid,
           cancelledAt: Date.now(),
           cancelledByUid: user.uid,
+          // Drives the SUMMARY Sheet backup (syncWorker.js) - still
+          // synced even though it's Cancelled from the start, so a
+          // never-issued voided number still explains its own gap.
+          isSynced: false,
+          hasBeenBackedUp: false,
         })
         await recordPrSerialUsed(user.uid, trimmedPrNo)
         toast.success(`PR ${trimmedPrNo} cancelled`)

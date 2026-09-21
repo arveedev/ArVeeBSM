@@ -19,6 +19,7 @@ import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
 import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
+import { queuePrDeletion } from '../services/syncWorker.js'
 
 const LIST_PAGE_SIZE = 50
 
@@ -203,7 +204,13 @@ function SdoHome() {
 
   const handleDeleteCancelledPr = async () => {
     if (!deletePrTarget) return
+    // The underlying WSR's own date (the real delivery date) determines
+    // which monthly Sheet source the row lives in, per explicit
+    // correction - falls back to the PR's own date only for a
+    // placeholder that never had a real WSR to begin with.
+    const wsr = deletePrTarget.wsrTransactionId ? await db.transactions.get(deletePrTarget.wsrTransactionId) : null
     await db.purchaseReceipts.delete(deletePrTarget.prId)
+    queuePrDeletion(deletePrTarget.prNo, wsr?.date ?? deletePrTarget.date)
     toast.success(`PR ${deletePrTarget.prNo} deleted`)
     setDeletePrTarget(null)
   }

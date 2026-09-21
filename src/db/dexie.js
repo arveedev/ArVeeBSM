@@ -941,6 +941,18 @@ db.version(36).stores({}).upgrade(async (tx) => {
   }
 })
 
+// v37 — Purchase Receipt "SUMMARY" Sheet backup. Same queued-deletion
+// pattern as db.transactions' own pendingSheetDeletions (syncWorker.js) -
+// a hard-deleted purchaseReceipts record survives only as prNo here long
+// enough to replay the Sheet-side delete if the first attempt fails
+// offline/transiently. purchaseReceipts itself gains isSynced/
+// hasBeenBackedUp/syncFailureLogged fields (mirroring db.transactions'
+// own backup-tracking fields) - no schema change needed for those, they
+// are plain non-indexed fields on an existing table.
+db.version(37).stores({
+  pendingPrSheetDeletions: 'id',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

@@ -10,7 +10,7 @@
 
 import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
-import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
+import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, pushPrBackup, updatePrBackup, deletePrBackup, stripWarehouseCodePrefix, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
 import { preloadTransactionsForUser } from './transactionPreload.js'
 import { pauseTransactionSync, resumeTransactionSync, isTransactionSyncPaused } from './syncPauseState.js'
 import { logSyncFailure, resolveSyncFailure } from '../utils/errorLog.js'
@@ -239,6 +239,90 @@ const runSyncQueue = async () => {
         }
       }
     }
+
+    // Purchase Receipt "SUMMARY" Sheet backup - same isSynced/
+    // hasBeenBackedUp pattern as db.transactions above, but a parallel
+    // block (not a shared code path) since a PR is a structurally
+    // different record, resolved against its own related WSR (for
+    // WSR#/I-FA/Gender/Farmer Member) rather than being self-contained.
+    const pendingPrs = await db.purchaseReceipts.filter((pr) => pr.isSynced === false).toArray()
+    for (const pr of pendingPrs) {
+      try {
+        const warehouse = pr.warehouseId ? await db.warehouses.get(pr.warehouseId) : null
+        const sdoUser = pr.sdoUid ? await db.users.get(pr.sdoUid) : null
+        const wsr = pr.wsrTransactionId ? await db.transactions.get(pr.wsrTransactionId) : null
+        const context = {
+          warehouseName: warehouse ? stripWarehouseCodePrefix(warehouse.name) : null,
+          sdoName: sdoUser?.nickname ?? sdoUser?.name ?? null,
+          wsrSerialNo: wsr?.serialNo ?? null,
+          // The WSR's own date - per explicit correction, this (not
+          // pr.date) is what both the row's DATE column and which
+          // monthly Sheet source it belongs to are resolved from.
+          wsrDate: wsr?.date ?? null,
+          isFarmersAssociation: Boolean(wsr?.farmerCoops?.length),
+          farmerMembersText: wsr?.farmerCoops?.length
+            ? wsr.farmerCoops.map((m) => `${m.name} (${m.rsbsa || 'no RSBSA'}, ${m.gender || 'no gender'})`).join('; ')
+            : null,
+          farmerGender: wsr?.farmerGender ?? null,
+        }
+
+        const result = await withOneRetry(() =>
+          pr.hasBeenBackedUp ? updatePrBackup(pr, context) : pushPrBackup(pr, context)
+        )
+
+        if (result.ok) {
+          await db.purchaseReceipts.update(pr.prId, { isSynced: true, hasBeenBackedUp: true, syncFailureLogged: false })
+          synced += 1
+          if (pr.syncFailureLogged) await resolveSyncFailure(pr.prId)
+        } else {
+          console.error(`Sheets backup ${pr.hasBeenBackedUp ? 'update' : 'append'} failed for PR ${pr.prNo}:`, result)
+          failed += 1
+          if (!pr.syncFailureLogged) {
+            await logSyncFailure('Sheet sync', `PR ${pr.prNo} failed to push to the Sheet - will keep retrying automatically every 30s.`, pr.prId)
+            await db.purchaseReceipts.update(pr.prId, { syncFailureLogged: true })
+          }
+        }
+      } catch (err) {
+        console.error(`Sheets backup failed for PR ${pr.prId} (${pr.prNo}):`, err)
+        failed += 1
+        if (!pr.syncFailureLogged) {
+          await logSyncFailure('Sheet sync', `PR ${pr.prNo} failed to push to the Sheet (${err?.message ?? err}) - will keep retrying automatically every 30s.`, pr.prId)
+          await db.purchaseReceipts.update(pr.prId, { syncFailureLogged: true })
+        }
+      }
+    }
+
+    // Drain queued offline PR deletions - mirrors pendingSheetDeletions
+    // above; only prNo survives a hard delete, since the local record is
+    // already gone by the time this runs.
+    const queuedPrDeletions = await db.pendingPrSheetDeletions.toArray()
+    for (const deletion of queuedPrDeletions) {
+      try {
+        const result = await withOneRetry(() => deletePrBackup(deletion.prNo, deletion.date))
+        if (result.ok) {
+          if (result.found === false && !deletion.expectMissing) {
+            toast.error(`PR ${deletion.prNo} deleted locally, but no matching row was found on the Sheet — please verify manually`, { duration: 10000 })
+          }
+          await db.pendingPrSheetDeletions.delete(deletion.id)
+          synced += 1
+          if (deletion.syncFailureLogged) await resolveSyncFailure(deletion.id)
+        } else {
+          console.error(`Sheets delete-backup failed for PR ${deletion.prNo}:`, result)
+          failed += 1
+          if (!deletion.syncFailureLogged) {
+            await logSyncFailure('Sheet sync', `Delete of PR ${deletion.prNo} failed to push to the Sheet - will keep retrying automatically every 30s.`, deletion.id)
+            await db.pendingPrSheetDeletions.update(deletion.id, { syncFailureLogged: true })
+          }
+        }
+      } catch (err) {
+        console.error(`Sheets delete-backup failed for PR ${deletion.prNo}:`, err)
+        failed += 1
+        if (!deletion.syncFailureLogged) {
+          await logSyncFailure('Sheet sync', `Delete of PR ${deletion.prNo} failed to push to the Sheet (${err?.message ?? err}) - will keep retrying automatically every 30s.`, deletion.id)
+          await db.pendingPrSheetDeletions.update(deletion.id, { syncFailureLogged: true })
+        }
+      }
+    }
   } finally {
     isSyncing = false
   }
@@ -299,12 +383,44 @@ export const queueTransactionDeletion = async (serialNo, type, warehouseCode, { 
   await db.pendingSheetDeletions.add({ id: crypto.randomUUID(), serialNo, type, warehouseCode, expectMissing })
 }
 
+/**
+ * Call this when a Purchase Receipt is genuinely (hard) DELETED locally,
+ * so its SUMMARY row is removed too - never call this for a Cancel,
+ * which updates the row in place instead (see updatePrBackup) and keeps
+ * it visible, per explicit decision that a cancelled PR must still be
+ * explained on the Sheet, unlike a deleted one, which must not exist
+ * anywhere. Same immediate-attempt-then-queue shape as
+ * queueTransactionDeletion above. `date` is the deleted PR's own date -
+ * required (not optional) so the correct monthly source can be resolved
+ * (see deletePrBackup), same as every other PR backup call.
+ */
+export const queuePrDeletion = async (prNo, date, { expectMissing = false } = {}) => {
+  try {
+    const result = await deletePrBackup(prNo, date)
+    if (result.ok) {
+      if (result.found === false && !expectMissing) {
+        toast.error(`PR ${prNo} deleted locally, but no matching row was found on the Sheet — please verify manually`, { duration: 10000 })
+      }
+      return
+    }
+  } catch {
+    // fall through to queueing below
+  }
+  await db.pendingPrSheetDeletions.add({ id: crypto.randomUUID(), prNo, date, expectMissing })
+}
+
 let immediateSyncRegistered = false
 
 export const registerImmediateSyncOnSave = () => {
   if (immediateSyncRegistered) return
   immediateSyncRegistered = true
   db.transactions.hook('creating', () => {
+    setTimeout(() => { processSyncQueue() }, 0)
+  })
+  db.purchaseReceipts.hook('creating', () => {
+    setTimeout(() => { processSyncQueue() }, 0)
+  })
+  db.purchaseReceipts.hook('updating', () => {
     setTimeout(() => { processSyncQueue() }, 0)
   })
   // Editing an existing transaction (db.transactions.update) is a

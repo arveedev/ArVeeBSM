@@ -40,6 +40,7 @@ const emptyForm = {
   issuesSheetName: 'Issues Backup',
   sacksReceiptsSheetName: 'Sacks Receipts Backup',
   sacksIssuesSheetName: 'Sacks Issues Backup',
+  summarySheetName: 'SUMMARY',
   dateFrom: '',
   dateTo: '',
 }
@@ -104,6 +105,11 @@ function SheetSourcesPanel() {
       issuesSheetName: form.issuesSheetName.trim() || 'Issues Backup',
       sacksReceiptsSheetName: form.sacksReceiptsSheetName.trim() || 'Sacks Receipts Backup',
       sacksIssuesSheetName: form.sacksIssuesSheetName.trim() || 'Sacks Issues Backup',
+      // SDO Purchase Receipt backup - per explicit request, a new
+      // spreadsheet (and this source record) is created monthly rather
+      // than yearly for this one, same mechanism as every other backup
+      // sheet name here.
+      summarySheetName: form.summarySheetName.trim() || 'SUMMARY',
       dateFrom: form.dateFrom,
       dateTo: form.dateTo || null,
       lastSyncedAt: editingId ? sources.find((s) => s.id === editingId)?.lastSyncedAt ?? null : null,
@@ -127,6 +133,7 @@ function SheetSourcesPanel() {
       issuesSheetName: source.issuesSheetName,
       sacksReceiptsSheetName: source.sacksReceiptsSheetName,
       sacksIssuesSheetName: source.sacksIssuesSheetName,
+      summarySheetName: source.summarySheetName ?? 'SUMMARY',
       dateFrom: source.dateFrom,
       dateTo: source.dateTo,
     })
@@ -262,6 +269,10 @@ function SheetSourcesPanel() {
           <div>
             <label className={labelClass}>Sacks Issues (ESI)</label>
             <input type="text" value={form.sacksIssuesSheetName} onChange={(e) => updateField('sacksIssuesSheetName', e.target.value)} className={inputClass} placeholder="Sacks Issues Backup" />
+          </div>
+          <div>
+            <label className={labelClass}>SUMMARY (Purchase Receipts)</label>
+            <input type="text" value={form.summarySheetName} onChange={(e) => updateField('summarySheetName', e.target.value)} className={inputClass} placeholder="SUMMARY" />
           </div>
         </div>
 

@@ -17,6 +17,7 @@ import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import { getPalayMoistureState, fmtBags, fmtKilos, liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
 import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken } from '../../../utils/serialNumber.js'
+import { queuePrDeletion } from '../../../services/syncWorker.js'
 import {
   lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost, computePricerAmount,
   resolveBuyingPrice, resolveUnitCost, amountInWords,
@@ -174,6 +175,11 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
           totalAmount,
           createdAt: Date.now(),
           createdByUid: user.uid,
+          // Drives the SUMMARY Sheet backup (syncWorker.js) - same
+          // isSynced/hasBeenBackedUp pattern db.transactions already
+          // uses, picked up by the same background sync loop.
+          isSynced: false,
+          hasBeenBackedUp: false,
         })
       })
       if (blockedByDuplicate) {
@@ -208,6 +214,11 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
       cancelReason: cancelReason.trim() || null,
       cancelledAt: Date.now(),
       cancelledByUid: user.uid,
+      // Re-pushes an UPDATE to the SUMMARY Sheet row (blanked figures,
+      // NAME becomes CANCELLED) rather than leaving the last-synced
+      // Active version sitting there stale - the row itself is never
+      // removed by Cancel, only by a genuine Delete (see handleDelete).
+      isSynced: false,
     })
     toast.success(`Purchase Receipt ${cancelTarget.prNo} cancelled — cash reverted`)
     setCancelTargetPrId(null)
@@ -217,13 +228,17 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
 
   // Delete is genuinely permanent - per explicit request, distinct from
   // Cancel: the record is removed outright and never appears anywhere
-  // again (not the Completed list, not the Abstract PDF - there is
-  // nothing left to print a CANCELLED row for). Cash reverts the same
-  // way Cancel's does, since Cash on Hand only ever sums rows that still
-  // exist with status 'Active'.
+  // again (not the Completed list, not the Abstract PDF, not the SUMMARY
+  // Sheet - there is nothing left to print/keep a CANCELLED row for).
+  // Cash reverts the same way Cancel's does, since Cash on Hand only
+  // ever sums rows that still exist with status 'Active'.
   const handleDelete = async () => {
     if (!deleteTarget) return
     await db.purchaseReceipts.delete(deleteTarget.prId)
+    // wsr.date (the real delivery date), not deleteTarget.date (when the
+    // payment was recorded) - matches how push/update resolve the
+    // correct monthly Sheet source, per explicit correction.
+    queuePrDeletion(deleteTarget.prNo, wsr.date)
     toast.success(`Purchase Receipt ${deleteTarget.prNo} deleted — cash reverted`)
     setDeleteTargetPrId(null)
     if (!hasDuplicatePrs) onClose()

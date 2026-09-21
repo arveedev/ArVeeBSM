@@ -5191,4 +5191,40 @@
 //            alongside the existing warehouse/sort/period filters.
 //   1.10-94 - Per direct feedback, ProcurementMonitor's Paid/Unpaid tags
 //            are bigger (text-xs, more padding - was text-[10px]).
-export const APP_VERSION = '1.10-94'
+//   1.10-95 - New feature: SDO Purchase Receipt backup to a Google Sheet
+//            "SUMMARY" tab, admin-configured (SheetSourcesPanel.jsx
+//            gains a "SUMMARY (Purchase Receipts)" sheet-name field,
+//            same db.sheetSources record every other backup sheet
+//            already uses). Fires automatically on issue/cancel/delete,
+//            same isSynced/hasBeenBackedUp/pendingPrSheetDeletions-queue
+//            pattern already proven for WSR/WSI/ESR/ESI backups
+//            (syncWorker.js), extended in parallel rather than reusing
+//            their type-dispatch tables (a Purchase Receipt is a
+//            structurally different record). A Cancel updates the row
+//            in place (blanks the figures, NAME becomes CANCELLED) so a
+//            gap in the PR Number sequence is always explained; only a
+//            genuine Delete removes the row entirely.
+//
+//            Per explicit correction: which of the admin's monthly
+//            spreadsheets a row belongs to - and its own DATE column -
+//            is resolved from the underlying WSR's own date (the real
+//            delivery date), never the PR's own date (when the SDO
+//            happened to record the payment) or today's date. A
+//            pre-registered "never issued" cancelled PR (no real WSR)
+//            falls back to its own date, having nothing else to go by.
+//
+//            Column headers match the real SUMMARY sheet's own header
+//            row exactly, including its two blank spacer columns and
+//            its two differently-punctuated RSBSA columns. REMARKS
+//            (its own =IF(K2="GID 2","CTD","ALB") formula) is
+//            deliberately never written to - that column belongs to the
+//            sheet, per explicit decision. I/FA and GENDER are pulled
+//            from the underlying WSR's own farmerCoops/farmerGender
+//            fields, not stored redundantly on the PR record.
+//
+//            docs/apps-script-full-replacement.js (the template pasted
+//            into each new monthly deployment) gained 'SUMMARY' in its
+//            own WRITE_ALLOWLIST - no other server-side change needed,
+//            since its generic appendTransaction/updateTransaction
+//            actions already map by header name for any sheet.
+export const APP_VERSION = '1.10-95'

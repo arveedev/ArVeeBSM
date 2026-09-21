@@ -97,20 +97,26 @@ const WRITE_ALLOWLIST_KEYS = [
   'issuesSheetName',
   'sacksReceiptsSheetName',
   'sacksIssuesSheetName',
+  'summarySheetName',
 ]
 
 /** Every configured sheet source, oldest first. */
 const getAllSheetSources = async () => db.sheetSources.orderBy('dateFrom').toArray()
 
+/** The single source whose date range covers a given date, or null if
+ * none does. */
+const getSheetSourceForDate = async (date) => {
+  const sources = await getAllSheetSources()
+  return sources.find((s) => s.dateFrom <= date && (!s.dateTo || date <= s.dateTo)) ?? null
+}
+
 /** The single source whose date range covers today, or null if none does
  * (e.g. no source configured yet for the current year). Used only for
- * WRITING new transaction backups - authority sync always uses every
- * source, never just this one. */
-const getActiveSheetSource = async () => {
-  const today = todayLocalISO()
-  const sources = await getAllSheetSources()
-  return sources.find((s) => s.dateFrom <= today && (!s.dateTo || today <= s.dateTo)) ?? null
-}
+ * WRITING WSR/WSI/ESR/ESI transaction backups - authority sync always
+ * uses every source, never just this one. Purchase Receipt SUMMARY
+ * backups deliberately do NOT use this - see pushPrBackup's own comment
+ * for why they resolve by the record's own date instead. */
+const getActiveSheetSource = async () => getSheetSourceForDate(todayLocalISO())
 
 const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false
 
@@ -1610,6 +1616,138 @@ export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => 
     matchColumn: SERIAL_COLUMN_BY_TYPE[type],
     matchValue: serialNo,
     warehouseCode: warehouseCode ?? null,
+  })
+}
+
+// ── SDO Purchase Receipt "SUMMARY" Sheet backup ──────────────────────────
+//
+// A Purchase Receipt is not a db.transactions row (a structurally
+// different record, see purchaseReceipts' own schema), so this is a
+// parallel set of functions rather than an extension of
+// pushTransactionBackup/SHEET_NAME_KEY_BY_TYPE above - same
+// postToSheetsWithRetry/allowlist/active-source pattern, one sheet
+// instead of a per-type dispatch table.
+//
+// Column headers match the real SUMMARY sheet's own header row exactly
+// (confirmed directly against a real sample, including its two blank
+// spacer columns and its two differently-punctuated "RSBSA NO."/
+// "RSBSA NO" columns, both genuinely present) - the server's generic
+// appendTransaction/updateTransaction actions map object keys to columns
+// purely by header-name match, so an exact match here is what makes this
+// work at all, not just cosmetic.
+//
+// REMARKS (=IF(K2="GID 2","CTD","ALB"), keyed off the WHSE column) is
+// deliberately never included as a key in the built row - per explicit
+// decision, that formula belongs to the sheet, not this app; omitting
+// the key entirely (rather than sending '') leaves whatever is already
+// in that cell alone on an update, and leaves a freshly appended row's
+// cell for the admin to drag the formula down into, same as every other
+// new row.
+const PR_SUMMARY_MATCH_COLUMN = 'PR NO.'
+
+const buildPrSummaryRow = (pr, context) => {
+  const { warehouseName, sdoName, wsrSerialNo, wsrDate, isFarmersAssociation, farmerMembersText, farmerGender } = context
+  const isCancelled = pr.status === 'Cancelled'
+  // The sheet's own WSR column is a plain number, not a string - sent as
+  // one whenever the serial actually parses as one (it always should),
+  // falling back to the raw string rather than silently dropping it.
+  const wsrNum = toNumberOrNull(wsrSerialNo)
+  return {
+    // The underlying WSR's own date (the actual delivery date), not
+    // pr.date (when the SDO happened to record the payment) - per
+    // explicit correction, "PALAY DELIVERIES" means the delivery date,
+    // and it's also what determines which month's spreadsheet this row
+    // belongs in at all (see getSourceDateForPr below). A placeholder
+    // Cancelled PR with no real WSR has nothing else to fall back to.
+    'DATE': wsrDate ?? pr.date,
+    'PR NO.': pr.prNo,
+    'WSR': wsrNum != null ? wsrNum : (wsrSerialNo ?? null),
+    'RSBSA NO.': pr.rsbsa ?? null,
+    'NAME': isCancelled ? 'CANCELLED' : (pr.payeeName ?? null),
+    'ADDRESS': isCancelled ? '' : (pr.payeeAddress ?? null),
+    'I / FA': isCancelled ? '' : (isFarmersAssociation ? 'FA' : 'I'),
+    'WHSE': warehouseName ?? '',
+    'BAGS': isCancelled ? '' : (pr.numberOfBags ?? null),
+    'VARIETY': isCancelled ? '' : (pr.classification ?? null),
+    'MC': isCancelled ? '' : (pr.moistureContent ?? null),
+    'GROSS': isCancelled ? '' : (pr.grossKilos ?? null),
+    'SACK': isCancelled ? '' : (pr.sackKilos ?? null),
+    'NET KG': isCancelled ? '' : (pr.netKilos ?? null),
+    'ENW': isCancelled ? '' : (pr.enwFactor ?? null),
+    'ENW KG': isCancelled ? '' : (pr.enw ?? null),
+    'BASIC COST': isCancelled ? '' : (pr.basicCost ?? null),
+    'BUYING PRICE': isCancelled ? '' : (pr.unitCost ?? null),
+    'PRICER COST': isCancelled ? '' : (pr.pricerAmount ?? null),
+    'GRAND TOTAL': isCancelled ? '' : (pr.totalAmount ?? null),
+    'SDO': sdoName ?? '',
+    'RSBSA NO': pr.rsbsa ?? null,
+    'FARMER MEMBER': isCancelled ? '' : (farmerMembersText ?? null),
+    'GENDER': isCancelled ? '' : (farmerGender ?? null),
+  }
+}
+
+// Per explicit correction: unlike the WSR/WSI/ESR/ESI backups above
+// (which always write to whichever source's range covers TODAY,
+// regardless of the document's own, possibly-backdated date), a
+// Purchase Receipt's SUMMARY row must land in the ONE monthly
+// spreadsheet that actually corresponds to the underlying WSR's OWN
+// date (the real delivery date) - NOT pr.date (when the SDO happened to
+// record the payment). A WSR delivered Aug 30 but paid Sep 2 goes to
+// August's URL, not September's. A placeholder Cancelled PR with no
+// real WSR (see CancelPrModal.jsx) has nothing else to go by, so it
+// falls back to its own pr.date. Every function below takes this
+// resolved date explicitly (as `context.wsrDate` for push/update, or a
+// plain `date` argument for delete, where there is no `pr` object left
+// to derive it from) rather than assuming pr.date - the caller is
+// always the one with access to the real WSR record.
+const resolvePrSourceDate = (pr, wsrDate) => wsrDate ?? pr.date
+
+/** Appends a new SUMMARY row for a just-issued (or freshly cancelled-with-no-WSR) Purchase Receipt, to whichever monthly source covers the underlying WSR's own date. */
+export const pushPrBackup = async (pr, context = {}) => {
+  if (!WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
+  const source = await getSheetSourceForDate(resolvePrSourceDate(pr, context.wsrDate))
+  if (!source) return { ok: false, reason: 'no_active_source' }
+  if (!source.summarySheetName) return { ok: false, reason: 'no_summary_sheet_configured' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  return postToSheetsWithRetry(source.webAppUrl, {
+    action: 'appendTransaction',
+    sheet: source.summarySheetName,
+    serialColumn: PR_SUMMARY_MATCH_COLUMN,
+    row: buildPrSummaryRow(pr, context),
+  })
+}
+
+/** Updates an existing SUMMARY row in place, found by its own PR No. within whichever monthly source covers the underlying WSR's own date - used both for a real edit and for a Cancel (blanks the figures, keeps the row). */
+export const updatePrBackup = async (pr, context = {}) => {
+  if (!WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
+  const source = await getSheetSourceForDate(resolvePrSourceDate(pr, context.wsrDate))
+  if (!source) return { ok: false, reason: 'no_active_source' }
+  if (!source.summarySheetName) return { ok: false, reason: 'no_summary_sheet_configured' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  return postToSheetsWithRetry(source.webAppUrl, {
+    action: 'updateTransaction',
+    sheet: source.summarySheetName,
+    matchColumn: PR_SUMMARY_MATCH_COLUMN,
+    matchValue: pr.prNo,
+    row: buildPrSummaryRow(pr, context),
+  })
+}
+
+/** Deletes a SUMMARY row outright, found by PR No. within whichever monthly source covers the given date - used only for a genuine (permanent) Delete, never a Cancel, which keeps the row (see updatePrBackup). `date` should be the underlying WSR's own date when one exists (the caller resolves this - there is no `pr` object left by delete time to derive it from), falling back to the deleted PR's own date otherwise. */
+export const deletePrBackup = async (prNo, date) => {
+  if (!WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
+  const source = await getSheetSourceForDate(date)
+  if (!source) return { ok: false, reason: 'no_active_source' }
+  if (!source.summarySheetName) return { ok: false, reason: 'no_summary_sheet_configured' }
+  if (!isOnline()) return { ok: false, reason: 'offline' }
+
+  return postToSheetsWithRetry(source.webAppUrl, {
+    action: 'deleteTransaction',
+    sheet: source.summarySheetName,
+    matchColumn: PR_SUMMARY_MATCH_COLUMN,
+    matchValue: prNo,
   })
 }
 

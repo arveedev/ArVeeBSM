@@ -67,6 +67,7 @@ const WRITE_ALLOWLIST = [
   'Sacks Issues Backup',     // ESI backup
   'MO',                      // Milling Order - STATUS column only, see markMillingOrderDone
   'TMO',                     // Test Milling Order - STATUS column only, see markMillingOrderDone
+  'SUMMARY',                 // SDO Purchase Receipt backup (one monthly spreadsheet/deployment - this exact file is the template pasted into each new one, with its own SPREADSHEET_ID above)
 ];
 
 const LAST_MODIFIED_COLUMN_INDEX = 13; // column N, zero-based (N is the 14th column)
