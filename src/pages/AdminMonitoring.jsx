@@ -196,18 +196,25 @@ function AdminMonitoring() {
               transform: `translateX(calc(${TABS.indexOf(activeTab) * 100}% + ${TABS.indexOf(activeTab) * 0.5}rem))`,
             }}
           />
+          {/* 5 tabs (added PROCUREMENT) no longer fit at text-base on a
+              narrow screen - "PROCUREMENT" alone overflowed its own
+              20%-width slot and got clipped by the sliding highlight.
+              Shrinks to a smaller size (and PROCUREMENT further
+              abbreviates to "PROC") below the sm breakpoint, full size/
+              label from sm up where there's room. */}
           {TABS.map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
-              className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-colors active:scale-95 ${
+              className={`relative z-10 flex-1 rounded-lg px-0.5 py-2 text-[11px] transition-colors active:scale-95 sm:text-base ${
                 activeTab === tab
                   ? 'font-bold text-brand-contrast'
                   : 'font-medium text-neutral-400 hover:text-app-text'
               }`}
             >
-              {tab}
+              <span className="sm:hidden">{tab === 'PROCUREMENT' ? 'PROC' : tab}</span>
+              <span className="hidden sm:inline">{tab}</span>
             </button>
           ))}
         </div>

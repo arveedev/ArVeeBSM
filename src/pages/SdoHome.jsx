@@ -6,7 +6,8 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, ArrowUpDown } from 'lucide-react'
+import { Search, ArrowUpDown, Trash2 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -17,6 +18,8 @@ import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
 import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
+import CancelPrModal from '../components/common/sdo/CancelPrModal.jsx'
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 
 const LIST_PAGE_SIZE = 50
 
@@ -71,7 +74,13 @@ function SdoHome() {
   const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | null
   const [editingPrice, setEditingPrice] = useState(false)
   const [showAbstractExport, setShowAbstractExport] = useState(false)
+  const [showCancelPr, setShowCancelPr] = useState(false)
   const [mounted, setMounted] = useState(false)
+  // Per explicit request: a Cancelled PR must have somewhere to be
+  // permanently deleted from - it has no WSR to hang off of when it's a
+  // pre-registered "never issued" number, so it can't live in the
+  // regular WSR-driven list above and gets its own section instead.
+  const [deletePrTarget, setDeletePrTarget] = useState(null)
 
   // A page/filter/search/sort change invalidates how far the list was
   // paged - back to the first LIST_PAGE_SIZE rows of whatever the new
@@ -95,7 +104,7 @@ function SdoHome() {
   // without this, the fixed header/nav sat on top of the modal and the
   // page's own scroll plus the modal's own internal scroll produced two
   // visible scrollbars at once.
-  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || editingPrice
+  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || editingPrice || showCancelPr || Boolean(deletePrTarget)
   useEffect(() => {
     setChromeHidden?.(anyModalOpen)
     document.body.style.overflow = anyModalOpen ? 'hidden' : ''
@@ -183,6 +192,24 @@ function SdoHome() {
   const fullList = applySort(applySearch(applyWarehouseFilter(listTab === 'payment' ? unpaid : paid)))
   const visibleList = fullList.slice(0, visibleCount)
 
+  // Every Cancelled PR this SDO has (a real one voided after issuance,
+  // or a number reserved as cancelled with nothing behind it at all) -
+  // shown only on the Completed tab, each with its own permanent Delete,
+  // per explicit request that a cancelled PR must be reachable to purge
+  // entirely, not just live on forever as a CANCELLED row.
+  const cancelledPrs = useLiveQuery(
+    () => user?.uid ? db.purchaseReceipts.where('[sdoUid+status]').equals([user.uid, 'Cancelled']).toArray() : [],
+    [user?.uid]
+  ) ?? []
+  const sortedCancelledPrs = [...cancelledPrs].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+
+  const handleDeleteCancelledPr = async () => {
+    if (!deletePrTarget) return
+    await db.purchaseReceipts.delete(deletePrTarget.prId)
+    toast.success(`PR ${deletePrTarget.prNo} deleted`)
+    setDeletePrTarget(null)
+  }
+
   return (
     <div className={`min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
       {/* Per explicit request, one "Buying Price" card replaces the old
@@ -226,6 +253,12 @@ function SdoHome() {
         </div>
         <button type="button" onClick={() => setShowAbstractExport(true)} aria-label="Export Abstract of Cereal Purchases" className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-neutral-400 transition-all active:scale-95">
           Export
+        </button>
+        {/* Per explicit request: cancels a PR by number alone - either
+            an already-issued one (in place) or a number never issued at
+            all (a physical form spoiled before it was filled out). */}
+        <button type="button" onClick={() => setShowCancelPr(true)} aria-label="Cancel a PR number" className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-brand-crimson transition-all active:scale-95">
+          Cancel PR
         </button>
       </div>
 
@@ -317,12 +350,54 @@ function SdoHome() {
         )}
       </div>
 
+      {/* Cancelled PRs have no WSR to attach to (a pre-registered "never
+          issued" number has none at all) so they get their own section
+          here instead of living in the WSR-driven list above - per
+          explicit request, only reachable/visible on the Completed tab,
+          each with a genuinely permanent Delete. */}
+      {listTab === 'completed' && sortedCancelledPrs.length > 0 && (
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-neutral-500">Cancelled PRs</p>
+          <div className="space-y-2">
+            {sortedCancelledPrs.map((pr) => (
+              <div key={pr.prId} className="flex items-center justify-between gap-2 rounded-xl border border-brand-crimson/30 bg-brand-crimson/5 p-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-bold text-app-text">PR {pr.prNo}</p>
+                  <p className="text-xs text-neutral-500">
+                    {pr.date}{pr.payeeName ? ` · ${pr.payeeName}` : ' · never issued'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeletePrTarget(pr)}
+                  aria-label={`Delete PR ${pr.prNo}`}
+                  className="shrink-0 rounded-lg bg-brand-crimson/10 p-2 text-brand-crimson transition-all active:scale-90"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={Boolean(deletePrTarget)}
+        title={`Delete PR ${deletePrTarget?.prNo ?? ''}?`}
+        description="This permanently removes it - it will no longer appear anywhere, including the exported Abstract. This cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Back"
+        onConfirm={handleDeleteCancelledPr}
+        onCancel={() => setDeletePrTarget(null)}
+      />
+
       {activeWsr && <PurchaseReceiptModal wsr={activeWsr} cashOnHand={cashOnHand} onClose={() => setActiveWsr(null)} />}
       {(cashModal === 'replenish' || cashModal === 'liquidate') && (
         <CashActionModal mode={cashModal} currentCashOnHand={cashOnHand} onClose={() => setCashModal(null)} />
       )}
       {showAbstractExport && <AbstractExportModal onClose={() => setShowAbstractExport(false)} />}
       {editingPrice && <BuyingPriceModal currentPriceRow={currentPriceRow} onClose={() => setEditingPrice(false)} />}
+      {showCancelPr && <CancelPrModal onClose={() => setShowCancelPr(false)} />}
     </div>
   )
 }

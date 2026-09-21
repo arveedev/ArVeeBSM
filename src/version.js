@@ -5154,4 +5154,28 @@
 //            as each individual row - label with bags below it on the
 //            left, net kilos with net bags stacked below it on the
 //            right (was one condensed line each).
-export const APP_VERSION = '1.10-90'
+//   1.10-91 - AdminMonitoring.jsx's 5-tab bar (AI/SIA/MILLING/NFA/
+//            PROCUREMENT) clipped "PROCUREMENT" on narrow screens - now
+//            shrinks font size and abbreviates to "PROC" below the sm
+//            breakpoint, full label/size from sm up.
+//
+//            Built the SDO Cancel/Delete PR feature, all per explicit
+//            request:
+//            - Cancel is now reachable by typing a PR number alone
+//              (CancelPrModal.jsx, "Cancel PR" button on SdoHome.jsx),
+//              no reason required - an already-issued PR is cancelled in
+//              place, a number never issued is reserved straight at
+//              status: 'Cancelled' with no real data behind it. Either
+//              way it prints on the Abstract PDF as a CANCELLED row
+//              (sdoAbstractPdfGenerator.js/AbstractExportModal.jsx now
+//              include Cancelled PRs in the export, blank fields except
+//              date/PR No., excluded from every total) so a gap in the
+//              PR Number sequence is always explained.
+//            - Delete is a separate, genuinely permanent action -
+//              PurchaseReceiptModal.jsx's header now has both a Cancel
+//              (amber, soft) and Delete (red, `.delete()`) button for an
+//              issued PR; SdoHome.jsx's Completed tab gained its own
+//              "Cancelled PRs" section (Cancelled PRs have no WSR to
+//              attach to) with a Delete button per entry, since a
+//              cancelled PR needs somewhere to be purged from entirely.
+export const APP_VERSION = '1.10-91'

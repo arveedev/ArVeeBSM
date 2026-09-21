@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Ban } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
@@ -33,6 +33,10 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   const [pricerRate, setPricerRate] = useState('')
   const [cancelTargetPrId, setCancelTargetPrId] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
+  // Delete is a separate, genuinely permanent action from Cancel (see
+  // handleDelete below) - per explicit request, distinct from the soft
+  // Cancel path (status: 'Cancelled', still shows on the Abstract PDF).
+  const [deleteTargetPrId, setDeleteTargetPrId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [entered, setEntered] = useState(false)
   // Belt-and-suspenders against a double "Save & Issue" tap: `saving`
@@ -190,22 +194,38 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   }
 
   const cancelTarget = existingPrs?.find((pr) => pr.prId === cancelTargetPrId) ?? null
+  const deleteTarget = existingPrs?.find((pr) => pr.prId === deleteTargetPrId) ?? null
 
+  // Cancel is soft - the record stays (status: 'Cancelled'), still shows
+  // on the Abstract PDF as a CANCELLED row (per explicit request, a
+  // cancelled PR Number is always explained on the report, never just
+  // missing) and cash reverts automatically since Cash on Hand only ever
+  // sums Active PRs. Per explicit request, no reason is required.
   const handleCancel = async () => {
     if (!cancelTarget) return
-    if (!cancelReason.trim()) {
-      toast.error('A reason is required')
-      return
-    }
     await db.purchaseReceipts.update(cancelTarget.prId, {
       status: 'Cancelled',
-      cancelReason: cancelReason.trim(),
+      cancelReason: cancelReason.trim() || null,
       cancelledAt: Date.now(),
       cancelledByUid: user.uid,
     })
     toast.success(`Purchase Receipt ${cancelTarget.prNo} cancelled — cash reverted`)
     setCancelTargetPrId(null)
     setCancelReason('')
+    if (!hasDuplicatePrs) onClose()
+  }
+
+  // Delete is genuinely permanent - per explicit request, distinct from
+  // Cancel: the record is removed outright and never appears anywhere
+  // again (not the Completed list, not the Abstract PDF - there is
+  // nothing left to print a CANCELLED row for). Cash reverts the same
+  // way Cancel's does, since Cash on Hand only ever sums rows that still
+  // exist with status 'Active'.
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    await db.purchaseReceipts.delete(deleteTarget.prId)
+    toast.success(`Purchase Receipt ${deleteTarget.prNo} deleted — cash reverted`)
+    setDeleteTargetPrId(null)
     if (!hasDuplicatePrs) onClose()
   }
 
@@ -229,9 +249,18 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
           <h2 className="text-lg font-semibold text-app-text">Purchase Receipt</h2>
           <div className="flex gap-2">
             {isReadOnly && !hasDuplicatePrs && (
-              <button type="button" onClick={() => setCancelTargetPrId(existingPr.prId)} aria-label="Cancel receipt" className="rounded-lg bg-brand-crimson/10 p-1.5 text-brand-crimson">
-                <Trash2 size={18} />
-              </button>
+              <>
+                {/* Cancel (soft - stays as a CANCELLED row on the Abstract
+                    PDF) and Delete (permanent - gone from everywhere,
+                    including the Abstract) are two distinct actions per
+                    explicit request, not one. */}
+                <button type="button" onClick={() => setCancelTargetPrId(existingPr.prId)} aria-label="Cancel receipt" className="rounded-lg bg-brand-amber/10 p-1.5 text-brand-amber">
+                  <Ban size={18} />
+                </button>
+                <button type="button" onClick={() => setDeleteTargetPrId(existingPr.prId)} aria-label="Delete receipt" className="rounded-lg bg-brand-crimson/10 p-1.5 text-brand-crimson">
+                  <Trash2 size={18} />
+                </button>
+              </>
             )}
             <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400">
               <X size={18} />
@@ -411,11 +440,21 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
         <textarea
           value={cancelReason}
           onChange={(e) => setCancelReason(e.target.value)}
-          placeholder="Reason (required)"
+          placeholder="Reason (optional)"
           rows={2}
           className="w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon"
         />
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={`Delete Purchase Receipt ${deleteTarget?.prNo ?? ''}?`}
+        description={deleteTarget ? `This permanently removes it - it will no longer appear anywhere, including the exported Abstract. This cannot be undone. ₱${(deleteTarget.totalAmount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })} reverts back to your Cash on Hand.${hasDuplicatePrs ? '' : ` WSR ${wsr.serialNo} returns to Unpaid.`}` : ''}
+        confirmLabel="Delete"
+        cancelLabel="Back"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTargetPrId(null)}
+      />
     </div>,
     document.body
   )

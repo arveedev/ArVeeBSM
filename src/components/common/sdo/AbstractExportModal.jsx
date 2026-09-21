@@ -32,7 +32,12 @@ function AbstractExportModal({ onClose }) {
     setGenerating(true)
     try {
       const [allPrs, warehouses, provinces, branches, config, ledgerEntries, activePrsAll] = await Promise.all([
-        db.purchaseReceipts.where('sdoUid').equals(user.uid).and((pr) => pr.status === 'Active' && pr.date >= dateFrom && pr.date <= dateTo).toArray(),
+        // Per explicit request, a Cancelled PR (voided after issuance, or
+        // pre-registered as a skipped series number with no real WSR
+        // behind it - see VoidPrModal.jsx) still appears on the export,
+        // so a gap in the PR Number sequence is always explained rather
+        // than silently missing.
+        db.purchaseReceipts.where('sdoUid').equals(user.uid).and((pr) => (pr.status === 'Active' || pr.status === 'Cancelled') && pr.date >= dateFrom && pr.date <= dateTo).toArray(),
         db.warehouses.toArray(),
         db.provinces.toArray(),
         db.branches.toArray(),
@@ -49,11 +54,17 @@ function AbstractExportModal({ onClose }) {
       const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
       const provinceMap = new Map(provinces.map((p) => [p.provinceId, p]))
       const branchMap = new Map(branches.map((b) => [b.branchId, b]))
-      const firstWarehouse = warehouseMap.get(allPrs[0]?.warehouseId)
+      // Skips past a void-placeholder Cancelled PR (no real warehouseId)
+      // that might happen to sort first, so the letterhead still resolves
+      // from the first PR that actually has one.
+      const firstWarehouse = warehouseMap.get(allPrs.find((pr) => pr.warehouseId)?.warehouseId)
       const branch = branchMap.get(provinceMap.get(firstWarehouse?.provinceId)?.branchId)
       const branchLabel = branch ? `${branch.name}${branch.address ? ' · ' + branch.address : ''}` : ''
-      const wsrIds = allPrs.map((pr) => pr.wsrTransactionId)
-      const wsrs = await db.transactions.where('id').anyOf(wsrIds).toArray()
+      // A void-placeholder Cancelled PR (see VoidPrModal.jsx) has no real
+      // WSR behind it - wsrTransactionId is null, which Dexie's .anyOf()
+      // can't take as a key, so it's filtered out before the lookup.
+      const wsrIds = allPrs.map((pr) => pr.wsrTransactionId).filter(Boolean)
+      const wsrs = wsrIds.length > 0 ? await db.transactions.where('id').anyOf(wsrIds).toArray() : []
       const wsrById = new Map(wsrs.map((w) => [w.id, w]))
 
       // The Whse column shows the province code plus the warehouse's own

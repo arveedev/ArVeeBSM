@@ -176,7 +176,21 @@ export const generateSdoAbstract = ({
     content: '', styles: { minCellHeight: 3, cellPadding: 0 },
   }))
 
-  const body = purchaseReceipts.map((pr) => [
+  // A Cancelled PR (either voided after issuance, or pre-registered as
+  // skipped via "Void PR Number" with no real farmer/weight data behind
+  // it at all) still prints its own row - per explicit request, "it is
+  // enough that the cancelled series appears" - so a gap in the PR
+  // Number sequence is always explained, never silently invisible. Every
+  // field but the date and PR No. itself is blank, and the word
+  // CANCELLED replaces the farmer name, matching the same convention
+  // the main NFA stock report already uses for a voided WSR/WSI row.
+  const isCancelled = (pr) => pr.status === 'Cancelled'
+  const body = purchaseReceipts.map((pr) => isCancelled(pr) ? [
+    fmtRowDate(pr.date), (pr.warehouseCode ?? '').toUpperCase(), 'CANCELLED',
+    '', '', (pr.prNo ?? '').toUpperCase(), '', '', '', '', '', '', '', '', '', '', '',
+    ...(pricerEnabled ? ['', '', ''] : []),
+    '',
+  ] : [
     fmtRowDate(pr.date), (pr.warehouseCode ?? '').toUpperCase(), (pr.payeeName ?? '').toUpperCase(),
     (pr.payeeAddress ?? '').toUpperCase(), (pr.rsbsa ?? '').toUpperCase(),
     (pr.prNo ?? '').toUpperCase(), (pr.wsrSerialNo ?? '').toUpperCase(), fmtBags(pr.numberOfBags),
@@ -189,7 +203,10 @@ export const generateSdoAbstract = ({
   body.unshift(spacerRow)
   body.push(spacerRow)
 
-  const totals = purchaseReceipts.reduce((a, pr) => ({
+  // Cancelled rows never had real weights/costs to begin with, so they
+  // contribute nothing to any total - same isCountable-style exclusion
+  // the main NFA stock report already applies to its own cancelled rows.
+  const totals = purchaseReceipts.filter((pr) => !isCancelled(pr)).reduce((a, pr) => ({
     bags: a.bags + (pr.numberOfBags ?? 0),
     gross: a.gross + (pr.grossKilos ?? 0),
     sack: a.sack + (pr.sackKilos ?? 0),
