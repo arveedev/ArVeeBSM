@@ -293,9 +293,9 @@ function ProcurementMonitor() {
                               <div className="flex items-center gap-2">
                                 <p className="text-sm text-neutral-500">{t.date}</p>
                                 {paidWsrIds.has(t.id) ? (
-                                  <span className="rounded-full bg-brand-neon/10 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-neon">Paid</span>
+                                  <span className="rounded-full bg-brand-neon/10 px-2.5 py-1 text-xs font-bold uppercase text-brand-neon">Paid</span>
                                 ) : (
-                                  <span className="rounded-full bg-brand-amber/10 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-amber">Unpaid</span>
+                                  <span className="rounded-full bg-brand-amber/10 px-2.5 py-1 text-xs font-bold uppercase text-brand-amber">Unpaid</span>
                                 )}
                               </div>
                               <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">

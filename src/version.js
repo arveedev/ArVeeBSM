@@ -5189,4 +5189,6 @@
 //            (purchaseReceipts.wsrTransactionId), nothing derived from
 //            the transaction itself. Added an All/Paid/Unpaid toggle
 //            alongside the existing warehouse/sort/period filters.
-export const APP_VERSION = '1.10-93'
+//   1.10-94 - Per direct feedback, ProcurementMonitor's Paid/Unpaid tags
+//            are bigger (text-xs, more padding - was text-[10px]).
+export const APP_VERSION = '1.10-94'
