@@ -2,16 +2,18 @@
 // Procurement-type WSR (palay bought directly from farmers - the same
 // "Procurement" transaction nature ProcurementBagsNotification.jsx
 // already tracks per-warehouse for sack matching, here surfaced as a
-// warehouse-oversight list instead). One card per warehouse, each
-// listing its own rows: date, variety and the real counted bags on the
-// left; net kilos (prominent) and the derived net-bags figure (kilos /
-// 50, shown subtly) on the right - plus a per-warehouse TOTAL row.
+// warehouse-oversight list instead). One card per warehouse, grouped by
+// variety within it (each variety gets its own subtotal), plus an
+// overall per-warehouse TOTAL. Each row shows date and the real counted
+// bags on the left; net kilos and the derived net-bags figure (kilos /
+// 50) on the right - both large and readable, per explicit correction
+// (an earlier pass made net bags too small/subtle to read).
 //
-// Search (by warehouse or variety), a variety filter, a sort order, and
-// an optional period range are all client-side over the same already-
-// fetched dataset - no extra query per control, since the underlying
-// transaction count per warehouse is small enough that re-filtering in
-// JS on every keystroke is cheap.
+// Search (by warehouse or variety), a warehouse filter, a sort order,
+// and an optional period range are all client-side over the same
+// already-fetched dataset - no extra query per control, since the
+// underlying transaction count per warehouse is small enough that
+// re-filtering in JS on every keystroke is cheap.
 
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -32,7 +34,7 @@ const SORTS = [
 function ProcurementMonitor() {
   const { weightUnit } = useSettings() ?? {}
   const [searchQuery, setSearchQuery] = useState('')
-  const [varietyFilter, setVarietyFilter] = useState('')
+  const [warehouseFilter, setWarehouseFilter] = useState('')
   const [sortBy, setSortBy] = useState('date-desc')
   const [periodFrom, setPeriodFrom] = useState('')
   const [periodTo, setPeriodTo] = useState('')
@@ -80,13 +82,16 @@ function ProcurementMonitor() {
     return true
   })
 
-  const varietyFilteredTx = varietyFilter
-    ? periodFilteredTx.filter((t) => t.varietyId === varietyFilter)
+  // Per explicit request, the variety filter is replaced by a warehouse
+  // filter - cards are already grouped by warehouse, so this just jumps
+  // straight to one instead of scrolling past every other warehouse.
+  const warehouseFilteredTx = warehouseFilter
+    ? periodFilteredTx.filter((t) => t.warehouseId === warehouseFilter)
     : periodFilteredTx
 
   const q = searchQuery.trim().toLowerCase()
   const visibleTx = q
-    ? varietyFilteredTx.filter((t) => {
+    ? warehouseFilteredTx.filter((t) => {
         const w = warehouseMap.get(t.warehouseId)
         const varietyName = varietyMap.get(t.varietyId)?.name ?? ''
         return (
@@ -95,7 +100,7 @@ function ProcurementMonitor() {
           varietyName.toLowerCase().includes(q)
         )
       })
-    : varietyFilteredTx
+    : warehouseFilteredTx
 
   const sortRows = (rows) => {
     const sorted = [...rows]
@@ -118,10 +123,30 @@ function ProcurementMonitor() {
     .map(([warehouseId, rows]) => {
       const totalBags = rows.reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
       const totalKilos = rows.reduce((s, t) => s + (t.netKilos ?? 0), 0)
+
+      // Per explicit request: within each warehouse, rows group by
+      // variety, each variety carrying its own subtotal.
+      const byVariety = new Map()
+      for (const t of rows) {
+        const key = t.varietyId ?? '—'
+        if (!byVariety.has(key)) byVariety.set(key, [])
+        byVariety.get(key).push(t)
+      }
+      const varietyGroups = [...byVariety.entries()]
+        .map(([varietyId, vRows]) => ({
+          varietyId,
+          varietyName: varietyMap.get(varietyId)?.name ?? '—',
+          rows: sortRows(vRows),
+          subtotalBags: vRows.reduce((s, t) => s + (t.numberOfBags ?? 0), 0),
+          subtotalKilos: vRows.reduce((s, t) => s + (t.netKilos ?? 0), 0),
+        }))
+        .sort((a, b) => a.varietyName.localeCompare(b.varietyName))
+
       return {
         warehouseId,
         warehouse: warehouseMap.get(warehouseId),
-        rows: sortRows(rows),
+        rowCount: rows.length,
+        varietyGroups,
         totalBags,
         totalKilos,
       }
@@ -129,7 +154,9 @@ function ProcurementMonitor() {
     .filter((c) => c.warehouse)
     .sort((a, b) => (a.warehouse.code ?? '').localeCompare(b.warehouse.code ?? ''))
 
-  const varietyOptions = [...varietyMap.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+  const warehouseOptions = warehouses
+    .filter((w) => byWarehouse.has(w.warehouseId))
+    .sort((a, b) => (a.code ?? '').localeCompare(b.code ?? ''))
 
   return (
     <div className="mt-4">
@@ -158,12 +185,12 @@ function ProcurementMonitor() {
 
       <div className="mt-2 grid grid-cols-2 gap-2">
         <select
-          value={varietyFilter}
-          onChange={(e) => setVarietyFilter(e.target.value)}
+          value={warehouseFilter}
+          onChange={(e) => setWarehouseFilter(e.target.value)}
           className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
         >
-          <option value="">All varieties</option>
-          {varietyOptions.map((v) => <option key={v.varietyId} value={v.varietyId}>{v.name}</option>)}
+          <option value="">All warehouses</option>
+          {warehouseOptions.map((w) => <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>)}
         </select>
         <select
           value={sortBy}
@@ -209,33 +236,48 @@ function ProcurementMonitor() {
                   {c.warehouse.code} — {c.warehouse.name}
                 </p>
                 <span className="shrink-0 text-xs text-neutral-500">
-                  {c.rows.length} {c.rows.length === 1 ? 'transaction' : 'transactions'}
+                  {c.rowCount} {c.rowCount === 1 ? 'transaction' : 'transactions'}
                 </span>
               </div>
-              <div className="space-y-2">
-                {c.rows.map((t) => (
-                  <div key={t.id} className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm text-neutral-500">{t.date}</p>
-                        <p className="mt-0.5 truncate text-sm font-semibold text-app-text">
-                          {varietyMap.get(t.varietyId)?.name ?? '—'}
-                        </p>
-                        <p className="mt-1 text-base font-bold tabular-nums text-app-text">
-                          {fmtBags(t.numberOfBags)} <span className="text-xs font-normal text-neutral-500">bags</span>
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-xl font-bold tabular-nums text-app-text">{fmtWeight(t.netKilos, weightUnit)}</p>
-                        <p className="mt-0.5 text-[11px] tabular-nums text-neutral-600">
-                          {fmtNetBags(calculateNetBags(t.netKilos))} net bags
+
+              <div className="space-y-4">
+                {c.varietyGroups.map((vg) => (
+                  <div key={vg.varietyId}>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-widest text-neutral-500">{vg.varietyName}</p>
+                    <div className="space-y-2">
+                      {vg.rows.map((t) => (
+                        <div key={t.id} className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm text-neutral-500">{t.date}</p>
+                              <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">
+                                {fmtBags(t.numberOfBags)} <span className="text-sm font-normal text-neutral-500">bags</span>
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="text-2xl font-bold tabular-nums text-app-text">{fmtWeight(t.netKilos, weightUnit)}</p>
+                              <p className="mt-1 text-base font-semibold tabular-nums text-neutral-400">
+                                {fmtNetBags(calculateNetBags(t.netKilos))} net bags
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-2">
+                      <span className="text-xs font-bold uppercase text-neutral-400">Subtotal</span>
+                      <div className="text-right">
+                        <p className="text-sm font-bold tabular-nums text-app-text">{fmtBags(vg.subtotalBags)} bags</p>
+                        <p className="text-xs tabular-nums text-neutral-500">
+                          {fmtWeight(vg.subtotalKilos, weightUnit)} · {fmtNetBags(calculateNetBags(vg.subtotalKilos))} net bags
                         </p>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-2.5">
+
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-2.5">
                 <span className="text-sm font-bold text-app-text">TOTAL</span>
                 <div className="text-right">
                   <p className="text-base font-bold tabular-nums text-app-text">{fmtBags(c.totalBags)} bags</p>

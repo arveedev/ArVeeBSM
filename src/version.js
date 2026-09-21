@@ -5132,4 +5132,18 @@
 //            being silently folded into one COH — Fund Balance figure -
 //            the one-time "Opening balance" seed entry (no real check)
 //            still folds in as before, since it has nothing to itemize.
-export const APP_VERSION = '1.10-88'
+//   1.10-89 - CRITICAL FIX: 1.10-83 removed the `useRef` import from
+//            Home.jsx (thought unused after removing the old Milling
+//            accordion's collapse state) but `warehouseSectionRef`
+//            still used it - broke the entire Home page for every
+//            regular user (ReferenceError: useRef is not defined) from
+//            1.10-83 onward. Restored the import.
+//
+//            Also, per explicit correction, rebuilt ProcurementMonitor:
+//            the variety filter is now a warehouse filter (cards are
+//            already grouped by warehouse, so this jumps straight to
+//            one); each warehouse's rows now group by variety with
+//            their own subtotal; bags and net bags both display much
+//            larger/more readable than the previous pass (net bags
+//            especially had been left too small/subtle to read).
+export const APP_VERSION = '1.10-89'

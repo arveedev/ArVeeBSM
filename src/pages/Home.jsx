@@ -3,7 +3,7 @@
 // HomeStocks/HomeSacks. The pile list moved to its own tab on the Piles
 // page (alongside the layout editor) - it no longer lives on Home.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
