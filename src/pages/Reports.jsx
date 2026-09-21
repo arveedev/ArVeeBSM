@@ -50,6 +50,34 @@ const bySerial = (a, b) => {
 // transaction has no groupSerialNo, so it falls back to its own
 // unique id as the key and passes through unaffected, as its own
 // single-item group.
+// Defensive safeguard against duplicate transaction records - same
+// type+warehouseId+serialNo+cerealCategory key already proven correct
+// in pdfGenerator.js's addStockStatementPage (that dedup is exactly why
+// the exported PDF shows a duplicated record once, while this on-screen
+// list, lacking the same guard, showed it twice). A genuine data-level
+// duplicate (e.g. a leftover Sheet-import placeholder that never got
+// self-healed by findTransactionBySerial - that self-heal only runs
+// when a form actually navigates to that exact serial) must never
+// render as two separate rows here - the on-screen list and the
+// exported PDF must always agree on what exists.
+const dedupeTransactions = (transactions) => {
+  const seenIds = new Set()
+  const dedupedById = transactions.filter((t) => {
+    if (seenIds.has(t.id)) return false
+    seenIds.add(t.id)
+    return true
+  })
+  const seenKeys = new Set()
+  const deduped = []
+  for (const t of dedupedById) {
+    const key = `${t.type}::${t.warehouseId}::${t.serialNo}::${t.cerealCategory ?? ''}`
+    if (seenKeys.has(key)) continue
+    seenKeys.add(key)
+    deduped.push(t)
+  }
+  return deduped
+}
+
 const combineMultiPileGroups = (transactions) => {
   const groups = new Map()
   for (const t of transactions) {
@@ -149,15 +177,16 @@ function Reports() {
     })),
   })
 
-  const { receipts: rawStockReceipts, issues: rawStockIssues } = splitStockTransactions(stockTxRaw ?? [])
+  const { receipts: rawStockReceipts, issues: rawStockIssues } = splitStockTransactions(dedupeTransactions(stockTxRaw ?? []))
   // Only issues can be multi-pile (WSI's own extraPileAllocations
   // feature - see combineMultiPileGroups) - combining receipts too is
   // harmless either way, since an ordinary WSR has no groupSerialNo
   // and passes through as its own single-item group regardless.
   const stockReceipts = combineMultiPileGroups(rawStockReceipts).map(enrichStock).sort(bySerial)
   const stockIssues = combineMultiPileGroups(rawStockIssues).map(enrichStock).sort(bySerial)
-  const sackReceipts = (sackTxRaw ?? []).filter((t) => t.type === 'ESR').map(enrichSack).sort(bySerial)
-  const sackIssues = (sackTxRaw ?? []).filter((t) => t.type === 'ESI').map(enrichSack).sort(bySerial)
+  const dedupedSackTx = dedupeTransactions(sackTxRaw ?? [])
+  const sackReceipts = dedupedSackTx.filter((t) => t.type === 'ESR').map(enrichSack).sort(bySerial)
+  const sackIssues = dedupedSackTx.filter((t) => t.type === 'ESI').map(enrichSack).sort(bySerial)
 
   const currentStockList = stockSubTab === 'receipts' ? stockReceipts : stockIssues
   const currentSackList = sackSubTab === 'receipts' ? sackReceipts : sackIssues
@@ -165,25 +194,25 @@ function Reports() {
 
   // Group by cereal type → variety (for stocks) or by transaction type → sack type (for sacks)
   //
-  // Same fix as pdfGenerator.js's addStockSummaryPage - a Cancelled
-  // record with no resolvable category (a legacy one voided before
-  // category preservation existed) used to group under its own literal
-  // "Unknown" heading, duplicated away from the real list it actually
-  // belongs near. Display-only: nothing here ever writes back to the
-  // record's own stored cerealCategory, only which on-screen group it
-  // renders under - it's placed in whichever real category already has
-  // the most activity in this exact list (the same non-arbitrary
-  // "closest real group" choice the PDF makes), visually marked as
-  // cancelled (red border, dimmed) by the row itself so it's never
-  // mistaken for a genuine, confirmed entry of that category.
+  // Same fix as pdfGenerator.js's generateNfaReport - a series/serial
+  // number belongs permanently to one cereal type, so a Cancelled
+  // record's own stored cerealCategory (enrichStock above only coerces
+  // it to the literal 'Unknown' string when nothing real was ever
+  // stored) is always the correct group, even if this exact tab/period
+  // has no OTHER Active activity of that same type - it must never be
+  // reassigned to whichever real category happens to have the most
+  // activity here. Only a genuinely orphaned record (no real category
+  // ever stored - enriched down to 'Unknown') has no recoverable true
+  // answer and still gets the closest-real-group guess below, visually
+  // marked as cancelled (red border, dimmed) by the row itself so it's
+  // never mistaken for a genuine, confirmed entry of that category.
   const groupStock = (txList) => {
-    const realCats = new Set(txList.filter((t) => t.status !== 'Cancelled').map((t) => t.cerealCategory))
     const counts = new Map()
     for (const t of txList) {
-      if (realCats.has(t.cerealCategory)) counts.set(t.cerealCategory, (counts.get(t.cerealCategory) ?? 0) + 1)
+      if (t.cerealCategory !== 'Unknown') counts.set(t.cerealCategory, (counts.get(t.cerealCategory) ?? 0) + 1)
     }
     const fallbackCat = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
-    const effectiveCat = (t) => (realCats.has(t.cerealCategory) ? t.cerealCategory : (fallbackCat ?? t.cerealCategory))
+    const effectiveCat = (t) => (t.cerealCategory !== 'Unknown' ? t.cerealCategory : (fallbackCat ?? t.cerealCategory))
 
     const groups = {}
     for (const t of txList) {

@@ -4945,4 +4945,31 @@
 //            label instead of trying to fill in the blank fields a void
 //            deliberately clears - so it's clearly part of the list,
 //            never mistaken for a genuine confirmed entry.
-export const APP_VERSION = '1.10-79'
+//   1.10-80 - 1.10-78/79's "closest real category" fallback was itself
+//            wrong per direct correction: a series/serial number
+//            belongs permanently to ONE cereal type (Rice and Palay
+//            keep entirely separate series per warehouse), so a
+//            Cancelled record's own stored cerealCategory is always
+//            the correct, final answer for where it belongs - it must
+//            never be reassigned just because this exact export/tab
+//            happens to have no OTHER Active activity of that same
+//            type in the current period. Both pdfGenerator.js's
+//            generateNfaReport and Reports.jsx's groupStock only ever
+//            counted ACTIVE transactions toward "which categories are
+//            real" here, so a Cancelled-only Rice record showed up
+//            under whatever category (e.g. By Products) happened to
+//            have the most/first activity instead of its own true
+//            Rice series. Fixed by honoring a record's own stored
+//            category directly whenever it has one (Cancelled or not)
+//            - only a genuinely orphaned record (no category ever
+//            recorded at all - a legacy one voided before category
+//            preservation existed) still falls back to a guess, since
+//            that's the only case with no recoverable true answer.
+//            Also fixed: the on-screen Reports list could show one
+//            Cancelled record twice (a genuine duplicate Dexie record,
+//            e.g. an unhealed Sheet-import placeholder) since it never
+//            had the same type+warehouseId+serialNo+cerealCategory
+//            dedup guard pdfGenerator.js's addStockStatementPage
+//            already applies - added the identical guard here so the
+//            on-screen list and the exported PDF always agree.
+export const APP_VERSION = '1.10-80'

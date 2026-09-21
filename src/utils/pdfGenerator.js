@@ -956,40 +956,30 @@ export const generateNfaReport = ({
   // warehouse with stock but zero transactions in this period must still
   // get a summary page showing beginning = ending balance.
   //
-  // Reported real bug: an older Cancelled record (voided before
-  // StockFormBase.jsx's cerealCategory-preservation fix existed, or one
-  // of a multi-pile group's "extra" records - both leave cerealCategory
-  // null) fell back to `?? 'Unknown'` here the same as every other
-  // transaction, and since a whole PHANTOM "Unknown" cereal type gets
-  // its own full Summary + Statement + Recap page set - for a single
-  // cancelled row with no real stock activity behind it at all. A
-  // Cancelled record with a genuinely known category was never the
-  // problem (it already correctly folds into that category's own real
-  // statement, same as any other row there) - only ones with NO
-  // resolvable category spawn this phantom page set, since nothing
-  // else ever legitimately uses 'Unknown' as a real cereal type. Only
-  // counting Active transactions toward which cereal types get a page
-  // fixes this without touching how a properly-categorized Cancelled
-  // row displays.
-  const allStockTx = [...receipts, ...issues].filter((t) => t.status !== 'Cancelled')
+  // Reported real bug: a series/serial number belongs permanently to one
+  // cereal type (Rice and Palay keep entirely separate series per
+  // warehouse - see serialNumber.js), so a Cancelled record's own stored
+  // cerealCategory is always the correct, final answer for where it
+  // belongs - it must never be reassigned just because this particular
+  // export/period happens to have no OTHER Active activity of that same
+  // type. The previous version only added a category to cerealTypes from
+  // Active transactions, so a Cancelled-only Rice record in a period with
+  // no Active Rice activity fell through to whichever real category
+  // happened to sort first (e.g. By Products) - visibly wrong. Only a
+  // truly orphaned record (cerealCategory itself null - a legacy one
+  // voided before StockFormBase.jsx's preservation fix existed) has no
+  // recoverable true answer and still needs the "first real category"
+  // guess below; every other Cancelled record's own category is honored
+  // directly, same as an Active one's.
+  const allStockTx = [...receipts, ...issues].filter((t) => t.status !== 'Cancelled' || t.cerealCategory)
   const cerealTypes = [...new Set([
     ...allStockTx.map(t => t.cerealCategory ?? 'Unknown'),
     ...(stockBeginningBals ? [...stockBeginningBals.keys()] : []),
   ])].sort()
-  const cerealTypesSet = new Set(cerealTypes)
-  // A Cancelled record's own category only matters here if it's one of
-  // the real types above - otherwise (an orphaned legacy record voided
-  // before category preservation existed) it must still land on a real
-  // statement rather than spawning its own phantom 'Unknown' page OR
-  // silently disappearing, both reported as wrong. There's no way to
-  // recover its true original category any more, so it's attached to
-  // the first real cereal type this export actually has - the only
-  // non-arbitrary choice left, and in the common case (a warehouse
-  // dealing in one cereal type) it's also the correct one.
-  const effectiveCategory = (t) => {
-    const own = t.cerealCategory ?? 'Unknown'
-    return cerealTypesSet.has(own) ? own : (cerealTypes[0] ?? own)
-  }
+  // A record's own cerealCategory is now already reflected in cerealTypes
+  // above whenever it's non-null (Cancelled or not) - so the only case
+  // left needing a guess is a record with NO stored category at all.
+  const effectiveCategory = (t) => t.cerealCategory ?? (cerealTypes[0] ?? 'Unknown')
 
   for (const cerealType of cerealTypes) {
     const catRec = receipts.filter(t => effectiveCategory(t) === cerealType)
