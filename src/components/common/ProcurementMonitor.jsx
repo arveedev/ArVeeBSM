@@ -31,6 +31,12 @@ const SORTS = [
   { id: 'bags-asc', label: 'Bags (Lowest)' },
 ]
 
+const PAYMENT_FILTERS = [
+  { id: '', label: 'All' },
+  { id: 'paid', label: 'Paid' },
+  { id: 'unpaid', label: 'Unpaid' },
+]
+
 function ProcurementMonitor() {
   const { weightUnit } = useSettings() ?? {}
   const [searchQuery, setSearchQuery] = useState('')
@@ -38,12 +44,19 @@ function ProcurementMonitor() {
   const [sortBy, setSortBy] = useState('date-desc')
   const [periodFrom, setPeriodFrom] = useState('')
   const [periodTo, setPeriodTo] = useState('')
+  // '' | 'paid' | 'unpaid' - per explicit request, a WSR only counts as
+  // Paid when an Active Purchase Receipt exists for it on the SDO side
+  // (purchaseReceipts.wsrTransactionId) - nothing here is derived from
+  // any other field on the transaction itself.
+  const [paymentFilter, setPaymentFilter] = useState('')
   const periodToPickerRef = useRef(null)
 
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), []) ?? []
   const globalDataStartDate = useLiveQuery(async () => (await db.reportConfig.get('global'))?.dataStartDate || null, []) ?? null
+  const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), []) ?? []
+  const paidWsrIds = new Set(activePrs.map((pr) => pr.wsrTransactionId).filter(Boolean))
 
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
@@ -89,9 +102,13 @@ function ProcurementMonitor() {
     ? periodFilteredTx.filter((t) => t.warehouseId === warehouseFilter)
     : periodFilteredTx
 
+  const paymentFilteredTx = paymentFilter
+    ? warehouseFilteredTx.filter((t) => (paymentFilter === 'paid') === paidWsrIds.has(t.id))
+    : warehouseFilteredTx
+
   const q = searchQuery.trim().toLowerCase()
   const visibleTx = q
-    ? warehouseFilteredTx.filter((t) => {
+    ? paymentFilteredTx.filter((t) => {
         const w = warehouseMap.get(t.warehouseId)
         const varietyName = varietyMap.get(t.varietyId)?.name ?? ''
         return (
@@ -100,7 +117,7 @@ function ProcurementMonitor() {
           varietyName.toLowerCase().includes(q)
         )
       })
-    : warehouseFilteredTx
+    : paymentFilteredTx
 
   const sortRows = (rows) => {
     const sorted = [...rows]
@@ -201,6 +218,30 @@ function ProcurementMonitor() {
         </select>
       </div>
 
+      {/* Paid = an Active Purchase Receipt exists for this WSR on the
+          SDO side; everything else is Unpaid - per explicit request. */}
+      <div className="relative mt-2 flex gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+        <div
+          className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+          style={{
+            width: `calc(${100 / PAYMENT_FILTERS.length}% - ${(PAYMENT_FILTERS.length - 1) / PAYMENT_FILTERS.length * 0.25}rem)`,
+            transform: `translateX(calc(${PAYMENT_FILTERS.findIndex((p) => p.id === paymentFilter) * 100}% + ${PAYMENT_FILTERS.findIndex((p) => p.id === paymentFilter) * 0.25}rem))`,
+          }}
+        />
+        {PAYMENT_FILTERS.map((p) => (
+          <button
+            key={p.id || 'all'}
+            type="button"
+            onClick={() => setPaymentFilter(p.id)}
+            className={`relative z-10 flex-1 rounded-lg py-2 text-sm transition-colors active:scale-95 ${
+              paymentFilter === p.id ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-app-text'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {/* Period range is optional (blank = every Procurement transaction
           ever recorded) - same true 50/50 two-column split as Reports.jsx
           on wide screens, stacked on narrow ones. */}
@@ -249,7 +290,14 @@ function ProcurementMonitor() {
                         <div key={t.id} className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-sm text-neutral-500">{t.date}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm text-neutral-500">{t.date}</p>
+                                {paidWsrIds.has(t.id) ? (
+                                  <span className="rounded-full bg-brand-neon/10 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-neon">Paid</span>
+                                ) : (
+                                  <span className="rounded-full bg-brand-amber/10 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-amber">Unpaid</span>
+                                )}
+                              </div>
                               <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">
                                 {fmtBags(t.numberOfBags)} <span className="text-sm font-normal text-neutral-500">bags</span>
                               </p>

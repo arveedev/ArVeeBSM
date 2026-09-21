@@ -5183,4 +5183,10 @@
 //            SdoHome.jsx to Settings.jsx's Cash Balance section (next to
 //            Denomination Count/Cash History) - the "Cancelled PRs" list
 //            + Delete on SdoHome.jsx's Completed tab is unaffected.
-export const APP_VERSION = '1.10-92'
+//   1.10-93 - ProcurementMonitor.jsx now tags each row Paid (green) or
+//            Unpaid (amber) - Paid means an Active Purchase Receipt
+//            exists for that WSR on the SDO side
+//            (purchaseReceipts.wsrTransactionId), nothing derived from
+//            the transaction itself. Added an All/Paid/Unpaid toggle
+//            alongside the existing warehouse/sort/period filters.
+export const APP_VERSION = '1.10-93'
