@@ -1221,9 +1221,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       // varieties - don't assume this transaction is the same variety
       // the pile happened to be created with, leave it for the user to
       // choose explicitly each time. Variety is genuinely changing
-      // (to unknown) here, so clearing MTS along with it is correct.
-      setVarietyId('')
-      setSackSelection('')
+      // (to unknown) here, so clearing MTS along with it is correct -
+      // UNLESS an authority is already linked (handleSelectAuthority,
+      // below): reported real bug, selecting an AI first (which
+      // resolves this transaction's variety from the authority itself)
+      // then selecting a pile wiped that variety straight back to
+      // blank. The AI's variety is the one that must win here, exactly
+      // like handleSelectAuthority already asserts when the pile gets
+      // picked BEFORE the authority instead - only clear when nothing
+      // has already pinned the variety.
+      if (!linkedDocNo) {
+        setVarietyId('')
+        setSackSelection('')
+      }
     } else if (pile?.varietyId) {
       // Real bug found: MTS (sack weight/condition) was cleared
       // unconditionally on every pile change, even between two piles of

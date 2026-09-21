@@ -4800,4 +4800,18 @@
 //            some future export) - so the box now reads exactly one
 //            COH — Fund Balance figure, followed by disbursements and
 //            the final total.
-export const APP_VERSION = '1.10-71'
+//   1.10-72 - Reported real bug: on a By Products entry, selecting an AI
+//            then selecting a pile wiped the variety back to blank, even
+//            though the AI itself already determines the variety.
+//            Root cause in StockFormBase.jsx's handlePileChange: a By
+//            Products pile can genuinely hold a mix of varieties, so
+//            clearing varietyId on pile change is correct when nothing
+//            else has pinned it yet - but it ran unconditionally, even
+//            when an authority was already linked (handleSelectAuthority
+//            already resolves and locks the variety from the AI itself
+//            in that case). Fixed by only clearing when no authority
+//            (linkedDocNo) is currently linked - matches the existing,
+//            already-correct rule the other direction (picking a pile
+//            BEFORE the authority: handleSelectAuthority clears a
+//            mismatched pile rather than the other way around).
+export const APP_VERSION = '1.10-72'
