@@ -5047,4 +5047,25 @@
 //            both subtle outlined ghost buttons easy to miss - both
 //            now solid, filled brand-neon buttons with real visual
 //            weight, matching each other.
-export const APP_VERSION = '1.10-84'
+//   1.10-85 - 1.10-84's row-merge was corrected per direct feedback: the
+//            Period From/To date fields stay their own row as before -
+//            it's the Export PDF/Save as image button that now shares
+//            that row (right-aligned), and separately the month-nav
+//            (‹ Month ›) and preset pills (1-7/8-15/etc) merge into one
+//            row together (PeriodPresetPicker.jsx itself, from the lg
+//            breakpoint up - still stacked below it on narrow screens).
+//            Save as image's export logic/canvas ref, previously
+//            self-contained inside DailySummaryCard with its own button,
+//            is now triggered imperatively (forwardRef +
+//            useImperativeHandle) from a button Reports.jsx renders in
+//            its own header row, matching Export PDF's position exactly.
+//
+//            Also added Procurement Monitoring: a 5th admin Monitoring
+//            tab (AI/SIA/MILLING/NFA/PROCUREMENT) showing every
+//            Procurement-type WSR (palay bought directly from farmers)
+//            across every warehouse at once, one card per warehouse,
+//            each row showing date, variety, the real counted bags and
+//            net kilos (both prominent), with the derived net-bags
+//            figure (kilos / 50) shown subtly alongside them - new
+//            src/components/common/ProcurementMonitor.jsx.
+export const APP_VERSION = '1.10-85'

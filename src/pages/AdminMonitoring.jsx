@@ -28,8 +28,9 @@ import AuthorityReconciliationPanel from '../components/common/AuthorityReconcil
 import CompletedAuthorityModal from '../components/common/CompletedAuthorityModal.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
 import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
+import ProcurementMonitor from '../components/common/ProcurementMonitor.jsx'
 
-const TABS = ['AI', 'SIA', 'MILLING', 'NFA']
+const TABS = ['AI', 'SIA', 'MILLING', 'NFA', 'PROCUREMENT']
 
 function AdminMonitoring() {
   const { user } = useAuth()
@@ -211,7 +212,7 @@ function AdminMonitoring() {
           ))}
         </div>
 
-        {activeTab !== 'MILLING' && activeTab !== 'NFA' && (
+        {activeTab !== 'MILLING' && activeTab !== 'NFA' && activeTab !== 'PROCUREMENT' && (
           <>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -273,7 +274,10 @@ function AdminMonitoring() {
       <div className={activeTab === 'NFA' ? '' : 'hidden'}>
         <NfaMillingMonitor active={activeTab === 'NFA'} />
       </div>
-      <div className={activeTab === 'MILLING' || activeTab === 'NFA' ? 'hidden' : ''}>
+      <div className={activeTab === 'PROCUREMENT' ? '' : 'hidden'}>
+        <ProcurementMonitor />
+      </div>
+      <div className={activeTab === 'MILLING' || activeTab === 'NFA' || activeTab === 'PROCUREMENT' ? 'hidden' : ''}>
       {/* Reported, real gap: this box only ever appeared when the admin
           picked a regional authority number from the dropdown - typing
           into the search box instead left it invisible, even when it

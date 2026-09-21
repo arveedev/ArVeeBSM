@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { FileDown, Loader, CheckCircle2 } from 'lucide-react'
+import { FileDown, Loader, CheckCircle2, Camera } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -186,6 +186,12 @@ function Reports() {
   // PDF" the instant the file is generated with no visible confirmation
   // on the button itself (only a separate toast).
   const [justExported, setJustExported] = useState(false)
+  // Save as image (Summary tab): the actual export logic/canvas ref
+  // lives inside DailySummaryCard, triggered imperatively from the
+  // button here so it can sit in this page's own header row alongside
+  // the period fields, matching the Statement tab's Export PDF button.
+  const summaryCardRef = useRef(null)
+  const [summaryExporting, setSummaryExporting] = useState(false)
 
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
 
@@ -545,13 +551,14 @@ function Reports() {
           animation on its own, so it replays every time this panel
           becomes visible again without needing to remount anything. */}
       <div className={`mt-5 animate-flow-down ${pageTab === 'summary' ? '' : 'hidden'}`}>
-        {/* Date fields and the month-nav/preset picker stack on narrow
-            screens (each needs the full width to stay usable) but sit
-            side by side from the lg breakpoint up, where there's room
-            for both without either feeling cramped. */}
-        <div className="mt-2 lg:flex lg:items-start lg:gap-6">
-          <div className="grid grid-cols-2 gap-3 lg:w-80 lg:shrink-0">
-            <div>
+        {/* Date fields stay their own row (always need the full width to
+            stay usable); the Save as image button now shares that row
+            instead of sitting above it on its own, per explicit request -
+            stacks below the dates on narrow screens, sits to their right
+            from the lg breakpoint up. */}
+        <div className="mt-2 lg:flex lg:items-end lg:gap-4">
+          <div className="grid grid-cols-2 gap-3 lg:flex lg:w-auto lg:gap-4">
+            <div className="lg:w-40">
               <label className="mb-1 block text-xs text-neutral-500">From</label>
               <CalendarDatePicker
                 value={summaryFrom}
@@ -560,46 +567,36 @@ function Reports() {
                 valueClassName="text-base font-semibold"
               />
             </div>
-            <div>
+            <div className="lg:w-40">
               <label className="mb-1 block text-xs text-neutral-500">To</label>
               <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} label="End Date" onChange={setSummaryTo} valueClassName="text-base font-semibold" />
             </div>
           </div>
-          <div className="lg:flex-1">
-            <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} currentFrom={summaryFrom} currentTo={summaryTo} />
+          <div className="mt-3 flex justify-end lg:mt-0 lg:ml-auto lg:shrink-0">
+            <button type="button" onClick={() => summaryCardRef.current?.exportImage()}
+              disabled={summaryExporting}
+              className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
+              {summaryExporting ? <Loader size={15} className="animate-spin" /> : <Camera size={15} />}
+              {summaryExporting ? 'Exporting…' : 'Save as image'}
+            </button>
           </div>
         </div>
+        <div className="mt-3">
+          <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} currentFrom={summaryFrom} currentTo={summaryTo} />
+        </div>
         <div key={currentWarehouseId} className="animate-pop-in">
-          <DailySummaryCard dateFrom={summaryFrom} dateTo={summaryTo} />
+          <DailySummaryCard ref={summaryCardRef} dateFrom={summaryFrom} dateTo={summaryTo} onExportingChange={setSummaryExporting} />
         </div>
       </div>
 
       {/* ── Stock Statement ─────────────────────────────────────────────── */}
       <div className={`mt-5 animate-flow-down ${pageTab === 'statement' ? '' : 'hidden'}`}>
-        {/* Solid, filled button (was a subtle outlined ghost button) -
-            exporting the statement is the primary action on this tab,
-            so it gets the same visual weight as other primary CTAs
-            elsewhere in the app rather than blending into the header row. */}
-        <div className="flex items-center justify-end">
-          <button type="button" onClick={handleExportPdf}
-            disabled={isExporting || needsDates}
-            className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
-            {isExporting ? (
-              <Loader size={15} className="animate-spin" />
-            ) : justExported ? (
-              <CheckCircle2 size={15} className="animate-toast-icon-check" />
-            ) : (
-              <FileDown size={15} />
-            )}
-            {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export PDF'}
-          </button>
-        </div>
-
-        {/* Date fields and the month-nav/preset picker stack on narrow
-            screens but sit side by side from the lg breakpoint up. */}
-        <div className="mt-2 lg:flex lg:items-start lg:gap-6">
-          <div className="grid grid-cols-2 gap-3 lg:w-80 lg:shrink-0">
-            <div>
+        {/* Same shape as the Summary tab above: date fields keep their own
+            row, Export PDF now shares it instead of sitting above on its
+            own row, per explicit request. */}
+        <div className="mt-2 lg:flex lg:items-end lg:gap-4">
+          <div className="grid grid-cols-2 gap-3 lg:flex lg:w-auto lg:gap-4">
+            <div className="lg:w-40">
               <label className="mb-1 block text-xs text-neutral-500">Period From *</label>
               <CalendarDatePicker
                 value={stmtFrom}
@@ -607,14 +604,29 @@ function Reports() {
                 onChange={(iso) => { setStmtFrom(iso); stmtToPickerRef.current?.open() }}
               />
             </div>
-            <div>
+            <div className="lg:w-40">
               <label className="mb-1 block text-xs text-neutral-500">Period To *</label>
               <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} label="End Date" onChange={setStmtTo} />
             </div>
           </div>
-          <div className="lg:flex-1">
-            <PeriodPresetPicker onSelectRange={(from, to) => { setStmtFrom(from); setStmtTo(to) }} currentFrom={stmtFrom} currentTo={stmtTo} />
+          <div className="mt-3 flex justify-end lg:mt-0 lg:ml-auto lg:shrink-0">
+            <button type="button" onClick={handleExportPdf}
+              disabled={isExporting || needsDates}
+              className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
+              {isExporting ? (
+                <Loader size={15} className="animate-spin" />
+              ) : justExported ? (
+                <CheckCircle2 size={15} className="animate-toast-icon-check" />
+              ) : (
+                <FileDown size={15} />
+              )}
+              {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export PDF'}
+            </button>
           </div>
+        </div>
+
+        <div className="mt-3">
+          <PeriodPresetPicker onSelectRange={(from, to) => { setStmtFrom(from); setStmtTo(to) }} currentFrom={stmtFrom} currentTo={stmtTo} />
         </div>
         {needsDates && (
           <p className="mt-1 text-xs text-brand-amber">

@@ -9,10 +9,16 @@
 // suppliers were involved, not just the volume moved.
 //
 // "Save as image" exports the card as a JPEG via html2canvas for sharing.
+// The trigger button itself is NOT rendered here - per explicit request
+// it sits in Reports.jsx's own header row alongside the period date
+// fields, for the same row layout as the Statement tab's Export PDF
+// button. This component exposes an imperative `exportImage()` (via
+// forwardRef) for that button to call, and reports its own busy state
+// up through `onExportingChange` so Reports.jsx's button can show the
+// same spinner/label states without duplicating the export logic here.
 
-import { useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Camera, Loader } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import toast from 'react-hot-toast'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
@@ -24,11 +30,15 @@ import { splitStockTransactions } from '../../utils/wtsAdapter.js'
 const STOCK_TYPES = ['WSR', 'WSI', 'WTS']
 const PROCUREMENT_TYPE_NAME = 'Procurement'
 
-function DailySummaryCard({ dateFrom, dateTo }) {
+const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo, onExportingChange }, ref) {
   const { currentWarehouse } = useWarehouse() ?? {}
   const { weightUnit } = useSettings() ?? {}
   const cardRef = useRef(null)
   const [exporting, setExporting] = useState(false)
+
+  useEffect(() => {
+    onExportingChange?.(exporting)
+  }, [exporting, onExportingChange])
 
   const today = todayLocalISO()
   const effectiveFrom = dateFrom || today
@@ -144,24 +154,11 @@ function DailySummaryCard({ dateFrom, dateTo }) {
     }
   }
 
+  useImperativeHandle(ref, () => ({ exportImage: handleExport }))
+
   return (
     <div className="mt-2">
-      {/* Solid, filled button (was a subtle outlined ghost button) -
-          matches Reports.jsx's Export PDF button now, so the two export
-          actions on this page carry the same visual weight. */}
-      <div className="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={exporting}
-          className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none"
-        >
-          {exporting ? <Loader size={15} className="animate-spin" /> : <Camera size={15} />}
-          {exporting ? 'Exporting…' : 'Save as image'}
-        </button>
-      </div>
-
-      <div ref={cardRef} className="mt-2 rounded-2xl border border-neutral-800 bg-neutral-950 p-4">
+      <div ref={cardRef} className="rounded-2xl border border-neutral-800 bg-neutral-950 p-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-brand-neon">
             NFA — BSM Summary
@@ -245,6 +242,6 @@ function DailySummaryCard({ dateFrom, dateTo }) {
       </div>
     </div>
   )
-}
+})
 
 export default DailySummaryCard

@@ -55,19 +55,23 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
   }
 
   return (
-    <div className="mt-2">
-      <div className="flex items-center justify-between">
+    // Stacked (nav row, then preset pills below) on narrow screens where
+    // there isn't room for both in one line; merged into a single row
+    // from the lg breakpoint up, per explicit request - the month nav
+    // stays a compact cluster on the left, the pills fill the rest.
+    <div className="mt-2 lg:flex lg:items-center lg:gap-4">
+      <div className="flex items-center justify-between lg:w-auto lg:shrink-0 lg:justify-start lg:gap-3">
         <button
           type="button"
           onClick={() => handleNav('back')}
           aria-label="Previous month"
-          className="rounded-lg border border-neutral-800 bg-neutral-900 px-8 py-2 text-lg text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
+          className="rounded-lg border border-neutral-800 bg-neutral-900 px-8 py-2 text-lg text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95 lg:px-3"
         >
           ‹
         </button>
         <span
           key={monthOffset}
-          className={`text-base font-semibold text-app-text ${monthNavDirection === 'back' ? 'animate-nav-back' : monthNavDirection === 'forward' ? 'animate-nav-forward' : ''}`}
+          className={`text-base font-semibold whitespace-nowrap text-app-text ${monthNavDirection === 'back' ? 'animate-nav-back' : monthNavDirection === 'forward' ? 'animate-nav-forward' : ''}`}
         >
           {monthLabel}
         </span>
@@ -75,12 +79,12 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
           type="button"
           onClick={() => handleNav('forward')}
           aria-label="Next month"
-          className="rounded-lg border border-neutral-800 bg-neutral-900 px-8 py-2 text-lg text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
+          className="rounded-lg border border-neutral-800 bg-neutral-900 px-8 py-2 text-lg text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95 lg:px-3"
         >
           ›
         </button>
       </div>
-      <div className="relative mt-2 flex gap-2">
+      <div className="relative mt-2 flex gap-2 lg:mt-0 lg:flex-1">
         {activeIndex !== -1 && (
           <div
             className="pointer-events-none absolute inset-y-0 z-0 rounded-lg border border-brand-neon/50 bg-brand-neon/10 transition-transform duration-300 ease-out"
