@@ -243,7 +243,7 @@ function ProcurementMonitor() {
               <div className="space-y-4">
                 {c.varietyGroups.map((vg) => (
                   <div key={vg.varietyId}>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-widest text-neutral-500">{vg.varietyName}</p>
+                    <p className="mb-2 text-base font-bold text-app-text">{vg.varietyName}</p>
                     <div className="space-y-2">
                       {vg.rows.map((t) => (
                         <div key={t.id} className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3">
@@ -264,27 +264,37 @@ function ProcurementMonitor() {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-2">
-                      <span className="text-xs font-bold uppercase text-neutral-400">Subtotal</span>
-                      <div className="text-right">
-                        <p className="text-sm font-bold tabular-nums text-app-text">{fmtBags(vg.subtotalBags)} bags</p>
-                        <p className="text-xs tabular-nums text-neutral-500">
-                          {fmtWeight(vg.subtotalKilos, weightUnit)} · {fmtNetBags(calculateNetBags(vg.subtotalKilos))} net bags
-                        </p>
+                    {/* Only meaningful with 2+ varieties in this warehouse -
+                        a single-variety card's subtotal would just repeat
+                        the card's own TOTAL below it, so it's skipped. */}
+                    {c.varietyGroups.length > 1 && (
+                      <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <span className="text-sm font-bold uppercase text-neutral-400">Subtotal</span>
+                            <p className="mt-1 text-xl font-bold tabular-nums text-app-text">{fmtBags(vg.subtotalBags)} <span className="text-sm font-normal text-neutral-500">bags</span></p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-xl font-bold tabular-nums text-app-text">{fmtWeight(vg.subtotalKilos, weightUnit)}</p>
+                            <p className="mt-1 text-base font-semibold tabular-nums text-neutral-400">{fmtNetBags(calculateNetBags(vg.subtotalKilos))} net bags</p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
 
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-2.5">
-                <span className="text-sm font-bold text-app-text">TOTAL</span>
-                <div className="text-right">
-                  <p className="text-base font-bold tabular-nums text-app-text">{fmtBags(c.totalBags)} bags</p>
-                  <p className="text-sm tabular-nums text-neutral-300">
-                    {fmtWeight(c.totalKilos, weightUnit)}
-                    <span className="text-xs text-neutral-500"> · {fmtNetBags(calculateNetBags(c.totalKilos))} net bags</span>
-                  </p>
+              <div className="mt-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="text-sm font-bold uppercase text-brand-neon">Total</span>
+                    <p className="mt-1 text-xl font-bold tabular-nums text-app-text">{fmtBags(c.totalBags)} <span className="text-sm font-normal text-neutral-500">bags</span></p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xl font-bold tabular-nums text-app-text">{fmtWeight(c.totalKilos, weightUnit)}</p>
+                    <p className="mt-1 text-base font-semibold tabular-nums text-neutral-400">{fmtNetBags(calculateNetBags(c.totalKilos))} net bags</p>
+                  </div>
                 </div>
               </div>
             </div>

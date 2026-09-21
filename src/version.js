@@ -5146,4 +5146,12 @@
 //            their own subtotal; bags and net bags both display much
 //            larger/more readable than the previous pass (net bags
 //            especially had been left too small/subtle to read).
-export const APP_VERSION = '1.10-89'
+//   1.10-90 - Per direct feedback, ProcurementMonitor's Subtotal only
+//            renders when a warehouse has 2+ varieties (a single-variety
+//            card's subtotal just repeated its own TOTAL below it,
+//            pointlessly); the variety heading is bigger/brighter; both
+//            Subtotal and TOTAL are now bigger text, in the same shape
+//            as each individual row - label with bags below it on the
+//            left, net kilos with net bags stacked below it on the
+//            right (was one condensed line each).
+export const APP_VERSION = '1.10-90'
