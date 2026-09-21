@@ -5253,4 +5253,19 @@
 //            ever being picked up automatically. Changed to
 //            `pr.isSynced !== true`, which correctly treats "never set"
 //            the same as "not yet synced".
-export const APP_VERSION = '1.10-97'
+//   1.10-98 - docs/apps-script-full-replacement.js only: replaced every
+//            SpreadsheetApp.openById(SPREADSHEET_ID) (a hardcoded ID,
+//            left over from the original single-spreadsheet script)
+//            with SpreadsheetApp.getActiveSpreadsheet(). Per direct
+//            question from the user: the deployed Web App URL a source
+//            is configured with already IS what determines which
+//            spreadsheet gets written to (Sheet Sources/PR Sheet
+//            Sources both already say so in their own UI copy) - the
+//            hardcoded ID contradicted that and would have silently
+//            made a PALAY DELIVERIES deployment keep writing into the
+//            CONTROL NUMBER file if this exact file were ever pasted in
+//            unmodified, exactly as the file's own header comment
+//            already claimed it could be. No app-side code changed -
+//            this is a redeploy-only fix for whoever pastes the script
+//            into a spreadsheet's Apps Script project next.
+export const APP_VERSION = '1.10-98'

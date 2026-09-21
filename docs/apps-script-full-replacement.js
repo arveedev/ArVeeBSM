@@ -58,8 +58,17 @@
  * is writable by default.
  */
 
-const SPREADSHEET_ID = '1R5MpAlcY7WnJnc5DZTNyg3RYu1VYN9G8FyQnWIYZ1EU';
-
+// This script is CONTAINER-BOUND - it always operates on whichever
+// spreadsheet its own Apps Script project lives inside
+// (SpreadsheetApp.getActiveSpreadsheet(), used everywhere below),
+// never a hardcoded spreadsheet ID. That's deliberate: this exact file
+// is pasted unmodified into every spreadsheet that needs this API (the
+// main "CONTROL NUMBER" backup spreadsheet, and each monthly "PALAY
+// DELIVERIES" SUMMARY spreadsheet) - each gets its own separate Web App
+// deployment (its own URL), and each deployment automatically targets
+// only the spreadsheet it was deployed from. No per-file edits needed,
+// and no risk of one file's script accidentally writing into a
+// DIFFERENT spreadsheet, which a hardcoded ID could silently do.
 const WRITE_ALLOWLIST = [
   'DATA_ENTRY',              // WSR backup
   'Issues Backup',           // WSI backup
@@ -67,7 +76,7 @@ const WRITE_ALLOWLIST = [
   'Sacks Issues Backup',     // ESI backup
   'MO',                      // Milling Order - STATUS column only, see markMillingOrderDone
   'TMO',                     // Test Milling Order - STATUS column only, see markMillingOrderDone
-  'SUMMARY',                 // SDO Purchase Receipt backup (one monthly spreadsheet/deployment - this exact file is the template pasted into each new one, with its own SPREADSHEET_ID above)
+  'SUMMARY',                 // SDO Purchase Receipt backup - deployed separately on each monthly PALAY DELIVERIES spreadsheet, same script file as everywhere else
 ];
 
 const LAST_MODIFIED_COLUMN_INDEX = 13; // column N, zero-based (N is the 14th column)
@@ -183,7 +192,7 @@ function doGet(e) {
         return jsonResponse({ status: 'ERROR', message: 'Missing sheet/matchColumn/matchValue parameter' });
       }
 
-      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
       const sheet = ss.getSheetByName(sheetName);
       if (!sheet) {
         return jsonResponse({ status: 'ERROR', message: `Sheet "${sheetName}" not found` });
@@ -224,7 +233,7 @@ function doGet(e) {
         return jsonResponse({ status: 'ERROR', message: 'Missing sheet/type parameter' });
       }
 
-      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
       const sheet = ss.getSheetByName(sheetName);
       if (!sheet) {
         return jsonResponse({ status: 'ERROR', message: `Sheet "${sheetName}" not found` });
@@ -302,7 +311,7 @@ function doGet(e) {
         return jsonResponse({ status: 'ERROR', message: 'Missing sheet/matchColumn parameter' });
       }
 
-      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
       const sheet = ss.getSheetByName(sheetName);
       if (!sheet) {
         return jsonResponse({ status: 'ERROR', message: `Sheet "${sheetName}" not found` });
@@ -328,7 +337,7 @@ function doGet(e) {
         return jsonResponse({ status: 'ERROR', message: 'Missing sheet parameter' });
       }
 
-      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
       const sheet = ss.getSheetByName(sheetName);
       if (!sheet) {
         return jsonResponse({ status: 'ERROR', message: `Sheet "${sheetName}" not found` });
@@ -409,7 +418,7 @@ function doGet(e) {
       return jsonResponse({ status: 'ERROR', message: 'Missing sheet parameter' });
     }
 
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       return jsonResponse({ status: 'ERROR', message: `Sheet "${sheetName}" not found` });
@@ -518,7 +527,7 @@ function doPost(e) {
       return jsonResponse({ status: 'ERROR', message: `Writing to "${sheetName}" is not permitted` });
     }
 
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       return jsonResponse({ status: 'ERROR', message: `Sheet "${sheetName}" not found` });
@@ -803,7 +812,7 @@ function findSerialRange(sheet, matchColumn, warehouseColumn, warehouseValue) {
  *                  instead of re-downloading every row on every sync.
  */
 function ensureBackupSheetColumns() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const sheetsAndColumns = [
     { name: 'DATA_ENTRY', columns: ['AGE', 'Age Unit', 'MO Number', 'TMO Number', 'Batch Number', 'Trial Number', 'RSBSA', 'Gender', 'Farmer Organization Members', 'Last Modified'] },
