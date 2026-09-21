@@ -55,12 +55,12 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
   }
 
   return (
-    // Stacked (nav row, then preset pills below) on narrow screens where
-    // there isn't room for both in one line; merged into a single row
-    // from the lg breakpoint up, per explicit request - the month nav
-    // stays a compact cluster on the left, the pills fill the rest.
-    <div className="mt-2 lg:flex lg:items-center lg:gap-4">
-      <div className="flex items-center justify-between lg:w-auto lg:shrink-0 lg:justify-start lg:gap-3">
+    // Stacked (nav row, then preset pills below) on narrow screens; a
+    // true two-column 50/50 split from the lg breakpoint up, per
+    // explicit request - month nav in the first half, preset pills in
+    // the second, not an asymmetric shrink-to-fit split.
+    <div className="mt-2 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-center lg:gap-4">
+      <div className="flex items-center justify-between lg:justify-start lg:gap-3">
         <button
           type="button"
           onClick={() => handleNav('back')}
@@ -84,7 +84,7 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
           ›
         </button>
       </div>
-      <div className="relative mt-2 flex gap-2 lg:mt-0 lg:flex-1">
+      <div className="relative flex gap-2">
         {activeIndex !== -1 && (
           <div
             className="pointer-events-none absolute inset-y-0 z-0 rounded-lg border border-brand-neon/50 bg-brand-neon/10 transition-transform duration-300 ease-out"

@@ -3,24 +3,40 @@
 // "Procurement" transaction nature ProcurementBagsNotification.jsx
 // already tracks per-warehouse for sack matching, here surfaced as a
 // warehouse-oversight list instead). One card per warehouse, each
-// listing its own rows: date, variety, the real counted bags and net
-// kilos (both prominent - these are what actually happened), and the
-// derived net-bags figure (kilos / 50) shown subtly alongside them -
-// same "real count is the point, net bags is a secondary derived
-// number" convention RicemillRecoveryDetail.jsx already uses.
+// listing its own rows: date, variety and the real counted bags on the
+// left; net kilos (prominent) and the derived net-bags figure (kilos /
+// 50, shown subtly) on the right - plus a per-warehouse TOTAL row.
 //
-// Mirrors MillingMonitor/NfaMillingMonitor's own `active` prop shape
-// for consistency with AdminMonitoring.jsx's always-mounted/hidden-
-// toggle tab pattern, even though this component has no debounced
-// recompute of its own to gate.
+// Search (by warehouse or variety), a variety filter, a sort order, and
+// an optional period range are all client-side over the same already-
+// fetched dataset - no extra query per control, since the underlying
+// transaction count per warehouse is small enough that re-filtering in
+// JS on every keystroke is cheap.
 
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Search, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags, calculateNetBags, isProcurementTypeName, effectiveCutoffDate } from '../../utils/calculations.js'
+import PeriodPresetPicker from './PeriodPresetPicker.jsx'
+import CalendarDatePicker from './CalendarDatePicker.jsx'
+
+const SORTS = [
+  { id: 'date-desc', label: 'Date (Newest)' },
+  { id: 'date-asc', label: 'Date (Oldest)' },
+  { id: 'bags-desc', label: 'Bags (Highest)' },
+  { id: 'bags-asc', label: 'Bags (Lowest)' },
+]
 
 function ProcurementMonitor() {
   const { weightUnit } = useSettings() ?? {}
+  const [searchQuery, setSearchQuery] = useState('')
+  const [varietyFilter, setVarietyFilter] = useState('')
+  const [sortBy, setSortBy] = useState('date-desc')
+  const [periodFrom, setPeriodFrom] = useState('')
+  const [periodTo, setPeriodTo] = useState('')
+  const periodToPickerRef = useRef(null)
 
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
@@ -49,10 +65,48 @@ function ProcurementMonitor() {
   // Same reporting-cutoff-date rule Reports.jsx/SdoHome.jsx already
   // apply everywhere else - a warehouse's own override, or the global
   // Data Start Date, whichever is later wins.
-  const visibleTx = rawTx.filter((t) => {
+  const cutoffFilteredTx = rawTx.filter((t) => {
     const cutoff = effectiveCutoffDate(warehouseMap.get(t.warehouseId)?.reportingCutoffDate, globalDataStartDate)
     return !cutoff || t.date > cutoff
   })
+
+  // Period range is optional - blank From/To (the default) shows every
+  // Procurement transaction ever recorded, matching this tab's original
+  // "monitor all" scope; setting a range narrows it the same way
+  // Reports.jsx's Statement period does.
+  const periodFilteredTx = cutoffFilteredTx.filter((t) => {
+    if (periodFrom && t.date < periodFrom) return false
+    if (periodTo && t.date > periodTo) return false
+    return true
+  })
+
+  const varietyFilteredTx = varietyFilter
+    ? periodFilteredTx.filter((t) => t.varietyId === varietyFilter)
+    : periodFilteredTx
+
+  const q = searchQuery.trim().toLowerCase()
+  const visibleTx = q
+    ? varietyFilteredTx.filter((t) => {
+        const w = warehouseMap.get(t.warehouseId)
+        const varietyName = varietyMap.get(t.varietyId)?.name ?? ''
+        return (
+          (w?.code ?? '').toLowerCase().includes(q) ||
+          (w?.name ?? '').toLowerCase().includes(q) ||
+          varietyName.toLowerCase().includes(q)
+        )
+      })
+    : varietyFilteredTx
+
+  const sortRows = (rows) => {
+    const sorted = [...rows]
+    switch (sortBy) {
+      case 'date-asc': return sorted.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+      case 'bags-desc': return sorted.sort((a, b) => (b.numberOfBags ?? 0) - (a.numberOfBags ?? 0))
+      case 'bags-asc': return sorted.sort((a, b) => (a.numberOfBags ?? 0) - (b.numberOfBags ?? 0))
+      case 'date-desc':
+      default: return sorted.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+    }
+  }
 
   const byWarehouse = new Map()
   for (const t of visibleTx) {
@@ -61,59 +115,140 @@ function ProcurementMonitor() {
   }
 
   const cards = [...byWarehouse.entries()]
-    .map(([warehouseId, rows]) => ({
-      warehouseId,
-      warehouse: warehouseMap.get(warehouseId),
-      rows: [...rows].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
-    }))
+    .map(([warehouseId, rows]) => {
+      const totalBags = rows.reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
+      const totalKilos = rows.reduce((s, t) => s + (t.netKilos ?? 0), 0)
+      return {
+        warehouseId,
+        warehouse: warehouseMap.get(warehouseId),
+        rows: sortRows(rows),
+        totalBags,
+        totalKilos,
+      }
+    })
     .filter((c) => c.warehouse)
     .sort((a, b) => (a.warehouse.code ?? '').localeCompare(b.warehouse.code ?? ''))
 
-  if (cards.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-neutral-600">
-        No Procurement transactions recorded yet.
-      </p>
-    )
-  }
+  const varietyOptions = [...varietyMap.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
 
   return (
-    <div className="space-y-3">
-      {cards.map((c) => (
-        <div key={c.warehouseId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-base font-semibold text-app-text">
-              {c.warehouse.code} — {c.warehouse.name}
-            </p>
-            <span className="shrink-0 text-xs text-neutral-500">
-              {c.rows.length} {c.rows.length === 1 ? 'transaction' : 'transactions'}
-            </span>
+    <div className="mt-4">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search warehouse or variety"
+            className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <select
+          value={varietyFilter}
+          onChange={(e) => setVarietyFilter(e.target.value)}
+          className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
+        >
+          <option value="">All varieties</option>
+          {varietyOptions.map((v) => <option key={v.varietyId} value={v.varietyId}>{v.name}</option>)}
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
+        >
+          {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </div>
+
+      {/* Period range is optional (blank = every Procurement transaction
+          ever recorded) - same true 50/50 two-column split as Reports.jsx
+          on wide screens, stacked on narrow ones. */}
+      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs text-neutral-500">Period From</label>
+            <CalendarDatePicker
+              value={periodFrom}
+              label="Start Date"
+              required={false}
+              onChange={(iso) => { setPeriodFrom(iso); periodToPickerRef.current?.open() }}
+            />
           </div>
-          <div className="space-y-2">
-            {c.rows.map((t) => (
-              <div key={t.id} className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-neutral-500">{t.date}</p>
-                    <p className="mt-0.5 truncate text-sm font-semibold text-app-text">
-                      {varietyMap.get(t.varietyId)?.name ?? '—'}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-lg font-bold tabular-nums text-app-text">
-                      {fmtBags(t.numberOfBags)} <span className="text-xs font-normal text-neutral-500">bags</span>
-                    </p>
-                    <p className="text-sm tabular-nums text-neutral-300">{fmtWeight(t.netKilos, weightUnit)}</p>
-                    <p className="mt-0.5 text-[11px] tabular-nums text-neutral-600">
-                      {fmtNetBags(calculateNetBags(t.netKilos))} net bags
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div>
+            <label className="mb-1 block text-xs text-neutral-500">Period To</label>
+            <CalendarDatePicker ref={periodToPickerRef} value={periodTo} label="End Date" required={false} onChange={setPeriodTo} />
           </div>
         </div>
-      ))}
+        <PeriodPresetPicker onSelectRange={(from, to) => { setPeriodFrom(from); setPeriodTo(to) }} currentFrom={periodFrom} currentTo={periodTo} />
+      </div>
+
+      {cards.length === 0 ? (
+        <p className="py-8 text-center text-sm text-neutral-600">
+          No Procurement transactions match.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {cards.map((c) => (
+            <div key={c.warehouseId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-base font-semibold text-app-text">
+                  {c.warehouse.code} — {c.warehouse.name}
+                </p>
+                <span className="shrink-0 text-xs text-neutral-500">
+                  {c.rows.length} {c.rows.length === 1 ? 'transaction' : 'transactions'}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {c.rows.map((t) => (
+                  <div key={t.id} className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm text-neutral-500">{t.date}</p>
+                        <p className="mt-0.5 truncate text-sm font-semibold text-app-text">
+                          {varietyMap.get(t.varietyId)?.name ?? '—'}
+                        </p>
+                        <p className="mt-1 text-base font-bold tabular-nums text-app-text">
+                          {fmtBags(t.numberOfBags)} <span className="text-xs font-normal text-neutral-500">bags</span>
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-xl font-bold tabular-nums text-app-text">{fmtWeight(t.netKilos, weightUnit)}</p>
+                        <p className="mt-0.5 text-[11px] tabular-nums text-neutral-600">
+                          {fmtNetBags(calculateNetBags(t.netKilos))} net bags
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-2.5">
+                <span className="text-sm font-bold text-app-text">TOTAL</span>
+                <div className="text-right">
+                  <p className="text-base font-bold tabular-nums text-app-text">{fmtBags(c.totalBags)} bags</p>
+                  <p className="text-sm tabular-nums text-neutral-300">
+                    {fmtWeight(c.totalKilos, weightUnit)}
+                    <span className="text-xs text-neutral-500"> · {fmtNetBags(calculateNetBags(c.totalKilos))} net bags</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

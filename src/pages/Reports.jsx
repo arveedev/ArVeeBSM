@@ -551,14 +551,12 @@ function Reports() {
           animation on its own, so it replays every time this panel
           becomes visible again without needing to remount anything. */}
       <div className={`mt-5 animate-flow-down ${pageTab === 'summary' ? '' : 'hidden'}`}>
-        {/* Date fields stay their own row (always need the full width to
-            stay usable); the Save as image button now shares that row
-            instead of sitting above it on its own, per explicit request -
-            stacks below the dates on narrow screens, sits to their right
-            from the lg breakpoint up. */}
-        <div className="mt-2 lg:flex lg:items-end lg:gap-4">
-          <div className="grid grid-cols-2 gap-3 lg:flex lg:w-auto lg:gap-4">
-            <div className="lg:w-40">
+        {/* True two-column 50/50 split from the lg breakpoint up, per
+            explicit request - date fields in the first half, Save as
+            image in the second - stacked on narrow screens. */}
+        <div className="mt-2 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-end lg:gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className="mb-1 block text-xs text-neutral-500">From</label>
               <CalendarDatePicker
                 value={summaryFrom}
@@ -567,12 +565,12 @@ function Reports() {
                 valueClassName="text-base font-semibold"
               />
             </div>
-            <div className="lg:w-40">
+            <div>
               <label className="mb-1 block text-xs text-neutral-500">To</label>
               <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} label="End Date" onChange={setSummaryTo} valueClassName="text-base font-semibold" />
             </div>
           </div>
-          <div className="mt-3 flex justify-end lg:mt-0 lg:ml-auto lg:shrink-0">
+          <div className="flex justify-end">
             <button type="button" onClick={() => summaryCardRef.current?.exportImage()}
               disabled={summaryExporting}
               className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
@@ -591,12 +589,10 @@ function Reports() {
 
       {/* ── Stock Statement ─────────────────────────────────────────────── */}
       <div className={`mt-5 animate-flow-down ${pageTab === 'statement' ? '' : 'hidden'}`}>
-        {/* Same shape as the Summary tab above: date fields keep their own
-            row, Export PDF now shares it instead of sitting above on its
-            own row, per explicit request. */}
-        <div className="mt-2 lg:flex lg:items-end lg:gap-4">
-          <div className="grid grid-cols-2 gap-3 lg:flex lg:w-auto lg:gap-4">
-            <div className="lg:w-40">
+        {/* Same true 50/50 two-column split as the Summary tab above. */}
+        <div className="mt-2 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-end lg:gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className="mb-1 block text-xs text-neutral-500">Period From *</label>
               <CalendarDatePicker
                 value={stmtFrom}
@@ -604,12 +600,12 @@ function Reports() {
                 onChange={(iso) => { setStmtFrom(iso); stmtToPickerRef.current?.open() }}
               />
             </div>
-            <div className="lg:w-40">
+            <div>
               <label className="mb-1 block text-xs text-neutral-500">Period To *</label>
               <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} label="End Date" onChange={setStmtTo} />
             </div>
           </div>
-          <div className="mt-3 flex justify-end lg:mt-0 lg:ml-auto lg:shrink-0">
+          <div className="flex justify-end">
             <button type="button" onClick={handleExportPdf}
               disabled={isExporting || needsDates}
               className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">

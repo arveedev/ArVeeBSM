@@ -5068,4 +5068,22 @@
 //            net kilos (both prominent), with the derived net-bags
 //            figure (kilos / 50) shown subtly alongside them - new
 //            src/components/common/ProcurementMonitor.jsx.
-export const APP_VERSION = '1.10-85'
+//   1.10-86 - Per direct feedback, corrected 1.10-85's "divide by 2"
+//            layout to a true 50/50 two-column grid (was an asymmetric
+//            shrink-to-fit flex split) on both Reports.jsx's date+export
+//            row and PeriodPresetPicker.jsx's month-nav+preset-pills
+//            row, still stacked on narrow screens.
+//
+//            Rebuilt ProcurementMonitor.jsx's row layout (was too
+//            crowded): bags now sits below the variety on the left;
+//            net kilos (larger) and the derived net-bags figure
+//            (smaller, subtle) sit on the right. Added a per-warehouse
+//            TOTAL row, a search box (warehouse/variety), a variety
+//            filter, a sort order (date/bags, asc/desc), and an
+//            optional Period From/To range (blank = every Procurement
+//            transaction ever recorded) using the same true 50/50 split.
+//
+//            Also: StockFormBase.jsx's Procurement-only RSBSA/Gender row
+//            was a fixed 2-column grid at every width - now stacks on
+//            narrow screens and sits side by side from sm up.
+export const APP_VERSION = '1.10-86'
