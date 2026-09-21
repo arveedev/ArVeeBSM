@@ -105,7 +105,7 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
  * live data after being issued, so a later Buying Price or variety
  * edit can't silently reshape an already-issued document).
  * `purityDisplayFormat`: 'range' | 'letter'.
- * `reconciliation`: { fundBalance, addLabel, addAmount, lessEntries: [{label, amount}] }
+ * `reconciliation`: { fundBalance, addEntries: [{label, amount}], lessEntries: [{label, amount}] }
  * `signatories`: { preparedBy: {name, position}, verifiedBy, notedBy }
  *
  * Whether the Rate/Amount/Basic Cost columns print is decided from the
@@ -164,13 +164,16 @@ export const generateSdoAbstract = ({
     'TOTAL AMOUNT',
   ]]
 
-  // A blank, borderless row - one before the first real transaction row
-  // and one right before TOTAL (appended as the body's own last row,
-  // since TOTAL itself is the table's `foot`, drawn immediately after
-  // the body) - per explicit request, visually separating the header/
-  // TOTAL from the actual transaction rows.
+  // A blank row - one before the first real transaction row and one
+  // right before TOTAL (appended as the body's own last row, since
+  // TOTAL itself is the table's `foot`, drawn immediately after the
+  // body) - visually separating the header/TOTAL from the actual
+  // transaction rows. Keeps the grid's normal border (a real bug in the
+  // first version of this: `lineWidth: 0` blanked the row's own border
+  // entirely, leaving a gap with no outline instead of a clean empty
+  // row that still reads as part of the table).
   const spacerRow = head[0].map(() => ({
-    content: '', styles: { minCellHeight: 3, cellPadding: 0, lineWidth: 0 },
+    content: '', styles: { minCellHeight: 3, cellPadding: 0 },
   }))
 
   const body = purchaseReceipts.map((pr) => [
@@ -254,22 +257,25 @@ export const generateSdoAbstract = ({
   // assumes that), instead of a flat 40mm guess that only happened to
   // be enough for the current one-deduction shape.
   const fundBalance = reconciliation?.fundBalance ?? 0
-  const addAmount = reconciliation?.addAmount ?? 0
-  let running = fundBalance + addAmount
-  // Reported real bug: a separate "Fund available" ADD row (even once
-  // it was actually computing a real number, not the hardcoded 0 it
-  // used to be) read as TWO fund balances on the page - the SDO's own
-  // convention is one COH — Fund Balance figure, already inclusive of
-  // any replenishment during the period. The caller now folds that in
-  // before calling this, so addAmount is 0 for the current export - the
-  // ADD row (and its own redundant TOTAL) is skipped whenever there's
-  // nothing in it, collapsing back to the single-line figure. Kept
-  // conditional rather than deleted outright so a genuinely separate
-  // mid-period addition can still be shown distinctly if some future
-  // export needs that shape.
+  let running = fundBalance
+  // Per explicit request/correction: a check-numbered replenishment
+  // received during the period must show as its own line (previously
+  // every replenishment, checked or not, was silently folded into one
+  // COH — Fund Balance figure and never appeared anywhere on the page).
+  // `addEntries` here is only the period's replenishments that actually
+  // have a real check number (see AbstractExportModal.jsx) - anything
+  // without one (the one-time "Opening balance" seed entry) stays
+  // folded into fundBalance itself, same as before, since it isn't a
+  // real check to reference. One running TOTAL after all of them
+  // together, not one per entry, so a period with several replenishments
+  // doesn't turn into a wall of repeated TOTAL rows.
   const reconRows = [{ label: 'COH — Fund Balance', amt: fundBalance }]
-  if (addAmount) {
-    reconRows.push({ label: reconciliation?.addLabel ?? 'ADD', amt: addAmount })
+  const addEntries = reconciliation?.addEntries ?? []
+  for (const e of addEntries) {
+    running += e.amount ?? 0
+    reconRows.push({ label: e.label, amt: e.amount })
+  }
+  if (addEntries.length > 0) {
     reconRows.push({ label: 'TOTAL', amt: running, bold: true })
   }
   for (const e of reconciliation?.lessEntries ?? []) {

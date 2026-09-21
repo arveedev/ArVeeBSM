@@ -60,7 +60,10 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
     // explicit request - month nav in the first half, preset pills in
     // the second, not an asymmetric shrink-to-fit split.
     <div className="mt-2 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-center lg:gap-4">
-      <div className="flex items-center justify-between lg:justify-start lg:gap-3">
+      {/* justify-between at every width (was lg:justify-start, packing
+          the cluster to the left and leaving the rest of its column
+          empty) - per explicit request, it fills the whole half. */}
+      <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={() => handleNav('back')}

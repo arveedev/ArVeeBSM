@@ -5120,4 +5120,16 @@
 //              background self-heal quietly caught up - added the same
 //              display-level dedup guard Reports.jsx already uses, so
 //              the SDO never sees a duplicate here at all.
-export const APP_VERSION = '1.10-87'
+//   1.10-88 - Per direct feedback: Reports.jsx's Save as image/Export
+//            PDF buttons and PeriodPresetPicker.jsx's month-nav cluster
+//            now actually fill their whole half of the 50/50 split (was
+//            a narrow element anchored to one side, leaving empty space
+//            beside it). Fixed the Abstract PDF's spacer rows (added
+//            1.10-87) losing their border entirely instead of reading as
+//            a clean empty row. A check-numbered period replenishment
+//            (CashActionModal.jsx's refNo field) now prints as its own
+//            line item in the Cash Reconciliation section instead of
+//            being silently folded into one COH — Fund Balance figure -
+//            the one-time "Opening balance" seed entry (no real check)
+//            still folds in as before, since it has nothing to itemize.
+export const APP_VERSION = '1.10-88'

@@ -94,23 +94,29 @@ function AbstractExportModal({ onClose }) {
         activePrsAll.filter((pr) => pr.date < dateFrom).map((pr) => pr.totalAmount ?? 0)
       )
       // Reported real bug (first pass): "Fund available" always printed
-      // 0.00 - hardcoded, never derived from anything - and a
-      // replenishment dated ON OR AFTER dateFrom (e.g. the period's own
-      // opening replenishment) fell into neither that line NOR
-      // openingBalance (strictly before dateFrom only), so it was
-      // uncounted anywhere in the report. Second report: showing it as a
-      // SEPARATE "Fund available" addition read as two different fund
-      // balances on the page - the SDO's own convention is one COH —
-      // Fund Balance figure, already inclusive of whatever replenished
-      // during the period. Folded into one number here instead: same
-      // replenish/liquidate ledger entries computeCashOnHand uses,
-      // scoped to this period's own date window and added directly to
-      // the opening balance - no PR disbursement subtracted here since
-      // that's its own separate "This period's disbursements" line below.
+      // 0.00 - hardcoded, never derived from anything. Second report:
+      // showing every replenishment folded into one COH — Fund Balance
+      // figure meant a real, check-numbered replenishment never appeared
+      // anywhere on the page - per explicit correction, a period
+      // replenishment WITH a real check number (CashActionModal.jsx's
+      // `refNo` field) now prints as its own line item. The one-time
+      // "Opening balance" seed entry (refNo literally set to that
+      // string, not a real check) has no check to reference, so it stays
+      // folded into the fundBalance figure itself, same as before -
+      // "only replenishment with check number should appear" per
+      // explicit request.
       const periodLedgerEntries = ledgerEntries.filter((e) => !e.voided && e.date >= dateFrom && e.date <= dateTo)
-      const periodReplenished = periodLedgerEntries.filter((e) => e.type === 'replenish').reduce((s, e) => s + e.amount, 0)
+      const periodReplenishEntries = periodLedgerEntries.filter((e) => e.type === 'replenish')
+      const checkedReplenishEntries = periodReplenishEntries.filter((e) => e.refNo && e.refNo !== 'Opening balance')
+      const uncheckedReplenished = periodReplenishEntries
+        .filter((e) => !(e.refNo && e.refNo !== 'Opening balance'))
+        .reduce((s, e) => s + e.amount, 0)
       const periodLiquidated = periodLedgerEntries.filter((e) => e.type === 'liquidate').reduce((s, e) => s + e.amount, 0)
-      const fundBalance = openingBalance + periodReplenished - periodLiquidated
+      const fundBalance = openingBalance + uncheckedReplenished - periodLiquidated
+      const addEntries = checkedReplenishEntries.map((e) => ({
+        label: `Replenish — Check No. ${e.refNo}`,
+        amount: e.amount,
+      }))
       const periodTotal = enriched.reduce((s, pr) => s + (pr.totalAmount ?? 0), 0)
 
       const doc = generateSdoAbstract({
@@ -121,6 +127,7 @@ function AbstractExportModal({ onClose }) {
         purityDisplayFormat: config?.purityDisplayFormat ?? 'range',
         reconciliation: {
           fundBalance,
+          addEntries,
           lessEntries: [{ label: 'This period’s disbursements', amount: periodTotal }],
         },
         signatories: {

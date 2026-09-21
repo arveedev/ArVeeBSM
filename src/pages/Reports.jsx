@@ -570,14 +570,15 @@ function Reports() {
               <CalendarDatePicker ref={summaryToPickerRef} value={summaryTo} label="End Date" onChange={setSummaryTo} valueClassName="text-base font-semibold" />
             </div>
           </div>
-          <div className="flex justify-end">
-            <button type="button" onClick={() => summaryCardRef.current?.exportImage()}
-              disabled={summaryExporting}
-              className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
-              {summaryExporting ? <Loader size={15} className="animate-spin" /> : <Camera size={15} />}
-              {summaryExporting ? 'Exporting…' : 'Save as image'}
-            </button>
-          </div>
+          {/* w-full (was a narrow button anchored right inside this
+              column) - per explicit request, it fills the whole half
+              instead of leaving empty space beside it. */}
+          <button type="button" onClick={() => summaryCardRef.current?.exportImage()}
+            disabled={summaryExporting}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
+            {summaryExporting ? <Loader size={15} className="animate-spin" /> : <Camera size={15} />}
+            {summaryExporting ? 'Exporting…' : 'Save as image'}
+          </button>
         </div>
         <div className="mt-3">
           <PeriodPresetPicker onSelectRange={(from, to) => { setSummaryFrom(from); setSummaryTo(to) }} currentFrom={summaryFrom} currentTo={summaryTo} />
@@ -605,20 +606,18 @@ function Reports() {
               <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} label="End Date" onChange={setStmtTo} />
             </div>
           </div>
-          <div className="flex justify-end">
-            <button type="button" onClick={handleExportPdf}
-              disabled={isExporting || needsDates}
-              className="flex items-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
-              {isExporting ? (
-                <Loader size={15} className="animate-spin" />
-              ) : justExported ? (
-                <CheckCircle2 size={15} className="animate-toast-icon-check" />
-              ) : (
-                <FileDown size={15} />
-              )}
-              {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export PDF'}
-            </button>
-          </div>
+          <button type="button" onClick={handleExportPdf}
+            disabled={isExporting || needsDates}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
+            {isExporting ? (
+              <Loader size={15} className="animate-spin" />
+            ) : justExported ? (
+              <CheckCircle2 size={15} className="animate-toast-icon-check" />
+            ) : (
+              <FileDown size={15} />
+            )}
+            {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export PDF'}
+          </button>
         </div>
 
         <div className="mt-3">
