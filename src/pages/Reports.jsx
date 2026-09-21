@@ -31,6 +31,17 @@ import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 
+// The Stock/Sack + Receipts/Issues merged segmented control (see its
+// render site below) - one entry per combination, in reading order so a
+// 2-column mobile grid naturally stacks Stock Receipts/Issues above Sack
+// Receipts/Issues.
+const REPORT_SEGMENTS = [
+  { key: 'stock-receipts', label: 'Stock Receipts', mainTab: 'stocks', subTab: 'receipts' },
+  { key: 'stock-issues', label: 'Stock Issues', mainTab: 'stocks', subTab: 'issues' },
+  { key: 'sack-receipts', label: 'Sack Receipts', mainTab: 'sacks', subTab: 'receipts' },
+  { key: 'sack-issues', label: 'Sack Issues', mainTab: 'sacks', subTab: 'issues' },
+]
+
 const byAlpha = (a, b) => (a ?? '').localeCompare(b ?? '', undefined, { sensitivity: 'base' })
 const bySerial = (a, b) => {
   const n = (x) => parseInt(String(x.serialNo ?? '').replace(/\D/g, ''), 10) || 0
@@ -593,33 +604,28 @@ function Reports() {
           </p>
         )}
 
-        {/* Main Stocks / Sacks tabs */}
-        <div className="relative mt-3 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
-          <div
-            className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-            style={{ transform: mainTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
-          />
-          {['stocks', 'sacks'].map((tab) => (
-            <button key={tab} type="button" onClick={() => setMainTab(tab)}
-              className={`relative z-10 flex-1 rounded-lg py-1.5 text-base capitalize transition-all active:scale-95 ${
-                mainTab === tab ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-app-text'
-              }`}>
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Sub-tabs */}
-        <div className="mt-2 flex gap-4 border-b border-neutral-800 px-1">
-          {['receipts', 'issues'].map((tab) => {
-            const active = mainTab === 'stocks' ? stockSubTab === tab : sackSubTab === tab
+        {/* Stock/Sack type and Receipts/Issues direction used to be two
+            separate stacked rows - really one choice ("which list am I
+            looking at"), not two sequential decisions - so they're one
+            merged 4-way segmented control. 2 columns on narrow screens
+            (Stock Receipts/Issues on top, Sack Receipts/Issues below),
+            4 across from the sm breakpoint up where there's room. */}
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {REPORT_SEGMENTS.map((seg) => {
+            const active = mainTab === seg.mainTab && (mainTab === 'stocks' ? stockSubTab : sackSubTab) === seg.subTab
             return (
-              <button key={tab} type="button"
-                onClick={() => mainTab === 'stocks' ? setStockSubTab(tab) : setSackSubTab(tab)}
-                className={`-mb-px border-b-2 pb-1.5 text-sm capitalize transition-colors ${
-                  active ? 'border-brand-neon font-bold text-app-text' : 'border-transparent font-medium text-neutral-500 hover:text-neutral-300'
+              <button key={seg.key} type="button"
+                onClick={() => {
+                  setMainTab(seg.mainTab)
+                  if (seg.mainTab === 'stocks') setStockSubTab(seg.subTab)
+                  else setSackSubTab(seg.subTab)
+                }}
+                className={`rounded-xl border py-2.5 text-sm font-bold transition-all active:scale-95 ${
+                  active
+                    ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
+                    : 'border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-app-text'
                 }`}>
-                {tab}
+                {seg.label}
               </button>
             )
           })}

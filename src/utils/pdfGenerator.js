@@ -419,12 +419,16 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
 
   const endTotBags = totBegBags + totRecBags - totIssBags
   const endTotKilos = totBegKilos + totRecKilos - totIssKilos
+  // Every cell in the TOTAL row is bold, not just the label - the figures
+  // themselves are the point of a totals row and need to stand out at
+  // least as much as the word "TOTAL" does.
+  const bold = (content) => ({ content, styles: { fontStyle: 'bold', halign: 'right' } })
   body.push([
     { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold', halign: 'left' } },
-    fmtBags(totBegBags), fmtKilos(totBegKilos),
-    fmtBags(totRecBags), fmtKilos(totRecKilos),
-    fmtBags(totIssBags), fmtKilos(totIssKilos),
-    fmtBags(endTotBags), fmtKilos(endTotKilos),
+    bold(fmtBags(totBegBags)), bold(fmtKilos(totBegKilos)),
+    bold(fmtBags(totRecBags)), bold(fmtKilos(totRecKilos)),
+    bold(fmtBags(totIssBags)), bold(fmtKilos(totIssKilos)),
+    bold(fmtBags(endTotBags)), bold(fmtKilos(endTotKilos)),
   ])
 
   autoTable(doc, {

@@ -5007,4 +5007,19 @@
 //            enrichStock uses to normalize a truly-null category before
 //            handing records to the PDF) as if it were a real category,
 //            silently resurrecting the phantom page even after 1.10-80.
-export const APP_VERSION = '1.10-81'
+//   1.10-82 - Reports > Stock Statement's Stocks/Sacks tab and its
+//            Receipts/Issues sub-tab below it were two separate stacked
+//            toggle rows for what's really one choice ("which list am I
+//            looking at") - merged into a single 4-way segmented control
+//            (Stock Receipts / Stock Issues / Sack Receipts / Sack
+//            Issues), 2 columns on narrow screens and 4 across from the
+//            sm breakpoint up, dropping the page from 3 stacked toggle
+//            rows to 2 before any data shows. Also: the exported PDF's
+//            Stock Summary page ("SUMMARY OF WEEKLY STOCK RECEIPTS,
+//            ISSUES AND BALANCES") only bolded the word "TOTAL" itself
+//            on its totals row, leaving the actual beginning/receipts/
+//            issues/ending figures next to it in plain weight - the
+//            numbers are the point of a totals row, so the whole row is
+//            now bold for visibility, matching every other report
+//            page's totals row (which were already fully bold).
+export const APP_VERSION = '1.10-82'
