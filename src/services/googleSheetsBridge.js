@@ -97,8 +97,15 @@ const WRITE_ALLOWLIST_KEYS = [
   'issuesSheetName',
   'sacksReceiptsSheetName',
   'sacksIssuesSheetName',
-  'summarySheetName',
 ]
+
+// Separate allowlist for the Purchase Receipt SUMMARY backup, which
+// writes to db.prSheetSources (the "PALAY DELIVERIES" spreadsheets) -
+// a completely different table/URL from db.sheetSources (the "CONTROL
+// NUMBER" spreadsheet) above. Kept as its own list rather than merged
+// into WRITE_ALLOWLIST_KEYS so neither allowlist can accidentally let a
+// write reach the other table's sheets.
+const PR_WRITE_ALLOWLIST_KEYS = ['summarySheetName']
 
 /** Every configured sheet source, oldest first. */
 const getAllSheetSources = async () => db.sheetSources.orderBy('dateFrom').toArray()
@@ -117,6 +124,15 @@ const getSheetSourceForDate = async (date) => {
  * backups deliberately do NOT use this - see pushPrBackup's own comment
  * for why they resolve by the record's own date instead. */
 const getActiveSheetSource = async () => getSheetSourceForDate(todayLocalISO())
+
+/** The single db.prSheetSources record ("PALAY DELIVERIES") whose date
+ * range covers a given date, or null if none does - entirely separate
+ * from getSheetSourceForDate/db.sheetSources ("CONTROL NUMBER") above,
+ * since these are genuinely different spreadsheet files per the user. */
+const getPrSheetSourceForDate = async (date) => {
+  const sources = await db.prSheetSources.orderBy('dateFrom').toArray()
+  return sources.find((s) => s.dateFrom <= date && (!s.dateTo || date <= s.dateTo)) ?? null
+}
 
 const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false
 
@@ -1704,8 +1720,8 @@ const resolvePrSourceDate = (pr, wsrDate) => wsrDate ?? pr.date
 
 /** Appends a new SUMMARY row for a just-issued (or freshly cancelled-with-no-WSR) Purchase Receipt, to whichever monthly source covers the underlying WSR's own date. */
 export const pushPrBackup = async (pr, context = {}) => {
-  if (!WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
-  const source = await getSheetSourceForDate(resolvePrSourceDate(pr, context.wsrDate))
+  if (!PR_WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
+  const source = await getPrSheetSourceForDate(resolvePrSourceDate(pr, context.wsrDate))
   if (!source) return { ok: false, reason: 'no_active_source' }
   if (!source.summarySheetName) return { ok: false, reason: 'no_summary_sheet_configured' }
   if (!isOnline()) return { ok: false, reason: 'offline' }
@@ -1720,8 +1736,8 @@ export const pushPrBackup = async (pr, context = {}) => {
 
 /** Updates an existing SUMMARY row in place, found by its own PR No. within whichever monthly source covers the underlying WSR's own date - used both for a real edit and for a Cancel (blanks the figures, keeps the row). */
 export const updatePrBackup = async (pr, context = {}) => {
-  if (!WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
-  const source = await getSheetSourceForDate(resolvePrSourceDate(pr, context.wsrDate))
+  if (!PR_WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
+  const source = await getPrSheetSourceForDate(resolvePrSourceDate(pr, context.wsrDate))
   if (!source) return { ok: false, reason: 'no_active_source' }
   if (!source.summarySheetName) return { ok: false, reason: 'no_summary_sheet_configured' }
   if (!isOnline()) return { ok: false, reason: 'offline' }
@@ -1737,8 +1753,8 @@ export const updatePrBackup = async (pr, context = {}) => {
 
 /** Deletes a SUMMARY row outright, found by PR No. within whichever monthly source covers the given date - used only for a genuine (permanent) Delete, never a Cancel, which keeps the row (see updatePrBackup). `date` should be the underlying WSR's own date when one exists (the caller resolves this - there is no `pr` object left by delete time to derive it from), falling back to the deleted PR's own date otherwise. */
 export const deletePrBackup = async (prNo, date) => {
-  if (!WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
-  const source = await getSheetSourceForDate(date)
+  if (!PR_WRITE_ALLOWLIST_KEYS.includes('summarySheetName')) return { ok: false, reason: 'not_allowlisted' }
+  const source = await getPrSheetSourceForDate(date)
   if (!source) return { ok: false, reason: 'no_active_source' }
   if (!source.summarySheetName) return { ok: false, reason: 'no_summary_sheet_configured' }
   if (!isOnline()) return { ok: false, reason: 'offline' }

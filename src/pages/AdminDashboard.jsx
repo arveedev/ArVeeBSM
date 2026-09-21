@@ -23,6 +23,7 @@ import SignatoriesPanel from '../components/common/admin/SignatoriesPanel.jsx'
 import VisitorAccessPanel from '../components/common/admin/VisitorAccessPanel.jsx'
 import TransactionTypesPanel from '../components/common/admin/TransactionTypesPanel.jsx'
 import SheetSourcesPanel from '../components/common/admin/SheetSourcesPanel.jsx'
+import PrSheetSourcesPanel from '../components/common/admin/PrSheetSourcesPanel.jsx'
 import BackupPanel from '../components/common/admin/BackupPanel.jsx'
 import DataStartDatePanel from '../components/common/admin/DataStartDatePanel.jsx'
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
@@ -74,6 +75,7 @@ const GROUPS = [
       { id: 'signatories', label: 'Signatories', Panel: SignatoriesPanel },
       { id: 'visitor', label: 'Visitor Access', Panel: VisitorAccessPanel },
       { id: 'sheets', label: 'Sheet Sources', Panel: SheetSourcesPanel },
+      { id: 'prSheets', label: 'PR Sheet Sources', Panel: PrSheetSourcesPanel },
       { id: 'dataStartDate', label: 'Data Start Date', Panel: DataStartDatePanel },
       { id: 'backup', label: 'Backup', Panel: BackupPanel },
       { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },

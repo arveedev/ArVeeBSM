@@ -953,6 +953,20 @@ db.version(37).stores({
   pendingPrSheetDeletions: 'id',
 })
 
+// v38 — Purchase Receipt SUMMARY backups get their OWN sheet-source
+// table, entirely separate from db.sheetSources. Confirmed by the user:
+// the WSR/WSI/ESR/ESI backups live as tabs inside the "CONTROL NUMBER"
+// spreadsheet (what db.sheetSources already points at), but the SUMMARY
+// backup belongs in the "PALAY DELIVERIES" spreadsheets - genuinely
+// different files, on their own URLs, one per MONTH rather than one per
+// year. Reusing db.sheetSources (as the first version of this feature
+// mistakenly did) would have written PR data into the CONTROL NUMBER
+// file instead. Same shape as sheetSources (id/dateFrom/dateTo indexed)
+// so it can reuse the same date-range-lookup/overlap-check logic.
+db.version(38).stores({
+  prSheetSources: 'id, dateFrom, dateTo',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

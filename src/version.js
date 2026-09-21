@@ -5227,4 +5227,18 @@
 //            own WRITE_ALLOWLIST - no other server-side change needed,
 //            since its generic appendTransaction/updateTransaction
 //            actions already map by header name for any sheet.
-export const APP_VERSION = '1.10-95'
+//   1.10-96 - Fixed a real architectural mistake in 1.10-95: the SUMMARY
+//            backup was sharing db.sheetSources with the WSR/WSI/ESR/ESI
+//            backups, which all point at the "CONTROL NUMBER"
+//            spreadsheet. Confirmed by the user: SUMMARY actually
+//            belongs in the separate "PALAY DELIVERIES" spreadsheets -
+//            different files, different URLs, one per month rather than
+//            per year. Reusing db.sheetSources would have written PR
+//            data into the CONTROL NUMBER file, never reaching PALAY
+//            DELIVERIES at all. Gave the SUMMARY backup its own table
+//            (db.prSheetSources, v38) and its own admin panel ("PR Sheet
+//            Sources") - completely decoupled from Sheet Sources, so
+//            configuring one can never redirect the other. The panel
+//            groups its entries by year for easier scanning as more
+//            months get added over time.
+export const APP_VERSION = '1.10-96'
