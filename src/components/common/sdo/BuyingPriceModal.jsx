@@ -7,17 +7,28 @@
 // already-issued Purchase Receipt keeps using the price that was
 // actually in effect on its own date (see sdoCalculations.
 // resolveBuyingPrice).
+//
+// Per explicit request, the old separate Dry/Wet price inputs are now
+// ONE "Buying Price" - the underlying buyingPrices row still stores
+// both `dryPrice` and `wetPrice` fields (no schema change, and every
+// already-issued PR's own snapshotted unitCost is untouched either
+// way), just written as the same single value every save, so
+// resolveUnitCost's existing wet/dry branch keeps working unchanged for
+// old records without needing a migration. Also per explicit request,
+// effectiveFrom is now a real date picker (was silently always "today")
+// so a price change can be backdated or scheduled for a future date.
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
-import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
+import { liveFormatNumber, parseFormattedNumber, todayLocalISO } from '../../../utils/calculations.js'
+import CalendarDatePicker from '../CalendarDatePicker.jsx'
 
 function BuyingPriceModal({ currentPriceRow, onClose }) {
   const { user } = useAuth()
-  const [dryPrice, setDryPrice] = useState(currentPriceRow ? String(currentPriceRow.dryPrice) : '')
-  const [wetPrice, setWetPrice] = useState(currentPriceRow ? String(currentPriceRow.wetPrice) : '')
+  const [price, setPrice] = useState(currentPriceRow ? String(currentPriceRow.dryPrice) : '')
+  const [effectiveFrom, setEffectiveFrom] = useState(todayLocalISO())
   const [saving, setSaving] = useState(false)
   const [entered, setEntered] = useState(false)
 
@@ -26,9 +37,8 @@ function BuyingPriceModal({ currentPriceRow, onClose }) {
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  const dryNum = parseFormattedNumber(dryPrice)
-  const wetNum = parseFormattedNumber(wetPrice)
-  const canSave = dryNum > 0 && wetNum > 0 && !saving
+  const priceNum = parseFormattedNumber(price)
+  const canSave = priceNum > 0 && Boolean(effectiveFrom) && !saving
 
   const handleSave = async () => {
     if (!canSave) return
@@ -36,9 +46,9 @@ function BuyingPriceModal({ currentPriceRow, onClose }) {
     try {
       await db.buyingPrices.add({
         id: crypto.randomUUID(),
-        dryPrice: dryNum,
-        wetPrice: wetNum,
-        effectiveFrom: new Date().toISOString().slice(0, 10),
+        dryPrice: priceNum,
+        wetPrice: priceNum,
+        effectiveFrom,
         setByUid: user.uid,
         createdAt: Date.now(),
       })
@@ -65,30 +75,25 @@ function BuyingPriceModal({ currentPriceRow, onClose }) {
         </div>
         <div className="space-y-4 px-4 py-4">
           <div>
-            <label className="text-sm font-semibold uppercase text-neutral-500">Dry Palay (₱/kg)</label>
+            <label className="text-sm font-semibold uppercase text-neutral-500">Buying Price (₱/kg)</label>
             <input
               type="text"
               inputMode="decimal"
-              value={dryPrice}
-              onChange={(e) => setDryPrice(liveFormatNumber(e.target.value, 2))}
+              value={price}
+              onChange={(e) => setPrice(liveFormatNumber(e.target.value, 2))}
               placeholder="0.00"
               className="mt-1.5 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-3 text-xl font-bold text-app-text outline-none transition-colors focus:border-brand-neon"
             />
           </div>
           <div>
-            <label className="text-sm font-semibold uppercase text-neutral-500">Wet Palay (₱/kg)</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={wetPrice}
-              onChange={(e) => setWetPrice(liveFormatNumber(e.target.value, 2))}
-              placeholder="0.00"
-              className="mt-1.5 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-3 text-xl font-bold text-app-text outline-none transition-colors focus:border-brand-neon"
-            />
+            <label className="text-sm font-semibold uppercase text-neutral-500">Effective From</label>
+            <div className="mt-1.5">
+              <CalendarDatePicker value={effectiveFrom} onChange={setEffectiveFrom} valueClassName="text-xl font-bold" />
+            </div>
           </div>
           {currentPriceRow && (
             <p className="text-sm text-neutral-500">
-              Current: ₱{currentPriceRow.dryPrice.toFixed(2)} dry · ₱{currentPriceRow.wetPrice.toFixed(2)} wet, as of {currentPriceRow.effectiveFrom}
+              Current: ₱{currentPriceRow.dryPrice.toFixed(2)}, as of {currentPriceRow.effectiveFrom}
             </p>
           )}
           <button

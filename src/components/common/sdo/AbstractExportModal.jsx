@@ -56,16 +56,36 @@ function AbstractExportModal({ onClose }) {
       const wsrs = await db.transactions.where('id').anyOf(wsrIds).toArray()
       const wsrById = new Map(wsrs.map((w) => [w.id, w]))
 
-      // The Whse column shows the warehouse's own NAME (short form, its
-      // province-code prefix stripped - e.g. "ALB-BSI B" -> "BSI B"),
-      // not the opaque numeric warehouse.code ("050501") - confirmed
-      // directly against a real sample, and matches how every other
-      // warehouse label in this app already strips that same prefix.
-      const enriched = allPrs.map((pr) => ({
-        ...pr,
-        warehouseCode: (warehouseMap.get(pr.warehouseId)?.name ?? '').replace(/^[A-Z]{2,5}-/, ''),
-        wsrSerialNo: wsrById.get(pr.wsrTransactionId)?.serialNo ?? '',
-      }))
+      // The Whse column shows the province code plus the warehouse's own
+      // short name (e.g. "ALB-BSI B", "CTD-ABACORP A") - per explicit
+      // request, built fresh from the warehouse's real provinceId ->
+      // province.code relationship (stripping any prefix the name
+      // already carries first, so a warehouse.name that happens to
+      // already start with one never doubles up into "ALB-ALB-BSI B"),
+      // not the opaque numeric warehouse.code ("050501").
+      const enriched = allPrs.map((pr) => {
+        const warehouse = warehouseMap.get(pr.warehouseId)
+        const province = provinceMap.get(warehouse?.provinceId)
+        const shortName = (warehouse?.name ?? '').replace(/^[A-Z]{2,5}-/, '')
+        return {
+          ...pr,
+          warehouseCode: province?.code ? `${province.code}-${shortName}` : shortName,
+          wsrSerialNo: wsrById.get(pr.wsrTransactionId)?.serialNo ?? '',
+        }
+      })
+      // Per explicit request: rows print sorted ascending by PR Number.
+      // prNo is a free-typed string field (serialNumber.js's
+      // suggestNextPrSerial only suggests a numeric default - it isn't
+      // enforced), so a numeric comparison is tried first when both
+      // sides parse cleanly as numbers, falling back to a plain string
+      // compare for anything that doesn't (never throws, never drops a
+      // row for having an unusual PR Number).
+      enriched.sort((a, b) => {
+        const na = Number(a.prNo)
+        const nb = Number(b.prNo)
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb
+        return (a.prNo ?? '').localeCompare(b.prNo ?? '', undefined, { numeric: true })
+      })
 
       // Opening balance: everything that happened strictly BEFORE this
       // period started.

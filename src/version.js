@@ -5086,4 +5086,38 @@
 //            Also: StockFormBase.jsx's Procurement-only RSBSA/Gender row
 //            was a fixed 2-column grid at every width - now stacks on
 //            narrow screens and sits side by side from sm up.
-export const APP_VERSION = '1.10-86'
+//   1.10-87 - Large SDO/export batch, all per explicit request:
+//            - Abstract PDF (sdoAbstractPdfGenerator.js): rows now sort
+//              ascending by PR Number (AbstractExportModal.jsx, numeric-
+//              aware with a string fallback); the branch header block
+//              and every column header/transaction-detail cell are
+//              UPPERCASE; Equivalent Net Weight always displays 4
+//              decimals everywhere (PDF and PurchaseReceiptModal.jsx's
+//              own preview) - the underlying truncation precision that
+//              determines the stored value is unchanged, this is
+//              display-only; the black "Cash Reconciliation" header bar
+//              is removed, the running-balance rows print on their own;
+//              Address now comes right after the farmer's name, RSBSA
+//              after Address (was Name -> RSBSA -> Address); "Sack"
+//              relabeled "MTS"; a blank spacer row now prints before the
+//              first transaction row and again right before TOTAL.
+//            - The Whse column (and AbstractExportModal.jsx's warehouse
+//              label) is now built fresh from each PR's own warehouse's
+//              real province.code ("ALB-BSI B") instead of stripping
+//              whatever prefix happened to already be baked into
+//              warehouse.name.
+//            - Buying Price: the old separate Dry/Wet inputs are now one
+//              "Buying Price" field (BuyingPriceModal.jsx, SdoHome.jsx's
+//              two price cards merged into one) - still writes the same
+//              value into both existing dryPrice/wetPrice columns, so
+//              every already-issued PR's own snapshotted cost is
+//              unaffected and no schema change was needed. Also added a
+//              real Effective From date picker (was silently always
+//              "today"), so a price change can be backdated or scheduled.
+//            - SdoHome.jsx's Unpaid WSR list could briefly show a
+//              genuine duplicate Dexie record (e.g. a sync-race Sheet-
+//              import placeholder) as two rows for the same WSR before a
+//              background self-heal quietly caught up - added the same
+//              display-level dedup guard Reports.jsx already uses, so
+//              the SDO never sees a duplicate here at all.
+export const APP_VERSION = '1.10-87'

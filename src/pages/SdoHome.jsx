@@ -20,6 +20,33 @@ import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
 
 const LIST_PAGE_SIZE = 50
 
+// Same defensive guard as Reports.jsx's dedupeTransactions - a genuine
+// duplicate Dexie record (e.g. a sync-race placeholder) must never be
+// shown to the SDO at all, even briefly, rather than appearing as two
+// rows for the same WSR and then silently vanishing once a background
+// self-heal catches up - per explicit correction, this list must never
+// visibly show a "duplicate" in the first place.
+const dedupeWsrTransactions = (transactions) => {
+  const seenIds = new Set()
+  const dedupedById = transactions.filter((t) => {
+    if (seenIds.has(t.id)) return false
+    seenIds.add(t.id)
+    return true
+  })
+  // Same isPlaceholder concept serialNumber.js's findTransactionBySerial
+  // already self-heals by elsewhere - a bare Sheet-import placeholder
+  // that slipped in during a sync race - so a real, complete WSR record
+  // is preferred over its own leftover placeholder when both exist.
+  const isPlaceholder = (t) => t.fromSheetImport && t.needsCompletion && !t.pileId
+  const seenKeys = new Map()
+  for (const t of dedupedById) {
+    const key = `${t.type}::${t.warehouseId}::${t.serialNo}::${t.cerealCategory ?? ''}`
+    const existing = seenKeys.get(key)
+    if (!existing || (isPlaceholder(existing) && !isPlaceholder(t))) seenKeys.set(key, t)
+  }
+  return [...seenKeys.values()]
+}
+
 function useDebounced(value, delay = 250) {
   const [debounced, setDebounced] = useState(value)
   useEffect(() => {
@@ -101,7 +128,7 @@ function SdoHome() {
     [warehouseIds.join(','), transactionTypes.length]
   ) ?? []
 
-  const visibleWsrTransactions = wsrTransactions.filter((t) => {
+  const visibleWsrTransactions = dedupeWsrTransactions(wsrTransactions).filter((t) => {
     const cutoff = effectiveCutoffDate(warehouseMap.get(t.warehouseId)?.reportingCutoffDate, globalDataStartDate)
     return !cutoff || t.date > cutoff
   })
@@ -158,24 +185,18 @@ function SdoHome() {
 
   return (
     <div className={`min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 transition-all duration-500 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => setEditingPrice((v) => !v)}
-          className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-all hover:border-brand-neon/50 active:scale-[0.98]"
-        >
-          <div className="text-[10px] font-bold uppercase text-neutral-500">Dry Palay</div>
-          <p className="mt-1.5 text-xl font-bold text-app-text">{currentPriceRow ? `₱${currentPriceRow.dryPrice.toFixed(2)}` : '—'}<span className="text-xs font-semibold text-neutral-500">/kg</span></p>
-        </button>
-        <button
-          type="button"
-          onClick={() => setEditingPrice((v) => !v)}
-          className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-all hover:border-brand-neon/50 active:scale-[0.98]"
-        >
-          <div className="text-[10px] font-bold uppercase text-neutral-500">Wet Palay</div>
-          <p className="mt-1.5 text-xl font-bold text-app-text">{currentPriceRow ? `₱${currentPriceRow.wetPrice.toFixed(2)}` : '—'}<span className="text-xs font-semibold text-neutral-500">/kg</span></p>
-        </button>
-      </div>
+      {/* Per explicit request, one "Buying Price" card replaces the old
+          separate Dry/Wet cards - the underlying row still stores both
+          fields (see BuyingPriceModal.jsx), but they're always written
+          as the same value now, so either one is the single real price. */}
+      <button
+        type="button"
+        onClick={() => setEditingPrice((v) => !v)}
+        className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-all hover:border-brand-neon/50 active:scale-[0.98]"
+      >
+        <div className="text-[10px] font-bold uppercase text-neutral-500">Buying Price</div>
+        <p className="mt-1.5 text-xl font-bold text-app-text">{currentPriceRow ? `₱${currentPriceRow.dryPrice.toFixed(2)}` : '—'}<span className="text-xs font-semibold text-neutral-500">/kg</span></p>
+      </button>
 
       <div className="mt-4 rounded-2xl border border-brand-neon/40 bg-brand-neon/5 p-4 transition-all">
         <p className="text-[10px] font-bold uppercase text-brand-neon">Cash on Hand</p>

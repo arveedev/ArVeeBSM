@@ -72,11 +72,10 @@ const fmtBags = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-PH'))
 const fmtKilos = (n, d = 3) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d }))
 const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
-// Duplicated locally rather than imported from sdoCalculations.js, per
-// this file's own house rule (see the top comment) of staying self-
-// contained - same rule the SDO reference screen uses: ENW shows 3
-// decimals when its factor is exactly 1, 4 otherwise.
-const enwDecimalsForFactor = (factor) => (Number(factor) === 1 ? 3 : 4)
+// Per explicit request, Equivalent Net Weight is always 4 decimals
+// everywhere on this export - the old factor-dependent 3-vs-4 split
+// (this local copy, and sdoCalculations.js's own enwDecimalsForFactor)
+// no longer applies here.
 
 const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
   doc.setFont('helvetica', 'bold')
@@ -85,7 +84,7 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
   doc.text('NATIONAL FOOD AUTHORITY', pageW / 2, 12, { align: 'center' })
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
-  doc.text(branchLabel, pageW / 2, 17, { align: 'center' })
+  doc.text((branchLabel ?? '').toUpperCase(), pageW / 2, 17, { align: 'center' })
   // Rule between the org block and the report title - present on the
   // reference layout, missing here before.
   doc.setDrawColor(...BLACK)
@@ -96,7 +95,7 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
   doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 26, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-  doc.text(`For the period ${periodLabel}`, pageW / 2, 31, { align: 'center' })
+  doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 31, { align: 'center' })
 }
 
 /**
@@ -136,35 +135,56 @@ export const generateSdoAbstract = ({
   // a period that genuinely crosses a year boundary keeps the full date
   // per row so nothing is lost.
   const year = commonYear(purchaseReceipts.map((pr) => pr.date))
-  const dateHeader = year ? { content: `Date\n${year}`, styles: { valign: 'middle' } } : 'Date'
+  const dateHeader = year ? { content: `DATE\n${year}`, styles: { valign: 'middle' } } : 'DATE'
   const fmtRowDate = (iso) => (year ? fmtDateShort(iso) : fmtDateLong(iso))
 
   // The BN/SH mark is deliberately NOT a table column - "must not be in
   // a table, just a text on that side" - tracked in its own array by
   // row index and drawn just past the table's right edge via
-  // didDrawCell below, instead.
-  const marks = purchaseReceipts.map((pr) => (pr.mtsCondition ?? '').toLowerCase())
+  // didDrawCell below, instead. Padded with one blank entry on each end
+  // to stay aligned with body's own leading/trailing spacer rows below
+  // (a blank mark is a no-op - didDrawCell's `if (!mark) return` guard
+  // already skips it).
+  const marks = ['', ...purchaseReceipts.map((pr) => (pr.mtsCondition ?? '').toLowerCase()), '']
 
+  // Column order per explicit request: Address comes right after the
+  // farmer's name, RSBSA after Address (was Name -> RSBSA -> Address).
+  // "Sack" (the Gross/Sack/Net weight split, not a sack-type count)
+  // relabeled to "MTS" per explicit request.
+  //
   // Basic Cost is only meaningfully DIFFERENT from Total Amount when
   // Pricer adds something on top of it - "the basic cost is part of
   // the pricers" - so with Pricer disabled it's the same figure as
   // Total Amount twice over, and the column is dropped entirely rather
   // than repeat it.
   const head = [[
-    dateHeader, 'Whse', 'Name of Farmer', 'RSBSA No.', 'Address', 'PR No.', 'WSR No.', 'Qty Bags', 'Variety', 'MC', 'Pur.',
-    'Gross', 'Sack', 'Net', 'ENW Factor', 'Equiv. Net Wt.', 'Unit Cost',
-    ...(pricerEnabled ? ['Basic Cost', 'Rate', 'Amount'] : []),
-    'Total Amount',
+    dateHeader, 'WHSE', 'NAME OF FARMER', 'ADDRESS', 'RSBSA NO.', 'PR NO.', 'WSR NO.', 'QTY BAGS', 'VARIETY', 'MC', 'PUR.',
+    'GROSS', 'MTS', 'NET', 'ENW FACTOR', 'EQUIV. NET WT.', 'UNIT COST',
+    ...(pricerEnabled ? ['BASIC COST', 'RATE', 'AMOUNT'] : []),
+    'TOTAL AMOUNT',
   ]]
 
+  // A blank, borderless row - one before the first real transaction row
+  // and one right before TOTAL (appended as the body's own last row,
+  // since TOTAL itself is the table's `foot`, drawn immediately after
+  // the body) - per explicit request, visually separating the header/
+  // TOTAL from the actual transaction rows.
+  const spacerRow = head[0].map(() => ({
+    content: '', styles: { minCellHeight: 3, cellPadding: 0, lineWidth: 0 },
+  }))
+
   const body = purchaseReceipts.map((pr) => [
-    fmtRowDate(pr.date), pr.warehouseCode ?? '', pr.payeeName, pr.rsbsa ?? '', pr.payeeAddress,
-    pr.prNo, pr.wsrSerialNo ?? '', fmtBags(pr.numberOfBags), baseVarietyCode(pr.classification), pr.moistureContent, purityText(pr),
+    fmtRowDate(pr.date), (pr.warehouseCode ?? '').toUpperCase(), (pr.payeeName ?? '').toUpperCase(),
+    (pr.payeeAddress ?? '').toUpperCase(), (pr.rsbsa ?? '').toUpperCase(),
+    (pr.prNo ?? '').toUpperCase(), (pr.wsrSerialNo ?? '').toUpperCase(), fmtBags(pr.numberOfBags),
+    baseVarietyCode(pr.classification).toUpperCase(), pr.moistureContent, purityText(pr).toUpperCase(),
     fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
-    pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, enwDecimalsForFactor(pr.enwFactor)), fmtKilos(pr.unitCost, 2),
+    pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 4), fmtKilos(pr.unitCost, 2),
     ...(pricerEnabled ? [fmtPeso(pr.basicCost), fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),
     fmtPeso(pr.totalAmount),
   ])
+  body.unshift(spacerRow)
+  body.push(spacerRow)
 
   const totals = purchaseReceipts.reduce((a, pr) => ({
     bags: a.bags + (pr.numberOfBags ?? 0),
@@ -198,7 +218,10 @@ export const generateSdoAbstract = ({
     styles: { font: 'helvetica', fontSize: 8, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.3, halign: 'center' },
     headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center', valign: 'middle' },
     footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 8, halign: 'center' },
-    columnStyles: { 2: { halign: 'left' }, 4: { halign: 'left' } },
+    // Col 2 Name of Farmer, col 3 Address - both left-aligned (RSBSA,
+    // now col 4, stays centered with the table's default like every
+    // other short-code column).
+    columnStyles: { 2: { halign: 'left' }, 3: { halign: 'left' } },
     didDrawPage: () => drawBranchHeader(doc, { branchLabel, periodLabel }),
     // Draws each row's BN/SH mark just past the table's own right edge
     // once that row's last real column has been placed - small, light
@@ -291,16 +314,11 @@ export const generateSdoAbstract = ({
     doc.setTextColor(...BLACK)
   })
 
+  // Per explicit request, the black "Cash Reconciliation" header bar is
+  // removed - the running-balance rows below print on their own, with
+  // no boxed title above them.
   const reconX = margin + sigAreaW + gapBeforeRecon
   let ry = y - 4
-  doc.setFillColor(...BLACK)
-  doc.rect(reconX, ry, reconW, 7, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.text('Cash Reconciliation', reconX + reconW / 2, ry + 5, { align: 'center' })
-  doc.setTextColor(...BLACK)
-  ry += 7
   // A running TOTAL after the initial COH+ADD, then again after EVERY
   // LESS deduction - confirmed directly against a real sample of this
   // document, and something this generator was missing entirely before

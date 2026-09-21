@@ -19,7 +19,7 @@ import { getPalayMoistureState, fmtBags, fmtKilos, liveFormatNumber, parseFormat
 import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken } from '../../../utils/serialNumber.js'
 import {
   lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost, computePricerAmount,
-  resolveBuyingPrice, resolveUnitCost, amountInWords, enwDecimalsForFactor,
+  resolveBuyingPrice, resolveUnitCost, amountInWords,
 } from '../../../utils/sdoCalculations.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 
@@ -328,7 +328,12 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
               <p>Bags <span className="font-semibold tabular-nums text-app-text">{fmtBags(wsr.numberOfBags)}</span></p>
               <p>Gross <span className="font-semibold tabular-nums text-app-text">{fmtKilos(wsr.grossKilos)}</span></p>
               <p>Net <span className="font-semibold tabular-nums text-app-text">{fmtKilos(netKilos)}</span></p>
-              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: enwDecimalsForFactor(displayed.factor), maximumFractionDigits: enwDecimalsForFactor(displayed.factor) }) : '—'}</span></p>
+              {/* Per explicit request, Equivalent Net Weight always
+                  DISPLAYS 4 decimals everywhere - the underlying stored
+                  value's own truncation precision (enwDecimalsForFactor,
+                  3 vs 4 depending on the ENW factor) is unchanged, this
+                  only affects how many places are shown/padded. */}
+              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—'}</span></p>
             </div>
           </div>
 
