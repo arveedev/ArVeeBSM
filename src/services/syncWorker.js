@@ -204,7 +204,19 @@ const runSyncQueue = async () => {
           deleteTransactionBackup(deletion.serialNo, deletion.type, deletion.warehouseCode)
         )
         if (result.ok) {
-          if (result.found === false) {
+          // Reported real bug: an already-Cancelled (voided) record was
+          // never written to the Sheet in the first place - policy is to
+          // never back up a cancelled document - so deleting one (e.g.
+          // un-voiding, which hard-deletes the Cancelled record to free
+          // its serial number again) will ALWAYS come back "not found"
+          // here. That's the expected, correct outcome, not something
+          // needing the user's attention - the alarming red toast was
+          // firing on a guaranteed non-event. `expectMissing` (set by the
+          // caller when it knows the record being deleted was Cancelled)
+          // suppresses it for exactly that case, while a genuinely
+          // unexpected missing row (deleting a record that WAS supposed
+          // to be backed up) still warns as before.
+          if (result.found === false && !deletion.expectMissing) {
             toast.error(`${deletion.type} ${deletion.serialNo} deleted locally, but no matching row was found on the Sheet — please verify manually`, { duration: 10000 })
           }
           await db.pendingSheetDeletions.delete(deletion.id)
@@ -256,8 +268,15 @@ const runSyncQueue = async () => {
  * the next successful sync retries it - the local transaction record
  * is already gone by then (a real hard delete happens immediately), so
  * only serialNo/type need to survive to replay the deletion later.
+ *
+ * `expectMissing` - pass true when the caller already knows this record
+ * was Cancelled (voided). A cancelled document is deliberately never
+ * written to the Sheet backup at all (policy, not a bug), so a "no
+ * matching row" result here is guaranteed and expected, not something
+ * that should alarm the user - unlike deleting a genuinely Active
+ * record, where a missing row IS a real, worth-surfacing discrepancy.
  */
-export const queueTransactionDeletion = async (serialNo, type, warehouseCode) => {
+export const queueTransactionDeletion = async (serialNo, type, warehouseCode, { expectMissing = false } = {}) => {
   try {
     const result = await deleteTransactionBackup(serialNo, type, warehouseCode)
     if (result.ok) {
@@ -269,7 +288,7 @@ export const queueTransactionDeletion = async (serialNo, type, warehouseCode) =>
       // re-queued here since retrying against the same source won't
       // find it any better the second time - surfacing it is the only
       // useful next step, so the user can go check the Sheet by hand.
-      if (result.found === false) {
+      if (result.found === false && !expectMissing) {
         toast.error(`${type} ${serialNo} deleted locally, but no matching row was found on the Sheet — please verify manually`, { duration: 10000 })
       }
       return
@@ -277,7 +296,7 @@ export const queueTransactionDeletion = async (serialNo, type, warehouseCode) =>
   } catch {
     // fall through to queueing below
   }
-  await db.pendingSheetDeletions.add({ id: crypto.randomUUID(), serialNo, type, warehouseCode })
+  await db.pendingSheetDeletions.add({ id: crypto.randomUUID(), serialNo, type, warehouseCode, expectMissing })
 }
 
 let immediateSyncRegistered = false

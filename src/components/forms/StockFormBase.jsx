@@ -2448,11 +2448,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       // deletion's effect on the pile total.
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
-      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
+      // Reported real bug: deleting an already-Cancelled record (a
+      // cancelled document is never written to the Sheet by policy)
+      // triggered an alarming "no matching row found" toast for a
+      // guaranteed, expected outcome. expectMissing tells
+      // queueTransactionDeletion not to warn for exactly that case.
+      const wasCancelled = loadedTransaction.status === 'Cancelled'
+      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code, { expectMissing: wasCancelled }) // fire-and-forget - local delete is already done, don't make the UI wait on the network
 
       for (const orig of originalExtraAllocations) {
         await db.transactions.delete(orig.id)
-        queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
+        queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code, { expectMissing: wasCancelled })
       }
 
       // A Cancelled (already-voided) record's pile/authority effect was
@@ -2570,10 +2576,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       await db.transactions.delete(loadedTransaction.id)
       for (const orig of originalExtraAllocations) {
         await db.transactions.delete(orig.id)
-        queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code)
+        // Un-voiding only ever deletes an already-Cancelled record - a
+        // "no matching row" result here is always expected, never a real
+        // discrepancy (see handleDeleteConfirmed's identical comment).
+        queueTransactionDeletion(orig.serialNo, loadedTransaction.type, currentWarehouse?.code, { expectMissing: true })
       }
       await recalculateSerialCounter(type, currentWarehouseId, activeCategory)
-      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
+      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code, { expectMissing: true })
     })
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()

@@ -909,7 +909,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     await db.transaction('rw', db.tables, async () => {
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter('WTS', currentWarehouseId)
-      queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
+      // Reported real bug: deleting an already-Cancelled record (a
+      // cancelled document is never written to the Sheet by policy)
+      // triggered an alarming "no matching row found" toast for a
+      // guaranteed, expected outcome. expectMissing tells
+      // queueTransactionDeletion not to warn for exactly that case.
+      queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code, { expectMissing: loadedTransaction.status === 'Cancelled' })
       // A Cancelled (already-voided) record's pile effect was already
       // reversed at void time - reversing it again here would double-
       // reverse both piles. Real, confirmed gap: Void already guards
@@ -987,7 +992,10 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     await db.transaction('rw', db.tables, async () => {
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter('WTS', currentWarehouseId)
-      queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code)
+      // Un-voiding only ever deletes an already-Cancelled record - a "no
+      // matching row" result here is always expected, never a real
+      // discrepancy (see handleDeleteConfirmed's identical comment).
+      queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code, { expectMissing: true })
     })
     toast.success(`WTS ${serialNo.trim()} is no longer cancelled — available again`)
     resetForm(serialNo.trim())

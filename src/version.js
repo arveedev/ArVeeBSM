@@ -4814,4 +4814,32 @@
 //            already-correct rule the other direction (picking a pile
 //            BEFORE the authority: handleSelectAuthority clears a
 //            mismatched pile rather than the other way around).
-export const APP_VERSION = '1.10-72'
+//   1.10-73 - Two real fixes, both reported directly. (1) Serious data
+//            integrity bug: two consecutive weekly Stock Report PDFs
+//            (Sep 1-7 vs Sep 8-15) disagreed on the carried-forward
+//            balance - period 1's own Ending Balance was under-reported
+//            by exactly one Cancelled transaction's bag/kilo count,
+//            while period 2's independently-computed Beginning Balance
+//            (Reports.jsx, already correctly Active-only) didn't repeat
+//            that error, so the two periods silently stopped agreeing.
+//            Root cause in pdfGenerator.js: Cancelled transactions are
+//            deliberately kept in the receipts/issues arrays so
+//            Statement pages can list them (labeled "CANCELLED") for
+//            audit visibility - but every SUMMING function reusing
+//            those same arrays (Summary balances, Recap totals, a
+//            Statement page's own bottom TOTAL row, and their sack
+//            equivalents) had no status filter at all, silently
+//            counting a cancelled transaction's bags/kilos/pieces as
+//            real stock movement. Added one shared `isCountable` filter
+//            and applied it everywhere a real total gets accumulated -
+//            never in the row-by-row listing itself, which still shows
+//            Cancelled rows exactly as before. (2) Deleting an already-
+//            Cancelled record (e.g. un-voiding) always triggered an
+//            alarming "no matching row found on the Sheet" toast - a
+//            cancelled document is deliberately never written to the
+//            Sheet backup by policy, so that outcome is guaranteed and
+//            expected, not a real discrepancy. queueTransactionDeletion
+//            now takes an `expectMissing` flag, passed as true whenever
+//            the caller (StockFormBase/SackFormBase/WTSForm, both
+//            Delete and Un-void) already knows the record was Cancelled.
+export const APP_VERSION = '1.10-73'

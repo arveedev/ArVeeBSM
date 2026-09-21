@@ -26,6 +26,22 @@ import { compareByRecency } from './serialNumber.js'
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
+// Reported real bug: a Cancelled transaction is deliberately kept in the
+// receipts/issues arrays this whole file works from - Statement pages
+// intentionally list it (labeled "CANCELLED") for audit visibility - but
+// every SUMMING function below (Summary balances, Recap totals, a
+// Statement page's own bottom TOTAL row, and their sack equivalents)
+// was including its bags/kilos/pieces as if it were real stock movement,
+// with no status filter anywhere. Confirmed against a real exported pair
+// of consecutive weekly reports: one period's Ending Balance was under-
+// reported by exactly one cancelled transaction's own bag/kilo count,
+// while the NEXT period's Beginning Balance (computed separately in
+// Reports.jsx, which already correctly filters to status === 'Active')
+// didn't carry that same error forward - so the two periods silently
+// stopped agreeing with each other. Use this wherever a real total is
+// being accumulated; never in the row-by-row listing itself.
+const isCountable = (t) => t.status !== 'Cancelled'
+
 const fmtBags = (n) =>
   (n == null || n === 0) ? '-' : Math.round(n).toLocaleString('en-PH')
 
@@ -380,10 +396,10 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
         }
       }
     }
-    const recBags = receipts.filter(matchesGroup).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
-    const recKilos = receipts.filter(matchesGroup).reduce((s, t) => s + (t.netKilos ?? 0), 0)
-    const issBags = issues.filter(matchesGroup).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
-    const issKilos = issues.filter(matchesGroup).reduce((s, t) => s + (t.netKilos ?? 0), 0)
+    const recBags = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
+    const recKilos = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.netKilos ?? 0), 0)
+    const issBags = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
+    const issKilos = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.netKilos ?? 0), 0)
     const endBags = beg.bags + recBags - issBags
     const endKilos = beg.kilos + recKilos - issKilos
 
@@ -519,9 +535,11 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
 
   let totBags = 0, totGross = 0, totNet = 0
   const body = sorted.map((t) => {
-    totBags += t.numberOfBags ?? 0
-    totGross += t.grossKilos ?? 0
-    totNet += t.netKilos ?? 0
+    if (isCountable(t)) {
+      totBags += t.numberOfBags ?? 0
+      totGross += t.grossKilos ?? 0
+      totNet += t.netKilos ?? 0
+    }
     const row = [
       dateYear ? fmtDateNoYear(t.date) : fmtDate(t.date),
       t.transactionTypeName ?? '',
@@ -636,7 +654,7 @@ const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, si
   y += 5
 
   const byActivity = {}
-  for (const t of transactions) {
+  for (const t of transactions.filter(isCountable)) {
     const act = t.transactionTypeName || 'UNKNOWN'
     if (!byActivity[act]) byActivity[act] = []
     byActivity[act].push(t)
@@ -728,10 +746,10 @@ const addSackSummaryPage = (doc, { header, sackReceipts, sackIssues, sackBeginBa
     const [sackTypeId, condition] = key.split('::')
     const sackType = sackTypeMap.get(sackTypeId)
     const beg = sackBeginBals?.get(key) ?? 0
-    const rec = sackReceipts.flatMap(t => t.sackLines ?? [])
+    const rec = sackReceipts.filter(isCountable).flatMap(t => t.sackLines ?? [])
       .filter(l => l.sackTypeId === sackTypeId && l.condition === condition)
       .reduce((s, l) => s + (l.pieces ?? 0), 0)
-    const iss = sackIssues.flatMap(t => t.sackLines ?? [])
+    const iss = sackIssues.filter(isCountable).flatMap(t => t.sackLines ?? [])
       .filter(l => l.sackTypeId === sackTypeId && l.condition === condition)
       .reduce((s, l) => s + (l.pieces ?? 0), 0)
     const end = beg + rec - iss
@@ -785,7 +803,7 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
     for (let i = 0; i < Math.max(lines.length, 1); i++) {
       const l = lines[i]
       const pcs = l?.pieces ?? 0
-      grandTotal += pcs
+      if (isCountable(t)) grandTotal += pcs
       body.push([
         i === 0 ? (dateYear ? fmtDateNoYear(t.date) : fmtDate(t.date)) : '',
         i === 0 ? (t.transactionTypeName ?? '') : '',
@@ -862,7 +880,7 @@ const addSackRecapPage = (doc, { header, transactions, isIssues, sackTypeMap, si
 
   // Group by sack type code + activity → condition → total pieces
   const groups = {}
-  for (const t of transactions) {
+  for (const t of transactions.filter(isCountable)) {
     const actLabel = t.transactionTypeName ?? '—'
     for (const l of (t.sackLines ?? [])) {
       const code = sackTypeMap.get(l.sackTypeId)?.code ?? '?'

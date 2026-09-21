@@ -1046,7 +1046,12 @@ const SackFormBase = forwardRef(function SackFormBase(
     await db.transaction('rw', db.tables, async () => {
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter(type, currentWarehouseId)
-      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code) // fire-and-forget - local delete is already done, don't make the UI wait on the network
+      // Reported real bug: deleting an already-Cancelled record (a
+      // cancelled document is never written to the Sheet by policy)
+      // triggered an alarming "no matching row found" toast for a
+      // guaranteed, expected outcome. expectMissing tells
+      // queueTransactionDeletion not to warn for exactly that case.
+      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code, { expectMissing: loadedTransaction.status === 'Cancelled' }) // fire-and-forget - local delete is already done, don't make the UI wait on the network
 
       // A Cancelled (already-voided) record's SIA balance was already
       // reversed at void time - reversing it again here would double-
@@ -1134,7 +1139,10 @@ const SackFormBase = forwardRef(function SackFormBase(
     await db.transaction('rw', db.tables, async () => {
       await db.transactions.delete(loadedTransaction.id)
       await recalculateSerialCounter(type, currentWarehouseId)
-      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code)
+      // Un-voiding only ever deletes an already-Cancelled record - a "no
+      // matching row" result here is always expected, never a real
+      // discrepancy (see handleDeleteConfirmed's identical comment).
+      queueTransactionDeletion(loadedTransaction.serialNo, loadedTransaction.type, currentWarehouse?.code, { expectMissing: true })
     })
     toast.success(`${type} ${serialNo.trim()} is no longer cancelled — available again`)
     const freedSerial = serialNo.trim()
