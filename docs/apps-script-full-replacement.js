@@ -48,6 +48,14 @@
  * was never at fault, only the response-delivery path for one huge
  * payload. The client now requests this in pages instead.
  *
+ * UPDATED AGAIN: appendTransaction/updateTransaction now write only the
+ * specific cells the caller provided (see writeRowCells), instead of
+ * overwriting the whole row width with blanks for anything not
+ * provided. Fixes a real reported bug: a hand-maintained REMARKS formula
+ * (e.g. =IF(K2="GID 2","CTD","ALB")) kept getting silently wiped out on
+ * every sync, since the app deliberately never sends a REMARKS key and
+ * the old code turned "not sent" into "write blank" for the whole row.
+ *
  * ── Safety, enforced here, not just trusted from the calling app ──
  * This app must NEVER write to the AI or SIA sheets - WRITE_ALLOWLIST
  * below is checked on every single write request BEFORE anything
@@ -157,6 +165,35 @@ function preformatSerialColumnAsText(sheet, headers, columnName, rowIndex) {
   if (colIndex === -1) return;
   sheet.getRange(rowIndex, colIndex + 1).setNumberFormat('@');
   SpreadsheetApp.flush(); // ensure the format is committed before the value is written
+}
+
+/**
+ * Writes ONLY the cells the caller actually provided in `rowData` (plus
+ * Last Modified, stamped with the server's own current time so it's
+ * consistent regardless of any device's clock being off). Any header
+ * NOT present as a key in `rowData` is left completely untouched.
+ *
+ * Confirmed, reported real bug: appendTransaction/updateTransaction used
+ * to build a full-width row array (blank string for every header not in
+ * the posted `row`) and write it in one setValues() call across the
+ * whole row - which silently blanked out any hand-maintained cell the
+ * app never intended to touch, most notably a REMARKS column holding a
+ * manual formula (e.g. =IF(K2="GID 2","CTD","ALB")) that the client
+ * deliberately omits so the sheet's own formula stays intact. Every
+ * write (new row or existing) now goes through this cell-by-cell path
+ * instead, so a column this app was never told about can never be
+ * cleared by a sync, no matter how many times a row gets appended to or
+ * updated.
+ */
+function writeRowCells(sheet, rowIndex, headers, rowData, lastModIndex) {
+  headers.forEach((header, i) => {
+    if (Object.prototype.hasOwnProperty.call(rowData, header)) {
+      sheet.getRange(rowIndex, i + 1).setValue(rowData[header]);
+    }
+  });
+  if (lastModIndex !== -1) {
+    sheet.getRange(rowIndex, lastModIndex + 1).setValue(new Date().toISOString());
+  }
 }
 
 /**
@@ -488,11 +525,12 @@ function doGet(e) {
  *
  *   updateTransaction: { sheet, matchColumn, matchValue, row } - finds
  *     the row whose matchColumn cell equals matchValue and overwrites
- *     its entire contents with row (same column-mapping rule as
- *     append). Returns an error if no matching row is found - it does
- *     NOT fall back to creating one, since a mismatched serial number
- *     usually means something else is wrong and silently appending
- *     instead would hide that.
+ *     ONLY the cells named as keys in `row` (same column-mapping rule as
+ *     append) - any other column on that row (e.g. a hand-maintained
+ *     REMARKS formula) is left completely untouched, never blanked. If
+ *     no matching row is found, falls back to appending it fresh rather
+ *     than erroring forever with no way to resolve it (e.g. the row was
+ *     deleted by hand).
  *
  *   deleteTransaction: { sheet, matchColumn, matchValue } - finds and
  *     deletes the matching row entirely (mirrors the app's own
@@ -535,13 +573,7 @@ function doPost(e) {
 
     if (body.action === 'appendTransaction') {
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-      const newRow = headers.map((header) => (header in body.row ? body.row[header] : ''));
-      // Stamped with the server's own current time, not anything the
-      // client sent - keeps this consistent regardless of any given
-      // device's clock being off, which matters for a timestamp other
-      // devices will later filter on.
       const lastModIndex = headers.indexOf('Last Modified');
-      if (lastModIndex !== -1) newRow[lastModIndex] = new Date().toISOString();
 
       // Idempotency guard: a row for this exact serial may already exist
       // on this sheet - from a retried sync after a dropped/late
@@ -562,22 +594,20 @@ function doPost(e) {
 
       if (existingRowIndex !== -1) {
         preformatSerialColumnAsText(sheet, headers, body.serialColumn, existingRowIndex);
-        sheet.getRange(existingRowIndex, 1, 1, newRow.length).setValues([newRow]);
+        writeRowCells(sheet, existingRowIndex, headers, body.row, lastModIndex);
         return jsonResponse({ status: 'SUCCESS', deduped: true });
       }
 
       const newRowIndex = sheet.getLastRow() + 1;
       preformatSerialColumnAsText(sheet, headers, body.serialColumn, newRowIndex);
-      sheet.appendRow(newRow);
+      writeRowCells(sheet, newRowIndex, headers, body.row, lastModIndex);
       return jsonResponse({ status: 'SUCCESS' });
     }
 
     if (body.action === 'updateTransaction') {
       const rowIndex = findRowIndexByMatch(sheet, body.matchColumn, body.matchValue);
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-      const updatedRow = headers.map((header) => (header in body.row ? body.row[header] : ''));
       const lastModIndex = headers.indexOf('Last Modified');
-      if (lastModIndex !== -1) updatedRow[lastModIndex] = new Date().toISOString();
 
       if (rowIndex === -1) {
         // No matching row - most commonly because it was deleted by
@@ -586,12 +616,12 @@ function doPost(e) {
         // this same failure forever with no way to ever resolve it.
         const newRowIndex = sheet.getLastRow() + 1;
         preformatSerialColumnAsText(sheet, headers, body.matchColumn, newRowIndex);
-        sheet.appendRow(updatedRow);
+        writeRowCells(sheet, newRowIndex, headers, body.row, lastModIndex);
         return jsonResponse({ status: 'SUCCESS' });
       }
 
       preformatSerialColumnAsText(sheet, headers, body.matchColumn, rowIndex);
-      sheet.getRange(rowIndex, 1, 1, updatedRow.length).setValues([updatedRow]);
+      writeRowCells(sheet, rowIndex, headers, body.row, lastModIndex);
       return jsonResponse({ status: 'SUCCESS' });
     }
 

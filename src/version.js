@@ -5296,4 +5296,19 @@
 //            and don't represent an FA transaction). A v40 Dexie
 //            migration resets sync state on already-backed-up FA PRs so
 //            existing rows on real Sheets self-correct on the next sync.
-export const APP_VERSION = '1.10-100'
+//   1.10-101 - docs/apps-script-full-replacement.js only: fixed a real
+//            reported bug - the SUMMARY sheet's hand-maintained REMARKS
+//            formula (=IF(K2="GID 2","CTD","ALB")) kept getting silently
+//            wiped on every sync. Root cause: appendTransaction/
+//            updateTransaction built a full-width row array (blank
+//            string for any header not sent, including REMARKS, which
+//            the app deliberately never sends) and wrote the WHOLE row
+//            in one setValues() call - "not sent" became "write blank"
+//            for the entire row, clobbering REMARKS even though the app
+//            never touched it directly. New writeRowCells() helper
+//            writes only the specific cells the caller actually
+//            provided, leaving every other column (REMARKS or anything
+//            else hand-maintained) completely alone, on every sheet
+//            this same code backs up (WSR/WSI/ESR/ESI/SUMMARY/MO/TMO).
+//            No app-side code changed - redeploy-only fix.
+export const APP_VERSION = '1.10-101'
