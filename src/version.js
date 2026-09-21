@@ -4972,4 +4972,39 @@
 //            dedup guard pdfGenerator.js's addStockStatementPage
 //            already applies - added the identical guard here so the
 //            on-screen list and the exported PDF always agree.
-export const APP_VERSION = '1.10-80'
+//   1.10-81 - 1.10-80 was still wrong on two counts per direct
+//            correction, both now fixed:
+//            (1) The on-screen dedup guard keyed on cerealCategory,
+//            but the two real duplicate Dexie records for 26529454 both
+//            had it null - so their normalized keys matched (should
+//            have deduped) yet both still rendered. Root cause: a
+//            Cancelled record has nothing left to legitimately
+//            distinguish it by category (buildCancelledPayload wipes
+//            every content field), so requiring an exact category match
+//            to dedupe two Cancelled records was too strict - Active
+//            records still require it (Rice #50 and Palay #50 ARE
+//            legitimately different real documents), but two Cancelled
+//            records sharing type+warehouse+serial are now always
+//            treated as the same real document regardless of category.
+//            (2) A cancelled document's serial number belongs to one
+//            specific cereal-type series just like every other document
+//            (Rice and Palay never share a series) - guessing its
+//            category from "whichever real category this export/period
+//            happens to have the most/first activity in" was never
+//            actually correct, it just coincidentally looked right in
+//            the single-category case. Per explicit correction: the
+//            true category is knowable from the immediately surrounding
+//            serials in that same document type's own series (e.g.
+//            #9453 and #9455 both Rice means #9454, cancelled with no
+//            category of its own, is provably Rice too) - added
+//            Reports.jsx's resolveOrphanCategories to infer it that way
+//            before either the on-screen list or the PDF export ever
+//            sees the record, so both agree and neither creates a
+//            phantom "Unknown" summary/statement page for a record that
+//            demonstrably belongs to a real series. Also fixed a related
+//            bug this surfaced: pdfGenerator.js's own fallback treated
+//            the literal string 'Unknown' (which Reports.jsx's
+//            enrichStock uses to normalize a truly-null category before
+//            handing records to the PDF) as if it were a real category,
+//            silently resurrecting the phantom page even after 1.10-80.
+export const APP_VERSION = '1.10-81'

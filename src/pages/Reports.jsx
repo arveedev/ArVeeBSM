@@ -67,15 +67,62 @@ const dedupeTransactions = (transactions) => {
     seenIds.add(t.id)
     return true
   })
-  const seenKeys = new Set()
-  const deduped = []
+  const seenByKey = new Map()
   for (const t of dedupedById) {
-    const key = `${t.type}::${t.warehouseId}::${t.serialNo}::${t.cerealCategory ?? ''}`
-    if (seenKeys.has(key)) continue
-    seenKeys.add(key)
-    deduped.push(t)
+    // A Cancelled record has nothing left to legitimately distinguish it
+    // by category - buildCancelledPayload wipes every content field, and
+    // cerealCategory itself may or may not have been preserved depending
+    // on when it was voided - so two Cancelled records sharing the same
+    // type+warehouse+serial are always the same real document, never a
+    // genuine same-number collision between two different series. Only
+    // an Active record's category is part of the key, since e.g. Rice
+    // #50 and Palay #50 ARE legitimately different real documents that
+    // must never be merged.
+    const key = t.status === 'Cancelled'
+      ? `${t.type}::${t.warehouseId}::${t.serialNo}`
+      : `${t.type}::${t.warehouseId}::${t.serialNo}::${t.cerealCategory ?? ''}`
+    const existing = seenByKey.get(key)
+    // Prefer whichever copy still has a real stored category, so a
+    // duplicate pair (one with cerealCategory preserved, one without)
+    // doesn't discard the recoverable one by coin-flip array order.
+    if (!existing || (!existing.cerealCategory && t.cerealCategory)) {
+      seenByKey.set(key, t)
+    }
   }
-  return deduped
+  return [...seenByKey.values()]
+}
+
+// A Cancelled record can lose its own cerealCategory (buildCancelledPayload
+// nulls it for anything voided before category-preservation existed) - but
+// per NFA convention each document type (WSR/WSI/ESR/ESI/WTS) keeps a
+// separate, contiguous series PER cereal type within a warehouse (see
+// serialNumber.js), so the category is still knowable: whichever real
+// category the immediately surrounding serials in this same list belong
+// to. `list` must already be sorted by serial (bySerial) and scoped to one
+// document type (stockReceipts or stockIssues, never both mixed), since
+// that's the actual series boundary - mixing WSR neighbors into a WSI gap
+// would infer a category from the wrong series entirely.
+const resolveOrphanCategories = (list) => {
+  const isKnown = (t) => t.cerealCategory && t.cerealCategory !== 'Unknown'
+  return list.map((t, i) => {
+    if (isKnown(t)) return t
+    let prevCat = null
+    for (let j = i - 1; j >= 0; j--) {
+      if (isKnown(list[j])) { prevCat = list[j].cerealCategory; break }
+    }
+    let nextCat = null
+    for (let j = i + 1; j < list.length; j++) {
+      if (isKnown(list[j])) { nextCat = list[j].cerealCategory; break }
+    }
+    // Neighbors on both sides agreeing is the strongest signal; only one
+    // side present is still far better than a blind guess; disagreeing
+    // neighbors (the series genuinely changed category right at this
+    // gap) fall through unresolved rather than picking one arbitrarily.
+    const resolved = prevCat && nextCat
+      ? (prevCat === nextCat ? prevCat : null)
+      : (prevCat ?? nextCat)
+    return resolved ? { ...t, cerealCategory: resolved } : t
+  })
 }
 
 const combineMultiPileGroups = (transactions) => {
@@ -182,8 +229,11 @@ function Reports() {
   // feature - see combineMultiPileGroups) - combining receipts too is
   // harmless either way, since an ordinary WSR has no groupSerialNo
   // and passes through as its own single-item group regardless.
-  const stockReceipts = combineMultiPileGroups(rawStockReceipts).map(enrichStock).sort(bySerial)
-  const stockIssues = combineMultiPileGroups(rawStockIssues).map(enrichStock).sort(bySerial)
+  // resolveOrphanCategories runs per document type (receipts vs issues
+  // built and sorted separately above) since that's the real series
+  // boundary - a WSR's series never informs a WSI's gap, and vice versa.
+  const stockReceipts = resolveOrphanCategories(combineMultiPileGroups(rawStockReceipts).map(enrichStock).sort(bySerial))
+  const stockIssues = resolveOrphanCategories(combineMultiPileGroups(rawStockIssues).map(enrichStock).sort(bySerial))
   const dedupedSackTx = dedupeTransactions(sackTxRaw ?? [])
   const sackReceipts = dedupedSackTx.filter((t) => t.type === 'ESR').map(enrichSack).sort(bySerial)
   const sackIssues = dedupedSackTx.filter((t) => t.type === 'ESI').map(enrichSack).sort(bySerial)

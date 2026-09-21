@@ -966,20 +966,26 @@ export const generateNfaReport = ({
   // Active transactions, so a Cancelled-only Rice record in a period with
   // no Active Rice activity fell through to whichever real category
   // happened to sort first (e.g. By Products) - visibly wrong. Only a
-  // truly orphaned record (cerealCategory itself null - a legacy one
-  // voided before StockFormBase.jsx's preservation fix existed) has no
-  // recoverable true answer and still needs the "first real category"
-  // guess below; every other Cancelled record's own category is honored
-  // directly, same as an Active one's.
-  const allStockTx = [...receipts, ...issues].filter((t) => t.status !== 'Cancelled' || t.cerealCategory)
+  // truly orphaned record (cerealCategory itself null/'Unknown' - a
+  // legacy one voided before StockFormBase.jsx's preservation fix
+  // existed, or one Reports.jsx's own resolveOrphanCategories couldn't
+  // recover from its neighboring serials) has no recoverable true answer
+  // and still needs the "first real category" guess below; every other
+  // Cancelled record's own category is honored directly, same as an
+  // Active one's. Callers (Reports.jsx) enrich a null cerealCategory to
+  // the literal string 'Unknown' before this function ever sees it, so
+  // that placeholder must be treated the same as null here too - not as
+  // a genuinely real category.
+  const hasKnownCategory = (t) => t.cerealCategory && t.cerealCategory !== 'Unknown'
+  const allStockTx = [...receipts, ...issues].filter((t) => t.status !== 'Cancelled' || hasKnownCategory(t))
   const cerealTypes = [...new Set([
-    ...allStockTx.map(t => t.cerealCategory ?? 'Unknown'),
+    ...allStockTx.map(t => hasKnownCategory(t) ? t.cerealCategory : 'Unknown'),
     ...(stockBeginningBals ? [...stockBeginningBals.keys()] : []),
   ])].sort()
   // A record's own cerealCategory is now already reflected in cerealTypes
-  // above whenever it's non-null (Cancelled or not) - so the only case
-  // left needing a guess is a record with NO stored category at all.
-  const effectiveCategory = (t) => t.cerealCategory ?? (cerealTypes[0] ?? 'Unknown')
+  // above whenever it's genuinely known (Cancelled or not) - so the only
+  // case left needing a guess is a record with no real stored category.
+  const effectiveCategory = (t) => (hasKnownCategory(t) ? t.cerealCategory : (cerealTypes[0] ?? 'Unknown'))
 
   for (const cerealType of cerealTypes) {
     const catRec = receipts.filter(t => effectiveCategory(t) === cerealType)
