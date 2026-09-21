@@ -192,7 +192,8 @@ function AuthorityMonitor() {
 
   return (
     <div className="mt-6">
-      {/* No longer collapsible, per explicit request - always shown. */}
+      {/* Not collapsible itself - Home.jsx now shows/hides this whole
+          component via its own Authority/Milling sub-tab instead. */}
       <div className="flex w-full items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3">
         <span className="flex min-w-0 items-center gap-2">
           <Inbox size={20} className="shrink-0 text-brand-neon" />

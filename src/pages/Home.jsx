@@ -3,17 +3,15 @@
 // HomeStocks/HomeSacks. The pile list moved to its own tab on the Piles
 // page (alongside the layout editor) - it no longer lives on Home.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
-import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import AuthorityMonitor from '../components/common/AuthorityMonitor.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
 import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
-import { Factory, ChevronDown, ChevronUp } from 'lucide-react'
 import SectionErrorBoundary from '../components/common/SectionErrorBoundary.jsx'
 import AlertsPanel from '../components/common/AlertsPanel.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
@@ -43,33 +41,25 @@ function Home() {
 
   // Overview = warehouse selector + Stocks/Sacks card + alerts (the
   // things checked most often); Activity = Milling Operations + AI/SIA
-  // Monitor (both already collapsible on their own). Splitting these
-  // into two top-level tabs, rather than stacking everything on one
-  // screen, mirrors the same Summary/Stock Statement split just added
-  // to Reports.jsx.
+  // Monitor. Splitting these into two top-level tabs, rather than
+  // stacking everything on one screen, mirrors the same Summary/Stock
+  // Statement split just added to Reports.jsx.
   const [pageTab, setPageTab] = useState('overview')
   const [inventoryTab, setInventoryTab] = useState('stocks')
-  const [showMillingMonitor, setShowMillingMonitor] = useState(false)
-  const shouldRenderMillingMonitor = useDelayedUnmount(showMillingMonitor, 250)
-  // Tracks whether the current open/closed state was reached via an
-  // explicit user tap, versus just being carried over into a remount
-  // caused by the warehouse switching - only the former should play
-  // its own entrance/exit animation. Without this, switching
-  // warehouses while this was already open played two overlapping
-  // animations at once (the outer warehouse-switch flow-down AND this
-  // section's own toggle animation), which is what caused the
-  // reported stutter.
-  const millingToggledByUserRef = useRef(false)
-  useEffect(() => {
-    millingToggledByUserRef.current = false
-  }, [currentWarehouseId])
-  // inventoryTab lives here in the parent, above the key={currentWarehouseId}
+  // Per explicit request, Authority Monitor and Milling Operations are
+  // now their own mutually-exclusive sub-tabs within Activity (previously
+  // stacked - Milling collapsible, Authority always shown below it).
+  // Defaults to 'authority' since it's relevant to every warehouse,
+  // unlike Milling which only applies when showMillingSection is true.
+  const [activitySubTab, setActivitySubTab] = useState('authority')
+  // Both live here in the parent, above the key={currentWarehouseId}
   // remount boundary on the panels below - so without this, switching
-  // warehouses while on the Sacks tab left the Sacks tab selected for
-  // the new warehouse too, since nothing was actually telling it to
-  // reset back to the default.
+  // warehouses left the previous warehouse's tab selected for the new
+  // one too, since nothing was actually telling it to reset back to
+  // the default.
   useEffect(() => {
     setInventoryTab('stocks')
+    setActivitySubTab('authority')
   }, [currentWarehouseId])
   const warehouseSectionRef = useRef(null)
 
@@ -185,41 +175,44 @@ function Home() {
       </div>
 
       <div key={`activity-${currentWarehouseId}`} className={`stagger-fields animate-flow-down ${pageTab === 'activity' ? '' : 'hidden'}`}>
+        {/* A warehouse with no milling activity has nothing to switch
+            between, so the sub-tab bar itself only appears once there's
+            a second thing to show - Authority Monitor alone otherwise. */}
         {showMillingSection && (
-          <SectionErrorBoundary user={user} label="Milling monitor">
-            <button
-              type="button"
-              onClick={() => {
-                millingToggledByUserRef.current = true
-                setShowMillingMonitor((o) => !o)
-              }}
-              className="mt-4 flex w-full items-center justify-between rounded-2xl border-2 border-brand-amber bg-neutral-900 px-4 py-3 text-left transition-all active:scale-[0.99]"
-            >
-              <span className="flex items-center gap-2">
-                <Factory size={20} className="text-brand-amber" />
-                <span className="text-sm font-bold text-app-text">
-                  {isRicemillFacility ? 'NFA Ricemill Status' : 'Milling Operations'}
-                </span>
-              </span>
-              {showMillingMonitor ? (
-                <ChevronUp size={20} className="text-neutral-500" />
-              ) : (
-                <ChevronDown size={20} className="text-neutral-500" />
-              )}
-            </button>
-            {shouldRenderMillingMonitor && (
-              <div
-                className={`mt-3 ${
-                  millingToggledByUserRef.current ? (showMillingMonitor ? 'animate-flow-down' : 'animate-flow-up-exit') : ''
+          <div className="relative mt-1 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
+            <div
+              className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
+              style={{ transform: activitySubTab === 'authority' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
+            />
+            {[
+              { id: 'authority', label: 'Authority' },
+              { id: 'milling', label: isRicemillFacility ? 'NFA Ricemill' : 'Milling' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActivitySubTab(t.id)}
+                className={`relative z-10 flex-1 rounded-lg py-2 text-base transition-all active:scale-95 ${
+                  activitySubTab === t.id ? 'font-extrabold text-brand-contrast' : 'font-semibold text-neutral-400 hover:text-app-text'
                 }`}
               >
-                {isRicemillFacility ? <NfaMillingMonitor warehouseId={currentWarehouseId} /> : <MillingMonitor />}
-              </div>
-            )}
-          </SectionErrorBoundary>
+                {t.label}
+              </button>
+            ))}
+          </div>
         )}
 
-        <AuthorityMonitor />
+        <div className={`mt-4 ${!showMillingSection || activitySubTab === 'authority' ? '' : 'hidden'}`}>
+          <AuthorityMonitor />
+        </div>
+
+        {showMillingSection && (
+          <SectionErrorBoundary user={user} label="Milling monitor">
+            <div className={`mt-4 ${activitySubTab === 'milling' ? '' : 'hidden'}`}>
+              {isRicemillFacility ? <NfaMillingMonitor warehouseId={currentWarehouseId} /> : <MillingMonitor />}
+            </div>
+          </SectionErrorBoundary>
+        )}
       </div>
     </div>
   )

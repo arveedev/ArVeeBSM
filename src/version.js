@@ -5022,4 +5022,17 @@
 //            numbers are the point of a totals row, so the whole row is
 //            now bold for visibility, matching every other report
 //            page's totals row (which were already fully bold).
-export const APP_VERSION = '1.10-82'
+//   1.10-83 - Home's Activity panel stacked Milling Operations
+//            (collapsible) directly above Authority Monitor (always
+//            shown) on the same screen. Per explicit request, split
+//            them into their own mutually-exclusive sub-tabs
+//            (Authority | Milling/NFA Ricemill), matching the same
+//            sliding-pill pattern as the Overview/Activity and
+//            Stocks/Sacks tabs elsewhere on this page - only one
+//            section is ever visible at a time now, defaulting to
+//            Authority since it applies to every warehouse (the
+//            sub-tab bar itself only appears for a warehouse that
+//            actually has milling activity to switch to). Removed the
+//            now-unused collapse/expand state and animation that used
+//            to belong to the old Milling accordion button.
+export const APP_VERSION = '1.10-83'
