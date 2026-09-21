@@ -267,10 +267,22 @@ const runSyncQueue = async () => {
           // monthly Sheet source it belongs to are resolved from.
           wsrDate: wsr?.date ?? null,
           isFarmersAssociation: Boolean(wsr?.farmerCoops?.length),
+          // Per explicit correction: FARMER MEMBER should hold just the
+          // name(s), not "Name (RSBSA, Gender)" crammed into one cell -
+          // the RSBSA NO./GENDER columns are where that data belongs.
           farmerMembersText: wsr?.farmerCoops?.length
-            ? wsr.farmerCoops.map((m) => `${m.name} (${m.rsbsa || 'no RSBSA'}, ${m.gender || 'no gender'})`).join('; ')
+            ? wsr.farmerCoops.map((m) => m.name).join('; ')
             : null,
-          farmerGender: wsr?.farmerGender ?? null,
+          // A single-member FA has that one member's own RSBSA/gender
+          // pulled directly into the RSBSA NO./GENDER columns (see
+          // buildPrSummaryRow) rather than the WSR-level
+          // farmerRsbsa/farmerGender fields, which are the Individual
+          // farmer's own info and don't apply to an FA transaction. With
+          // more than one member, no single cell can represent all of
+          // them, so these fall back to the WSR-level fields exactly as
+          // before (blank/whatever an Individual transaction would show).
+          farmerRsbsa: wsr?.farmerCoops?.length === 1 ? (wsr.farmerCoops[0].rsbsa || null) : null,
+          farmerGender: wsr?.farmerCoops?.length === 1 ? (wsr.farmerCoops[0].gender || null) : (wsr?.farmerGender ?? null),
         }
 
         // Per explicit decision, a Cancelled PR must never appear on the

@@ -987,6 +987,27 @@ db.version(39).stores({}).upgrade(async (tx) => {
   }
 })
 
+// v40 — Per explicit correction: a Farmers Association PR's SUMMARY
+// FARMER MEMBER cell was showing "Name (RSBSA, Gender)" crammed into
+// one column instead of the RSBSA NO./GENDER columns actually being
+// used for that data (see buildPrSummaryRow/syncWorker.js's own PR-sync
+// context). Every already-backed-up Active PR whose WSR has farmer
+// members gets isSynced reset to false, so the next sync re-pushes it
+// as an UPDATE with the corrected split, cleaning up existing rows on
+// real Sheets the same way v39 did for Cancelled PRs above.
+db.version(40).stores({}).upgrade(async (tx) => {
+  const activePrs = await tx.table('purchaseReceipts')
+    .where('status').equals('Active')
+    .and((pr) => pr.hasBeenBackedUp === true && Boolean(pr.wsrTransactionId))
+    .toArray()
+  for (const pr of activePrs) {
+    const wsr = await tx.table('transactions').get(pr.wsrTransactionId)
+    if (wsr?.farmerCoops?.length) {
+      await tx.table('purchaseReceipts').update(pr.prId, { isSynced: false })
+    }
+  }
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

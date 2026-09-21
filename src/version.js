@@ -5285,4 +5285,15 @@
 //            resets isSynced on any already-cancelled-and-backed-up PR,
 //            so existing "CANCELLED" rows already sitting on real
 //            Sheets get cleaned up by the very next sync automatically.
-export const APP_VERSION = '1.10-99'
+//   1.10-100 - Per direct feedback from a real SUMMARY sheet: FARMER
+//            MEMBER was showing "Name (RSBSA, Gender)" crammed into one
+//            cell for a Farmers Association PR, duplicating what the
+//            RSBSA NO./GENDER columns already exist for. FARMER MEMBER
+//            now holds just the name(s); for a single-member FA, that
+//            member's own RSBSA and gender fill the RSBSA NO./GENDER
+//            columns directly (was pr.rsbsa/the WSR-level farmerGender
+//            field, which are really the Individual farmer's own info
+//            and don't represent an FA transaction). A v40 Dexie
+//            migration resets sync state on already-backed-up FA PRs so
+//            existing rows on real Sheets self-correct on the next sync.
+export const APP_VERSION = '1.10-100'

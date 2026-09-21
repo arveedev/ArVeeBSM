@@ -1667,11 +1667,16 @@ const PR_SUMMARY_MATCH_COLUMN = 'PR NO.'
 // document's backup - per explicit decision, the SUMMARY sheet should
 // never show a "CANCELLED" placeholder row at all).
 const buildPrSummaryRow = (pr, context) => {
-  const { warehouseName, sdoName, wsrSerialNo, wsrDate, isFarmersAssociation, farmerMembersText, farmerGender } = context
+  const { warehouseName, sdoName, wsrSerialNo, wsrDate, isFarmersAssociation, farmerMembersText, farmerRsbsa, farmerGender } = context
   // The sheet's own WSR column is a plain number, not a string - sent as
   // one whenever the serial actually parses as one (it always should),
   // falling back to the raw string rather than silently dropping it.
   const wsrNum = toNumberOrNull(wsrSerialNo)
+  // A single-member FA's own RSBSA (context.farmerRsbsa) takes priority
+  // over pr.rsbsa - per explicit correction, the RSBSA columns should
+  // show the actual farmer member's number, not be left to whatever the
+  // PR's own top-level rsbsa field happens to hold.
+  const rsbsa = farmerRsbsa ?? pr.rsbsa ?? null
   return {
     // The underlying WSR's own date (the actual delivery date), not
     // pr.date (when the SDO happened to record the payment) - per
@@ -1681,7 +1686,7 @@ const buildPrSummaryRow = (pr, context) => {
     'DATE': wsrDate ?? pr.date,
     'PR NO.': pr.prNo,
     'WSR': wsrNum != null ? wsrNum : (wsrSerialNo ?? null),
-    'RSBSA NO.': pr.rsbsa ?? null,
+    'RSBSA NO.': rsbsa,
     'NAME': pr.payeeName ?? null,
     'ADDRESS': pr.payeeAddress ?? null,
     'I / FA': isFarmersAssociation ? 'FA' : 'I',
@@ -1699,7 +1704,7 @@ const buildPrSummaryRow = (pr, context) => {
     'PRICER COST': pr.pricerAmount ?? null,
     'GRAND TOTAL': pr.totalAmount ?? null,
     'SDO': sdoName ?? '',
-    'RSBSA NO': pr.rsbsa ?? null,
+    'RSBSA NO': rsbsa,
     'FARMER MEMBER': farmerMembersText ?? null,
     'GENDER': farmerGender ?? null,
   }
