@@ -5549,4 +5549,33 @@
 //            larger (text-xs, more padding) and sits on the number's own
 //            row, adding no extra vertical space. Same treatment in the
 //            detail sheet header.
-export const APP_VERSION = '1.10-116'
+//   1.10-117 - New feature: entry-form auto-exit / SDO auto-logout on
+//            inactivity, per explicit request.
+//            - New shared useIdleCountdown hook (src/hooks/) - tracks
+//              real window activity (mouse/keyboard/touch/scroll)
+//              against a rolling idle clock, single 1s interval per
+//              instance rather than rescheduling on every event.
+//            - New IdleCloseWarning component - "Closing due to
+//              inactivity in Xs" + a Stay button, per explicit decision
+//              to warn before discarding unsaved form input rather than
+//              closing silently.
+//            - Wired into WSR/WSI/WTS/ESI/ESR (all render through one
+//              central spot in App.jsx, so this covers all five at
+//              once) and PurchaseReceiptModal.jsx (the SDO side's own
+//              main entry form) - 60s idle with a 10s final warning by
+//              default, closes back to whatever page was behind it.
+//            - Separate, app-wide 5-minute-default clock (same shared
+//              hook, fed by the same activity events) logs out any
+//              non-Admin/Visitor session (SDO, Warehouse Supervisor,
+//              etc.) after that much continued inactivity - Admin/
+//              Visitor sessions are exempt, per explicit scope decision.
+//              No separate warning for this one; the form-level warning
+//              already gave the user a chance to notice and stay.
+//            - Both timeouts are admin-configurable (Admin Dashboard >
+//              System > Session Timeouts, new SessionTimeoutsPanel.jsx),
+//              stored on db.reportConfig 'global', defaulting to 60s/
+//              300s if never set.
+//            - Known gap, not yet covered: smaller SDO modals (Cancel
+//              PR, Buying Price, Cash actions) don't have this wired in
+//              yet - flagged for a follow-up if wanted.
+export const APP_VERSION = '1.10-117'

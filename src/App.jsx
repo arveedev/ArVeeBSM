@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { Toaster, toast } from 'react-hot-toast'
+import { db } from './db/dexie.js'
+import { useIdleCountdown } from './hooks/useIdleCountdown.js'
+import IdleCloseWarning from './components/common/IdleCloseWarning.jsx'
 import Login from './pages/Login.jsx'
 import Home from './pages/Home.jsx'
 import AdminHome from './pages/AdminHome.jsx'
@@ -44,7 +48,7 @@ const FORM_COMPONENTS = {
 }
 
 function App() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { theme } = useSettings() ?? {}
   const { chromeHidden } = usePageHeader() ?? {}
   const { pathname } = useLocation()
@@ -134,6 +138,42 @@ function App() {
   const closeForm = () => {
     setActiveFormType(null)
   }
+
+  // Entry-form auto-exit / SDO auto-logout - per explicit request.
+  // Admin-configurable via db.reportConfig 'global' (Admin Dashboard >
+  // System > Session Timeouts), defaulting to 60s/300s if never set.
+  const sessionConfig = useLiveQuery(() => db.reportConfig.get('global'), [])
+  const formInactivityTimeoutSec = sessionConfig?.formInactivityTimeoutSec ?? 60
+  const logoutInactivityTimeoutSec = sessionConfig?.logoutInactivityTimeoutSec ?? 300
+
+  // WSR/WSI/WTS/ESI/ESR all render through this one central spot (see
+  // FORM_COMPONENTS below), so wiring the idle timer here once covers
+  // all five instead of needing it repeated per form component. Only
+  // armed while a form is actually open (shouldRenderForm, defined
+  // above) - Boolean(activeFormType) alone would stay armed through the
+  // trailing exit-animation window too, which is harmless but pointless.
+  const { secondsLeft: formCloseSecondsLeft, resetActivity: resetFormIdleActivity } = useIdleCountdown({
+    idleTimeoutMs: formInactivityTimeoutSec * 1000,
+    warningLeadMs: 10000,
+    onIdle: closeForm,
+    enabled: shouldRenderForm,
+  })
+
+  // Separate, app-wide clock - fed by the exact same window activity
+  // events, so it keeps counting from the same real "last activity"
+  // moment even after the form-level timer above has already closed a
+  // form at the 1-minute mark. Per explicit scope decision, Admin/
+  // Visitor sessions are exempt (often used for longer review/
+  // monitoring work); every other role (SDO, Warehouse Supervisor,
+  // etc.) gets logged out after this many seconds of continued
+  // inactivity, with no separate warning of its own - the form-level
+  // warning above already gave the user a chance to notice and stay.
+  const isExemptFromAutoLogout = isAdmin || isVisitor
+  useIdleCountdown({
+    idleTimeoutMs: logoutInactivityTimeoutSec * 1000,
+    onIdle: () => { if (!isExemptFromAutoLogout) logout() },
+    enabled: Boolean(user) && !isExemptFromAutoLogout,
+  })
 
   // Prefill data stays around through the trailing exit-animation window
   // (the form itself doesn't need it updated after its initial load) and
@@ -298,6 +338,11 @@ function App() {
                   return (
                     <SectionErrorBoundary user={user} label={`${formTypeToRender} form`} onClose={closeForm}>
                       <FormComponent isOpen={Boolean(activeFormType)} onClose={closeForm} prefill={activeFormPrefill} />
+                      <IdleCloseWarning
+                        secondsLeft={formCloseSecondsLeft}
+                        onStay={resetFormIdleActivity}
+                        message="Form closing due to inactivity"
+                      />
                     </SectionErrorBoundary>
                   )
                 })()}

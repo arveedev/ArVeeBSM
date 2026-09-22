@@ -29,6 +29,7 @@ import DataStartDatePanel from '../components/common/admin/DataStartDatePanel.js
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
 import DisbursementSettingsPanel from '../components/common/admin/DisbursementSettingsPanel.jsx'
+import SessionTimeoutsPanel from '../components/common/admin/SessionTimeoutsPanel.jsx'
 
 const GROUPS = [
   {
@@ -79,6 +80,7 @@ const GROUPS = [
       { id: 'dataStartDate', label: 'Data Start Date', Panel: DataStartDatePanel },
       { id: 'backup', label: 'Backup', Panel: BackupPanel },
       { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
+      { id: 'sessionTimeouts', label: 'Session Timeouts', Panel: SessionTimeoutsPanel },
     ],
   },
 ]

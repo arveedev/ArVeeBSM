@@ -23,6 +23,8 @@ import {
   resolveBuyingPrice, resolveUnitCost, amountInWords,
 } from '../../../utils/sdoCalculations.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import { useIdleCountdown } from '../../../hooks/useIdleCountdown.js'
+import IdleCloseWarning from '../IdleCloseWarning.jsx'
 
 function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   const { user } = useAuth()
@@ -63,6 +65,15 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
   const eligibility = useLiveQuery(() => user ? db.pricerEligibility.get(user.uid) : null, [user?.uid])
   const pricerEnabled = eligibility?.enabled ?? false
+
+  // Entry-form auto-exit on inactivity - per explicit request, same
+  // admin-configurable timeout (db.reportConfig 'global') and shared
+  // hook/warning component App.jsx already uses for WSR/WSI/WTS/ESI/ESR.
+  const { secondsLeft: formCloseSecondsLeft, resetActivity: resetFormIdleActivity } = useIdleCountdown({
+    idleTimeoutMs: (config?.formInactivityTimeoutSec ?? 60) * 1000,
+    warningLeadMs: 10000,
+    onIdle: onClose,
+  })
 
   // Fetched as a list, not `.first()` - normally holds at most one row,
   // but if two ever got issued for the same WSR (a double-tap, or two
@@ -274,6 +285,7 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   // real viewport, which is exactly what made this render small and
   // off-center instead of a real centered/full-width overlay.
   return createPortal(
+    <>
     <div
       className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-200 ${entered ? 'opacity-100' : 'opacity-0'}`}
       onClick={onClose}
@@ -512,7 +524,9 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTargetPrId(null)}
       />
-    </div>,
+    </div>
+    <IdleCloseWarning secondsLeft={formCloseSecondsLeft} onStay={resetFormIdleActivity} message="Closing due to inactivity" />
+    </>,
     document.body
   )
 }
