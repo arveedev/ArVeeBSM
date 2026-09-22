@@ -194,17 +194,17 @@ export function MillingOrderDetail({ order, onClose }) {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {/* AI/SIA, side by side (not stacked), each its own pill so
-                  they read as clearly separate values - same treatment
-                  as the list row card's corner badge. */}
+                  they read as clearly separate values - same in-line,
+                  larger treatment as the list row card. */}
               {(order.aiNumber || order.siaNumber) && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   {order.aiNumber && (
-                    <span className="rounded bg-brand-neon/10 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-brand-neon">
+                    <span className="rounded-md bg-brand-neon/10 px-2 py-1 text-xs font-bold tabular-nums text-brand-neon">
                       AI {order.aiNumber}
                     </span>
                   )}
                   {order.siaNumber && (
-                    <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-blue-400">
+                    <span className="rounded-md bg-blue-500/10 px-2 py-1 text-xs font-bold tabular-nums text-blue-400">
                       SIA {order.siaNumber}
                     </span>
                   )}
@@ -578,41 +578,39 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
       <button
         type="button"
         onClick={() => onSelect(o)}
-        className={`relative flex flex-1 items-center justify-between gap-3 rounded-xl border bg-neutral-950 px-3 text-left active:scale-[0.99] ${
-          // Extra top padding whenever the AI/SIA corner badge is
-          // present, so it never visually crowds the number/mill name
-          // sitting in normal flow right below it.
-          (o.aiNumber || o.siaNumber) ? 'pb-2.5 pt-7' : 'py-2.5'
-        } ${needsConfirmation ? 'border-brand-amber' : 'border-neutral-800'}`}
+        className={`flex flex-1 items-center justify-between gap-3 rounded-xl border bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99] ${
+          needsConfirmation ? 'border-brand-amber' : 'border-neutral-800'
+        }`}
       >
-        {/* AI/SIA, top-right corner of the card per explicit request -
-            side by side (not stacked), each its own pill so they read as
-            clearly separate values rather than one run-together line.
-            Visible to every role now (this card is shared between the
-            regular user's Home and AdminMonitoring), not just the
-            admin-only AI/SIA tab it used to be confined to. Every
-            MO/TMO genuinely carries BOTH its own AI and SIA (confirmed
-            directly against the real Sheet) - shows both when both
-            exist, not just whichever one happened to be checked first.
-            Absolutely positioned so it sits at the corner regardless of
-            how tall the card grows (progress bar, trial counts, etc.)
-            instead of being vertically centered with the whole card. */}
-        {(o.aiNumber || o.siaNumber) && (
-          <div className="absolute right-2.5 top-2 flex items-center gap-1">
-            {o.aiNumber && (
-              <span className="rounded bg-brand-neon/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-brand-neon">
-                AI {o.aiNumber}
-              </span>
-            )}
-            {o.siaNumber && (
-              <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-400">
-                SIA {o.siaNumber}
-              </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate text-base font-semibold text-app-text">{o.number}</p>
+            {/* AI/SIA, in-line with the MO/TMO number itself (same row,
+                right edge) per explicit request - larger and easier to
+                read than the earlier corner-badge attempt, and doesn't
+                add any extra height to the card the way a separate top
+                row did. Side by side (not stacked), each its own pill so
+                they read as clearly separate values. Visible to every
+                role now (this card is shared between the regular user's
+                Home and AdminMonitoring), not just the admin-only AI/SIA
+                tab it used to be confined to. Every MO/TMO genuinely
+                carries BOTH its own AI and SIA (confirmed directly
+                against the real Sheet) - shows both when both exist. */}
+            {(o.aiNumber || o.siaNumber) && (
+              <div className="flex shrink-0 items-center gap-1.5">
+                {o.aiNumber && (
+                  <span className="rounded-md bg-brand-neon/10 px-2 py-1 text-xs font-bold tabular-nums text-brand-neon">
+                    AI {o.aiNumber}
+                  </span>
+                )}
+                {o.siaNumber && (
+                  <span className="rounded-md bg-blue-500/10 px-2 py-1 text-xs font-bold tabular-nums text-blue-400">
+                    SIA {o.siaNumber}
+                  </span>
+                )}
+              </div>
             )}
           </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="min-w-0 truncate text-base font-semibold text-app-text">{o.number}</p>
           <p className="truncate text-sm text-neutral-500">
             {o.ricemillName}
             {o.type === 'MO' && o.batchCurrent != null && ` · Batch ${o.batchCurrent} of ${o.batchTotal}`}

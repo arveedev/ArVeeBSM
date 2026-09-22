@@ -5542,4 +5542,11 @@
 //            transactions). Partial/Ready to Complete shows the
 //            RECEIVING warehouse instead (order.receivingWarehouse,
 //            falling back to a receipt transaction's own warehouse).
-export const APP_VERSION = '1.10-115'
+//   1.10-116 - MillingMonitor.jsx: AI/SIA badges moved back in-line with
+//            the MO/TMO number (same row, right edge), per explicit
+//            feedback that the corner-badge version (1.10-113) was too
+//            small to read and added extra height to every card. Now
+//            larger (text-xs, more padding) and sits on the number's own
+//            row, adding no extra vertical space. Same treatment in the
+//            detail sheet header.
+export const APP_VERSION = '1.10-116'
