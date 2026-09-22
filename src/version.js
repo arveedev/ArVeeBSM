@@ -5450,4 +5450,29 @@
 //              and pileLayoutPdfGenerator.js's exported Pile Layout PDF
 //              boxes - for the same one-decimal formatting, not just
 //              the Abstract.
-export const APP_VERSION = '1.10-110'
+//   1.10-111 - Follow-up fixes from direct feedback on the previous
+//            batch:
+//            - MillingMonitor.jsx: every MO/TMO genuinely carries BOTH
+//              its own AI and SIA (confirmed against the real Sheet) -
+//              now shows both in-line with the number, not just
+//              whichever one happened to be checked first.
+//            - FARMER MEMBER/RSBSA NO./GENDER (PR SUMMARY sheet AND the
+//              main WSR/WSI CONTROL NUMBER backup) were only ever
+//              populated for an FA transaction with EXACTLY one member -
+//              a real reported bug, confirmed against a live sheet
+//              showing blank RSBSA/GENDER for a 2-member FA row. Now
+//              joins every member's own name/RSBSA/gender with "/",
+//              for any number of members.
+//            - AbstractExportModal.jsx: the Abstract PDF's RSBSA column
+//              could show a stale/WRONG value left over from before
+//              resolvedRsbsa existed (a non-empty pr.rsbsa always won,
+//              even when it didn't match any real member) - now always
+//              recomputes fresh from the WSR's own farmerCoops whenever
+//              one exists, overriding whatever pr.rsbsa holds.
+//            - PurchaseReceiptModal.jsx's own resolvedRsbsa switched
+//              from ", " to "/" to match the same separator convention
+//              used everywhere else this session.
+//            - v42 Dexie migration re-queues already-backed-up FA PRs
+//              for resync again, so existing Sheet rows pick up this
+//              fix too, not just newly-issued PRs.
+export const APP_VERSION = '1.10-111'

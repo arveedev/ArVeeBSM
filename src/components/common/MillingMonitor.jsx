@@ -189,12 +189,13 @@ export function MillingOrderDetail({ order, onClose }) {
         <div className={`shrink-0 p-4 ${shouldRenderTabContent ? 'pb-0' : ''}`}>
           <div className="flex items-start justify-between">
             <div>
-              <div className="flex items-baseline gap-2">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <p className="text-lg font-bold text-app-text">{order.number}</p>
-                {(order.aiNumber || order.siaNumber) && (
-                  <span className="text-sm font-semibold tabular-nums text-brand-neon">
-                    {order.aiNumber ? `AI ${order.aiNumber}` : `SIA ${order.siaNumber}`}
-                  </span>
+                {order.aiNumber && (
+                  <span className="text-sm font-semibold tabular-nums text-brand-neon">AI {order.aiNumber}</span>
+                )}
+                {order.siaNumber && (
+                  <span className="text-sm font-semibold tabular-nums text-blue-400">SIA {order.siaNumber}</span>
                 )}
               </div>
               <p className="text-base text-neutral-400">{order.ricemillName}</p>
@@ -573,18 +574,22 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1.5">
             <p className="min-w-0 truncate text-base font-semibold text-app-text">{o.number}</p>
-            {/* AI/SIA number, in-line with the MO/TMO number itself - per
-                explicit request, not as a separate badge row below.
+            {/* AI/SIA numbers, in-line with the MO/TMO number itself -
+                per explicit request, not as a separate badge row below.
                 Visible to every role now (this whole card is shared
                 between the regular user's Home and AdminMonitoring), not
                 just the admin-only AI/SIA tab it used to be confined to.
-                shrink-0 so a long MO number truncates before this does -
-                the AI/SIA number is short and fixed-width, always worth
+                Every MO/TMO genuinely carries BOTH its own AI and SIA
+                (confirmed directly against the real Sheet) - shows both
+                when both exist, not just whichever one happened to be
+                checked first. shrink-0 so a long MO number truncates
+                before these do - short, fixed-width, always worth
                 keeping fully visible. */}
-            {(o.aiNumber || o.siaNumber) && (
-              <span className="shrink-0 text-xs font-semibold tabular-nums text-brand-neon">
-                {o.aiNumber ? `AI ${o.aiNumber}` : `SIA ${o.siaNumber}`}
-              </span>
+            {o.aiNumber && (
+              <span className="shrink-0 text-xs font-semibold tabular-nums text-brand-neon">AI {o.aiNumber}</span>
+            )}
+            {o.siaNumber && (
+              <span className="shrink-0 text-xs font-semibold tabular-nums text-blue-400">SIA {o.siaNumber}</span>
             )}
           </div>
           <p className="truncate text-sm text-neutral-500">

@@ -1023,6 +1023,29 @@ db.version(41).stores({}).upgrade(async (tx) => {
   }
 })
 
+// v42 — Per explicit correction (a real reported bug, confirmed against
+// a live SUMMARY sheet): FARMER MEMBER/RSBSA NO./GENDER were left blank
+// for an FA transaction with more than one member (only the exactly-
+// one-member case was ever handled), and the Abstract PDF's own RSBSA
+// column could show a stale/WRONG value left over from before this
+// fix existed, since a non-empty pr.rsbsa always won regardless of
+// whether it actually matched. Every already-backed-up Active PR whose
+// WSR has farmer members gets isSynced reset to false again, so the
+// next sync re-pushes it with every member's RSBSA/name/gender
+// correctly "/"-joined - same cleanup pattern as v39/v40/v41 above.
+db.version(42).stores({}).upgrade(async (tx) => {
+  const activePrs = await tx.table('purchaseReceipts')
+    .where('status').equals('Active')
+    .and((pr) => pr.hasBeenBackedUp === true && Boolean(pr.wsrTransactionId))
+    .toArray()
+  for (const pr of activePrs) {
+    const wsr = await tx.table('transactions').get(pr.wsrTransactionId)
+    if (wsr?.farmerCoops?.length) {
+      await tx.table('purchaseReceipts').update(pr.prId, { isSynced: false })
+    }
+  }
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

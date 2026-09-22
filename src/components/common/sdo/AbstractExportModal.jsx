@@ -78,17 +78,20 @@ function AbstractExportModal({ onClose }) {
         const warehouse = warehouseMap.get(pr.warehouseId)
         const province = provinceMap.get(warehouse?.provinceId)
         const shortName = (warehouse?.name ?? '').replace(/^[A-Z]{2,5}-/, '')
-        // A PR issued going forward already carries every FA member's
-        // RSBSA pre-joined into pr.rsbsa itself (PurchaseReceiptModal.jsx's
-        // resolvedRsbsa) - but a PR issued before that existed may still
-        // have a blank/single-value rsbsa despite its WSR genuinely being
-        // an FA transaction. Falls back to computing the same joined
-        // string here, read-time, so an older PR's Abstract row still
-        // shows every member's RSBSA rather than nothing or just one.
+        // Confirmed, reported real bug: a PR issued before resolvedRsbsa
+        // existed can have a stale/WRONG value already sitting in
+        // pr.rsbsa (e.g. a single value typed in before FA's RSBSA field
+        // was hidden) - falling back to it only when EMPTY isn't enough,
+        // since a wrong-but-non-empty value would still win. Whenever
+        // the underlying WSR is genuinely FA (has farmerCoops), this
+        // always recomputes every member's own RSBSA fresh, "/"-joined,
+        // overriding whatever pr.rsbsa happens to hold - only an
+        // Individual transaction (no farmerCoops) ever falls back to
+        // pr.rsbsa itself.
         const wsr = wsrById.get(pr.wsrTransactionId)
-        const rsbsa = pr.rsbsa || (wsr?.farmerCoops?.length
-          ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(', ') || null
-          : null)
+        const rsbsa = wsr?.farmerCoops?.length
+          ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
+          : (pr.rsbsa || null)
         return {
           ...pr,
           rsbsa,

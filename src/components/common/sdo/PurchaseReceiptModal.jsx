@@ -92,12 +92,13 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   // top-level RSBSA (wsr.farmerRsbsa is null for one - see
   // StockFormBase.jsx's own RSBSA/Gender field, now hidden whenever FA
   // is on) - its real RSBSA data lives per-member in farmerCoops, so
-  // this joins every member's own RSBSA into one comma-separated string
-  // for anywhere that only has room for a single RSBSA value (this
-  // modal's own display below, and the PR record's own `rsbsa` field,
-  // which the Abstract PDF reads directly).
+  // this joins every member's own RSBSA with "/" (the app's established
+  // separator for this - matches FARMER MEMBER/GENDER's own join) for
+  // anywhere that only has room for a single RSBSA value (this modal's
+  // own display below, and the PR record's own `rsbsa` field, which the
+  // Abstract PDF reads directly).
   const resolvedRsbsa = wsr.farmerCoops?.length
-    ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(', ') || null
+    ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
     : wsr.farmerRsbsa ?? null
 
   const purityDisplayFormat = config?.purityDisplayFormat ?? 'range'

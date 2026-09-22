@@ -1279,10 +1279,20 @@ const buildBackupRow = (transaction, context) => {
       'TMO Number': transaction.tmoNumber ?? null,
       'Batch Number': transaction.batchNumber ?? null,
       'Trial Number': transaction.trialNumber ?? null,
-      RSBSA: transaction.farmerRsbsa ?? null,
-      Gender: transaction.farmerGender ?? null,
+      // Per explicit correction (same fix as the PR SUMMARY sheet):
+      // an FA's own member RSBSA/Gender, "/"-joined for any number of
+      // members, takes priority over the WSR-level farmerRsbsa/
+      // farmerGender fields, which are null for FA (that field is
+      // hidden whenever FA is on - see StockFormBase.jsx) and only
+      // ever hold real data for an Individual transaction.
+      RSBSA: transaction.farmerCoops?.length
+        ? transaction.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
+        : transaction.farmerRsbsa ?? null,
+      Gender: transaction.farmerCoops?.length
+        ? transaction.farmerCoops.map((m) => m.gender).filter(Boolean).join('/') || null
+        : transaction.farmerGender ?? null,
       'Farmer Organization Members': transaction.farmerCoops?.length
-        ? transaction.farmerCoops.map((m) => `${m.name} (${m.rsbsa || 'no RSBSA'}, ${m.gender || 'no gender'})`).join('; ')
+        ? transaction.farmerCoops.map((m) => m.name).join('/')
         : null,
     }
   }
@@ -1308,10 +1318,14 @@ const buildBackupRow = (transaction, context) => {
       'TMO Number': transaction.tmoNumber ?? null,
       'Batch Number': transaction.batchNumber ?? null,
       'Trial Number': transaction.trialNumber ?? null,
-      RSBSA: transaction.farmerRsbsa ?? null,
-      Gender: transaction.farmerGender ?? null,
+      RSBSA: transaction.farmerCoops?.length
+        ? transaction.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
+        : transaction.farmerRsbsa ?? null,
+      Gender: transaction.farmerCoops?.length
+        ? transaction.farmerCoops.map((m) => m.gender).filter(Boolean).join('/') || null
+        : transaction.farmerGender ?? null,
       'Farmer Organization Members': transaction.farmerCoops?.length
-        ? transaction.farmerCoops.map((m) => `${m.name} (${m.rsbsa || 'no RSBSA'}, ${m.gender || 'no gender'})`).join('; ')
+        ? transaction.farmerCoops.map((m) => m.name).join('/')
         : null,
     }
   }
@@ -1683,9 +1697,10 @@ const buildPrSummaryRow = (pr, context) => {
   // one whenever the serial actually parses as one (it always should),
   // falling back to the raw string rather than silently dropping it.
   const wsrNum = toNumberOrNull(wsrSerialNo)
-  // A single-member FA's own RSBSA (context.farmerRsbsa) takes priority
-  // over pr.rsbsa - per explicit correction, the RSBSA columns should
-  // show the actual farmer member's number, not be left to whatever the
+  // An FA's own member RSBSA(s) (context.farmerRsbsa, already "/"-joined
+  // for however many members there are) takes priority over pr.rsbsa -
+  // per explicit correction, the RSBSA columns should show every actual
+  // farmer member's number, not be left blank or stuck on whatever the
   // PR's own top-level rsbsa field happens to hold.
   const rsbsa = farmerRsbsa ?? pr.rsbsa ?? null
   return {
