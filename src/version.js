@@ -5343,4 +5343,21 @@
 //            overflow-y-auto (the pattern already used correctly
 //            elsewhere in this app, e.g. UsersPanel.jsx), so a long
 //            match list is now fully reachable by scrolling.
-export const APP_VERSION = '1.10-104'
+//   1.10-105 - Fixed the customer autocomplete dropdown still being cut
+//            off after 1.10-104's fix: the previous fix made the list
+//            itself scrollable, but it was still `position: absolute`
+//            inside the WSR/WSI form modal's own scrollable body
+//            (overflow-y-auto) - an absolutely-positioned element can
+//            never render past its nearest scrolling ancestor's clipped
+//            viewport, so the bottom of a long list stayed cut off
+//            regardless of its own internal scroll. Now portals
+//            straight to document.body and positions itself with
+//            `fixed` + the input's live getBoundingClientRect(),
+//            removing it from that ancestor entirely - repositions on
+//            scroll/resize so it still tracks the input, and its own
+//            max-height now adapts to whatever room is actually left
+//            below the input on screen. Click-outside-to-close updated
+//            to also recognize clicks inside the now-portaled dropdown
+//            (previously would have closed it before a selection's own
+//            click could register).
+export const APP_VERSION = '1.10-105'

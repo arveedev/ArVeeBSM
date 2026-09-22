@@ -11,6 +11,7 @@
 // warehouse's supervisor.
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { User, Users, Building2 } from 'lucide-react'
 import {
   searchCustomers,
@@ -34,7 +35,9 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
 ) {
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [dropdownRect, setDropdownRect] = useState(null)
   const containerRef = useRef(null)
+  const dropdownRef = useRef(null)
   const inputRef = useRef(null)
 
   useImperativeHandle(ref, () => ({
@@ -108,13 +111,49 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setShowSuggestions(false)
-      }
+      // The dropdown itself now portals to document.body (see the
+      // positioning effect below), so it's no longer inside
+      // containerRef's own DOM subtree - without also checking
+      // dropdownRef here, clicking a suggestion would register as an
+      // "outside" click and close the list on mousedown, before its own
+      // onClick ever got a chance to fire.
+      if (containerRef.current?.contains(e.target)) return
+      if (dropdownRef.current?.contains(e.target)) return
+      setShowSuggestions(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Confirmed real bug: this dropdown used to be `position: absolute`
+  // inside its own `relative` wrapper, which itself sits inside the
+  // parent form modal's scrollable body (`overflow-y-auto`). Even after
+  // making the dropdown's own list scrollable, an absolutely-positioned
+  // element can never render past its nearest scrolling ancestor's own
+  // clipped viewport - so the bottom of a long list still got cut off,
+  // with the dropdown's own scrollbar unable to reveal the rest.
+  // Portaling straight to document.body and positioning with `fixed` +
+  // the input's live getBoundingClientRect() removes it from that
+  // ancestor entirely, so it can render (and scroll) freely regardless
+  // of where it sits inside a scrolling form. Repositions on scroll
+  // (capture: true so this also catches a scroll on the modal's own
+  // body, not just the window) and resize, so it tracks the input
+  // instead of drifting away from it.
+  useEffect(() => {
+    if (!showSuggestions) return
+    const updatePosition = () => {
+      if (!inputRef.current) return
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownRect({ top: rect.bottom, left: rect.left, width: rect.width })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    document.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      document.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [showSuggestions])
 
   const handleSelect = (customer) => {
     onChange(customer.name)
@@ -139,8 +178,23 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
         autoComplete="off"
       />
 
-      {showSuggestions && suggestions.length > 0 && (
-        <ul className="absolute z-10 mt-1.5 max-h-72 w-full divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50">
+      {showSuggestions && suggestions.length > 0 && dropdownRect && createPortal(
+        <ul
+          ref={dropdownRef}
+          className="fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
+          style={{
+            top: dropdownRect.top,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+            // Same 288px cap as before when there's room for it, but
+            // shrinks further (down to a 120px floor) when the input
+            // sits low enough on screen that 288px would run off the
+            // bottom of the viewport - never a flat max-height that
+            // could overflow past the visible screen regardless of
+            // where the input actually is.
+            maxHeight: Math.max(120, Math.min(288, window.innerHeight - dropdownRect.top - 12)),
+          }}
+        >
           {suggestions.map((c) => (
             <li key={c.customerId}>
               <button
@@ -188,7 +242,8 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
               </button>
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
   )
