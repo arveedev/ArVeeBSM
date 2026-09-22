@@ -5533,4 +5533,13 @@
 //            - sdoAbstractPdfGenerator.js's page margin reduced from
 //              12mm (~0.47in) to 0.3in, per explicit request, freeing up
 //              more width for the actual report content.
-export const APP_VERSION = '1.10-114'
+//   1.10-115 - MillingMonitor.jsx's Overview panel: per-order sub-line
+//            now shows the actual warehouse the stock moved through,
+//            not the MO/TMO number (already this whole panel's own
+//            context). Confirmed: "On Hand" means a warehouse has
+//            issued stock TO the ricemill, nothing back yet - that row
+//            shows the ISSUING warehouse (from the order's own issue
+//            transactions). Partial/Ready to Complete shows the
+//            RECEIVING warehouse instead (order.receivingWarehouse,
+//            falling back to a receipt transaction's own warehouse).
+export const APP_VERSION = '1.10-115'

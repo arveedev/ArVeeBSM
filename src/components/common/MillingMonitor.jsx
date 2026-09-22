@@ -695,7 +695,31 @@ const BUCKET_META = {
 }
 const BUCKET_RANK = { onHand: 0, partial: 1, ready: 2 }
 
-function MillingOverviewPanel({ filtered, lastActivityDate }) {
+// Per explicit request: the sub-line under each row shows the actual
+// WAREHOUSE the stock moved through, not the MO/TMO number (already
+// shown as this whole panel's own context, and less useful here than
+// "where"). On Hand (nothing received back yet) shows the warehouse
+// that ISSUED stock to the mill (from the order's own issue
+// transactions' warehouseId) - that's the confirmed meaning of "On
+// Hand": a warehouse has sent stock to the ricemill, still there.
+// Partial/Ready shows the warehouse the milled product came back INTO
+// instead - order.receivingWarehouse is already a real field on the
+// synced order record for this, falling back to a receipt
+// transaction's own warehouseId only if that field is somehow blank.
+const resolveOrderWarehouseLabel = (o, warehouseMap) => {
+  const bucket = orderBucket(o)
+  if (bucket === 'onHand') {
+    const issueWhId = o.issueTx?.[0]?.warehouseId
+    const name = issueWhId ? warehouseMap.get(issueWhId)?.name : null
+    return name ? stripWarehouseCodePrefix(name) : null
+  }
+  if (o.receivingWarehouse) return o.receivingWarehouse
+  const receiptWhId = o.receiptTx?.[0]?.warehouseId
+  const name = receiptWhId ? warehouseMap.get(receiptWhId)?.name : null
+  return name ? stripWarehouseCodePrefix(name) : null
+}
+
+function MillingOverviewPanel({ filtered, lastActivityDate, warehouseMap }) {
   if (filtered.length === 0) return null
 
   const total = filtered.length
@@ -776,7 +800,8 @@ function MillingOverviewPanel({ filtered, lastActivityDate }) {
                     )}
                   </div>
                   <p className="truncate text-[11px] text-neutral-500 sm:text-xs">
-                    {o.number}{days != null && !overdue ? ` · ${days === 0 ? 'today' : `${days}d ago`}` : ''}
+                    {resolveOrderWarehouseLabel(o, warehouseMap) ?? o.number}
+                    {days != null && !overdue ? ` · ${days === 0 ? 'today' : `${days}d ago`}` : ''}
                   </p>
                 </div>
               </div>
@@ -1035,7 +1060,7 @@ function MillingMonitor({ isAdmin = false, active = true }) {
       </div>
       )}
 
-      {isExpanded && <MillingOverviewPanel filtered={filtered} lastActivityDate={lastActivityDate} />}
+      {isExpanded && <MillingOverviewPanel filtered={filtered} lastActivityDate={lastActivityDate} warehouseMap={warehouseMap} />}
 
       {isExpanded && (
         <div className="relative mt-3">
