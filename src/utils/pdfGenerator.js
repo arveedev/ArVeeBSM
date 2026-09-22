@@ -200,12 +200,23 @@ const addSignatories = (doc, { certifiedCorrectName, certifiedCorrectPosition, s
   // full required height up front and force a page break before
   // drawing anything if it wouldn't fit, rather than only reacting
   // after finding text already clipped.
+  // Reported real case this was too conservative for: a table ending
+  // with genuinely enough room left (confirmed against a real export -
+  // roughly 90mm of blank space below the table) still triggered a
+  // page break, wasting most of a page for signatures that would have
+  // fit. Recomputed to match exactly what gets drawn below (traced
+  // through renderName's own y-offsets: notedY's label sits at
+  // baseY+topRowHeight+4, its name at +13.5 more, its position at +18
+  // more) instead of a rounder, padded guess - a small 3mm safety
+  // margin covers font-metrics rounding, not a full extra line's worth.
   const vcList = signatories?.verifiedCorrect ?? []
   const topRowHeight = Math.max(lineGap * 3 + vcList.length * lineGap * 3.5, lineGap * 7)
-  const notedBlockHeight = lineGap * 4 // label→name gap + name line + position line
-  const requiredHeight = 10 /* baseY offset */ + topRowHeight + 4 /* notedY gap */ + notedBlockHeight + 8 /* buffer */
+  const requiredHeight = 10 /* baseY offset */ + topRowHeight + 4 /* notedY gap */ + 18 /* notedY label -> position bottom */ + 3 /* margin */
   const pageH = doc.internal.pageSize.getHeight()
-  const FOOTER_RESERVE = 12
+  // Footer text itself sits at pageH-5 (see addFooter) - 8mm leaves it
+  // comfortably clear without reserving a whole extra line's worth of
+  // unused space the way 12mm did.
+  const FOOTER_RESERVE = 8
   if (startY + requiredHeight > pageH - FOOTER_RESERVE) {
     doc.addPage()
     startY = 20

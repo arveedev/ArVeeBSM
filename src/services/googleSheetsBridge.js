@@ -1286,13 +1286,13 @@ const buildBackupRow = (transaction, context) => {
       // hidden whenever FA is on - see StockFormBase.jsx) and only
       // ever hold real data for an Individual transaction.
       RSBSA: transaction.farmerCoops?.length
-        ? transaction.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
+        ? transaction.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(' / ') || null
         : transaction.farmerRsbsa ?? null,
       Gender: transaction.farmerCoops?.length
-        ? transaction.farmerCoops.map((m) => m.gender).filter(Boolean).join('/') || null
+        ? transaction.farmerCoops.map((m) => m.gender).filter(Boolean).join(' / ') || null
         : transaction.farmerGender ?? null,
       'Farmer Organization Members': transaction.farmerCoops?.length
-        ? transaction.farmerCoops.map((m) => m.name).join('/')
+        ? transaction.farmerCoops.map((m) => m.name).join(' / ')
         : null,
     }
   }
@@ -1319,13 +1319,13 @@ const buildBackupRow = (transaction, context) => {
       'Batch Number': transaction.batchNumber ?? null,
       'Trial Number': transaction.trialNumber ?? null,
       RSBSA: transaction.farmerCoops?.length
-        ? transaction.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
+        ? transaction.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(' / ') || null
         : transaction.farmerRsbsa ?? null,
       Gender: transaction.farmerCoops?.length
-        ? transaction.farmerCoops.map((m) => m.gender).filter(Boolean).join('/') || null
+        ? transaction.farmerCoops.map((m) => m.gender).filter(Boolean).join(' / ') || null
         : transaction.farmerGender ?? null,
       'Farmer Organization Members': transaction.farmerCoops?.length
-        ? transaction.farmerCoops.map((m) => m.name).join('/')
+        ? transaction.farmerCoops.map((m) => m.name).join(' / ')
         : null,
     }
   }

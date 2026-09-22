@@ -5475,4 +5475,30 @@
 //            - v42 Dexie migration re-queues already-backed-up FA PRs
 //              for resync again, so existing Sheet rows pick up this
 //              fix too, not just newly-issued PRs.
-export const APP_VERSION = '1.10-111'
+//   1.10-112 - Direct feedback round:
+//            - The "/" separator joining multiple FA members now has a
+//              space on each side ("A / B") everywhere it's used - the
+//              SUMMARY sheet, the main WSR/WSI backup, the Abstract PDF,
+//              and PurchaseReceiptModal.jsx's own display - so a report
+//              or spreadsheet column naturally overflows/wraps between
+//              entries instead of running them together. v43 migration
+//              re-queues already-backed-up FA PRs once more.
+//            - MillingMonitor.jsx: AI/SIA moved off the MO/TMO number's
+//              own line to a bordered column on the right side of the
+//              card (list row and detail sheet), for clearer visual
+//              separation from the rest of the card.
+//            - pdfGenerator.js's addSignatories page-fit check (added
+//              1.10-102) was more conservative than it needed to be -
+//              recomputed the required-height estimate to match exactly
+//              what gets drawn (was padded ~8mm over the real need) and
+//              reduced the footer safety margin from 12mm to 8mm, so a
+//              table with genuinely enough room below it (confirmed
+//              against a real export wasting most of a page) no longer
+//              gets pushed to a wasted extra page unnecessarily.
+//            - SdoHome.jsx: the Abstract Export button was too easy to
+//              miss (small, same muted treatment as a secondary button) -
+//              now a real accent-colored action with an icon. Stacks
+//              onto its own full-width row below the For Payment/
+//              Completed tabs on narrow screens instead of competing
+//              for space in the same row, rejoining it at sm+.
+export const APP_VERSION = '1.10-112'

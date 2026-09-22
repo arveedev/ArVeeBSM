@@ -90,7 +90,7 @@ function AbstractExportModal({ onClose }) {
         // pr.rsbsa itself.
         const wsr = wsrById.get(pr.wsrTransactionId)
         const rsbsa = wsr?.farmerCoops?.length
-          ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
+          ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(' / ') || null
           : (pr.rsbsa || null)
         return {
           ...pr,

@@ -6,7 +6,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, ArrowUpDown, Trash2 } from 'lucide-react'
+import { Search, ArrowUpDown, Trash2, FileDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -248,7 +248,13 @@ function SdoHome() {
         </div>
       </div>
 
-      <div className="mt-5 flex gap-2">
+      {/* Per explicit feedback, Export was too easy to miss (small,
+          same muted neutral treatment as an ordinary secondary button) -
+          now a real accent-colored action with its own icon, not just
+          text. flex-col on narrow screens so it never gets squeezed
+          into the tab pill's row - it gets its own full-width row
+          below instead, rejoining the same row once there's room, sm+. */}
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
         <div className="relative flex flex-1 gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
           <div
             className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
@@ -261,7 +267,13 @@ function SdoHome() {
             Completed
           </button>
         </div>
-        <button type="button" onClick={() => setShowAbstractExport(true)} aria-label="Export Abstract of Cereal Purchases" className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-neutral-400 transition-all active:scale-95">
+        <button
+          type="button"
+          onClick={() => setShowAbstractExport(true)}
+          aria-label="Export Abstract of Cereal Purchases"
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-neon px-4 py-2 text-xs font-bold text-brand-contrast shadow-lg shadow-brand-neon/20 transition-all active:scale-95 sm:w-auto"
+        >
+          <FileDown size={15} strokeWidth={2.5} />
           Export
         </button>
       </div>

@@ -276,7 +276,7 @@ const runSyncQueue = async () => {
           // three is the same member), so "/" lines up positionally the
           // same way across all three columns.
           farmerMembersText: wsr?.farmerCoops?.length
-            ? wsr.farmerCoops.map((m) => m.name).join('/')
+            ? wsr.farmerCoops.map((m) => m.name).join(' / ')
             : null,
           // Per-member RSBSA/gender pulled directly into the RSBSA
           // NO./GENDER columns (see buildPrSummaryRow) rather than the
@@ -284,10 +284,10 @@ const runSyncQueue = async () => {
           // Individual farmer's own info and don't apply to an FA
           // transaction.
           farmerRsbsa: wsr?.farmerCoops?.length
-            ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
+            ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(' / ') || null
             : null,
           farmerGender: wsr?.farmerCoops?.length
-            ? wsr.farmerCoops.map((m) => m.gender).filter(Boolean).join('/') || null
+            ? wsr.farmerCoops.map((m) => m.gender).filter(Boolean).join(' / ') || null
             : (wsr?.farmerGender ?? null),
         }
 

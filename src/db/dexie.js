@@ -1046,6 +1046,24 @@ db.version(42).stores({}).upgrade(async (tx) => {
   }
 })
 
+// v43 — Per explicit request, the "/" separator joining multiple FA
+// members' names/RSBSA/gender (SUMMARY sheet, main WSR/WSI backup, and
+// the Abstract PDF) now has a space on each side ("A / B", not "A/B"),
+// so a report/spreadsheet column naturally wraps between entries
+// instead of them running together. Same re-queue pattern as v42.
+db.version(43).stores({}).upgrade(async (tx) => {
+  const activePrs = await tx.table('purchaseReceipts')
+    .where('status').equals('Active')
+    .and((pr) => pr.hasBeenBackedUp === true && Boolean(pr.wsrTransactionId))
+    .toArray()
+  for (const pr of activePrs) {
+    const wsr = await tx.table('transactions').get(pr.wsrTransactionId)
+    if (wsr?.farmerCoops?.length) {
+      await tx.table('purchaseReceipts').update(pr.prId, { isSynced: false })
+    }
+  }
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

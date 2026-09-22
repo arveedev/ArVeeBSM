@@ -98,7 +98,7 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   // own display below, and the PR record's own `rsbsa` field, which the
   // Abstract PDF reads directly).
   const resolvedRsbsa = wsr.farmerCoops?.length
-    ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join('/') || null
+    ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(' / ') || null
     : wsr.farmerRsbsa ?? null
 
   const purityDisplayFormat = config?.purityDisplayFormat ?? 'range'

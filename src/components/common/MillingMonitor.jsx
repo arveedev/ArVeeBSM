@@ -187,22 +187,24 @@ export function MillingOrderDetail({ order, onClose }) {
             pb-0 left its last block sitting flush against the modal's
             bottom edge with no gap. */}
         <div className={`shrink-0 p-4 ${shouldRenderTabContent ? 'pb-0' : ''}`}>
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <p className="text-lg font-bold text-app-text">{order.number}</p>
-                {order.aiNumber && (
-                  <span className="text-sm font-semibold tabular-nums text-brand-neon">AI {order.aiNumber}</span>
-                )}
-                {order.siaNumber && (
-                  <span className="text-sm font-semibold tabular-nums text-blue-400">SIA {order.siaNumber}</span>
-                )}
-              </div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-lg font-bold text-app-text">{order.number}</p>
               <p className="text-base text-neutral-400">{order.ricemillName}</p>
             </div>
-            <button type="button" onClick={handleClose} className="rounded-full p-2 text-brand-crimson transition-transform active:scale-90">
-              <X size={26} strokeWidth={2.5} />
-            </button>
+            <div className="flex shrink-0 items-center gap-3">
+              {/* AI/SIA on the right, its own bordered column for clear
+                  separation - same treatment as the list row card. */}
+              {(order.aiNumber || order.siaNumber) && (
+                <div className="flex flex-col items-end gap-0.5 border-l border-neutral-800 pl-3 text-right">
+                  {order.aiNumber && <span className="text-xs font-semibold tabular-nums text-brand-neon">AI {order.aiNumber}</span>}
+                  {order.siaNumber && <span className="text-xs font-semibold tabular-nums text-blue-400">SIA {order.siaNumber}</span>}
+                </div>
+              )}
+              <button type="button" onClick={handleClose} className="rounded-full p-2 text-brand-crimson transition-transform active:scale-90">
+                <X size={26} strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-base">
@@ -572,26 +574,7 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
         }`}
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-1.5">
-            <p className="min-w-0 truncate text-base font-semibold text-app-text">{o.number}</p>
-            {/* AI/SIA numbers, in-line with the MO/TMO number itself -
-                per explicit request, not as a separate badge row below.
-                Visible to every role now (this whole card is shared
-                between the regular user's Home and AdminMonitoring), not
-                just the admin-only AI/SIA tab it used to be confined to.
-                Every MO/TMO genuinely carries BOTH its own AI and SIA
-                (confirmed directly against the real Sheet) - shows both
-                when both exist, not just whichever one happened to be
-                checked first. shrink-0 so a long MO number truncates
-                before these do - short, fixed-width, always worth
-                keeping fully visible. */}
-            {o.aiNumber && (
-              <span className="shrink-0 text-xs font-semibold tabular-nums text-brand-neon">AI {o.aiNumber}</span>
-            )}
-            {o.siaNumber && (
-              <span className="shrink-0 text-xs font-semibold tabular-nums text-blue-400">SIA {o.siaNumber}</span>
-            )}
-          </div>
+          <p className="min-w-0 truncate text-base font-semibold text-app-text">{o.number}</p>
           <p className="truncate text-sm text-neutral-500">
             {o.ricemillName}
             {o.type === 'MO' && o.batchCurrent != null && ` · Batch ${o.batchCurrent} of ${o.batchTotal}`}
@@ -613,6 +596,21 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
             </>
           )}
         </div>
+        {/* AI/SIA, moved to the right side of the card per explicit
+            request - a bordered column of its own (not inline with the
+            number) for clear visual separation from the rest of the
+            card. Visible to every role now (this card is shared between
+            the regular user's Home and AdminMonitoring), not just the
+            admin-only AI/SIA tab it used to be confined to. Every
+            MO/TMO genuinely carries BOTH its own AI and SIA (confirmed
+            directly against the real Sheet) - shows both when both
+            exist, not just whichever one happened to be checked first. */}
+        {(o.aiNumber || o.siaNumber) && (
+          <div className="flex shrink-0 flex-col items-end gap-0.5 border-l border-neutral-800 pl-2.5 text-right">
+            {o.aiNumber && <span className="text-[11px] font-semibold tabular-nums text-brand-neon">AI {o.aiNumber}</span>}
+            {o.siaNumber && <span className="text-[11px] font-semibold tabular-nums text-blue-400">SIA {o.siaNumber}</span>}
+          </div>
+        )}
         <div className="flex shrink-0 items-center gap-2">
           {!isCompleted && (o.issuedKilos > 0 || o.issuedPieces > 0) && (
             <AlertTriangle size={14} className="text-brand-amber" />
