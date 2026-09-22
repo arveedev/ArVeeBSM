@@ -89,6 +89,17 @@ const toNumberOrNull = (value) => {
   return Number.isNaN(num) ? null : num
 }
 
+/** Converts this app's own 'YYYY-MM-DD' local date string into the
+ * "9/21/2026" format (no leading zeros) the PR SUMMARY sheet's DATE
+ * column expects - per explicit request. Returns null unchanged for a
+ * missing/malformed date rather than sending a garbled value. */
+const toSheetDateFormat = (isoDate) => {
+  if (!isoDate) return null
+  const [y, m, d] = isoDate.split('-')
+  if (!y || !m || !d) return isoDate
+  return `${Number(m)}/${Number(d)}/${y}`
+}
+
 // The ONLY sheet-name keys this app is ever allowed to write to. AI/SIA
 // are deliberately absent - there is no code path that can add them
 // without editing this list directly, which is the point.
@@ -1683,7 +1694,7 @@ const buildPrSummaryRow = (pr, context) => {
     // explicit correction, "PALAY DELIVERIES" means the delivery date,
     // and it's also what determines which month's spreadsheet this row
     // belongs in at all (see getSourceDateForPr below).
-    'DATE': wsrDate ?? pr.date,
+    'DATE': toSheetDateFormat(wsrDate ?? pr.date),
     'PR NO.': pr.prNo,
     'WSR': wsrNum != null ? wsrNum : (wsrSerialNo ?? null),
     'RSBSA NO.': rsbsa,

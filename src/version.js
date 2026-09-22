@@ -5327,4 +5327,11 @@
 //            needed, never silently clipped. Applies to every page type
 //            that calls addSignatories (stock summary/statement/recap,
 //            sack summary/statement/recap).
-export const APP_VERSION = '1.10-102'
+//   1.10-103 - Per explicit request, the PR SUMMARY sheet's DATE column
+//            now reads "9/21/2026" (M/D/YYYY, no leading zeros) instead
+//            of this app's internal 'YYYY-MM-DD' format - new
+//            toSheetDateFormat() helper in googleSheetsBridge.js. A v41
+//            Dexie migration resets sync state on already-backed-up
+//            Active PRs so existing Sheet rows self-correct on the next
+//            sync, same cleanup pattern as v39/v40.
+export const APP_VERSION = '1.10-103'

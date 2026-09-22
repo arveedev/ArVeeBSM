@@ -1008,6 +1008,21 @@ db.version(40).stores({}).upgrade(async (tx) => {
   }
 })
 
+// v41 — Per explicit request, the PR SUMMARY sheet's DATE column should
+// read like "9/21/2026" (no leading zeros), not this app's own internal
+// 'YYYY-MM-DD' format. Every already-backed-up Active PR gets isSynced
+// reset to false so the next sync re-pushes it with the corrected DATE
+// formatting, same cleanup pattern as v39/v40 above.
+db.version(41).stores({}).upgrade(async (tx) => {
+  const activePrs = await tx.table('purchaseReceipts')
+    .where('status').equals('Active')
+    .and((pr) => pr.hasBeenBackedUp === true)
+    .toArray()
+  for (const pr of activePrs) {
+    await tx.table('purchaseReceipts').update(pr.prId, { isSynced: false })
+  }
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the
