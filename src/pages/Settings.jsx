@@ -324,7 +324,7 @@ function ClassifierSection({ warehouseId }) {
                 </button>
               )}
               {showSuggestions && classifierSuggestions.length > 0 && (
-                <ul className="absolute z-10 mt-1.5 w-full divide-y divide-neutral-800 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50">
+                <ul className="absolute z-10 mt-1.5 max-h-72 w-full divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50">
                   {classifierSuggestions.map((cn) => (
                     <li key={cn}>
                       <button

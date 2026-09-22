@@ -5334,4 +5334,13 @@
 //            Dexie migration resets sync state on already-backed-up
 //            Active PRs so existing Sheet rows self-correct on the next
 //            sync, same cleanup pattern as v39/v40.
-export const APP_VERSION = '1.10-103'
+//   1.10-104 - Fixed the customer name autocomplete dropdown (and an
+//            identical copy in Settings.jsx's classifier name field)
+//            being unscrollable and cut off when a search (e.g. typing
+//            "WS") matched many results - the <ul> had overflow-hidden
+//            with no max-height, which clips extra rows entirely rather
+//            than letting them scroll. Changed to max-h-72
+//            overflow-y-auto (the pattern already used correctly
+//            elsewhere in this app, e.g. UsersPanel.jsx), so a long
+//            match list is now fully reachable by scrolling.
+export const APP_VERSION = '1.10-104'
