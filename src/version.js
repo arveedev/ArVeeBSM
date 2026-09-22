@@ -5311,4 +5311,20 @@
 //            else hand-maintained) completely alone, on every sheet
 //            this same code backs up (WSR/WSI/ESR/ESI/SUMMARY/MO/TMO).
 //            No app-side code changed - redeploy-only fix.
-export const APP_VERSION = '1.10-101'
+//   1.10-102 - Fixed a real reported bug in the exported Stock Statement
+//            PDF (pdfGenerator.js): the signatory block (Certified
+//            Correct/Verified Correct/Audited By/Noted By) was drawn at
+//            whatever Y a preceding table happened to end at, with no
+//            check that it actually fit on the page - a long Statement
+//            of Weekly Issues table pushed "Noted By" past the physical
+//            page height, where jsPDF silently draws off-canvas, so it
+//            never appeared at all - confirmed against a real export
+//            where the exact same block rendered fine on the very next
+//            (shorter) Recapitulation page. addSignatories now computes
+//            its own required height up front and forces a page break
+//            before drawing anything if it wouldn't fit, so signatories
+//            are always present - extending onto a fresh page when
+//            needed, never silently clipped. Applies to every page type
+//            that calls addSignatories (stock summary/statement/recap,
+//            sack summary/statement/recap).
+export const APP_VERSION = '1.10-102'

@@ -185,8 +185,33 @@ const addRegionProvinceCodeWhse = (doc, { warehouse, province, branch }, y) => {
 
 const addSignatories = (doc, { certifiedCorrectName, certifiedCorrectPosition, signatories }, startY) => {
   const col = (pageW - margin * 2) / 3
-  const baseY = startY + 10
   const lineGap = 4.5
+
+  // Confirmed real bug: this whole block used to draw at whatever Y a
+  // preceding table happened to end at, with no check that it actually
+  // fit on the page - a long Statement of Weekly Issues table (many
+  // rows) pushed "Noted By" (the last, bottom-most row) past the
+  // physical page height, where jsPDF just silently draws off-canvas,
+  // so it never appeared at all - while the identical signature block
+  // rendered fine on the very next page (a shorter Recapitulation
+  // table) purely because there was more room left. Per explicit
+  // requirement, signatories must always be present - extending onto a
+  // fresh page is fine, silently vanishing is not. Compute the block's
+  // full required height up front and force a page break before
+  // drawing anything if it wouldn't fit, rather than only reacting
+  // after finding text already clipped.
+  const vcList = signatories?.verifiedCorrect ?? []
+  const topRowHeight = Math.max(lineGap * 3 + vcList.length * lineGap * 3.5, lineGap * 7)
+  const notedBlockHeight = lineGap * 4 // label→name gap + name line + position line
+  const requiredHeight = 10 /* baseY offset */ + topRowHeight + 4 /* notedY gap */ + notedBlockHeight + 8 /* buffer */
+  const pageH = doc.internal.pageSize.getHeight()
+  const FOOTER_RESERVE = 12
+  if (startY + requiredHeight > pageH - FOOTER_RESERVE) {
+    doc.addPage()
+    startY = 20
+  }
+
+  const baseY = startY + 10
 
   const renderName = (name, position, x, y, colWidth) => {
     // Underline first
@@ -222,7 +247,6 @@ const addSignatories = (doc, { certifiedCorrectName, certifiedCorrectPosition, s
 
   // MIDDLE — Verified Correct (label once, then each name stacked below)
   let vcY = baseY
-  const vcList = signatories?.verifiedCorrect ?? []
   renderLabel('Verified Correct:', margin + col, vcY)
   vcY += lineGap * 3
   for (const vc of vcList) {
