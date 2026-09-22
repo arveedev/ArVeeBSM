@@ -12,7 +12,7 @@ import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
 import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
-import { fmtBags, fmtWeight, fmtNetBags, calculateCurrentAge, AGE_BUCKETS, formatTrialLabel, expandTrialNumbers } from '../../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtNetBags, calculateCurrentAge, AGE_BUCKETS, formatTrialLabel, expandTrialNumbers, todayLocalISO } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
@@ -192,13 +192,22 @@ export function MillingOrderDetail({ order, onClose }) {
               <p className="text-lg font-bold text-app-text">{order.number}</p>
               <p className="text-base text-neutral-400">{order.ricemillName}</p>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
-              {/* AI/SIA on the right, its own bordered column for clear
-                  separation - same treatment as the list row card. */}
+            <div className="flex shrink-0 items-center gap-2">
+              {/* AI/SIA, side by side (not stacked), each its own pill so
+                  they read as clearly separate values - same treatment
+                  as the list row card's corner badge. */}
               {(order.aiNumber || order.siaNumber) && (
-                <div className="flex flex-col items-end gap-0.5 border-l border-neutral-800 pl-3 text-right">
-                  {order.aiNumber && <span className="text-xs font-semibold tabular-nums text-brand-neon">AI {order.aiNumber}</span>}
-                  {order.siaNumber && <span className="text-xs font-semibold tabular-nums text-blue-400">SIA {order.siaNumber}</span>}
+                <div className="flex items-center gap-1">
+                  {order.aiNumber && (
+                    <span className="rounded bg-brand-neon/10 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-brand-neon">
+                      AI {order.aiNumber}
+                    </span>
+                  )}
+                  {order.siaNumber && (
+                    <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-blue-400">
+                      SIA {order.siaNumber}
+                    </span>
+                  )}
                 </div>
               )}
               <button type="button" onClick={handleClose} className="rounded-full p-2 text-brand-crimson transition-transform active:scale-90">
@@ -569,10 +578,39 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
       <button
         type="button"
         onClick={() => onSelect(o)}
-        className={`flex flex-1 items-center justify-between gap-3 rounded-xl border bg-neutral-950 px-3 py-2.5 text-left active:scale-[0.99] ${
-          needsConfirmation ? 'border-brand-amber' : 'border-neutral-800'
-        }`}
+        className={`relative flex flex-1 items-center justify-between gap-3 rounded-xl border bg-neutral-950 px-3 text-left active:scale-[0.99] ${
+          // Extra top padding whenever the AI/SIA corner badge is
+          // present, so it never visually crowds the number/mill name
+          // sitting in normal flow right below it.
+          (o.aiNumber || o.siaNumber) ? 'pb-2.5 pt-7' : 'py-2.5'
+        } ${needsConfirmation ? 'border-brand-amber' : 'border-neutral-800'}`}
       >
+        {/* AI/SIA, top-right corner of the card per explicit request -
+            side by side (not stacked), each its own pill so they read as
+            clearly separate values rather than one run-together line.
+            Visible to every role now (this card is shared between the
+            regular user's Home and AdminMonitoring), not just the
+            admin-only AI/SIA tab it used to be confined to. Every
+            MO/TMO genuinely carries BOTH its own AI and SIA (confirmed
+            directly against the real Sheet) - shows both when both
+            exist, not just whichever one happened to be checked first.
+            Absolutely positioned so it sits at the corner regardless of
+            how tall the card grows (progress bar, trial counts, etc.)
+            instead of being vertically centered with the whole card. */}
+        {(o.aiNumber || o.siaNumber) && (
+          <div className="absolute right-2.5 top-2 flex items-center gap-1">
+            {o.aiNumber && (
+              <span className="rounded bg-brand-neon/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-brand-neon">
+                AI {o.aiNumber}
+              </span>
+            )}
+            {o.siaNumber && (
+              <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-400">
+                SIA {o.siaNumber}
+              </span>
+            )}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="min-w-0 truncate text-base font-semibold text-app-text">{o.number}</p>
           <p className="truncate text-sm text-neutral-500">
@@ -596,21 +634,6 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
             </>
           )}
         </div>
-        {/* AI/SIA, moved to the right side of the card per explicit
-            request - a bordered column of its own (not inline with the
-            number) for clear visual separation from the rest of the
-            card. Visible to every role now (this card is shared between
-            the regular user's Home and AdminMonitoring), not just the
-            admin-only AI/SIA tab it used to be confined to. Every
-            MO/TMO genuinely carries BOTH its own AI and SIA (confirmed
-            directly against the real Sheet) - shows both when both
-            exist, not just whichever one happened to be checked first. */}
-        {(o.aiNumber || o.siaNumber) && (
-          <div className="flex shrink-0 flex-col items-end gap-0.5 border-l border-neutral-800 pl-2.5 text-right">
-            {o.aiNumber && <span className="text-[11px] font-semibold tabular-nums text-brand-neon">AI {o.aiNumber}</span>}
-            {o.siaNumber && <span className="text-[11px] font-semibold tabular-nums text-blue-400">SIA {o.siaNumber}</span>}
-          </div>
-        )}
         <div className="flex shrink-0 items-center gap-2">
           {!isCompleted && (o.issuedKilos > 0 || o.issuedPieces > 0) && (
             <AlertTriangle size={14} className="text-brand-amber" />
@@ -620,6 +643,137 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
       </button>
     </div>
     </ShrinkFilterRow>
+  )
+}
+
+// ── Milling Overview panel (donut + per-order urgency list) ────────────
+// Per explicit request (built from the "G1" demo round): sits above the
+// MO/TMO list, pending orders only, one instance per tab - since the
+// caller's `filtered` is already scoped to whichever tab (Milling/Test
+// Milling) is currently active, rendering this once per tab switch
+// automatically gives "one overview for Milling and another for Test
+// Milling" with no extra plumbing needed.
+//
+// Donut buckets: On Hand (issued, nothing received back yet), Partial
+// (some received, not yet fulfilled), Ready to Complete (o.fulfilled -
+// the exact same "looks done" signal the pending list's own amber-
+// border needsConfirmation cue already uses elsewhere in this file, not
+// a new definition of "done").
+//
+// G1 (not G2/G3): one shared list, not a separate flagged section - an
+// overdue On Hand row (nothing received back for OVERDUE_DAYS+) gets
+// its own tinted background and day-count badge in place, instead of
+// also appearing a second time elsewhere. Capped to a handful of rows,
+// prioritized On Hand-oldest-first (most urgent), then Partial-oldest-
+// first, then Ready-to-Complete-newest-first - this stays a genuine
+// "at a glance" panel, not the full list restated a second time.
+const DONUT_R = 70
+const DONUT_C = 2 * Math.PI * DONUT_R
+const OVERDUE_DAYS = 7
+const OVERVIEW_ROW_CAP = 5
+
+const orderBucket = (o) => {
+  if (o.fulfilled) return 'ready'
+  const received = (o.receivedKilos ?? 0) + (o.receivedPieces ?? 0)
+  return received > 0 ? 'partial' : 'onHand'
+}
+
+const daysSince = (dateStr) => {
+  if (!dateStr) return null
+  const then = new Date(`${dateStr}T00:00:00`)
+  const now = new Date(`${todayLocalISO()}T00:00:00`)
+  return Math.max(0, Math.round((now - then) / (1000 * 60 * 60 * 24)))
+}
+
+const BUCKET_META = {
+  onHand: { label: 'On Hand', color: '#F5A524', dotClass: 'bg-brand-amber', statusText: 'on hand' },
+  partial: { label: 'Partial', color: '#378ADD', dotClass: 'bg-blue-400', statusText: 'partially received' },
+  ready: { label: 'Ready to Complete', color: '#00FFA3', dotClass: 'bg-brand-neon', statusText: 'fully received' },
+}
+const BUCKET_RANK = { onHand: 0, partial: 1, ready: 2 }
+
+function MillingOverviewPanel({ filtered, lastActivityDate }) {
+  if (filtered.length === 0) return null
+
+  const total = filtered.length
+  const counts = { onHand: 0, partial: 0, ready: 0 }
+  for (const o of filtered) counts[orderBucket(o)] += 1
+
+  let cursor = 0
+  const arcs = ['onHand', 'partial', 'ready']
+    .map((key) => {
+      const length = total > 0 ? (counts[key] / total) * DONUT_C : 0
+      const arc = { key, length, offset: -cursor, ...BUCKET_META[key] }
+      cursor += length
+      return arc
+    })
+    .filter((a) => a.length > 0)
+
+  const rows = filtered
+    .map((o) => {
+      const bucket = orderBucket(o)
+      const lastDate = lastActivityDate(o)
+      return { order: o, bucket, lastDate, days: daysSince(lastDate) }
+    })
+    .sort((a, b) => {
+      if (BUCKET_RANK[a.bucket] !== BUCKET_RANK[b.bucket]) return BUCKET_RANK[a.bucket] - BUCKET_RANK[b.bucket]
+      return a.bucket === 'ready' ? b.lastDate.localeCompare(a.lastDate) : a.lastDate.localeCompare(b.lastDate)
+    })
+    .slice(0, OVERVIEW_ROW_CAP)
+
+  return (
+    <div className="mt-3 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+      <div className="flex items-center gap-4">
+        <div className="relative h-[92px] w-[92px] shrink-0">
+          <svg width="92" height="92" viewBox="0 0 168 168">
+            <circle cx="84" cy="84" r={DONUT_R} fill="none" stroke="#1c1c1f" strokeWidth="20" />
+            {arcs.map((a) => (
+              <circle
+                key={a.key} cx="84" cy="84" r={DONUT_R} fill="none" stroke={a.color} strokeWidth="20"
+                strokeDasharray={`${a.length} ${DONUT_C}`} strokeDashoffset={a.offset}
+                transform="rotate(-90 84 84)"
+              />
+            ))}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-xl font-extrabold tabular-nums text-app-text">{total}</span>
+            <span className="text-[9px] uppercase tracking-wide text-neutral-500">Pending</span>
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          {['onHand', 'partial', 'ready'].map((key) => (
+            <div key={key} className="flex items-center gap-2 text-xs">
+              <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: BUCKET_META[key].color }} />
+              <span className="min-w-0 flex-1 truncate font-semibold text-app-text">{BUCKET_META[key].label}</span>
+              <span className="shrink-0 font-extrabold tabular-nums" style={{ color: BUCKET_META[key].color }}>{counts[key]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2 border-t border-neutral-800 pt-3">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Per-Order Status</p>
+        {rows.map(({ order: o, bucket, days }) => {
+          const overdue = bucket === 'onHand' && days != null && days >= OVERDUE_DAYS
+          return (
+            <div key={o.orderId} className={`flex items-start gap-2.5 ${overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}`}>
+              <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${BUCKET_META[bucket].dotClass}`} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-xs font-semibold text-app-text">{o.ricemillName} — {BUCKET_META[bucket].statusText}</p>
+                  {overdue && (
+                    <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-crimson">⚠ {days}d</span>
+                  )}
+                </div>
+                <p className="truncate text-[11px] text-neutral-500">
+                  {o.number}{days != null && !overdue ? ` · ${days === 0 ? 'today' : `${days}d ago`}` : ''}
+                </p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -869,6 +1023,8 @@ function MillingMonitor({ isAdmin = false, active = true }) {
         ))}
       </div>
       )}
+
+      {isExpanded && <MillingOverviewPanel filtered={filtered} lastActivityDate={lastActivityDate} />}
 
       {isExpanded && (
         <div className="relative mt-3">

@@ -5501,4 +5501,25 @@
 //              onto its own full-width row below the For Payment/
 //              Completed tabs on narrow screens instead of competing
 //              for space in the same row, rejoining it at sm+.
-export const APP_VERSION = '1.10-112'
+//   1.10-113 - Direct feedback round:
+//            - MillingMonitor.jsx: AI/SIA moved to the actual top-right
+//              CORNER of the card (absolutely positioned, no longer
+//              vertically centered with the whole card), shown side by
+//              side as two distinct pills instead of stacked, so they
+//              read as clearly separate values. Same treatment in the
+//              detail sheet's header.
+//            - sdoAbstractPdfGenerator.js: RSBSA NO. column given a
+//              fixed, modest width (was auto-sizing to fit a now-
+//              multi-value RSBSA, squeezing every other column) - wraps
+//              a multi-value RSBSA onto a second line instead.
+//            - New feature: Milling Overview panel (built from the "G1"
+//              demo), sitting above the MO/TMO list - one automatically
+//              per tab (Milling/Test Milling), since it's built from
+//              whichever tab's own pending list is already showing. A
+//              donut (On Hand / Partial / Ready to Complete, using the
+//              same "fulfilled" signal the pending list's own
+//              needsConfirmation cue already relies on) plus a capped,
+//              priority-sorted per-order status list where an overdue
+//              On Hand order (nothing received back for 7+ days) gets
+//              its own flagged treatment in place.
+export const APP_VERSION = '1.10-113'

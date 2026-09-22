@@ -241,10 +241,15 @@ export const generateSdoAbstract = ({
     styles: { font: 'helvetica', fontSize: 8, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.3, halign: 'center' },
     headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center', valign: 'middle' },
     footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 8, halign: 'center' },
-    // Col 2 Name of Farmer, col 3 Address - both left-aligned (RSBSA,
-    // now col 4, stays centered with the table's default like every
-    // other short-code column).
-    columnStyles: { 2: { halign: 'left' }, 3: { halign: 'left' } },
+    // Col 2 Name of Farmer, col 3 Address - both left-aligned. Col 4
+    // RSBSA NO. gets a fixed, modest cellWidth - per explicit feedback,
+    // an FA row's now-multi-value RSBSA ("A / B") was left to
+    // auto-size and ate up disproportionate space, squeezing every
+    // other column. Constrained width wraps a multi-value RSBSA onto a
+    // second line (autoTable's default overflow behavior) rather than
+    // stretching the column - a plain single-value RSBSA still fits on
+    // one line comfortably at this width.
+    columnStyles: { 2: { halign: 'left' }, 3: { halign: 'left' }, 4: { cellWidth: 26 } },
     didDrawPage: () => drawBranchHeader(doc, { branchLabel, periodLabel }),
     // Draws each row's BN/SH mark just past the table's own right edge
     // once that row's last real column has been placed - small, light
