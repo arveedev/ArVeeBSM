@@ -119,10 +119,10 @@ const GENDERS = ['Male', 'Female']
 const DELETE_ANIM_MS = 1000
 
 // One accent color per pile card in the live "Pile now" sidebar, so a
-// multi-pile WSI (primary pile + one or more "Issue from another pile"
-// additions) can tell its cards apart at a glance - per explicit
-// request, no combined total block, just each pile's own real figures
-// under its own accent.
+// multi-pile WSI or WSR (primary pile + one or more "Issue from another
+// pile"/"Receive to another pile" additions) can tell its cards apart
+// at a glance - per explicit request, no combined total block, just
+// each pile's own real figures under its own accent.
 const PILE_SIDEBAR_ACCENTS = ['#00FFA3', '#378ADD', '#F5A524', '#D4537E']
 
 // Live "Pile now" sidebar figures for one pile card. A plain Rice/Palay
@@ -1149,8 +1149,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       avgWeightPerBag: calculateAverageWeightPerBag(fields.netKilos, fields.numberOfBags),
       availableBags: allocAvailableBags,
       availableKilos: allocAvailableKilos,
-      overKilos: allocAvailableKilos != null && fields.netKilos > allocAvailableKilos + KILOS_TOLERANCE,
-      overBags: allocAvailableBags != null && fields.numberOfBags > allocAvailableBags,
+      // Same isIssuance gate as the primary pile's own overKilos/overBags
+      // above - a WSR "receive to another pile" line ADDS to that pile,
+      // so there's no stock ceiling to check against (unlike a WSI
+      // "issue from another pile" line, which draws the pile's own
+      // current stock down and genuinely can't exceed it).
+      overKilos: isIssuance && allocAvailableKilos != null && fields.netKilos > allocAvailableKilos + KILOS_TOLERANCE,
+      overBags: isIssuance && allocAvailableBags != null && fields.numberOfBags > allocAvailableBags,
     }
   })
 
@@ -2010,7 +2015,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const reverseGroupEffect = async (primary) => {
     await reverseTransactionFromPile(primary)
     for (const orig of originalExtraAllocations) {
-      await reverseTransactionFromPile({ type: 'WSI', pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
+      // primary.type, not a hardcoded 'WSI' - a real bug fixed while
+      // adding WSR's own "receive to another pile" equivalent of this
+      // feature: every sibling in a group is always the same document
+      // type as its primary (a WSR's extra allocations are never WSI),
+      // and reverseTransactionFromPile needs the real type to know
+      // whether reversing this line means adding stock back (undoing a
+      // WSI) or subtracting it back out (undoing a WSR).
+      await reverseTransactionFromPile({ type: primary.type, pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
     }
     if (primary.aiNumber) {
       const totalBags = (primary.numberOfBags ?? 0) + originalExtraAllocations.reduce((s, o) => s + (o.numberOfBags ?? 0), 0)
@@ -2334,7 +2346,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               fields.numberOfBags, fields.netKilos
             )
           } else {
-            if (orig?.pileId) await reverseTransactionFromPile({ type: 'WSI', pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
+            // extraUpdated.type (same fix as reverseGroupEffect above) -
+            // not a hardcoded 'WSI', so reversing this line's OLD pile
+            // correctly adds back (WSI) or subtracts back out (WSR).
+            if (orig?.pileId) await reverseTransactionFromPile({ type: extraUpdated.type, pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
             await applyTransactionToPile(extraUpdated)
           }
         } else {
@@ -2355,7 +2370,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       for (const orig of originalExtraAllocations) {
         if (survivingTxIds.has(orig.id)) continue
         await db.transactions.delete(orig.id)
-        await reverseTransactionFromPile({ type: 'WSI', pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
+        // updated.type (same fix as above) - not a hardcoded 'WSI'.
+        await reverseTransactionFromPile({ type: updated.type, pileId: orig.pileId, numberOfBags: orig.numberOfBags, netKilos: orig.netKilos })
         queueTransactionDeletion(orig.serialNo, updated.type, currentWarehouse?.code) // fire-and-forget, same as a normal delete
       }
 
@@ -3482,9 +3498,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
           {/* Sits right after the primary pile's own Net Kilos, before
               Age - by the time the user gets here they know whether this
-              pile alone covers the issuance, which is the natural moment
-              to decide whether another pile is needed to complete it. */}
-          {type === 'WSI' && !isAccountabilityFacility && (
+              pile alone covers the issuance/receipt, which is the
+              natural moment to decide whether another pile is needed to
+              complete it. Same feature for WSR as WSI (added per direct
+              request - a WSR can arrive with more stock than one pile
+              alone should hold, same reasoning as WSI's existing
+              "issue from another pile"), just the opposite direction:
+              a WSI line draws its own pile's current stock DOWN and is
+              capped by it (isIssuance-gated overKilos/overBags above),
+              while a WSR line simply ADDS to its own pile with no such
+              ceiling. */}
+          {(type === 'WSI' || type === 'WSR') && !isAccountabilityFacility && (
             <div>
               {extraPileAllocations.map((alloc, i) => {
                 const info = extraAllocInfos[i]
@@ -3561,7 +3585,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
                   {info.pile && (
                     <div className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs tabular-nums text-neutral-400">
-                      Available on {info.pile.pileName}: {fmtBags(info.availableBags)} bags ·{' '}
+                      {/* isIssuance: this figure is a real ceiling (what's
+                          left to draw down). For a WSR line, it's purely
+                          informational - a receipt isn't capped by
+                          whatever the pile already holds. */}
+                      {isIssuance ? 'Available' : 'Current stock'} on {info.pile.pileName}: {fmtBags(info.availableBags)} bags ·{' '}
                       {fmtWeight(info.availableKilos, weightUnit)}
                     </div>
                   )}
@@ -3634,6 +3662,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                         {info.pile?.pileName ?? 'This pile'} only has {fmtWeight(info.availableKilos, weightUnit, 'Net')} - add another pile to complete the transaction.
                       </p>
                     )}
+                    {/* overKilos can only ever be true here when isIssuance
+                        (see extraAllocInfos above), so no separate
+                        isIssuance check is needed on this branch itself. */}
                     {parseFormattedNumber(alloc.bags) > 0 && !info.overKilos && (
                       <p className="mt-1 text-xs tabular-nums text-neutral-500">
                         Average weight per bag: {info.avgWeightPerBag.toFixed(2)} kg
@@ -3648,7 +3679,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 onClick={() => setExtraPileAllocations((rows) => [...rows, emptyExtraAllocation()])}
                 className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
               >
-                <Plus size={14} /> Issue from another pile
+                <Plus size={14} /> {isIssuance ? 'Issue from another pile' : 'Receive to another pile'}
               </button>
               {extraPileAllocations.length > 0 && (
                 <p className="mt-1.5 text-xs text-neutral-500">
@@ -3702,11 +3733,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
           {isPC && (() => {
             // Primary pile first, then every additional pile from
-            // "Issue from another pile" that actually has one selected
-            // yet - each keeps its own accent (PILE_SIDEBAR_ACCENTS) so
-            // a multi-pile WSI reads as genuinely separate piles, not
-            // one blended figure. Per explicit request: no combined
-            // total card.
+            // "Issue from another pile"/"Receive to another pile" that
+            // actually has one selected yet - each keeps its own accent
+            // (PILE_SIDEBAR_ACCENTS) so a multi-pile WSI or WSR reads as
+            // genuinely separate piles, not one blended figure. Per
+            // explicit request: no combined total card.
             const sidebarPiles = selectedPile ? [selectedPile, ...extraAllocInfos.map((i) => i.pile).filter(Boolean)] : []
             const sidebarWidth = 210
             const sidebarVarietyMap = new Map((varieties ?? []).map((v) => [v.varietyId, v]))

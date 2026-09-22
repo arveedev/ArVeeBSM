@@ -5360,4 +5360,36 @@
 //            to also recognize clicks inside the now-portaled dropdown
 //            (previously would have closed it before a selection's own
 //            click could register).
-export const APP_VERSION = '1.10-105'
+//   1.10-106 - New feature: WSR "Receive to another pile," the receipt-
+//            side equivalent of WSI's existing "Issue from another
+//            pile" - per explicit request, since a single WSR can
+//            arrive with more stock than one pile alone should hold
+//            (e.g. that pile is already near full). Reuses the exact
+//            same mechanism WSI's version already proved out this
+//            session (StockFormBase.jsx): each extra pile allocation
+//            becomes its own separate transaction record sharing the
+//            primary's groupSerialNo, letter-suffixed serial, and full
+//            atomic save/update/delete/void handling - Reports.jsx's
+//            on-screen grouping, pdfGenerator.js's PDF grouping, and
+//            serialRename.js's group-aware renaming all already
+//            operate on `transactions` generically (never gated to
+//            WSI specifically), so they combine a multi-pile WSR for
+//            free with no changes needed there.
+//
+//            Two real differences from WSI's version, both fixed:
+//            (1) a WSI line draws its OWN pile's current stock down
+//            and is capped by it - a WSR line only ADDS, so that
+//            same-shaped ceiling check (extraAllocInfos' overKilos/
+//            overBags) is now gated behind the same `isIssuance` check
+//            the primary pile's own fields already used, so a receipt
+//            is never wrongly blocked by "not enough already in that
+//            pile." (2) reverseGroupEffect and two spots inside
+//            handleUpdate hardcoded `type: 'WSI'` when reversing an
+//            extra allocation's pile effect on delete/edit - correct
+//            only because this whole feature never existed for any
+//            other type before now. Fixed to use the record's own real
+//            type (primary.type / extraUpdated.type / updated.type)
+//            instead, so reversing a WSR line correctly subtracts back
+//            out rather than incorrectly adding, which the literal
+//            'WSI' would have silently done.
+export const APP_VERSION = '1.10-106'

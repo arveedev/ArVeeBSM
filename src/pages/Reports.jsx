@@ -242,10 +242,12 @@ function Reports() {
   })
 
   const { receipts: rawStockReceipts, issues: rawStockIssues } = splitStockTransactions(dedupeTransactions(stockTxRaw ?? []))
-  // Only issues can be multi-pile (WSI's own extraPileAllocations
-  // feature - see combineMultiPileGroups) - combining receipts too is
-  // harmless either way, since an ordinary WSR has no groupSerialNo
-  // and passes through as its own single-item group regardless.
+  // Both receipts and issues can be multi-pile (WSR "receive to another
+  // pile" and WSI "issue from another pile" - both share the same
+  // extraPileAllocations mechanism in StockFormBase.jsx, see
+  // combineMultiPileGroups) - applying this to both here regardless is
+  // also harmless for an ordinary single-pile transaction, since it has
+  // no groupSerialNo and passes through as its own single-item group.
   // resolveOrphanCategories runs per document type (receipts vs issues
   // built and sorted separately above) since that's the real series
   // boundary - a WSR's series never informs a WSI's gap, and vice versa.

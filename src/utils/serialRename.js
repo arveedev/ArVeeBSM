@@ -14,8 +14,9 @@
 // instead so an admin can resolve it by renumbering one side - this is
 // that renumbering action.
 //
-// A multi-pile WSI issuance is actually several linked records sharing
-// one groupSerialNo (the primary's own serialNo, plus one
+// A multi-pile WSI issuance (or WSR receipt - same feature, same
+// mechanism, either direction) is actually several linked records
+// sharing one groupSerialNo (the primary's own serialNo, plus one
 // "<serial>-A"/"-B"/... record per extra pile - see StockFormBase.jsx's
 // performSave). Renaming the primary renames the whole group together,
 // so no sibling record is left pointing at a groupSerialNo that no
