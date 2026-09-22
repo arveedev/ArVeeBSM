@@ -526,16 +526,20 @@ export const startSyncWorker = (onSyncComplete) => {
   }
 }
 
-// Was 5 minutes - reported directly as too slow for a new AI/SIA
-// authority (or any Sheet edit) to actually show up in the app. Both
+// Was 5 minutes, then 1 minute (see prior history in this comment) -
+// per explicit request, shortened again to keep an admin's Sheet edit
+// showing up in the app faster than "up to a minute." Chose 20s (3x
+// more frequent than the prior 1-minute value) rather than something
+// much more aggressive - this still isn't true push (see the
+// architecture discussion this came out of: a real push design would
+// need a webhook + realtime relay, a genuinely bigger project), so the
+// goal here is "meaningfully better" without needlessly maximizing
+// request volume against Vercel's sheets-proxy function or Apps
+// Script's own execution quota for diminishing returns. Both
 // syncAuthoritiesFromSheets and syncMillingOrdersFromSheets are already
-// full-table re-fetches designed to run forever on a fixed cadence (see
-// their own comments - a cheap enough operation at this data's real
-// scale), so there's no technical reason to hold this at 5 minutes; 1
-// minute matches the app's other periodic pulls (BACKUP_QUEUE_RETRY_
-// INTERVAL_MS, TRANSACTION_SYNC_INTERVAL_MS) far more closely while
-// still well short of hammering the Apps Script backend.
-const AUTHORITY_SYNC_INTERVAL_MS = 60 * 1000
+// delta (modifiedSince) pulls with a diff-patch write, not full re-
+// fetches, so a more frequent empty-or-near-empty cycle stays cheap.
+const AUTHORITY_SYNC_INTERVAL_MS = 20 * 1000
 
 /**
  * Periodically pulls fresh AI/SIA allocation data from the configured

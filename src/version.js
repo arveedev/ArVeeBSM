@@ -5403,4 +5403,11 @@
 //            Content)" field label to just "MC %" on every entry form
 //            (StockFormBase.jsx's primary pile fields and its
 //            Additional pile allocation rows, WTSForm.jsx).
-export const APP_VERSION = '1.10-108'
+//   1.10-109 - Shortened the authority (AI/SIA) background sync interval
+//            from 60s to 20s, per explicit request after discussing the
+//            tradeoffs (still a poll, not true push - no cost increase
+//            on the Apps Script side, a modest increase in requests
+//            through Vercel's sheets-proxy function, no logic changed).
+//            Cuts worst-case latency for a Sheet edit reaching the app
+//            from ~60s to ~20s.
+export const APP_VERSION = '1.10-109'
