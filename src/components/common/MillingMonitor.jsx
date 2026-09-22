@@ -670,7 +670,10 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
 const DONUT_R = 70
 const DONUT_C = 2 * Math.PI * DONUT_R
 const OVERDUE_DAYS = 7
-const OVERVIEW_ROW_CAP = 5
+// 6, not 5 - divides evenly into both the 2-column (sm) and 3-column
+// (lg) grid the Per-Order Status list now uses on wider screens, so the
+// last row never sits alone with empty space beside it.
+const OVERVIEW_ROW_CAP = 6
 
 const orderBucket = (o) => {
   if (o.fulfilled) return 'ready'
@@ -722,10 +725,16 @@ function MillingOverviewPanel({ filtered, lastActivityDate }) {
     .slice(0, OVERVIEW_ROW_CAP)
 
   return (
-    <div className="mt-3 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
-      <div className="flex items-center gap-4">
-        <div className="relative h-[92px] w-[92px] shrink-0">
-          <svg width="92" height="92" viewBox="0 0 168 168">
+    // Per explicit feedback: on a wider viewport this used to stay
+    // exactly as small as on mobile, wasting most of the card's own
+    // available width - sm:/lg: breakpoints below scale the donut up,
+    // widen the legend, and let Per-Order Status flow into two columns
+    // once there's genuinely room for it, instead of one narrow column
+    // with empty space beside it.
+    <div className="mt-3 rounded-xl border border-neutral-800 bg-neutral-950 p-3 sm:p-4">
+      <div className="flex items-center gap-4 sm:gap-6">
+        <div className="relative h-[92px] w-[92px] shrink-0 sm:h-[130px] sm:w-[130px]">
+          <svg viewBox="0 0 168 168" className="h-full w-full">
             <circle cx="84" cy="84" r={DONUT_R} fill="none" stroke="#1c1c1f" strokeWidth="20" />
             {arcs.map((a) => (
               <circle
@@ -736,14 +745,14 @@ function MillingOverviewPanel({ filtered, lastActivityDate }) {
             ))}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-xl font-extrabold tabular-nums text-app-text">{total}</span>
-            <span className="text-[9px] uppercase tracking-wide text-neutral-500">Pending</span>
+            <span className="text-xl font-extrabold tabular-nums text-app-text sm:text-3xl">{total}</span>
+            <span className="text-[9px] uppercase tracking-wide text-neutral-500 sm:text-xs">Pending</span>
           </div>
         </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-sm sm:gap-3">
           {['onHand', 'partial', 'ready'].map((key) => (
-            <div key={key} className="flex items-center gap-2 text-xs">
-              <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: BUCKET_META[key].color }} />
+            <div key={key} className="flex items-center gap-2 text-xs sm:gap-3 sm:text-base">
+              <span className="h-2 w-2 shrink-0 rounded-sm sm:h-3 sm:w-3" style={{ background: BUCKET_META[key].color }} />
               <span className="min-w-0 flex-1 truncate font-semibold text-app-text">{BUCKET_META[key].label}</span>
               <span className="shrink-0 font-extrabold tabular-nums" style={{ color: BUCKET_META[key].color }}>{counts[key]}</span>
             </div>
@@ -751,27 +760,29 @@ function MillingOverviewPanel({ filtered, lastActivityDate }) {
         </div>
       </div>
 
-      <div className="mt-3 space-y-2 border-t border-neutral-800 pt-3">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Per-Order Status</p>
-        {rows.map(({ order: o, bucket, days }) => {
-          const overdue = bucket === 'onHand' && days != null && days >= OVERDUE_DAYS
-          return (
-            <div key={o.orderId} className={`flex items-start gap-2.5 ${overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}`}>
-              <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${BUCKET_META[bucket].dotClass}`} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-xs font-semibold text-app-text">{o.ricemillName} — {BUCKET_META[bucket].statusText}</p>
-                  {overdue && (
-                    <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-crimson">⚠ {days}d</span>
-                  )}
+      <div className="mt-3 border-t border-neutral-800 pt-3 sm:mt-4 sm:pt-4">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:text-xs">Per-Order Status</p>
+        <div className="mt-2 space-y-2 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-2 sm:space-y-0 lg:grid-cols-3">
+          {rows.map(({ order: o, bucket, days }) => {
+            const overdue = bucket === 'onHand' && days != null && days >= OVERDUE_DAYS
+            return (
+              <div key={o.orderId} className={`flex items-start gap-2.5 ${overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}`}>
+                <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${BUCKET_META[bucket].dotClass}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-xs font-semibold text-app-text sm:text-sm">{o.ricemillName} — {BUCKET_META[bucket].statusText}</p>
+                    {overdue && (
+                      <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-crimson">⚠ {days}d</span>
+                    )}
+                  </div>
+                  <p className="truncate text-[11px] text-neutral-500 sm:text-xs">
+                    {o.number}{days != null && !overdue ? ` · ${days === 0 ? 'today' : `${days}d ago`}` : ''}
+                  </p>
                 </div>
-                <p className="truncate text-[11px] text-neutral-500">
-                  {o.number}{days != null && !overdue ? ` · ${days === 0 ? 'today' : `${days}d ago`}` : ''}
-                </p>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )

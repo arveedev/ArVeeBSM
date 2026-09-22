@@ -24,7 +24,10 @@ import autoTable from 'jspdf-autotable'
 const BLACK = [0, 0, 0]
 const GRAY_TEXT = [140, 140, 140]
 const HEADER_BG = [232, 232, 232]
-const margin = 12
+// 0.3in (was 12mm/~0.47in) - per explicit request, a tighter page
+// margin frees up more width for the actual report content, same
+// in-to-mm conversion already used for the page dimensions below.
+const margin = 0.3 * 25.4
 // 8.5 x 13 in (the physical paper this is actually printed on -
 // confirmed directly, not A4), landscape: width/height swapped, both
 // converted from inches to mm since the rest of this file works in mm.

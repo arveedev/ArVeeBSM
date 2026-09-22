@@ -5522,4 +5522,15 @@
 //              priority-sorted per-order status list where an overdue
 //              On Hand order (nothing received back for 7+ days) gets
 //              its own flagged treatment in place.
-export const APP_VERSION = '1.10-113'
+//   1.10-114 - Direct feedback round:
+//            - MillingMonitor.jsx's new Overview panel now scales up on
+//              wider screens instead of staying exactly mobile-sized -
+//              bigger donut, larger legend text, and the Per-Order
+//              Status list flows into a 2-column (sm) / 3-column (lg)
+//              grid once there's genuinely room, instead of one narrow
+//              column with empty space beside it. Row cap raised from 5
+//              to 6, which divides evenly into both grid widths.
+//            - sdoAbstractPdfGenerator.js's page margin reduced from
+//              12mm (~0.47in) to 0.3in, per explicit request, freeing up
+//              more width for the actual report content.
+export const APP_VERSION = '1.10-114'
