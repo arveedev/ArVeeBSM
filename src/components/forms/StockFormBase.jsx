@@ -3542,9 +3542,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       {sortedPiles
                         .filter((p) => p.pileId !== pileId && !extraPileAllocations.some((r, idx) => idx !== i && r.pileId === p.pileId))
                         .filter((p) => !selectedVariety || p.varietyId === selectedVariety.varietyId)
-                        .map((p) => (
-                          <option key={p.pileId} value={p.pileId}>{p.pileName}</option>
-                        ))}
+                        .map((p) => {
+                          // Same label format as the primary pile's own
+                          // selector above - per direct feedback, this
+                          // one was showing just the bare pile name,
+                          // with no way to tell piles of the same name
+                          // pattern apart by variety at a glance.
+                          const variety = sortedVarieties.find((v) => v.varietyId === p.varietyId)
+                          return (
+                            <option key={p.pileId} value={p.pileId}>
+                              {p.cerealType === 'By Products' ? p.pileName : `${p.pileName} (${variety ? variety.name : p.cerealType})`}
+                            </option>
+                          )
+                        })}
                     </select>
                   </div>
 

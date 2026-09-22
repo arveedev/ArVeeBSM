@@ -5392,4 +5392,11 @@
 //            instead, so reversing a WSR line correctly subtracts back
 //            out rather than incorrectly adding, which the literal
 //            'WSI' would have silently done.
-export const APP_VERSION = '1.10-106'
+//   1.10-107 - Fixed the "Additional pile" selector (WSI "issue from
+//            another pile" / WSR "receive to another pile") showing
+//            only the bare pile name, unlike the primary pile selector
+//            just above it, which shows "PILE NAME (VARIETY)" - per
+//            direct feedback, made hard to tell apart piles sharing a
+//            similar name. Now uses the exact same label format as the
+//            primary selector.
+export const APP_VERSION = '1.10-107'
