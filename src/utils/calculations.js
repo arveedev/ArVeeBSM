@@ -450,6 +450,20 @@ export const fmtKilos = (n) => {
   return Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
+/**
+ * Formats a Moisture Content value with exactly one decimal place, per
+ * explicit request - 14 -> "14.0", 21 -> "21.0". Used everywhere MC
+ * displays, not just one report - a pile's own moistureContent field is
+ * free-typed (Beginning Balances), so this only reformats it when it
+ * actually parses as a clean number; anything else (blank, already has
+ * a stray suffix) passes through unchanged rather than risk mangling it.
+ */
+export const fmtMc = (value) => {
+  if (value == null || value === '') return value
+  const num = Number(value)
+  return Number.isNaN(num) ? value : num.toFixed(1)
+}
+
 /** Formats net bags (kilos/50) with commas and 2 decimal places. */
 export const fmtNetBags = (n) => {
   if (n == null) return '—'

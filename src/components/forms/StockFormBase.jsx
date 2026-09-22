@@ -1895,8 +1895,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     initialAgeValue: initialAgeDays,
     condition,
     moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
-    farmerRsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
-    farmerGender: isProcurement ? farmerGender || null : null,
+    // !farmerOrgEnabled guard (not just isProcurement) - per explicit
+    // request, an FA transaction never carries a single top-level
+    // RSBSA/Gender (that field's own UI is now hidden whenever FA is
+    // on, see the Customer Name section above), only farmerCoops'
+    // per-member values below. Without this guard, toggling FA on
+    // AFTER already typing something into the now-hidden field would
+    // still silently save that stale value.
+    farmerRsbsa: isProcurement && !farmerOrgEnabled ? farmerRsbsa.trim() || null : null,
+    farmerGender: isProcurement && !farmerOrgEnabled ? farmerGender || null : null,
     farmerCoops: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
     orNumber: isSales ? orNumber.trim() || null : null,
     recordedByName: user?.name ?? user?.nickname ?? null,
@@ -2074,8 +2081,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         rememberCustomer({
           name: customerName.trim(),
           address: customerAddress.trim() || null,
-          rsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
-          gender: isProcurement ? farmerGender || null : null,
+          rsbsa: isProcurement && !farmerOrgEnabled ? farmerRsbsa.trim() || null : null,
+          gender: isProcurement && !farmerOrgEnabled ? farmerGender || null : null,
           isFarmerOrg: farmerOrgEnabled,
           farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
           warehouseId: currentWarehouseId,
@@ -2294,8 +2301,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       await rememberCustomer({
         name: customerName.trim(),
         address: customerAddress.trim() || null,
-        rsbsa: isProcurement ? farmerRsbsa.trim() || null : null,
-        gender: isProcurement ? farmerGender || null : null,
+        rsbsa: isProcurement && !farmerOrgEnabled ? farmerRsbsa.trim() || null : null,
+        gender: isProcurement && !farmerOrgEnabled ? farmerGender || null : null,
         isFarmerOrg: farmerOrgEnabled,
         farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
         warehouseId: currentWarehouseId,
@@ -2936,6 +2943,35 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             onChange={setCustomerName}
             onMatch={handleCustomerMatch}
             warehouseId={currentWarehouseId}
+            // Procurement-only "FA" (Farmers Organization) toggle, now
+            // in-line with the label itself - per explicit request,
+            // moved here from its own separate section further down
+            // the form (see the old location's comment history for
+            // what used to live there).
+            labelRight={isProcurement ? (
+              <button
+                type="button"
+                onClick={() => setFarmerOrgEnabled((v) => !v)}
+                aria-pressed={farmerOrgEnabled}
+                title="Farmers Organization - switch on only if this procurement is from a cooperative rather than an individual"
+                className={`flex shrink-0 items-center gap-1.5 rounded-full py-0.5 pl-2 pr-1 text-[10px] font-semibold transition-colors ${
+                  farmerOrgEnabled ? 'bg-brand-neon/15 text-brand-neon' : 'bg-neutral-800 text-neutral-400'
+                }`}
+              >
+                FA
+                <span
+                  className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                    farmerOrgEnabled ? 'bg-brand-neon' : 'bg-neutral-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-2.5 w-2.5 rounded-full bg-neutral-950 shadow transition-transform ${
+                      farmerOrgEnabled ? 'translate-x-3.5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </span>
+              </button>
+            ) : null}
           />
 
           <div>
@@ -2948,6 +2984,69 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               placeholder="Optional"
             />
           </div>
+
+          {/* Members list - only when the FA toggle (now up by the
+              Customer Name label) is on. RSBSA/Gender live per-member
+              here ONLY, never as a separate top-level field for an FA
+              transaction - see the isProcurement RSBSA/Gender block
+              further down, now gated to !farmerOrgEnabled. */}
+          {isProcurement && farmerOrgEnabled && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+              <p className="text-sm font-medium text-app-text">Farmer Organization Members</p>
+              <div className="mt-3 space-y-3">
+                {members.map((m, i) => (
+                  <div key={i} className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-neutral-500">Member {i + 1}</span>
+                      {members.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeMember(i)}
+                          aria-label="Remove member"
+                          className={removeButtonClass}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        value={m.name}
+                        onChange={(e) => updateMember(i, 'name', e.target.value)}
+                        className={inputClass}
+                        placeholder="Member Full Name"
+                      />
+                      <input
+                        type="text"
+                        value={m.rsbsa}
+                        onChange={(e) => updateMember(i, 'rsbsa', e.target.value)}
+                        className={inputClass}
+                        placeholder="RSBSA Reference Registration ID"
+                      />
+                      <select
+                        value={m.gender}
+                        onChange={(e) => updateMember(i, 'gender', e.target.value)}
+                        className={inputClass}
+                      >
+                        {GENDERS.map((g) => (
+                          <option key={g} value={g}>
+                            {g}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+
+                <button type="button" onClick={addMember} className={smallButtonClass}>
+                  <span className="flex items-center gap-1">
+                    <Plus size={14} /> Add member
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {isSales && (
             <div>
@@ -3151,7 +3250,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             )
           })()}
 
-          {isProcurement && (
+          {/* Per explicit request: an FA (Farmers Organization)
+              transaction never shows a single top-level RSBSA/Gender -
+              that would misrepresent a whole cooperative as one person.
+              RSBSA/Gender only exist per-member, in the Members list
+              above, once the FA toggle is on. */}
+          {isProcurement && !farmerOrgEnabled && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>RSBSA</label>
@@ -3794,87 +3898,6 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             )
           })()}
           </div>
-
-          {isProcurement && (
-            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-app-text">Farmers Organization</span>
-                <button
-                  type="button"
-                  onClick={() => setFarmerOrgEnabled((v) => !v)}
-                  aria-pressed={farmerOrgEnabled}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                    farmerOrgEnabled ? 'bg-brand-neon' : 'bg-neutral-700'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
-                      farmerOrgEnabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-              <p className="mt-1 text-xs text-neutral-500">
-                Switch this on only if the procurement is from a cooperative
-                rather than the individual named above.
-              </p>
-
-              {farmerOrgEnabled && (
-                <div className="mt-3 space-y-3">
-                  {members.map((m, i) => (
-                    <div key={i} className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-neutral-500">Member {i + 1}</span>
-                        {members.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeMember(i)}
-                            aria-label="Remove member"
-                            className={removeButtonClass}
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                      <div className="mt-2 space-y-2">
-                        <input
-                          type="text"
-                          value={m.name}
-                          onChange={(e) => updateMember(i, 'name', e.target.value)}
-                          className={inputClass}
-                          placeholder="Member Full Name"
-                        />
-                        <input
-                          type="text"
-                          value={m.rsbsa}
-                          onChange={(e) => updateMember(i, 'rsbsa', e.target.value)}
-                          className={inputClass}
-                          placeholder="RSBSA Reference Registration ID"
-                        />
-                        <select
-                          value={m.gender}
-                          onChange={(e) => updateMember(i, 'gender', e.target.value)}
-                          className={inputClass}
-                        >
-                          {GENDERS.map((g) => (
-                            <option key={g} value={g}>
-                              {g}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  ))}
-
-                  <button type="button" onClick={addMember} className={smallButtonClass}>
-                    <span className="flex items-center gap-1">
-                      <Plus size={14} /> Add member
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
           <label className="flex items-center justify-center gap-2 py-1 text-base font-semibold text-brand-crimson">
             <input

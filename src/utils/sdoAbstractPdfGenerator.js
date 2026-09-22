@@ -159,7 +159,7 @@ export const generateSdoAbstract = ({
   // than repeat it.
   const head = [[
     dateHeader, 'WHSE', 'NAME OF FARMER', 'ADDRESS', 'RSBSA NO.', 'PR NO.', 'WSR NO.', 'QTY BAGS', 'VARIETY', 'MC', 'PUR.',
-    'GROSS', 'MTS', 'NET', 'ENW FACTOR', 'EQUIV. NET WT.', 'UNIT COST',
+    'GROSS', 'MTS', 'NET WT', 'ENW FACTOR', 'EQUIV. NET WT.', 'UNIT COST',
     ...(pricerEnabled ? ['BASIC COST', 'RATE', 'AMOUNT'] : []),
     'TOTAL AMOUNT',
   ]]
@@ -194,7 +194,10 @@ export const generateSdoAbstract = ({
     fmtRowDate(pr.date), (pr.warehouseCode ?? '').toUpperCase(), (pr.payeeName ?? '').toUpperCase(),
     (pr.payeeAddress ?? '').toUpperCase(), (pr.rsbsa ?? '').toUpperCase(),
     (pr.prNo ?? '').toUpperCase(), (pr.wsrSerialNo ?? '').toUpperCase(), fmtBags(pr.numberOfBags),
-    baseVarietyCode(pr.classification).toUpperCase(), pr.moistureContent, purityText(pr).toUpperCase(),
+    // Per explicit request, MC always shows one decimal even for a
+    // whole number (14 -> "14.0") - fmtKilos already supports a
+    // decimal-count override, reused here rather than a new helper.
+    baseVarietyCode(pr.classification).toUpperCase(), fmtKilos(pr.moistureContent, 1), purityText(pr).toUpperCase(),
     fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
     pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 4), fmtKilos(pr.unitCost, 2),
     ...(pricerEnabled ? [fmtPeso(pr.basicCost), fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),
@@ -331,7 +334,10 @@ export const generateSdoAbstract = ({
     doc.line(x, y + 16, x + sigW, y + 16)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    doc.text(c.person?.name ?? '', x, y + 20)
+    // Per explicit request: the signatory's own NAME always prints in
+    // full caps, while their Role/Position stays exactly as entered
+    // (Title Case) - not the same treatment, so only .name is forced.
+    doc.text((c.person?.name ?? '').toUpperCase(), x, y + 20)
     doc.setTextColor(90, 90, 90)
     doc.text(c.person?.position ?? '', x, y + 24)
     doc.setTextColor(...BLACK)

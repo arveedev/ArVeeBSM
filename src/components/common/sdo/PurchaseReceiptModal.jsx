@@ -28,8 +28,11 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   const { user } = useAuth()
   const [prNo, setPrNo] = useState('')
   // Defaults to today, not the WSR's own (often earlier, backlogged)
-  // date - this is genuinely when the SDO is paying, and it's what the
-  // Buying Price lookup should use too, not the WSR's encoding date.
+  // date - this is genuinely when the SDO is paying, and is what gets
+  // written onto the PR record itself. Per explicit correction, the
+  // Buying Price lookup does NOT use this - see priceRow below, which
+  // now resolves against the WSR's own date instead (reverses an
+  // earlier decision that used this field for that lookup).
   const [datePaid, setDatePaid] = useState(() => new Date().toISOString().slice(0, 10))
   const [pricerRate, setPricerRate] = useState('')
   const [cancelTargetPrId, setCancelTargetPrId] = useState(null)
@@ -85,13 +88,30 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
     suggestNextPrSerial(user.uid).then(setPrNo)
   }, [isReadOnly, user?.uid])
 
+  // Per explicit request: an FA (Farmers Organization) WSR has no single
+  // top-level RSBSA (wsr.farmerRsbsa is null for one - see
+  // StockFormBase.jsx's own RSBSA/Gender field, now hidden whenever FA
+  // is on) - its real RSBSA data lives per-member in farmerCoops, so
+  // this joins every member's own RSBSA into one comma-separated string
+  // for anywhere that only has room for a single RSBSA value (this
+  // modal's own display below, and the PR record's own `rsbsa` field,
+  // which the Abstract PDF reads directly).
+  const resolvedRsbsa = wsr.farmerCoops?.length
+    ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(', ') || null
+    : wsr.farmerRsbsa ?? null
+
   const purityDisplayFormat = config?.purityDisplayFormat ?? 'range'
   const purityDisplay = variety
     ? (purityDisplayFormat === 'letter' ? variety.purityLetter : `${variety.purityMin}–${variety.purityMax}`)
     : '—'
 
   const moistureState = getPalayMoistureState(variety?.name, wsr.cerealCategory)
-  const priceRow = resolveBuyingPrice(buyingPrices, isReadOnly ? existingPr.date : datePaid)
+  // Per explicit correction: the buying price in force on the WSR's own
+  // delivery date, not whenever the SDO happens to pay it (datePaid/
+  // existingPr.date) - a WSR delivered Sep 19 and paid Sep 22, after a
+  // Sep 20 price change, must still use the Sep 19 price, not the new
+  // one. wsr.date is stable regardless of read-only vs actively issuing.
+  const priceRow = resolveBuyingPrice(buyingPrices, wsr.date)
   const unitCost = resolveUnitCost(priceRow, moistureState)
   const factor = lookupEnwFactor(enwFactors, variety, wsr.moistureContent)
   const netKilos = wsr.netKilos ?? 0
@@ -151,7 +171,7 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
           date: datePaid,
           payeeName: wsr.customerName,
           payeeAddress: wsr.customerAddress,
-          rsbsa: wsr.farmerRsbsa ?? null,
+          rsbsa: resolvedRsbsa,
           varietyId: wsr.varietyId,
           classification: variety?.name ?? null,
           purityLetter: variety?.purityLetter ?? null,
@@ -346,8 +366,27 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-base">
             <p className="text-xs font-semibold uppercase text-neutral-500">Payee</p>
             <p className="mt-1 font-medium text-app-text">{wsr.customerName}</p>
-            {wsr.farmerRsbsa && <p className="text-sm text-neutral-400">RSBSA {wsr.farmerRsbsa}</p>}
             <p className="text-sm text-neutral-400">{wsr.customerAddress}</p>
+            {/* FA: per-member RSBSA/Gender, never one flattened line for
+                the whole association - per explicit request. Individual:
+                the single RSBSA/Gender the SDO entered directly. */}
+            {wsr.farmerCoops?.length ? (
+              <div className="mt-2 space-y-1 border-t border-neutral-800 pt-2">
+                {wsr.farmerCoops.map((m, i) => (
+                  <p key={i} className="text-sm text-neutral-400">
+                    {m.name}
+                    {m.rsbsa ? ` · RSBSA ${m.rsbsa}` : ''}
+                    {m.gender ? ` · ${m.gender}` : ''}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              (wsr.farmerRsbsa || wsr.farmerGender) && (
+                <p className="text-sm text-neutral-400">
+                  {[wsr.farmerRsbsa && `RSBSA ${wsr.farmerRsbsa}`, wsr.farmerGender].filter(Boolean).join(' · ')}
+                </p>
+              )
+            )}
           </div>
 
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-base">

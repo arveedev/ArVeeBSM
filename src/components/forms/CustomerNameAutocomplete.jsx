@@ -30,7 +30,12 @@ const initialsOf = (name = '') =>
     .join('')
 
 const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
-  { value, onChange, onMatch, warehouseId = null, required = true },
+  // labelRight: optional content rendered inline with the "Customer
+  // Name" label itself (e.g. StockFormBase.jsx's Procurement-only
+  // Farmers Organization toggle) - per explicit request, that toggle
+  // needed to sit right next to this label instead of in its own
+  // separate section further down the form.
+  { value, onChange, onMatch, warehouseId = null, required = true, labelRight = null },
   ref
 ) {
   const [suggestions, setSuggestions] = useState([])
@@ -163,7 +168,10 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
 
   return (
     <div ref={containerRef} className="relative">
-      <label className={labelClass}>Customer Name</label>
+      <div className="flex items-center justify-between gap-2">
+        <label className={labelClass}>Customer Name</label>
+        {labelRight}
+      </div>
       <input
         ref={inputRef}
         type="text"

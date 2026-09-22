@@ -27,7 +27,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db } from '../db/dexie.js'
-import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO, AGE_BUCKETS } from '../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtMc, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO, AGE_BUCKETS } from '../utils/calculations.js'
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
@@ -1502,7 +1502,7 @@ function Piles() {
             !isMultiGroup && pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
             pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring, periodTo || undefined))],
             pile.condition && ['Condition', pile.condition],
-            pile.moistureContent && ['MC', pile.moistureContent],
+            pile.moistureContent && ['MC', fmtMc(pile.moistureContent)],
             pile.purity && ['Purity', pile.purity],
             (!isMultiGroup || !isByProducts) && pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
           ].filter(Boolean)
@@ -1636,7 +1636,7 @@ function Piles() {
             !isMultiGroup && pile.currentKilos != null && ['Net', fmtWeight(pile.currentKilos, weightUnit)],
             pile.initialAgeValue != null && ['Age', fmtAge(calculateCurrentAge(pile.initialAgeValue, pile.dateOfReceipt, autoAgeMonitoring, periodTo || undefined))],
             pile.condition && ['Condition', pile.condition],
-            pile.moistureContent && ['MC', pile.moistureContent],
+            pile.moistureContent && ['MC', fmtMc(pile.moistureContent)],
             pile.purity && ['Purity', pile.purity],
             (!isMultiGroup || !isByProducts) && pile.dateProcured && [pile.cerealType === 'Palay' ? 'Procured' : 'Received', pile.dateProcured],
           ].filter(Boolean)

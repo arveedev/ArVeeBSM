@@ -78,10 +78,22 @@ function AbstractExportModal({ onClose }) {
         const warehouse = warehouseMap.get(pr.warehouseId)
         const province = provinceMap.get(warehouse?.provinceId)
         const shortName = (warehouse?.name ?? '').replace(/^[A-Z]{2,5}-/, '')
+        // A PR issued going forward already carries every FA member's
+        // RSBSA pre-joined into pr.rsbsa itself (PurchaseReceiptModal.jsx's
+        // resolvedRsbsa) - but a PR issued before that existed may still
+        // have a blank/single-value rsbsa despite its WSR genuinely being
+        // an FA transaction. Falls back to computing the same joined
+        // string here, read-time, so an older PR's Abstract row still
+        // shows every member's RSBSA rather than nothing or just one.
+        const wsr = wsrById.get(pr.wsrTransactionId)
+        const rsbsa = pr.rsbsa || (wsr?.farmerCoops?.length
+          ? wsr.farmerCoops.map((m) => m.rsbsa).filter(Boolean).join(', ') || null
+          : null)
         return {
           ...pr,
+          rsbsa,
           warehouseCode: province?.code ? `${province.code}-${shortName}` : shortName,
-          wsrSerialNo: wsrById.get(pr.wsrTransactionId)?.serialNo ?? '',
+          wsrSerialNo: wsr?.serialNo ?? '',
         }
       })
       // Per explicit request: rows print sorted ascending by PR Number.

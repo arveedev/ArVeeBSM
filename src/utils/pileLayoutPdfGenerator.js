@@ -6,7 +6,7 @@
 // (assigned Warehouse Supervisor), Noted By (Branch Manager).
 
 import jsPDF from 'jspdf'
-import { fmtBags, fmtKilos } from './calculations.js'
+import { fmtBags, fmtKilos, fmtMc } from './calculations.js'
 import { groupHeading, fmtGroupDate } from './pileStockGroups.js'
 
 const BLACK = [0, 0, 0]
@@ -129,7 +129,7 @@ export const generatePileLayoutReport = ({
             !isByProducts && box.variety?.name && field('Var', box.variety.name),
             box.pile.formattedAge && field('Age', box.pile.formattedAge),
             box.pile.condition && field('Cond', box.pile.condition),
-            box.pile.moistureContent && field('MC', box.pile.moistureContent),
+            box.pile.moistureContent && field('MC', fmtMc(box.pile.moistureContent)),
             box.pile.purity && field('Purity', box.pile.purity),
             !isByProducts && box.pile.dateProcured && field(box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured),
             ...box.groupRows.flatMap((row) => [
@@ -148,7 +148,7 @@ export const generatePileLayoutReport = ({
             box.pile.currentKilos != null && field('Net Kg', fmtKilos(box.pile.currentKilos)),
             box.pile.formattedAge && field('Age', box.pile.formattedAge),
             box.pile.condition && field('Cond', box.pile.condition),
-            box.pile.moistureContent && field('MC', box.pile.moistureContent),
+            box.pile.moistureContent && field('MC', fmtMc(box.pile.moistureContent)),
             box.pile.purity && field('Purity', box.pile.purity),
             box.pile.dateProcured && field(box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured),
           ].filter(Boolean)

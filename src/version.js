@@ -5410,4 +5410,44 @@
 //            through Vercel's sheets-proxy function, no logic changed).
 //            Cuts worst-case latency for a Sheet edit reaching the app
 //            from ~60s to ~20s.
-export const APP_VERSION = '1.10-109'
+//   1.10-110 - Large batch of direct feedback fixes:
+//            - MillingMonitor.jsx: AI/SIA number now shown in-line with
+//              the MO/TMO number itself (list card + detail sheet), for
+//              every role - was only ever in the admin-only AI/SIA tab.
+//            - StockFormBase.jsx (Procurement): the "FA" (Farmers
+//              Organization) toggle moved to sit in-line with the
+//              Customer Name label itself (was its own separate section
+//              far down the form). The top-level RSBSA/Gender fields
+//              now hide entirely whenever FA is on - per explicit
+//              request, a whole association can't be represented by one
+//              person's RSBSA/Gender; that data only ever lives per-
+//              member in the Members list now. Every save path (add,
+//              PurchaseReceiptModal's rememberCustomer calls, edit)
+//              guards farmerRsbsa/farmerGender behind !farmerOrgEnabled
+//              too, not just the UI, so a stale value typed before
+//              toggling FA on can never sneak into a save.
+//            - PurchaseReceiptModal.jsx: RSBSA display/save now joins
+//              every FA member's own RSBSA into one string
+//              (resolvedRsbsa) instead of reading the now-always-null
+//              top-level wsr.farmerRsbsa: the Payee block shows each
+//              member's name/RSBSA/Gender individually for FA, or the
+//              single RSBSA/Gender for an Individual, same as before.
+//            - PurchaseReceiptModal.jsx: the Buying Price lookup now
+//              resolves against the WSR's own date, not whenever the
+//              SDO pays (datePaid/existingPr.date) - per explicit
+//              correction, a WSR delivered before a price change must
+//              still use the OLD price even if paid after the change.
+//            - AbstractExportModal.jsx: falls back to computing the
+//              same joined multi-RSBSA string from a WSR's farmerCoops
+//              for an older PR issued before resolvedRsbsa existed, so
+//              its Abstract row isn't left blank.
+//            - sdoAbstractPdfGenerator.js: NET column header renamed to
+//              NET WT; MC column now shows one decimal (14 -> "14.0");
+//              signatory NAMES print in full caps, Role/Position stays
+//              exactly as entered (Title Case).
+//            - New shared fmtMc() helper (calculations.js), applied
+//              everywhere MC displays - Piles.jsx's pile detail popups
+//              and pileLayoutPdfGenerator.js's exported Pile Layout PDF
+//              boxes - for the same one-decimal formatting, not just
+//              the Abstract.
+export const APP_VERSION = '1.10-110'
