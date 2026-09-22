@@ -5399,4 +5399,8 @@
 //            direct feedback, made hard to tell apart piles sharing a
 //            similar name. Now uses the exact same label format as the
 //            primary selector.
-export const APP_VERSION = '1.10-107'
+//   1.10-108 - Per explicit request, simplified the "MC % (Moisture
+//            Content)" field label to just "MC %" on every entry form
+//            (StockFormBase.jsx's primary pile fields and its
+//            Additional pile allocation rows, WTSForm.jsx).
+export const APP_VERSION = '1.10-108'

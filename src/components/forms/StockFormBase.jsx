@@ -3249,7 +3249,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>MC % (Moisture Content)</label>
+              <label className={labelClass}>MC %</label>
               <input
                 type="text"
                 inputMode="decimal"
@@ -3566,7 +3566,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       short enough to sit next to MC cleanly. */}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className={labelClass}>MC % (Moisture Content)</label>
+                      <label className={labelClass}>MC %</label>
                       <input
                         type="text" inputMode="decimal"
                         value={alloc.moistureContent}

@@ -1152,7 +1152,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         </div>
 
         <div>
-          <label className={labelClass}>MC % (Moisture Content)</label>
+          <label className={labelClass}>MC %</label>
           <input type="text" inputMode="decimal"
             value={moistureContent} onChange={(e) => setMoistureContent(liveFormatNumber(e.target.value))}
             className={`${inputClass} ${moistureContent === '' ? '!border-brand-amber' : ''}`} placeholder="13.90" />
