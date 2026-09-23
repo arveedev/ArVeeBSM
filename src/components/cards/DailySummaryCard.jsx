@@ -212,27 +212,33 @@ const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo
                         // width-column fix already used for the Total
                         // Branch stat grid elsewhere in the app.
                         <div key={varietyName} className="grid grid-cols-[1fr_4rem_7rem] items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
-                          {/* Reported bug: variety names rendered as
+                          {/* Reported bug, two earlier wrong fixes
+                              (document.fonts.ready - no effect;
+                              removing `truncate`'s ellipsis - also no
+                              effect): variety names rendered as
                               corrupted/illegible glyphs specifically in
-                              the exported "Save as Image" PNG, while
-                              identical live on-screen. Only this span
-                              used `truncate` (Tailwind's overflow:hidden
-                              + text-overflow:ellipsis + white-space:
-                              nowrap) - html2canvas has a known bug
-                              mis-rendering text-overflow:ellipsis,
-                              producing exactly this kind of glyph
-                              corruption, while every other span on this
-                              card (none of which use `truncate`)
-                              exports correctly. Swapped to overflow-
-                              hidden + whitespace-nowrap WITHOUT the
-                              ellipsis - keeps the same "don't wrap into
-                              the numeric columns" containment without
-                              the specific CSS property html2canvas
-                              can't handle. A genuinely too-long name
-                              just clips cleanly now instead of getting
-                              an ellipsis, a fully acceptable trade-off
-                              for a short variety code like this. */}
-                          <span className="overflow-hidden whitespace-nowrap text-xs text-app-text">{varietyName}</span>
+                              the exported "Save as Image" PNG, always
+                              correct live on-screen. Real root cause:
+                              index.css sets `font-variant-numeric:
+                              tabular-nums` on <body>, inherited by
+                              every element including this span -
+                              html2canvas has a known bug mis-rendering
+                              that OpenType feature specifically on
+                              MIXED alphanumeric text (a variety code
+                              like "PD1m-A" has both letters and
+                              digits), substituting wrong glyphs for the
+                              letters next to a digit. This exactly
+                              matched the evidence: pure-word text
+                              ("Bags", "PALAY") and pure-digit text
+                              ("1,751") both always exported fine -
+                              only text mixing the two, on this one
+                              span, ever broke. `normal-nums` overrides
+                              the inherited tabular-nums back to normal
+                              for just this span - it was never actually
+                              needed here anyway, since this isn't a
+                              column of pure numbers that needs digit
+                              widths to line up. */}
+                          <span className="overflow-hidden whitespace-nowrap text-xs normal-nums text-app-text">{varietyName}</span>
                           <div className="text-right">
                             <p className="text-xs text-neutral-500">Bags</p>
                             <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-app-text">{fmtBags(totals.bags)}</p>

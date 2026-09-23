@@ -5759,4 +5759,22 @@
 //              Verified By/Noted By) now print in bold, per explicit
 //              request - sdoAbstractPdfGenerator.js. Role/Position stays
 //              normal weight, unchanged.
-export const APP_VERSION = '1.10-127'
+//   1.10-128 - Third attempt, finally the real fix: Save as Image's
+//              garbled variety names (DailySummaryCard.jsx). The prior
+//              two attempts (1.10-124 document.fonts.ready, 1.10-125
+//              removing `truncate`'s ellipsis) both shipped with no
+//              effect, confirmed by the user re-testing after each one.
+//              Real root cause: index.css sets `font-variant-numeric:
+//              tabular-nums` on <body>, inherited everywhere - html2canvas
+//              has a known bug mis-rendering that OpenType feature
+//              specifically on MIXED alphanumeric text (a variety code
+//              like "PD1m-A" has both letters and digits), substituting
+//              wrong glyphs for the letters next to a digit. This matched
+//              the evidence exactly: pure-word text ("Bags", "PALAY") and
+//              pure-digit text ("1,751") both always exported correctly -
+//              only text mixing the two, on this one span, ever broke.
+//              Added `normal-nums` (font-variant-numeric: normal) to just
+//              the variety-name span, overriding the inherited tabular-
+//              nums - never actually needed there anyway, since it isn't
+//              a column of pure numbers needing digit widths to align.
+export const APP_VERSION = '1.10-128'
