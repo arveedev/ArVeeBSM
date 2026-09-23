@@ -5710,4 +5710,24 @@
 //              document.fonts.ready immediately before calling
 //              html2canvas, guaranteeing every font the page uses has
 //              actually finished loading before the capture runs.
-export const APP_VERSION = '1.10-124'
+//   1.10-125 - 1.10-124 didn't fix it - user confirmed the export still
+//              showed the same corrupted variety names even after that
+//              fix shipped, and confirmed the on-screen (live app) text
+//              was always correct - only the exported PNG was wrong. That
+//              ruled out the font.fonts.ready theory (had zero effect)
+//              and pointed at something specific to the ONE span that
+//              behaved differently from the rest of the card. Found it:
+//              the variety-name span was the only text on this card using
+//              Tailwind's `truncate` utility (overflow:hidden + text-
+//              overflow:ellipsis + white-space:nowrap) - html2canvas has
+//              a known, documented bug mis-rendering text-overflow:
+//              ellipsis, producing exactly this kind of glyph corruption,
+//              while every other span on the card (none of which used
+//              `truncate`) always exported correctly. Swapped to
+//              overflow-hidden + whitespace-nowrap WITHOUT the ellipsis -
+//              keeps the same "don't wrap into the numeric columns"
+//              containment without the specific CSS property html2canvas
+//              can't handle; a genuinely too-long variety name now clips
+//              cleanly instead of getting an ellipsis, an acceptable
+//              trade-off for a short variety code.
+export const APP_VERSION = '1.10-125'

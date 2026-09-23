@@ -212,7 +212,27 @@ const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo
                         // width-column fix already used for the Total
                         // Branch stat grid elsewhere in the app.
                         <div key={varietyName} className="grid grid-cols-[1fr_4rem_7rem] items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
-                          <span className="truncate text-xs text-app-text">{varietyName}</span>
+                          {/* Reported bug: variety names rendered as
+                              corrupted/illegible glyphs specifically in
+                              the exported "Save as Image" PNG, while
+                              identical live on-screen. Only this span
+                              used `truncate` (Tailwind's overflow:hidden
+                              + text-overflow:ellipsis + white-space:
+                              nowrap) - html2canvas has a known bug
+                              mis-rendering text-overflow:ellipsis,
+                              producing exactly this kind of glyph
+                              corruption, while every other span on this
+                              card (none of which use `truncate`)
+                              exports correctly. Swapped to overflow-
+                              hidden + whitespace-nowrap WITHOUT the
+                              ellipsis - keeps the same "don't wrap into
+                              the numeric columns" containment without
+                              the specific CSS property html2canvas
+                              can't handle. A genuinely too-long name
+                              just clips cleanly now instead of getting
+                              an ellipsis, a fully acceptable trade-off
+                              for a short variety code like this. */}
+                          <span className="overflow-hidden whitespace-nowrap text-xs text-app-text">{varietyName}</span>
                           <div className="text-right">
                             <p className="text-xs text-neutral-500">Bags</p>
                             <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-app-text">{fmtBags(totals.bags)}</p>
