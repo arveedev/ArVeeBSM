@@ -5639,4 +5639,51 @@
 //              sacks, plus fixing pile deletion to explicitly cancel/void
 //              a deleted pile's now-dangling transactions, are planned as
 //              immediate follow-ups.
-export const APP_VERSION = '1.10-118'
+//   1.10-119 - CRITICAL HOTFIX to 1.10-118, same day: 1.10-118's own new
+//              computeWarehouseStockBalanceAsOf grouped Beginning/Ending
+//              Balance by the WRONG field - computePileStockBreakdown's
+//              `mtsCondition` (the SACK's own condition, BN/SH/US, used
+//              only to look up a tare weight for the MTS/net-kilos
+//              deduction) instead of a transaction's real STOCK condition
+//              (`condition` - GQ/TRD/INF/PD/TD, CONDITION_FLAGS in
+//              shared.js) - the field every report's COND. column and its
+//              Receipts/Issues matching actually key off of. Reported
+//              immediately, with live export screenshots, by the user:
+//              every exported Stock Report's Beginning/Ending Balance
+//              split into nonsense extra "GQ"/"SH"/"null" rows that don't
+//              match the real rows Issues/Receipts print, several landing
+//              at negative bag/kilo counts (e.g. -300 bags / -15,000.000
+//              kg) - visibly broken on every warehouse, not the narrow
+//              case 1.10-118 originally fixed.
+//            - Root cause: computePileStockBreakdown (pileLedger.js) is a
+//              real, already-correct, already-shipped function - but it
+//              was built for a DIFFERENT purpose (Pile Layout/Home
+//              Stocks/BIN Card's sack-weight breakdown), grouped by
+//              mtsCondition on purpose for that use. Reusing it wholesale
+//              for the warehouse balance rollup silently imported that
+//              wrong grouping key into the Reports feature instead.
+//            - Fix: computeWarehouseStockBalanceAsOf no longer calls
+//              computePileStockBreakdown at all - it now walks the
+//              warehouse's own WSR/WSI/WTS transactions directly, using
+//              each transaction's real `condition` field (WTS's own
+//              issuedStockCondition/receivedStockCondition, mapped via
+//              wtsAdapter.js's STOCK_CONDITION_TO_FLAG - now exported -
+//              same as the flattened rows normalizeWtsSide already
+//              produces for the period's own Issues/Receipts display), so
+//              Beginning/Ending Balance always land in the exact same
+//              variety+condition+weight row the period's own printed
+//              activity uses. Still deliberately keeps everything
+//              1.10-118 was actually built to fix: no "does this pile
+//              still exist in db.piles today" check (a deleted pile's
+//              real history still counts), and a genuinely CLOSED pile
+//              (closePile()'s deliberate write-off as of its closedDate)
+//              still correctly stops counting from that date forward.
+//              Reports.jsx's own grouping key updated to match
+//              (g.condition instead of g.mtsCondition).
+//            - Caught and fixed same-day, before the incorrect 1.10-118
+//              export was used for anything - this comment (and the
+//              detailed one directly on computeWarehouseStockBalanceAsOf
+//              in pileLedger.js) exists so this specific mixup - reusing
+//              a function's grouping key without checking it means the
+//              same thing in the new context - doesn't happen again.
+export const APP_VERSION = '1.10-119'

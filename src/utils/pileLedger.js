@@ -7,6 +7,7 @@
 
 import { db } from '../db/dexie.js'
 import { normalizeAgeToDays, todayLocalISO, round3, effectiveCutoffDate } from './calculations.js'
+import { STOCK_CONDITION_TO_FLAG } from './wtsAdapter.js'
 
 // Cheap primary-key lookup (not a table scan) - fine to call once per
 // function invocation, even in a per-pile loop, unlike sackTypes'
@@ -803,12 +804,13 @@ export const reopenPile = async (pileId) => {
 
 /**
  * Warehouse-wide stock balance "as of" any given date, broken out by
- * variety + condition + MTS weight - the single canonical answer to
- * "how much of variety X does this warehouse have on date Y," meant to
- * replace every place that used to answer that question by hand-summing
- * transactions independently (most notably Reports.jsx's Beginning
- * Balance, which used to disagree with the prior period's own Ending
- * Balance for exactly this reason).
+ * variety + STOCK condition (GQ/TRD/INF/PD/TD - CONDITION_FLAGS, the
+ * quality flag reports actually group and print by) + MTS weight - the
+ * single canonical answer to "how much of variety X does this warehouse
+ * have on date Y," meant to replace every place that used to answer that
+ * question by hand-summing transactions independently (most notably
+ * Reports.jsx's Beginning Balance, which used to disagree with the prior
+ * period's own Ending Balance for exactly this reason).
  *
  * Confirmed, reported real bug this exists to fix: a warehouse's
  * Beginning Balance for one report period silently excluded a whole
@@ -822,23 +824,38 @@ export const reopenPile = async (pileId) => {
  * numbers that were supposed to mean the same thing, silently
  * disagreeing.
  *
- * The fix here is deliberately NOT a new independent transaction sum -
- * it's built entirely on computePileStockBreakdown, the exact same,
- * already-correct per-pile function Pile List/Home Stocks already use
- * and already trust. That function has no "does this pile still exist"
- * check at all (a deleted pile's `db.piles.get()` simply returns
- * undefined, so its real transaction history counts normally - exactly
- * right, since deleting a pile record is an organizational action, not
- * a statement that the stock movement never happened), and it already
- * correctly respects a pile's closedDate - once a pile is closed,
- * closePile() deliberately writes off whatever balance remained as of
- * that date, and this must (and does, by reusing the same function)
- * honor that write-off too, not silently un-do it by summing raw
- * history as if the pile were never closed. Reusing this function
- * instead of writing new logic means there is no new code path where a
- * closed-vs-deleted mixup could be introduced - it's the same, already-
- * proven logic, just rolled up across every pile in a warehouse instead
- * of applied to one pile at a time.
+ * IMPORTANT - do not group this by computePileStockBreakdown's own
+ * `mtsCondition` field. That function (and its `mtsCondition` grouping
+ * key) exists for a completely different, unrelated concept: the SACK's
+ * own condition (BN/SH/US), used only to look up a tare weight for the
+ * MTS deduction - it is not the STOCK condition (GQ/TRD/INF/PD/TD,
+ * CONDITION_FLAGS in shared.js) that every report's COND. column and its
+ * Receipts/Issues matching actually key off of (a transaction's `condition`
+ * field). A first version of this function grouped by mtsCondition and
+ * shipped as 1.10-118 - it built and looked correct, but broke every
+ * exported Stock Report: Beginning/Ending Balance split into nonsense
+ * BN/SH/null "condition" rows that don't match the real GQ/TRD/etc rows
+ * Issues and Receipts print, several of them landing at negative bag
+ * counts. Caught immediately from a live export screenshot before this
+ * spread further - this comment exists so the same mixup can't happen
+ * again. WTS transactions need their own real stock condition too - see
+ * wtsAdapter.js's STOCK_CONDITION_TO_FLAG (issuedStockCondition/
+ * receivedStockCondition, e.g. "Good"/"Part Damaged"/"Damaged", mapped to
+ * the same GQ/PD/TD scale) rather than WTS's own issuedCondition/
+ * receivedCondition (BN/SH/US - again the sack's own condition, not the
+ * stock's).
+ *
+ * This still deliberately does NOT check whether a transaction's pile
+ * still exists in db.piles today (a deleted pile's real transaction
+ * history counts normally - deleting a pile record is an organizational
+ * action, not a statement that the stock movement never happened), and
+ * it DOES respect a pile's closedDate the same way computeHistoricalPileState/
+ * computePileStockBreakdown do: once a pile is closed, closePile()
+ * deliberately writes off whatever balance remained as of that date, so
+ * any of that pile's transactions are excluded once asOfDate has reached
+ * or passed its closedDate - a closed pile is NOT the same thing as a
+ * deleted one, and must not start counting again just because raw
+ * transaction history still exists for it.
  *
  * Every pile that EVER had a WSR/WSI/WTS transaction in this warehouse
  * is included, whether or not it still exists in db.piles today -
@@ -854,45 +871,79 @@ export const reopenPile = async (pileId) => {
  * period's Beginning can never disagree with each other again, by
  * construction rather than by coincidence.
  *
- * Returns an array of { varietyId, sackTypeId, mtsCondition, weight,
- * bags, kilos } - one entry per distinct variety+condition+weight
- * combination found across every pile summed. Pass warehouse/sackTypes
- * when the caller already has them in scope, to avoid re-fetching the
- * warehouse record and the full sack types table on every call (a
- * report calls this twice, once per boundary date).
+ * Returns an array of { varietyId, condition, weight, bags, kilos } -
+ * one entry per distinct variety+condition+weight combination found
+ * across every relevant transaction, using the exact same key shape
+ * (`${varietyId}::${condition}::${weight ?? ''}`) as pdfGenerator.js's
+ * addStockSummaryPage already uses for its Receipts/Issues rows, so
+ * Beginning/Ending Balance always lands in the same row as the period's
+ * own printed activity for that variety+condition+weight. Pass
+ * warehouse/sackTypes when the caller already has them in scope, to
+ * avoid re-fetching the warehouse record and the full sack types table
+ * on every call (a report calls this twice, once per boundary date).
  */
 export const computeWarehouseStockBalanceAsOf = async (warehouseId, asOfDate, { warehouse, sackTypes } = {}) => {
   const resolvedWarehouse = warehouse ?? (await db.warehouses.get(warehouseId))
   const resolvedSackTypes = sackTypes ?? (await db.sackTypes.toArray())
+  const sackTypeMap = new Map(resolvedSackTypes.map((s) => [s.sackTypeId, s]))
+  const reportingCutoffDate = effectiveCutoffDate(resolvedWarehouse?.reportingCutoffDate, await getGlobalDataStartDate())
 
-  const relevantTx = await db.transactions
+  const warehousePiles = await db.piles.where('warehouseId').equals(warehouseId).toArray()
+  const pileMap = new Map(warehousePiles.map((p) => [p.pileId, p]))
+
+  // Same isInitialBalance/reportingCutoffDate treatment as every other
+  // balance computation in this file: a seed always counts regardless of
+  // the cutoff (it IS the confirmed truth as of its own date), everything
+  // else is excluded once on or before the cutoff.
+  const relevantTx = (await db.transactions
     .where('warehouseId').equals(warehouseId)
-    .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active')
-    .toArray()
+    .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active' && t.date <= asOfDate)
+    .toArray())
+    .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
 
-  const pileIds = new Set()
-  for (const t of relevantTx) {
-    if (t.type === 'WTS') {
-      if (t.issuedPileId) pileIds.add(t.issuedPileId)
-      if (t.receivedPileId) pileIds.add(t.receivedPileId)
-    } else if (t.pileId) {
-      pileIds.add(t.pileId)
-    }
+  // Mirrors Reports.jsx's own (now-removed) resolveMtsWeight exactly: a
+  // transaction's own mtsSackTypeId/mtsCondition wins when set, falling
+  // back to whichever pile it belongs to - many transactions (especially
+  // older/imported ones) never set their own, even though the pile they
+  // belong to has a properly configured one.
+  const resolveWeight = (t, pileId) => {
+    const ownSackTypeId = t.mtsSackTypeId ?? pileMap.get(pileId)?.mtsSackTypeId
+    const ownCondition = t.mtsCondition ?? pileMap.get(pileId)?.mtsCondition
+    return sackTypeMap.get(ownSackTypeId)?.weights?.[ownCondition] ?? null
+  }
+  const isWrittenOff = (pileId) => {
+    const pile = pileMap.get(pileId)
+    return pile?.closedDate != null && asOfDate >= pile.closedDate
   }
 
   const groups = new Map()
-  const groupKey = (varietyId, sackTypeId, mtsCondition) => `${varietyId ?? ''}::${sackTypeId ?? ''}::${mtsCondition ?? ''}`
+  const groupKey = (varietyId, condition, weight) => `${varietyId ?? ''}::${condition ?? ''}::${weight ?? ''}`
+  const add = (varietyId, condition, weight, bags, kilos) => {
+    const key = groupKey(varietyId, condition, weight)
+    if (!groups.has(key)) groups.set(key, { varietyId: varietyId ?? null, condition: condition ?? null, weight, bags: 0, kilos: 0 })
+    const entry = groups.get(key)
+    entry.bags += bags
+    entry.kilos = round3(entry.kilos + kilos)
+  }
 
-  for (const pileId of pileIds) {
-    const breakdown = await computePileStockBreakdown(pileId, asOfDate, resolvedWarehouse, resolvedSackTypes)
-    for (const g of breakdown) {
-      const key = groupKey(g.varietyId, g.sackTypeId, g.mtsCondition)
-      if (!groups.has(key)) {
-        groups.set(key, { varietyId: g.varietyId, sackTypeId: g.sackTypeId, mtsCondition: g.mtsCondition, weight: g.weight, bags: 0, kilos: 0 })
+  for (const t of relevantTx) {
+    if (t.type === 'WSR' || t.type === 'WSI') {
+      if (isWrittenOff(t.pileId)) continue
+      const sign = t.type === 'WSR' ? 1 : -1
+      add(t.varietyId, t.condition, resolveWeight(t, t.pileId), (t.numberOfBags ?? 0) * sign, (t.netKilos ?? 0) * sign)
+    } else if (t.type === 'WTS') {
+      // No weight separation for WTS, matching the existing Receipts/
+      // Issues display: normalizeWtsSide (wtsAdapter.js) never sets
+      // mtsSackTypeId/mtsCondition on its flattened row, so pdfGenerator's
+      // own mtsWeightOf() always resolves a WTS-originated row to the
+      // unweighted ('') bucket too - this keeps Beginning/Ending Balance
+      // landing in that exact same bucket for WTS activity.
+      if (t.issuedPileId != null && t.issuedBags != null && !isWrittenOff(t.issuedPileId)) {
+        add(t.issuedVarietyId, STOCK_CONDITION_TO_FLAG[t.issuedStockCondition] ?? 'GQ', null, -(t.issuedBags ?? 0), -(t.issuedNetKilos ?? 0))
       }
-      const entry = groups.get(key)
-      entry.bags += g.bags
-      entry.kilos = round3(entry.kilos + g.kilos)
+      if (t.receivedPileId != null && t.receivedBags != null && !isWrittenOff(t.receivedPileId)) {
+        add(t.receivedVarietyId, STOCK_CONDITION_TO_FLAG[t.receivedStockCondition] ?? 'GQ', null, t.receivedBags ?? 0, t.receivedNetKilos ?? 0)
+      }
     }
   }
 

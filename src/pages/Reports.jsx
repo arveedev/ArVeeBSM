@@ -407,7 +407,7 @@ function Reports() {
         for (const g of flatGroups) {
           const variety = varietyMap.get(g.varietyId)
           if (!variety) continue
-          const key = `${g.varietyId}::${g.mtsCondition}::${g.weight ?? ''}`
+          const key = `${g.varietyId}::${g.condition}::${g.weight ?? ''}`
           if (!byCategory.has(variety.category)) byCategory.set(variety.category, new Map())
           byCategory.get(variety.category).set(key, { bags: g.bags, kilos: g.kilos })
         }

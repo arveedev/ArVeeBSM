@@ -23,7 +23,7 @@
 // this maps WTS's own Stock Condition field (issuedStockCondition/
 // receivedStockCondition, already collected on the form) to that scale
 // instead.
-const STOCK_CONDITION_TO_FLAG = { Good: 'GQ', 'Part Damaged': 'PD', Damaged: 'TD' }
+export const STOCK_CONDITION_TO_FLAG = { Good: 'GQ', 'Part Damaged': 'PD', Damaged: 'TD' }
 
 export const normalizeWtsSide = (tx, side) => ({
   ...tx,
