@@ -5755,4 +5755,8 @@
 //              exactly as saved); if one is found, it needs a manual,
 //              individually-verified correction, not an automatic
 //              formula-driven one.
-export const APP_VERSION = '1.10-126'
+//   1.10-127 - Exported Abstract (SDO side): signatory names (Prepared By/
+//              Verified By/Noted By) now print in bold, per explicit
+//              request - sdoAbstractPdfGenerator.js. Role/Position stays
+//              normal weight, unchanged.
+export const APP_VERSION = '1.10-127'

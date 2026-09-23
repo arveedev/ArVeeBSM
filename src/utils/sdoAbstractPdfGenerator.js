@@ -340,12 +340,14 @@ export const generateSdoAbstract = ({
     doc.text(c.role, x, y)
     doc.setLineWidth(0.3)
     doc.line(x, y + 16, x + sigW, y + 16)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
     // Per explicit request: the signatory's own NAME always prints in
-    // full caps, while their Role/Position stays exactly as entered
-    // (Title Case) - not the same treatment, so only .name is forced.
+    // full caps AND bold, while their Role/Position stays exactly as
+    // entered (Title Case, normal weight) - not the same treatment, so
+    // only .name gets both.
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
     doc.text((c.person?.name ?? '').toUpperCase(), x, y + 20)
+    doc.setFont('helvetica', 'normal')
     doc.setTextColor(90, 90, 90)
     doc.text(c.person?.position ?? '', x, y + 24)
     doc.setTextColor(...BLACK)
