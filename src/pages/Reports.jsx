@@ -26,7 +26,6 @@ import { db } from '../db/dexie.js'
 import { generateNfaReport } from '../utils/pdfGenerator.js'
 import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, todayLocalISO, customerNameWithMillingRef, effectiveCutoffDate } from '../utils/calculations.js'
 import { splitStockTransactions } from '../utils/wtsAdapter.js'
-import { computeWarehouseStockBalanceAsOf } from '../utils/pileLedger.js'
 import DailySummaryCard from '../components/cards/DailySummaryCard.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
@@ -376,49 +375,60 @@ function Reports() {
       const pileMtsById = new Map(
         warehousePiles.map((p) => [p.pileId, { mtsSackTypeId: p.mtsSackTypeId, mtsCondition: p.mtsCondition }])
       )
-      // Beginning AND Ending Balance both come from ONE canonical function
-      // now (computeWarehouseStockBalanceAsOf, pileLedger.js) - called
-      // twice, once for the day before this period starts and once for
-      // the period's own last day. Per confirmed root-cause investigation:
-      // these two numbers used to come from separately hand-written code
-      // (this file's own transaction sum for Beginning, vs "Beginning +
-      // this period's receipts - issues" arithmetic for Ending), and
-      // could silently disagree - a real, reported case where a whole
-      // week's real issuance vanished from the very next period's
-      // Beginning Balance because that hand-written sum checked whether
-      // each transaction's pile still existed in db.piles today (to
-      // avoid a deleted test pile's phantom seed inflating balances
-      // forever) while nothing else in the report applied that same
-      // check. computeWarehouseStockBalanceAsOf has no such check at all
-      // - a deleted pile's real history still counts (deletion isn't a
-      // statement that stock movement never happened), while a pile that
-      // was deliberately CLOSED still correctly writes off its balance
-      // from its own closedDate forward, because the function is built
-      // entirely on computePileStockBreakdown, the same already-proven
-      // per-pile logic Pile List/Home Stocks already use - not a second,
-      // independent implementation that could drift from it.
-      const dayBefore = (isoDate) => {
-        const d = new Date(`${isoDate}T00:00:00`)
-        d.setDate(d.getDate() - 1)
-        return d.toISOString().slice(0, 10)
+      const resolveMtsWeight = (t) => {
+        const ownSackTypeId = t.mtsSackTypeId ?? pileMtsById.get(t.pileId)?.mtsSackTypeId
+        const ownCondition = t.mtsCondition ?? pileMtsById.get(t.pileId)?.mtsCondition
+        return sackTypeMap.get(ownSackTypeId)?.weights?.[ownCondition] ?? null
       }
-      const groupStockBalanceByCategory = (flatGroups) => {
-        const byCategory = new Map()
-        for (const g of flatGroups) {
-          const variety = varietyMap.get(g.varietyId)
-          if (!variety) continue
-          const key = `${g.varietyId}::${g.condition}::${g.weight ?? ''}`
-          if (!byCategory.has(variety.category)) byCategory.set(variety.category, new Map())
-          byCategory.get(variety.category).set(key, { bags: g.bags, kilos: g.kilos })
-        }
-        return byCategory
+      // Deleting a pile deliberately keeps its transactions forever (BIN
+      // cards and other historical records still need them) - but that
+      // means a beginning balance computed by summing EVERY isInitialBalance
+      // transaction warehouse-wide, with no per-pile matching, silently
+      // keeps counting a pile that was deleted (e.g. created by mistake and
+      // replaced with a corrected one) as if it still physically existed -
+      // permanently inflating every future report's beginning balance for
+      // that variety by however many bags/kilos that phantom pile's seed
+      // once held. Filtering to only piles that still exist today is the
+      // per-warehouse-aggregate equivalent of the "pile still exists" fix
+      // already applied to the per-pile computeHistoricalPileState/
+      // recalculatePileCurrentState (pileLedger.js) - this is a genuinely
+      // separate code path (a direct warehouse-wide transaction sum, not a
+      // per-pile query) that never received that same fix.
+      const existingPileIds = new Set(warehousePiles.map((p) => p.pileId))
+      const resolvePileId = (t) => (t.wtsSide ? (t.wtsSide === 'received' ? t.receivedPileId : t.issuedPileId) : t.pileId)
+      const stockBeginningBals = new Map()
+      // Root cause found and confirmed (not a code bug here): this
+      // warehouse's "Ignore Data On/Before" cutoff was set to a date
+      // that excluded a genuinely real, active transaction dated exactly
+      // on it - the field's own OLD wording read as inclusive ("Reports
+      // Start Date") when the actual rule has always been exclusive.
+      // See WarehousesPanel.jsx/DataStartDatePanel.jsx for the wording
+      // fix that should prevent this exact misconfiguration going
+      // forward. This query's own date filter is correct and unchanged.
+      const priorStockRaw = (await db.transactions
+        .where('warehouseId').equals(currentWarehouseId)
+        .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active' &&
+          (t.isInitialBalance || t.date < stmtFrom))
+        .toArray())
+        .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
+      const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
+      const addToBeginningBal = (t, sign) => {
+        if (!existingPileIds.has(resolvePileId(t))) return
+        const variety = varietyMap.get(t.varietyId)
+        if (!variety) return
+        const cat = variety.category
+        const mtsWeight = resolveMtsWeight(t)
+        const key = `${t.varietyId}::${t.condition}::${mtsWeight ?? ''}`
+        if (!stockBeginningBals.has(cat)) stockBeginningBals.set(cat, new Map())
+        const catMap = stockBeginningBals.get(cat)
+        const cur = catMap.get(key) ?? { bags: 0, kilos: 0 }
+        catMap.set(key, {
+          bags: cur.bags + (t.numberOfBags ?? 0) * sign,
+          kilos: cur.kilos + (t.netKilos ?? 0) * sign,
+        })
       }
-      const [stockBeginningGroups, stockEndingGroups] = await Promise.all([
-        computeWarehouseStockBalanceAsOf(currentWarehouseId, dayBefore(stmtFrom), { warehouse: currentWarehouse, sackTypes }),
-        computeWarehouseStockBalanceAsOf(currentWarehouseId, stmtTo, { warehouse: currentWarehouse, sackTypes }),
-      ])
-      const stockBeginningBals = groupStockBalanceByCategory(stockBeginningGroups)
-      const stockEndingBals = groupStockBalanceByCategory(stockEndingGroups)
+      for (const t of priorReceipts) addToBeginningBal(t, 1)
+      for (const t of priorIssues) addToBeginningBal(t, -1)
 
       // Compute beginning balances for sacks - same model as stocks
       // above: everything (seed or real) dated before the period
@@ -460,7 +470,6 @@ function Reports() {
         sackReceipts: sackReceipts.map(enrichSack),
         sackIssues: sackIssues.map(enrichSack),
         stockBeginningBals,
-        stockEndingBals,
         sackBeginningBals,
         signatories,
         certifiedCorrect,

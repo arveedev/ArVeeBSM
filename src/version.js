@@ -5578,112 +5578,52 @@
 //            - Known gap, not yet covered: smaller SDO modals (Cancel
 //              PR, Buying Price, Cash actions) don't have this wired in
 //              yet - flagged for a follow-up if wanted.
-//   1.10-118 - CRITICAL DATA INTEGRITY FIX: exported Stock Report PDFs could
-//              show an Ending Balance for one period that didn't match the
-//              Beginning Balance printed for the very next period (reported
-//              live: WD1 at ALB-ABACORP A, Sep 1-7's Ending Balance was
-//              missing exactly that week's own printed Issues from Sep
-//              8-15's Beginning Balance).
-//            - Root cause: Reports.jsx's Beginning Balance calc
-//              (addToBeginningBal) silently skipped any transaction whose
-//              pile no longer existed in db.piles TODAY (existingPileIds
-//              check) - intended to stop a deleted mistake-pile's phantom
-//              seed from inflating balances forever, but it also silently
-//              dropped REAL historical activity from a pile that had
-//              genuine receipts/issues before being deleted. That period's
-//              own printed Issues/Receipts columns had NO such check, so a
-//              pile deleted between two report generations produced
-//              exactly this symptom - a period's own Issues counted, but
-//              the same activity vanished from the next period's Beginning
-//              Balance. Confirmed NOT caused by the "Ignore Data On/Before"
-//              cutoff (both the global and per-warehouse cutoffs were
-//              checked and were weeks too early to be involved).
-//            - Fix (agreed with the user as the definitive, permanent
-//              solution, not a one-off patch): one new canonical function,
-//              computeWarehouseStockBalanceAsOf(warehouseId, asOfDate) in
-//              pileLedger.js, is now the ONLY way any report computes a
-//              warehouse's stock balance as of any date. It's built on top
-//              of computePileStockBreakdown - the same already-proven
-//              per-pile function Pile List/Home Stocks already trust -
-//              which correctly handles BOTH pile-lifecycle cases: a
-//              DELETED pile's db.piles.get() simply returns undefined, so
-//              its real transaction history is counted normally (no
-//              existingPileIds guessing needed anywhere); a genuinely
-//              CLOSED pile (closePile()'s deliberate, permanent write-off
-//              as of its closedDate - a real business rule, not a bug,
-//              and explicitly NOT the same thing as a deleted pile) still
-//              correctly zeroes out from its closedDate forward. Reports.jsx
-//              now calls this one function twice per statement period (once
-//              for the day before the period starts, once for the period's
-//              last day) to get Beginning AND Ending Balance - both numbers
-//              come from the exact same calculation, so they can no longer
-//              independently drift apart the way beg+receipts-issues
-//              arithmetic could. pdfGenerator.js's addStockSummaryPage now
-//              reads Ending Balance as a direct endBalMap lookup (mirroring
-//              how Beginning Balance already reads beginBalMap) instead of
-//              deriving it via beg+receipts-issues arithmetic, and the
-//              TOTAL row sums the same real per-row Ending Balance figures
-//              rather than re-deriving its own total from the arithmetic.
-//            - Deliberately a pure on-demand computed function, not a
-//              persisted/cached running-balance table - a cached table
-//              synced across devices via Dexie Cloud would reintroduce the
-//              exact "two things that are supposed to agree but might not"
-//              risk one level deeper, just moved to a different pair of
-//              numbers.
-//            - Scope note: this fix covers PILES (rice/palay/by-products
-//              stock). The same latent risk exists for SACKS (Empty
-//              Sacks/MTS) - Reports.jsx's sack Beginning Balance, HomeSacks
-//              and AdminHomeSacks are still three independently
-//              hand-written loops with no shared canonical function - and
-//              is confirmed real but not yet triggered; a matching fix for
-//              sacks, plus fixing pile deletion to explicitly cancel/void
-//              a deleted pile's now-dangling transactions, are planned as
-//              immediate follow-ups.
-//   1.10-119 - CRITICAL HOTFIX to 1.10-118, same day: 1.10-118's own new
-//              computeWarehouseStockBalanceAsOf grouped Beginning/Ending
-//              Balance by the WRONG field - computePileStockBreakdown's
-//              `mtsCondition` (the SACK's own condition, BN/SH/US, used
-//              only to look up a tare weight for the MTS/net-kilos
-//              deduction) instead of a transaction's real STOCK condition
-//              (`condition` - GQ/TRD/INF/PD/TD, CONDITION_FLAGS in
-//              shared.js) - the field every report's COND. column and its
-//              Receipts/Issues matching actually key off of. Reported
-//              immediately, with live export screenshots, by the user:
-//              every exported Stock Report's Beginning/Ending Balance
-//              split into nonsense extra "GQ"/"SH"/"null" rows that don't
-//              match the real rows Issues/Receipts print, several landing
-//              at negative bag/kilo counts (e.g. -300 bags / -15,000.000
-//              kg) - visibly broken on every warehouse, not the narrow
-//              case 1.10-118 originally fixed.
-//            - Root cause: computePileStockBreakdown (pileLedger.js) is a
-//              real, already-correct, already-shipped function - but it
-//              was built for a DIFFERENT purpose (Pile Layout/Home
-//              Stocks/BIN Card's sack-weight breakdown), grouped by
-//              mtsCondition on purpose for that use. Reusing it wholesale
-//              for the warehouse balance rollup silently imported that
-//              wrong grouping key into the Reports feature instead.
-//            - Fix: computeWarehouseStockBalanceAsOf no longer calls
-//              computePileStockBreakdown at all - it now walks the
-//              warehouse's own WSR/WSI/WTS transactions directly, using
-//              each transaction's real `condition` field (WTS's own
-//              issuedStockCondition/receivedStockCondition, mapped via
-//              wtsAdapter.js's STOCK_CONDITION_TO_FLAG - now exported -
-//              same as the flattened rows normalizeWtsSide already
-//              produces for the period's own Issues/Receipts display), so
-//              Beginning/Ending Balance always land in the exact same
-//              variety+condition+weight row the period's own printed
-//              activity uses. Still deliberately keeps everything
-//              1.10-118 was actually built to fix: no "does this pile
-//              still exist in db.piles today" check (a deleted pile's
-//              real history still counts), and a genuinely CLOSED pile
-//              (closePile()'s deliberate write-off as of its closedDate)
-//              still correctly stops counting from that date forward.
-//              Reports.jsx's own grouping key updated to match
-//              (g.condition instead of g.mtsCondition).
-//            - Caught and fixed same-day, before the incorrect 1.10-118
-//              export was used for anything - this comment (and the
-//              detailed one directly on computeWarehouseStockBalanceAsOf
-//              in pileLedger.js) exists so this specific mixup - reusing
-//              a function's grouping key without checking it means the
-//              same thing in the new context - doesn't happen again.
-export const APP_VERSION = '1.10-119'
+//   1.10-120 - EMERGENCY ROLLBACK of 1.10-118/1.10-119. Both attempted to
+//              fix a real, confirmed bug (Reports.jsx's Beginning Balance
+//              silently excluded a deleted pile's real transaction
+//              history, via an `existingPileIds` check, while the same
+//              period's own printed Issues had no such check - see the
+//              still-valid root-cause writeup a few entries above this
+//              one). Removing that check (both attempts did this) turned
+//              out to reopen a DIFFERENT, already-known trade-off that
+//              had been explicitly flagged earlier the same day and
+//              deliberately deferred, not yet fixed: a pile that is
+//              DELETED while it still holds real, un-netted-out stock (a
+//              mistake pile, a duplicate, one replaced by a corrected
+//              one) leaves that stock permanently dangling in the raw
+//              transaction history forever, with nothing left to
+//              subtract it back out - `existingPileIds` was originally
+//              added specifically to stop that phantom balance from
+//              inflating every future report, at the cost of also
+//              wrongly excluding a deleted pile's GENUINELY real history
+//              (the bug 1.10-118/119 targeted). Shipping the removal
+//              before fixing pile deletion itself (to net out a deleted
+//              pile's remaining balance at the moment it's deleted) let
+//              that dangling-stock trade-off surface immediately, in
+//              production, on a live warehouse - reported by the user
+//              within minutes via a live export: Beginning/Ending Balance
+//              for one variety at one warehouse jumped roughly 8-10x
+//              (thousands of extra bags) above its real current stock,
+//              confirmed against that warehouse's own live Pile List.
+//              This is a MUCH worse, harder-to-trust failure mode than
+//              the narrow one-week mismatch originally reported, so both
+//              changes are fully reverted here - src/pages/Reports.jsx,
+//              src/utils/pdfGenerator.js, src/utils/pileLedger.js, and
+//              src/utils/wtsAdapter.js are byte-identical to their
+//              1.10-117 state again (confirmed via `git diff`), and the
+//              `existingPileIds` bug is back to its original, bounded,
+//              already-understood behavior rather than left in a
+//              worse-than-before state.
+//            - Correct order for a real fix, next time, not skipped
+//              again: (1) fix pile deletion (CreateEditPileModal.jsx,
+//              BeginningBalancesPanel.jsx, Settings.jsx) to explicitly
+//              net out a deleted pile's remaining real balance at
+//              deletion time - cancel/void its seed if it never had real
+//              activity beyond it, require explicit confirmation if it
+//              did - so no pile can ever be deleted while still holding
+//              phantom, un-netted-out stock; ONLY THEN (2) revisit
+//              removing/replacing existingPileIds in Reports.jsx's
+//              Beginning/Ending Balance calc, once deletion itself can no
+//              longer create the exact phantom-balance scenario that
+//              check exists to guard against.
+export const APP_VERSION = '1.10-120'

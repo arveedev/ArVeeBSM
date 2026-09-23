@@ -354,7 +354,7 @@ const addFooter = (doc) => {
 
 // ── STOCK REPORT PAGES ────────────────────────────────────────────────────────
 
-const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, issues, beginBalMap, endBalMap, sackTypeMap, pileMtsById, sigCtx }) => {
+const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, issues, beginBalMap, sackTypeMap, pileMtsById, sigCtx }) => {
   doc.addPage()
   let y = addPageHeader(doc, { ...header, subtitle: 'Summary of Weekly Stock Receipts, Issues and Balances' })
   y = addRegionProvinceCodeWhse(doc, header, y)
@@ -380,9 +380,6 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   }
   if (beginBalMap) {
     for (const key of beginBalMap.keys()) rawKeys.add(key)
-  }
-  if (endBalMap) {
-    for (const key of endBalMap.keys()) rawKeys.add(key)
   }
 
   // First pass: for each variety+condition pair, collect every
@@ -416,7 +413,6 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   let totBegBags = 0, totBegKilos = 0
   let totRecBags = 0, totRecKilos = 0
   let totIssBags = 0, totIssKilos = 0
-  let totEndBags = 0, totEndKilos = 0
 
   const body = [...keys].sort().map((key) => {
     const [varietyId, condition, mtsWeightStr] = key.split('::')
@@ -435,32 +431,16 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
         }
       }
     }
-    // Ending Balance is looked up from endBalMap the same way Beginning
-    // Balance is looked up from beginBalMap - both come from the same
-    // canonical computeWarehouseStockBalanceAsOf() function (one call per
-    // asOfDate), so the two figures can never independently drift out of
-    // agreement with each other the way beg+receipts-issues arithmetic
-    // could if a pile's transactions were altered/deleted between report
-    // periods.
-    let end = { bags: 0, kilos: 0 }
-    if (endBalMap) {
-      for (const [rawKey, val] of endBalMap.entries()) {
-        if (displayKeyOf(rawKey) === key) {
-          end = { bags: end.bags + val.bags, kilos: end.kilos + val.kilos }
-        }
-      }
-    }
     const recBags = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
     const recKilos = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.netKilos ?? 0), 0)
     const issBags = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
     const issKilos = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.netKilos ?? 0), 0)
-    const endBags = end.bags
-    const endKilos = end.kilos
+    const endBags = beg.bags + recBags - issBags
+    const endKilos = beg.kilos + recKilos - issKilos
 
     totBegBags += beg.bags; totBegKilos += beg.kilos
     totRecBags += recBags; totRecKilos += recKilos
     totIssBags += issBags; totIssKilos += issKilos
-    totEndBags += endBags; totEndKilos += endKilos
 
     return [
       mtsWeight != null ? `${variety?.name ?? varietyId} (${mtsWeight.toFixed(3)})` : (variety?.name ?? varietyId),
@@ -472,8 +452,8 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
     ]
   })
 
-  const endTotBags = totEndBags
-  const endTotKilos = totEndKilos
+  const endTotBags = totBegBags + totRecBags - totIssBags
+  const endTotKilos = totBegKilos + totRecKilos - totIssKilos
   // Every cell in the TOTAL row is bold, not just the label - the figures
   // themselves are the point of a totals row and need to stand out at
   // least as much as the word "TOTAL" does.
@@ -998,7 +978,7 @@ export const generateNfaReport = ({
   dateFrom, dateTo,
   receipts, issues,
   sackReceipts, sackIssues,
-  stockBeginningBals, stockEndingBals, sackBeginningBals,
+  stockBeginningBals, sackBeginningBals,
   signatories, certifiedCorrect,
   varieties, sackTypes, sackTypeMap, pileMtsById,
 }) => {
@@ -1040,7 +1020,6 @@ export const generateNfaReport = ({
   const cerealTypes = [...new Set([
     ...allStockTx.map(t => hasKnownCategory(t) ? t.cerealCategory : 'Unknown'),
     ...(stockBeginningBals ? [...stockBeginningBals.keys()] : []),
-    ...(stockEndingBals ? [...stockEndingBals.keys()] : []),
   ])].sort()
   // A record's own cerealCategory is now already reflected in cerealTypes
   // above whenever it's genuinely known (Cancelled or not) - so the only
@@ -1053,12 +1032,11 @@ export const generateNfaReport = ({
 
     const catVars = varieties.filter(v => v.category === cerealType)
     const beginBalMap = stockBeginningBals?.get(cerealType) ?? new Map()
-    const endBalMap = stockEndingBals?.get(cerealType) ?? new Map()
 
     // Summary always renders (beginning/ending balance is meaningful even
     // with zero activity). Statement/recap pages only render if there is
     // actual activity to list - a statement of zero rows is meaningless.
-    addStockSummaryPage(doc, { header, cerealType, varieties: catVars, receipts: catRec, issues: catIss, beginBalMap, endBalMap, sackTypeMap, pileMtsById, sigCtx })
+    addStockSummaryPage(doc, { header, cerealType, varieties: catVars, receipts: catRec, issues: catIss, beginBalMap, sackTypeMap, pileMtsById, sigCtx })
     if (catRec.length > 0) {
       addStockStatementPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx })
       addStockRecapPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx })
