@@ -29,6 +29,7 @@ import CompletedAuthorityModal from '../components/common/CompletedAuthorityModa
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
 import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
 import ProcurementMonitor from '../components/common/ProcurementMonitor.jsx'
+import SdoCashOverviewPanel from '../components/common/SdoCashOverviewPanel.jsx'
 
 const TABS = ['AI', 'SIA', 'MILLING', 'NFA', 'PROCUREMENT']
 
@@ -282,6 +283,8 @@ function AdminMonitoring() {
         <NfaMillingMonitor active={activeTab === 'NFA'} />
       </div>
       <div className={activeTab === 'PROCUREMENT' ? '' : 'hidden'}>
+        <SdoCashOverviewPanel />
+        <h2 className="mt-6 text-base font-semibold text-app-text">Procurement</h2>
         <ProcurementMonitor />
       </div>
       <div className={activeTab === 'MILLING' || activeTab === 'NFA' || activeTab === 'PROCUREMENT' ? 'hidden' : ''}>

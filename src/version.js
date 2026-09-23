@@ -5654,4 +5654,16 @@
 //              spots, so it's never fooled by drift between saves - same
 //              0.01kg tolerance closePile()'s own zero-detection already
 //              uses elsewhere in the app.
-export const APP_VERSION = '1.10-121'
+//   1.10-122 - New: SDO Cash on Hand overview, Monitoring > Procurement tab
+//              (Admin/Visitor only, same access as the rest of that page) -
+//              explicit request: "so the visitors can see how much cash
+//              each SDO have on hand." New SdoCashOverviewPanel.jsx lists
+//              every SDO-role user with their current Cash on Hand and
+//              assigned warehouse(s), plus a combined total across all
+//              SDOs, above the existing per-warehouse Procurement list.
+//              Purely read-only - reuses computeCashOnHand
+//              (sdoCalculations.js) exactly as SdoHome.jsx already does
+//              for the logged-in SDO's own figure, just run once per SDO
+//              user instead of once for "me" - the same proven math, not
+//              a second independent calculation that could drift from it.
+export const APP_VERSION = '1.10-122'
