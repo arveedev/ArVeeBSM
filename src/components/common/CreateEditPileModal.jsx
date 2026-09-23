@@ -111,8 +111,28 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
 
   // Checks for real transactions beyond the pile's own seed, purely to
   // inform the confirmation text below - never deleted, only mentioned.
+  //
+  // Confirmed, reported real bug: deleting a pile never removed or wrote
+  // off its remaining stock - the pile RECORD went away, but every
+  // report/balance that sums real transaction history had no way to know
+  // that stock should stop counting, so it either got silently dropped
+  // (the original bug) or, worse, kept counting forever as a permanent
+  // phantom balance once that exclusion was removed (a real production
+  // incident - a warehouse's reported stock jumped ~8-10x above its true
+  // current total after exactly this). Close already does this correctly
+  // - closePile() zeroes the balance and records closedDate ON THE STILL-
+  // EXISTING pile record, which every balance calculation already knows
+  // to respect - so a pile with real stock left must be Closed first,
+  // never deleted outright. recalculatePileCurrentState (not the
+  // possibly-stale pile.currentBags/currentKilos fields) is used here so
+  // this check is never fooled by drift between saves.
   const confirmDelete = async () => {
     setMenuOpen(false)
+    const { bags, kilos } = await recalculatePileCurrentState(pile.pileId)
+    if (bags > 0 || kilos > 0.01) {
+      toast.error('This pile still has stock on hand - Close it first (writes off the remaining balance correctly), then delete it.')
+      return
+    }
     const others = await db.transactions
       .where('pileId').equals(pile.pileId)
       .and((t) => !t.isInitialBalance)

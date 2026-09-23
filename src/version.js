@@ -5626,4 +5626,32 @@
 //              Beginning/Ending Balance calc, once deletion itself can no
 //              longer create the exact phantom-balance scenario that
 //              check exists to guard against.
-export const APP_VERSION = '1.10-120'
+//   1.10-121 - Pile deletion now blocks outright when the pile still has real
+//              stock on hand, directing the user to Close it first instead -
+//              CreateEditPileModal.jsx, BeginningBalancesPanel.jsx,
+//              Settings.jsx (the three places a pile can be deleted from,
+//              same check duplicated in each). Close already zeroes a
+//              pile's balance correctly (closePile() sets closedDate AND
+//              zeroes currentBags/currentKilos on the pile record, which
+//              every balance/history function already knows to respect),
+//              while Delete only ever removed the pile RECORD, leaving its
+//              real transaction history dangling in the ledger forever
+//              with no way for any future calculation to know that stock
+//              should stop counting. Deliberately a pure prevention fix,
+//              nothing else: does not touch Reports.jsx, pdfGenerator.js,
+//              or any balance calculation, so it cannot affect what any
+//              export shows - stops any NEW pile deletion from creating
+//              this problem going forward, but does not retroactively
+//              repair a report period affected by a pile already deleted
+//              before this shipped (that needs a separate, targeted,
+//              verified correction against the specific pile involved,
+//              not a blanket formula change - see 1.10-118/119/120's
+//              history directly above for why a blanket change here is
+//              genuinely dangerous without being able to verify it against
+//              real data first).
+//              recalculatePileCurrentState (not the cached pile.currentBags/
+//              currentKilos fields) is used for the check in all three
+//              spots, so it's never fooled by drift between saves - same
+//              0.01kg tolerance closePile()'s own zero-detection already
+//              uses elsewhere in the app.
+export const APP_VERSION = '1.10-121'

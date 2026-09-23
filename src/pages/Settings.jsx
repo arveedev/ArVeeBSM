@@ -13,6 +13,7 @@ import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { fmtBags, fmtWeight } from '../utils/calculations.js'
 import { computeCashOnHand } from '../utils/sdoCalculations.js'
+import { recalculatePileCurrentState } from '../utils/pileLedger.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, editIconClass, deleteIconClass } from '../components/common/admin/shared.js'
 import { SacksBeginningBalances } from '../components/common/admin/BeginningBalancesPanel.jsx'
@@ -436,7 +437,16 @@ function PileListSection({ warehouseId, onCreatePile, onEditPile }) {
   // same check-for-real-history + ConfirmDialog pattern already used
   // there and everywhere else a pile can be deleted from.
   const [pendingDelete, setPendingDelete] = useState(null)
+  // Same guard as CreateEditPileModal.jsx/BeginningBalancesPanel.jsx's own
+  // confirmDelete - a pile with real stock left must be Closed (writes
+  // off the balance correctly, on the still-existing record) before it
+  // can be deleted, never deleted outright.
   const confirmDelete = async (pile) => {
+    const { bags, kilos } = await recalculatePileCurrentState(pile.pileId)
+    if (bags > 0 || kilos > 0.01) {
+      toast.error('This pile still has stock on hand - Close it first (writes off the remaining balance correctly), then delete it.')
+      return
+    }
     const others = await db.transactions
       .where('pileId').equals(pile.pileId)
       .and((t) => !t.isInitialBalance)

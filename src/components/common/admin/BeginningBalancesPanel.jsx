@@ -502,7 +502,17 @@ function PilesBeginningBalances({ warehouseId }) {
 
   // Checks for real transactions beyond the pile's own seed, purely to
   // inform the confirmation text below - never deleted, only mentioned.
+  //
+  // Same guard as CreateEditPileModal.jsx's own confirmDelete - see its
+  // comment for the full reasoning. A pile with real stock left must be
+  // Closed (writes off the balance correctly, on the still-existing
+  // record) before it can be deleted, never deleted outright.
   const confirmDelete = async (pile) => {
+    const { bags, kilos } = await recalculatePileCurrentState(pile.pileId)
+    if (bags > 0 || kilos > 0.01) {
+      toast.error('This pile still has stock on hand - Close it first (writes off the remaining balance correctly), then delete it.')
+      return
+    }
     const others = await db.transactions
       .where('pileId').equals(pile.pileId)
       .and((t) => !t.isInitialBalance)
