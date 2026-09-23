@@ -5777,4 +5777,29 @@
 //              the variety-name span, overriding the inherited tabular-
 //              nums - never actually needed there anyway, since it isn't
 //              a column of pure numbers needing digit widths to align.
-export const APP_VERSION = '1.10-128'
+//   1.10-129 - Fourth attempt at Save as Image's garbled variety names,
+//              strategy change this time. 1.10-128's normal-nums fix
+//              still had no effect, confirmed by the user re-testing.
+//              Built an isolated reproduction of the export (the app's
+//              actual built CSS/fonts + html2canvas, run directly) in a
+//              desktop Chromium browser to inspect the real output myself
+//              instead of continuing to guess blind - and the severe
+//              corruption never reproduced there at all, only a harmless
+//              minor spacing quirk. Every user report was from an
+//              iPhone, which together points at a Safari/WebKit-specific
+//              html2canvas bug around custom webfont handling (this
+//              app's Inter font ships as 35 separate unicode-range-
+//              subsetted @font-face entries) - a well-documented bug
+//              category, but not something reproducible or verifiable
+//              from a desktop testing environment, so no further CSS-
+//              property guessing would be reliable.
+//            - Instead of chasing the exact trigger, DailySummaryCard.jsx
+//              now temporarily swaps the captured card to a plain system
+//              font stack for the duration of the html2canvas capture
+//              only (already installed on-device, never downloaded or
+//              unicode-range-subsetted, nothing for WebKit to mishandle),
+//              then immediately restores Inter after - sidesteps the
+//              entire bug category rather than one specific manifestation
+//              of it. The live on-screen card is completely unaffected;
+//              only the exported image's font differs.
+export const APP_VERSION = '1.10-129'

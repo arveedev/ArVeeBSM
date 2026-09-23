@@ -115,24 +115,41 @@ const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo
     if (!cardRef.current) return
     setExporting(true)
     try {
-      // Reported real bug: variety names (e.g. "DD1m - A") rendered as
-      // garbled/wrong-looking glyphs in the exported image, while plain
-      // digits and words elsewhere on the same card ("Bags", "Net
-      // Kilos") came out fine - the classic symptom of html2canvas
-      // capturing the card before the browser had actually finished
-      // loading/parsing the specific font weight/style used for that
-      // text, falling back to a substitute glyph for that one style.
-      // document.fonts.ready resolves only once every @font-face the
-      // page is using has actually finished loading, so awaiting it
-      // here guarantees the real font is available before the canvas
-      // capture runs, regardless of whether this particular text style
-      // happened to be used anywhere else on the page yet.
+      // Reported real bug, three earlier attempts (document.fonts.ready,
+      // removing `truncate`'s ellipsis, normal-nums overriding tabular-
+      // nums) all shipped with no effect - variety names like "PD1m-A"
+      // kept rendering as garbled/illegible glyphs in the exported image,
+      // always correct on-screen. Every user report was from an iPhone;
+      // reproducing this same export in a desktop Chromium browser
+      // (against the app's real, built CSS and fonts) never showed the
+      // severe corruption at all - only a harmless minor spacing quirk.
+      // That points squarely at a Safari/WebKit-specific html2canvas bug,
+      // a well-documented category of issue around CUSTOM webfont
+      // handling (this app's Inter font ships as 35 separate @font-face
+      // entries, subsetted by unicode-range, per weight) - not something
+      // reproducible or verifiable from a desktop testing environment.
+      //
+      // Rather than continue guessing at which exact CSS property
+      // triggers it, this sidesteps the entire bug category: the
+      // captured card temporarily switches to a plain system font stack
+      // (already installed on the device, never subsetted, never
+      // downloaded, nothing for html2canvas/WebKit to mishandle) for the
+      // duration of the html2canvas capture only, then restores Inter
+      // immediately after - the live on-screen card is completely
+      // unaffected, only the exported image's font differs.
+      const originalFontFamily = cardRef.current.style.fontFamily
+      cardRef.current.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       await document.fonts?.ready
-      const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: '#0A0A0A',
-        scale: 2,
-        useCORS: true,
-      })
+      let canvas
+      try {
+        canvas = await html2canvas(cardRef.current, {
+          backgroundColor: '#0A0A0A',
+          scale: 2,
+          useCORS: true,
+        })
+      } finally {
+        cardRef.current.style.fontFamily = originalFontFamily
+      }
       const filename = `BSM-Summary-${currentWarehouse?.code ?? 'WH'}-${effectiveFrom}.jpg`
 
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
