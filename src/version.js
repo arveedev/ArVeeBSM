@@ -5666,4 +5666,36 @@
 //              for the logged-in SDO's own figure, just run once per SDO
 //              user instead of once for "me" - the same proven math, not
 //              a second independent calculation that could drift from it.
-export const APP_VERSION = '1.10-122'
+//   1.10-123 - Three small, unrelated additions, all explicit requests:
+//              - SdoCashOverviewPanel.jsx: removed the warehouse subtext
+//                line under each SDO's name (name + cash figure only now).
+//              - Admin Dashboard > Disbursement > Settings: new "Priority
+//                Warehouse" section - for an SDO assigned to more than one
+//                warehouse, admin can now pick which one should always
+//                show first. Stored as a plain `priorityWarehouseId` field
+//                directly on the user record (no schema/version bump
+//                needed, same as purity/moistureContent already are).
+//                WarehouseContext.jsx's accessibleWarehouses now sorts
+//                that warehouse first when set - this is the one place
+//                ordering actually matters, since it's what picks the
+//                default selected warehouse on load and what every
+//                dropdown/list built from accessibleWarehouses inherits.
+//                Same refresh-on-next-login behavior as assignedWarehouses
+//                already has (user is a login-time snapshot, not live).
+//              - Sack Types (Admin Dashboard > Inventory): new per-sack-
+//                code Enable/Disable toggle. Disabling a sack code hides
+//                it from NEW selection on the entry forms only (WSR/WSI's
+//                MTS picker in StockFormBase.jsx, ESR/ESI's sack lines in
+//                SackFormBase.jsx, WTS's SidePanel in WTSForm.jsx) - every
+//                other consumer (Home overview, live view, Pile Layout,
+//                Stock Report, BIN Card, etc.) still resolves it by ID
+//                exactly as before, since none of them filter by `active`.
+//                A transaction/line already using a since-disabled code
+//                keeps showing it correctly on the form it was saved on
+//                too - each entry form's existing "preserve an already-
+//                selected stale option" fallback (already there for a
+//                deleted/renamed sack type) covers this for free, since it
+//                doesn't care why an option was filtered out. Absence of
+//                the new `active` field means active, so no backfill is
+//                needed for sack types saved before this shipped.
+export const APP_VERSION = '1.10-123'

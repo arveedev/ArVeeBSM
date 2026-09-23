@@ -677,6 +677,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   }, [isProcurement])
 
   const sackOptions = [...(sackTypes ?? [])]
+    // Admin-disabled sack codes (SackTypesPanel.jsx's own Disable toggle -
+    // entry-forms-only, per explicit request) are excluded from new
+    // selection here - the fallback block right below this still adds an
+    // already-saved selection back in even if it's now disabled, so
+    // editing existing data is unaffected.
+    .filter((s) => s.active !== false)
     .filter((s) => !selectedVariety || selectedVariety.category === 'By Products' || s.category === selectedVariety.category)
     .sort((a, b) => byAlpha(a.code, b.code))
     .flatMap((s) =>

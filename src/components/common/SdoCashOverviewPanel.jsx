@@ -17,21 +17,12 @@ const fmtPeso = (n) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 
 
 function SdoCashOverviewPanel() {
   const sdoUsers = useLiveQuery(() => db.users.where('role').equals('SDO').toArray(), []) ?? []
-  const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
-  const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
 
   // Both tables are small (one row per cash-ledger entry / currently-
   // Active purchase receipt across the WHOLE system) - fetched once here
   // and grouped by sdoUid client-side, rather than one query per SDO.
   const allLedgerEntries = useLiveQuery(() => db.cashLedgerV2.toArray(), []) ?? []
   const allActivePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), []) ?? []
-
-  const describeWarehouses = (user) => {
-    const codes = (user.assignedWarehouses ?? [])
-      .map((id) => warehouseMap.get(id)?.code)
-      .filter(Boolean)
-    return codes.length > 0 ? codes.join(', ') : 'No warehouse assigned'
-  }
 
   const cards = sdoUsers
     .map((u) => {
@@ -40,7 +31,6 @@ function SdoCashOverviewPanel() {
       return {
         uid: u.uid,
         name: u.name || u.accessCode || 'Unnamed SDO',
-        warehouseLabel: describeWarehouses(u),
         cashOnHand: computeCashOnHand(myLedger, myPrTotals),
       }
     })
@@ -74,7 +64,6 @@ function SdoCashOverviewPanel() {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold text-app-text">{c.name}</p>
-                <p className="truncate text-xs text-neutral-500">{c.warehouseLabel}</p>
               </div>
               <p className={`shrink-0 text-xl font-bold tabular-nums ${c.cashOnHand < 0 ? 'text-brand-crimson' : 'text-app-text'}`}>
                 {fmtPeso(c.cashOnHand)}

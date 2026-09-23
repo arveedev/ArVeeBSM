@@ -16,10 +16,27 @@ export const WarehouseProvider = ({ children }) => {
 
   const allWarehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
 
-  const accessibleWarehouses =
+  const scopedWarehouses =
     user?.role === 'Admin'
       ? allWarehouses
       : allWarehouses.filter((w) => user?.assignedWarehouses?.includes(w.warehouseId))
+
+  // Admin-configurable per-SDO "priority warehouse" (Admin Dashboard >
+  // Disbursement > Settings) - explicit request: an SDO assigned to more
+  // than one warehouse should always see their priority one first,
+  // rather than whatever order db.warehouses happens to return. This is
+  // the one place that ordering actually matters everywhere else in the
+  // app: it's what picks the default selected warehouse below, and every
+  // dropdown/list built from accessibleWarehouses inherits the same
+  // order from it.
+  const priorityId = user?.priorityWarehouseId
+  const accessibleWarehouses = priorityId
+    ? [...scopedWarehouses].sort((a, b) => {
+        if (a.warehouseId === priorityId) return -1
+        if (b.warehouseId === priorityId) return 1
+        return 0
+      })
+    : scopedWarehouses
 
   const accessibleIds = accessibleWarehouses.map((w) => w.warehouseId).join(',')
 

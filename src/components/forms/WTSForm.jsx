@@ -85,6 +85,11 @@ const ACCENTS = {
 
 function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sortedSackTypes, sackTypeMap, sortedVarieties }) {
   const { weightUnit } = useSettings() ?? {}
+  // Admin-disabled sack codes (SackTypesPanel.jsx's own Disable toggle -
+  // entry-forms-only) are excluded from new selection here, same as
+  // StockFormBase.jsx/SackFormBase.jsx - but this side keeps showing its
+  // own already-selected one even if it's now disabled.
+  const sackTypeOptions = sortedSackTypes.filter((s) => s.active !== false || s.sackTypeId === side.sackTypeId)
   const lockedVariety = side.pileId
     ? sortedPiles.find((p) => p.pileId === side.pileId)?.varietyId
     : null
@@ -137,7 +142,7 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
             <label className={labelClass}>Sack Type</label>
             <select value={side.sackTypeId} onChange={(e) => setSide((s) => ({ ...s, sackTypeId: e.target.value }))} className={`${inputClass} ${!side.sackTypeId ? '!border-brand-amber' : ''}`}>
               <option value="">Select…</option>
-              {sortedSackTypes.map((s) => <option key={s.sackTypeId} value={s.sackTypeId}>{s.code}</option>)}
+              {sackTypeOptions.map((s) => <option key={s.sackTypeId} value={s.sackTypeId}>{s.code}</option>)}
             </select>
           </div>
           <div>

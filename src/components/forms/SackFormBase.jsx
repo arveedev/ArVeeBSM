@@ -1576,6 +1576,14 @@ const SackFormBase = forwardRef(function SackFormBase(
                 const displayConditions = line.condition && !availableConditions.includes(line.condition)
                   ? [...availableConditions, line.condition]
                   : availableConditions
+                // Admin-disabled sack codes (SackTypesPanel.jsx's own
+                // Disable toggle - entry-forms-only) are excluded from
+                // new selection, same as StockFormBase.jsx's sackOptions -
+                // but a line already set to one keeps showing it, same
+                // reasoning as displayConditions just above.
+                const displaySackTypes = line.sackTypeId && !sortedSackTypes.some((s) => s.sackTypeId === line.sackTypeId && s.active !== false)
+                  ? sortedSackTypes.filter((s) => s.active !== false || s.sackTypeId === line.sackTypeId)
+                  : sortedSackTypes.filter((s) => s.active !== false)
                 return (
                   <div key={i} className="rounded-xl border border-neutral-800 bg-neutral-900 p-2">
                     <div className="flex items-center justify-between">
@@ -1598,7 +1606,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                         className={`${inputClass} mt-0 ${!line.sackTypeId ? '!border-brand-amber' : ''}`}
                       >
                         <option value="">Code…</option>
-                        {sortedSackTypes.map((s) => (
+                        {displaySackTypes.map((s) => (
                           <option key={s.sackTypeId} value={s.sackTypeId}>
                             {s.code}
                           </option>

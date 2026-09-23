@@ -63,6 +63,17 @@ function DisbursementSettingsPanel() {
     toast.success(enabled ? 'Pricer enabled for this SDO' : 'Pricer disabled for this SDO')
   }
 
+  // Plain field on the user record - not indexed, so no Dexie schema/
+  // version bump needed, same as purity/moistureContent already are
+  // elsewhere. Read by WarehouseContext.jsx to sort this SDO's own
+  // accessibleWarehouses so the priority one always sorts first -
+  // that's what picks the default warehouse on load and what every
+  // warehouse dropdown/list built from accessibleWarehouses shows on top.
+  const setPriorityWarehouse = async (uid, warehouseId) => {
+    await db.users.update(uid, { priorityWarehouseId: warehouseId || null })
+    toast.success(warehouseId ? 'Priority warehouse set' : 'Priority warehouse cleared')
+  }
+
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <h2 className="text-base font-semibold text-app-text">Disbursement Settings</h2>
@@ -150,6 +161,34 @@ function DisbursementSettingsPanel() {
               </li>
             )
           })}
+        </ul>
+      )}
+
+      <p className="mt-5 text-xs font-semibold uppercase text-neutral-500">Priority Warehouse</p>
+      <p className="mt-1 text-xs text-neutral-500">
+        For an SDO assigned to more than one warehouse, pick which one should always show first.
+      </p>
+      {sortedSdos.filter((u) => (u.assignedWarehouses ?? []).length > 1).length === 0 ? (
+        <p className="mt-2 text-xs text-neutral-500">No SDO currently has more than one warehouse assigned.</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {sortedSdos.filter((u) => (u.assignedWarehouses ?? []).length > 1).map((u) => (
+            <li key={u.uid} className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5">
+              <p className="text-sm font-medium text-app-text">{u.name}</p>
+              <p className="text-xs text-neutral-500">{describeWarehouses(u.assignedWarehouses)}</p>
+              <select
+                value={u.priorityWarehouseId ?? ''}
+                onChange={(e) => setPriorityWarehouse(u.uid, e.target.value)}
+                className={`${inputClass} mt-2`}
+              >
+                <option value="">No priority (default order)</option>
+                {(u.assignedWarehouses ?? []).map((id) => {
+                  const w = warehouseMap.get(id)
+                  return w ? <option key={id} value={id}>{w.code} — {w.name}</option> : null
+                })}
+              </select>
+            </li>
+          ))}
         </ul>
       )}
     </section>

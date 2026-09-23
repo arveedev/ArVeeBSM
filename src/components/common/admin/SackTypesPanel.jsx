@@ -111,6 +111,22 @@ function SackTypesPanel() {
     toast.success('Sack type deleted')
   }
 
+  // Absence of `active` means active (existing sack types never had this
+  // field before it existed) - only an explicit `false` means disabled,
+  // so no migration/backfill is needed for records saved before this
+  // toggle existed. Entry forms (StockFormBase.jsx/SackFormBase.jsx/
+  // WTSForm.jsx) filter this out of their own pickers; every other
+  // consumer (Home overview, live view, Pile Layout, Stock Report, BIN
+  // Card, etc.) still resolves a disabled sack code by ID exactly as
+  // before, since none of them filter by `active` - a sack code already
+  // in use anywhere stays fully visible everywhere except new entry, per
+  // explicit request.
+  const toggleActive = async (sackType) => {
+    const nextActive = sackType.active === false
+    await db.sackTypes.update(sackType.sackTypeId, { active: nextActive })
+    toast.success(nextActive ? `${sackType.code} enabled for entry forms` : `${sackType.code} disabled from entry forms`)
+  }
+
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <h2 className="text-base font-semibold text-app-text">Sack Types</h2>
@@ -182,11 +198,18 @@ function SackTypesPanel() {
 
       {sortedSackTypes.length > 0 && (
         <ul className="mt-4 space-y-2">
-          {sortedSackTypes.map((s) => (
-            <li key={s.sackTypeId} className={`${listItemClass} items-start`}>
+          {sortedSackTypes.map((s) => {
+            const isActive = s.active !== false
+            return (
+            <li key={s.sackTypeId} className={`${listItemClass} items-start ${isActive ? '' : 'opacity-60'}`}>
               <div>
                 <p className="font-medium text-app-text">
                   {s.code} · {s.category}
+                  {!isActive && (
+                    <span className="ml-2 rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-semibold uppercase text-neutral-400">
+                      Disabled
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-neutral-400">
                   {SACK_CONDITIONS.map(
@@ -194,7 +217,18 @@ function SackTypesPanel() {
                   ).join(' · ')}
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => toggleActive(s)}
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors ${
+                    isActive
+                      ? 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
+                      : 'border-brand-neon/50 text-brand-neon'
+                  }`}
+                >
+                  {isActive ? 'Disable' : 'Enable'}
+                </button>
                 <button
                   type="button"
                   onClick={() => handleEdit(s)}
@@ -213,7 +247,8 @@ function SackTypesPanel() {
                 </button>
               </div>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 
