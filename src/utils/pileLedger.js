@@ -800,3 +800,101 @@ export const reopenPile = async (pileId) => {
   await db.piles.update(pileId, { closedDate: null })
   return recalculatePileCurrentState(pileId)
 }
+
+/**
+ * Warehouse-wide stock balance "as of" any given date, broken out by
+ * variety + condition + MTS weight - the single canonical answer to
+ * "how much of variety X does this warehouse have on date Y," meant to
+ * replace every place that used to answer that question by hand-summing
+ * transactions independently (most notably Reports.jsx's Beginning
+ * Balance, which used to disagree with the prior period's own Ending
+ * Balance for exactly this reason).
+ *
+ * Confirmed, reported real bug this exists to fix: a warehouse's
+ * Beginning Balance for one report period silently excluded a whole
+ * week's worth of real issuance from the immediately preceding period,
+ * because that computation checked whether each transaction's pile
+ * still existed in db.piles TODAY (to avoid a deleted test pile's
+ * phantom seed inflating balances forever) while the period's own
+ * printed Issues total used no such check - so a pile that had genuine
+ * activity, then got deleted before the next report ran, vanished from
+ * one side of the math but not the other. Two independently-computed
+ * numbers that were supposed to mean the same thing, silently
+ * disagreeing.
+ *
+ * The fix here is deliberately NOT a new independent transaction sum -
+ * it's built entirely on computePileStockBreakdown, the exact same,
+ * already-correct per-pile function Pile List/Home Stocks already use
+ * and already trust. That function has no "does this pile still exist"
+ * check at all (a deleted pile's `db.piles.get()` simply returns
+ * undefined, so its real transaction history counts normally - exactly
+ * right, since deleting a pile record is an organizational action, not
+ * a statement that the stock movement never happened), and it already
+ * correctly respects a pile's closedDate - once a pile is closed,
+ * closePile() deliberately writes off whatever balance remained as of
+ * that date, and this must (and does, by reusing the same function)
+ * honor that write-off too, not silently un-do it by summing raw
+ * history as if the pile were never closed. Reusing this function
+ * instead of writing new logic means there is no new code path where a
+ * closed-vs-deleted mixup could be introduced - it's the same, already-
+ * proven logic, just rolled up across every pile in a warehouse instead
+ * of applied to one pile at a time.
+ *
+ * Every pile that EVER had a WSR/WSI/WTS transaction in this warehouse
+ * is included, whether or not it still exists in db.piles today -
+ * discovered from the transactions' own `warehouseId` (WTS carries this
+ * directly, same as WSR/WSI, since a transfer only ever moves stock
+ * between two piles in the SAME warehouse), not from db.piles, which a
+ * deleted pile is by definition absent from.
+ *
+ * Call this with the SAME warehouseId for both a period's Beginning
+ * Balance (asOfDate = the day before the period starts) and its Ending
+ * Balance (asOfDate = the period's last day) - both numbers then come
+ * from the exact same calculation, so one period's Ending and the next
+ * period's Beginning can never disagree with each other again, by
+ * construction rather than by coincidence.
+ *
+ * Returns an array of { varietyId, sackTypeId, mtsCondition, weight,
+ * bags, kilos } - one entry per distinct variety+condition+weight
+ * combination found across every pile summed. Pass warehouse/sackTypes
+ * when the caller already has them in scope, to avoid re-fetching the
+ * warehouse record and the full sack types table on every call (a
+ * report calls this twice, once per boundary date).
+ */
+export const computeWarehouseStockBalanceAsOf = async (warehouseId, asOfDate, { warehouse, sackTypes } = {}) => {
+  const resolvedWarehouse = warehouse ?? (await db.warehouses.get(warehouseId))
+  const resolvedSackTypes = sackTypes ?? (await db.sackTypes.toArray())
+
+  const relevantTx = await db.transactions
+    .where('warehouseId').equals(warehouseId)
+    .and((t) => ['WSR', 'WSI', 'WTS'].includes(t.type) && t.status === 'Active')
+    .toArray()
+
+  const pileIds = new Set()
+  for (const t of relevantTx) {
+    if (t.type === 'WTS') {
+      if (t.issuedPileId) pileIds.add(t.issuedPileId)
+      if (t.receivedPileId) pileIds.add(t.receivedPileId)
+    } else if (t.pileId) {
+      pileIds.add(t.pileId)
+    }
+  }
+
+  const groups = new Map()
+  const groupKey = (varietyId, sackTypeId, mtsCondition) => `${varietyId ?? ''}::${sackTypeId ?? ''}::${mtsCondition ?? ''}`
+
+  for (const pileId of pileIds) {
+    const breakdown = await computePileStockBreakdown(pileId, asOfDate, resolvedWarehouse, resolvedSackTypes)
+    for (const g of breakdown) {
+      const key = groupKey(g.varietyId, g.sackTypeId, g.mtsCondition)
+      if (!groups.has(key)) {
+        groups.set(key, { varietyId: g.varietyId, sackTypeId: g.sackTypeId, mtsCondition: g.mtsCondition, weight: g.weight, bags: 0, kilos: 0 })
+      }
+      const entry = groups.get(key)
+      entry.bags += g.bags
+      entry.kilos = round3(entry.kilos + g.kilos)
+    }
+  }
+
+  return [...groups.values()]
+}
