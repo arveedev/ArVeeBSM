@@ -115,6 +115,19 @@ const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo
     if (!cardRef.current) return
     setExporting(true)
     try {
+      // Reported real bug: variety names (e.g. "DD1m - A") rendered as
+      // garbled/wrong-looking glyphs in the exported image, while plain
+      // digits and words elsewhere on the same card ("Bags", "Net
+      // Kilos") came out fine - the classic symptom of html2canvas
+      // capturing the card before the browser had actually finished
+      // loading/parsing the specific font weight/style used for that
+      // text, falling back to a substitute glyph for that one style.
+      // document.fonts.ready resolves only once every @font-face the
+      // page is using has actually finished loading, so awaiting it
+      // here guarantees the real font is available before the canvas
+      // capture runs, regardless of whether this particular text style
+      // happened to be used anywhere else on the page yet.
+      await document.fonts?.ready
       const canvas = await html2canvas(cardRef.current, {
         backgroundColor: '#0A0A0A',
         scale: 2,

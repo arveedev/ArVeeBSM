@@ -5698,4 +5698,16 @@
 //                doesn't care why an option was filtered out. Absence of
 //                the new `active` field means active, so no backfill is
 //                needed for sack types saved before this shipped.
-export const APP_VERSION = '1.10-123'
+//   1.10-124 - Fixed reported bug: variety names on the "Save as Image"
+//              Summary card (Reports page, user side) rendered as garbled/
+//              wrong-looking glyphs (e.g. "DD1m - A" showing corrupted),
+//              while plain digits and other words on the same card came
+//              out fine - the classic symptom of html2canvas capturing
+//              the card before the browser had actually finished loading
+//              the specific font weight/style used for that text,
+//              falling back to a substitute glyph for just that style.
+//              DailySummaryCard.jsx's handleExport now awaits
+//              document.fonts.ready immediately before calling
+//              html2canvas, guaranteeing every font the page uses has
+//              actually finished loading before the capture runs.
+export const APP_VERSION = '1.10-124'
