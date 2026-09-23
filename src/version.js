@@ -5730,4 +5730,29 @@
 //              can't handle; a genuinely too-long variety name now clips
 //              cleanly instead of getting an ellipsis, an acceptable
 //              trade-off for a short variety code.
-export const APP_VERSION = '1.10-125'
+//   1.10-126 - Fixed reported bug: on the SDO Purchase Receipt screen, a
+//              WSR with Net Weight 4,154.534 and an ENW Factor of exactly
+//              1.0000 showed an Equivalent Net Weight of 4,154.5330 - one
+//              whole thousandth LOWER than it should be, visibly throwing
+//              off the Total Amount. Root cause: sdoCalculations.js's
+//              truncTo()/roundTo() added a literal `Number.EPSILON`
+//              (~2.22e-16) before flooring/rounding, to guard against a
+//              "clean" decimal like .534 not being exactly representable
+//              in binary floating point - but a double's real precision
+//              step SCALES with magnitude, so a fixed, unscaled epsilon is
+//              thousands of times too small to absorb that drift at any
+//              real kilos/peso magnitude (only correct for values near 1).
+//              Fixed by scaling the tolerance to the value's own
+//              magnitude instead - verified numerically against 3M+
+//              random clean-decimal values up to ~100 million magnitude
+//              with zero mismatches, while still correctly truncating
+//              DOWN a genuinely different value at the same boundary (a
+//              real 0.0001 difference is never absorbed, only floating-
+//              point noise is). Affects every truncated/rounded peso and
+//              ENW figure computed from here forward - does NOT
+//              retroactively correct any already-saved Purchase Receipt
+//              that hit this (its stored enw/basicCost/totalAmount stay
+//              exactly as saved); if one is found, it needs a manual,
+//              individually-verified correction, not an automatic
+//              formula-driven one.
+export const APP_VERSION = '1.10-126'

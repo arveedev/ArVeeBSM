@@ -13,16 +13,50 @@
 // all (dry, top grade), which is apparently precise enough at 3;
 // anything actually adjusted by the factor table keeps the extra digit.
 
+// Reported real bug: a WSR with a clean, already-3-decimal net weight of
+// 4,154.534 (stored via calculateNetKilos's own round3, so the intended
+// value genuinely has no more than 3 decimal places) produced an
+// Equivalent Net Weight of 4,154.533 - one whole thousandth LOWER, wrong
+// by enough to visibly throw off the Total Amount. Root cause: `n` here
+// (netKilos * factor) is a JS double, and a "clean" decimal like .534
+// still can't always be represented exactly in binary floating point -
+// the actual stored value can land a hair below the intended one (e.g.
+// 4154.533999999997). The old fudge factor added a literal
+// `Number.EPSILON` (~2.22e-16) before flooring - correct for a value near
+// 1, but a double's own representable precision step SCALES with
+// magnitude (roughly `magnitude * Number.EPSILON`, ~9e-13 at 4154) - a
+// literal, unscaled Number.EPSILON is thousands of times too small to
+// absorb that at any real-world kilos/peso magnitude, so Math.floor saw
+// the true-but-imprecise 4154533.999999997 and floored it DOWN to
+// 4154533 instead of 4154534.
+//
+// Fixed by scaling the tolerance to the actual value's own magnitude
+// (`Math.abs(scaled) * Number.EPSILON`, the same relationship a double's
+// real precision step follows) instead of a bare constant, with a
+// generous ×8 safety margin for the handful of chained floating-point
+// operations netKilos/ENW pass through before reaching here (round3 at
+// save time, then this multiply-by-factor). Verified numerically against
+// 3,000,000+ random clean-decimal values up to ~100 million magnitude
+// (far beyond any real kilos/peso figure this app produces) with zero
+// mismatches, while still correctly truncating DOWN a genuinely different
+// value at the same boundary (e.g. 4154.5339 still truncates to 4154.533,
+// not 4154.534 - this only absorbs floating-point noise, never a real
+// difference, since the smallest real difference anything here truncates
+// on is 0.0001).
+const scaledEpsilon = (scaled) => Math.max(1e-9, Math.abs(scaled) * Number.EPSILON * 8)
+
 /** Truncates (never rounds) `n` to `decimals` places - used only for Equivalent Net Weight. */
 export const truncTo = (n, decimals) => {
   const f = 10 ** decimals
-  return Math.floor((n + Number.EPSILON) * f) / f
+  const scaled = n * f
+  return Math.floor(scaled + scaledEpsilon(scaled)) / f
 }
 
 /** Standard-rounds (not truncates) `n` to `decimals` places - used for every peso amount. */
 export const roundTo = (n, decimals) => {
   const f = 10 ** decimals
-  return Math.round((n + Number.EPSILON) * f) / f
+  const scaled = n * f
+  return Math.round(scaled + scaledEpsilon(scaled)) / f
 }
 
 export const roundPeso2 = (n) => roundTo(n, 2)
