@@ -41,6 +41,13 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [dropdownRect, setDropdownRect] = useState(null)
+  // Per explicit request: Arrow Down/Up moves a highlighted selection
+  // through the suggestion list, Tab accepts whichever one is
+  // highlighted (same as clicking it) without blocking Tab's own
+  // default behavior, so focus still moves on to the next field right
+  // after - matches how a native browser autocomplete already feels.
+  // -1 means nothing highlighted yet (plain typing, no arrow pressed).
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const containerRef = useRef(null)
   const dropdownRef = useRef(null)
   const inputRef = useRef(null)
@@ -57,6 +64,14 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
     // this only reveals them.
     openSuggestions: () => setShowSuggestions(true),
   }))
+
+  // A fresh suggestion list (new search results, or the dropdown
+  // closing) always starts with nothing highlighted - carrying over a
+  // stale index from the previous list could highlight the wrong row,
+  // or one that no longer exists.
+  useEffect(() => {
+    setHighlightedIndex(-1)
+  }, [suggestions, showSuggestions])
 
   useEffect(() => {
     let cancelled = false
@@ -166,6 +181,31 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
     setShowSuggestions(false)
   }
 
+  // Per explicit request: Arrow Down/Up moves the highlight through the
+  // suggestion list (wrapping at either end), Tab accepts whichever
+  // suggestion is currently highlighted - deliberately NOT calling
+  // preventDefault for Tab, so the browser's own default focus-advance
+  // still happens right after, the same way accepting a native browser
+  // autocomplete suggestion and tabbing onward already feels. Enter
+  // accepts the same way, but WITH preventDefault (Enter has no useful
+  // default action inside a plain text field, and blocking it also
+  // stops it from accidentally submitting anything).
+  const handleKeyDown = (e) => {
+    if (!showSuggestions || suggestions.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightedIndex((i) => (i + 1) % suggestions.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightedIndex((i) => (i - 1 + suggestions.length) % suggestions.length)
+    } else if (e.key === 'Tab' && highlightedIndex >= 0) {
+      handleSelect(suggestions[highlightedIndex])
+    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+      e.preventDefault()
+      handleSelect(suggestions[highlightedIndex])
+    }
+  }
+
   return (
     <div ref={containerRef} className="relative">
       <div className="flex items-center justify-between gap-2">
@@ -181,6 +221,7 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
           setShowSuggestions(true)
         }}
         onFocus={() => setShowSuggestions(true)}
+        onKeyDown={handleKeyDown}
         className={`${inputClass} ${required && !(value ?? '').trim() ? '!border-brand-amber' : ''}`}
         placeholder="Name"
         autoComplete="off"
@@ -203,12 +244,15 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
             maxHeight: Math.max(120, Math.min(288, window.innerHeight - dropdownRect.top - 12)),
           }}
         >
-          {suggestions.map((c) => (
+          {suggestions.map((c, i) => (
             <li key={c.customerId}>
               <button
                 type="button"
                 onClick={() => handleSelect(c)}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-neutral-800 active:bg-neutral-800"
+                onMouseEnter={() => setHighlightedIndex(i)}
+                className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-neutral-800 active:bg-neutral-800 ${
+                  i === highlightedIndex ? 'bg-neutral-800' : ''
+                }`}
               >
                 <span
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${

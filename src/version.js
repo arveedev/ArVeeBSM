@@ -5972,4 +5972,31 @@
 //              Left/Right arrow keys move the selection within the
 //              group while focused, matching how a native radio group
 //              already behaves.
-export const APP_VERSION = '1.10-138'
+//   1.10-139 - Farmers Organization (FA) member handling rework, per
+//              explicit request.
+//            - Stopped auto-filling FARMER MEMBER rows from whichever
+//              members were saved the last time this FA was used -
+//              matching a known FA customer still auto-fills the FA's
+//              own name/address (kept, already good), but member rows
+//              now always start as one blank row waiting for real
+//              input, both when a customer match enables FA and when
+//              the FA toggle is switched on manually.
+//            - New MemberNameAutocomplete.jsx: each individual member
+//              now has their own name autocomplete, sourced from (and,
+//              on save, written back to) the same db.customers
+//              directory the main Customer Name field already uses -
+//              previously missing entirely. Selecting a suggestion
+//              auto-fills that one row's RSBSA/Gender from the
+//              member's own saved record. Each member is remembered as
+//              their own individual customer (isFarmerOrg: false),
+//              separate from the coop's own record, so their RSBSA/
+//              Gender carries over the next time their name comes up
+//              in ANY context, not just under the same coop again.
+//            - CustomerNameAutocomplete.jsx (the main Customer Name
+//              field): Arrow Down/Up now moves a highlighted selection
+//              through the suggestion list, Tab accepts whichever
+//              suggestion is highlighted (without blocking Tab's own
+//              default focus-advance afterward - the same feel as a
+//              native browser autocomplete), Enter does the same with
+//              preventDefault. Previously mouse/touch-only.
+export const APP_VERSION = '1.10-139'

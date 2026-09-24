@@ -99,6 +99,7 @@ import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 import { SavedReceipt } from '../common/AnimatedToast.jsx'
 import { useEntryFormShortcuts } from '../../hooks/useEntryFormShortcuts.js'
+import MemberNameAutocomplete from './MemberNameAutocomplete.jsx'
 import {
   inputClass,
   labelClass,
@@ -1234,6 +1235,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const removeMember = (index) => {
     setMembers((rows) => (rows.length > 1 ? rows.filter((_, i) => i !== index) : rows))
   }
+  // Per explicit request: selecting/matching a member from their own
+  // autocomplete auto-fills that ONE row's RSBSA/Gender from their own
+  // individually-saved customer record - never anything about a
+  // different member or the FA/coop itself.
+  const handleMemberMatch = (index, customer) => {
+    updateMember(index, 'rsbsa', customer.rsbsa || '')
+    if (customer.gender) updateMember(index, 'gender', customer.gender)
+  }
 
   const handlePileChange = (value) => {
     if (value === NEW_PILE_OPTION) {
@@ -1289,9 +1298,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     else if (customer.address) setCustomerAddress(customer.address)
     if (customer.rsbsa) setFarmerRsbsa(customer.rsbsa)
     if (customer.gender) setFarmerGender(customer.gender)
+    // Per explicit request: the FA name/address autofill above is fine,
+    // but the individual MEMBER rows must never auto-fill from
+    // whichever members happened to be saved the last time this FA was
+    // used - always starts as one blank member row, waiting for real
+    // input, regardless of what's on file for this customer. Matches
+    // "if the FA toggle is on, it should show a blank member 1 detail"
+    // for the toggle's manual on/off case too, since both paths now
+    // converge on the same plain [emptyMember()] starting state.
     if (customer.isFarmerOrg) {
       setFarmerOrgEnabled(true)
-      if (customer.farmerCoopMembers?.length) setMembers(customer.farmerCoopMembers)
+      setMembers([emptyMember()])
     }
   }
 
@@ -2108,6 +2125,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
           warehouseId: currentWarehouseId,
         }),
+        // Per explicit request: each FA member is ALSO remembered as
+        // their own individual customer record (isFarmerOrg: false,
+        // never nested only inside the coop's own record) - the whole
+        // point of giving members their own autocomplete is that a
+        // farmer's RSBSA/Gender carries over the next time their name
+        // comes up, in any context, not just when re-using the exact
+        // same coop's own saved member list.
+        ...(farmerOrgEnabled
+          ? members.filter((m) => m.name.trim()).map((m) => rememberCustomer({
+              name: m.name.trim(),
+              rsbsa: m.rsbsa?.trim() || null,
+              gender: m.gender || null,
+            }))
+          : []),
       ])
 
       // Multi-pile issuance: each additional pile allocation becomes
@@ -2329,6 +2360,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         farmerCoopMembers: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
         warehouseId: currentWarehouseId,
       })
+      // Same per-member remembering as handleSave's identical block -
+      // see its comment for the full reasoning.
+      if (farmerOrgEnabled) {
+        await Promise.all(
+          members.filter((m) => m.name.trim()).map((m) => rememberCustomer({
+            name: m.name.trim(),
+            rsbsa: m.rsbsa?.trim() || null,
+            gender: m.gender || null,
+          }))
+        )
+      }
 
       // Reconcile the extra pile allocations against what actually
       // existed before this edit (originalExtraAllocations): a line
@@ -2992,7 +3034,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             labelRight={isProcurement ? (
               <button
                 type="button"
-                onClick={() => setFarmerOrgEnabled((v) => !v)}
+                onClick={() => setFarmerOrgEnabled((v) => {
+                  const next = !v
+                  // Per explicit request: turning FA on always starts
+                  // with one blank member row waiting for input - same
+                  // fix as handleCustomerMatch, applied here too so
+                  // manually flipping it off then back on doesn't leave
+                  // stale member rows from earlier in the same session.
+                  if (next) setMembers([emptyMember()])
+                  return next
+                })}
                 aria-pressed={farmerOrgEnabled}
                 title="Farmers Organization - switch on only if this procurement is from a cooperative rather than an individual"
                 className={`flex shrink-0 items-center gap-1.5 rounded-full py-0.5 pl-2 pr-1 text-[10px] font-semibold transition-colors ${
@@ -3051,12 +3102,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       )}
                     </div>
                     <div className="mt-2 space-y-2">
-                      <input
-                        type="text"
+                      <MemberNameAutocomplete
                         value={m.name}
-                        onChange={(e) => updateMember(i, 'name', e.target.value)}
-                        className={inputClass}
-                        placeholder="Member Full Name"
+                        onChange={(v) => updateMember(i, 'name', v)}
+                        onMatch={(customer) => handleMemberMatch(i, customer)}
                       />
                       <input
                         type="text"
