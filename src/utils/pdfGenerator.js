@@ -233,7 +233,11 @@ const addSignatories = (doc, { certifiedCorrectName, certifiedCorrectPosition, s
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...BLACK)
-    doc.text(name ?? '', x + (colWidth - 2) / 2, y - 1, { align: 'center' })
+    // Per explicit request: every signatory name on the exported Stock
+    // Statement prints in UPPER CASE, matching the Position/Role
+    // staying exactly as typed - same convention already applied to
+    // the SDO Abstract's own signatories.
+    doc.text((name ?? '').toUpperCase(), x + (colWidth - 2) / 2, y - 1, { align: 'center' })
     // Position centered below
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7)
@@ -584,7 +588,11 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
       t.transactionTypeName ?? '',
       t.serialNo ?? '',
       isIssues ? (t.aiNumber ?? '') : (t.linkedDocNo ?? ''),
-      t.status === 'Cancelled' ? 'CANCELLED' : customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber),
+      // Per explicit request: the customer/"FROM WHOM RECEIVED" name
+      // always exports in UPPER CASE for uniformity, regardless of how
+      // it was originally typed (Title Case and UPPER CASE were both
+      // showing up inconsistently in the same exported statement).
+      t.status === 'Cancelled' ? 'CANCELLED' : customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber).toUpperCase(),
       t.varietyName ?? '',
       ...(isByProducts ? [] : [t.moistureContent != null ? Number(t.moistureContent).toFixed(1) : '-']),
       fmtBags(t.numberOfBags),
@@ -848,7 +856,8 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
         i === 0 ? (t.transactionTypeName ?? '') : '',
         i === 0 ? (t.serialNo ?? '') : '',
         i === 0 ? (isIssues ? (t.siaNumber ?? t.linkedDocNo ?? '') : (t.linkedDocNo ?? '')) : '',
-        i === 0 ? (t.status === 'Cancelled' ? 'CANCELLED' : customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber)) : '',
+        // Same UPPER CASE uniformity rule as the stock statement page.
+        i === 0 ? (t.status === 'Cancelled' ? 'CANCELLED' : customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber).toUpperCase()) : '',
         sackTypeMap.get(l?.sackTypeId)?.code ?? (i === 0 ? sackCodes : ''),
         sackTypeMap.get(l?.sackTypeId) ? (l?.condition === 'BN' ? 'BN' : l?.condition === 'SH' ? 'SH' : l?.condition ?? '') : '',
         pcs > 0 ? pcs.toLocaleString('en-PH') : '-',

@@ -652,17 +652,22 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
 // automatically gives "one overview for Milling and another for Test
 // Milling" with no extra plumbing needed.
 //
-// Donut buckets: On Hand (issued, nothing received back yet), Partial
-// (some received, not yet fulfilled), Ready to Complete (o.fulfilled -
-// the exact same "looks done" signal the pending list's own amber-
-// border needsConfirmation cue already uses elsewhere in this file, not
-// a new definition of "done").
+// Donut buckets, per explicit request/correction: On Hand (a real WSI
+// issuance exists for this MO/TMO - palay is actually on hand at the
+// miller - regardless of whether some has already been received back;
+// the old separate "Partial" bucket is gone, folded into On Hand, since
+// an order that's been partially received still has real stock on hand
+// until fully fulfilled), Waiting (the MO/TMO record exists but has no
+// WSI or WSR against it at all yet - nothing has physically happened),
+// Ready to Complete (o.fulfilled - the exact same "looks done" signal
+// the pending list's own amber-border needsConfirmation cue already
+// uses elsewhere in this file, not a new definition of "done").
 //
 // G1 (not G2/G3): one shared list, not a separate flagged section - an
 // overdue On Hand row (nothing received back for OVERDUE_DAYS+) gets
 // its own tinted background and day-count badge in place, instead of
 // also appearing a second time elsewhere. Capped to a handful of rows,
-// prioritized On Hand-oldest-first (most urgent), then Partial-oldest-
+// prioritized On Hand-oldest-first (most urgent), then Waiting-oldest-
 // first, then Ready-to-Complete-newest-first - this stays a genuine
 // "at a glance" panel, not the full list restated a second time.
 const DONUT_R = 70
@@ -673,10 +678,21 @@ const OVERDUE_DAYS = 7
 // last row never sits alone with empty space beside it.
 const OVERVIEW_ROW_CAP = 6
 
+// Per explicit request: "On Hand" now means specifically that palay was
+// actually issued to the miller (a real WSI exists) and nothing has come
+// back yet - checked directly against issuedKilos/issuedPieces, not
+// inferred from the absence of a receipt. The old "Partial" bucket
+// (some received, not yet fulfilled) is gone - an order that's been
+// partially received still has real stock on hand at the miller until
+// it's fully fulfilled, so it now folds into "On Hand" too, matching the
+// explicit instruction to remove Partial rather than rename it. "Waiting"
+// replaces it as a genuinely different state: an MO/TMO record exists
+// but has no WSI (issuance) or WSR (receipt) against it yet at all -
+// nothing has physically happened for this order yet.
 const orderBucket = (o) => {
   if (o.fulfilled) return 'ready'
-  const received = (o.receivedKilos ?? 0) + (o.receivedPieces ?? 0)
-  return received > 0 ? 'partial' : 'onHand'
+  const issued = (o.issuedKilos ?? 0) + (o.issuedPieces ?? 0)
+  return issued > 0 ? 'onHand' : 'waiting'
 }
 
 const daysSince = (dateStr) => {
@@ -688,10 +704,10 @@ const daysSince = (dateStr) => {
 
 const BUCKET_META = {
   onHand: { label: 'On Hand', color: '#F5A524', dotClass: 'bg-brand-amber', statusText: 'on hand' },
-  partial: { label: 'Partial', color: '#378ADD', dotClass: 'bg-blue-400', statusText: 'partially received' },
+  waiting: { label: 'Waiting', color: '#378ADD', dotClass: 'bg-blue-400', statusText: 'waiting' },
   ready: { label: 'Ready to Complete', color: '#00FFA3', dotClass: 'bg-brand-neon', statusText: 'fully received' },
 }
-const BUCKET_RANK = { onHand: 0, partial: 1, ready: 2 }
+const BUCKET_RANK = { onHand: 0, waiting: 1, ready: 2 }
 
 // Per explicit request: the sub-line under each row shows the actual
 // WAREHOUSE the stock moved through, not the MO/TMO number (already
@@ -721,11 +737,11 @@ function MillingOverviewPanel({ filtered, lastActivityDate, warehouseMap }) {
   if (filtered.length === 0) return null
 
   const total = filtered.length
-  const counts = { onHand: 0, partial: 0, ready: 0 }
+  const counts = { onHand: 0, waiting: 0, ready: 0 }
   for (const o of filtered) counts[orderBucket(o)] += 1
 
   let cursor = 0
-  const arcs = ['onHand', 'partial', 'ready']
+  const arcs = ['onHand', 'waiting', 'ready']
     .map((key) => {
       const length = total > 0 ? (counts[key] / total) * DONUT_C : 0
       const arc = { key, length, offset: -cursor, ...BUCKET_META[key] }
@@ -772,7 +788,7 @@ function MillingOverviewPanel({ filtered, lastActivityDate, warehouseMap }) {
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-sm sm:gap-3">
-          {['onHand', 'partial', 'ready'].map((key) => (
+          {['onHand', 'waiting', 'ready'].map((key) => (
             <div key={key} className="flex items-center gap-2 text-xs sm:gap-3 sm:text-base">
               <span className="h-2 w-2 shrink-0 rounded-sm sm:h-3 sm:w-3" style={{ background: BUCKET_META[key].color }} />
               <span className="min-w-0 flex-1 truncate font-semibold text-app-text">{BUCKET_META[key].label}</span>

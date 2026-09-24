@@ -5862,4 +5862,26 @@
 //              explicit request, a Fillers transaction can legitimately
 //              be a bag count with no weight at all, which the
 //              validator didn't previously know about.
-export const APP_VERSION = '1.10-131'
+//   1.10-132 - Second batch of the large reported set.
+//            - Exported Stock Statement: customer/"FROM WHOM RECEIVED"
+//              name now always exports in UPPER CASE for uniformity
+//              (was inconsistently Title Case or UPPER CASE depending on
+//              how it was originally typed) - both the Statement of
+//              Weekly Receipts/Issues and the Statement of MTS
+//              Receipts/Issues pages. Signatory names on the exported
+//              Stock Statement (Certified Correct/Verified Correct/
+//              Audited By/Noted By) now also print UPPER CASE (already
+//              bold) - matching the convention the SDO Abstract's own
+//              signatories already used.
+//            - Milling Operations Overview: "On Hand" now means
+//              specifically that a real WSI issuance exists for that
+//              MO/TMO (palay is actually on hand at the miller),
+//              checked directly rather than inferred from "hasn't been
+//              received yet" - regardless of whether some has already
+//              been received back, since there's still real stock on
+//              hand until it's fully fulfilled. The old separate
+//              "Partial" bucket is removed (folded into On Hand, per
+//              explicit instruction) and replaced with "Waiting" - an
+//              MO/TMO record that exists but has no WSI or WSR against
+//              it at all yet.
+export const APP_VERSION = '1.10-132'
