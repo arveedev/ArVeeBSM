@@ -5925,4 +5925,16 @@
 //              grouped in the same line as the warehouse/days text
 //              instead of being split apart, and every text size in
 //              this section now scales up on sm:/lg: breakpoints.
-export const APP_VERSION = '1.10-135'
+//   1.10-136 - Per explicit follow-up feedback (still too small on a
+//              large display, wanted more compact): Per Ricemill Status
+//              reworked from "grouped by ricemill" to "grouped by
+//              status" - three columns (On Hand/Waiting/Ready to
+//              Complete), one per status, side by side on a large
+//              display (lg:grid-cols-3, matching the donut legend's own
+//              3 statuses 1:1) instead of a narrow list wasting most of
+//              a wide screen. Stacks back into one section per status,
+//              full width, on a narrow screen. The ricemill name now
+//              lives on each entry itself (bold, first line) since a
+//              mill can appear under more than one status column at
+//              once.
+export const APP_VERSION = '1.10-136'

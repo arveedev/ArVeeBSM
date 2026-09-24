@@ -762,22 +762,18 @@ function MillingOverviewPanel({ filtered, lastActivityDate, warehouseMap }) {
     })
     .slice(0, OVERVIEW_ROW_CAP)
 
-  // Per explicit request: grouped by ricemill (one heading per mill,
-  // every one of its own orders listed underneath) instead of one flat
-  // list repeating the ricemill name on every row - a mill with more
-  // than one order in flight (a common case, per the reported real
-  // example: the same mill showing both "on hand" and "waiting" at
-  // once) reads far more clearly this way. Built from `rows` (already
-  // capped and sorted by bucket/date above) via a Map, which preserves
-  // first-seen order - since `rows` is already priority-sorted, a
-  // mill's FIRST row naturally lands the whole group at that same
-  // priority position, without needing a second, separate sort here.
-  const ricemillGroups = [...rows.reduce((groups, row) => {
-    const key = row.order.ricemillName ?? '—'
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(row)
-    return groups
-  }, new Map())]
+  // Per explicit follow-up feedback: reworked again from "grouped by
+  // ricemill" to "grouped by status" - three columns (On Hand/Waiting/
+  // Ready to Complete), one per status, side by side on a large display
+  // (matching the donut legend's own 3 statuses 1:1) so a wide screen's
+  // space is actually used instead of one narrow list with huge empty
+  // margins either side. Stacks back into one section-per-status column
+  // on a narrow screen, in the same bucket priority order the rows
+  // themselves already sort by. The ricemill name now lives on each
+  // entry itself (bold, first line) rather than as a shared group
+  // heading, since a mill can appear under more than one status column.
+  const rowsByBucket = { onHand: [], waiting: [], ready: [] }
+  for (const row of rows) rowsByBucket[row.bucket].push(row)
 
   return (
     // Per explicit feedback: on a wider viewport this used to stay
@@ -817,44 +813,47 @@ function MillingOverviewPanel({ filtered, lastActivityDate, warehouseMap }) {
 
       <div className="mt-3 border-t border-neutral-800 pt-3 sm:mt-4 sm:pt-4">
         <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:text-xs">Per Ricemill Status</p>
-        <div className="mt-2 space-y-3 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-3 sm:space-y-0 lg:grid-cols-3">
-          {ricemillGroups.map(([ricemillName, entries]) => (
-            <div key={ricemillName} className="min-w-0">
-              <p className="truncate text-sm font-bold text-app-text sm:text-base lg:text-lg">{ricemillName}</p>
-              <div className="mt-1 space-y-2">
-                {entries.map(({ order: o, bucket, days }) => {
-                  const overdue = bucket === 'onHand' && days != null && days >= OVERDUE_DAYS
-                  // Per explicit feedback: text was unreadably small on
-                  // a large display, AND the batch number (previously
-                  // pushed to the far edge via justify-between) left a
-                  // huge, wasteful gap on a wide column - kept grouped
-                  // in the same line as the warehouse/days text instead
-                  // of being split apart, and every size here now scales
-                  // up on sm:/lg: like the rest of this panel already
-                  // does, not just the mobile size.
-                  const detailParts = [
-                    resolveOrderWarehouseLabel(o, warehouseMap) ?? o.number,
-                    days != null && !overdue ? (days === 0 ? 'today' : `${days}d ago`) : null,
-                    o.type === 'MO' && o.batchCurrent != null ? `Batch ${o.batchCurrent} of ${o.batchTotal}` : null,
-                  ].filter(Boolean)
-                  return (
-                    <div key={o.orderId} className={`flex items-start gap-2 sm:gap-3 ${overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}`}>
-                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full sm:mt-2 sm:h-2.5 sm:w-2.5 ${BUCKET_META[bucket].dotClass}`} />
-                      <div className="min-w-0 flex-1">
+        <div className="mt-2 space-y-4 lg:grid lg:grid-cols-3 lg:gap-x-6 lg:space-y-0">
+          {['onHand', 'waiting', 'ready'].map((bucket) => {
+            const bucketRows = rowsByBucket[bucket]
+            if (bucketRows.length === 0) return null
+            return (
+              <div key={bucket} className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${BUCKET_META[bucket].dotClass}`} />
+                  <p className="text-sm font-bold text-app-text sm:text-base">{BUCKET_META[bucket].label}</p>
+                </div>
+                <div className="mt-2 space-y-2.5">
+                  {bucketRows.map(({ order: o, days }) => {
+                    const overdue = bucket === 'onHand' && days != null && days >= OVERDUE_DAYS
+                    // Per explicit feedback (two rounds): text was
+                    // unreadably small on a large display, AND the
+                    // batch number (once pushed to the far edge via
+                    // justify-between) left a huge, wasteful gap on a
+                    // wide column - kept grouped in the same line as
+                    // the warehouse/days text, and every size here
+                    // scales up on sm: like the rest of this panel.
+                    const detailParts = [
+                      resolveOrderWarehouseLabel(o, warehouseMap) ?? o.number,
+                      days != null && !overdue ? (days === 0 ? 'today' : `${days}d ago`) : null,
+                      o.type === 'MO' && o.batchCurrent != null ? `Batch ${o.batchCurrent} of ${o.batchTotal}` : null,
+                    ].filter(Boolean)
+                    return (
+                      <div key={o.orderId} className={overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}>
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-xs text-neutral-300 sm:text-sm lg:text-base">{BUCKET_META[bucket].statusText}</p>
+                          <p className="truncate text-sm font-semibold text-app-text sm:text-base">{o.ricemillName}</p>
                           {overdue && (
-                            <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-crimson sm:text-xs">⚠ {days}d</span>
+                            <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-xs font-bold text-brand-crimson">⚠ {days}d</span>
                           )}
                         </div>
                         <p className="truncate text-xs text-neutral-500 sm:text-sm">{detailParts.join(' · ')}</p>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
