@@ -98,6 +98,7 @@ import SplitFlapText from '../common/SplitFlapText.jsx'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 import { SavedReceipt } from '../common/AnimatedToast.jsx'
+import { useEntryFormShortcuts } from '../../hooks/useEntryFormShortcuts.js'
 import {
   inputClass,
   labelClass,
@@ -2671,6 +2672,21 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
   const isEditMode = Boolean(loadedTransaction)
 
+  // Per explicit request: Ctrl/Cmd+S saves or updates (whichever the
+  // visible button currently does), Ctrl/Cmd+Shift+Backspace opens the
+  // Delete confirmation when editing an existing record - same
+  // canSave-gated logic the buttons themselves already run, never a
+  // silent bypass. See useEntryFormShortcuts.js for the shared
+  // implementation used by every entry form.
+  useEntryFormShortcuts({
+    onSave: () => {
+      if (!canSave) { setShowSaveHint(true); focusFirstInvalidField(scrollContainerRef.current); return }
+      if (isEditMode) handleUpdate()
+      else handleSave()
+    },
+    onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
+  })
+
   // Pop scale+fade, coordinated with the nav bar/header's own 350ms
   // slide (see App.jsx's FORM_EXIT_MS) - onClose now fires immediately
   // on tap (App.jsx keeps this component mounted for the trailing
@@ -3838,14 +3854,33 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
           <div>
             <label className={labelClass}>Condition</label>
+            {/* Per explicit request: Tab should land on the next field,
+                not visit every individual toggle option one at a time -
+                only the currently-selected flag is a real tab stop
+                (tabIndex 0), the rest are tabIndex -1 (still clickable/
+                tappable normally, just skipped by Tab), matching a
+                native radio group's own roving-tabindex behavior. Left/
+                Right arrow keys move the selection (and focus) within
+                the group while it's focused, same as a native radio
+                group already does. */}
             <div className="mt-1 grid grid-cols-5 gap-2">
-              {CONDITION_FLAGS.map((flag) => {
+              {CONDITION_FLAGS.map((flag, i) => {
                 const active = condition === flag
                 return (
                   <button
                     key={flag}
                     type="button"
                     onClick={() => setCondition(flag)}
+                    tabIndex={active ? 0 : -1}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+                      e.preventDefault()
+                      const nextIndex = e.key === 'ArrowRight'
+                        ? (i + 1) % CONDITION_FLAGS.length
+                        : (i - 1 + CONDITION_FLAGS.length) % CONDITION_FLAGS.length
+                      setCondition(CONDITION_FLAGS[nextIndex])
+                      e.currentTarget.parentElement.children[nextIndex]?.focus()
+                    }}
                     className={`rounded-lg border py-2.5 text-xs font-medium transition-all active:scale-95 ${
                       active
                         ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'

@@ -38,6 +38,7 @@ import SerialCrossfadeOverlay from '../common/SerialCrossfadeOverlay.jsx'
 import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import { SavedReceipt } from '../common/AnimatedToast.jsx'
+import { useEntryFormShortcuts } from '../../hooks/useEntryFormShortcuts.js'
 import { suggestNextSerial, isSerialTaken, stepSerial, findTransactionBySerial, findNextAvailableSerial, recordSerialUsed, recalculateSerialCounter, findAdjacentTransaction } from '../../utils/serialNumber.js'
 import {
   liveFormatNumber,
@@ -174,10 +175,24 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
         )}
         <div>
           <label className={labelClass}>Stock Condition</label>
+          {/* Per explicit request: same roving-tabindex fix as
+              StockFormBase.jsx's Condition group - only the selected
+              option is a real tab stop, Left/Right arrows move within
+              the group while focused. */}
           <div className="mt-1 flex gap-2">
-            {STOCK_CONDITIONS.map((c) => (
+            {STOCK_CONDITIONS.map((c, i) => (
               <button key={c} type="button"
                 onClick={() => setSide((s) => ({ ...s, stockCondition: c }))}
+                tabIndex={side.stockCondition === c ? 0 : -1}
+                onKeyDown={(e) => {
+                  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+                  e.preventDefault()
+                  const nextIndex = e.key === 'ArrowRight'
+                    ? (i + 1) % STOCK_CONDITIONS.length
+                    : (i - 1 + STOCK_CONDITIONS.length) % STOCK_CONDITIONS.length
+                  setSide((s) => ({ ...s, stockCondition: STOCK_CONDITIONS[nextIndex] }))
+                  e.currentTarget.parentElement.children[nextIndex]?.focus()
+                }}
                 className={`flex-1 rounded-lg border py-2 text-xs font-medium transition-all active:scale-95 ${
                   side.stockCondition === c
                     ? `${accentClasses.activeBorder} ${accentClasses.activeBg} ${accentClasses.text}`
@@ -1028,6 +1043,18 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   }
 
   const isEditMode = Boolean(loadedTransaction)
+
+  // Per explicit request: Ctrl/Cmd+S saves or updates, Ctrl/Cmd+Shift+
+  // Backspace opens the Delete confirmation when editing an existing
+  // record - see useEntryFormShortcuts.js for the shared implementation.
+  useEntryFormShortcuts({
+    onSave: () => {
+      if (!canSave) { setShowSaveHint(true); focusFirstInvalidField(scrollContainerRef.current); return }
+      if (isEditMode) handleUpdate()
+      else handleSave()
+    },
+    onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
+  })
 
   return (
     <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[350ms] ${hasEntered && isOpen ? 'scale-100 opacity-100 ease-[cubic-bezier(0.34,1.56,0.64,1)]' : 'scale-95 opacity-0 ease-in'}`}>

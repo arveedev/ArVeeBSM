@@ -55,6 +55,7 @@ import AuthorityPickerModal from './AuthorityPickerModal.jsx'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 import { SavedReceipt } from '../common/AnimatedToast.jsx'
+import { useEntryFormShortcuts } from '../../hooks/useEntryFormShortcuts.js'
 import {
   inputClass,
   labelClass,
@@ -1186,6 +1187,18 @@ const SackFormBase = forwardRef(function SackFormBase(
       && Boolean(serialNo.trim())
       && Boolean(customerName.trim())
       && sackLines.some((l) => l.sackTypeId && l.condition && l.pieces !== '')
+
+  // Per explicit request: Ctrl/Cmd+S saves or updates, Ctrl/Cmd+Shift+
+  // Backspace opens the Delete confirmation when editing an existing
+  // record - see useEntryFormShortcuts.js for the shared implementation.
+  useEntryFormShortcuts({
+    onSave: () => {
+      if (!canSave) { setShowSaveHint(true); focusFirstInvalidField(scrollContainerRef.current); return }
+      if (isEditMode) handleUpdate()
+      else handleSave()
+    },
+    onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
+  })
 
   return (
     <div className={`fixed inset-0 z-50 flex flex-col bg-neutral-950 transition-all duration-[350ms] ${hasEntered && isOpen ? 'scale-100 opacity-100 ease-[cubic-bezier(0.34,1.56,0.64,1)]' : 'scale-95 opacity-0 ease-in'}`}>

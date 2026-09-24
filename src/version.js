@@ -5949,4 +5949,27 @@
 //              decided before any real transaction happens - and
 //              MillingMonitor.jsx's resolveOrderWarehouseLabel uses it
 //              specifically for the Waiting bucket.
-export const APP_VERSION = '1.10-137'
+//   1.10-138 - Keyboard navigation & shortcuts on every entry form (WSR/
+//              WSI, ESR/ESI, WTS), per explicit request.
+//            - New shared hook (useEntryFormShortcuts.js): Ctrl/Cmd+S
+//              saves or updates (whichever the visible button currently
+//              does, same canSave-gated validation the button's own
+//              onClick already runs - never a silent bypass).
+//              Ctrl/Cmd+Shift+Backspace opens the Delete confirmation
+//              when editing an existing record (never deletes outright -
+//              Shift+Backspace specifically chosen so plain Ctrl+
+//              Backspace, the standard "delete previous word" shortcut
+//              while typing, is never hijacked).
+//            - Tab order: audited all three entry forms for interactive
+//              controls Tab would either skip or over-visit. Every
+//              field turned out to already be a proper focusable
+//              element (native <select>, real <button>) with no stray
+//              tabIndex overrides - the one real gap was each button-
+//              group toggle (Condition in StockFormBase.jsx, Stock
+//              Condition in WTSForm.jsx) being N separate tab stops
+//              (one per option) instead of one. Both now use roving
+//              tabindex - only the selected option is a real tab stop,
+//              Left/Right arrow keys move the selection within the
+//              group while focused, matching how a native radio group
+//              already behaves.
+export const APP_VERSION = '1.10-138'
