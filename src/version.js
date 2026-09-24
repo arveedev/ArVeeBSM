@@ -5884,4 +5884,27 @@
 //              explicit instruction) and replaced with "Waiting" - an
 //              MO/TMO record that exists but has no WSI or WSR against
 //              it at all yet.
-export const APP_VERSION = '1.10-132'
+//   1.10-133 - Third batch.
+//            - Sticky headers (warehouse name indicator on Home/Piles/
+//              Reports/Settings, and the "{type} # {serialNo}" indicator
+//              on every entry form) now appear once the real one is HALF
+//              scrolled out of view, not fully gone - per explicit
+//              request, so it's readable sooner without scrolling back
+//              up. Was checking intersectionRatio strictly at 0 (fully
+//              gone); now checked against a real 0.5 cutoff.
+//            - Admin Dashboard > System: Sheet Sources and PR Sheet
+//              Sources now block saving if the same Web App URL is
+//              entered in both - Control Number and PALAY DELIVERIES
+//              must always be two separate spreadsheet deployments;
+//              sharing one would make every request silently resolve to
+//              whichever single spreadsheet that one deployment is
+//              bound to. Investigated the reported "no matching row
+//              found on the Sheet" warning further per user correction
+//              (same Apps Script CODE deployed to both, not a shared
+//              URL) - confirmed the script's own design (getActiveSpreadsheet(),
+//              no hardcoded ID) already isolates each deployment
+//              correctly; the more likely real cause is a record backed
+//              up under a different date-ranged source than the one now
+//              used to look it up for deletion - needs a live example
+//              to confirm, not something fixable blind.
+export const APP_VERSION = '1.10-133'

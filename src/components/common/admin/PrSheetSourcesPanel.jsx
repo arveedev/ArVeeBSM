@@ -97,6 +97,21 @@ function PrSheetSourcesPanel() {
       return
     }
 
+    // Same cross-check as Sheet Sources' matching guard - see its own
+    // comment for the full reasoning. This (PALAY DELIVERIES) and
+    // Sheet Sources (CONTROL NUMBER) are always two DIFFERENT
+    // spreadsheets; sharing a Web App URL between them causes every
+    // request to silently resolve to whichever ONE spreadsheet that
+    // single deployment is bound to, producing exactly the reported
+    // "no matching row found" false warning on deletion.
+    const crossMatch = (await db.sheetSources.toArray()).find(
+      (s) => s.webAppUrl.trim() === form.webAppUrl.trim()
+    )
+    if (crossMatch) {
+      toast.error(`This Web App URL is already used by Sheet Source "${crossMatch.label}" - PALAY DELIVERIES and Control Number must be different spreadsheets with different URLs`, { duration: 8000 })
+      return
+    }
+
     const payload = {
       id: editingId ?? crypto.randomUUID(),
       label: form.label.trim(),

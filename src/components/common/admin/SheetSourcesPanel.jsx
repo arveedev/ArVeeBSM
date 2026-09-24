@@ -92,6 +92,29 @@ function SheetSourcesPanel() {
       return
     }
 
+    // Reported real bug: deleting a WSR/WSI/etc transaction sometimes
+    // warned "no matching row was found on the Sheet" for a record that
+    // genuinely was backed up - traced to this exact misconfiguration
+    // class. This (CONTROL NUMBER) and PR Sheet Sources (PALAY
+    // DELIVERIES) are always two DIFFERENT spreadsheets with two
+    // DIFFERENT Apps Script deployments/URLs - if the same URL is ever
+    // entered in both, every request against it (whichever logical
+    // source triggered it) resolves to whichever ONE physical
+    // spreadsheet that single deployment is bound to via
+    // SpreadsheetApp.getActiveSpreadsheet(), so a tab name that only
+    // exists in the OTHER spreadsheet comes back "not found" even
+    // though the record really is backed up somewhere. Blocked outright
+    // here, the same way an overlapping date range already is, rather
+    // than left to silently misroute requests and produce alarming but
+    // wrong "please verify manually" warnings.
+    const crossMatch = (await db.prSheetSources.toArray()).find(
+      (s) => s.webAppUrl.trim() === form.webAppUrl.trim()
+    )
+    if (crossMatch) {
+      toast.error(`This Web App URL is already used by PR Sheet Source "${crossMatch.label}" - Control Number and PALAY DELIVERIES must be different spreadsheets with different URLs`, { duration: 8000 })
+      return
+    }
+
     const payload = {
       id: editingId ?? crypto.randomUUID(),
       label: form.label.trim(),

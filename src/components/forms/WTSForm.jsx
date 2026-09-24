@@ -283,9 +283,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     const root = scrollContainerRef.current
     if (!target || !root) return
 
+    // Per explicit request: shows sooner - once the real serial number
+    // field is half scrolled out of view, not fully gone. Same fix as
+    // StickyWarehouseIndicator.jsx's identical change.
     const observer = new IntersectionObserver(
-      ([entry]) => setIsSerialFieldVisible(entry.isIntersecting),
-      { root, threshold: 0 }
+      ([entry]) => setIsSerialFieldVisible(entry.intersectionRatio > 0.5),
+      { root, threshold: [0, 0.5, 1] }
     )
     observer.observe(target)
     return () => observer.disconnect()

@@ -18,9 +18,20 @@ function StickyWarehouseIndicator({ targetRef, warehouse }) {
   useEffect(() => {
     const target = targetRef.current
     if (!target) return
+    // Per explicit request: the sticky indicator should appear sooner,
+    // "right before the text actually disappears, like halfway" -
+    // threshold: 0 (the old value) only fires isIntersecting=false once
+    // the target is 100% scrolled out of view, so the real warehouse
+    // name/header visibly vanished off the top of the screen before this
+    // sticky replacement ever appeared, forcing a scroll back up just to
+    // see it. Checking intersectionRatio directly (not isIntersecting,
+    // which stays true down to the smallest sliver of visibility
+    // regardless of which threshold triggered the callback) against a
+    // 0.5 cutoff shows the sticky version once the real one is half
+    // scrolled away, not fully gone.
     const observer = new IntersectionObserver(
-      ([entry]) => setIsTargetVisible(entry.isIntersecting),
-      { threshold: 0 }
+      ([entry]) => setIsTargetVisible(entry.intersectionRatio > 0.5),
+      { threshold: [0, 0.5, 1] }
     )
     observer.observe(target)
     return () => observer.disconnect()
