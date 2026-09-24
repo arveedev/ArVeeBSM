@@ -124,6 +124,57 @@ function SdoPositionSection({ userRecord, uid }) {
   )
 }
 
+// Per explicit request: an SDO-personal toggle for how the exported
+// Abstract's own Cash Reconciliation box reads. ON (default) keeps
+// today's shape unchanged (COH — Fund Balance, each checked
+// replenishment as its own line, a running TOTAL, then "This period's
+// disbursements" and a final TOTAL). OFF collapses the whole COH/
+// replenishment breakdown into one combined "Fund Balance" figure
+// (same underlying math, just not broken out line by line), and
+// relabels "This period's disbursements" to "This Period's
+// Replenishment" - both figures unchanged either way, only what's
+// shown/labeled differs. Stored directly on this SDO's own user
+// record (db.users), the same pattern as Position/Role just above -
+// each SDO's own preference for their own exports, not a global
+// setting.
+function SdoAbstractDisplaySection({ userRecord, uid }) {
+  const showReplenishmentDetails = userRecord?.showReplenishmentDetails !== false
+
+  const toggle = async () => {
+    await db.users.update(uid, { showReplenishmentDetails: !showReplenishmentDetails })
+  }
+
+  return (
+    <section className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-app-text">Abstract Cash Details</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Show the COH/replenishment breakdown on the exported Abstract, or collapse it into one Fund Balance figure.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-pressed={showReplenishmentDetails}
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+            showReplenishmentDetails ? 'bg-brand-neon' : 'bg-neutral-700'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+              showReplenishmentDetails ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+      <p className="mt-2 text-xs font-medium text-neutral-400">
+        {showReplenishmentDetails ? 'Showing full breakdown' : 'Showing combined Fund Balance only'}
+      </p>
+    </section>
+  )
+}
+
 // Cash Balance (denomination count) + Cash History - moved here from
 // SdoHome.jsx per explicit request: Home stays focused on today's
 // actions (Replenish/Liquidate against a live Cash on Hand figure),
@@ -928,6 +979,7 @@ function Settings() {
       )}
 
       {isSdo && <SdoPositionSection userRecord={userRecord} uid={user.uid} />}
+      {isSdo && <SdoAbstractDisplaySection userRecord={userRecord} uid={user.uid} />}
       {isSdo && <SdoCashSection uid={user.uid} />}
 
       {!isSdo && (

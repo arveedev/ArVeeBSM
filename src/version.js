@@ -5999,4 +5999,39 @@
 //              default focus-advance afterward - the same feel as a
 //              native browser autocomplete), Enter does the same with
 //              preventDefault. Previously mouse/touch-only.
-export const APP_VERSION = '1.10-139'
+//   1.10-140 - SDO Abstract of Cereal Purchases: per-page SUB-TOTAL row
+//              (matching the real TOTAL row's own look - a full grid
+//              row, bold+italic, with the same bags/gross/MTS/net/
+//              equiv-net/amount columns filled in) on every page this
+//              report overflows onto, plus a personal (per-SDO) toggle
+//              to hide the Replenishment breakdown, per explicit
+//              request.
+//            - showFoot: 'lastPage' stops the real grand TOTAL row from
+//              repeating misleadingly on every page (autoTable's
+//              default behavior) - it now only prints once, on the
+//              table's true last page.
+//            - The SUB-TOTAL row is drawn by hand (doc.rect/line/text)
+//              against the real table's own captured column x/width,
+//              not via a second autoTable() call - that was tried
+//              first and caught by a full multi-page browser
+//              reproduction: autoTable's own page-break logic decided
+//              a row starting near a page's bottom margin didn't fit
+//              and silently pushed it onto the wrong physical page,
+//              which in turn also left jsPDF's "current page" pointer
+//              on the wrong page afterward, corrupting where the
+//              signatories/reconciliation footer drew below it. Both
+//              root causes fixed together; verified against a real
+//              3-page export with the sub-totals and grand TOTAL each
+//              landing on the correct page and summing back to the
+//              real total exactly.
+//            - New per-SDO Settings toggle (showReplenishmentDetails on
+//              db.users, Settings.jsx's SdoAbstractDisplaySection):
+//              when off, the reconciliation box collapses the COH/
+//              Replenishment breakdown into a single "Fund Balance"
+//              starting figure (AbstractExportModal.jsx's
+//              combinedFundBalance) with one deduction row relabeled
+//              "This Period's Replenishment", still ending on the same
+//              real TOTAL as the full breakdown - verified both shapes
+//              render correctly and reconcile to the same ending
+//              balance.
+export const APP_VERSION = '1.10-140'

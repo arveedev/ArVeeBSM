@@ -145,17 +145,41 @@ function AbstractExportModal({ onClose }) {
       }))
       const periodTotal = enriched.reduce((s, pr) => s + (pr.totalAmount ?? 0), 0)
 
+      // Per explicit request: an SDO-personal toggle (Settings page,
+      // showReplenishmentDetails on their own user record - defaults
+      // true) for how the Cash Reconciliation box reads. ON keeps
+      // today's shape (COH — Fund Balance, each checked replenishment
+      // as its own line, a running TOTAL, then "This period's
+      // disbursements" and a final TOTAL) exactly as-is. OFF collapses
+      // the whole COH/replenishment breakdown into one combined "Fund
+      // Balance" figure (same underlying math - openingBalance + EVERY
+      // replenishment, checked or not, minus periodLiquidated - just
+      // not broken out line by line) and relabels the deduction line to
+      // "This Period's Replenishment". Both figures are identical
+      // either way; only what's shown/labeled changes.
+      const showReplenishmentDetails = userRecord?.showReplenishmentDetails !== false
+      const totalReplenished = uncheckedReplenished + checkedReplenishEntries.reduce((s, e) => s + (e.amount ?? 0), 0)
+      const combinedFundBalance = openingBalance + totalReplenished - periodLiquidated
+
       const doc = generateSdoAbstract({
         branchLabel,
         dateFrom,
         dateTo,
         purchaseReceipts: enriched,
         purityDisplayFormat: config?.purityDisplayFormat ?? 'range',
-        reconciliation: {
-          fundBalance,
-          addEntries,
-          lessEntries: [{ label: 'This period’s disbursements', amount: periodTotal }],
-        },
+        reconciliation: showReplenishmentDetails
+          ? {
+              fundBalanceLabel: 'COH — Fund Balance',
+              fundBalance,
+              addEntries,
+              lessEntries: [{ label: 'This period’s disbursements', amount: periodTotal }],
+            }
+          : {
+              fundBalanceLabel: 'Fund Balance',
+              fundBalance: combinedFundBalance,
+              addEntries: [],
+              lessEntries: [{ label: "This Period's Replenishment", amount: periodTotal }],
+            },
         signatories: {
           // Always the SDO who actually generated this export, not an
           // admin-set fixed name - "the prepared by should always be

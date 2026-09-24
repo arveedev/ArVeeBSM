@@ -108,7 +108,7 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
  * live data after being issued, so a later Buying Price or variety
  * edit can't silently reshape an already-issued document).
  * `purityDisplayFormat`: 'range' | 'letter'.
- * `reconciliation`: { fundBalance, addEntries: [{label, amount}], lessEntries: [{label, amount}] }
+ * `reconciliation`: { fundBalanceLabel, fundBalance, addEntries: [{label, amount}], lessEntries: [{label, amount}] } - fundBalanceLabel defaults to 'COH — Fund Balance' if not given.
  * `signatories`: { preparedBy: {name, position}, verifiedBy, notedBy }
  *
  * Whether the Rate/Amount/Basic Cost columns print is decided from the
@@ -234,12 +234,38 @@ export const generateSdoAbstract = ({
 
   const lastColIndex = head[0].length - 1
 
+  // Per explicit request: a page that this table overflows onto showed
+  // the FULL grand total (autoTable's default `foot` behavior repeats
+  // the foot row on every page, same as `head` does) - misleading,
+  // since it reads as if it were that page's own total when it's
+  // actually the total of every row across every page. showFoot:
+  // 'lastPage' below stops that repetition (the real grand TOTAL now
+  // only ever prints once, on the true last page); this map tracks
+  // which body rows landed on which page (and how far down that page's
+  // table content actually reached) so a real SUB-total - just that
+  // page's own rows, computed straight from `purchaseReceipts`, never
+  // duplicating the `totals` reduce above - can be drawn under the
+  // table on every page except the last. A single-page export never
+  // touches this at all: its one real TOTAL (already correct) is
+  // already sufficient, per explicit instruction.
+  const pageRowInfo = new Map() // pageNumber -> { rowIndices: number[], bottomY: number }
+  // Each column's own x/width, captured straight off the real table's
+  // drawn cells (head row - same widths as every other row/section in
+  // an autoTable table) so the manually-drawn SUB-TOTAL row below can
+  // line its borders and text up exactly, without a second nested
+  // autoTable() call - that was tried first and silently misplaced rows
+  // (its own page-break logic decided some rows didn't fit and pushed
+  // them onto a different physical page than the one requested).
+  const columnX = new Map() // colIndex -> { x, width }
+  let footRowHeight = 7.66 // cellPadding(1.3)*2 + fontSize(8)*~1.15 - fallback only, overwritten by the real foot row's own height below
+
   autoTable(doc, {
     startY: 36,
     margin: { left: margin, right: margin, top: 36 },
     head,
     body,
     foot,
+    showFoot: 'lastPage',
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 8, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.3, halign: 'center' },
     headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center', valign: 'middle' },
@@ -256,8 +282,23 @@ export const generateSdoAbstract = ({
     didDrawPage: () => drawBranchHeader(doc, { branchLabel, periodLabel }),
     // Draws each row's BN/SH mark just past the table's own right edge
     // once that row's last real column has been placed - small, light
-    // gray, never part of the bordered grid itself.
+    // gray, never part of the bordered grid itself. Also records this
+    // row's page/position for the per-page sub-total drawn after the
+    // table finishes (see pageRowInfo above).
     didDrawCell: (data) => {
+      if (data.section === 'head') {
+        columnX.set(data.column.index, { x: data.cell.x, width: data.cell.width })
+      }
+      if (data.section === 'foot') {
+        footRowHeight = data.cell.height
+      }
+      if (data.section === 'body') {
+        const pageNum = doc.internal.getCurrentPageInfo().pageNumber
+        if (!pageRowInfo.has(pageNum)) pageRowInfo.set(pageNum, { rowIndices: [], bottomY: 0 })
+        const info = pageRowInfo.get(pageNum)
+        info.bottomY = Math.max(info.bottomY, data.cell.y + data.cell.height)
+        if (data.column.index === 0) info.rowIndices.push(data.row.index)
+      }
       if (data.section !== 'body' || data.column.index !== lastColIndex) return
       const mark = marks[data.row.index]
       if (!mark) return
@@ -268,6 +309,88 @@ export const generateSdoAbstract = ({
       doc.setTextColor(...BLACK)
     },
   })
+
+  // `doc.lastAutoTable` reflects only the table just drawn above - read
+  // it now, before anything else runs, so the footer placement further
+  // down always has the real table's own finalY/page (nothing else in
+  // this function calls autoTable() again).
+  const mainFinalY = doc.lastAutoTable.finalY
+  const lastTablePage = doc.internal.getCurrentPageInfo().pageNumber
+
+  // Draw each non-last page's own SUB-TOTAL row - same shape and grid
+  // styling as the real `foot` TOTAL row above (just that page's own
+  // rows, computed straight from `purchaseReceipts`, never duplicating
+  // the `totals` reduce above), positioned directly under that page's
+  // own table content. Drawn by hand with doc.rect/doc.line/doc.text
+  // against the real table's own captured column x/width
+  // (`columnX`) rather than a second autoTable() call - that was tried
+  // first and silently misplaced rows onto the wrong physical page
+  // (autoTable's own page-break logic decided a row begun near a
+  // page's bottom margin didn't fit and pushed it onto whichever page
+  // came next in the document, not necessarily page `pageNum`).
+  // `body` has a leading and trailing spacer row (see spacerRow above)
+  // with no matching purchaseReceipts entry - row index N (1-based
+  // within body, after the leading spacer) maps to
+  // purchaseReceipts[N - 1].
+  const tablePages = [...pageRowInfo.keys()].sort((a, b) => a - b)
+  if (tablePages.length > 1) {
+    for (const pageNum of tablePages.slice(0, -1)) {
+      const info = pageRowInfo.get(pageNum)
+      const pageTotals = info.rowIndices.reduce((a, rowIndex) => {
+        const pr = purchaseReceipts[rowIndex - 1]
+        if (!pr || isCancelled(pr)) return a
+        return {
+          bags: a.bags + (pr.numberOfBags ?? 0),
+          gross: a.gross + (pr.grossKilos ?? 0),
+          sack: a.sack + (pr.sackKilos ?? 0),
+          net: a.net + (pr.netKilos ?? 0),
+          enw: a.enw + (pr.enw ?? 0),
+          basic: a.basic + (pr.basicCost ?? 0),
+          pricer: a.pricer + (pr.pricerAmount ?? 0),
+          total: a.total + (pr.totalAmount ?? 0),
+        }
+      }, { bags: 0, gross: 0, sack: 0, net: 0, enw: 0, basic: 0, pricer: 0, total: 0 })
+      const subtotalCells = [
+        { content: 'SUB-TOTAL', colSpan: 7 },
+        fmtBags(pageTotals.bags), '', '', '',
+        fmtKilos(pageTotals.gross), fmtKilos(pageTotals.sack), fmtKilos(pageTotals.net),
+        '', fmtKilos(pageTotals.enw, 4), '',
+        ...(pricerEnabled ? [fmtPeso(pageTotals.basic), '', fmtPeso(pageTotals.pricer)] : []),
+        fmtPeso(pageTotals.total),
+      ]
+
+      doc.setPage(pageNum)
+      const rowY = info.bottomY
+      const rowH = footRowHeight
+
+      doc.setFillColor(240, 240, 240)
+      doc.rect(margin, rowY, pageW - margin * 2, rowH, 'F')
+      doc.setDrawColor(150, 150, 150)
+      doc.setLineWidth(0.1)
+      doc.setFont('helvetica', 'bolditalic')
+      doc.setFontSize(8)
+      doc.setTextColor(...BLACK)
+
+      let colIndex = 0
+      for (const cell of subtotalCells) {
+        const span = (typeof cell === 'object' && cell.colSpan) || 1
+        const text = typeof cell === 'object' ? cell.content : cell
+        const first = columnX.get(colIndex)
+        let w = 0
+        for (let s = 0; s < span; s++) w += columnX.get(colIndex + s)?.width ?? 0
+        if (first) {
+          doc.line(first.x, rowY, first.x, rowY + rowH)
+          if (text !== '') doc.text(String(text), first.x + w / 2, rowY + rowH / 2 + 1.5, { align: 'center' })
+        }
+        colIndex += span
+      }
+      const lastCol = columnX.get(lastColIndex)
+      if (lastCol) doc.line(lastCol.x + lastCol.width, rowY, lastCol.x + lastCol.width, rowY + rowH)
+      doc.line(margin, rowY, pageW - margin, rowY)
+      doc.line(margin, rowY + rowH, pageW - margin, rowY + rowH)
+    }
+    doc.setPage(lastTablePage)
+  }
 
   // Footer (signatories lower-left, reconciliation lower-right) prints
   // exactly once, right after the table's true final row - wherever
@@ -297,7 +420,7 @@ export const generateSdoAbstract = ({
   // real check to reference. One running TOTAL after all of them
   // together, not one per entry, so a period with several replenishments
   // doesn't turn into a wall of repeated TOTAL rows.
-  const reconRows = [{ label: 'COH — Fund Balance', amt: fundBalance }]
+  const reconRows = [{ label: reconciliation?.fundBalanceLabel ?? 'COH — Fund Balance', amt: fundBalance }]
   const addEntries = reconciliation?.addEntries ?? []
   for (const e of addEntries) {
     running += e.amount ?? 0
@@ -318,7 +441,7 @@ export const generateSdoAbstract = ({
   const sigBoxH = 28 // role line at y, signature line at y+16, name/position through y+24
   const footerH = Math.max(reconBoxH, sigBoxH)
 
-  let y = doc.lastAutoTable.finalY + 10
+  let y = mainFinalY + 10
   if (y + footerH > pageH - margin) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel }); y = 40 }
 
   const usableW = pageW - margin * 2
