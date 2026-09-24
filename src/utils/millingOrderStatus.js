@@ -40,9 +40,18 @@ export const computeMillingOrderStatuses = async (orderType) => {
     .toArray()
 
   // The linked AI/SIA's own allocation total - the natural "100%
-  // issuance" reference point for the progress bar. Fetched once per
-  // order rather than per row, since aiNumber/siaNumber is fixed per
-  // order.
+  // issuance" reference point for the progress bar - and its
+  // assignedWarehouse, fetched once per order rather than per row,
+  // since aiNumber/siaNumber is fixed per order.
+  //
+  // assignedWarehouse is the only real, data-grounded answer to "which
+  // warehouse is this order waiting on" for an order with no real WSI
+  // yet (the monitor's own "Waiting" bucket) - the order itself carries
+  // no dedicated issuing-warehouse field (only receivingWarehouse,
+  // meant for the OPPOSITE side, meant to be filled once milled product
+  // actually comes back), but its linked authority's assignedWarehouse
+  // is literally which warehouse is authorized to issue against it,
+  // decided before any real transaction happens.
   const authorityByOrder = new Map(
     await Promise.all(
       orders.map(async (o) => {
@@ -51,7 +60,7 @@ export const computeMillingOrderStatuses = async (orderType) => {
           : o.siaNumber
             ? await db.authorities.where('siaNumber').equals(o.siaNumber).first()
             : null
-        return [o.orderId, auth?.totalAllocationKilos ?? null]
+        return [o.orderId, { totalAllocationKilos: auth?.totalAllocationKilos ?? null, assignedWarehouse: auth?.assignedWarehouse ?? null }]
       })
     )
   )
@@ -86,6 +95,7 @@ export const computeMillingOrderStatuses = async (orderType) => {
       fulfilled = ['1', '2', '3'].every((n) => recovered.has(n))
     }
 
+    const authorityInfo = authorityByOrder.get(order.orderId)
     return {
       ...order,
       issueTx,
@@ -96,7 +106,8 @@ export const computeMillingOrderStatuses = async (orderType) => {
       receivedPieces,
       recoveredTrials,
       fulfilled,
-      authorityAllocationKilos: authorityByOrder.get(order.orderId) ?? null,
+      authorityAllocationKilos: authorityInfo?.totalAllocationKilos ?? null,
+      authorityAssignedWarehouse: authorityInfo?.assignedWarehouse ?? null,
     }
   })
 }

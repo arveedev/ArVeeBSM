@@ -716,15 +716,29 @@ const BUCKET_RANK = { onHand: 0, waiting: 1, ready: 2 }
 // that ISSUED stock to the mill (from the order's own issue
 // transactions' warehouseId) - that's the confirmed meaning of "On
 // Hand": a warehouse has sent stock to the ricemill, still there.
-// Partial/Ready shows the warehouse the milled product came back INTO
-// instead - order.receivingWarehouse is already a real field on the
-// synced order record for this, falling back to a receipt
-// transaction's own warehouseId only if that field is somehow blank.
+// Ready shows the warehouse the milled product came back INTO instead -
+// order.receivingWarehouse is already a real field on the synced order
+// record for this, falling back to a receipt transaction's own
+// warehouseId only if that field is somehow blank.
+//
+// Reported real bug: Waiting (no WSI posted yet at all) was also
+// falling into the receivingWarehouse branch, showing the warehouse the
+// milled product is expected to come BACK to - but a Waiting order has
+// no stock movement of either direction yet, so "waiting" specifically
+// means waiting on the ISSUING warehouse to act, not the receiving one.
+// There's no dedicated issuing-warehouse field on the order itself, but
+// its linked AI/SIA authority's assignedWarehouse (see
+// millingOrderStatus.js) is exactly that - the warehouse authorized to
+// issue against it, decided before any real transaction happens.
 const resolveOrderWarehouseLabel = (o, warehouseMap) => {
   const bucket = orderBucket(o)
   if (bucket === 'onHand') {
     const issueWhId = o.issueTx?.[0]?.warehouseId
     const name = issueWhId ? warehouseMap.get(issueWhId)?.name : null
+    return name ? stripWarehouseCodePrefix(name) : null
+  }
+  if (bucket === 'waiting') {
+    const name = o.authorityAssignedWarehouse ? warehouseMap.get(o.authorityAssignedWarehouse)?.name : null
     return name ? stripWarehouseCodePrefix(name) : null
   }
   if (o.receivingWarehouse) return o.receivingWarehouse

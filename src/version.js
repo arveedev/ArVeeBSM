@@ -5937,4 +5937,16 @@
 //              lives on each entry itself (bold, first line) since a
 //              mill can appear under more than one status column at
 //              once.
-export const APP_VERSION = '1.10-136'
+//   1.10-137 - Fixed reported bug: a "Waiting" order in Milling Operations
+//              Overview showed the RECEIVING warehouse, when Waiting
+//              specifically means nothing has moved yet and the order is
+//              waiting on the ISSUING warehouse to act. No dedicated
+//              issuing-warehouse field exists on the order record itself
+//              (only receivingWarehouse, meant for the opposite side),
+//              so millingOrderStatus.js now also carries through the
+//              order's linked AI/SIA authority's own assignedWarehouse -
+//              the warehouse actually authorized to issue against it,
+//              decided before any real transaction happens - and
+//              MillingMonitor.jsx's resolveOrderWarehouseLabel uses it
+//              specifically for the Waiting bucket.
+export const APP_VERSION = '1.10-137'
