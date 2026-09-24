@@ -353,6 +353,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const [isRenaming, setIsRenaming] = useState(false)
 
   const [isSaving, setIsSaving] = useState(false)
+  // Reported real bug: Update and Delete both animated at once,
+  // regardless of which one was actually tapped - both buttons read the
+  // same shared `isSaving` lock (correctly shared, so a double-tap on
+  // either can't race), but each rendered ITS OWN "in progress"
+  // animation off that same flag with no way to tell which action it
+  // was actually for. This tracks which one is in flight, purely for
+  // deciding which button's animation shows - isSaving itself stays the
+  // single lock every handler already correctly guards on.
+  const [savingAction, setSavingAction] = useState(null) // null | 'update' | 'delete'
   // True for the brief window between a delete actually finishing and
   // the form switching back to a blank entry - see handleDeleteConfirmed's
   // own comment for why this delay exists (so the Delete button's own
@@ -2245,6 +2254,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // validateForm runs, not after.
     if (isSaving) return
     setIsSaving(true)
+    setSavingAction('update')
     // See handleSave's matching comment - try/finally so an unexpected
     // throw anywhere below can't leave isSaving stuck true forever.
     try {
@@ -2425,6 +2435,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       toast.error('Update failed — please try again')
     } finally {
       setIsSaving(false)
+      setSavingAction(null)
     }
   }
 
@@ -2457,6 +2468,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
+    setSavingAction('delete')
     try {
 
     // Deleting a multi-pile issuance deletes the WHOLE group, not just
@@ -2510,6 +2522,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // immediately would unmount DeleteButtonLabel the moment isSaving
     // flips back to false, before that animation ever rendered a frame.
     setIsSaving(false)
+    setSavingAction(null)
     setDeleteCompleting(true)
     setTimeout(() => {
       setDeleteCompleting(false)
@@ -2521,6 +2534,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       logError(`${type} delete`, err, user)
       toast.error('Delete failed — please try again')
       setIsSaving(false)
+      setSavingAction(null)
     }
   }
 
@@ -3440,6 +3454,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 placeholder="0.000"
                 validate={(v) => {
                   if (v === '') return null // not yet entered - no opinion until the user actually leaves it blank on purpose
+                  // Fillers can legitimately be a bag count with no
+                  // weight at all (per explicit request: "that is the
+                  // nature of the fillers") - 0 (or any other value) is
+                  // never flagged as invalid for this type, unlike
+                  // every other transaction type where a real Gross
+                  // Kilos of 0 is a genuine data-entry mistake.
+                  if (isFillersType) return { valid: true }
                   const num = parseFormattedNumber(v)
                   if (!(num > 0)) return { valid: false, message: 'Gross Kilos must be greater than 0' }
                   return { valid: true }
@@ -3937,7 +3958,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               disabled={isSaving || deleteCompleting}
               className="relative flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
-              <UpdateButtonContent isSaving={isSaving} />
+              <UpdateButtonContent isSaving={isSaving && savingAction === 'update'} />
             </button>
             <button
               type="button"
@@ -3945,7 +3966,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               disabled={isSaving || deleteCompleting}
               className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
-              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving} />
+              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving && savingAction === 'delete'} />
             </button>
           </div>
           {showSaveHint && !canSave && (

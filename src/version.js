@@ -5826,4 +5826,40 @@
 //              keeps `min-w-0 flex-1` (correct flex sizing) and adds
 //              `break-words` instead - fully verified against the real
 //              export pipeline before shipping, not guessed.
-export const APP_VERSION = '1.10-130'
+//   1.10-131 - First batch of a large reported set: three real bugs found
+//              and fixed.
+//            - CRITICAL: root-caused the "Data Start Date keeps reverting"
+//              bug. backupWorker.js's daily auto-backup fetches
+//              reportConfig ONCE at the start, then runs a long (many
+//              seconds) full-table dump + gzip + GitHub upload, before
+//              writing `{...config, lastAutoBackupAt: now}` back - a
+//              spread of whatever reportConfig looked like BEFORE that
+//              long gap, silently clobbering any real admin edit (Data
+//              Start Date, Signatories, Session Timeouts, Purity Format,
+//              Visitor Access, etc.) made DURING it. This worker fires
+//              immediately on every login when a backup is overdue,
+//              landing that race window right when an admin is likely
+//              to be actively changing settings. Every reportConfig
+//              writer in the app (backupWorker.js, DataStartDatePanel.jsx,
+//              SessionTimeoutsPanel.jsx, SignatoriesPanel.jsx,
+//              DisbursementSettingsPanel.jsx x2, VisitorAccessPanel.jsx
+//              x2) converted from `put({...config, ...})` to `update()`,
+//              which only ever touches the specific field(s) each one
+//              actually intends to change, no matter what changed
+//              underneath it since - closes this entire bug class, not
+//              just the one reported field.
+//            - Update/Delete buttons on every entry form (WSR/WSI,
+//              ESR/ESI, WTS) animated simultaneously no matter which one
+//              was actually tapped - both read the same shared isSaving
+//              lock (correctly shared, to prevent a double-submit race),
+//              but each rendered its own "in progress" animation off
+//              that same flag with no way to tell which action it was
+//              for. New `savingAction` state ('update'|'delete') tracks
+//              which one is actually in flight; isSaving itself is
+//              unchanged as the real lock.
+//            - Fillers transactions (StockFormBase.jsx) no longer show a
+//              red-border error on Gross Kilos when it's 0 - per
+//              explicit request, a Fillers transaction can legitimately
+//              be a bag count with no weight at all, which the
+//              validator didn't previously know about.
+export const APP_VERSION = '1.10-131'

@@ -107,6 +107,11 @@ const SackFormBase = forwardRef(function SackFormBase(
   const [trialNumber, setTrialNumber] = useState('')
   const [unresolvedSiaHint, setUnresolvedSiaHint] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
+  // Same fix as StockFormBase.jsx's identical bug - Update and Delete
+  // both animated at once regardless of which was tapped, since both
+  // read the same shared isSaving lock. Tracks which action is actually
+  // in flight, purely for choosing which button's animation shows.
+  const [savingAction, setSavingAction] = useState(null) // null | 'update' | 'delete'
   // See StockFormBase.jsx's identical state/comment - blocks the
   // Update/Delete buttons for the brief window between a delete
   // finishing and the form switching back to a blank entry, so the
@@ -978,6 +983,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     // Same race-window fix as handleSave.
     if (isSaving) return
     setIsSaving(true)
+    setSavingAction('update')
     try {
     const ok = await validateForm({ excludeId: loadedTransaction.id })
     if (!ok) return
@@ -1012,6 +1018,7 @@ const SackFormBase = forwardRef(function SackFormBase(
       toast.error('Update failed — please try again')
     } finally {
       setIsSaving(false)
+      setSavingAction(null)
     }
   }
 
@@ -1039,6 +1046,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
+    setSavingAction('delete')
     try {
 
     // Grouped into one atomic Dexie transaction - see StockFormBase.jsx's
@@ -1068,6 +1076,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     // back to a blank entry until the Delete button's own bin-lid
     // completion animation has had time to play.
     setIsSaving(false)
+    setSavingAction(null)
     setDeleteCompleting(true)
     setTimeout(() => {
       setDeleteCompleting(false)
@@ -1079,6 +1088,7 @@ const SackFormBase = forwardRef(function SackFormBase(
       logError(`${type} delete`, err, user)
       toast.error('Delete failed — please try again')
       setIsSaving(false)
+      setSavingAction(null)
     }
   }
 
@@ -1726,7 +1736,7 @@ const SackFormBase = forwardRef(function SackFormBase(
               disabled={isSaving || deleteCompleting}
               className="relative flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
-              <UpdateButtonContent isSaving={isSaving} />
+              <UpdateButtonContent isSaving={isSaving && savingAction === 'update'} />
             </button>
             <button
               type="button"
@@ -1734,7 +1744,7 @@ const SackFormBase = forwardRef(function SackFormBase(
               disabled={isSaving || deleteCompleting}
               className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             >
-              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving} />
+              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving && savingAction === 'delete'} />
             </button>
           </div>
         ) : (

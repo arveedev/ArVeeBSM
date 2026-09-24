@@ -105,7 +105,31 @@ const runAutoBackupIfDue = async () => {
     // fails, the next check (at most BACKUP_CHECK_INTERVAL_MS later)
     // sees the same stale timestamp and simply tries again, rather
     // than silently skipping a whole day because of one failed attempt.
-    await db.reportConfig.put({ ...config, id: 'global', lastAutoBackupAt: new Date().toISOString() })
+    //
+    // Reported real bug: an admin setting changed elsewhere (confirmed
+    // case: Data Start Date) would silently revert to an old value some
+    // time after being saved. Root cause: `config` above is fetched
+    // ONCE, at the very start of this function, then the full-table
+    // dump + gzip + GitHub upload runs - a real, possibly long (many
+    // seconds) async gap - before this write. This worker's own
+    // runCheck() fires immediately on every login whenever a backup is
+    // overdue, so that gap lands right when an admin is most likely to
+    // be actively changing settings. The old `db.reportConfig.put({
+    // ...config, ... })` spread whatever reportConfig looked like BEFORE
+    // that gap, silently clobbering any real edit made during it - this
+    // worker only ever needs to change ONE field, so it has no business
+    // writing back the other 'global' fields at all. `update()` patches
+    // just lastAutoBackupAt on whatever the record's CURRENT state is,
+    // no matter what else changed underneath it during the backup -
+    // update() is a safe no-op if the record doesn't exist yet (a truly
+    // fresh install with no admin config saved yet), so fall back to a
+    // plain put() only in that one case, where there is nothing to
+    // clobber.
+    if (config) {
+      await db.reportConfig.update('global', { lastAutoBackupAt: new Date().toISOString() })
+    } else {
+      await db.reportConfig.put({ id: 'global', lastAutoBackupAt: new Date().toISOString() })
+    }
     console.log('[backupWorker] Automatic backup committed to GitHub.')
     toast.success(createElement(SyncProgressToast, { doneLabel: 'Backup committed to GitHub', phase: 'done' }), { id: BACKUP_TOAST_ID })
   } catch (err) {

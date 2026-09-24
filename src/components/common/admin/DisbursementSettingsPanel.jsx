@@ -40,7 +40,13 @@ function DisbursementSettingsPanel() {
     setSigForm((f) => ({ ...f, [key]: { ...f[key], [field]: value } }))
 
   const saveSignatories = async () => {
-    await db.reportConfig.put({ ...(config ?? { id: 'global' }), ...sigForm })
+    // update(), not a `{...config, ...}` spread-then-put - see
+    // backupWorker.js's matching fix for the full reasoning.
+    if (config) {
+      await db.reportConfig.update('global', sigForm)
+    } else {
+      await db.reportConfig.put({ id: 'global', ...sigForm })
+    }
     toast.success('Abstract signatories saved')
   }
 
@@ -55,7 +61,13 @@ function DisbursementSettingsPanel() {
     (uids ?? []).map((id) => warehouseMap.get(id)?.name).filter(Boolean).join(', ') || 'None assigned'
 
   const setPurityFormat = async (format) => {
-    await db.reportConfig.put({ ...(config ?? { id: 'global' }), purityDisplayFormat: format })
+    // update(), not a `{...config, ...}` spread-then-put - see
+    // backupWorker.js's matching fix for the full reasoning.
+    if (config) {
+      await db.reportConfig.update('global', { purityDisplayFormat: format })
+    } else {
+      await db.reportConfig.put({ id: 'global', purityDisplayFormat: format })
+    }
   }
 
   const togglePricer = async (uid, enabled) => {

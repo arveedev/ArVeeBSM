@@ -36,10 +36,17 @@ function VisitorAccessPanel() {
 
     const hashed = await hashPin(visitorAccessCode)
 
-    // Spread the existing config first so this save never destroys
-    // fields owned by other panels (Signatories, BSQAO, etc) - put()
-    // fully replaces the record, it doesn't merge.
-    await db.reportConfig.put({ ...config, id: 'global', visitorAccessCode: hashed })
+    // update(), not a `{...config, ...}` spread-then-put - see
+    // backupWorker.js's matching fix for the full reasoning: only
+    // touches visitorAccessCode, so it can never clobber some OTHER
+    // reportConfig field (Signatories, BSQAO, Data Start Date, etc)
+    // changed by someone else since this panel's own `config` was last
+    // loaded, including during the await above.
+    if (config) {
+      await db.reportConfig.update('global', { visitorAccessCode: hashed })
+    } else {
+      await db.reportConfig.put({ id: 'global', visitorAccessCode: hashed })
+    }
     setVisitorAccessCode('')
     // Concept F (picked) - the Save button's own checkmark morph is
     // the confirmation now; a toast on top would be redundant for a
@@ -47,7 +54,11 @@ function VisitorAccessPanel() {
   }
 
   const handleDisable = async () => {
-    await db.reportConfig.put({ ...config, id: 'global', visitorAccessCode: null })
+    if (config) {
+      await db.reportConfig.update('global', { visitorAccessCode: null })
+    } else {
+      await db.reportConfig.put({ id: 'global', visitorAccessCode: null })
+    }
     setVisitorAccessCode('')
     toast.success('Visitor access disabled')
   }

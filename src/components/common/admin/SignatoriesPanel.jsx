@@ -215,16 +215,24 @@ function GlobalSignatoriesSection() {
       (row) => row.name.trim() || row.position.trim()
     )
 
-    await db.reportConfig.put({
-      ...config,
-      id: 'global',
+    // update(), not a `{...config, ...}` spread-then-put - see
+    // backupWorker.js's matching fix for the full reasoning: only
+    // touches the fields actually named here, so it can never clobber
+    // some OTHER reportConfig field (e.g. Data Start Date) changed by
+    // someone else since this panel's own `config` was last loaded.
+    const fields = {
       verifiedCorrect: cleanedVerified,
       bsqao: bsqaoName.trim() ? { name: bsqaoName.trim(), position: bsqaoPosition.trim() } : null,
       auditedByName: auditedByName.trim(),
       auditedByPosition: auditedByPosition.trim(),
       notedByName: notedByName.trim(),
       notedByPosition: notedByPosition.trim(),
-    })
+    }
+    if (config) {
+      await db.reportConfig.update('global', fields)
+    } else {
+      await db.reportConfig.put({ id: 'global', ...fields })
+    }
     toast.success('Signatories saved')
   }
 

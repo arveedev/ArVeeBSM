@@ -43,7 +43,18 @@ function DataStartDatePanel() {
   const currentlySet = config?.dataStartDate || null
 
   const applyDate = async (date) => {
-    await db.reportConfig.put({ ...config, id: 'global', dataStartDate: date || null })
+    // update(), not a `{...config, ...}` spread-then-put - see
+    // backupWorker.js's matching fix for the full reasoning: this is
+    // the actual field the user reported silently reverting (traced to
+    // backupWorker.js's own stale spread-write clobbering it sometime
+    // after being saved). update() only ever touches dataStartDate
+    // itself here, so nothing this panel does can be the source of that
+    // class of bug for any OTHER field either.
+    if (config) {
+      await db.reportConfig.update('global', { dataStartDate: date || null })
+    } else {
+      await db.reportConfig.put({ id: 'global', dataStartDate: date || null })
+    }
     toast.success(date ? `Data start date set to ${date}` : 'Data start date override cleared')
   }
 

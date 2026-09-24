@@ -37,11 +37,21 @@ function SessionTimeoutsPanel() {
       toast.error('Auto-logout must be longer than the form auto-exit time')
       return
     }
-    await db.reportConfig.put({
-      ...(config ?? { id: 'global' }),
-      formInactivityTimeoutSec: formSec,
-      logoutInactivityTimeoutSec: logoutSec,
-    })
+    // update(), not a `{...config, ...}` spread-then-put - see
+    // backupWorker.js's matching fix for the full reasoning: a spread
+    // write can silently clobber any OTHER reportConfig field changed
+    // by someone else since this panel's own `config` was last loaded,
+    // and update() only ever touches the fields actually named here,
+    // no matter what else changed underneath it. Falls back to put()
+    // only when the record doesn't exist yet at all.
+    if (config) {
+      await db.reportConfig.update('global', {
+        formInactivityTimeoutSec: formSec,
+        logoutInactivityTimeoutSec: logoutSec,
+      })
+    } else {
+      await db.reportConfig.put({ id: 'global', formInactivityTimeoutSec: formSec, logoutInactivityTimeoutSec: logoutSec })
+    }
     toast.success('Session timeouts updated')
   }
 

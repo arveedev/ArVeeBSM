@@ -226,6 +226,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const [renameValue, setRenameValue] = useState('')
   const [isRenaming, setIsRenaming] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  // Same fix as StockFormBase.jsx/SackFormBase.jsx's identical bug -
+  // Update and Delete both animated at once regardless of which was
+  // tapped, since both read the same shared isSaving lock. Tracks which
+  // action is actually in flight, purely for choosing which button's
+  // animation shows.
+  const [savingAction, setSavingAction] = useState(null) // null | 'update' | 'delete'
   // See StockFormBase.jsx's identical state/comment - blocks the
   // Update/Delete buttons for the brief window between a delete
   // finishing and the form switching back to a blank entry, so the
@@ -851,6 +857,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // Same race-window fix as handleSave.
     if (isSaving) return
     setIsSaving(true)
+    setSavingAction('update')
     try {
     if (!(await validate(loadedTransaction.id))) return
     const updated = buildPayload({ id: loadedTransaction.id })
@@ -875,6 +882,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       toast.error('Update failed — please try again')
     } finally {
       setIsSaving(false)
+      setSavingAction(null)
     }
   }
 
@@ -902,6 +910,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (isSaving) return
     setPendingDelete(false)
     setIsSaving(true)
+    setSavingAction('delete')
     try {
     // Grouped into one atomic Dexie transaction - see handleSave above.
     // Delete happens BEFORE reversing this WTS's pile effect - see
@@ -934,6 +943,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // back to a blank entry until the Delete button's own bin-lid
     // completion animation has had time to play.
     setIsSaving(false)
+    setSavingAction(null)
     setDeleteCompleting(true)
     setTimeout(() => {
       setDeleteCompleting(false)
@@ -945,6 +955,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       logError('WTS delete', err, user)
       toast.error('Delete failed — please try again')
       setIsSaving(false)
+      setSavingAction(null)
     }
   }
 
@@ -1204,11 +1215,11 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
           <div className="flex gap-3">
             <button type="button" onClick={handleUpdate} disabled={isSaving || deleteCompleting}
               className="relative flex-1 rounded-xl bg-brand-neon py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50">
-              <UpdateButtonContent isSaving={isSaving} />
+              <UpdateButtonContent isSaving={isSaving && savingAction === 'update'} />
             </button>
             <button type="button" onClick={() => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) }} disabled={isSaving || deleteCompleting}
               className="flex-1 rounded-xl bg-brand-crimson py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50">
-              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving} />
+              <DeleteButtonLabel incrementKey={deleteAnimKey} isSaving={isSaving && savingAction === 'delete'} />
             </button>
           </div>
         ) : (
