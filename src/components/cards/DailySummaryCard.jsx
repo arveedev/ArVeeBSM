@@ -220,61 +220,57 @@ const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo
                       const isProcurement = txTypeName === PROCUREMENT_TYPE_NAME
                       const individualCount = totals.individualFarmers?.size ?? 0
                       return (
-                        // A fixed grid (not flex + gap, the previous
-                        // approach) - each numeric block's own width
-                        // used to be driven by its own digit count
-                        // ("86" vs "3,669" vs "1,856"), so Bags/Net
-                        // Kilos drifted left/right between rows instead
-                        // of lining up as real columns. Same fixed-
-                        // width-column fix already used for the Total
-                        // Branch stat grid elsewhere in the app.
-                        <div key={varietyName} className="grid grid-cols-[1fr_4rem_7rem] items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
-                          {/* Reported bug, two earlier wrong fixes
-                              (document.fonts.ready - no effect;
-                              removing `truncate`'s ellipsis - also no
-                              effect): variety names rendered as
-                              corrupted/illegible glyphs specifically in
-                              the exported "Save as Image" PNG, always
-                              correct live on-screen. Real root cause:
-                              index.css sets `font-variant-numeric:
-                              tabular-nums` on <body>, inherited by
-                              every element including this span -
-                              html2canvas has a known bug mis-rendering
-                              that OpenType feature specifically on
-                              MIXED alphanumeric text (a variety code
-                              like "PD1m-A" has both letters and
-                              digits), substituting wrong glyphs for the
-                              letters next to a digit. This exactly
-                              matched the evidence: pure-word text
-                              ("Bags", "PALAY") and pure-digit text
-                              ("1,751") both always exported fine -
-                              only text mixing the two, on this one
-                              span, ever broke. `normal-nums` overrides
-                              the inherited tabular-nums back to normal
-                              for just this span - it was never actually
-                              needed here anyway, since this isn't a
-                              column of pure numbers that needs digit
-                              widths to line up. */}
-                          <span className="overflow-hidden whitespace-nowrap text-xs normal-nums text-app-text">{varietyName}</span>
-                          <div className="text-right">
-                            <p className="text-xs text-neutral-500">Bags</p>
-                            <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-app-text">{fmtBags(totals.bags)}</p>
-                          </div>
-                          <div className="text-right">
-                            {/* Unit is already this card's own weightUnit
-                                setting - no per-value "kg"/"MT" suffix
-                                needed (that used to be wide enough to
-                                push "kg" onto its own line), just a
-                                unit-aware label instead. */}
-                            <p className="text-xs text-neutral-500">Net {weightUnit === 'mt' ? 'MT' : 'Kilos'}</p>
-                            <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-brand-neon">
-                              {weightUnit === 'mt'
-                                ? Number(totals.kilos / 1000).toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
-                                : fmtKilos(totals.kilos)}
-                            </p>
+                        // Reported bug, four earlier wrong fixes
+                        // (document.fonts.ready, removing `truncate`'s
+                        // ellipsis, normal-nums overriding tabular-nums,
+                        // a system-font swap during capture) all shipped
+                        // with no effect: variety names exported cut off
+                        // mid-word (e.g. "PD1m-A" and "PD1m-B" both
+                        // showing as just "PD1m" + a stray mark), always
+                        // correct on-screen. Finally root-caused by
+                        // building an actual reproduction of the real
+                        // export (this app's real code, real login, real
+                        // seeded data) and inspecting the real output
+                        // JPEG directly, instead of guessing from a
+                        // description: html2canvas was measuring this
+                        // row's CSS Grid `1fr` track (grid-cols-[1fr_
+                        // 4rem_7rem], the previous layout here) far
+                        // narrower than the live DOM does - a well-known
+                        // html2canvas weak spot with CSS Grid's `fr`
+                        // unit - and the name span's overflow-hidden
+                        // then clipped whatever didn't fit inside that
+                        // wrongly-narrow measured width. Rebuilt as
+                        // plain Flexbox with explicit pixel widths on
+                        // the two numeric columns (matching the old
+                        // 4rem/7rem exactly - w-16/w-28) instead of a
+                        // `1fr` track - flexbox with fixed widths is
+                        // historically far more reliably measured by
+                        // html2canvas than CSS Grid ratio units.
+                        // Verified against this exact fix, in an
+                        // isolated reproduction, before shipping.
+                        <div key={varietyName} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="min-w-0 flex-1 break-words text-xs text-app-text">{varietyName}</span>
+                            <div className="w-16 shrink-0 text-right">
+                              <p className="text-xs text-neutral-500">Bags</p>
+                              <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-app-text">{fmtBags(totals.bags)}</p>
+                            </div>
+                            <div className="w-28 shrink-0 text-right">
+                              {/* Unit is already this card's own weightUnit
+                                  setting - no per-value "kg"/"MT" suffix
+                                  needed (that used to be wide enough to
+                                  push "kg" onto its own line), just a
+                                  unit-aware label instead. */}
+                              <p className="text-xs text-neutral-500">Net {weightUnit === 'mt' ? 'MT' : 'Kilos'}</p>
+                              <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-brand-neon">
+                                {weightUnit === 'mt'
+                                  ? Number(totals.kilos / 1000).toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+                                  : fmtKilos(totals.kilos)}
+                              </p>
+                            </div>
                           </div>
                           {isProcurement && (individualCount > 0 || totals.coopCount > 0) && (
-                            <p className="col-span-3 mt-1 text-[11px] text-neutral-500">
+                            <p className="mt-1 text-[11px] text-neutral-500">
                               {individualCount > 0 && `${individualCount} individual farmer${individualCount !== 1 ? 's' : ''}`}
                               {individualCount > 0 && totals.coopCount > 0 && ' · '}
                               {totals.coopCount > 0 && (

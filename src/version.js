@@ -5802,4 +5802,28 @@
 //              entire bug category rather than one specific manifestation
 //              of it. The live on-screen card is completely unaffected;
 //              only the exported image's font differs.
-export const APP_VERSION = '1.10-129'
+//   1.10-130 - Save as Image variety-name clipping, ACTUALLY fixed and
+//              verified this time. Four earlier attempts (1.10-124
+//              through 1.10-129) all shipped blind, with no way to see
+//              the real output, and all failed. This time: built a real
+//              reproduction of the export using the app's own real code
+//              (DailySummaryCard.jsx unmodified, real AuthProvider/
+//              WarehouseProvider/SettingsProvider, a real login against
+//              a seeded test user, real seeded transactions), ran it in
+//              a browser, captured the actual canvas output at each
+//              step, and inspected the real decoded JPEG bytes directly
+//              - not a description, the actual file. Proved definitively
+//              that switching CSS Grid to Flexbox (1.10-129's own
+//              change) had ZERO effect (byte-for-byte identical MD5
+//              output before/after). The real cause: `overflow-hidden`
+//              combined with `whitespace-nowrap` on the variety-name
+//              span - html2canvas cannot correctly compute that
+//              element's available width in this layout and clips it at
+//              some small wrong width, consistently and identically
+//              regardless of grid vs flex. Confirmed by removing both
+//              properties: text rendered in full, correctly, wrapping
+//              onto two lines instead of being cut off. Final className
+//              keeps `min-w-0 flex-1` (correct flex sizing) and adds
+//              `break-words` instead - fully verified against the real
+//              export pipeline before shipping, not guessed.
+export const APP_VERSION = '1.10-130'
