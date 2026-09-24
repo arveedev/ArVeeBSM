@@ -5916,4 +5916,13 @@
 //              reads far more clearly this way). Batch number (MO only;
 //              TMO uses trials instead) now shows on the right side of
 //              the warehouse/days line, below the ricemill name.
-export const APP_VERSION = '1.10-134'
+//   1.10-135 - Fixed reported bug in 1.10-134's own Per Ricemill Status
+//              change, same day: text was unreadably small on a large
+//              display (never had sm:/lg: scaling like the rest of this
+//              panel), and the batch number - previously pushed to the
+//              far edge of its row via justify-between - left a huge,
+//              wasteful gap on a wide column. Batch number now stays
+//              grouped in the same line as the warehouse/days text
+//              instead of being split apart, and every text size in
+//              this section now scales up on sm:/lg: breakpoints.
+export const APP_VERSION = '1.10-135'

@@ -820,36 +820,34 @@ function MillingOverviewPanel({ filtered, lastActivityDate, warehouseMap }) {
         <div className="mt-2 space-y-3 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-3 sm:space-y-0 lg:grid-cols-3">
           {ricemillGroups.map(([ricemillName, entries]) => (
             <div key={ricemillName} className="min-w-0">
-              <p className="truncate text-xs font-bold text-app-text sm:text-sm">{ricemillName}</p>
-              <div className="mt-1 space-y-1.5">
+              <p className="truncate text-sm font-bold text-app-text sm:text-base lg:text-lg">{ricemillName}</p>
+              <div className="mt-1 space-y-2">
                 {entries.map(({ order: o, bucket, days }) => {
                   const overdue = bucket === 'onHand' && days != null && days >= OVERDUE_DAYS
+                  // Per explicit feedback: text was unreadably small on
+                  // a large display, AND the batch number (previously
+                  // pushed to the far edge via justify-between) left a
+                  // huge, wasteful gap on a wide column - kept grouped
+                  // in the same line as the warehouse/days text instead
+                  // of being split apart, and every size here now scales
+                  // up on sm:/lg: like the rest of this panel already
+                  // does, not just the mobile size.
+                  const detailParts = [
+                    resolveOrderWarehouseLabel(o, warehouseMap) ?? o.number,
+                    days != null && !overdue ? (days === 0 ? 'today' : `${days}d ago`) : null,
+                    o.type === 'MO' && o.batchCurrent != null ? `Batch ${o.batchCurrent} of ${o.batchTotal}` : null,
+                  ].filter(Boolean)
                   return (
-                    <div key={o.orderId} className={`flex items-start gap-2 ${overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}`}>
-                      <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${BUCKET_META[bucket].dotClass}`} />
+                    <div key={o.orderId} className={`flex items-start gap-2 sm:gap-3 ${overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}`}>
+                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full sm:mt-2 sm:h-2.5 sm:w-2.5 ${BUCKET_META[bucket].dotClass}`} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-[11px] text-neutral-300 sm:text-xs">{BUCKET_META[bucket].statusText}</p>
+                          <p className="truncate text-xs text-neutral-300 sm:text-sm lg:text-base">{BUCKET_META[bucket].statusText}</p>
                           {overdue && (
-                            <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-crimson">⚠ {days}d</span>
+                            <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-crimson sm:text-xs">⚠ {days}d</span>
                           )}
                         </div>
-                        {/* Per explicit request: the batch number sits
-                            below the ricemill name, on the right side
-                            of the warehouse/days line (not its own
-                            separate row) - MO orders only, since TMO
-                            uses trials instead of batches (same
-                            condition already used elsewhere in this
-                            file for the same reason). */}
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-[11px] text-neutral-500">
-                            {resolveOrderWarehouseLabel(o, warehouseMap) ?? o.number}
-                            {days != null && !overdue ? ` · ${days === 0 ? 'today' : `${days}d ago`}` : ''}
-                          </p>
-                          {o.type === 'MO' && o.batchCurrent != null && (
-                            <span className="shrink-0 text-[11px] text-neutral-500">Batch {o.batchCurrent} of {o.batchTotal}</span>
-                          )}
-                        </div>
+                        <p className="truncate text-xs text-neutral-500 sm:text-sm">{detailParts.join(' · ')}</p>
                       </div>
                     </div>
                   )
