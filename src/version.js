@@ -5907,4 +5907,13 @@
 //              up under a different date-ranged source than the one now
 //              used to look it up for deletion - needs a live example
 //              to confirm, not something fixable blind.
-export const APP_VERSION = '1.10-133'
+//   1.10-134 - Milling Operations Overview: the Per-Order Status section
+//              is now grouped by ricemill (renamed "Per Ricemill
+//              Status") - one heading per mill, every one of its own
+//              orders listed underneath, instead of a flat list
+//              repeating the mill name on every row (a mill with more
+//              than one order in flight - the reported real example -
+//              reads far more clearly this way). Batch number (MO only;
+//              TMO uses trials instead) now shows on the right side of
+//              the warehouse/days line, below the ricemill name.
+export const APP_VERSION = '1.10-134'

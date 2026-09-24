@@ -762,6 +762,23 @@ function MillingOverviewPanel({ filtered, lastActivityDate, warehouseMap }) {
     })
     .slice(0, OVERVIEW_ROW_CAP)
 
+  // Per explicit request: grouped by ricemill (one heading per mill,
+  // every one of its own orders listed underneath) instead of one flat
+  // list repeating the ricemill name on every row - a mill with more
+  // than one order in flight (a common case, per the reported real
+  // example: the same mill showing both "on hand" and "waiting" at
+  // once) reads far more clearly this way. Built from `rows` (already
+  // capped and sorted by bucket/date above) via a Map, which preserves
+  // first-seen order - since `rows` is already priority-sorted, a
+  // mill's FIRST row naturally lands the whole group at that same
+  // priority position, without needing a second, separate sort here.
+  const ricemillGroups = [...rows.reduce((groups, row) => {
+    const key = row.order.ricemillName ?? '—'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(row)
+    return groups
+  }, new Map())]
+
   return (
     // Per explicit feedback: on a wider viewport this used to stay
     // exactly as small as on mobile, wasting most of the card's own
@@ -799,28 +816,47 @@ function MillingOverviewPanel({ filtered, lastActivityDate, warehouseMap }) {
       </div>
 
       <div className="mt-3 border-t border-neutral-800 pt-3 sm:mt-4 sm:pt-4">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:text-xs">Per-Order Status</p>
-        <div className="mt-2 space-y-2 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-2 sm:space-y-0 lg:grid-cols-3">
-          {rows.map(({ order: o, bucket, days }) => {
-            const overdue = bucket === 'onHand' && days != null && days >= OVERDUE_DAYS
-            return (
-              <div key={o.orderId} className={`flex items-start gap-2.5 ${overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}`}>
-                <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${BUCKET_META[bucket].dotClass}`} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-xs font-semibold text-app-text sm:text-sm">{o.ricemillName} — {BUCKET_META[bucket].statusText}</p>
-                    {overdue && (
-                      <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-crimson">⚠ {days}d</span>
-                    )}
-                  </div>
-                  <p className="truncate text-[11px] text-neutral-500 sm:text-xs">
-                    {resolveOrderWarehouseLabel(o, warehouseMap) ?? o.number}
-                    {days != null && !overdue ? ` · ${days === 0 ? 'today' : `${days}d ago`}` : ''}
-                  </p>
-                </div>
+        <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 sm:text-xs">Per Ricemill Status</p>
+        <div className="mt-2 space-y-3 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-3 sm:space-y-0 lg:grid-cols-3">
+          {ricemillGroups.map(([ricemillName, entries]) => (
+            <div key={ricemillName} className="min-w-0">
+              <p className="truncate text-xs font-bold text-app-text sm:text-sm">{ricemillName}</p>
+              <div className="mt-1 space-y-1.5">
+                {entries.map(({ order: o, bucket, days }) => {
+                  const overdue = bucket === 'onHand' && days != null && days >= OVERDUE_DAYS
+                  return (
+                    <div key={o.orderId} className={`flex items-start gap-2 ${overdue ? 'rounded-lg bg-brand-crimson/5 p-1.5' : ''}`}>
+                      <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${BUCKET_META[bucket].dotClass}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-[11px] text-neutral-300 sm:text-xs">{BUCKET_META[bucket].statusText}</p>
+                          {overdue && (
+                            <span className="shrink-0 rounded bg-brand-crimson/15 px-1.5 py-0.5 text-[10px] font-bold text-brand-crimson">⚠ {days}d</span>
+                          )}
+                        </div>
+                        {/* Per explicit request: the batch number sits
+                            below the ricemill name, on the right side
+                            of the warehouse/days line (not its own
+                            separate row) - MO orders only, since TMO
+                            uses trials instead of batches (same
+                            condition already used elsewhere in this
+                            file for the same reason). */}
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-[11px] text-neutral-500">
+                            {resolveOrderWarehouseLabel(o, warehouseMap) ?? o.number}
+                            {days != null && !overdue ? ` · ${days === 0 ? 'today' : `${days}d ago`}` : ''}
+                          </p>
+                          {o.type === 'MO' && o.batchCurrent != null && (
+                            <span className="shrink-0 text-[11px] text-neutral-500">Batch {o.batchCurrent} of {o.batchTotal}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
       </div>
     </div>
