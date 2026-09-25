@@ -178,7 +178,7 @@ function AbstractExportModal({ onClose }) {
               fundBalanceLabel: 'Fund Balance',
               fundBalance: combinedFundBalance,
               addEntries: [],
-              lessEntries: [{ label: "This Period's Replenishment", amount: periodTotal }],
+              lessEntries: [{ label: "LESS: This Period's Replenishment", amount: periodTotal }],
             },
         signatories: {
           // Always the SDO who actually generated this export, not an

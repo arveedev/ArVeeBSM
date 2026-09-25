@@ -6067,4 +6067,8 @@
 //              already-saved documents (no edits made) never prompts,
 //              including from a blank/untouched new entry, per explicit
 //              request.
-export const APP_VERSION = '1.10-141'
+//   1.10-142 - Abstract export: the Replenishment-hidden reconciliation
+//              view's deduction row now reads "LESS: This Period's
+//              Replenishment" (was missing the "LESS:" prefix the
+//              disbursements version already has), per explicit request.
+export const APP_VERSION = '1.10-142'
