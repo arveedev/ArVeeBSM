@@ -818,6 +818,27 @@ const SackFormBase = forwardRef(function SackFormBase(
     ...overrides,
   })
 
+  // Unsaved-changes guard for series navigation - see StockFormBase.jsx's
+  // matching comment for the full reasoning (same pattern, shared by
+  // every entry form).
+  const baselineRef = useRef(null)
+  useEffect(() => {
+    baselineRef.current = JSON.stringify(buildTransactionPayload())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedTransaction])
+  const isFormDirty = () => JSON.stringify(buildTransactionPayload()) !== baselineRef.current
+
+  const [pendingNavDirection, setPendingNavDirection] = useState(null) // 'back' | 'forward' | null
+  const attemptStep = (direction) => {
+    if (isFormDirty()) {
+      setPendingNavDirection(direction)
+    } else if (direction === 'back') {
+      handleStepBack()
+    } else {
+      handleStepForward()
+    }
+  }
+
   const validateForm = async ({ excludeId = null } = {}) => {
     if (!currentWarehouseId) { toast.error('No warehouse selected'); return false }
     if (!serialNo.trim()) { toast.error('Serial No. is required'); return false }
@@ -1198,6 +1219,8 @@ const SackFormBase = forwardRef(function SackFormBase(
       else handleSave()
     },
     onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
+    onStepBack: () => attemptStep('back'),
+    onStepForward: () => attemptStep('forward'),
   })
 
   return (
@@ -1283,7 +1306,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                 <>
                   <button
                     type="button"
-                    onClick={handleStepBack}
+                    onClick={() => attemptStep('back')}
                     aria-label="Previous serial"
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
                   >
@@ -1302,7 +1325,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                   </div>
                   <button
                     type="button"
-                    onClick={handleStepForward}
+                    onClick={() => attemptStep('forward')}
                     aria-label={forwardIsGap ? 'Next available serial' : 'Next serial'}
                     className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-90 ${
                       forwardIsGap
@@ -1807,6 +1830,21 @@ const SackFormBase = forwardRef(function SackFormBase(
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
         confirmDisabled={isSaving}
+      />
+
+      <ConfirmDialog
+        open={pendingNavDirection != null}
+        icon={AlertTriangle}
+        title="Leave this document unsaved?"
+        description={`${loadedTransaction ? 'Your changes to' : "What you've entered for"} ${type} ${serialNo.trim() ? `#${serialNo.trim()}` : 'this entry'} haven't been saved yet. Moving to another serial number now will discard them.`}
+        confirmLabel="Leave without saving"
+        onConfirm={() => {
+          const direction = pendingNavDirection
+          setPendingNavDirection(null)
+          if (direction === 'back') handleStepBack()
+          else handleStepForward()
+        }}
+        onCancel={() => setPendingNavDirection(null)}
       />
 
       <ConfirmDialog

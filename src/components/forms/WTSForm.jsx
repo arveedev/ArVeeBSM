@@ -177,17 +177,19 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
           <label className={labelClass}>Stock Condition</label>
           {/* Per explicit request: same roving-tabindex fix as
               StockFormBase.jsx's Condition group - only the selected
-              option is a real tab stop, Left/Right arrows move within
-              the group while focused. */}
+              option is a real tab stop, Up/Down arrows move within
+              the group while focused (this app's convention: Up/Down
+              for a selector, Left/Right reserved app-wide for stepping
+              through this document's serial-number series). */}
           <div className="mt-1 flex gap-2">
             {STOCK_CONDITIONS.map((c, i) => (
               <button key={c} type="button"
                 onClick={() => setSide((s) => ({ ...s, stockCondition: c }))}
                 tabIndex={side.stockCondition === c ? 0 : -1}
                 onKeyDown={(e) => {
-                  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+                  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
                   e.preventDefault()
-                  const nextIndex = e.key === 'ArrowRight'
+                  const nextIndex = e.key === 'ArrowDown'
                     ? (i + 1) % STOCK_CONDITIONS.length
                     : (i - 1 + STOCK_CONDITIONS.length) % STOCK_CONDITIONS.length
                   setSide((s) => ({ ...s, stockCondition: STOCK_CONDITIONS[nextIndex] }))
@@ -614,6 +616,27 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       receivedStockCondition: receivedSide.stockCondition,
       isSynced: false,
       ...overrides,
+    }
+  }
+
+  // Unsaved-changes guard for series navigation - see StockFormBase.jsx's
+  // matching comment for the full reasoning (same pattern, shared by
+  // every entry form).
+  const baselineRef = useRef(null)
+  useEffect(() => {
+    baselineRef.current = JSON.stringify(buildPayload())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedTransaction])
+  const isFormDirty = () => JSON.stringify(buildPayload()) !== baselineRef.current
+
+  const [pendingNavDirection, setPendingNavDirection] = useState(null) // 'back' | 'forward' | null
+  const attemptStep = (direction) => {
+    if (isFormDirty()) {
+      setPendingNavDirection(direction)
+    } else if (direction === 'back') {
+      handleStepBack()
+    } else {
+      handleStepForward()
     }
   }
 
@@ -1054,6 +1077,8 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       else handleSave()
     },
     onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
+    onStepBack: () => attemptStep('back'),
+    onStepForward: () => attemptStep('forward'),
   })
 
   return (
@@ -1123,7 +1148,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
               />
             ) : (
               <>
-                <button type="button" onClick={handleStepBack} aria-label="Previous WTS"
+                <button type="button" onClick={() => attemptStep('back')} aria-label="Previous WTS"
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 active:scale-90">
                   <ChevronLeft size={18} />
                 </button>
@@ -1132,7 +1157,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
                     className={`mt-0 w-full rounded-xl border bg-neutral-950 px-3 py-2 text-center font-mono outline-none transition-colors focus:border-brand-neon ${!serialNo.trim() ? '!border-brand-amber' : 'border-neutral-800'} ${navFlash ? 'text-transparent' : 'text-app-text'}`} />
                   <SerialCrossfadeOverlay value={serialNo} navFlash={navFlash} />
                 </div>
-                <button type="button" onClick={handleStepForward} aria-label={forwardIsGap ? 'Next available WTS' : 'Next WTS'}
+                <button type="button" onClick={() => attemptStep('forward')} aria-label={forwardIsGap ? 'Next available WTS' : 'Next WTS'}
                   className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-90 ${
                     forwardIsGap
                       ? 'border-brand-neon/50 bg-brand-neon/10 text-brand-neon hover:border-brand-neon hover:bg-brand-neon/20'
@@ -1305,6 +1330,21 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
         confirmDisabled={isSaving}
+      />
+
+      <ConfirmDialog
+        open={pendingNavDirection != null}
+        icon={AlertTriangle}
+        title="Leave this document unsaved?"
+        description={`${loadedTransaction ? 'Your changes to' : "What you've entered for"} WTS ${serialNo.trim() ? `#${serialNo.trim()}` : 'this entry'} haven't been saved yet. Moving to another serial number now will discard them.`}
+        confirmLabel="Leave without saving"
+        onConfirm={() => {
+          const direction = pendingNavDirection
+          setPendingNavDirection(null)
+          if (direction === 'back') handleStepBack()
+          else handleStepForward()
+        }}
+        onCancel={() => setPendingNavDirection(null)}
       />
 
       <ConfirmDialog

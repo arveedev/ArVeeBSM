@@ -6034,4 +6034,37 @@
 //              real TOTAL as the full breakdown - verified both shapes
 //              render correctly and reconcile to the same ending
 //              balance.
-export const APP_VERSION = '1.10-140'
+//   1.10-141 - Entry-form keyboard nav rework, per explicit request/
+//              correction: Left/Right arrow keys are now reserved
+//              app-wide for stepping through this document's serial-
+//              number series (the on-screen Chevron buttons' own
+//              keyboard equivalent), while Up/Down stay exclusively for
+//              selectors/suggestion lists - the Condition toggle
+//              (StockFormBase.jsx) and Stock Condition toggle
+//              (WTSForm.jsx), previously using Left/Right for their own
+//              roving-tabindex cycling (1.10-138), now use Up/Down
+//              instead, so they no longer collide with series nav.
+//              useEntryFormShortcuts.js only intercepts bare Left/Right
+//              while focus ISN'T inside a free-text field (input/
+//              textarea/contentEditable), so normal text-cursor
+//              movement anywhere in these forms - including hand-typing
+//              a serial number - is never hijacked.
+//            - New unsaved-changes guard: stepping to another serial
+//              (via the arrow keys OR the existing Chevron buttons -
+//              both now go through the same guard) while the current
+//              document has real unsaved edits asks for confirmation
+//              first ("Leave this document unsaved?"); Cancel keeps you
+//              on the current document with nothing navigated.
+//              Dirtiness is detected by re-calling the exact same
+//              payload-builder function each form already uses for
+//              Save/Update (buildTransactionPayload/buildPayload) both
+//              right after a document loads (or the form resets to a
+//              blank entry) and again live at the moment of navigation,
+//              comparing the two - reuses the form's own single source
+//              of truth for "what would actually be saved" rather than
+//              hand-maintaining a separate list of watched fields that
+//              could drift out of sync with it. Purely browsing through
+//              already-saved documents (no edits made) never prompts,
+//              including from a blank/untouched new entry, per explicit
+//              request.
+export const APP_VERSION = '1.10-141'

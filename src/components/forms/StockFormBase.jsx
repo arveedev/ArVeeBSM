@@ -1961,6 +1961,35 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     ...overrides,
   })
 
+  // Unsaved-changes guard for series navigation (Left/Right arrow keys,
+  // and the same Chevron buttons) - per explicit request: stepping
+  // through already-saved documents to review them must stay silent,
+  // but stepping away from a document with real unfilled/edited changes
+  // must ask first. `baselineRef` snapshots this exact payload shape
+  // right after a document finishes loading (or the form resets to a
+  // blank entry) - the effect fires once state has actually committed
+  // from that load/reset (loadedTransaction is always among the last
+  // fields either path sets), so buildTransactionPayload() here reflects
+  // the freshly-loaded/blank values, not a stale pre-load snapshot.
+  // isFormDirty then just re-calls the same builder live and compares.
+  const baselineRef = useRef(null)
+  useEffect(() => {
+    baselineRef.current = JSON.stringify(buildTransactionPayload())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedTransaction])
+  const isFormDirty = () => JSON.stringify(buildTransactionPayload()) !== baselineRef.current
+
+  const [pendingNavDirection, setPendingNavDirection] = useState(null) // 'back' | 'forward' | null
+  const attemptStep = (direction) => {
+    if (isFormDirty()) {
+      setPendingNavDirection(direction)
+    } else if (direction === 'back') {
+      handleStepBack()
+    } else {
+      handleStepForward()
+    }
+  }
+
   const validateForm = async ({ excludeId = null } = {}) => {
     if (!currentWarehouseId) {
       toast.error('No warehouse selected')
@@ -2727,6 +2756,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       else handleSave()
     },
     onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
+    onStepBack: () => attemptStep('back'),
+    onStepForward: () => attemptStep('forward'),
   })
 
   // Pop scale+fade, coordinated with the nav bar/header's own 350ms
@@ -2862,7 +2893,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <>
                   <button
                     type="button"
-                    onClick={handleStepBack}
+                    onClick={() => attemptStep('back')}
                     aria-label="Previous serial"
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
                   >
@@ -2886,7 +2917,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   </div>
                   <button
                     type="button"
-                    onClick={handleStepForward}
+                    onClick={() => attemptStep('forward')}
                     aria-label={forwardIsGap ? 'Next available serial' : 'Next serial'}
                     className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-90 ${
                       forwardIsGap
@@ -3908,10 +3939,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 only the currently-selected flag is a real tab stop
                 (tabIndex 0), the rest are tabIndex -1 (still clickable/
                 tappable normally, just skipped by Tab), matching a
-                native radio group's own roving-tabindex behavior. Left/
-                Right arrow keys move the selection (and focus) within
-                the group while it's focused, same as a native radio
-                group already does. */}
+                native radio group's own roving-tabindex behavior.
+                Up/Down arrow keys move the selection (and focus) within
+                the group while it's focused - matches this app's own
+                keyboard convention (Up/Down for a selector, Left/Right
+                reserved app-wide for stepping through this document's
+                serial-number series), not just a native radio group's
+                usual Left/Right. */}
             <div className="mt-1 grid grid-cols-5 gap-2">
               {CONDITION_FLAGS.map((flag, i) => {
                 const active = condition === flag
@@ -3922,9 +3956,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     onClick={() => setCondition(flag)}
                     tabIndex={active ? 0 : -1}
                     onKeyDown={(e) => {
-                      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+                      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
                       e.preventDefault()
-                      const nextIndex = e.key === 'ArrowRight'
+                      const nextIndex = e.key === 'ArrowDown'
                         ? (i + 1) % CONDITION_FLAGS.length
                         : (i - 1 + CONDITION_FLAGS.length) % CONDITION_FLAGS.length
                       setCondition(CONDITION_FLAGS[nextIndex])
@@ -4125,6 +4159,21 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setPendingDelete(false)}
         confirmDisabled={isSaving}
+      />
+
+      <ConfirmDialog
+        open={pendingNavDirection != null}
+        icon={AlertTriangle}
+        title="Leave this document unsaved?"
+        description={`${loadedTransaction ? 'Your changes to' : 'What you\'ve entered for'} ${type} ${serialNo.trim() ? `#${serialNo.trim()}` : 'this entry'} haven't been saved yet. Moving to another serial number now will discard them.`}
+        confirmLabel="Leave without saving"
+        onConfirm={() => {
+          const direction = pendingNavDirection
+          setPendingNavDirection(null)
+          if (direction === 'back') handleStepBack()
+          else handleStepForward()
+        }}
+        onCancel={() => setPendingNavDirection(null)}
       />
 
       <ConfirmDialog
