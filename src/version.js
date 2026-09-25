@@ -6480,4 +6480,18 @@
 //                sheet opened, never moved for the digit-shortcut path
 //                the way arrow-key navigation already does. Now
 //                focuses the actually-matched button first.
-export const APP_VERSION = '1.10-164'
+//   1.10-165 - Notification bell generalized, per explicit request: no
+//              longer Admin-only, now available to every logged-in
+//              (non-Visitor) user. Two sources feed the same shared
+//              dropdown now: db.errorLogs (still admin-only, unchanged)
+//              and Procurement sacks still needing a matching SIA for
+//              the currently selected warehouse - moved here from
+//              ProcurementBagsNotification.jsx (deleted; its query
+//              logic now lives directly in AppHeader.jsx), which used
+//              to render as its own always-expanded amber banner inside
+//              AlertsPanel.jsx on Home. Clear All only ever clears
+//              db.errorLogs rows and no longer shows at all when the
+//              only entries present are procurement notifications,
+//              which aren't stored rows to clear - they disappear on
+//              their own the moment a matching SIA is actually issued.
+export const APP_VERSION = '1.10-165'

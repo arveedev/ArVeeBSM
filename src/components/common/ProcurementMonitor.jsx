@@ -1,6 +1,6 @@
 // ProcurementMonitor — Admin-only cross-warehouse view of every
 // Procurement-type WSR (palay bought directly from farmers - the same
-// "Procurement" transaction nature ProcurementBagsNotification.jsx
+// "Procurement" transaction nature AppHeader.jsx's notification bell
 // already tracks per-warehouse for sack matching, here surfaced as a
 // warehouse-oversight list instead). One card per warehouse, grouped by
 // variety within it (each variety gets its own subtotal), plus an

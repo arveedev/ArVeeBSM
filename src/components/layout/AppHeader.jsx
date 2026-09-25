@@ -45,6 +45,7 @@ function AppHeader({ hidden = false }) {
   const { user, logout } = useAuth() ?? {}
   const { theme, weightUnit, updateSetting } = useSettings() ?? {}
   const { title, subtitle, setHeaderHeight } = usePageHeader() ?? {}
+  const { currentWarehouseId } = useWarehouse() ?? {}
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [confirmingLogout, setConfirmingLogout] = useState(false)
@@ -109,29 +110,81 @@ function AppHeader({ hidden = false }) {
   const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
   const canEditAvatar = Boolean(user?.uid)
 
-  // Admin-only notification bell, per explicit request - a general
-  // notification surface this session only feeds from db.errorLogs
-  // (the same table ErrorLogPanel.jsx reads) since that's the only
-  // real notification-worthy data source in the app right now, but per
-  // explicit request this is meant to grow: other notification kinds,
-  // and other roles besides Admin, are expected to feed into this same
-  // bell later - `notifEntries` is kept as a plain, source-agnostic
-  // {id, icon, title, detail, onClick} shape rather than raw error-log
-  // rows, specifically so a later second source can be merged in
-  // alongside without reshaping what the dropdown itself renders.
+  // General notification bell, per explicit request - available to
+  // every logged-in (non-Visitor) user now, not just Admin. Two
+  // independent sources feed into one shared, source-agnostic
+  // {id, resolved, title, detail, onClick} shape (`notifEntries`), so
+  // either can be extended or a third source added later without
+  // reshaping what the dropdown itself renders:
   //
-  // Tapping an entry deep-links into Admin Dashboard's Error Log tab
-  // and scrolls/expands/highlights that exact row (see
-  // ErrorLogPanel.jsx's focusEntryId handling) - since a sync failure
-  // updates the SAME log row in place once it resolves rather than
-  // creating a second entry, a notification for an error that's since
-  // resolved still correctly lands on that row now showing its own
-  // green Resolved banner, never a stale "still broken" view.
+  // 1. db.errorLogs (admin-only, same table ErrorLogPanel.jsx reads).
+  //    Tapping an entry deep-links into Admin Dashboard's Error Log tab
+  //    and scrolls/expands/highlights that exact row (see
+  //    ErrorLogPanel.jsx's focusEntryId handling) - since a sync
+  //    failure updates the SAME log row in place once it resolves
+  //    rather than creating a second entry, a notification for an
+  //    error that's since resolved still correctly lands on that row
+  //    now showing its own green Resolved banner.
+  //
+  // 2. Procurement sacks still needing a matching SIA, for the
+  //    currently selected warehouse - the exact same query
+  //    ProcurementBagsNotification.jsx already ran (see its own
+  //    comment for the full scenario), moved here per explicit request
+  //    ("we can show that as a notification instead of the alert") -
+  //    that component's usage in AlertsPanel.jsx is removed to match,
+  //    so this is a move, not a duplicate. Available to every user with
+  //    a warehouse in context, not just Admin - a Warehouse Supervisor
+  //    is exactly who needs to act on this. These entries have no
+  //    persistent id of their own (a live-computed set, not stored
+  //    rows) - `resolved` is always false while shown (the moment it's
+  //    actually resolved, the entry disappears from the query result
+  //    entirely rather than flipping a flag), and they're excluded from
+  //    Clear All below, which only ever clears db.errorLogs rows.
   const isAdmin = user?.role === 'Admin'
+  const isVisitor = user?.role === 'Visitor'
   const errorEntries = useLiveQuery(
     () => (isAdmin ? db.errorLogs.orderBy('timestamp').reverse().toArray() : []),
     [isAdmin]
   ) ?? []
+
+  const procurementOutstanding = useLiveQuery(async () => {
+    if (!currentWarehouseId) return []
+    const transactionTypes = await db.transactionTypes.toArray()
+    const procurementTypeId = transactionTypes.find((t) => isProcurementTypeName(t.name))?.transactionTypeId
+    if (!procurementTypeId) return []
+
+    const sackTypes = await db.sackTypes.toArray()
+    const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
+
+    const byKey = new Map()
+    const procurementWsr = await db.transactions
+      .where('warehouseId').equals(currentWarehouseId)
+      .and((t) => t.type === 'WSR' && t.status === 'Active' && t.transactionTypeId === procurementTypeId)
+      .toArray()
+    for (const t of procurementWsr) {
+      if (!t.mtsSackTypeId || !t.mtsCondition) continue
+      const key = `${t.mtsSackTypeId}::${t.mtsCondition}`
+      byKey.set(key, (byKey.get(key) ?? 0) + (t.numberOfBags ?? 0))
+    }
+    const procurementEsi = await db.transactions
+      .where('warehouseId').equals(currentWarehouseId)
+      .and((t) => t.type === 'ESI' && t.status === 'Active' && t.transactionTypeId === procurementTypeId)
+      .toArray()
+    for (const t of procurementEsi) {
+      for (const line of t.sackLines ?? []) {
+        const key = `${line.sackTypeId}::${line.condition}`
+        byKey.set(key, (byKey.get(key) ?? 0) - (line.pieces ?? 0))
+      }
+    }
+
+    return [...byKey.entries()]
+      .filter(([, amount]) => amount !== 0)
+      .map(([key, amount]) => {
+        const [sackTypeId, condition] = key.split('::')
+        return { key, code: sackTypeMap.get(sackTypeId)?.code ?? sackTypeId, condition, amount }
+      })
+  }, [currentWarehouseId]) ?? []
+
   const [notifOpen, setNotifOpen] = useState(false)
   const [confirmingClearNotifs, setConfirmingClearNotifs] = useState(false)
   const notifRef = useRef(null)
@@ -144,23 +197,39 @@ function AppHeader({ hidden = false }) {
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [notifOpen])
 
-  const notifEntries = errorEntries.map((entry) => ({
-    id: entry.id,
-    resolved: Boolean(entry.resolved),
-    title: entry.context,
-    detail: entry.message,
-    onClick: () => {
-      setNotifOpen(false)
-      navigate('/admin', { state: { groupId: 'system', tabId: 'errorLog', focusEntryId: entry.id } })
-    },
-  }))
+  const notifEntries = [
+    ...errorEntries.map((entry) => ({
+      id: `error:${entry.id}`,
+      resolved: Boolean(entry.resolved),
+      title: entry.context,
+      detail: entry.message,
+      onClick: () => {
+        setNotifOpen(false)
+        navigate('/admin', { state: { groupId: 'system', tabId: 'errorLog', focusEntryId: entry.id } })
+      },
+    })),
+    ...procurementOutstanding.map(({ key, code, condition, amount }) => ({
+      id: `procurement:${key}`,
+      resolved: false,
+      title: 'Procurement sacks need matching SIA',
+      detail: amount > 0
+        ? `${code} (${condition}): ${fmtBags(amount)} bag${amount === 1 ? '' : 's'} still needs a matching SIA`
+        : `${code} (${condition}): SIA-backed issuance exceeds Procurement by ${fmtBags(Math.abs(amount))} - check for an over-issuance`,
+      onClick: () => {
+        setNotifOpen(false)
+        navigate('/')
+      },
+    })),
+  ]
   const unresolvedNotifCount = notifEntries.filter((n) => !n.resolved).length
 
-  // Same table this bell's only current source reads from - clearing
-  // here is exactly ErrorLogPanel's own "Clear All" action, just
-  // reachable without opening Admin Dashboard first. Confirmed first
-  // (same as that panel's own Clear All), since this is destructive and
-  // shared across every device.
+  // Same table this bell's error source reads from - clearing here is
+  // exactly ErrorLogPanel's own "Clear All" action, just reachable
+  // without opening Admin Dashboard first. Confirmed first (same as
+  // that panel's own Clear All), since this is destructive and shared
+  // across every device. Procurement entries aren't stored rows, so
+  // there's nothing for this to clear there - they resolve themselves
+  // the moment a matching SIA is actually issued.
   const handleClearAllNotifs = async () => {
     setConfirmingClearNotifs(false)
     await db.errorLogs.clear()
@@ -347,7 +416,11 @@ function AppHeader({ hidden = false }) {
               </span>
             </button>
 
-            {isAdmin && (
+            {/* Per explicit request, no longer Admin-only - every real
+                (non-Visitor) user gets the bell now, since the
+                procurement-sacks source above is relevant to whoever is
+                actually working a warehouse, not just Admin. */}
+            {!isVisitor && (
               <div ref={notifRef} className="relative">
                 <button
                   type="button"
@@ -371,7 +444,13 @@ function AppHeader({ hidden = false }) {
                           ? `${unresolvedNotifCount} unresolved`
                           : 'Notifications'}
                       </p>
-                      {notifEntries.length > 0 && (
+                      {/* errorEntries, not notifEntries - Clear All only
+                          ever clears db.errorLogs rows (see
+                          handleClearAllNotifs), so it has nothing to do
+                          and shouldn't show at all when the only
+                          entries present are procurement notifications,
+                          which aren't stored rows to clear. */}
+                      {errorEntries.length > 0 && (
                         <button
                           type="button"
                           onClick={() => setConfirmingClearNotifs(true)}

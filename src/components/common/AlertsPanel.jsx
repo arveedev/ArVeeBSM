@@ -1,13 +1,19 @@
-// AlertsPanel — merges the Procurement-sacks-need-SIA and Palay-drying
-// notifications (previously each rendered as its own always-expanded,
-// full-width colored banner directly on Home) into a single collapsed-
-// by-default strip with a count badge, matching the app's existing
-// collapsible-section convention (see Milling Operations in Home.jsx).
-// Collapsed by default so a warehouse with several active alerts
-// doesn't stack up multiple loud banners before the user even reaches
-// the stock data.
+// AlertsPanel — a collapsed-by-default strip with a count badge,
+// matching the app's existing collapsible-section convention (see
+// Milling Operations in Home.jsx), for on-page alerts that still make
+// sense shown inline here. Collapsed by default so a warehouse with
+// several active alerts doesn't stack up multiple loud banners before
+// the user even reaches the stock data.
 //
-// Each underlying notification component decides independently (via
+// Procurement-sacks-need-SIA used to also live here, merged in
+// alongside Palay-drying - per explicit request ("we can show that as
+// a notification instead of the alert"), it's been MOVED to the
+// general notification bell (AppHeader.jsx) instead, which is now
+// available to every user, not just Admin. This is a move, not a
+// duplicate - ProcurementBagsNotification.jsx itself was deleted, its
+// query logic now lives directly in AppHeader.jsx.
+//
+// The underlying notification component decides independently (via
 // its own useLiveQuery) whether it has anything to show, returning
 // null otherwise - rather than duplicating that query logic here just
 // to compute a count, a MutationObserver watches the always-mounted
@@ -19,7 +25,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, ChevronDown } from 'lucide-react'
-import ProcurementBagsNotification from './ProcurementBagsNotification.jsx'
 import PalayDryingStatus from './WetPalayNotification.jsx'
 
 function AlertsPanel() {
@@ -60,7 +65,6 @@ function AlertsPanel() {
           animation on its own, so it replays every time this becomes
           visible again, same technique used for Reports.jsx's tabs. */}
       <div ref={bodyRef} className={expanded && count > 0 ? 'mt-2 space-y-2 animate-flow-down' : 'hidden'}>
-        <ProcurementBagsNotification />
         <PalayDryingStatus />
       </div>
     </>
