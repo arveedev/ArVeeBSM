@@ -395,6 +395,44 @@ alongside batching (§2.12 point 1) and `useDebouncedLiveCompute`
 (everywhere else in this section). Requires `ReactDOM.createRoot` (React
 18 concurrent rendering), already in use app-wide.
 
+### 2.13 A full pull that returns zero rows must not advance the sync cursor
+
+**Decision**: `runAuthoritiesSync` (`src/services/googleSheetsBridge.js`)
+only writes a fresh `lastSyncedAt` for a Sheet source when either (a) the
+request sent a `modifiedSince` filter (a routine delta pull, where zero
+new/changed rows is the normal, expected outcome), or (b) a full pull (no
+`modifiedSince` — a Force Resync, or a source's first-ever sync) actually
+returned at least one AI or SIA row. A full pull that comes back with
+zero rows for both AI and SIA leaves `lastSyncedAt` unset instead of
+being marked "synced as of now," so the very next periodic sync tick
+retries the same full pull automatically.
+
+**Rationale**: the Apps Script bulk-fetch echo-redirect flakiness already
+documented in `fetchWithRetry`'s own code comment (2.4/2.8's sync
+mechanism relies on this same fetch path) doesn't always surface as a
+thrown error — an affected attempt can come back as a syntactically valid
+`{status: 'SUCCESS', rows: []}` response, which `fetchAuthorityRows`
+correctly treats as success, not failure. Before this decision, the
+sync loop wrote `lastSyncedAt: now` unconditionally after every pass
+regardless of row count, so a single unlucky empty full pull permanently
+poisoned that source: every later delta pull's `modifiedSince` filter is
+relative to that new cursor, and can structurally never again catch a row
+whose real last-modified timestamp falls before it — exactly the rows
+the failed full pull existed to catch in the first place, with no error
+ever surfaced anywhere to explain why. Confirmed against a real
+production report: six specific AI/SIA authority numbers for one
+warehouse (PHF SHED, its mechanical dryer transactions) stayed at
+`assignedWarehouse: null` indefinitely, including after the user manually
+ran Force Resync, while a direct fetch of the identical Apps Script URL —
+bypassing the app's own retry logic entirely — proved the underlying
+sheet data and warehouse-alias matching were both already correct. This
+isolated the bug specifically to the sync loop's own cursor bookkeeping,
+not to data or alias resolution, and the fix targets exactly that: leave
+the cursor where it was on a suspicious empty full pull rather than
+trusting it, so the same self-healing "the escape hatch is always still
+there" property 2.4/2.8 already rely on for Force Resync keeps holding
+even through this specific flavor of transient failure.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

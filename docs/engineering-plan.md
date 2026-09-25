@@ -334,6 +334,30 @@ fixes across every earlier phase.
   turn in this chain was caught by getting real evidence (an Executions
   log, a Network tab, a function log) before the next attempt, rather
   than compounding one guess on top of another.
+- A later, structurally related incident in the same sync path: a
+  warehouse's AI/SIA authorities (reported case: PHF SHED's mechanical
+  dryer transactions) never appearing on its Authority Monitor, despite
+  the warehouse's own alias table being correctly configured and the
+  user manually running Force Resync. Root-caused by getting the same
+  kind of real evidence the chain above relied on — live `db.authorities`
+  queries (via `window.__DEBUG_DB__`) confirming six specific AI/SIA
+  numbers existed locally but with `assignedWarehouse: null`, then a
+  direct, un-proxied fetch of the exact same Apps Script URL (bypassing
+  the app's own fetch/retry logic entirely) proving the sheet data and
+  the alias match were both already correct — which narrowed the bug to
+  the client's own sync-state bookkeeping rather than data or alias
+  resolution. The actual defect: `runAuthoritiesSync` wrote a fresh
+  `lastSyncedAt` after every pass unconditionally, even when a full pull
+  (Force Resync, or a source's first sync) came back with zero rows for
+  both AI and SIA — the same echo-redirect flakiness documented above can
+  return that as a normal `{status:'SUCCESS', rows:[]}` response rather
+  than a thrown error, so it was never caught as a failure. Advancing the
+  cursor anyway permanently excluded every row that pull was meant to
+  catch from every later delta pull, since `modifiedSince` can never
+  again match a row modified before that new cursor. Fixed by leaving
+  `lastSyncedAt` unset when a full pull comes back completely empty, so
+  the next periodic tick retries automatically instead of getting stuck
+  forever (TDD §2.13).
 
 **Milestone**: the app is in daily production use across multiple
 warehouses with no open data-integrity bug, and every NFA report type
