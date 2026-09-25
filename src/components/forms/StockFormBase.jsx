@@ -98,7 +98,7 @@ import SplitFlapText from '../common/SplitFlapText.jsx'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 import { SavedReceipt } from '../common/AnimatedToast.jsx'
-import { useEntryFormShortcuts } from '../../hooks/useEntryFormShortcuts.js'
+import { useEntryFormShortcuts, isTextEditable } from '../../hooks/useEntryFormShortcuts.js'
 import MemberNameAutocomplete from './MemberNameAutocomplete.jsx'
 import {
   inputClass,
@@ -2885,28 +2885,36 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     }
   }
 
-  // Alt+1/2/3 jumps straight to the Rice/Palay/By Products tab, per
-  // explicit request - Ctrl/Cmd+1-9 was considered first but rejected:
-  // Chrome/Firefox/Edge all reserve that combination for switching
-  // between BROWSER tabs, at a level a webpage can never intercept or
-  // preventDefault, so it would only work for someone using this app as
-  // an installed PWA, never in a regular browser tab. Alt+number isn't
-  // claimed by any browser this app targets, so it works reliably
-  // either way. Scoped to isCategoryScoped (WSR/WSI only - the only
-  // types with these tabs at all) and skipped for the same suppressed-
-  // region reason as useEntryFormShortcuts.js's own shortcuts (a picker
-  // or dialog open on top should own the keyboard, not this).
+  // Plain 1/2/3 (no modifier) jumps straight to the Rice/Palay/By
+  // Products tab, per explicit request. Two earlier modifier schemes
+  // were tried and both confirmed broken by real browser/OS behavior
+  // no webpage can work around: Ctrl/Cmd+1-9 is reserved by Chrome/
+  // Firefox/Edge for switching BROWSER tabs; Alt+digit was ALSO
+  // confirmed not firing even after fixing the e.key/e.code distinction
+  // below, consistent with Windows routing a held Alt key to the
+  // browser's own menu/accelerator handling before the follow-up digit
+  // ever reaches page JS. No modifier at all sidesteps both problems,
+  // at the cost of needing a real guard against hijacking normal
+  // typing - isTextEditable (useEntryFormShortcuts.js, exported for
+  // reuse here) is the same guard Left/Right series-nav already
+  // trusts for exactly this. Scoped to isCategoryScoped (WSR/WSI only)
+  // and skipped while a picker/dialog owns the keyboard
+  // (data-suppress-form-shortcuts), same as every other shortcut here.
   useEffect(() => {
     if (!isCategoryScoped) return
     const handleKeyDown = (e) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey) return
-      // Confirmed, reported real bug: e.key was unreliable with Alt
-      // held on the reporting device - Alt can shift what character a
-      // browser/OS reports as `key` (the same general class of issue
-      // that makes Alt+letter act as an accelerator in some apps),
-      // while `e.code` always reports the raw PHYSICAL key regardless
-      // of modifiers, which is what every other digit-based shortcut in
-      // this codebase should actually key off for reliability.
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (isTextEditable(document.activeElement)) return
+      // Also skip while any <select> has focus - isTextEditable alone
+      // doesn't cover it, but a select can have its own real, meaningful
+      // use for a digit keypress (native browser type-ahead, or this
+      // form's own custom useWarehouseTypeahead on the Warehouse field)
+      // that this shortcut would otherwise silently steal.
+      if (document.activeElement?.tagName === 'SELECT') return
+      // e.code (the raw physical key), not e.key - confirmed real bug
+      // with the earlier Alt+digit version: e.key can report a
+      // different character depending on modifiers/layout, e.code
+      // never does.
       const index = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]
       if (index == null) return
       if (document.activeElement?.closest?.('[data-suppress-form-shortcuts]')) return
@@ -3038,7 +3046,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   key={tab.key}
                   type="button"
                   onClick={() => handleCategoryTabChange(tab.key)}
-                  // Per explicit request: Alt+1/2/3 above already
+                  // Per explicit request: plain 1/2/3 above already
                   // reaches these tabs directly, so they're pulled out
                   // of the Tab order entirely (Tab from Warehouse goes
                   // straight to Serial No.) rather than being an extra

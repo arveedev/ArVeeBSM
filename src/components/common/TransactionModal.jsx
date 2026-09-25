@@ -62,7 +62,19 @@ function TransactionModal({ open, onClose, onSelectType }) {
     const digitIndex = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4 }[e.code]
     if (digitIndex != null) {
       e.preventDefault()
-      handleSelect(FLAT_TYPE_ORDER[digitIndex])
+      const matchedType = FLAT_TYPE_ORDER[digitIndex]
+      // Confirmed, reported real bug: calling handleSelect directly
+      // left keyboard focus (and the browser's own default focus
+      // outline) sitting on WSR - the button that received it on
+      // mount - no matter which digit was actually pressed, since
+      // nothing ever moved focus for the digit-shortcut path the way
+      // arrow-key navigation already does. Read as "WSR flashing as
+      // pressed" regardless of the real selection. Focusing the actual
+      // matched button first, even for the brief instant before the
+      // sheet closes, makes the visible feedback match what was
+      // genuinely chosen.
+      buttonRefs.current[matchedType]?.focus()
+      handleSelect(matchedType)
       return
     }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return

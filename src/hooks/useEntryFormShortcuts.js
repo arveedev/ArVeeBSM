@@ -31,7 +31,7 @@ import { useEffect } from 'react'
 
 const EDITABLE_INPUT_TYPES = new Set(['text', 'search', 'tel', 'email', 'url', 'password', 'number'])
 
-const isTextEditable = (el) => {
+export const isTextEditable = (el) => {
   if (!el) return false
   if (el.isContentEditable) return true
   if (el.tagName === 'TEXTAREA') return true

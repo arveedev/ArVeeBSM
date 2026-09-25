@@ -6458,4 +6458,26 @@
 //                carries `refId`) - a plain crash log never gets
 //                auto-resolved by anything, so labeling one
 //                "Unresolved" would mislead rather than inform.
-export const APP_VERSION = '1.10-163'
+//   1.10-164 - Two fixes from real feedback on 1.10-163:
+//              - Cereal-tab shortcut: Alt+1/2/3 confirmed STILL not
+//                firing even after the e.code fix - consistent with
+//                Windows routing a held Alt key to the browser's own
+//                menu/accelerator handling before the follow-up digit
+//                ever reaches page JS, the same unfixable-from-a-
+//                webpage class of problem that already ruled out
+//                Ctrl/Cmd+1-9. Replaced with plain 1/2/3 (no modifier
+//                at all), guarded by isTextEditable (now exported from
+//                useEntryFormShortcuts.js for reuse - the same guard
+//                Left/Right series-nav already trusts) plus a new
+//                check for a focused <select>, since a select can have
+//                its own real use for a digit key (native browser
+//                type-ahead, or this form's own useWarehouseTypeahead)
+//                that the shortcut would otherwise silently steal.
+//              - The + button's document-type sheet: pressing a digit
+//                opened the right document, but the PRESS animation
+//                always showed on WSR regardless of which one was
+//                picked - the button that received focus when the
+//                sheet opened, never moved for the digit-shortcut path
+//                the way arrow-key navigation already does. Now
+//                focuses the actually-matched button first.
+export const APP_VERSION = '1.10-164'
