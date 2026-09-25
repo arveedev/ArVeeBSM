@@ -6071,4 +6071,22 @@
 //              view's deduction row now reads "LESS: This Period's
 //              Replenishment" (was missing the "LESS:" prefix the
 //              disbursements version already has), per explicit request.
-export const APP_VERSION = '1.10-142'
+//   1.10-143 - Fixed AI/SIA authorities getting permanently stuck with
+//              no assigned warehouse (reported: PHF SHED's mechanical
+//              dryer transactions never appearing in Authority Monitor).
+//              Root cause, confirmed by comparing a direct Apps Script
+//              fetch against the app's own sync: runAuthoritiesSync
+//              always wrote a fresh lastSyncedAt after every pass, even
+//              when a FULL pull (Force Resync, or a source's first-ever
+//              sync) came back with zero AI and zero SIA rows - the
+//              known, already-documented echo-redirect flakiness
+//              (comment above fetchWithRetry) returns this as a normal
+//              {status:'SUCCESS', rows:[]} response, not a thrown error,
+//              so it silently "succeeded" while advancing the sync
+//              cursor past every row that full pull was supposed to
+//              catch - permanently excluding them from every later delta
+//              pull. Now a full pull that comes back completely empty
+//              leaves lastSyncedAt unset instead, so the next periodic
+//              tick retries automatically. A routine delta tick with
+//              zero new rows (the normal, expected case) is unaffected.
+export const APP_VERSION = '1.10-143'

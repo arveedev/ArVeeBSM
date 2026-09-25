@@ -984,6 +984,12 @@ const runAuthoritiesSync = async () => {
     let siaCount = 0
 
     for (const source of sources) {
+      // Captured before the fetch, since fetchAuthorityRows itself
+      // branches on source.lastSyncedAt to decide modifiedSince vs a
+      // full pull - this is the same signal, just read early so the
+      // lastSyncedAt write below can tell a full pull apart from a
+      // routine delta tick.
+      const wasFullPull = !source.lastSyncedAt
       const [aiRows, siaRows] = await Promise.all([
         fetchAuthorityRows(source, 'AI'),
         fetchAuthorityRows(source, 'SIA'),
@@ -1184,7 +1190,35 @@ const runAuthoritiesSync = async () => {
         siaCount += 1
       }
 
-      await db.sheetSources.update(source.id, { lastSyncedAt: new Date().toISOString() })
+      // Confirmed, reported real bug: this write used to run
+      // unconditionally, even when aiRows/siaRows both came back
+      // completely empty on a FULL pull (source.lastSyncedAt was
+      // null/just cleared going in - e.g. Force Resync). A full pull
+      // returning zero rows is exactly the shape of the known,
+      // documented echo-redirect flakiness above (a `{status:
+      // 'SUCCESS', rows: []}` response, not a thrown error, so it never
+      // hit the catch block below) - yet advancing lastSyncedAt to "now"
+      // anyway permanently poisoned every later delta pull, since rows
+      // modified before that moment (i.e. every row the full pull was
+      // supposed to catch) can never satisfy a future modifiedSince
+      // filter again. Confirmed directly against a real device: six
+      // specific AI/SIA authorities stayed at assignedWarehouse: null
+      // forever after exactly this sequence, even though a direct,
+      // unfetchWithRetry'd GET of the same URL proved the sheet data and
+      // alias matching were both already correct. Skipping the write
+      // here instead leaves lastSyncedAt null, so the very next periodic
+      // tick retries the SAME full pull rather than quietly giving up -
+      // self-healing, matching the "no dead end" pattern this file
+      // already uses elsewhere. A routine delta tick (lastSyncedAt was
+      // already set) still always advances even on a genuine 0-row
+      // result - that's the normal, expected "nothing changed" case,
+      // not a failure.
+      const cameBackEmpty = aiRows.length === 0 && siaRows.length === 0
+      if (!wasFullPull || !cameBackEmpty) {
+        await db.sheetSources.update(source.id, { lastSyncedAt: new Date().toISOString() })
+      } else {
+        console.warn('[AUTHORITY-SYNC-DIAG] full pull returned 0 rows for source', source.id, '- leaving lastSyncedAt unset so the next tick retries')
+      }
     }
 
     // TEMPORARY diagnostic - this function had no success/failure
