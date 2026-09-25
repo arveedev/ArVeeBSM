@@ -4183,6 +4183,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         title="Leave this document unsaved?"
         description={`${loadedTransaction ? 'Your changes to' : 'What you\'ve entered for'} ${type} ${serialNo.trim() ? `#${serialNo.trim()}` : 'this entry'} haven't been saved yet. Moving to another serial number now will discard them.`}
         confirmLabel="Leave without saving"
+        destructive={false}
         onConfirm={() => {
           const direction = pendingNavDirection
           setPendingNavDirection(null)

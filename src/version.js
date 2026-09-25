@@ -6129,4 +6129,19 @@
 //              effect on serialNo, which changes on every single step
 //              regardless of whether the destination is blank or
 //              loaded.
-export const APP_VERSION = '1.10-145'
+//   1.10-146 - ConfirmDialog (src/components/common/ConfirmDialog.jsx)
+//              now supports Esc/Enter, per explicit request to make the
+//              app usable without reaching for a mouse. Esc always
+//              cancels, on every dialog app-wide, destructive or not -
+//              same action as tapping outside/Cancel, so it's always
+//              safe. Enter confirms only when the caller explicitly
+//              passes `destructive={false}` - the default stays
+//              destructive (matching the existing default
+//              confirmLabel="Delete"), so every existing delete/remove
+//              confirmation in the app keeps requiring a deliberate
+//              click/tap, unaffected unless it opts in. The three
+//              "Leave this document unsaved?" dialogs (StockFormBase,
+//              WTSForm, SackFormBase) are the first to opt in, since
+//              leaving a document unsaved is reversible/non-destructive
+//              in the same sense a Cancel button already is.
+export const APP_VERSION = '1.10-146'

@@ -19,9 +19,35 @@ import { createPortal } from 'react-dom'
 // Must match the transition duration used on the box below.
 const BOX_ANIMATION_MS = 220
 
-function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon, rotate = false, children, confirmDisabled = false }) {
+function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon, rotate = false, children, confirmDisabled = false, destructive = true }) {
   const [shouldRender, setShouldRender] = useState(open)
   const [hasEntered, setHasEntered] = useState(false)
+
+  // Keyboard support, per explicit request to make the app usable
+  // without reaching for a mouse: Esc always cancels (safe on every
+  // dialog, destructive or not - it's the same action as tapping
+  // outside/Cancel). Enter only confirms when the caller has explicitly
+  // marked this dialog `destructive={false}` - the default stays
+  // `destructive: true` (matching the default confirmLabel="Delete"),
+  // so every existing delete/remove confirmation in the app keeps
+  // requiring a deliberate click/tap and is completely unaffected
+  // unless its caller opts in. Listens on `open` rather than
+  // `shouldRender` so it's live for exactly as long as the dialog is
+  // actually interactive, not during its exit animation.
+  useEffect(() => {
+    if (!open) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel?.()
+      } else if (e.key === 'Enter' && !destructive && !confirmDisabled) {
+        e.preventDefault()
+        onConfirm?.()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, destructive, confirmDisabled, onConfirm, onCancel])
 
   // Concept J (picked) - every dialog gets the scale+fade entrance/
   // exit now, not just warning-style (icon-present) ones. A plain
