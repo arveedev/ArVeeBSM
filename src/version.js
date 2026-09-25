@@ -6380,4 +6380,14 @@
 //              shows just the code (BN/SH/US) instead of the full
 //              "Brand New (BN)" label, which was getting clipped to
 //              "Brand New (" in the field's own width.
-export const APP_VERSION = '1.10-159'
+//   1.10-160 - Per explicit request: Tab from Serial No. now goes
+//              straight to Date, never stopping on the Previous/Next
+//              serial Chevron buttons either side of it, across all
+//              three entry form bases (StockFormBase, WTSForm,
+//              SackFormBase). Left/Right arrow keys already reach the
+//              exact same action (useEntryFormShortcuts.js), so
+//              there's nothing this Tab stop offered that isn't
+//              already covered another way. Same tabIndex={-1}
+//              convention as the "Use X to complete AI balance"
+//              suggestion buttons (1.10-147).
+export const APP_VERSION = '1.10-160'

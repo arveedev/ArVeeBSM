@@ -1317,9 +1317,12 @@ const SackFormBase = forwardRef(function SackFormBase(
                 />
               ) : (
                 <>
+                  {/* tabIndex={-1} on both Chevrons - see
+                      StockFormBase.jsx's identical fix/comment. */}
                   <button
                     type="button"
                     onClick={() => attemptStep('back')}
+                    tabIndex={-1}
                     aria-label="Previous serial"
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-90"
                   >
@@ -1339,6 +1342,7 @@ const SackFormBase = forwardRef(function SackFormBase(
                   <button
                     type="button"
                     onClick={() => attemptStep('forward')}
+                    tabIndex={-1}
                     aria-label={forwardIsGap ? 'Next available serial' : 'Next serial'}
                     className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-90 ${
                       forwardIsGap
