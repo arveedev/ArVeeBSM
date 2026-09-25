@@ -7,6 +7,7 @@
 // and SackFormBase have different field shapes, so each decides for
 // itself how to apply it, this modal only handles picking.
 
+import { useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
@@ -15,6 +16,41 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 
 function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
   const { weightUnit } = useSettings() ?? {}
+
+  // Keyboard navigation, per explicit request that opening this picker
+  // (via Browse) should let the user pick an AI/SIA with Up/Down and
+  // Space/Enter, never needing the mouse. Each row is already a real
+  // <button>, so Tab, and Enter/Space once a row has focus, already
+  // worked natively with no extra code - what's added here is: the
+  // list receiving real DOM focus itself (Escape needs somewhere to be
+  // heard, and Up/Down need a starting point) the moment the modal
+  // opens, Up/Down moving focus between rows, and Escape closing the
+  // modal, matching the same convention as CalendarDatePicker/
+  // ConfirmDialog.
+  const listRef = useRef(null)
+  const rowRefs = useRef([])
+  useEffect(() => {
+    rowRefs.current[0]?.focus()
+  }, [])
+
+  // Escape is handled once, on the outer modal container below, so it
+  // works regardless of which element inside currently has focus (a
+  // row, or the Close button) - this handler only needs Up/Down.
+  const handleListKeyDown = (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const rows = rowRefs.current.filter(Boolean)
+    if (rows.length === 0) return
+    const currentIndex = rows.indexOf(document.activeElement)
+    const nextIndex = e.key === 'ArrowDown'
+      ? Math.min(currentIndex + 1, rows.length - 1)
+      : Math.max(currentIndex - 1, 0)
+    // currentIndex is -1 (nothing in the list focused yet) on the very
+    // first arrow press if focus somehow isn't already on row 0 - the
+    // clamp above still lands on a valid row (0 for Up, 0 for Down
+    // since -1+1=0) rather than doing nothing.
+    rows[nextIndex === -1 ? 0 : nextIndex]?.focus()
+  }
 
   const authorities = useLiveQuery(async () => {
     if (!warehouseId) return []
@@ -71,6 +107,7 @@ function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
       <div
         className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }}
       >
         <div className="flex items-center justify-between">
           <div>
@@ -86,14 +123,14 @@ function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
           </button>
         </div>
 
-        <div className="mt-3 flex-1 overflow-y-auto">
+        <div ref={listRef} className="mt-3 flex-1 overflow-y-auto" onKeyDown={handleListKeyDown}>
           {pending.length === 0 ? (
             <p className="py-6 text-center text-xs text-neutral-500">
               No pending {type} records for this warehouse.
             </p>
           ) : (
             <ul className="space-y-2">
-              {pending.map((a) => {
+              {pending.map((a, rowIndex) => {
                 const variety = type === 'AI' ? varietyMap.get(a.varietyId) : null
                 const isSia = type === 'SIA'
                 const totalAllocBags = isSia
@@ -106,9 +143,10 @@ function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
                 return (
                   <li key={a.authId}>
                     <button
+                      ref={(el) => { rowRefs.current[rowIndex] = el }}
                       type="button"
                       onClick={() => onSelect(a)}
-                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left transition-all hover:border-brand-neon/50 active:scale-[0.99]"
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-left outline-none transition-all hover:border-brand-neon/50 focus-visible:border-brand-neon active:scale-[0.99]"
                     >
                       <div className="min-w-0">
                         <p className={`truncate text-sm font-medium ${categoryColor(a)}`}>

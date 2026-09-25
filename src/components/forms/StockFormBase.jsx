@@ -3555,6 +3555,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               {suggestedBagsToComplete != null && suggestedBagsToComplete > 0 && (
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setNumberOfBags(liveFormatNumber(String(suggestedBagsToComplete)))}
                   className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs tabular-nums text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
                 >
@@ -3586,6 +3587,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               {suggestedGrossKilosToComplete != null && suggestedGrossKilosToComplete > 0 && (
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={() => setGrossKilos(liveFormatNumber(suggestedGrossKilosToComplete.toFixed(3), 3))}
                   className="mt-1 rounded-lg border border-brand-neon/40 bg-brand-neon/10 px-2 py-1 text-xs tabular-nums text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-95"
                 >

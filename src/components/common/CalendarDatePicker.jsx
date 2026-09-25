@@ -90,6 +90,21 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
   const [viewYear, setViewYear] = useState(selected?.year ?? today.getFullYear())
   const [viewMonth, setViewMonth] = useState(selected?.month ?? today.getMonth())
 
+  // Keyboard day navigation, per explicit request that every input in
+  // the app be operable without a mouse: the trigger is already a plain
+  // <button> (Space/Enter already open it natively, no extra code
+  // needed there). Once open, `focusedIso` tracks which day cell has
+  // keyboard focus as a real ISO date rather than a grid index, so it
+  // survives crossing a month boundary cleanly - the grid gets rebuilt
+  // for the new viewMonth/Year and the matching cell is simply the one
+  // whose own computed ISO equals focusedIso, wherever it lands in the
+  // new 42-cell layout. Actual DOM focus is moved to match via the ref
+  // map effect below, so Enter/Space on the now-focused button reaches
+  // its real onClick (handleDayTap) with no separate key handling
+  // needed for selection itself - only movement and Escape are custom.
+  const [focusedIso, setFocusedIso] = useState(null)
+  const dayButtonRefs = useRef(new Map())
+
   // Keep the calendar's viewed month in sync if the value changes from
   // outside (e.g. a preset button fills this field) while closed.
   useEffect(() => {
@@ -115,6 +130,50 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
       document.removeEventListener('touchstart', handleOutside)
     }
   }, [isOpen])
+
+  // Seeds focusedIso the moment the popup opens - the selected date if
+  // there is one, otherwise today, so an arrow key immediately after
+  // opening moves from a sensible starting point rather than nowhere.
+  useEffect(() => {
+    if (!isOpen) return
+    const todayIso = toIso(today.getFullYear(), today.getMonth(), today.getDate())
+    setFocusedIso(value || todayIso)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
+
+  // Moves real DOM focus onto whichever day button currently matches
+  // focusedIso, every time it changes - this is what makes the day grid
+  // genuinely keyboard-navigable (arrow keys move focusedIso, this
+  // effect follows it with actual focus, and the browser's own
+  // Enter/Space-activates-a-focused-button behavior does the rest).
+  useEffect(() => {
+    if (!isOpen || !focusedIso) return
+    dayButtonRefs.current.get(focusedIso)?.focus()
+  }, [isOpen, focusedIso, viewMonth, viewYear])
+
+  // Arrow keys move focusedIso by day/week; crossing into the previous
+  // or next month re-points viewMonth/viewYear so the target cell is
+  // actually rendered before the focus-sync effect above tries to find
+  // it. Escape closes without committing anything, matching the same
+  // "Esc always cancels" convention as ConfirmDialog.
+  const handlePopupKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setIsOpen(false)
+      triggerRef.current?.focus()
+      return
+    }
+    const deltaDays = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key]
+    if (deltaDays == null || !focusedIso) return
+    e.preventDefault()
+    const parsed = parseIso(focusedIso)
+    const target = new Date(parsed.year, parsed.month, parsed.day + deltaDays)
+    if (target.getFullYear() !== viewYear || target.getMonth() !== viewMonth) {
+      setViewYear(target.getFullYear())
+      setViewMonth(target.getMonth())
+    }
+    setFocusedIso(toIso(target.getFullYear(), target.getMonth(), target.getDate()))
+  }
 
   const goPrevMonth = () => {
     // Navigating months NEVER touches the selected value - only the
@@ -161,6 +220,7 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
             ref={popupRef}
             className={`max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl ${isOpen ? 'animate-calendar-slide-in' : 'animate-calendar-slide-out'}`}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={handlePopupKeyDown}
           >
           {label && (
             <div className="mb-2 flex justify-center">
@@ -204,9 +264,21 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
               return (
                 <button
                   key={i}
+                  ref={(el) => {
+                    if (el) dayButtonRefs.current.set(cellIso, el)
+                    else dayButtonRefs.current.delete(cellIso)
+                  }}
                   type="button"
                   onClick={() => handleDayTap(cell)}
-                  className={`aspect-square rounded-lg text-xs transition-all active:scale-90 ${
+                  onFocus={() => setFocusedIso(cellIso)}
+                  // Roving tabindex, same convention already used for
+                  // arrow-key toggle groups elsewhere in the app (e.g.
+                  // StockFormBase's CONDITION_FLAGS): only the cell arrow
+                  // navigation is currently pointed at is a real Tab
+                  // stop, so Tab moves past the whole grid in one step
+                  // instead of stopping at all 42 day cells.
+                  tabIndex={cellIso === focusedIso ? 0 : -1}
+                  className={`aspect-square rounded-lg text-xs outline-none transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-brand-neon ${
                     !cell.inCurrentMonth
                       ? 'text-neutral-700 hover:bg-neutral-800/50'
                       : isSelected

@@ -6144,4 +6144,25 @@
 //              WTSForm, SackFormBase) are the first to opt in, since
 //              leaving a document unsaved is reversible/non-destructive
 //              in the same sense a Cancel button already is.
-export const APP_VERSION = '1.10-146'
+//   1.10-147 - First real step of the full-keyboard-navigation rework
+//              (WSI form, per explicit request - more forms follow once
+//              this one feels right in daily use):
+//              - CalendarDatePicker: the trigger was already a real
+//                <button> (Space/Enter already opened it natively). Now
+//                Arrow keys move a focused day cell by day/week once
+//                open (crossing month boundaries correctly), Enter/Space
+//                selects the focused day via the browser's own
+//                button-activation behavior, and Escape closes without
+//                selecting - roving tabindex keeps Tab moving past the
+//                whole grid in one step instead of all 42 cells.
+//              - AuthorityPickerModal (the AI/SIA Browse picker): opens
+//                with keyboard focus already on the first pending
+//                record, Up/Down moves between records, Enter/Space
+//                selects (native button behavior), Escape closes.
+//              - The two "Use X to complete AI balance" suggestion
+//                buttons (Number of Bags / Gross Kilos) are pulled out
+//                of the Tab order (tabIndex={-1}) - reported bug: Tab
+//                from Number of Bags landed on its own suggestion button
+//                before reaching Gross Kilos; it's still clickable, just
+//                no longer a Tab stop.
+export const APP_VERSION = '1.10-147'
