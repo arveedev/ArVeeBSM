@@ -6210,4 +6210,32 @@
 //                autofocuses its Cancel button on open, both as a safer
 //                keyboard-first default and so this suppression can
 //                actually detect it's open via document.activeElement.
-export const APP_VERSION = '1.10-149'
+//   1.10-150 - Fixed two reported bugs, both the same root cause class
+//              as 1.10-149's suppression mechanism depending on real
+//              focus actually landing where expected:
+//              - AuthorityPickerModal: Up/Down couldn't navigate the
+//                list after opening via Browse, and Escape closed the
+//                whole entry form instead of just the picker. Root
+//                cause: its auto-focus-first-row effect ran once on
+//                mount with an empty dependency array, but `pending` is
+//                derived from useLiveQuery, which resolves
+//                asynchronously - the effect fired before any row
+//                existed to focus, so focus never actually entered the
+//                modal. Now keyed on `pending` itself (with a
+//                has-focused guard so it only claims focus once, not on
+//                every live-query re-resolve). Also added
+//                stopPropagation to this modal's own Escape handler and
+//                CalendarDatePicker's, as defense in depth so their
+//                Escape handling no longer depends purely on focus
+//                state to keep the form's own Escape-closes-form
+//                shortcut from also firing on the same keypress.
+//              - ConfirmDialog: its own Cancel-button auto-focus (added
+//                in 1.10-149, specifically to make this suppression
+//                mechanism work) depended on `open`, but `open`
+//                becoming true and the button actually existing in the
+//                DOM happen on two separate renders (shouldRender lags
+//                a render behind) - so the effect fired while the ref
+//                was still null and never actually focused anything.
+//                Fixed by depending on `shouldRender` instead, the flag
+//                that actually gates whether the button exists.
+export const APP_VERSION = '1.10-150'

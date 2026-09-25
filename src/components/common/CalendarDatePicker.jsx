@@ -159,6 +159,14 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
   const handlePopupKeyDown = (e) => {
     if (e.key === 'Escape') {
       e.preventDefault()
+      // stopPropagation, not just preventDefault - defense in depth so
+      // this doesn't depend on document.activeElement genuinely sitting
+      // inside this popup at the moment Escape is pressed (see
+      // AuthorityPickerModal's matching fix/comment for the concrete
+      // bug this class of issue caused there) to keep the underlying
+      // entry form's own Escape-closes-the-form shortcut from also
+      // firing on the same keypress.
+      e.stopPropagation()
       setIsOpen(false)
       triggerRef.current?.focus()
       return

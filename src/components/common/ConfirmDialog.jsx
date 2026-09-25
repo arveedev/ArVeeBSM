@@ -32,10 +32,26 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
   // region (see useEntryFormShortcuts.js), which only works if
   // something inside this dialog actually holds focus rather than
   // whatever was focused in the form underneath before this opened.
+  //
+  // Confirmed, reported real bug (same root cause the AuthorityPicker-
+  // Modal fix next to this one hit): this used to depend on `open`, but
+  // `open` becoming true and `shouldRender` becoming true happen on TWO
+  // separate renders - shouldRender's own effect (below) only fires
+  // AFTER this one, on the same commit as `open` first flips true, so
+  // on that very first render the component still returns null (see
+  // the `if (isAnimated ? !shouldRender : !open) return null` guard
+  // below) and cancelButtonRef.current was still null when this ran.
+  // By the next render, when the button actually exists, `open` hadn't
+  // changed again so this effect never re-fired - the button was never
+  // actually focused, `document.activeElement` stayed on whatever was
+  // focused before the dialog opened, and the suppression check above
+  // silently failed. Depending on `shouldRender` instead - the same
+  // flag that actually gates whether the button is in the DOM - fixes
+  // it at the real source rather than papering over the timing gap.
   useEffect(() => {
-    if (!open) return
+    if (!shouldRender) return
     cancelButtonRef.current?.focus()
-  }, [open])
+  }, [shouldRender])
 
   // Keyboard support, per explicit request to make the app usable
   // without reaching for a mouse: Esc always cancels (safe on every

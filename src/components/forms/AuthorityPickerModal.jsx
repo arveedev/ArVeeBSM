@@ -29,9 +29,21 @@ function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
   // ConfirmDialog.
   const listRef = useRef(null)
   const rowRefs = useRef([])
-  useEffect(() => {
-    rowRefs.current[0]?.focus()
-  }, [])
+  // Confirmed, reported real bug: this used to run once on mount with
+  // an empty dependency array - but `pending` (below) is derived from
+  // useLiveQuery, which returns nothing on its very first render and
+  // only resolves the real rows asynchronously a tick or more later.
+  // The effect fired before any row existed to focus, so
+  // rowRefs.current[0] was still empty at that moment - Up/Down then
+  // had nothing to move focus FROM (document.activeElement stayed on
+  // whatever was focused before this modal opened, e.g. the Browse
+  // button, which isn't even part of this modal's own DOM subtree, so
+  // keydown events on it never reached this list's handler at all).
+  // Now keyed on `pending` itself, with a ref guard so it only claims
+  // focus the first time real rows actually exist, not every time the
+  // live query re-resolves (which must not yank focus away from a row
+  // the user has already arrowed down to while the modal stays open).
+  const hasAutoFocused = useRef(false)
 
   // Escape is handled once, on the outer modal container below, so it
   // works regardless of which element inside currently has focus (a
@@ -102,12 +114,30 @@ function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
     })
   })()
 
+  useEffect(() => {
+    if (hasAutoFocused.current || pending.length === 0) return
+    hasAutoFocused.current = true
+    rowRefs.current[0]?.focus()
+  }, [pending])
+
   return (
     <div data-suppress-form-shortcuts className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
         className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }}
+        // stopPropagation here, not just preventDefault - confirmed,
+        // reported real bug: Escape closed the ENTIRE entry form, not
+        // just this modal, because the underlying form's own Escape
+        // handler (useEntryFormShortcuts.js) only skips itself when
+        // document.activeElement sits inside a data-suppress-form-
+        // shortcuts region, and focus hadn't actually landed inside
+        // this modal at all (the same stale-empty-`pending`-at-mount
+        // bug that also broke Up/Down, fixed above) - so that check
+        // failed and the form's own handler fired too, on the very same
+        // keypress. stopPropagation here means this modal's own Escape
+        // handling is no longer dependent on focus state to keep the
+        // form's handler from also firing.
+        onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose() } }}
       >
         <div className="flex items-center justify-between">
           <div>
