@@ -820,12 +820,16 @@ const SackFormBase = forwardRef(function SackFormBase(
 
   // Unsaved-changes guard for series navigation - see StockFormBase.jsx's
   // matching comment for the full reasoning (same pattern, shared by
-  // every entry form).
+  // every entry form). Also carries that file's fix: `serialNo` is
+  // included alongside `loadedTransaction` so stepping between two
+  // genuinely blank serials (where loadedTransaction stays null both
+  // before and after) still re-captures a fresh baseline instead of
+  // comparing against a stale one from the previous blank serial.
   const baselineRef = useRef(null)
   useEffect(() => {
     baselineRef.current = JSON.stringify(buildTransactionPayload())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadedTransaction])
+  }, [loadedTransaction, serialNo])
   const isFormDirty = () => JSON.stringify(buildTransactionPayload()) !== baselineRef.current
 
   const [pendingNavDirection, setPendingNavDirection] = useState(null) // 'back' | 'forward' | null

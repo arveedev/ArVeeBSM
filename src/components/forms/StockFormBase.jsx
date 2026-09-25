@@ -1972,11 +1972,27 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // fields either path sets), so buildTransactionPayload() here reflects
   // the freshly-loaded/blank values, not a stale pre-load snapshot.
   // isFormDirty then just re-calls the same builder live and compares.
+  //
+  // Confirmed, reported real bug: keying this only on `loadedTransaction`
+  // missed the blank-to-blank case entirely - loadedTransaction is null
+  // for EVERY blank serial, so stepping from one genuinely empty serial
+  // to another genuinely empty one never changed the dependency's
+  // identity (null === null), and the effect simply never re-ran. The
+  // stale baseline from the PREVIOUS blank serial then got compared
+  // against the new blank serial's own live values (a different default
+  // date, an empty AI No. where the old one may have had one typed,
+  // etc.), falsely flagging a brand-new, untouched document as dirty and
+  // showing "Leave this document unsaved?" for something the user never
+  // touched. `serialNo` changes on every single step (blank or not - see
+  // resetToBlankEntry/handleStepBack/handleStepForward, which always
+  // call setSerialNo before anything else settles), so adding it here
+  // re-captures a fresh baseline on every navigation, closing exactly
+  // that gap without affecting the already-correct loaded-document case.
   const baselineRef = useRef(null)
   useEffect(() => {
     baselineRef.current = JSON.stringify(buildTransactionPayload())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadedTransaction])
+  }, [loadedTransaction, serialNo])
   const isFormDirty = () => JSON.stringify(buildTransactionPayload()) !== baselineRef.current
 
   const [pendingNavDirection, setPendingNavDirection] = useState(null) // 'back' | 'forward' | null

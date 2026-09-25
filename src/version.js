@@ -6115,4 +6115,18 @@
 //              much smaller than the other), and a source with no prior
 //              baseline yet (first sync, or an always-small sheet) is
 //              never flagged - there's nothing real to regress from.
-export const APP_VERSION = '1.10-144'
+//   1.10-145 - Fixed reported bug: the unsaved-changes guard on series
+//              navigation (1.10-141) falsely warned "Leave this document
+//              unsaved?" when stepping between two genuinely blank/
+//              untouched serials. Root cause: the baseline-capturing
+//              effect (WSR/WSI/ESR/ESI/WTS forms all share this pattern)
+//              was keyed only on loadedTransaction, which is null for
+//              EVERY blank serial - stepping from one blank serial to
+//              another never changed that dependency's identity, so the
+//              effect never re-ran, and the stale baseline from the
+//              previous blank serial got compared against the new one's
+//              own (different) live values. Fixed by also keying the
+//              effect on serialNo, which changes on every single step
+//              regardless of whether the destination is blank or
+//              loaded.
+export const APP_VERSION = '1.10-145'
