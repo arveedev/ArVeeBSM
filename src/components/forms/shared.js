@@ -1,6 +1,51 @@
 // Shared styling constants for transaction forms (WSR/WSI/WTS/ESR/ESI).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+
+// Strips a leading "PROVINCE-" or "PROVINCE " prefix (e.g. "ALB-",
+// "CTD-", "ALB ") from a warehouse name, per explicit request - the
+// convention this app's warehouse names already follow (confirmed
+// directly against real names: "ALB-VRT", "CTD-GID 2", "ALB ABACORP-B").
+// Used only for keyboard type-ahead matching below, never for display -
+// the full name (province included) still shows in the dropdown itself.
+const PROVINCE_PREFIX_RE = /^[A-Z]{2,6}[\s-]+/
+export const stripProvincePrefix = (name) => (name ?? '').replace(PROVINCE_PREFIX_RE, '')
+
+/**
+ * Keyboard type-ahead for the Warehouse <select>, per explicit request:
+ * matches only against the warehouse's own name with its province
+ * prefix stripped, not the option's full visible text ("050563 — ALB-
+ * VRT") the browser's own native type-ahead would otherwise match from
+ * the start of - useless here, since every option starts with a numeric
+ * code, and even matching the name directly would require typing the
+ * province ("ALB") before ever reaching the meaningful part ("VRT").
+ *
+ * Standard multi-keystroke buffered type-ahead (typing "v" then "r" then
+ * "t" within the same short window narrows the match, same convention
+ * as a native <select>'s own type-ahead) - the buffer resets after a
+ * pause (700ms) rather than per-keystroke, so typing a whole word
+ * quickly still works as one continuous match rather than restarting on
+ * every character. Returns an onKeyDown handler; the caller passes the
+ * sorted warehouse list and a callback invoked with the first match's
+ * warehouseId.
+ */
+export const useWarehouseTypeahead = (warehouses, onMatch) => {
+  const bufferRef = useRef('')
+  const lastKeyTimeRef = useRef(0)
+  return (e) => {
+    if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return
+    const now = Date.now()
+    if (now - lastKeyTimeRef.current > 700) bufferRef.current = ''
+    lastKeyTimeRef.current = now
+    bufferRef.current += e.key.toLowerCase()
+    const buffer = bufferRef.current
+    const match = (warehouses ?? []).find((w) => stripProvincePrefix(w.name).toLowerCase().startsWith(buffer))
+    if (match) {
+      e.preventDefault()
+      onMatch(match.warehouseId)
+    }
+  }
+}
 
 // Real bug found, twice over, reported directly with real screenshots:
 // (1) grid-auto-flow: column with a measured row count shared row

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // Action Selector Flyout Sheet — Step 4.3 (updated layout per user spec).
 //
@@ -25,9 +25,41 @@ const LABEL_MAP = {
 // Must match the transition duration used on the sheet/backdrop below.
 const SHEET_ANIMATION_MS = 200
 
+// Flat row-major order (matches the visual grid: WSR/WSI, ESR/ESI, then
+// WTS) - used for Up/Down arrow-key navigation between the 5 type
+// buttons, same convention AuthorityPickerModal.jsx already uses for
+// its own record list.
+const FLAT_TYPE_ORDER = ['WSR', 'WSI', 'ESR', 'ESI', 'WTS']
+
 function TransactionModal({ open, onClose, onSelectType }) {
   const [hasEntered, setHasEntered] = useState(false)
   const [shouldRender, setShouldRender] = useState(open)
+  const buttonRefs = useRef({})
+
+  // Per explicit request ("Space/Enter on the + button opens the same
+  // type-selection UI, then arrow keys pick a type"): focuses the first
+  // type button the moment this sheet finishes entering, and Up/Down
+  // moves between all 5 in the flat order above. Escape closes, same
+  // convention as every other overlay in the app.
+  useEffect(() => {
+    if (!hasEntered) return
+    buttonRefs.current[FLAT_TYPE_ORDER[0]]?.focus()
+  }, [hasEntered])
+
+  const handleSheetKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      onClose()
+      return
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const currentIndex = FLAT_TYPE_ORDER.findIndex((t) => buttonRefs.current[t] === document.activeElement)
+    const nextIndex = e.key === 'ArrowDown'
+      ? Math.min(currentIndex + 1, FLAT_TYPE_ORDER.length - 1)
+      : Math.max(currentIndex - 1, 0)
+    buttonRefs.current[FLAT_TYPE_ORDER[nextIndex === -1 ? 0 : nextIndex]]?.focus()
+  }
 
   // Sheet slides up fast from below on open, and slides back down on
   // close (the reverse), with the backdrop fading in/out over the same
@@ -75,6 +107,7 @@ function TransactionModal({ open, onClose, onSelectType }) {
         }}
         className="w-full max-w-md rounded-t-3xl border border-neutral-800 bg-neutral-900 p-4 pb-8"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleSheetKeyDown}
       >
         {/* drag handle */}
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-neutral-700" />
@@ -87,13 +120,23 @@ function TransactionModal({ open, onClose, onSelectType }) {
           {ROWS.map((pair) => (
             <div key={pair.join()} className="grid grid-cols-2 gap-2">
               {pair.map((type) => (
-                <FormButton key={type} type={type} onClick={() => handleSelect(type)} />
+                <FormButton
+                  key={type}
+                  type={type}
+                  buttonRef={(el) => { buttonRefs.current[type] = el }}
+                  onClick={() => handleSelect(type)}
+                />
               ))}
             </div>
           ))}
 
           {/* Row 3: WTS full-width */}
-          <FormButton type="WTS" fullWidth onClick={() => handleSelect('WTS')} />
+          <FormButton
+            type="WTS"
+            fullWidth
+            buttonRef={(el) => { buttonRefs.current.WTS = el }}
+            onClick={() => handleSelect('WTS')}
+          />
         </div>
 
         <button
@@ -108,9 +151,10 @@ function TransactionModal({ open, onClose, onSelectType }) {
   )
 }
 
-function FormButton({ type, onClick, fullWidth = false }) {
+function FormButton({ type, onClick, fullWidth = false, buttonRef }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       onClick={onClick}
       className={`${fullWidth ? 'w-full' : ''} rounded-xl border border-brand-neon/30 bg-neutral-950 py-4 text-sm font-semibold text-brand-neon transition-all hover:border-brand-neon hover:bg-brand-neon/10 hover:shadow-[0_0_20px_rgba(0,255,163,0.3)] active:scale-95`}

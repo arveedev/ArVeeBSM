@@ -6404,4 +6404,32 @@
 //                re-visiting. Unless Address came back empty, in which
 //                case Tab from MTS goes to Address instead, so that
 //                real gap isn't silently skipped past.
-export const APP_VERSION = '1.10-161'
+//   1.10-162 - Keyboard-navigation rework, continued: warehouse/cereal-
+//              type selection, and the + button:
+//              - Warehouse <select> (all three entry form bases): real
+//                keyboard type-ahead, per explicit request - typing
+//                matches only the warehouse's own name with its
+//                province prefix stripped ("VRT" jumps to "ALB-VRT"
+//                without typing "ALB" first), not the browser's own
+//                native type-ahead, which would match from the start of
+//                the option's full visible text (the numeric code) and
+//                be useless. Shared as useWarehouseTypeahead (shared.js)
+//                across all three forms rather than three separate
+//                implementations. Nature of Transaction's own type-
+//                ahead already worked natively (its option text is just
+//                the type name, no prefix to strip), so it needed no
+//                change.
+//              - Cereal-type tabs (Rice/Palay/By Products, WSR/WSI
+//                only): Alt+1/2/3 jumps directly to a tab. Ctrl/Cmd+1-9
+//                was considered and rejected - Chrome/Firefox/Edge all
+//                reserve that combination for switching BROWSER tabs at
+//                a level a webpage can never intercept, so it would
+//                only work as an installed PWA, never in a regular
+//                browser tab.
+//              - The + button (already keyboard-reachable, a real
+//                <button>) opens the existing document-type sheet,
+//                which now focuses its first type button on open,
+//                Up/Down moves between all 5 types, Enter/Space selects
+//                (native button behavior), and Escape closes it -
+//                previously only mouse/tap and Tab worked.
+export const APP_VERSION = '1.10-162'

@@ -50,7 +50,7 @@ import {
   round3,
 } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
-import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useIsWideLayout, groupBoxClass } from './shared.js'
+import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useIsWideLayout, groupBoxClass, useWarehouseTypeahead } from './shared.js'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 
@@ -324,6 +324,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   useEffect(() => attachCenterFocusScroll(scrollContainerRef.current), [])
 
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  // See StockFormBase.jsx's identical fix/comment.
+  const handleWarehouseSelect = (warehouseId) => {
+    setCurrentWarehouseId(warehouseId)
+    setLoadedTransaction(null)
+  }
+  const warehouseTypeaheadKeyDown = useWarehouseTypeahead(sortedWarehouses, handleWarehouseSelect)
 
   const piles = useLiveQuery(async () => {
     if (!currentWarehouseId) return []
@@ -1107,7 +1113,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         {sortedWarehouses.length > 1 && !openedFromReports ? (
           <div className="mt-2">
             <label className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
-            <select ref={warehouseSelectRef} value={currentWarehouseId ?? ''} onChange={(e) => { setCurrentWarehouseId(e.target.value); setLoadedTransaction(null) }}
+            <select ref={warehouseSelectRef} value={currentWarehouseId ?? ''} onChange={(e) => handleWarehouseSelect(e.target.value)} onKeyDown={warehouseTypeaheadKeyDown}
               className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon">
               {sortedWarehouses.map((w) => <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>)}
             </select>

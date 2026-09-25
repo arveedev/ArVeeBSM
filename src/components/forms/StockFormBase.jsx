@@ -111,6 +111,7 @@ import {
   focusFirstInvalidField,
   useIsWideLayout,
   groupBoxClass,
+  useWarehouseTypeahead,
 } from './shared.js'
 
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
@@ -689,6 +690,22 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     .filter((t) => !t.appliesTo || t.appliesTo === 'Both' || t.appliesTo === currentDirection)
     .sort((a, b) => byAlpha(a.name, b.name))
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+
+  // Shared by the Warehouse <select>'s onChange and its own keyboard
+  // type-ahead (useWarehouseTypeahead, shared.js) - both need to run the
+  // exact same side effects a warehouse change already requires
+  // (clearing pile/variety/MTS and the loaded document, plus the same
+  // brief flash), so this is factored out once rather than duplicated.
+  const handleWarehouseSelect = (warehouseId) => {
+    setCurrentWarehouseId(warehouseId)
+    setPileId('')
+    setVarietyId('')
+    setSackSelection('')
+    setLoadedTransaction(null)
+    setWarehouseChangeFlash(true)
+    setTimeout(() => setWarehouseChangeFlash(false), 750)
+  }
+  const warehouseTypeaheadKeyDown = useWarehouseTypeahead(sortedWarehouses, handleWarehouseSelect)
 
   const sortedPiles = [...(piles ?? [])]
     .filter((p) => !isCategoryScoped || p.cerealType === activeCategory)
@@ -2868,6 +2885,32 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     }
   }
 
+  // Alt+1/2/3 jumps straight to the Rice/Palay/By Products tab, per
+  // explicit request - Ctrl/Cmd+1-9 was considered first but rejected:
+  // Chrome/Firefox/Edge all reserve that combination for switching
+  // between BROWSER tabs, at a level a webpage can never intercept or
+  // preventDefault, so it would only work for someone using this app as
+  // an installed PWA, never in a regular browser tab. Alt+number isn't
+  // claimed by any browser this app targets, so it works reliably
+  // either way. Scoped to isCategoryScoped (WSR/WSI only - the only
+  // types with these tabs at all) and skipped for the same suppressed-
+  // region reason as useEntryFormShortcuts.js's own shortcuts (a picker
+  // or dialog open on top should own the keyboard, not this).
+  useEffect(() => {
+    if (!isCategoryScoped) return
+    const handleKeyDown = (e) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return
+      const index = { '1': 0, '2': 1, '3': 2 }[e.key]
+      if (index == null) return
+      if (document.activeElement?.closest?.('[data-suppress-form-shortcuts]')) return
+      e.preventDefault()
+      handleCategoryTabChange(['Rice', 'Palay', 'By Products'][index])
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCategoryScoped])
+
   const handleCategoryTabChange = (nextCategory) => {
     if (nextCategory === cerealCategory) return
     setCerealCategory(nextCategory)
@@ -2941,15 +2984,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             <select
               ref={warehouseSelectRef}
               value={currentWarehouseId ?? ''}
-              onChange={(e) => {
-                setCurrentWarehouseId(e.target.value)
-                setPileId('')
-                setVarietyId('')
-                setSackSelection('')
-                setLoadedTransaction(null)
-                setWarehouseChangeFlash(true)
-                setTimeout(() => setWarehouseChangeFlash(false), 750)
-              }}
+              onChange={(e) => handleWarehouseSelect(e.target.value)}
+              onKeyDown={warehouseTypeaheadKeyDown}
               className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon"
             >
               {sortedWarehouses.map((w) => (

@@ -65,6 +65,7 @@ import {
   focusFirstInvalidField,
   useIsWideLayout,
   groupBoxClass,
+  useWarehouseTypeahead,
 } from './shared.js'
 
 const SACK_CONDITION_CODES = ['BN', 'SH', 'US']
@@ -365,6 +366,14 @@ const SackFormBase = forwardRef(function SackFormBase(
     .filter((t) => !t.appliesTo || t.appliesTo === 'Both' || t.appliesTo === currentDirection)
     .sort((a, b) => byAlpha(a.name, b.name))
   const sortedWarehouses = [...(accessibleWarehouses ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  // See StockFormBase.jsx's identical fix/comment.
+  const handleWarehouseSelect = (warehouseId) => {
+    setCurrentWarehouseId(warehouseId)
+    setLoadedTransaction(null)
+    setWarehouseChangeFlash(true)
+    setTimeout(() => setWarehouseChangeFlash(false), 750)
+  }
+  const warehouseTypeaheadKeyDown = useWarehouseTypeahead(sortedWarehouses, handleWarehouseSelect)
 
   useEffect(() => {
     if (loadedTransaction) return
@@ -1257,12 +1266,8 @@ const SackFormBase = forwardRef(function SackFormBase(
             <select
               ref={warehouseSelectRef}
               value={currentWarehouseId ?? ''}
-              onChange={(e) => {
-                setCurrentWarehouseId(e.target.value)
-                setLoadedTransaction(null)
-                setWarehouseChangeFlash(true)
-                setTimeout(() => setWarehouseChangeFlash(false), 750)
-              }}
+              onChange={(e) => handleWarehouseSelect(e.target.value)}
+              onKeyDown={warehouseTypeaheadKeyDown}
               className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon"
             >
               {sortedWarehouses.map((w) => (
