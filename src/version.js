@@ -6390,4 +6390,18 @@
 //              already covered another way. Same tabIndex={-1}
 //              convention as the "Use X to complete AI balance"
 //              suggestion buttons (1.10-147).
-export const APP_VERSION = '1.10-160'
+//   1.10-161 - Two fixes, per explicit request:
+//              - Farmers Organization members: RSBSA is now required
+//                per member, same as Name already was - previously only
+//                a blank Name blocked Save, the exact asymmetry that let
+//                a blank RSBSA slip through with no amber border at all.
+//              - WSI/ESI Tab order: for an AI/SIA-linked type, Tab from
+//                MTS now jumps straight to Number of Bags instead of
+//                back to Nature of Transaction/Customer Name (the
+//                natural DOM order, since Customer sits BEFORE Stock
+//                Details in the two-column desktop layout) - those are
+//                already filled in by the authority pick and don't need
+//                re-visiting. Unless Address came back empty, in which
+//                case Tab from MTS goes to Address instead, so that
+//                real gap isn't silently skipped past.
+export const APP_VERSION = '1.10-161'

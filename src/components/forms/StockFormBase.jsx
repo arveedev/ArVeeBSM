@@ -593,6 +593,21 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // this stays null and the optional-chained .focus() call is simply a
   // no-op on that path rather than needing its own separate branch.
   const pileSelectRef = useRef(null)
+  // Tab-order override from MTS, per explicit request: for an AI/SIA-
+  // linked type (linkedDocDeductsFromAi), Nature of Transaction/
+  // Customer Name/Address are already filled by the authority pick and
+  // don't need re-visiting - Tab from MTS jumps straight to Number of
+  // Bags instead. Unless Address came back empty (a real gap the user
+  // still needs to fill in by hand, e.g. a customer with no address on
+  // file), in which case it goes to Address instead so that gap isn't
+  // silently skipped past. Needs explicit refs + a keydown intercept
+  // rather than relying on the natural DOM tab order, since the
+  // Customer group actually sits BEFORE the Stock Details group in the
+  // two-column desktop layout (documentGroup+stockDetailsGroup one
+  // column, customerGroup+quantityGroup the other) - Tab from MTS would
+  // otherwise land back on Nature of Transaction, not forward at all.
+  const addressInputRef = useRef(null)
+  const numberOfBagsRef = useRef(null)
   // Tracks the most recent key pressed on the Pile ID select - used
   // only by handlePileChange's own NEW_PILE_OPTION guard above, to
   // tell a deliberate Enter/Space commit apart from the browser's own
@@ -1265,7 +1280,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       && (!linkedDocDeductsFromAi || Boolean(linkedDocNo.trim()))
       && (isFillersType || (ageUnit === 'Months + Days' ? (monthsValue !== '' && daysValue !== '') : ageValue !== ''))
       && !overKilos
-      && (!farmerOrgEnabled || members.every((m) => m.name.trim()))
+      // Per explicit request: RSBSA is now required per member too, same
+      // as name already was - previously only name blocked Save, which
+      // is exactly the asymmetry that let a blank RSBSA slip through
+      // with no visual cue at all (see MemberNameAutocomplete's own
+      // `required` prop, now matched by the RSBSA input below).
+      && (!farmerOrgEnabled || members.every((m) => m.name.trim() && m.rsbsa.trim()))
       // Same requirements as the primary pile's own fields, applied
       // per additional-pile line - a line with no pile picked yet is
       // still tolerated (silently dropped at save time, same as
@@ -3248,6 +3268,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           <div>
             <label className={labelClass}>Address</label>
             <input
+              ref={addressInputRef}
               type="text"
               value={customerAddress}
               onChange={(e) => setCustomerAddress(e.target.value)}
@@ -3302,7 +3323,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                         type="text"
                         value={m.rsbsa}
                         onChange={(e) => updateMember(i, 'rsbsa', e.target.value)}
-                        className={inputClass}
+                        className={`${inputClass} ${!m.rsbsa.trim() ? '!border-brand-amber' : ''}`}
                         placeholder="RSBSA Reference Registration ID"
                       />
                       <select
@@ -3687,6 +3708,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               <select
                 value={sackSelection}
                 onChange={(e) => setSackSelection(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Tab' || e.shiftKey || !linkedDocDeductsFromAi) return
+                  e.preventDefault()
+                  if (customerAddress.trim()) numberOfBagsRef.current?.focus()
+                  else addressInputRef.current?.focus()
+                }}
                 className={`${inputClass} ${!sackSelection ? '!border-brand-amber' : ''}`}
               >
                 <option value="">Select sack code…</option>
@@ -3721,6 +3748,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             <div>
               <label className={labelClass}>Number of Bags</label>
               <input
+                ref={numberOfBagsRef}
                 type="text"
                 inputMode="decimal"
                 value={numberOfBags}
