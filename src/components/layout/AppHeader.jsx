@@ -189,11 +189,20 @@ function AppHeader({ hidden = false }) {
     const sackTypes = await db.sackTypes.toArray()
     const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
 
-    // { amount, minDate, maxDate } per key - minDate/maxDate track only
-    // the actual WSR receipt dates that fed this key (the "period the
-    // procurement was made" the notification now shows), never touched
-    // by the ESI side below, which only ever subtracts from the amount.
-    const byKey = new Map()
+    // Bags aren't lot/batch-tracked - a (warehouse, sackType, condition)
+    // group is one fungible pool, so there's no record of which specific
+    // WSR's physical bags a later SIA/ESI actually drew from. Reported,
+    // confirmed real bug: naively taking the min/max date across EVERY
+    // contributing WSR (regardless of whether it was since fully matched)
+    // kept a fully-covered receipt's date in the displayed range - e.g. a
+    // Sept 7 receipt fully consumed by a same-day SIA still showed up as
+    // "procured Sep 7" alongside genuinely-outstanding later receipts.
+    // Fixed with a FIFO simulation per key: consume the OLDEST receipts
+    // first against the total ESI deduction, so only the receipts whose
+    // bags plausibly remain unconsumed - the same assumption a warehouse
+    // worker would naturally make (oldest stock gets matched first) -
+    // contribute their date to the range.
+    const receiptsByKey = new Map()
     const procurementWsr = await db.transactions
       .where('warehouseId').anyOf(warehouseIds)
       .and((t) => t.type === 'WSR' && t.status === 'Active' && t.transactionTypeId === procurementTypeId)
@@ -201,12 +210,11 @@ function AppHeader({ hidden = false }) {
     for (const t of procurementWsr) {
       if (!t.mtsSackTypeId || !t.mtsCondition) continue
       const key = `${t.warehouseId}::${t.mtsSackTypeId}::${t.mtsCondition}`
-      const entry = byKey.get(key) ?? { amount: 0, minDate: null, maxDate: null }
-      entry.amount += t.numberOfBags ?? 0
-      if (t.date && (!entry.minDate || t.date < entry.minDate)) entry.minDate = t.date
-      if (t.date && (!entry.maxDate || t.date > entry.maxDate)) entry.maxDate = t.date
-      byKey.set(key, entry)
+      const list = receiptsByKey.get(key) ?? []
+      list.push({ date: t.date ?? '', amount: t.numberOfBags ?? 0 })
+      receiptsByKey.set(key, list)
     }
+    const consumedByKey = new Map()
     const procurementEsi = await db.transactions
       .where('warehouseId').anyOf(warehouseIds)
       .and((t) => t.type === 'ESI' && t.status === 'Active' && t.transactionTypeId === procurementTypeId)
@@ -214,10 +222,39 @@ function AppHeader({ hidden = false }) {
     for (const t of procurementEsi) {
       for (const line of t.sackLines ?? []) {
         const key = `${t.warehouseId}::${line.sackTypeId}::${line.condition}`
-        const entry = byKey.get(key) ?? { amount: 0, minDate: null, maxDate: null }
-        entry.amount -= line.pieces ?? 0
-        byKey.set(key, entry)
+        consumedByKey.set(key, (consumedByKey.get(key) ?? 0) + (line.pieces ?? 0))
       }
+    }
+
+    // { amount, minDate, maxDate } per key - amount is the plain net
+    // total (unaffected by FIFO, which only narrows which dates count);
+    // minDate/maxDate only reflect receipts that still have unconsumed
+    // bags after FIFO-matching the oldest receipts against total ESI
+    // consumption for that key.
+    const byKey = new Map()
+    for (const [key, list] of receiptsByKey) {
+      const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date))
+      let remaining = consumedByKey.get(key) ?? 0
+      const entry = { amount: 0, minDate: null, maxDate: null }
+      for (const r of sorted) {
+        entry.amount += r.amount
+        let outstanding = r.amount
+        if (remaining > 0) {
+          const consumedFromThis = Math.min(remaining, r.amount)
+          outstanding -= consumedFromThis
+          remaining -= consumedFromThis
+        }
+        if (outstanding > 0 && r.date) {
+          if (!entry.minDate || r.date < entry.minDate) entry.minDate = r.date
+          if (!entry.maxDate || r.date > entry.maxDate) entry.maxDate = r.date
+        }
+      }
+      entry.amount -= consumedByKey.get(key) ?? 0
+      byKey.set(key, entry)
+    }
+    for (const [key, consumed] of consumedByKey) {
+      if (receiptsByKey.has(key)) continue
+      byKey.set(key, { amount: -consumed, minDate: null, maxDate: null })
     }
 
     // Accumulate every still-positive key into one total per warehouse,

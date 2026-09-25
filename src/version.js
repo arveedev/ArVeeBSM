@@ -6529,4 +6529,21 @@
 //              which the console collapsed last time and hid exactly
 //              the fields that mattered) plus whether
 //              handleCategoryTabChange actually got called.
-export const APP_VERSION = '1.10-167'
+//   1.10-168 - Fixed a real reported bug in the procurement-SIA
+//              notification's date range: a fully-matched receipt's date
+//              still showed up in the range, because bags aren't lot/
+//              batch-tracked - a (warehouse, sackType, condition) group
+//              is one fungible pool, so the old min/max calculation took
+//              every contributing WSR's date regardless of whether an
+//              ESI had since fully consumed that specific receipt's
+//              bags. Confirmed via live diagnostic: a Sept 7 receipt
+//              (29 bags) fully matched by a same-day SIA/ESI still kept
+//              "Sep 7" in the displayed range alongside genuinely
+//              outstanding later receipts. Fixed with a FIFO simulation
+//              per key - oldest receipts get matched against the total
+//              ESI deduction first, so only receipts whose bags
+//              plausibly remain unconsumed contribute their date to the
+//              range. The accumulated bag total itself was already
+//              correct (confirmed by diagnostic - the Sept 7 pair nets
+//              to exactly zero) and is unchanged by this fix.
+export const APP_VERSION = '1.10-168'
