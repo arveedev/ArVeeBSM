@@ -103,7 +103,7 @@ function AuthorityPickerModal({ type, warehouseId, onSelect, onClose }) {
   })()
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div data-suppress-series-nav className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
         className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-neutral-800 bg-neutral-900 p-5"
         onClick={(e) => e.stopPropagation()}

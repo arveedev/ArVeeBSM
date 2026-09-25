@@ -6165,4 +6165,20 @@
 //                from Number of Bags landed on its own suggestion button
 //                before reaching Gross Kilos; it's still clickable, just
 //                no longer a Tab stop.
-export const APP_VERSION = '1.10-147'
+//   1.10-148 - Fixed reported bug: Left/Right arrow keys navigated the
+//              series (per useEntryFormShortcuts.js) even while
+//              CalendarDatePicker or AuthorityPickerModal was open and
+//              focused - neither one's day/record buttons are text-
+//              editable, so the shortcut hook's existing
+//              isTextEditable guard didn't stop them from stepping the
+//              underlying document out from under an open picker. Any
+//              overlay that wants to own arrow keys while it's open now
+//              marks its own root with `data-suppress-series-nav`,
+//              which the shortcut hook checks for on the focused
+//              element before acting - CalendarDatePicker and
+//              AuthorityPickerModal both opt in. CustomerNameAutocomplete's
+//              suggestion dropdown is marked too, for explicitness -
+//              its text input already kept real focus throughout, so
+//              it was already unaffected, but this keeps that fact from
+//              being an implicit assumption.
+export const APP_VERSION = '1.10-148'

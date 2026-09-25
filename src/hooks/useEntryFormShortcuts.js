@@ -39,6 +39,21 @@ const isTextEditable = (el) => {
   return false
 }
 
+// Confirmed, reported real bug: CalendarDatePicker's day grid and
+// AuthorityPickerModal's record list both navigate with Up/Down/Enter/
+// Escape via real, focusable <button> elements. A genuine button is
+// never text-editable, so isTextEditable(document.activeElement) alone
+// let a Left/Right press meant for series navigation fall straight
+// through this hook's window-level listener while one of these was
+// open and focused, stepping the underlying document's serial out from
+// under an open picker. The fix is opt-in from the overlay's own side:
+// any focusable container that wants to own arrow keys while it's open
+// marks its own root with `data-suppress-series-nav`, and this hook
+// checks for that ancestor on the currently focused element before
+// acting - covers any current or future overlay the same way without
+// this hook needing to know each one by name.
+const isInSuppressedRegion = (el) => Boolean(el?.closest?.('[data-suppress-series-nav]'))
+
 export const useEntryFormShortcuts = ({ onSave, onDelete, onStepBack, onStepForward }) => {
   useEffect(() => {
     const handler = (e) => {
@@ -59,6 +74,7 @@ export const useEntryFormShortcuts = ({ onSave, onDelete, onStepBack, onStepForw
 
       if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey && !e.altKey) {
         if (isTextEditable(document.activeElement)) return
+        if (isInSuppressedRegion(document.activeElement)) return
         if (e.key === 'ArrowLeft' && onStepBack) {
           e.preventDefault()
           onStepBack()
