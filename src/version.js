@@ -6432,4 +6432,30 @@
 //                Up/Down moves between all 5 types, Enter/Space selects
 //                (native button behavior), and Escape closes it -
 //                previously only mouse/tap and Tab worked.
-export const APP_VERSION = '1.10-162'
+//   1.10-163 - Four fixes/additions from real feedback on 1.10-162:
+//              - Alt+1/2/3 (cereal tabs) confirmed not firing on the
+//                reporting device - keyed off e.key, unreliable with
+//                Alt held (the same class of issue that makes Alt+
+//                letter act as an accelerator in some apps/browsers).
+//                Now keyed off e.code (Digit1/2/3, the raw physical
+//                key) instead, immune to what character a modifier
+//                makes the browser report.
+//              - The three cereal-tab buttons are now out of the Tab
+//                order (tabIndex={-1}) - Alt+1/2/3 already reaches
+//                them directly, so Tab from Warehouse now goes
+//                straight to Serial No.
+//              - The + button's document-type sheet: each of the 5
+//                type buttons now shows a small number badge (1-5,
+//                matching the visual grid order) and pressing that
+//                digit selects it directly, no arrowing required -
+//                same e.code-based approach as the Alt+digit fix above.
+//              - Error Log: each entry's title row now shows an
+//                explicit "Resolved"/"Unresolved" text badge, not just
+//                the existing icon+color, which wasn't obvious enough
+//                at a glance without already knowing the convention.
+//                Only shown for an entry that actually has a resolved/
+//                unresolved concept at all (a sync-failure entry, which
+//                carries `refId`) - a plain crash log never gets
+//                auto-resolved by anything, so labeling one
+//                "Unresolved" would mislead rather than inform.
+export const APP_VERSION = '1.10-163'

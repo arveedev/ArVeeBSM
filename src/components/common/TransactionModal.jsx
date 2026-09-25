@@ -52,6 +52,19 @@ function TransactionModal({ open, onClose, onSelectType }) {
       onClose()
       return
     }
+    // Direct number-key selection, per explicit request - matches the
+    // number badge shown on each button below. Keyed off e.code
+    // (Digit1..Digit5, the raw physical key) rather than e.key, per the
+    // reported real bug with Alt+1/2/3 (StockFormBase.jsx's own cereal-
+    // tab shortcut) - e.key isn't reliable with a modifier involved on
+    // every device, though no modifier is actually needed here since
+    // this sheet has no text field to collide with.
+    const digitIndex = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4 }[e.code]
+    if (digitIndex != null) {
+      e.preventDefault()
+      handleSelect(FLAT_TYPE_ORDER[digitIndex])
+      return
+    }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
     e.preventDefault()
     const currentIndex = FLAT_TYPE_ORDER.findIndex((t) => buttonRefs.current[t] === document.activeElement)
@@ -123,6 +136,7 @@ function TransactionModal({ open, onClose, onSelectType }) {
                 <FormButton
                   key={type}
                   type={type}
+                  number={FLAT_TYPE_ORDER.indexOf(type) + 1}
                   buttonRef={(el) => { buttonRefs.current[type] = el }}
                   onClick={() => handleSelect(type)}
                 />
@@ -134,6 +148,7 @@ function TransactionModal({ open, onClose, onSelectType }) {
           <FormButton
             type="WTS"
             fullWidth
+            number={FLAT_TYPE_ORDER.indexOf('WTS') + 1}
             buttonRef={(el) => { buttonRefs.current.WTS = el }}
             onClick={() => handleSelect('WTS')}
           />
@@ -151,14 +166,21 @@ function TransactionModal({ open, onClose, onSelectType }) {
   )
 }
 
-function FormButton({ type, onClick, fullWidth = false, buttonRef }) {
+function FormButton({ type, onClick, fullWidth = false, buttonRef, number }) {
   return (
     <button
       ref={buttonRef}
       type="button"
       onClick={onClick}
-      className={`${fullWidth ? 'w-full' : ''} rounded-xl border border-brand-neon/30 bg-neutral-950 py-4 text-sm font-semibold text-brand-neon transition-all hover:border-brand-neon hover:bg-brand-neon/10 hover:shadow-[0_0_20px_rgba(0,255,163,0.3)] active:scale-95`}
+      className={`relative ${fullWidth ? 'w-full' : ''} rounded-xl border border-brand-neon/30 bg-neutral-950 py-4 text-sm font-semibold text-brand-neon transition-all hover:border-brand-neon hover:bg-brand-neon/10 hover:shadow-[0_0_20px_rgba(0,255,163,0.3)] active:scale-95`}
     >
+      {/* Number badge - per explicit request, a direct keyboard
+          shortcut to pick a type without arrowing through the list
+          first (1-5, matching FLAT_TYPE_ORDER exactly). Shown so the
+          shortcut is discoverable, not just documented. */}
+      <span className="absolute left-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-800 text-[10px] font-bold text-neutral-400">
+        {number}
+      </span>
       {LABEL_MAP[type]}
     </button>
   )

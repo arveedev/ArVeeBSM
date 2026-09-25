@@ -2900,7 +2900,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     if (!isCategoryScoped) return
     const handleKeyDown = (e) => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return
-      const index = { '1': 0, '2': 1, '3': 2 }[e.key]
+      // Confirmed, reported real bug: e.key was unreliable with Alt
+      // held on the reporting device - Alt can shift what character a
+      // browser/OS reports as `key` (the same general class of issue
+      // that makes Alt+letter act as an accelerator in some apps),
+      // while `e.code` always reports the raw PHYSICAL key regardless
+      // of modifiers, which is what every other digit-based shortcut in
+      // this codebase should actually key off for reliability.
+      const index = { Digit1: 0, Digit2: 1, Digit3: 2 }[e.code]
       if (index == null) return
       if (document.activeElement?.closest?.('[data-suppress-form-shortcuts]')) return
       e.preventDefault()
@@ -3031,6 +3038,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   key={tab.key}
                   type="button"
                   onClick={() => handleCategoryTabChange(tab.key)}
+                  // Per explicit request: Alt+1/2/3 above already
+                  // reaches these tabs directly, so they're pulled out
+                  // of the Tab order entirely (Tab from Warehouse goes
+                  // straight to Serial No.) rather than being an extra
+                  // stop that offers nothing the shortcut doesn't.
+                  tabIndex={-1}
                   className={`relative z-10 rounded-lg border-2 border-transparent py-2.5 text-base transition-colors active:scale-95 ${cerealCategory === tab.key ? 'font-extrabold' : 'font-bold'}`}
                   style={{ color: cerealCategory === tab.key ? tab.textColor : '#737373' }}
                 >

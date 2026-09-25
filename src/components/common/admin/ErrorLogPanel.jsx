@@ -119,8 +119,28 @@ function ErrorLogPanel({ focusEntryId = null, onFocusHandled } = {}) {
                       ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-brand-neon" />
                       : <AlertTriangle size={15} className="mt-0.5 shrink-0 text-brand-crimson" />}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
                         <span className="truncate text-sm font-medium text-app-text">{entry.context}</span>
+                        {/* Explicit text badge, per explicit request - the
+                            icon+color alone (CheckCircle2/AlertTriangle
+                            above) wasn't obvious enough to read at a
+                            glance without already knowing the convention.
+                            Only shown when this entry actually HAS a
+                            resolved/unresolved concept at all - a plain
+                            logError crash entry (no `refId`, see
+                            errorLog.js) never gets auto-resolved by
+                            anything, so labeling one "Unresolved" would
+                            be misleading rather than informative. */}
+                        {entry.refId != null && (
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            entry.resolved
+                              ? 'bg-brand-neon/10 text-brand-neon'
+                              : 'bg-brand-crimson/10 text-brand-crimson'
+                          }`}>
+                            {entry.resolved ? 'Resolved' : 'Unresolved'}
+                          </span>
+                        )}
+                        <span className="flex-1" />
                         {isExpanded ? <ChevronDown size={14} className="shrink-0 text-neutral-500" /> : <ChevronRight size={14} className="shrink-0 text-neutral-500" />}
                       </div>
                       <p className="mt-0.5 text-xs text-neutral-500">{fmtTimestamp(entry.timestamp)}</p>
