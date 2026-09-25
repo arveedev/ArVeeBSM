@@ -395,7 +395,7 @@ alongside batching (§2.12 point 1) and `useDebouncedLiveCompute`
 (everywhere else in this section). Requires `ReactDOM.createRoot` (React
 18 concurrent rendering), already in use app-wide.
 
-### 2.13 A full pull that returns zero rows must not advance the sync cursor
+### 2.13 A full pull that returns zero or suspiciously few rows must not advance the sync cursor
 
 **Decision**: `runAuthoritiesSync` (`src/services/googleSheetsBridge.js`)
 only writes a fresh `lastSyncedAt` for a Sheet source when either (a) the
@@ -431,7 +431,34 @@ not to data or alias resolution, and the fix targets exactly that: leave
 the cursor where it was on a suspicious empty full pull rather than
 trusting it, so the same self-healing "the escape hatch is always still
 there" property 2.4/2.8 already rely on for Force Resync keeps holding
-even through this specific flavor of transient failure.
+even through this specific flavor of transient failure. Confirmed fixed
+directly on the reporting device: a Force Resync's retries visibly hit
+the same known echo-redirect 404s in console, self-healed on a later
+automatic retry (per `fetchWithRetry`'s existing 6-attempt budget), and
+landed a real full pull (`aiCount: 1306, siaCount: 241`) — PHF SHED's six
+AI/SIA records then appeared under Authority Monitor as expected.
+
+**Extension**: the same echo-redirect response layer could in principle
+also hand back a genuine, valid-looking `{status: 'SUCCESS', rows: [...]}`
+response that's merely *truncated* rather than fully empty — not observed
+directly, but nothing about the zero-rows check above would catch it,
+since any non-empty result skips past it and advances `lastSyncedAt`
+regardless of how incomplete the result actually is. Each sheet source
+now also remembers its row count from its last full pull that wasn't
+itself flagged suspicious (`lastFullPullRowCounts`, a plain extra field
+on the source record — no Dexie schema/version bump, same pattern as
+`dateProcured` on a beginning-balance line). A later full pull whose AI
+or SIA row count comes back under half of that source's own remembered
+baseline is treated the same as the zero-rows case: `lastSyncedAt` is
+left unset so the next tick retries, rather than silently accepting a
+partial pull as complete. AI and SIA are judged independently (one sheet
+can be legitimately much smaller than the other), and a source with no
+prior baseline yet — a first sync, or a sheet that's always been small —
+is never flagged, since there is nothing real yet to regress from. The
+50% threshold is deliberately loose: tight enough to catch a response
+that's lost the bulk of its rows to truncation, loose enough to tolerate
+a sheet that's legitimately shrunk (e.g. a fresh year's copy starting
+smaller than the prior year's).
 
 ## 3. Non-Functional Requirements
 

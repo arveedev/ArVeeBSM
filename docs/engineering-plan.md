@@ -357,7 +357,18 @@ fixes across every earlier phase.
   again match a row modified before that new cursor. Fixed by leaving
   `lastSyncedAt` unset when a full pull comes back completely empty, so
   the next periodic tick retries automatically instead of getting stuck
-  forever (TDD §2.13).
+  forever (TDD §2.13). Confirmed working directly on the reporting
+  device: a Force Resync's retries visibly hit the same known
+  echo-redirect 404s, self-healed automatically on a later attempt, and
+  landed a real full pull (`aiCount: 1306, siaCount: 241`) — PHF SHED's
+  six authorities then appeared under Authority Monitor as expected.
+  Extended the same fix, proactively rather than from a second real
+  report, to a related failure shape the zero-rows check alone couldn't
+  catch: a full pull whose response is genuinely truncated rather than
+  fully empty. Each source now remembers its row count from its last
+  trustworthy full pull, and a later full pull whose AI or SIA count
+  drops below half that baseline is treated the same as an empty one
+  (TDD §2.13).
 
 **Milestone**: the app is in daily production use across multiple
 warehouses with no open data-integrity bug, and every NFA report type
