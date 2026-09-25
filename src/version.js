@@ -6566,4 +6566,18 @@
 //              listener (and re-attaching a new window-level handler)
 //              on every category change. Diagnostic logging removed now
 //              that the real cause is confirmed and fixed.
-export const APP_VERSION = '1.10-169'
+//   1.10-170 - Reported real bug, confirmed live (1.10-169 fixed the
+//              stale-closure bug but this one remained): plain 1/2/3
+//              silently did nothing right after opening a WSR/WSI form,
+//              because the form deliberately opens with focus ON the
+//              Warehouse dropdown, and a plain digit had to be skipped
+//              while any <select> is focused so it wouldn't steal
+//              typing from the Warehouse/Pile type-ahead. Per explicit
+//              request, switched the cereal-tab shortcut to Shift+1/2/3
+//              so it works immediately no matter which field has focus
+//              - Shift+digit produces a symbol (!/@/#), which neither
+//              the browser's native select type-ahead nor this form's
+//              own useWarehouseTypeahead (both match by character) will
+//              ever mistake for a real search key, so the SELECT-focus
+//              guard could be dropped entirely for this shortcut.
+export const APP_VERSION = '1.10-170'

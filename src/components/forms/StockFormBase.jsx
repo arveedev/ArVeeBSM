@@ -2911,18 +2911,26 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // current every render sidesteps the stale closure without having to
   // rebuild the listener (and re-attach a new window-level handler) on
   // every category change.
+  // Reported real bug: plain 1/2/3 silently did nothing right after the
+  // form opened, because the form deliberately opens with focus ON the
+  // Warehouse dropdown (below) - and a plain digit had to be skipped
+  // while any <select> is focused, since a select can have its own
+  // real, meaningful use for a digit keypress (native browser type-
+  // ahead, or this form's own custom useWarehouseTypeahead on the
+  // Warehouse field). Per explicit request, switched to Shift+1/2/3 so
+  // it works immediately regardless of which field has focus - Shift
+  // sidesteps the type-ahead conflict since Shift+digit produces a
+  // symbol (!/@/#), not a digit, so neither the browser's native
+  // type-ahead nor useWarehouseTypeahead's own e.key match (both search
+  // by character, not by code) will ever fire on it.
   const handleCategoryTabChangeRef = useRef(null)
   useEffect(() => {
     if (!isCategoryScoped) return
     const handleKeyDown = (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (e.ctrlKey || e.metaKey || e.altKey || !e.shiftKey) return
+      // Still respected even with Shift held - Shift+1 typed into a
+      // text field must still insert "!" normally, not get hijacked.
       if (isTextEditable(document.activeElement)) return
-      // Also skip while any <select> has focus - isTextEditable alone
-      // doesn't cover it, but a select can have its own real, meaningful
-      // use for a digit keypress (native browser type-ahead, or this
-      // form's own custom useWarehouseTypeahead on the Warehouse field)
-      // that this shortcut would otherwise silently steal.
-      if (document.activeElement?.tagName === 'SELECT') return
       // e.code (the raw physical key), not e.key - confirmed real bug
       // with the earlier Alt+digit version: e.key can report a
       // different character depending on modifiers/layout, e.code
