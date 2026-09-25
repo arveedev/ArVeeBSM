@@ -6293,4 +6293,26 @@
 //                later. Added a Clear All button (same destructive
 //                action, confirmed, as Error Log's own Clear All in
 //                Admin Dashboard, just reachable from the bell too).
-export const APP_VERSION = '1.10-153'
+//   1.10-154 - Two fixes for the false "unsaved changes" warning,
+//              root-caused after the user identified the actual record:
+//              a Farmers Organization member with a blank name.
+//              - No visual flag existed for a blank member name, unlike
+//                every other required field in the form (which all get
+//                the amber "needs attention" border) - despite canSave
+//                already requiring every member's name to be non-blank.
+//                MemberNameAutocomplete now accepts the same `required`
+//                prop CustomerNameAutocomplete already has, wired on.
+//              - loadTransactionIntoForm used to set `members` straight
+//                from the raw stored `tx.farmerCoops` shape, unlike
+//                every other field this function loads (all normalized
+//                with `?? ''` or similar) - an older record's member
+//                object missing a key entirely (e.g. no `rsbsa` field
+//                at all, pre-dating the current 3-key shape) would
+//                JSON.stringify differently from the freshly-spread
+//                shape buildTransactionPayload() re-produces on any
+//                later call, with nothing the user actually changed.
+//                Now normalized to the exact {name, rsbsa, gender}
+//                shape on load, same as a blank member always has.
+//                (1.10-151's [DIRTY-CHECK-DIAG] diagnostic stays live
+//                to confirm this was the actual mechanism.)
+export const APP_VERSION = '1.10-154'

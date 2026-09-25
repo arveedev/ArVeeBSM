@@ -23,7 +23,7 @@ import { User } from 'lucide-react'
 import { searchCustomers, findCustomerByName } from '../../utils/customerDirectory.js'
 import { inputClass } from './shared.js'
 
-function MemberNameAutocomplete({ value, onChange, onMatch, placeholder = 'Member Full Name' }) {
+function MemberNameAutocomplete({ value, onChange, onMatch, placeholder = 'Member Full Name', required = false }) {
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   // Same Arrow Down/Up + Tab-to-accept behavior as CustomerNameAutocomplete.jsx.
@@ -119,7 +119,7 @@ function MemberNameAutocomplete({ value, onChange, onMatch, placeholder = 'Membe
         }}
         onFocus={() => setShowSuggestions(true)}
         onKeyDown={handleKeyDown}
-        className={inputClass}
+        className={`${inputClass} ${required && !(value ?? '').trim() ? '!border-brand-amber' : ''}`}
         placeholder={placeholder}
         autoComplete="off"
       />

@@ -1550,7 +1550,24 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setCondition(tx.condition ?? '')
     setMoistureContent(tx.moistureContent != null ? liveFormatNumber(String(tx.moistureContent)) : '')
     setFarmerOrgEnabled(Boolean(tx.farmerCoops?.length))
-    setMembers(tx.farmerCoops?.length ? tx.farmerCoops : [emptyMember()])
+    // Normalized to emptyMember()'s exact {name, rsbsa, gender} shape,
+    // unlike the raw `tx.farmerCoops` this used to set directly -
+    // every other field loaded in this function already normalizes
+    // (`?? ''`, `!= null ? ... : ''`) except this one had been left
+    // as whatever shape happened to be stored. A genuinely plausible
+    // contributor to the reported false "unsaved changes" warning:
+    // an older record's member object missing a key entirely (e.g. no
+    // `rsbsa` field at all, pre-dating when this exact 3-key shape was
+    // standardized) would JSON.stringify differently from the freshly-
+    // spread `{...m}` shape buildTransactionPayload() re-produces on
+    // any later call, with nothing the user actually changed - now
+    // both the baseline capture and every later live call always see
+    // the identical, complete shape.
+    setMembers(
+      tx.farmerCoops?.length
+        ? tx.farmerCoops.map((m) => ({ name: m.name ?? '', rsbsa: m.rsbsa ?? '', gender: m.gender || 'Male' }))
+        : [emptyMember()]
+    )
   }
 
   const resetToBlankEntry = (nextSerial) => {
@@ -3219,10 +3236,22 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       )}
                     </div>
                     <div className="mt-2 space-y-2">
+                      {/* Confirmed, reported real bug: a member with a
+                          blank name has no visual flag at all, even
+                          though canSave's own gate already requires
+                          every member's name to be non-blank
+                          (`members.every((m) => m.name.trim())`) - a
+                          record saved before that rule existed can
+                          silently carry a blank member name forever,
+                          with nothing on screen to explain why the
+                          unsaved-changes guard (or Save itself) keeps
+                          objecting. `required` matches Customer Name's
+                          own amber-border convention exactly. */}
                       <MemberNameAutocomplete
                         value={m.name}
                         onChange={(v) => updateMember(i, 'name', v)}
                         onMatch={(customer) => handleMemberMatch(i, customer)}
+                        required
                       />
                       <input
                         type="text"
