@@ -607,7 +607,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // two-column desktop layout (documentGroup+stockDetailsGroup one
   // column, customerGroup+quantityGroup the other) - Tab from MTS would
   // otherwise land back on Nature of Transaction, not forward at all.
+  // Per explicit follow-up request, the same "skip what's already
+  // filled in" rule now also covers the top-level RSBSA/Gender fields
+  // (Procurement, FA off only - a Farmer Org's per-member RSBSA/Gender
+  // are never touched by an AI pick, so there's nothing to skip there).
+  // Same priority-chain approach: the first of Address/RSBSA/Gender
+  // that's still blank gets focus; only once all three are filled does
+  // Tab reach Number of Bags.
   const addressInputRef = useRef(null)
+  const farmerRsbsaRef = useRef(null)
+  const farmerGenderRef = useRef(null)
   const numberOfBagsRef = useRef(null)
   // Tracks the most recent key pressed on the Pile ID select - used
   // only by handlePileChange's own NEW_PILE_OPTION guard above, to
@@ -3639,6 +3648,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               <div>
                 <label className={labelClass}>RSBSA</label>
                 <input
+                  ref={farmerRsbsaRef}
                   type="text"
                   value={farmerRsbsa}
                   onChange={(e) => setFarmerRsbsa(e.target.value)}
@@ -3649,6 +3659,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               <div>
                 <label className={labelClass}>Gender</label>
                 <select
+                  ref={farmerGenderRef}
                   value={farmerGender}
                   onChange={(e) => setFarmerGender(e.target.value)}
                   className={inputClass}
@@ -3788,8 +3799,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 onKeyDown={(e) => {
                   if (e.key !== 'Tab' || e.shiftKey || !linkedDocDeductsFromAi) return
                   e.preventDefault()
-                  if (customerAddress.trim()) numberOfBagsRef.current?.focus()
-                  else addressInputRef.current?.focus()
+                  if (!customerAddress.trim()) { addressInputRef.current?.focus(); return }
+                  if (isProcurement && !farmerOrgEnabled) {
+                    if (!farmerRsbsa.trim()) { farmerRsbsaRef.current?.focus(); return }
+                    if (!farmerGender) { farmerGenderRef.current?.focus(); return }
+                  }
+                  numberOfBagsRef.current?.focus()
                 }}
                 className={`${inputClass} ${!sackSelection ? '!border-brand-amber' : ''}`}
               >

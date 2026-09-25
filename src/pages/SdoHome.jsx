@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureState } from '../utils/calculations.js'
+import { fuzzyMatchesAny } from '../utils/fuzzySearch.js'
 import {
   computeCashOnHand, resolveBuyingPrice, resolveUnitCost,
   lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost,
@@ -225,12 +226,10 @@ function SdoHome() {
     : null
 
   const applySearch = (list) => {
-    const q = debouncedSearch.trim().toLowerCase()
+    const q = debouncedSearch.trim()
     if (!q) return list
     return list.filter((t) =>
-      (t.customerName ?? '').toLowerCase().includes(q) ||
-      (t.serialNo ?? '').toLowerCase().includes(q) ||
-      (activePrByWsrId.get(t.id)?.prNo ?? '').toLowerCase().includes(q)
+      fuzzyMatchesAny(q, [t.customerName, t.serialNo, activePrByWsrId.get(t.id)?.prNo])
     )
   }
 

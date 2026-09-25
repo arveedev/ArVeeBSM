@@ -6,11 +6,12 @@
 // narrow reference field. One shared implementation so every screen's
 // idea of "broad" stays the same instead of each picking its own subset.
 
-const matchesAny = (query, candidates) => {
-  const q = query.trim().toLowerCase()
-  if (!q) return true
-  return candidates.some((c) => c != null && String(c).toLowerCase().includes(q))
-}
+import { fuzzyMatchesAny } from './fuzzySearch.js'
+
+// Per explicit request, every search box in the app tolerates small
+// typos - delegates to the shared fuzzy matcher (see fuzzySearch.js)
+// instead of a plain exact-substring check.
+const matchesAny = fuzzyMatchesAny
 
 /**
  * AI/SIA authority record - fields confirmed directly against the

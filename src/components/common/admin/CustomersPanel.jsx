@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import { Pencil, Trash2, Search, X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { normalizeCustomerName } from '../../../utils/customerDirectory.js'
+import { fuzzyContains } from '../../../utils/fuzzySearch.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import ShrinkFilterRow from '../ShrinkFilterRow.jsx'
 import {
@@ -143,10 +144,10 @@ function CustomersPanel() {
   const normalizedSearch = normalizeCustomerName(search)
   const matchesQuery = (c) => {
     if (!normalizedSearch) return true
-    if (c.normalizedName.includes(normalizedSearch)) return true
-    if (c.address && normalizeCustomerName(c.address).includes(normalizedSearch)) return true
+    if (fuzzyContains(c.normalizedName, normalizedSearch)) return true
+    if (c.address && fuzzyContains(normalizeCustomerName(c.address), normalizedSearch)) return true
     const nicknames = nicknamesByCustomer.get(c.customerId) ?? []
-    return nicknames.some((n) => normalizeCustomerName(n).includes(normalizedSearch))
+    return nicknames.some((n) => fuzzyContains(normalizeCustomerName(n), normalizedSearch))
   }
   const sortedCustomers = [...(customers ?? [])].sort((a, b) => byAlpha(a.name, b.name))
   const filtered = sortedCustomers.filter(matchesQuery)

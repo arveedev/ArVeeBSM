@@ -17,6 +17,7 @@
 
 import { db } from '../db/dexie.js'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
+import { fuzzyContains } from './fuzzySearch.js'
 
 // Prefixes a warehouse's own name/GID onto its address so a WS/MPO
 // suggestion's address reads e.g. "Tabaco GID, Tabaco City, Albay"
@@ -131,7 +132,8 @@ export const searchCustomers = async (query, limit = 6, warehouseId = null) => {
   if (normalizedQuery.length < 3) return []
 
   const all = await db.customers.toArray()
-  const matches = all.filter((c) => c.normalizedName.includes(normalizedQuery))
+  // Per explicit request, tolerant of small typos - see fuzzySearch.js.
+  const matches = all.filter((c) => fuzzyContains(c.normalizedName, normalizedQuery))
 
   matches.sort((a, b) => {
     const aStarts = a.normalizedName.startsWith(normalizedQuery)

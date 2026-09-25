@@ -6580,4 +6580,31 @@
 //              own useWarehouseTypeahead (both match by character) will
 //              ever mistake for a real search key, so the SELECT-focus
 //              guard could be dropped entirely for this shortcut.
-export const APP_VERSION = '1.10-170'
+//   1.10-171 - Three explicit requests in one round:
+//              (1) The MTS-based Tab-skip (StockFormBase.jsx) now also
+//              chains through the top-level RSBSA/Gender fields
+//              (Procurement, FA off) the same way it already did for
+//              Address - Tab jumps to whichever of Address/RSBSA/Gender
+//              is still blank, or straight to Number of Bags once all
+//              three are already filled. Farmer Org per-member RSBSA/
+//              Gender are untouched - an AI pick never fills those.
+//              (2) ProcurementMonitor.jsx (Admin/Visitor Procurement
+//              tab): a variety filter is back alongside the warehouse
+//              filter (previously replaced by it, now both coexist
+//              independently), and the card list now replays its
+//              stagger-field-in entrance animation whenever search,
+//              sort, or any filter changes the visible set - same
+//              key-driven-remount convention AuthorityMonitor.jsx's own
+//              list already uses.
+//              (3) New shared src/utils/fuzzySearch.js - every real
+//              search box in the app (Admin/Visitor Monitoring via
+//              monitoringSearch.js, the Procurement tab, SDO's
+//              transaction search, the Customers admin panel, customer-
+//              name autocomplete suggestions, warehouse classifier-name
+//              suggestions) now tolerates small typos, via a bounded
+//              Levenshtein edit-distance check that only runs once a
+//              plain exact-substring match fails. Exact-match lookups
+//              that drive auto-fill (findCustomerByName) are
+//              deliberately left untouched - fuzziness there would risk
+//              silently filling a form from the WRONG customer.
+export const APP_VERSION = '1.10-171'

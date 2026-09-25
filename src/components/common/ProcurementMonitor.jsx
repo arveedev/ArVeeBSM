@@ -21,6 +21,7 @@ import { Search, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags, calculateNetBags, isProcurementTypeName, effectiveCutoffDate } from '../../utils/calculations.js'
+import { fuzzyMatchesAny } from '../../utils/fuzzySearch.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 
@@ -41,6 +42,7 @@ function ProcurementMonitor() {
   const { weightUnit } = useSettings() ?? {}
   const [searchQuery, setSearchQuery] = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState('')
+  const [varietyFilter, setVarietyFilter] = useState('')
   const [sortBy, setSortBy] = useState('date-desc')
   const [periodFrom, setPeriodFrom] = useState('')
   const [periodTo, setPeriodTo] = useState('')
@@ -102,20 +104,23 @@ function ProcurementMonitor() {
     ? periodFilteredTx.filter((t) => t.warehouseId === warehouseFilter)
     : periodFilteredTx
 
-  const paymentFilteredTx = paymentFilter
-    ? warehouseFilteredTx.filter((t) => (paymentFilter === 'paid') === paidWsrIds.has(t.id))
+  // Per explicit request, variety filtering is back alongside the
+  // warehouse filter (not instead of it) - independent, so either or
+  // both can narrow the list at once.
+  const varietyFilteredTx = varietyFilter
+    ? warehouseFilteredTx.filter((t) => t.varietyId === varietyFilter)
     : warehouseFilteredTx
 
-  const q = searchQuery.trim().toLowerCase()
+  const paymentFilteredTx = paymentFilter
+    ? varietyFilteredTx.filter((t) => (paymentFilter === 'paid') === paidWsrIds.has(t.id))
+    : varietyFilteredTx
+
+  const q = searchQuery.trim()
   const visibleTx = q
     ? paymentFilteredTx.filter((t) => {
         const w = warehouseMap.get(t.warehouseId)
         const varietyName = varietyMap.get(t.varietyId)?.name ?? ''
-        return (
-          (w?.code ?? '').toLowerCase().includes(q) ||
-          (w?.name ?? '').toLowerCase().includes(q) ||
-          varietyName.toLowerCase().includes(q)
-        )
+        return fuzzyMatchesAny(q, [w?.code, w?.name, varietyName])
       })
     : paymentFilteredTx
 
@@ -175,6 +180,24 @@ function ProcurementMonitor() {
     .filter((w) => byWarehouse.has(w.warehouseId))
     .sort((a, b) => (a.code ?? '').localeCompare(b.code ?? ''))
 
+  // Built from cutoffFilteredTx (only the reporting-cutoff rule
+  // applied), not the fully-filtered visibleTx - so picking a variety
+  // never collapses this list down to just the one already selected,
+  // the way warehouseOptions above can.
+  const varietyOptionIds = new Set(cutoffFilteredTx.map((t) => t.varietyId).filter(Boolean))
+  const varietyOptions = varieties
+    .filter((v) => varietyOptionIds.has(v.varietyId))
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+
+  // Per explicit request: an animated cue whenever the visible list
+  // changes because of search, sort, or any filter - not just on first
+  // mount. Keying the list container on every control's current value
+  // forces React to remount it (replaying stagger-field-in on each
+  // card) instead of quietly re-rendering in place, the same
+  // key-driven-remount convention AuthorityMonitor.jsx already uses for
+  // its own filtered list.
+  const listAnimationKey = [searchQuery, warehouseFilter, varietyFilter, sortBy, paymentFilter, periodFrom, periodTo].join('|')
+
   return (
     <div className="mt-4">
       <div className="flex items-center gap-2">
@@ -209,6 +232,20 @@ function ProcurementMonitor() {
           <option value="">All warehouses</option>
           {warehouseOptions.map((w) => <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>)}
         </select>
+        {/* Per explicit request, brought back alongside the warehouse
+            filter (not in place of it, as it was before) - independent
+            filters, either or both narrow the list. */}
+        <select
+          value={varietyFilter}
+          onChange={(e) => setVarietyFilter(e.target.value)}
+          className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
+        >
+          <option value="">All varieties</option>
+          {varietyOptions.map((v) => <option key={v.varietyId} value={v.varietyId}>{v.name}</option>)}
+        </select>
+      </div>
+
+      <div className="mt-2">
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
@@ -269,7 +306,7 @@ function ProcurementMonitor() {
           No Procurement transactions match.
         </p>
       ) : (
-        <div className="mt-3 space-y-3">
+        <div key={listAnimationKey} className="mt-3 space-y-3 stagger-fields">
           {cards.map((c) => (
             <div key={c.warehouseId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">

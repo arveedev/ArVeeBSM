@@ -12,6 +12,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { fmtBags, fmtWeight } from '../utils/calculations.js'
+import { fuzzyContains } from '../utils/fuzzySearch.js'
 import { computeCashOnHand } from '../utils/sdoCalculations.js'
 import { recalculatePileCurrentState } from '../utils/pileLedger.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
@@ -274,7 +275,7 @@ function ClassifierSection({ warehouseId }) {
       const cn = w.classifierName
       if (!cn || w.warehouseId === warehouseId) continue
       const key = cn.toLowerCase()
-      if (key === q || seen.has(key) || !key.includes(q)) continue
+      if (key === q || seen.has(key) || !fuzzyContains(key, q)) continue
       seen.add(key)
       results.push(cn)
       if (results.length >= 6) break
