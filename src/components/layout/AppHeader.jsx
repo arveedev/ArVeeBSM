@@ -107,11 +107,19 @@ function AppHeader({ hidden = false }) {
   const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
   const canEditAvatar = Boolean(user?.uid)
 
-  // Admin-only error notification bell, per explicit request - a badge
-  // count of unresolved db.errorLogs entries (the same table
-  // ErrorLogPanel.jsx already reads), with a dropdown of the most
-  // recent ones. Tapping an entry deep-links into Admin Dashboard's
-  // Error Log tab and scrolls/expands/highlights that exact row (see
+  // Admin-only notification bell, per explicit request - a general
+  // notification surface this session only feeds from db.errorLogs
+  // (the same table ErrorLogPanel.jsx reads) since that's the only
+  // real notification-worthy data source in the app right now, but per
+  // explicit request this is meant to grow: other notification kinds,
+  // and other roles besides Admin, are expected to feed into this same
+  // bell later - `notifEntries` is kept as a plain, source-agnostic
+  // {id, icon, title, detail, onClick} shape rather than raw error-log
+  // rows, specifically so a later second source can be merged in
+  // alongside without reshaping what the dropdown itself renders.
+  //
+  // Tapping an entry deep-links into Admin Dashboard's Error Log tab
+  // and scrolls/expands/highlights that exact row (see
   // ErrorLogPanel.jsx's focusEntryId handling) - since a sync failure
   // updates the SAME log row in place once it resolves rather than
   // creating a second entry, a notification for an error that's since
@@ -122,8 +130,8 @@ function AppHeader({ hidden = false }) {
     () => (isAdmin ? db.errorLogs.orderBy('timestamp').reverse().toArray() : []),
     [isAdmin]
   ) ?? []
-  const unresolvedErrors = errorEntries.filter((e) => !e.resolved)
   const [notifOpen, setNotifOpen] = useState(false)
+  const [confirmingClearNotifs, setConfirmingClearNotifs] = useState(false)
   const notifRef = useRef(null)
   useEffect(() => {
     if (!notifOpen) return
@@ -133,9 +141,27 @@ function AppHeader({ hidden = false }) {
     document.addEventListener('mousedown', handleOutside)
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [notifOpen])
-  const handleNotifEntryClick = (entryId) => {
-    setNotifOpen(false)
-    navigate('/admin', { state: { groupId: 'system', tabId: 'errorLog', focusEntryId: entryId } })
+
+  const notifEntries = errorEntries.map((entry) => ({
+    id: entry.id,
+    resolved: Boolean(entry.resolved),
+    title: entry.context,
+    detail: entry.message,
+    onClick: () => {
+      setNotifOpen(false)
+      navigate('/admin', { state: { groupId: 'system', tabId: 'errorLog', focusEntryId: entry.id } })
+    },
+  }))
+  const unresolvedNotifCount = notifEntries.filter((n) => !n.resolved).length
+
+  // Same table this bell's only current source reads from - clearing
+  // here is exactly ErrorLogPanel's own "Clear All" action, just
+  // reachable without opening Admin Dashboard first. Confirmed first
+  // (same as that panel's own Clear All), since this is destructive and
+  // shared across every device.
+  const handleClearAllNotifs = async () => {
+    setConfirmingClearNotifs(false)
+    await db.errorLogs.clear()
   }
 
   // Slides down from above on mount - needs a tick of delay
@@ -324,43 +350,52 @@ function AppHeader({ hidden = false }) {
                 <button
                   type="button"
                   onClick={() => setNotifOpen((o) => !o)}
-                  aria-label="Error notifications"
+                  aria-label="Notifications"
                   className="relative flex h-10 w-10 items-center justify-center rounded-full text-neutral-300 transition-all hover:text-brand-neon active:scale-90"
                 >
                   <Bell size={20} />
-                  {unresolvedErrors.length > 0 && (
+                  {unresolvedNotifCount > 0 && (
                     <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-crimson px-1 text-[10px] font-bold text-app-text">
-                      {unresolvedErrors.length > 9 ? '9+' : unresolvedErrors.length}
+                      {unresolvedNotifCount > 9 ? '9+' : unresolvedNotifCount}
                     </span>
                   )}
                 </button>
 
                 {notifOpen && (
                   <div className="absolute right-0 top-full z-[106] mt-2 max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50">
-                    <div className="border-b border-neutral-800 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                        {unresolvedErrors.length > 0
-                          ? `${unresolvedErrors.length} unresolved error${unresolvedErrors.length === 1 ? '' : 's'}`
-                          : 'No unresolved errors'}
+                        {unresolvedNotifCount > 0
+                          ? `${unresolvedNotifCount} unresolved`
+                          : 'Notifications'}
                       </p>
+                      {notifEntries.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingClearNotifs(true)}
+                          className="shrink-0 text-xs font-medium text-neutral-500 transition-colors hover:text-brand-crimson"
+                        >
+                          Clear All
+                        </button>
+                      )}
                     </div>
-                    {errorEntries.length === 0 ? (
-                      <p className="px-3 py-4 text-center text-xs text-neutral-500">Nothing logged yet.</p>
+                    {notifEntries.length === 0 ? (
+                      <p className="px-3 py-4 text-center text-xs text-neutral-500">Nothing to show.</p>
                     ) : (
                       <ul className="divide-y divide-neutral-800">
-                        {errorEntries.slice(0, 8).map((entry) => (
-                          <li key={entry.id}>
+                        {notifEntries.slice(0, 8).map((notif) => (
+                          <li key={notif.id}>
                             <button
                               type="button"
-                              onClick={() => handleNotifEntryClick(entry.id)}
+                              onClick={notif.onClick}
                               className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-neutral-800"
                             >
-                              {entry.resolved
+                              {notif.resolved
                                 ? <Check size={14} className="mt-0.5 shrink-0 text-brand-neon" />
                                 : <AlertTriangle size={14} className="mt-0.5 shrink-0 text-brand-crimson" />}
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-xs font-medium text-app-text">{entry.context}</span>
-                                <span className="block truncate text-xs text-neutral-500">{entry.message}</span>
+                                <span className="block truncate text-xs font-medium text-app-text">{notif.title}</span>
+                                <span className="block truncate text-xs text-neutral-500">{notif.detail}</span>
                               </span>
                             </button>
                           </li>
@@ -453,6 +488,18 @@ function AppHeader({ hidden = false }) {
         onConfirm={handleLogoutConfirmed}
         onCancel={() => setConfirmingLogout(false)}
       />
+
+      {isAdmin && (
+        <ConfirmDialog
+          open={confirmingClearNotifs}
+          icon={AlertTriangle}
+          title="Clear all notifications?"
+          description={`This deletes all ${errorEntries.length} recorded error log entr${errorEntries.length === 1 ? 'y' : 'ies'} on every device - it doesn't undo whatever originally went wrong, only the record of it. Same as Error Log's own Clear All in Admin Dashboard.`}
+          confirmLabel="Clear All"
+          onConfirm={handleClearAllNotifs}
+          onCancel={() => setConfirmingClearNotifs(false)}
+        />
+      )}
 
       {/* Fades the whole screen to black on logout - the reverse
           counterpart to Login's own fade-out, so this reads as one

@@ -6276,4 +6276,21 @@
 //                since resolved correctly lands on that row already
 //                showing its own green Resolved banner - never a
 //                separate, disconnected "still broken" view.
-export const APP_VERSION = '1.10-152'
+//   1.10-153 - Two corrections to 1.10-152, per explicit feedback:
+//              - Pile ID: the "(Pile no longer exists)" case no longer
+//                gets the amber "needs attention" border - a pile
+//                deleted or closed AFTER a transaction was saved isn't
+//                a mistake or incomplete entry, just later housekeeping
+//                on unrelated, already-correct historical data. Amber
+//                wrongly implied it needed fixing; the informational
+//                disabled option alone is the whole fix.
+//              - Notification bell: reframed as a general-purpose
+//                notification surface (its dropdown now renders a
+//                source-agnostic {id, title, detail, onClick} shape),
+//                not permanently tied to only errors - db.errorLogs is
+//                just its first and only current source, expected to
+//                grow with other notification kinds and other roles
+//                later. Added a Clear All button (same destructive
+//                action, confirmed, as Error Log's own Clear All in
+//                Admin Dashboard, just reachable from the bell too).
+export const APP_VERSION = '1.10-153'

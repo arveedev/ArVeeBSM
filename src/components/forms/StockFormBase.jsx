@@ -3505,7 +3505,18 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <select
                   value={pileId}
                   onChange={(e) => handlePileChange(e.target.value)}
-                  className={`${inputClass} ${!pileId || pileNoLongerExists ? '!border-brand-amber' : ''}`}
+                  // pileNoLongerExists deliberately does NOT get the
+                  // amber "needs attention" treatment `!pileId` gets -
+                  // per explicit clarification, a pile deleted (or
+                  // closed) AFTER this record was saved is not a
+                  // mistake or an incomplete entry, it's just later
+                  // housekeeping on unrelated, already-correct
+                  // historical data. Amber here would wrongly read as
+                  // "this needs fixing" on a record that was entered
+                  // correctly at the time and hasn't actually lost
+                  // anything - the informational disabled option below
+                  // is the whole fix, not a validation flag.
+                  className={`${inputClass} ${!pileId ? '!border-brand-amber' : ''}`}
                 >
                   <option value="">Select pile…</option>
                   {/* Confirmed, reported real bug: a saved record whose
@@ -3519,7 +3530,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       true, and inviting an unnecessary re-pick. A
                       synthetic option for the dead ID keeps the select
                       genuinely showing something selected and honest
-                      about why. */}
+                      about why. Only fires for a pile that's genuinely
+                      gone (its row deleted) - a pile that's merely
+                      CLOSED (zeroed out, row still exists) still
+                      resolves and shows its real name normally,
+                      regardless of whether that closure happened before
+                      or after this transaction's own date, since the
+                      list this is checked against isn't date-filtered. */}
                   {pileNoLongerExists && (
                     <option value={pileId} disabled>
                       (Pile no longer exists - re-select if this needs a new pile)
