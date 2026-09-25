@@ -6315,4 +6315,21 @@
 //                shape on load, same as a blank member always has.
 //                (1.10-151's [DIRTY-CHECK-DIAG] diagnostic stays live
 //                to confirm this was the actual mechanism.)
-export const APP_VERSION = '1.10-154'
+//   1.10-155 - SDO Home: a new "Unpaid Procurement" card, per explicit
+//              request, shown before the WSR list itself - scoped ONLY
+//              to this SDO's own priority warehouse
+//              (user.priorityWarehouseId), never summed across every
+//              accessible warehouse the way the list below can be.
+//              Sums the same Basic Cost formula PurchaseReceiptModal.jsx
+//              uses for a real PR's totalAmount (ENW factor from each
+//              WSR's own variety+moisture, buying price as of that
+//              WSR's own delivery date) across every currently-unpaid
+//              WSR at that one warehouse. Deliberately excludes Pricer -
+//              that rate is only ever typed in by hand at the moment a
+//              specific PR is issued, with no stored default to
+//              estimate from ahead of time - so the card is explicit
+//              that it's Basic Cost only, rather than silently
+//              understating what Pricer-eligible WSRs will actually pay
+//              out. Renders nothing if this SDO has no priority
+//              warehouse configured.
+export const APP_VERSION = '1.10-155'

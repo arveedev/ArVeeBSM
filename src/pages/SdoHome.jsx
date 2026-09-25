@@ -12,8 +12,11 @@ import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
-import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate } from '../utils/calculations.js'
-import { computeCashOnHand, resolveBuyingPrice } from '../utils/sdoCalculations.js'
+import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureState } from '../utils/calculations.js'
+import {
+  computeCashOnHand, resolveBuyingPrice, resolveUnitCost,
+  lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost,
+} from '../utils/sdoCalculations.js'
 import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.jsx'
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
@@ -172,6 +175,43 @@ function SdoHome() {
   const unpaid = visibleWsrTransactions.filter((t) => !activePrByWsrId.has(t.id))
   const paid = visibleWsrTransactions.filter((t) => activePrByWsrId.has(t.id))
 
+  // Priority-warehouse unpaid total, per explicit request: only counts
+  // toward whichever ONE warehouse is this SDO's user.priorityWarehouseId
+  // (WarehouseContext.jsx's own concept - the warehouse this SDO is
+  // primarily stationed at), never summed across every accessible
+  // warehouse the way the list below can be. Same Basic Cost formula
+  // PurchaseReceiptModal.jsx uses to compute a real PR's totalAmount
+  // (ENW factor from this WSR's own variety+moisture, buying price as of
+  // the WSR's own delivery date, never today's) - deliberately EXCLUDES
+  // Pricer, since that rate is only ever typed in by hand at the moment
+  // a specific PR is actually issued (db.pricerEligibility carries no
+  // stored default rate to estimate from ahead of time), so this total
+  // is explicitly labeled as excluding it rather than silently
+  // understating what Pricer-eligible WSRs will actually pay out.
+  const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
+  const varietyMap = useMemo(() => new Map(varieties.map((v) => [v.varietyId, v])), [varieties])
+  const enwFactors = useLiveQuery(() => db.enwFactors.toArray(), []) ?? []
+
+  const computeWsrBasicCost = (wsr) => {
+    const variety = varietyMap.get(wsr.varietyId)
+    const moistureState = getPalayMoistureState(variety?.name, wsr.cerealCategory)
+    const priceRow = resolveBuyingPrice(buyingPrices, wsr.date)
+    const unitCost = resolveUnitCost(priceRow, moistureState)
+    const factor = lookupEnwFactor(enwFactors, variety, wsr.moistureContent)
+    const netKilos = wsr.netKilos ?? 0
+    if (factor == null || unitCost == null) return 0
+    const enw = computeEquivalentNetWeight(netKilos, factor)
+    return computeBasicCost(enw, unitCost)
+  }
+
+  const priorityWarehouseId = user?.priorityWarehouseId ?? null
+  const priorityUnpaidTotal = priorityWarehouseId
+    ? unpaid
+        .filter((t) => t.warehouseId === priorityWarehouseId)
+        .reduce((sum, t) => sum + computeWsrBasicCost(t), 0)
+    : null
+  const priorityWarehouseName = priorityWarehouseId ? warehouseMap.get(priorityWarehouseId)?.name : null
+
   const applySearch = (list) => {
     const q = debouncedSearch.trim().toLowerCase()
     if (!q) return list
@@ -247,6 +287,26 @@ function SdoHome() {
           <button type="button" onClick={() => setCashModal('liquidate')} className="flex-1 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-bold text-app-text transition-all active:scale-95">Liquidate</button>
         </div>
       </div>
+
+      {/* Priority-warehouse-only unpaid total, per explicit request -
+          shown before the WSR list itself, distinct from the list's own
+          (possibly multi-warehouse or filtered) view below. Only
+          renders when this SDO actually has a priority warehouse set
+          (Admin's Users panel) - nothing to scope a single-warehouse
+          total to otherwise. */}
+      {priorityWarehouseId && (
+        <div className="mt-4 rounded-2xl border border-brand-amber/40 bg-brand-amber/5 p-4">
+          <p className="text-[10px] font-bold uppercase text-brand-amber">
+            Unpaid Procurement{priorityWarehouseName ? ` — ${priorityWarehouseName}` : ''}
+          </p>
+          <p className="mt-1 text-2xl font-bold text-app-text">
+            ₱{(priorityUnpaidTotal ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="mt-1 text-xs text-neutral-500">
+            Basic Cost only, excludes Pricer - Pricer is set per PR at the moment it's issued.
+          </p>
+        </div>
+      )}
 
       {/* Per explicit feedback, Export was too easy to miss (small,
           same muted neutral treatment as an ordinary secondary button) -
