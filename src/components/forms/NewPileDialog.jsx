@@ -13,7 +13,7 @@
 // counting toward a report's beginning-balance figure (included in the
 // prior-transactions sum, since that query does not filter the flag out).
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { X, Check, AlertTriangle } from 'lucide-react'
@@ -51,6 +51,34 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
   // every keystroke, so it only reflects the name as the user last
   // actually finished typing it, not a half-typed value mid-edit.
   const [nameCheckStatus, setNameCheckStatus] = useState('idle')
+
+  // Confirmed, reported real bug: Escape here closed the WHOLE entry
+  // form instead of just this dialog. Two compounding causes, same
+  // class of issue already fixed for AuthorityPickerModal/ConfirmDialog
+  // elsewhere: (1) nothing inside this dialog ever received real DOM
+  // focus, so the form's own Escape-closes-form check (which walks up
+  // from document.activeElement looking for a data-suppress-form-
+  // shortcuts ancestor - see useEntryFormShortcuts.js) never found this
+  // dialog and fired anyway - fixed by autofocusing Pile Name the
+  // moment this mounts, so that check now finds it correctly. (2) this
+  // dialog never actually listened for Escape itself at all, so even
+  // once (1) is fixed and the form correctly stays out of it, nothing
+  // closed the dialog - fixed below, the same window-level pattern
+  // ConfirmDialog.jsx already uses for its own Escape handling.
+  const nameInputRef = useRef(null)
+  useEffect(() => {
+    nameInputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
   const checkPileNameDuplicate = async () => {
     const trimmed = pileName.trim()
@@ -168,6 +196,7 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
             <label className={labelClass}>Pile Name</label>
             <div className="relative">
               <input
+                ref={nameInputRef}
                 type="text"
                 value={pileName}
                 onChange={(e) => { setPileName(e.target.value); setNameCheckStatus('idle') }}

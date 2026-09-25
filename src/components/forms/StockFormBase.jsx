@@ -593,6 +593,15 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // this stays null and the optional-chained .focus() call is simply a
   // no-op on that path rather than needing its own separate branch.
   const pileSelectRef = useRef(null)
+  // Tracks the most recent key pressed on the Pile ID select - used
+  // only by handlePileChange's own NEW_PILE_OPTION guard above, to
+  // tell a deliberate Enter/Space commit apart from the browser's own
+  // per-arrow-keypress onChange firing on a closed <select>. Defaults
+  // to 'Enter' (not null) so a mouse/touch click - which fires onChange
+  // with no keydown at all - is correctly treated as an explicit commit
+  // rather than accidentally suppressed by leaving a stale arrow-key
+  // value behind from browsing elsewhere in the form first.
+  const pileSelectLastKeyRef = useRef('Enter')
   const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
 
   // Tracks whether the actual Serial No. field is currently scrolled
@@ -1290,7 +1299,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
 
   const handlePileChange = (value) => {
     if (value === NEW_PILE_OPTION) {
-      setShowNewPileDialog(true)
+      // Confirmed, reported real bug: a plain, closed native <select>
+      // fires onChange on EVERY arrow-key press, not just an explicit
+      // commit - so merely arrowing past "+ New Pile" while browsing
+      // the list opened this modal as an unwanted side effect. Only a
+      // genuine commit gesture (Enter/Space, or a mouse/touch click -
+      // see pileSelectLastKeyRef's own comment) should do that; a bare
+      // arrow-key change lands here too, but is deliberately ignored -
+      // React's controlled `value={pileId}` snaps the select's own
+      // visible selection back to the real, unchanged pileId on the
+      // very next render regardless, so nothing is left dangling either
+      // way.
+      if (pileSelectLastKeyRef.current === 'Enter' || pileSelectLastKeyRef.current === ' ') {
+        setShowNewPileDialog(true)
+      }
       return
     }
     setPileId(value)
@@ -3550,6 +3572,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   ref={pileSelectRef}
                   value={pileId}
                   onChange={(e) => handlePileChange(e.target.value)}
+                  onKeyDown={(e) => { pileSelectLastKeyRef.current = e.key }}
+                  onMouseDown={() => { pileSelectLastKeyRef.current = 'Enter' }}
                   // pileNoLongerExists deliberately does NOT get the
                   // amber "needs attention" treatment `!pileId` gets -
                   // per explicit clarification, a pile deleted (or

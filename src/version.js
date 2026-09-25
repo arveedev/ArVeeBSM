@@ -6355,4 +6355,23 @@
 //              Milling). No-ops safely for Accountability Facility
 //              types, which show a read-only pile display instead of a
 //              real field to focus.
-export const APP_VERSION = '1.10-157'
+//   1.10-158 - Two reported keyboard bugs on Pile ID's "+ New Pile":
+//              - Merely arrowing past "+ New Pile" while browsing the
+//                dropdown opened the New Pile dialog as an unwanted
+//                side effect - a plain, closed native <select> fires
+//                onChange on every arrow-key press, not just an
+//                explicit commit. Now only opens when the change was
+//                actually caused by Enter, Space, or a mouse/touch
+//                click - a bare arrow-key change to this option is
+//                ignored (React's controlled value snaps the select
+//                back to the real pile on the next render regardless).
+//              - Escape inside the New Pile dialog closed the whole
+//                entry form instead of just the dialog - same root
+//                cause as the AuthorityPickerModal/ConfirmDialog fixes
+//                earlier this session: nothing inside it ever received
+//                real focus, so the form's own suppression check never
+//                found it. Now autofocuses Pile Name on open (fixing
+//                the check) and, since this dialog never listened for
+//                Escape at all before, gains its own handler to
+//                actually close itself.
+export const APP_VERSION = '1.10-158'
