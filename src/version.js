@@ -6374,4 +6374,10 @@
 //                the check) and, since this dialog never listened for
 //                Escape at all before, gains its own handler to
 //                actually close itself.
-export const APP_VERSION = '1.10-158'
+//   1.10-159 - Beginning Balances edit form, per explicit request: the
+//              "Sack Weight / MTS (optional)" label shortened to just
+//              "MTS (optional)", and the Sack Condition dropdown now
+//              shows just the code (BN/SH/US) instead of the full
+//              "Brand New (BN)" label, which was getting clipped to
+//              "Brand New (" in the field's own width.
+export const APP_VERSION = '1.10-159'

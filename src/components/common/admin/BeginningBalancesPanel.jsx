@@ -408,7 +408,7 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
                 style={{ gridTemplateColumns: line.mtsSackTypeId ? '1fr 1fr' : '1fr 0fr', transition: 'grid-template-columns 0.25s ease-out' }}
               >
                 <div>
-                  <label className={labelClassLg}>Sack Weight / MTS (optional)</label>
+                  <label className={labelClassLg}>MTS (optional)</label>
                   <select
                     value={line.mtsSackTypeId}
                     onChange={(e) => updateLine(i, 'mtsSackTypeId', e.target.value)}
@@ -430,8 +430,8 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
                       className={inputClassLg}
                     >
                       <option value="">Select...</option>
-                      {SACK_CONDITIONS.map(({ code: cc, label }) => (
-                        <option key={cc} value={cc}>{label} ({cc})</option>
+                      {SACK_CONDITIONS.map(({ code: cc }) => (
+                        <option key={cc} value={cc}>{cc}</option>
                       ))}
                     </select>
                   </div>
