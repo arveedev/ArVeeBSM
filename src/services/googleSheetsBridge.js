@@ -1213,11 +1213,54 @@ const runAuthoritiesSync = async () => {
       // already set) still always advances even on a genuine 0-row
       // result - that's the normal, expected "nothing changed" case,
       // not a failure.
+      // Extends the zero-rows case above to a partial-truncation case:
+      // the same echo-redirect response layer could in principle also
+      // hand back a genuine, valid-looking JSON payload that's merely
+      // TRUNCATED rather than fully empty - not yet observed directly,
+      // but nothing about the zero-rows fix would catch it, since a
+      // non-empty result skipped straight past that check and advanced
+      // lastSyncedAt regardless of how few rows it actually contained.
+      // `lastFullPullRowCounts` (a plain extra field on the source
+      // record, same as `dateProcured` on a beginning-balance line -
+      // no Dexie schema/version bump needed) remembers the row count
+      // from the last full pull that wasn't itself flagged suspicious,
+      // so a later full pull can be compared against real prior
+      // evidence of how much data this source actually holds, not a
+      // guess. AI and SIA are checked independently since one sheet
+      // can genuinely be far smaller than the other.
+      const priorCounts = source.lastFullPullRowCounts
+      const suspiciouslyLow = (count, priorCount) =>
+        // Only a source with a real prior baseline can be judged
+        // suspicious - a source syncing for the very first time, or
+        // one whose sheet has always been small/empty, has nothing to
+        // regress from. Half of the prior count leaves real headroom
+        // for a sheet that's legitimately shrunk (e.g. a fresh year's
+        // copy started smaller) while still catching a response that's
+        // lost the bulk of its rows to truncation.
+        typeof priorCount === 'number' && priorCount > 0 && count < priorCount * 0.5
       const cameBackEmpty = aiRows.length === 0 && siaRows.length === 0
-      if (!wasFullPull || !cameBackEmpty) {
-        await db.sheetSources.update(source.id, { lastSyncedAt: new Date().toISOString() })
+      const cameBackTruncated =
+        wasFullPull &&
+        priorCounts &&
+        (suspiciouslyLow(aiRows.length, priorCounts.ai) || suspiciouslyLow(siaRows.length, priorCounts.sia))
+
+      if (wasFullPull && (cameBackEmpty || cameBackTruncated)) {
+        console.warn(
+          '[AUTHORITY-SYNC-DIAG] full pull for source', source.id,
+          'looks incomplete (aiRows:', aiRows.length, 'siaRows:', siaRows.length,
+          cameBackTruncated ? ', below prior baseline ' + JSON.stringify(priorCounts) : '',
+          ') - leaving lastSyncedAt unset so the next tick retries',
+        )
       } else {
-        console.warn('[AUTHORITY-SYNC-DIAG] full pull returned 0 rows for source', source.id, '- leaving lastSyncedAt unset so the next tick retries')
+        const update = { lastSyncedAt: new Date().toISOString() }
+        // Only a full pull's row counts are trustworthy as a future
+        // baseline - a delta pull's low/zero count is normal and would
+        // wrongly ratchet the baseline down to whatever a routine quiet
+        // period happened to return.
+        if (wasFullPull) {
+          update.lastFullPullRowCounts = { ai: aiRows.length, sia: siaRows.length }
+        }
+        await db.sheetSources.update(source.id, update)
       }
     }
 

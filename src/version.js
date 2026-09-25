@@ -6089,4 +6089,30 @@
 //              leaves lastSyncedAt unset instead, so the next periodic
 //              tick retries automatically. A routine delta tick with
 //              zero new rows (the normal, expected case) is unaffected.
-export const APP_VERSION = '1.10-143'
+//              Confirmed fixed on the real device: a Force Resync's
+//              retries hit the same known echo-redirect 404s live in
+//              console, self-healed on a later automatic retry, and
+//              landed a real full pull (aiCount: 1306, siaCount: 241) -
+//              PHF SHED's AI/SIA records now show under Authority
+//              Monitor.
+//   1.10-144 - Extended 1.10-143's sanity check to a second, related
+//              failure shape: a full pull returning a genuine, valid
+//              JSON response that's merely TRUNCATED rather than fully
+//              empty (not observed directly, but structurally possible
+//              from the same echo-redirect response layer, and the
+//              zero-rows check alone wouldn't catch it - any non-empty
+//              result skipped straight past it and advanced
+//              lastSyncedAt regardless of how incomplete it actually
+//              was). Each sheet source now remembers its row count from
+//              its last full pull that wasn't itself flagged suspicious
+//              (`lastFullPullRowCounts`, a plain extra field, no schema
+//              bump). A later full pull whose AI or SIA row count comes
+//              back under half of that source's own remembered baseline
+//              is treated the same as the zero-rows case - lastSyncedAt
+//              is left unset so the next tick retries - rather than
+//              silently accepting a partial pull as complete. AI and SIA
+//              are judged independently (one sheet can be legitimately
+//              much smaller than the other), and a source with no prior
+//              baseline yet (first sync, or an always-small sheet) is
+//              never flagged - there's nothing real to regress from.
+export const APP_VERSION = '1.10-144'
