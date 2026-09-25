@@ -6342,4 +6342,17 @@
 //              the total for whichever one is picked. Still always
 //              exactly one warehouse's total at a time, never summed
 //              across all of them.
-export const APP_VERSION = '1.10-156'
+//   1.10-157 - Keyboard-navigation rework, continued (WSI): picking an
+//              AI/SIA from the Browse picker used to leave focus
+//              nowhere once the modal closed (same "focus lost" class
+//              of bug CalendarDatePicker's own nextFieldRef fix already
+//              addressed) - per explicit original request ("after
+//              everything is pre-filled, the focus... should be on the
+//              pile"), handleSelectAuthority now focuses Pile ID right
+//              after it finishes applying everything else the pick
+//              resolved (variety, transaction type, customer, bags/
+//              kilos, and any auto-matched pile for Milling/Test
+//              Milling). No-ops safely for Accountability Facility
+//              types, which show a read-only pile display instead of a
+//              real field to focus.
+export const APP_VERSION = '1.10-157'

@@ -585,6 +585,14 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // focus there.
   const browseButtonRef = useRef(null)
   const warehouseSelectRef = useRef(null)
+  // Where handleSelectAuthority (below) moves focus once an AI/SIA pick
+  // finishes pre-filling the form - per explicit request ("after
+  // everything is pre-filled, the focus... should be on the pile").
+  // Only ever attached to the real <select> (isAccountabilityFacility
+  // shows a plain read-only div instead, nothing to focus there), so
+  // this stays null and the optional-chained .focus() call is simply a
+  // no-op on that path rather than needing its own separate branch.
+  const pileSelectRef = useRef(null)
   const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
 
   // Tracks whether the actual Serial No. field is currently scrolled
@@ -1439,6 +1447,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     }
 
     setShowAuthorityPicker(false)
+    // Per explicit request: once an AI/SIA pick finishes pre-filling
+    // everything above, focus lands on Pile ID next - the natural next
+    // thing to check/confirm (or pick, if nothing auto-matched above),
+    // rather than getting dropped when the picker modal closes (the
+    // same class of "focus lost" bug CalendarDatePicker's own
+    // nextFieldRef fix addressed).
+    pileSelectRef.current?.focus()
   }
 
   // Scrolls the form back to the very top (so Serial No., the first
@@ -3532,6 +3547,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <div className={readOnlyClass}>{selectedPile?.pileName ?? 'Select a variety first…'}</div>
               ) : (
                 <select
+                  ref={pileSelectRef}
                   value={pileId}
                   onChange={(e) => handlePileChange(e.target.value)}
                   // pileNoLongerExists deliberately does NOT get the
