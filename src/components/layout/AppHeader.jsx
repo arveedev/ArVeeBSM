@@ -45,7 +45,7 @@ function AppHeader({ hidden = false }) {
   const { user, logout } = useAuth() ?? {}
   const { theme, weightUnit, updateSetting } = useSettings() ?? {}
   const { title, subtitle, setHeaderHeight } = usePageHeader() ?? {}
-  const { currentWarehouseId } = useWarehouse() ?? {}
+  const { currentWarehouseId, accessibleWarehouses, setCurrentWarehouseId } = useWarehouse() ?? {}
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [confirmingLogout, setConfirmingLogout] = useState(false)
@@ -147,8 +147,25 @@ function AppHeader({ hidden = false }) {
     [isAdmin]
   ) ?? []
 
+  // Confirmed, reported real bug: this used to scope only to
+  // currentWarehouseId, silently going quiet the instant the user
+  // switched away from the ONE warehouse a notification happened to be
+  // about - per explicit correction, a notification is for whichever
+  // warehouse it's actually about, not whichever one happens to be
+  // selected right now, so it must stay visible regardless of the
+  // current selection. Now scoped across every warehouse this user is
+  // actually assigned to (accessibleWarehouses, the same list the
+  // picker itself offers), keyed by (warehouseId, sackTypeId,
+  // condition) instead of just (sackTypeId, condition) - two different
+  // warehouses procuring the same sack type/condition must never net
+  // against each other. Each entry now also names its own warehouse
+  // explicitly, since with more than one warehouse in the mix that's
+  // no longer implied by context the way it was when this only ever
+  // covered the single selected warehouse.
+  const warehouseIds = (accessibleWarehouses ?? []).map((w) => w.warehouseId)
+  const warehouseNameById = new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w.name]))
   const procurementOutstanding = useLiveQuery(async () => {
-    if (!currentWarehouseId) return []
+    if (warehouseIds.length === 0) return []
     const transactionTypes = await db.transactionTypes.toArray()
     const procurementTypeId = transactionTypes.find((t) => isProcurementTypeName(t.name))?.transactionTypeId
     if (!procurementTypeId) return []
@@ -158,21 +175,21 @@ function AppHeader({ hidden = false }) {
 
     const byKey = new Map()
     const procurementWsr = await db.transactions
-      .where('warehouseId').equals(currentWarehouseId)
+      .where('warehouseId').anyOf(warehouseIds)
       .and((t) => t.type === 'WSR' && t.status === 'Active' && t.transactionTypeId === procurementTypeId)
       .toArray()
     for (const t of procurementWsr) {
       if (!t.mtsSackTypeId || !t.mtsCondition) continue
-      const key = `${t.mtsSackTypeId}::${t.mtsCondition}`
+      const key = `${t.warehouseId}::${t.mtsSackTypeId}::${t.mtsCondition}`
       byKey.set(key, (byKey.get(key) ?? 0) + (t.numberOfBags ?? 0))
     }
     const procurementEsi = await db.transactions
-      .where('warehouseId').equals(currentWarehouseId)
+      .where('warehouseId').anyOf(warehouseIds)
       .and((t) => t.type === 'ESI' && t.status === 'Active' && t.transactionTypeId === procurementTypeId)
       .toArray()
     for (const t of procurementEsi) {
       for (const line of t.sackLines ?? []) {
-        const key = `${line.sackTypeId}::${line.condition}`
+        const key = `${t.warehouseId}::${line.sackTypeId}::${line.condition}`
         byKey.set(key, (byKey.get(key) ?? 0) - (line.pieces ?? 0))
       }
     }
@@ -180,10 +197,18 @@ function AppHeader({ hidden = false }) {
     return [...byKey.entries()]
       .filter(([, amount]) => amount !== 0)
       .map(([key, amount]) => {
-        const [sackTypeId, condition] = key.split('::')
-        return { key, code: sackTypeMap.get(sackTypeId)?.code ?? sackTypeId, condition, amount }
+        const [warehouseId, sackTypeId, condition] = key.split('::')
+        return {
+          key,
+          warehouseId,
+          warehouseName: warehouseNameById.get(warehouseId) ?? 'Unknown warehouse',
+          code: sackTypeMap.get(sackTypeId)?.code ?? sackTypeId,
+          condition,
+          amount,
+        }
       })
-  }, [currentWarehouseId]) ?? []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouseIds.join(',')]) ?? []
 
   const [notifOpen, setNotifOpen] = useState(false)
   const [confirmingClearNotifs, setConfirmingClearNotifs] = useState(false)
@@ -208,15 +233,25 @@ function AppHeader({ hidden = false }) {
         navigate('/admin', { state: { groupId: 'system', tabId: 'errorLog', focusEntryId: entry.id } })
       },
     })),
-    ...procurementOutstanding.map(({ key, code, condition, amount }) => ({
+    // title carries the warehouse name (bold, the first thing read) -
+    // per explicit correction, with entries now spanning every
+    // accessible warehouse rather than just the currently selected one,
+    // which warehouse a given line is about is no longer implied by
+    // context and must be explicit on every entry.
+    ...procurementOutstanding.map(({ key, warehouseId, warehouseName, code, condition, amount }) => ({
       id: `procurement:${key}`,
       resolved: false,
-      title: 'Procurement sacks need matching SIA',
+      title: `${warehouseName} — sacks need matching SIA`,
       detail: amount > 0
         ? `${code} (${condition}): ${fmtBags(amount)} bag${amount === 1 ? '' : 's'} still needs a matching SIA`
         : `${code} (${condition}): SIA-backed issuance exceeds Procurement by ${fmtBags(Math.abs(amount))} - check for an over-issuance`,
       onClick: () => {
         setNotifOpen(false)
+        // Switches the app's own current-warehouse context to the one
+        // this notification is actually about before navigating, so
+        // Home lands showing the relevant warehouse rather than
+        // whatever happened to be selected before the bell was opened.
+        if (warehouseId !== currentWarehouseId) setCurrentWarehouseId?.(warehouseId)
         navigate('/')
       },
     })),
@@ -475,8 +510,14 @@ function AppHeader({ hidden = false }) {
                                 ? <Check size={14} className="mt-0.5 shrink-0 text-brand-neon" />
                                 : <AlertTriangle size={14} className="mt-0.5 shrink-0 text-brand-crimson" />}
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-xs font-medium text-app-text">{notif.title}</span>
-                                <span className="block truncate text-xs text-neutral-500">{notif.detail}</span>
+                                {/* break-words, not truncate - per
+                                    explicit request, the detail must be
+                                    fully readable, especially now that
+                                    it spans multiple warehouses and
+                                    truncating away the amount/warehouse
+                                    would defeat the whole point. */}
+                                <span className="block break-words text-xs font-medium text-app-text">{notif.title}</span>
+                                <span className="block break-words text-xs text-neutral-500">{notif.detail}</span>
                               </span>
                             </button>
                           </li>

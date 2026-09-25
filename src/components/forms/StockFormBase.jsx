@@ -2903,6 +2903,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   useEffect(() => {
     if (!isCategoryScoped) return
     const handleKeyDown = (e) => {
+      // TEMPORARY diagnostic - reported real bug: plain 1/2/3 still not
+      // switching tabs even after removing the Alt modifier entirely.
+      // Logs every digit-key press this handler actually sees (or
+      // doesn't) and exactly why it bailed, so the real cause can be
+      // read directly from the console rather than guessed a third
+      // time.
+      if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') {
+        console.log('[CEREAL-TAB-DIAG]', {
+          code: e.code, key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, shiftKey: e.shiftKey,
+          activeElementTag: document.activeElement?.tagName,
+          isTextEditable: isTextEditable(document.activeElement),
+          inSuppressedRegion: Boolean(document.activeElement?.closest?.('[data-suppress-form-shortcuts]')),
+        })
+      }
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
       if (isTextEditable(document.activeElement)) return
       // Also skip while any <select> has focus - isTextEditable alone

@@ -6494,4 +6494,23 @@
 //              only entries present are procurement notifications,
 //              which aren't stored rows to clear - they disappear on
 //              their own the moment a matching SIA is actually issued.
-export const APP_VERSION = '1.10-165'
+//   1.10-166 - Procurement-SIA notification fix + cereal-tab diagnostic:
+//              - Confirmed, reported real bug: the notification only
+//              covered the CURRENTLY SELECTED warehouse, going silent
+//              the moment the user switched away from the one it
+//              happened to be about. Now scoped across every warehouse
+//              this user is assigned to (accessibleWarehouses), keyed
+//              by (warehouseId, sackTypeId, condition) so two
+//              warehouses with the same sack type/condition never net
+//              against each other, and each entry names its own
+//              warehouse explicitly. Tapping one also switches the
+//              app's current-warehouse context to match before
+//              navigating to Home. Detail text switched from
+//              truncate to break-words so it's fully readable.
+//              - TEMPORARY diagnostic: plain 1/2/3 for the cereal tabs
+//              confirmed still not working even with no modifier at
+//              all - logs every digit-key press this handler actually
+//              sees (or doesn't) and exactly why it bailed, so the
+//              real cause can be read from the console instead of
+//              guessed a third time.
+export const APP_VERSION = '1.10-166'
