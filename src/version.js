@@ -6332,4 +6332,14 @@
 //              understating what Pricer-eligible WSRs will actually pay
 //              out. Renders nothing if this SDO has no priority
 //              warehouse configured.
-export const APP_VERSION = '1.10-155'
+//   1.10-156 - Two refinements to 1.10-155's Unpaid Procurement card,
+//              per explicit feedback: the "Basic Cost only, excludes
+//              Pricer" subtext is removed, and the card is no longer
+//              locked to the priority warehouse - a warehouse selector
+//              next to the card's own label defaults to it but can
+//              switch to any other warehouse this SDO is assigned to
+//              (only shown when they have more than one), recomputing
+//              the total for whichever one is picked. Still always
+//              exactly one warehouse's total at a time, never summed
+//              across all of them.
+export const APP_VERSION = '1.10-156'
