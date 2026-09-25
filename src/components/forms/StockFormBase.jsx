@@ -2014,11 +2014,37 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // re-captures a fresh baseline on every navigation, closing exactly
   // that gap without affecting the already-correct loaded-document case.
   const baselineRef = useRef(null)
+  // Kept alongside baselineRef's JSON string purely for the TEMPORARY
+  // diagnostic in isFormDirty below - see its own comment.
+  const baselineObjRef = useRef(null)
   useEffect(() => {
-    baselineRef.current = JSON.stringify(buildTransactionPayload())
+    const payload = buildTransactionPayload()
+    baselineObjRef.current = payload
+    baselineRef.current = JSON.stringify(payload)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedTransaction, serialNo])
-  const isFormDirty = () => JSON.stringify(buildTransactionPayload()) !== baselineRef.current
+  // TEMPORARY diagnostic - reported real bug: this guard fired "Leave
+  // this document unsaved?" on a document the user hadn't touched at
+  // all, immediately after stepping onto it (no edits made). Something
+  // in buildTransactionPayload() is producing a different value on this
+  // call than it did the moment the baseline was captured, with nothing
+  // the user did in between - the field-by-field diff below, logged
+  // only on that mismatch, is what will actually identify which one.
+  const isFormDirty = () => {
+    const live = buildTransactionPayload()
+    const liveJson = JSON.stringify(live)
+    const dirty = liveJson !== baselineRef.current
+    if (dirty && baselineObjRef.current) {
+      const base = baselineObjRef.current
+      const changedKeys = Object.keys(live).filter(
+        (k) => JSON.stringify(live[k]) !== JSON.stringify(base[k])
+      )
+      console.log('[DIRTY-CHECK-DIAG] fields that differ from baseline:', changedKeys.map((k) => ({
+        field: k, baseline: base[k], live: live[k],
+      })))
+    }
+    return dirty
+  }
 
   const [pendingNavDirection, setPendingNavDirection] = useState(null) // 'back' | 'forward' | null
   const attemptStep = (direction) => {

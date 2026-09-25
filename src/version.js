@@ -6238,4 +6238,17 @@
 //                was still null and never actually focused anything.
 //                Fixed by depending on `shouldRender` instead, the flag
 //                that actually gates whether the button exists.
-export const APP_VERSION = '1.10-150'
+//   1.10-151 - TEMPORARY diagnostic: reported real bug - the unsaved-
+//              changes guard (1.10-141/1.10-145) fired "Leave this
+//              document unsaved?" on a LOADED, untouched document
+//              immediately after stepping onto it via the series
+//              navigation arrows, with no edits made. Something in
+//              buildTransactionPayload() is producing a different value
+//              on the live isFormDirty() call than it did the moment
+//              the baseline was captured, with no user action in
+//              between - isFormDirty now logs
+//              [DIRTY-CHECK-DIAG] with the exact field(s) that differ
+//              (baseline value vs live value) whenever it returns true,
+//              so the real cause can be identified from evidence rather
+//              than guessed. No behavior change otherwise.
+export const APP_VERSION = '1.10-151'
