@@ -2909,14 +2909,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       // doesn't) and exactly why it bailed, so the real cause can be
       // read directly from the console rather than guessed a third
       // time.
-      if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') {
-        console.log('[CEREAL-TAB-DIAG]', {
-          code: e.code, key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, shiftKey: e.shiftKey,
-          activeElementTag: document.activeElement?.tagName,
-          isTextEditable: isTextEditable(document.activeElement),
-          inSuppressedRegion: Boolean(document.activeElement?.closest?.('[data-suppress-form-shortcuts]')),
-        })
-      }
+      const isDiagDigit = e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3'
+      // Logged as plain, un-collapsible lines (not one object, which the
+      // console collapses behind a "…" that hid exactly the fields
+      // needed last time) - reported real bug: the shortcut still
+      // doesn't switch tabs even with no modifier at all involved.
+      if (isDiagDigit) console.log('[CEREAL-TAB-DIAG] code=' + e.code, 'activeTag=' + document.activeElement?.tagName, 'isTextEditable=' + isTextEditable(document.activeElement), 'inSuppressedRegion=' + Boolean(document.activeElement?.closest?.('[data-suppress-form-shortcuts]')), 'cerealCategory=' + cerealCategory)
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
       if (isTextEditable(document.activeElement)) return
       // Also skip while any <select> has focus - isTextEditable alone
@@ -2933,6 +2931,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       if (index == null) return
       if (document.activeElement?.closest?.('[data-suppress-form-shortcuts]')) return
       e.preventDefault()
+      if (isDiagDigit) console.log('[CEREAL-TAB-DIAG] calling handleCategoryTabChange with', ['Rice', 'Palay', 'By Products'][index])
       handleCategoryTabChange(['Rice', 'Palay', 'By Products'][index])
     }
     window.addEventListener('keydown', handleKeyDown)

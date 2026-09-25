@@ -38,6 +38,17 @@ const SYNC_LABELS = {
   error: 'Sync error — some data may be out of date',
 }
 
+// Formats the date range of the receipts behind an accumulated
+// procurement-notification total - "Sep 12" for a single day,
+// "Sep 12 - Sep 20" for a real span. Returns '' (not shown at all) when
+// there's no date to report, rather than a placeholder like "—".
+const fmtNotifDate = (iso) => new Date(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+const fmtDateRange = (minDate, maxDate) => {
+  if (!minDate) return ''
+  if (!maxDate || minDate === maxDate) return fmtNotifDate(minDate)
+  return `${fmtNotifDate(minDate)} - ${fmtNotifDate(maxDate)}`
+}
+
 // Must match the fade transition duration used on the overlay below.
 const LOGOUT_FADE_MS = 500
 
@@ -155,13 +166,18 @@ function AppHeader({ hidden = false }) {
   // selected right now, so it must stay visible regardless of the
   // current selection. Now scoped across every warehouse this user is
   // actually assigned to (accessibleWarehouses, the same list the
-  // picker itself offers), keyed by (warehouseId, sackTypeId,
-  // condition) instead of just (sackTypeId, condition) - two different
-  // warehouses procuring the same sack type/condition must never net
-  // against each other. Each entry now also names its own warehouse
-  // explicitly, since with more than one warehouse in the mix that's
-  // no longer implied by context the way it was when this only ever
-  // covered the single selected warehouse.
+  // picker itself offers). Internally still tracked per (warehouseId,
+  // sackTypeId, condition) - two different warehouses, or two different
+  // sack type/conditions, must never net against each other - but per
+  // explicit request the still-outstanding (positive) amounts are now
+  // summed into ONE accumulated total per warehouse for the
+  // notification itself, rather than one alert per sack type/
+  // condition, with the date range of the contributing receipts shown
+  // alongside it. An over-issuance (SIA-backed issuance exceeding
+  // Procurement - negative amount) is a genuinely different kind of
+  // signal - something's actually wrong, not just "still pending" - so
+  // those stay their own specific per-sack-type/condition entries
+  // rather than being folded into the accumulated total.
   const warehouseIds = (accessibleWarehouses ?? []).map((w) => w.warehouseId)
   const warehouseNameById = new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w.name]))
   const procurementOutstanding = useLiveQuery(async () => {
@@ -173,6 +189,10 @@ function AppHeader({ hidden = false }) {
     const sackTypes = await db.sackTypes.toArray()
     const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
 
+    // { amount, minDate, maxDate } per key - minDate/maxDate track only
+    // the actual WSR receipt dates that fed this key (the "period the
+    // procurement was made" the notification now shows), never touched
+    // by the ESI side below, which only ever subtracts from the amount.
     const byKey = new Map()
     const procurementWsr = await db.transactions
       .where('warehouseId').anyOf(warehouseIds)
@@ -181,7 +201,11 @@ function AppHeader({ hidden = false }) {
     for (const t of procurementWsr) {
       if (!t.mtsSackTypeId || !t.mtsCondition) continue
       const key = `${t.warehouseId}::${t.mtsSackTypeId}::${t.mtsCondition}`
-      byKey.set(key, (byKey.get(key) ?? 0) + (t.numberOfBags ?? 0))
+      const entry = byKey.get(key) ?? { amount: 0, minDate: null, maxDate: null }
+      entry.amount += t.numberOfBags ?? 0
+      if (t.date && (!entry.minDate || t.date < entry.minDate)) entry.minDate = t.date
+      if (t.date && (!entry.maxDate || t.date > entry.maxDate)) entry.maxDate = t.date
+      byKey.set(key, entry)
     }
     const procurementEsi = await db.transactions
       .where('warehouseId').anyOf(warehouseIds)
@@ -190,23 +214,52 @@ function AppHeader({ hidden = false }) {
     for (const t of procurementEsi) {
       for (const line of t.sackLines ?? []) {
         const key = `${t.warehouseId}::${line.sackTypeId}::${line.condition}`
-        byKey.set(key, (byKey.get(key) ?? 0) - (line.pieces ?? 0))
+        const entry = byKey.get(key) ?? { amount: 0, minDate: null, maxDate: null }
+        entry.amount -= line.pieces ?? 0
+        byKey.set(key, entry)
       }
     }
 
-    return [...byKey.entries()]
-      .filter(([, amount]) => amount !== 0)
-      .map(([key, amount]) => {
-        const [warehouseId, sackTypeId, condition] = key.split('::')
-        return {
+    // Accumulate every still-positive key into one total per warehouse,
+    // spanning the full date range of every receipt that contributed to
+    // it - this is the "accumulated number of bags... with the period"
+    // notification per explicit request. Negative (over-issuance) keys
+    // stay their own specific entries, named by warehouse AND sack
+    // type/condition, since that's a real discrepancy worth pinpointing
+    // exactly, not folding into a total.
+    const accumulatedByWarehouse = new Map()
+    const overIssuanceEntries = []
+    for (const [key, { amount, minDate, maxDate }] of byKey) {
+      if (amount === 0) continue
+      const [warehouseId, sackTypeId, condition] = key.split('::')
+      if (amount > 0) {
+        const acc = accumulatedByWarehouse.get(warehouseId) ?? { amount: 0, minDate: null, maxDate: null }
+        acc.amount += amount
+        if (minDate && (!acc.minDate || minDate < acc.minDate)) acc.minDate = minDate
+        if (maxDate && (!acc.maxDate || maxDate > acc.maxDate)) acc.maxDate = maxDate
+        accumulatedByWarehouse.set(warehouseId, acc)
+      } else {
+        overIssuanceEntries.push({
           key,
           warehouseId,
           warehouseName: warehouseNameById.get(warehouseId) ?? 'Unknown warehouse',
           code: sackTypeMap.get(sackTypeId)?.code ?? sackTypeId,
           condition,
           amount,
-        }
-      })
+        })
+      }
+    }
+
+    const accumulatedEntries = [...accumulatedByWarehouse.entries()].map(([warehouseId, { amount, minDate, maxDate }]) => ({
+      key: `accumulated:${warehouseId}`,
+      warehouseId,
+      warehouseName: warehouseNameById.get(warehouseId) ?? 'Unknown warehouse',
+      amount,
+      minDate,
+      maxDate,
+    }))
+
+    return [...accumulatedEntries, ...overIssuanceEntries]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warehouseIds.join(',')]) ?? []
 
@@ -237,13 +290,18 @@ function AppHeader({ hidden = false }) {
     // per explicit correction, with entries now spanning every
     // accessible warehouse rather than just the currently selected one,
     // which warehouse a given line is about is no longer implied by
-    // context and must be explicit on every entry.
-    ...procurementOutstanding.map(({ key, warehouseId, warehouseName, code, condition, amount }) => ({
+    // context and must be explicit on every entry. Two shapes coming
+    // out of procurementOutstanding now: an accumulated total per
+    // warehouse (amount > 0, minDate/maxDate set, no code/condition -
+    // the common case) and a specific over-issuance entry (amount < 0,
+    // code/condition set, no dates - see procurementOutstanding's own
+    // comment for why that one stays granular).
+    ...procurementOutstanding.map(({ key, warehouseId, warehouseName, code, condition, amount, minDate, maxDate }) => ({
       id: `procurement:${key}`,
       resolved: false,
       title: `${warehouseName} — sacks need matching SIA`,
       detail: amount > 0
-        ? `${code} (${condition}): ${fmtBags(amount)} bag${amount === 1 ? '' : 's'} still needs a matching SIA`
+        ? `${fmtBags(amount)} bag${amount === 1 ? '' : 's'} still need${amount === 1 ? 's' : ''} a matching SIA${fmtDateRange(minDate, maxDate) ? ` (procured ${fmtDateRange(minDate, maxDate)})` : ''}`
         : `${code} (${condition}): SIA-backed issuance exceeds Procurement by ${fmtBags(Math.abs(amount))} - check for an over-issuance`,
       onClick: () => {
         setNotifOpen(false)

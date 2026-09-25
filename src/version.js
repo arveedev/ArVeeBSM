@@ -6513,4 +6513,20 @@
 //              sees (or doesn't) and exactly why it bailed, so the
 //              real cause can be read from the console instead of
 //              guessed a third time.
-export const APP_VERSION = '1.10-166'
+//   1.10-167 - Procurement-SIA notification, per explicit request: the
+//              still-outstanding (positive) amounts across every sack
+//              type/condition are now accumulated into ONE total per
+//              warehouse, instead of one separate alert per sack type/
+//              condition - shown with the date range of the actual
+//              receipts behind it ("2,775 bags still need a matching
+//              SIA (procured Sep 12 - Sep 20)"). An over-issuance (SIA-
+//              backed issuance exceeding Procurement) stays its own
+//              specific per-sack-type/condition entry - a real
+//              discrepancy worth pinpointing exactly, not folding into
+//              a total.
+//              - Extended the cereal-tab keyboard diagnostic: it now
+//              logs each field on its own plain line (not one object,
+//              which the console collapsed last time and hid exactly
+//              the fields that mattered) plus whether
+//              handleCategoryTabChange actually got called.
+export const APP_VERSION = '1.10-167'
