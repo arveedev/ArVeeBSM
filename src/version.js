@@ -6546,4 +6546,24 @@
 //              range. The accumulated bag total itself was already
 //              correct (confirmed by diagnostic - the Sept 7 pair nets
 //              to exactly zero) and is unchanged by this fix.
-export const APP_VERSION = '1.10-168'
+//   1.10-169 - Found the real cause of the repeatedly-reported "plain
+//              1/2/3 still not working" cereal-tab shortcut, via the
+//              1.10-167 diagnostic's own console output: the digit-key
+//              listener WAS firing correctly and WAS calling
+//              handleCategoryTabChange with the right target category
+//              every time - the bug was downstream. The listener's
+//              useEffect only depends on isCategoryScoped, so once
+//              attached it keeps closing over whatever
+//              handleCategoryTabChange looked like at that moment -
+//              which itself closes over cerealCategory. The first digit
+//              press after mount works (compares against the real
+//              initial category), but every press after that compares
+//              the target category against a cerealCategory value
+//              frozen at mount, so switching back to the tab that was
+//              active when the form opened became a silent no-op
+//              forever. Fixed by routing the call through a ref that's
+//              kept current every render, instead of rebuilding the
+//              listener (and re-attaching a new window-level handler)
+//              on every category change. Diagnostic logging removed now
+//              that the real cause is confirmed and fixed.
+export const APP_VERSION = '1.10-169'

@@ -2900,21 +2900,21 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // trusts for exactly this. Scoped to isCategoryScoped (WSR/WSI only)
   // and skipped while a picker/dialog owns the keyboard
   // (data-suppress-form-shortcuts), same as every other shortcut here.
+  // Confirmed real bug via live diagnostic: the listener below is set
+  // up once per isCategoryScoped change (not per render), so its
+  // closure over handleCategoryTabChange - which itself closes over
+  // cerealCategory - went stale the moment the category changed after
+  // mount. handleCategoryTabChange's own `nextCategory === cerealCategory`
+  // guard then compared against that permanently stale value, so
+  // switching back to whichever category was active at mount became a
+  // silent no-op forever. Routing the call through a ref that's kept
+  // current every render sidesteps the stale closure without having to
+  // rebuild the listener (and re-attach a new window-level handler) on
+  // every category change.
+  const handleCategoryTabChangeRef = useRef(null)
   useEffect(() => {
     if (!isCategoryScoped) return
     const handleKeyDown = (e) => {
-      // TEMPORARY diagnostic - reported real bug: plain 1/2/3 still not
-      // switching tabs even after removing the Alt modifier entirely.
-      // Logs every digit-key press this handler actually sees (or
-      // doesn't) and exactly why it bailed, so the real cause can be
-      // read directly from the console rather than guessed a third
-      // time.
-      const isDiagDigit = e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3'
-      // Logged as plain, un-collapsible lines (not one object, which the
-      // console collapses behind a "…" that hid exactly the fields
-      // needed last time) - reported real bug: the shortcut still
-      // doesn't switch tabs even with no modifier at all involved.
-      if (isDiagDigit) console.log('[CEREAL-TAB-DIAG] code=' + e.code, 'activeTag=' + document.activeElement?.tagName, 'isTextEditable=' + isTextEditable(document.activeElement), 'inSuppressedRegion=' + Boolean(document.activeElement?.closest?.('[data-suppress-form-shortcuts]')), 'cerealCategory=' + cerealCategory)
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
       if (isTextEditable(document.activeElement)) return
       // Also skip while any <select> has focus - isTextEditable alone
@@ -2931,12 +2931,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       if (index == null) return
       if (document.activeElement?.closest?.('[data-suppress-form-shortcuts]')) return
       e.preventDefault()
-      if (isDiagDigit) console.log('[CEREAL-TAB-DIAG] calling handleCategoryTabChange with', ['Rice', 'Palay', 'By Products'][index])
-      handleCategoryTabChange(['Rice', 'Palay', 'By Products'][index])
+      handleCategoryTabChangeRef.current?.(['Rice', 'Palay', 'By Products'][index])
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCategoryScoped])
 
   const handleCategoryTabChange = (nextCategory) => {
@@ -2963,6 +2961,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // that is what correctly gets the form ready for a brand new
     // entry in the new category, with no lookup needed here at all.
   }
+  handleCategoryTabChangeRef.current = handleCategoryTabChange
 
   const isEditMode = Boolean(loadedTransaction)
 
