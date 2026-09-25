@@ -55,7 +55,7 @@ const buildMonthGrid = (year, month) => {
   return cells
 }
 
-const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true, label, valueClassName = 'text-sm' }, ref) {
+const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onChange, placeholder = 'Select date', required = true, label, valueClassName = 'text-sm', nextFieldRef }, ref) {
   const [isOpen, setIsOpen] = useState(false)
   // No exit delay (0, not the slide-out's own 180ms) - this popup is
   // commonly chained (picking a Start Date immediately opens the End
@@ -193,6 +193,17 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
     const targetDate = new Date(viewYear, targetMonth, cell.day)
     onChange(toIso(targetDate.getFullYear(), targetDate.getMonth(), cell.day))
     setIsOpen(false)
+    // Confirmed, reported real bug: closing the popup unmounts the day
+    // button that currently holds real DOM focus (via useDelayedUnmount,
+    // once its exit animation finishes) - a focused element being
+    // removed from the DOM makes the browser drop focus to <body>, with
+    // nothing else claiming it, which read as "focus got lost" after
+    // picking a date instead of advancing anywhere. `nextFieldRef` lets
+    // a caller name where focus should land next (e.g. WSI/ESI's Browse
+    // button, so Date -> Browse -> AI picker flows with no dead stop in
+    // between); without one, focus returns to this picker's own trigger
+    // button - always somewhere real, never dropped to <body>.
+    ;(nextFieldRef?.current ?? triggerRef.current)?.focus()
   }
 
   const cells = buildMonthGrid(viewYear, viewMonth)
@@ -215,7 +226,7 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
       </button>
 
       {shouldRenderPopup && createPortal(
-        <div data-suppress-series-nav className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
+        <div data-suppress-form-shortcuts className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
           <div
             ref={popupRef}
             className={`max-h-[90vh] w-72 max-w-full overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 p-3 shadow-xl ${isOpen ? 'animate-calendar-slide-in' : 'animate-calendar-slide-out'}`}

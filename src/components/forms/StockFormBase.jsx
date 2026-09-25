@@ -415,6 +415,21 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       if (raf2) cancelAnimationFrame(raf2)
     }
   }, [])
+
+  // Per explicit request: opening an entry form should start keyboard
+  // focus on the Warehouse picker, not nowhere. Only runs once, right
+  // after the form has actually mounted/entered (same double-RAF timing
+  // as hasEntered itself, so this doesn't fire while the form is still
+  // off-screen mid pop-in) - and only when the picker is a real <select>
+  // (sortedWarehouses.length > 1 and not openedFromReports); a
+  // single-warehouse form has nothing there to focus, and this
+  // deliberately leaves focus wherever the browser puts it by default
+  // in that case rather than guessing a fallback field.
+  useEffect(() => {
+    if (!hasEntered) return
+    warehouseSelectRef.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasEntered])
   const [showSaveHint, setShowSaveHint] = useState(false)
 
   // Live lookup of the linked AI authority, so its remaining balance can
@@ -560,6 +575,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const customerNameRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const serialFieldRef = useRef(null)
+  // browseButtonRef: where CalendarDatePicker moves focus after a date
+  // is picked, when this type has a Browse button (AI/SIA-linked
+  // types). warehouseSelectRef: focused once when the form first opens,
+  // per explicit request ("the first focus should be the warehouse
+  // picker") - only meaningful when the picker actually renders (more
+  // than one accessible warehouse and not opened from Reports); a
+  // single-warehouse form shows a static readout instead, nothing to
+  // focus there.
+  const browseButtonRef = useRef(null)
+  const warehouseSelectRef = useRef(null)
   const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
 
   // Tracks whether the actual Serial No. field is currently scrolled
@@ -2774,6 +2799,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
     onStepBack: () => attemptStep('back'),
     onStepForward: () => attemptStep('forward'),
+    onEscape: onClose,
   })
 
   // Pop scale+fade, coordinated with the nav bar/header's own 350ms
@@ -2802,6 +2828,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           <div className="mt-2">
             <label className="text-xs font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
             <select
+              ref={warehouseSelectRef}
               value={currentWarehouseId ?? ''}
               onChange={(e) => {
                 setCurrentWarehouseId(e.target.value)
@@ -3022,7 +3049,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           <div className={groupBoxClass}>
           <div>
             <label className={labelClass}>Date</label>
-            <CalendarDatePicker ref={dateRef} value={date} onChange={setDate} />
+            <CalendarDatePicker
+              ref={dateRef}
+              value={date}
+              onChange={setDate}
+              nextFieldRef={linkedDocDeductsFromAi ? browseButtonRef : undefined}
+            />
           </div>
 
           <div>
@@ -3037,6 +3069,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               />
               {linkedDocDeductsFromAi && (
                 <button
+                  ref={browseButtonRef}
                   type="button"
                   onClick={() => setShowAuthorityPicker(true)}
                   className="shrink-0 rounded-xl border border-brand-neon/40 px-3 text-xs font-medium text-brand-neon"

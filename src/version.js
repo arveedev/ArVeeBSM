@@ -6181,4 +6181,33 @@
 //              its text input already kept real focus throughout, so
 //              it was already unaffected, but this keeps that fact from
 //              being an implicit assumption.
-export const APP_VERSION = '1.10-148'
+//   1.10-149 - Three reported keyboard-flow fixes on the entry forms
+//              (WSR/WSI/ESR/ESI, WTS, SDO forms):
+//              - CalendarDatePicker: picking a day used to leave focus
+//                nowhere (the focused day button unmounts with the
+//                popup, and nothing claimed focus afterward) - a new
+//                `nextFieldRef` prop lets a caller name where focus
+//                should land next; StockFormBase wires this to the
+//                Browse button for AI/SIA-linked types (WSI/ESI), so
+//                Date -> Browse -> AI picker now flows with no dead
+//                stop. Without a nextFieldRef, focus returns to the
+//                picker's own trigger button instead of getting lost.
+//              - Opening any entry form now focuses the Warehouse
+//                picker first (when it's a real <select> - more than
+//                one accessible warehouse, not opened from Reports),
+//                across all three form bases.
+//              - Escape now closes the whole entry form, same action as
+//                tapping the X button (no new confirmation - matches
+//                the X's existing, already-unguarded behavior rather
+//                than diverging from it). Only fires when no nested
+//                overlay currently owns the keyboard: CalendarDatePicker,
+//                AuthorityPickerModal, ConfirmDialog, and NewPileDialog
+//                all mark their own root `data-suppress-form-shortcuts`
+//                (renamed from the narrower `data-suppress-series-nav`,
+//                since it now also gates this) so their own Escape
+//                handling always takes priority over closing the whole
+//                form out from under them. ConfirmDialog now also
+//                autofocuses its Cancel button on open, both as a safer
+//                keyboard-first default and so this suppression can
+//                actually detect it's open via document.activeElement.
+export const APP_VERSION = '1.10-149'

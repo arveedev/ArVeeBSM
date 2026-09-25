@@ -13,7 +13,7 @@
 // prop, so every existing delete confirmation in the app is completely
 // unaffected unless it explicitly asks for this treatment.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 // Must match the transition duration used on the box below.
@@ -22,6 +22,20 @@ const BOX_ANIMATION_MS = 220
 function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon, rotate = false, children, confirmDisabled = false, destructive = true }) {
   const [shouldRender, setShouldRender] = useState(open)
   const [hasEntered, setHasEntered] = useState(false)
+  const cancelButtonRef = useRef(null)
+
+  // Focuses Cancel the moment this dialog opens - the safer of the two
+  // buttons to land on by default, and also what makes an underlying
+  // entry form's OWN Escape-closes-the-whole-form shortcut correctly
+  // recognize a dialog is open: that shortcut checks whether
+  // document.activeElement sits inside a `data-suppress-form-shortcuts`
+  // region (see useEntryFormShortcuts.js), which only works if
+  // something inside this dialog actually holds focus rather than
+  // whatever was focused in the form underneath before this opened.
+  useEffect(() => {
+    if (!open) return
+    cancelButtonRef.current?.focus()
+  }, [open])
 
   // Keyboard support, per explicit request to make the app usable
   // without reaching for a mouse: Esc always cancels (safe on every
@@ -95,6 +109,7 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
       // it now sits above every modal in the app except
       // CalendarDatePicker's own z-[110] (a date field can still live
       // inside a confirmation's own body).
+      data-suppress-form-shortcuts
       className="fixed inset-0 z-[105] flex items-center justify-center bg-black/60 p-4"
       onClick={onCancel}
     >
@@ -131,6 +146,7 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
 
         <div className="mt-4 flex gap-2">
           <button
+            ref={cancelButtonRef}
             type="button"
             onClick={onCancel}
             className="flex-1 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-3 text-sm font-medium text-neutral-300 transition-all hover:border-neutral-600 hover:text-app-text active:scale-95"

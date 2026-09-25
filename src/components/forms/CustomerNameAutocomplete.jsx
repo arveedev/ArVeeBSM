@@ -235,11 +235,11 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
           // so useEntryFormShortcuts' own isTextEditable check already
           // keeps Left/Right out of series navigation while this is
           // open. Marked anyway, explicitly, matching the same
-          // data-suppress-series-nav convention CalendarDatePicker/
+          // data-suppress-form-shortcuts convention CalendarDatePicker/
           // AuthorityPickerModal use - keeps this guarantee from
           // silently depending on "focus never leaves the input" if
           // this dropdown's rows ever become directly focusable later.
-          data-suppress-series-nav
+          data-suppress-form-shortcuts
           className="fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
           style={{
             top: dropdownRect.top,

@@ -47,14 +47,17 @@ const isTextEditable = (el) => {
 // through this hook's window-level listener while one of these was
 // open and focused, stepping the underlying document's serial out from
 // under an open picker. The fix is opt-in from the overlay's own side:
-// any focusable container that wants to own arrow keys while it's open
-// marks its own root with `data-suppress-series-nav`, and this hook
-// checks for that ancestor on the currently focused element before
-// acting - covers any current or future overlay the same way without
-// this hook needing to know each one by name.
-const isInSuppressedRegion = (el) => Boolean(el?.closest?.('[data-suppress-series-nav]'))
+// any focusable container that wants to own keyboard input while it's
+// open marks its own root with `data-suppress-form-shortcuts`, and this
+// hook checks for that ancestor on the currently focused element before
+// acting on Left/Right OR Escape - covers any current or future overlay
+// (CalendarDatePicker, AuthorityPickerModal, ConfirmDialog, ...) the
+// same way without this hook needing to know each one by name. Named
+// generally (not just "series-nav") since Escape-closes-the-whole-form
+// below needs the exact same suppression, for the exact same reason.
+const isInSuppressedRegion = (el) => Boolean(el?.closest?.('[data-suppress-form-shortcuts]'))
 
-export const useEntryFormShortcuts = ({ onSave, onDelete, onStepBack, onStepForward }) => {
+export const useEntryFormShortcuts = ({ onSave, onDelete, onStepBack, onStepForward, onEscape }) => {
   useEffect(() => {
     const handler = (e) => {
       const mod = e.ctrlKey || e.metaKey
@@ -82,9 +85,28 @@ export const useEntryFormShortcuts = ({ onSave, onDelete, onStepBack, onStepForw
           e.preventDefault()
           onStepForward()
         }
+        return
+      }
+
+      // Per explicit request: Escape closes the whole entry form, same
+      // as tapping the X button (onClose itself decides whether that's
+      // safe - today it closes outright, same as the X always has; this
+      // deliberately doesn't add a NEW unsaved-changes guard Escape-only,
+      // which would make Escape behave differently from the X button it's
+      // meant to mirror). Unlike Left/Right, this fires regardless of
+      // isTextEditable - Escape closing a dialog/form while a text field
+      // happens to be focused is the normal, expected convention. Only
+      // skipped while a nested overlay owns the keyboard (isInSuppressedRegion) -
+      // ConfirmDialog/CalendarDatePicker/AuthorityPickerModal all handle
+      // their own Escape (cancel/close themselves) and must take priority
+      // over closing the entire form out from under them.
+      if (e.key === 'Escape' && onEscape) {
+        if (isInSuppressedRegion(document.activeElement)) return
+        e.preventDefault()
+        onEscape()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onSave, onDelete, onStepBack, onStepForward])
+  }, [onSave, onDelete, onStepBack, onStepForward, onEscape])
 }

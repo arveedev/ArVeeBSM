@@ -268,6 +268,14 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       if (raf2) cancelAnimationFrame(raf2)
     }
   }, [])
+
+  // See StockFormBase.jsx's identical fix/comment.
+  const warehouseSelectRef = useRef(null)
+  useEffect(() => {
+    if (!hasEntered) return
+    warehouseSelectRef.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasEntered])
   const [navFlash, setNavFlash] = useState(null)
   const [showSaveHint, setShowSaveHint] = useState(false)
   // See StockFormBase.jsx's identical state/comment.
@@ -1083,6 +1091,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
     onStepBack: () => attemptStep('back'),
     onStepForward: () => attemptStep('forward'),
+    onEscape: onClose,
   })
 
   return (
@@ -1098,7 +1107,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
         {sortedWarehouses.length > 1 && !openedFromReports ? (
           <div className="mt-2">
             <label className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
-            <select value={currentWarehouseId ?? ''} onChange={(e) => { setCurrentWarehouseId(e.target.value); setLoadedTransaction(null) }}
+            <select ref={warehouseSelectRef} value={currentWarehouseId ?? ''} onChange={(e) => { setCurrentWarehouseId(e.target.value); setLoadedTransaction(null) }}
               className="mt-1 w-full rounded-lg border-2 border-brand-neon/50 bg-neutral-950 px-3 py-3 text-base font-semibold text-app-text outline-none focus:border-brand-neon">
               {sortedWarehouses.map((w) => <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>)}
             </select>

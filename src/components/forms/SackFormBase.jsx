@@ -157,6 +157,13 @@ const SackFormBase = forwardRef(function SackFormBase(
   const customerNameRef = useRef(null)
   const dateRef = useRef(null)
   const scrollContainerRef = useRef(null)
+  // See StockFormBase.jsx's identical fix/comment.
+  const warehouseSelectRef = useRef(null)
+  useEffect(() => {
+    if (!hasEntered) return
+    warehouseSelectRef.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasEntered])
   const serialFieldRef = useRef(null)
   const [isSerialFieldVisible, setIsSerialFieldVisible] = useState(true)
 
@@ -1225,6 +1232,7 @@ const SackFormBase = forwardRef(function SackFormBase(
     onDelete: isEditMode ? () => { setDeleteAnimKey((k) => k + 1); setPendingDelete(true) } : null,
     onStepBack: () => attemptStep('back'),
     onStepForward: () => attemptStep('forward'),
+    onEscape: onClose,
   })
 
   return (
@@ -1247,6 +1255,7 @@ const SackFormBase = forwardRef(function SackFormBase(
           <div className="mt-2">
             <label className="text-xs font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
             <select
+              ref={warehouseSelectRef}
               value={currentWarehouseId ?? ''}
               onChange={(e) => {
                 setCurrentWarehouseId(e.target.value)

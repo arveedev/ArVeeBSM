@@ -136,6 +136,13 @@ function NewPileDialog({ warehouseId, varieties, lockedCategory, onCreated, onCl
 
   return (
     <div
+      // Prevents the parent entry form's own Escape-closes-the-form
+      // shortcut from firing while this is open and focused (see
+      // useEntryFormShortcuts.js's isInSuppressedRegion) - without this,
+      // Escape here would close the WHOLE entry form instead of just
+      // this dialog, since this dialog doesn't yet handle its own
+      // Escape and nothing else marks it as owning keyboard input.
+      data-suppress-form-shortcuts
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
