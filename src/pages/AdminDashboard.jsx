@@ -7,6 +7,7 @@
 // -> Warehouses -> Users), the others are grouped by what they configure.
 
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import ProvincesPanel from '../components/common/admin/ProvincesPanel.jsx'
@@ -87,10 +88,21 @@ const GROUPS = [
 
 function AdminDashboard({ onClose }) {
   const { setPageHeader } = usePageHeader() ?? {}
-  const [activeGroupId, setActiveGroupId] = useState(GROUPS[0].id)
+  // Deep-link support (e.g. the admin-only error notification bell in
+  // AppHeader.jsx navigating here with a specific entry to jump to):
+  // react-router's own navigation `state` rather than a URL query
+  // param, since this doesn't need to be shareable/bookmarkable, just
+  // passed along for this one navigation.
+  const { state: navState } = useLocation()
+  const [activeGroupId, setActiveGroupId] = useState(navState?.groupId ?? GROUPS[0].id)
   const activeGroup = GROUPS.find((g) => g.id === activeGroupId) ?? GROUPS[0]
 
-  const [activeTabId, setActiveTabId] = useState(activeGroup.tabs[0].id)
+  const [activeTabId, setActiveTabId] = useState(navState?.tabId ?? activeGroup.tabs[0].id)
+  // Consumed once by ErrorLogPanel below (scrolls to and expands this
+  // entry, then clears itself) - not re-read from navState again after
+  // the initial mount, so navigating within Admin Dashboard afterward
+  // doesn't keep re-triggering the same scroll/highlight.
+  const [focusEntryId, setFocusEntryId] = useState(navState?.focusEntryId ?? null)
 
   // Same pop entrance/exit as the transaction forms (StockFormBase etc)
   // - this page is reached by routing rather than the activeFormType
@@ -219,7 +231,9 @@ function AdminDashboard({ onClose }) {
             const isActive = activeGroupId === group.id && activeTabId === tab.id
             return (
               <div key={`${group.id}-${tab.id}`} className={isActive ? '' : 'hidden'}>
-                <Panel />
+                {tab.id === 'errorLog'
+                  ? <Panel focusEntryId={focusEntryId} onFocusHandled={() => setFocusEntryId(null)} />
+                  : <Panel />}
               </div>
             )
           }))}

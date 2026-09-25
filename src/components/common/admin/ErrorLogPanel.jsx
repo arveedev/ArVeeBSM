@@ -6,7 +6,7 @@
 // like any other real data, so an entry from any device shows up here
 // regardless of which one you're currently on.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle, CheckCircle2, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
@@ -21,7 +21,7 @@ function fmtTimestamp(iso) {
   })
 }
 
-function ErrorLogPanel() {
+function ErrorLogPanel({ focusEntryId = null, onFocusHandled } = {}) {
   const entries = useLiveQuery(
     () => db.errorLogs.orderBy('timestamp').reverse().toArray(),
     []
@@ -30,6 +30,31 @@ function ErrorLogPanel() {
   const [expandedId, setExpandedId] = useState(null)
   const [pendingClearAll, setPendingClearAll] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState(null)
+
+  // Deep-link support, from AppHeader.jsx's admin-only error
+  // notification bell: `focusEntryId` names one specific entry to jump
+  // to - scrolled into view, expanded, and briefly highlighted so it's
+  // unmistakable which one the notification was actually about.
+  // Resolving a notification navigates to this exact same row by its
+  // stable `entry.id` (sync failures update the SAME log row in place,
+  // never create a second one - see errorLog.js), so a since-resolved
+  // entry naturally lands here already showing its own green Resolved
+  // banner, per explicit request - never a separate, disconnected
+  // "still an error" vs "now resolved" pair of entries to reconcile.
+  const [highlightId, setHighlightId] = useState(null)
+  const rowRefs = useRef(new Map())
+  useEffect(() => {
+    if (!focusEntryId || entries.length === 0) return
+    const found = entries.some((e) => e.id === focusEntryId)
+    if (!found) return
+    setExpandedId(focusEntryId)
+    setHighlightId(focusEntryId)
+    rowRefs.current.get(focusEntryId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const fadeTimer = setTimeout(() => setHighlightId(null), 2500)
+    onFocusHandled?.()
+    return () => clearTimeout(fadeTimer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusEntryId, entries.length])
 
   const handleConfirmClearAll = async () => {
     setPendingClearAll(false)
@@ -72,8 +97,18 @@ function ErrorLogPanel() {
         <ul className="mt-3 space-y-2">
           {entries.map((entry) => {
             const isExpanded = expandedId === entry.id
+            const isHighlighted = highlightId === entry.id
             return (
-              <li key={entry.id} className="rounded-xl border border-neutral-800 bg-neutral-950">
+              <li
+                key={entry.id}
+                ref={(el) => {
+                  if (el) rowRefs.current.set(entry.id, el)
+                  else rowRefs.current.delete(entry.id)
+                }}
+                className={`rounded-xl border bg-neutral-950 transition-colors duration-700 ${
+                  isHighlighted ? 'border-brand-neon shadow-[0_0_0_1px_rgba(0,255,163,0.4)]' : 'border-neutral-800'
+                }`}
+              >
                 <div className="flex items-stretch gap-2">
                   <button
                     type="button"

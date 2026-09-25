@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useObservable, useLiveQuery } from 'dexie-react-hooks'
-import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, Check } from 'lucide-react'
+import { Moon, Sun, LogOut, AlertTriangle, Cloud, CloudOff, Check, Bell } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { usePageHeader } from '../../context/PageHeaderContext.jsx'
@@ -106,6 +106,37 @@ function AppHeader({ hidden = false }) {
   // non-editable avatar.
   const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
   const canEditAvatar = Boolean(user?.uid)
+
+  // Admin-only error notification bell, per explicit request - a badge
+  // count of unresolved db.errorLogs entries (the same table
+  // ErrorLogPanel.jsx already reads), with a dropdown of the most
+  // recent ones. Tapping an entry deep-links into Admin Dashboard's
+  // Error Log tab and scrolls/expands/highlights that exact row (see
+  // ErrorLogPanel.jsx's focusEntryId handling) - since a sync failure
+  // updates the SAME log row in place once it resolves rather than
+  // creating a second entry, a notification for an error that's since
+  // resolved still correctly lands on that row now showing its own
+  // green Resolved banner, never a stale "still broken" view.
+  const isAdmin = user?.role === 'Admin'
+  const errorEntries = useLiveQuery(
+    () => (isAdmin ? db.errorLogs.orderBy('timestamp').reverse().toArray() : []),
+    [isAdmin]
+  ) ?? []
+  const unresolvedErrors = errorEntries.filter((e) => !e.resolved)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const notifRef = useRef(null)
+  useEffect(() => {
+    if (!notifOpen) return
+    const handleOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [notifOpen])
+  const handleNotifEntryClick = (entryId) => {
+    setNotifOpen(false)
+    navigate('/admin', { state: { groupId: 'system', tabId: 'errorLog', focusEntryId: entryId } })
+  }
 
   // Slides down from above on mount - needs a tick of delay
   // (requestAnimationFrame) so the browser actually paints the
@@ -287,6 +318,59 @@ function AppHeader({ hidden = false }) {
                 )}
               </span>
             </button>
+
+            {isAdmin && (
+              <div ref={notifRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setNotifOpen((o) => !o)}
+                  aria-label="Error notifications"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-full text-neutral-300 transition-all hover:text-brand-neon active:scale-90"
+                >
+                  <Bell size={20} />
+                  {unresolvedErrors.length > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-crimson px-1 text-[10px] font-bold text-app-text">
+                      {unresolvedErrors.length > 9 ? '9+' : unresolvedErrors.length}
+                    </span>
+                  )}
+                </button>
+
+                {notifOpen && (
+                  <div className="absolute right-0 top-full z-[106] mt-2 max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50">
+                    <div className="border-b border-neutral-800 px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                        {unresolvedErrors.length > 0
+                          ? `${unresolvedErrors.length} unresolved error${unresolvedErrors.length === 1 ? '' : 's'}`
+                          : 'No unresolved errors'}
+                      </p>
+                    </div>
+                    {errorEntries.length === 0 ? (
+                      <p className="px-3 py-4 text-center text-xs text-neutral-500">Nothing logged yet.</p>
+                    ) : (
+                      <ul className="divide-y divide-neutral-800">
+                        {errorEntries.slice(0, 8).map((entry) => (
+                          <li key={entry.id}>
+                            <button
+                              type="button"
+                              onClick={() => handleNotifEntryClick(entry.id)}
+                              className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-neutral-800"
+                            >
+                              {entry.resolved
+                                ? <Check size={14} className="mt-0.5 shrink-0 text-brand-neon" />
+                                : <AlertTriangle size={14} className="mt-0.5 shrink-0 text-brand-crimson" />}
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium text-app-text">{entry.context}</span>
+                                <span className="block truncate text-xs text-neutral-500">{entry.message}</span>
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* KG/MT weight unit toggle - shows both labels at once with
                 the active one highlighted, so the current state is

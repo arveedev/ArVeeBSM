@@ -6251,4 +6251,29 @@
 //              (baseline value vs live value) whenever it returns true,
 //              so the real cause can be identified from evidence rather
 //              than guessed. No behavior change otherwise.
-export const APP_VERSION = '1.10-151'
+//   1.10-152 - Two features, both from real reports investigated this
+//              session:
+//              - Pile ID field: confirmed via live diagnostic that a
+//                record whose pile was later intentionally deleted/
+//                consolidated still correctly holds that pile's real
+//                (dead) ID - nothing was lost - but a plain <select> has
+//                no option to match that value against, so it silently
+//                fell back to showing "Select pile…", reading as "this
+//                record never had a pile" when that isn't true. A
+//                synthetic disabled option now shows "(Pile no longer
+//                exists - re-select if this needs a new pile)" instead,
+//                checked against the full per-warehouse pile list, not
+//                just the currently-filtered dropdown options.
+//              - Admin-only error notification bell (AppHeader.jsx), per
+//                explicit request: a badge count of unresolved
+//                db.errorLogs entries, with a dropdown of the most
+//                recent ones. Tapping one deep-links into Admin
+//                Dashboard's Error Log tab (via react-router navigation
+//                state, not a URL param) and scrolls/expands/highlights
+//                that exact row. Since a sync failure updates the SAME
+//                log row in place once it resolves rather than creating
+//                a second entry, a notification for an error that's
+//                since resolved correctly lands on that row already
+//                showing its own green Resolved banner - never a
+//                separate, disconnected "still broken" view.
+export const APP_VERSION = '1.10-152'

@@ -678,6 +678,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     })
     .sort((a, b) => byAlpha(a.pileName, b.pileName))
 
+  // Checked against the full per-warehouse `piles` list, not the
+  // filtered/sorted `sortedPiles` above - a pile excluded from
+  // sortedPiles by the category/variety/closed-date filters above still
+  // genuinely exists (a different, unrelated situation); this is
+  // specifically for a pileId that points at nothing anymore, anywhere.
+  // Guarded on `piles` actually having loaded (not just being an empty
+  // array while its own live query is still resolving) so this doesn't
+  // flash a false "deleted" warning for one render on a normal, valid
+  // pile before the query settles.
+  const pileNoLongerExists = Boolean(pileId) && piles != null && !piles.some((p) => p.pileId === pileId)
+
   // Drives the two-column field layout and the live "Pile now" sidebar
   // that grows in once a pile is actually selected. Real bug found,
   // reported directly: this used to be a one-time pointer-type check
@@ -3494,9 +3505,26 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 <select
                   value={pileId}
                   onChange={(e) => handlePileChange(e.target.value)}
-                  className={`${inputClass} ${!pileId ? '!border-brand-amber' : ''}`}
+                  className={`${inputClass} ${!pileId || pileNoLongerExists ? '!border-brand-amber' : ''}`}
                 >
                   <option value="">Select pile…</option>
+                  {/* Confirmed, reported real bug: a saved record whose
+                      pile was later intentionally deleted/consolidated
+                      still correctly holds that pile's real (dead) ID in
+                      its own data - nothing was actually lost. But a
+                      plain <select> has no option matching that value,
+                      so the browser silently falls back to displaying
+                      the FIRST option ("Select pile…") instead - reading
+                      as "this record never had a pile," which isn't
+                      true, and inviting an unnecessary re-pick. A
+                      synthetic option for the dead ID keeps the select
+                      genuinely showing something selected and honest
+                      about why. */}
+                  {pileNoLongerExists && (
+                    <option value={pileId} disabled>
+                      (Pile no longer exists - re-select if this needs a new pile)
+                    </option>
+                  )}
                   {sortedPiles.map((p) => {
                     const variety = sortedVarieties.find((v) => v.varietyId === p.varietyId)
                     // A By Products pile accepts any mix of By Products
