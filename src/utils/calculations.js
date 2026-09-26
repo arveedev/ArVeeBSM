@@ -136,6 +136,12 @@ export const getPeriodPresetRanges = (monthOffset = 0) => {
 
   return {
     monthLabel: `${MONTH_NAMES[month]} ${year}`,
+    // Whole-month bounds alongside the sub-period ranges - added for
+    // ProcurementMonitor.jsx's month-only scoping (PeriodPresetPicker's
+    // onMonthChange prop), additive so every existing caller destructuring
+    // just {monthLabel, ranges} is unaffected.
+    monthFrom: iso(1),
+    monthTo: iso(lastDay),
     ranges: [
       { label: '1–7', from: iso(1), to: iso(7) },
       { label: '8–15', from: iso(8), to: iso(15) },

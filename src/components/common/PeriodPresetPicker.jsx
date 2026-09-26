@@ -23,10 +23,10 @@ const monthOffsetFor = (currentFrom) => {
   return (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth())
 }
 
-function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
+function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo, onMonthChange }) {
   const [monthOffset, setMonthOffset] = useState(() => monthOffsetFor(currentFrom))
   const [monthNavDirection, setMonthNavDirection] = useState(null)
-  const { monthLabel, ranges } = getPeriodPresetRanges(monthOffset)
+  const { monthLabel, ranges, monthFrom, monthTo } = getPeriodPresetRanges(monthOffset)
 
   // Which preset (if any) matches the actual current selection - null
   // when the user has picked a custom date/range that doesn't match
@@ -48,8 +48,16 @@ function PeriodPresetPicker({ onSelectRange, currentFrom, currentTo }) {
     setMonthNavDirection(direction)
     const newOffset = monthOffset + (direction === 'back' ? -1 : 1)
     setMonthOffset(newOffset)
+    const newRanges = getPeriodPresetRanges(newOffset)
+    // Per explicit request (ProcurementMonitor.jsx's month-only view):
+    // when a caller opts in via onMonthChange, navigating months always
+    // selects that whole month by default - called BEFORE the preset
+    // carry-forward below, so a narrower sub-period the user already had
+    // active (activeIndex !== -1) still wins and correctly overrides it,
+    // exactly as it already did for Reports.jsx/Piles.jsx.
+    onMonthChange?.(newRanges.monthFrom, newRanges.monthTo)
     if (activeIndex !== -1) {
-      const preset = getPeriodPresetRanges(newOffset).ranges[activeIndex]
+      const preset = newRanges.ranges[activeIndex]
       if (preset) onSelectRange(preset.from, preset.to)
     }
   }

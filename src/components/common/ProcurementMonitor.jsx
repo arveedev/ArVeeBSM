@@ -20,7 +20,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Search, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
-import { fmtBags, fmtWeight, fmtNetBags, calculateNetBags, isProcurementTypeName, effectiveCutoffDate } from '../../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtNetBags, calculateNetBags, isProcurementTypeName, effectiveCutoffDate, getPeriodPresetRanges } from '../../utils/calculations.js'
 import { fuzzyMatchesAny } from '../../utils/fuzzySearch.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
@@ -44,8 +44,13 @@ function ProcurementMonitor() {
   const [warehouseFilter, setWarehouseFilter] = useState('')
   const [varietyFilter, setVarietyFilter] = useState('')
   const [sortBy, setSortBy] = useState('date-desc')
-  const [periodFrom, setPeriodFrom] = useState('')
-  const [periodTo, setPeriodTo] = useState('')
+  // Per explicit request: this tab shows one month at a time, defaulting
+  // to the CURRENT month (never blank/"every Procurement transaction
+  // ever" as it used to) - driven by the same ‹ Month › nav control
+  // beside these fields (see PeriodPresetPicker's onMonthChange below,
+  // which re-syncs these two on every month nav click).
+  const [periodFrom, setPeriodFrom] = useState(() => getPeriodPresetRanges(0).monthFrom)
+  const [periodTo, setPeriodTo] = useState(() => getPeriodPresetRanges(0).monthTo)
   // '' | 'paid' | 'unpaid' - per explicit request, a WSR only counts as
   // Paid when an Active Purchase Receipt exists for it on the SDO side
   // (purchaseReceipts.wsrTransactionId) - nothing here is derived from
@@ -87,10 +92,13 @@ function ProcurementMonitor() {
     return !cutoff || t.date > cutoff
   })
 
-  // Period range is optional - blank From/To (the default) shows every
-  // Procurement transaction ever recorded, matching this tab's original
-  // "monitor all" scope; setting a range narrows it the same way
-  // Reports.jsx's Statement period does.
+  // Per explicit request, this tab now always scopes to one month
+  // (default the current one), not "every Procurement transaction ever" -
+  // Period From/To default to, and stay synced with, the ‹ Month › nav
+  // below (see the periodFrom/periodTo useState initializers and
+  // PeriodPresetPicker's onMonthChange). Manually editing Period From/To
+  // (or a sub-period preset pill) can still narrow further within that
+  // month, same as Reports.jsx's Statement period.
   const periodFilteredTx = cutoffFilteredTx.filter((t) => {
     if (periodFrom && t.date < periodFrom) return false
     if (periodTo && t.date > periodTo) return false
@@ -279,9 +287,9 @@ function ProcurementMonitor() {
         ))}
       </div>
 
-      {/* Period range is optional (blank = every Procurement transaction
-          ever recorded) - same true 50/50 two-column split as Reports.jsx
-          on wide screens, stacked on narrow ones. */}
+      {/* Always scoped to one month by default (see above) - same true
+          50/50 two-column split as Reports.jsx on wide screens, stacked
+          on narrow ones. */}
       <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -298,7 +306,12 @@ function ProcurementMonitor() {
             <CalendarDatePicker ref={periodToPickerRef} value={periodTo} label="End Date" required={false} onChange={setPeriodTo} />
           </div>
         </div>
-        <PeriodPresetPicker onSelectRange={(from, to) => { setPeriodFrom(from); setPeriodTo(to) }} currentFrom={periodFrom} currentTo={periodTo} />
+        <PeriodPresetPicker
+          onSelectRange={(from, to) => { setPeriodFrom(from); setPeriodTo(to) }}
+          onMonthChange={(from, to) => { setPeriodFrom(from); setPeriodTo(to) }}
+          currentFrom={periodFrom}
+          currentTo={periodTo}
+        />
       </div>
 
       {cards.length === 0 ? (

@@ -6618,4 +6618,15 @@
 //              a matching SIA" here. Now filters both the WSR and ESI
 //              sides of the query the same way ProcurementMonitor.jsx
 //              does.
-export const APP_VERSION = '1.10-172'
+//   1.10-173 - Per explicit request/screenshot: the Procurement tab's
+//              ‹ Month › nav (PeriodPresetPicker, shared with Reports.jsx/
+//              Piles.jsx) already showed a month label but didn't
+//              actually scope the list to it - navigating to a different
+//              month left the visible data unchanged unless a sub-period
+//              preset pill happened to already be active. Now defaults
+//              to, and stays synced with, the current month via a new
+//              opt-in onMonthChange prop on PeriodPresetPicker (Reports.
+//              jsx/Piles.jsx don't pass it, so their own behavior is
+//              unchanged) - Period From/To (and a narrower preset pill,
+//              if one's active) can still fine-tune within that month.
+export const APP_VERSION = '1.10-173'
