@@ -11,7 +11,7 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
-import { fmtBags, fmtWeight } from '../utils/calculations.js'
+import { fmtBags, fmtWeight, liveFormatNumber, parseFormattedNumber } from '../utils/calculations.js'
 import { fuzzyContains } from '../utils/fuzzySearch.js'
 import { computeCashOnHand, roundPeso2 } from '../utils/sdoCalculations.js'
 import { recalculatePileCurrentState } from '../utils/pileLedger.js'
@@ -184,7 +184,7 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
 // Hand figure (not passed down from Home, which no longer renders this)
 // - computed the same way SdoHome.jsx does, from this SDO's own ledger
 // and Active Purchase Receipts.
-function SdoCashSection({ uid }) {
+function SdoCashSection({ uid, userName }) {
   const [openModal, setOpenModal] = useState(null) // 'denomination' | 'history' | 'cancelPr' | null
 
   const activePrs = useLiveQuery(
@@ -194,15 +194,17 @@ function SdoCashSection({ uid }) {
   const ledgerEntries = useLiveQuery(() => db.cashLedgerV2.where('sdoUid').equals(uid).toArray(), [uid]) ?? []
   const cashOnHand = computeCashOnHand(ledgerEntries, activePrs.map((pr) => pr.totalAmount ?? 0))
 
-  // Plain field on the user record - not indexed, so no Dexie schema/
-  // version bump needed, same as priorityWarehouseId/purity/
-  // moistureContent already are. Deliberately NOT derived from
-  // cashLedgerV2 the way Cash on Hand is above - per explicit request,
-  // this is a separate, manually-entered figure (the SDO's own bank
-  // deposit balance), which the Admin/Visitor Procurement tab's
-  // SdoCashOverviewPanel.jsx reads to show alongside Total CPF.
-  const cashOnBankRecord = useLiveQuery(() => db.users.get(uid), [uid])
-  const cashOnBank = cashOnBankRecord?.cashOnBank ?? 0
+  // Confirmed real correction: Cash on Bank is NOT per-SDO - it's one
+  // shared, branch-wide figure every SDO is jointly responsible for
+  // monitoring, any of them can update it, and it should read the same
+  // for all of them. Lives on db.reportConfig's 'global' singleton
+  // (same place purityDisplayFormat/dataStartDate/signatories already
+  // do), not on the individual user record. cashOnBankUpdatedAt/
+  // cashOnBankUpdatedBy record who last touched it and when, so both
+  // this screen and the Admin/Visitor Procurement tab's
+  // SdoCashOverviewPanel.jsx can show that alongside the amount.
+  const config = useLiveQuery(() => db.reportConfig.get('global'), [])
+  const cashOnBank = config?.cashOnBank ?? 0
   const [editingBank, setEditingBank] = useState(false)
   const [bankInput, setBankInput] = useState('')
 
@@ -211,15 +213,21 @@ function SdoCashSection({ uid }) {
     setEditingBank(true)
   }
   const saveCashOnBank = async () => {
-    const amount = Number(bankInput)
+    const amount = parseFormattedNumber(bankInput)
     if (!Number.isFinite(amount) || amount < 0) {
       toast.error('Enter a valid amount')
       return
     }
-    await db.users.update(uid, { cashOnBank: roundPeso2(amount) })
+    const patch = { cashOnBank: roundPeso2(amount), cashOnBankUpdatedAt: new Date().toISOString(), cashOnBankUpdatedBy: userName || 'Unknown' }
+    if (config) await db.reportConfig.update('global', patch)
+    else await db.reportConfig.put({ id: 'global', ...patch })
     toast.success('Cash on Bank updated')
     setEditingBank(false)
   }
+
+  const cashOnBankUpdatedLabel = config?.cashOnBankUpdatedAt
+    ? `Last updated by ${config.cashOnBankUpdatedBy || 'Unknown'} on ${new Date(config.cashOnBankUpdatedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : 'Not set yet'
 
   return (
     <section className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
@@ -227,11 +235,11 @@ function SdoCashSection({ uid }) {
       <p className="mt-1 text-xs text-neutral-500">Current Cash on Hand and every Replenish/Liquidate entry behind it.</p>
       <p className="mt-2 text-2xl font-bold text-app-text">₱{cashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
 
-      <div className="mt-4 border-t border-neutral-800 pt-3">
-        <div className="flex items-center justify-between gap-2">
+      <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+        <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-sm font-medium text-app-text">Cash on Bank</p>
-            <p className="text-xs text-neutral-500">Deposited balance - set here by hand, tracked separately from Cash on Hand.</p>
+            <p className="text-xs text-neutral-500">Shared across the whole branch - any SDO can update it.</p>
           </div>
           {!editingBank && (
             <button
@@ -245,37 +253,43 @@ function SdoCashSection({ uid }) {
           )}
         </div>
         {editingBank ? (
-          <div className="mt-2 flex items-center gap-2">
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              autoFocus
-              value={bankInput}
-              onChange={(e) => setBankInput(e.target.value)}
-              placeholder="0.00"
-              className={`flex-1 ${inputClass}`}
-            />
-            <button
-              type="button"
-              onClick={saveCashOnBank}
-              aria-label="Save Cash on Bank"
-              className="shrink-0 rounded-lg bg-brand-neon p-2.5 text-brand-contrast transition-all active:scale-95"
-            >
-              <Check size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditingBank(false)}
-              aria-label="Cancel"
-              className="shrink-0 rounded-lg border border-neutral-800 p-2.5 text-neutral-400 transition-all hover:text-app-text active:scale-95"
-            >
-              <X size={16} />
-            </button>
+          <div className="mt-2">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500">₱</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  value={bankInput}
+                  onChange={(e) => setBankInput(liveFormatNumber(e.target.value))}
+                  placeholder="0.00"
+                  className={`w-full pl-7 ${inputClass}`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={saveCashOnBank}
+                aria-label="Save Cash on Bank"
+                className="shrink-0 rounded-lg bg-brand-neon p-2.5 text-brand-contrast transition-all active:scale-95"
+              >
+                <Check size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingBank(false)}
+                aria-label="Cancel"
+                className="shrink-0 rounded-lg border border-neutral-800 p-2.5 text-neutral-400 transition-all hover:text-app-text active:scale-95"
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
         ) : (
-          <p className="mt-1 text-2xl font-bold text-app-text">₱{cashOnBank.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">₱{cashOnBank.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="mt-1 text-xs text-neutral-500">{cashOnBankUpdatedLabel}</p>
+          </>
         )}
       </div>
 
@@ -1060,7 +1074,7 @@ function Settings() {
 
       {isSdo && <SdoPositionSection userRecord={userRecord} uid={user.uid} />}
       {isSdo && <SdoAbstractDisplaySection userRecord={userRecord} uid={user.uid} />}
-      {isSdo && <SdoCashSection uid={user.uid} />}
+      {isSdo && <SdoCashSection uid={user.uid} userName={user.name} />}
 
       {!isSdo && (
         <>

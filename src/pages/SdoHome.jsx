@@ -33,7 +33,7 @@ const LIST_PAGE_SIZE = 50
 // rows for the same WSR and then silently vanishing once a background
 // self-heal catches up - per explicit correction, this list must never
 // visibly show a "duplicate" in the first place.
-const dedupeWsrTransactions = (transactions) => {
+export const dedupeWsrTransactions = (transactions) => {
   const seenIds = new Set()
   const dedupedById = transactions.filter((t) => {
     if (seenIds.has(t.id)) return false

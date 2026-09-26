@@ -6664,16 +6664,32 @@
 //              a separate, SDO-editable "Cash on Bank" figure (set from
 //              the SDO's own Settings) is a follow-up, not built yet.
 //   1.10-176 - Built the Cash on Bank feature (the follow-up promised
-//              above). New `cashOnBank` plain field on db.users, same
-//              no-schema-bump pattern as priorityWarehouseId/purity/
-//              moistureContent. Settings.jsx's SdoCashSection (any SDO's
-//              own Settings page) now has an editable Cash on Bank row
-//              below Cash on Hand - deliberately NOT derived from
-//              cashLedgerV2 the way Cash on Hand is; a manually-entered
-//              figure the SDO sets by hand. SdoCashOverviewPanel.jsx
-//              (Admin/Visitor Procurement tab) now shows a second
-//              "Total Cash on Bank — All SDOs" card alongside Total CPF
-//              - deliberately kept as two separate totals, never merged
-//              into one figure - and the per-SDO breakdown shows both
-//              CPF and Cash on Bank stacked per SDO.
-export const APP_VERSION = '1.10-176'
+//              above), then corrected twice more in the same round per
+//              direct feedback:
+//              (1) Cash on Bank is NOT per-SDO - it's one shared,
+//              branch-wide figure any SDO can update. Moved from a
+//              per-user db.users field to db.reportConfig's 'global'
+//              singleton (cashOnBank/cashOnBankUpdatedAt/
+//              cashOnBankUpdatedBy), same place purityDisplayFormat/
+//              dataStartDate/signatories already live. Settings.jsx's
+//              SdoCashSection edits this shared value (any SDO can),
+//              now with a comma-formatted live input (liveFormatNumber,
+//              matching every other money field in the app) instead of
+//              a bare type="number" with its ugly native spinner, plus
+//              an "Updated by X on [date]" line.
+//              (2) It's part of the ONE Total CPF figure, not a second
+//              separate total, per explicit correction -
+//              SdoCashOverviewPanel.jsx now shows a single Total CPF
+//              card (sum of every SDO's own Cash on Hand + the shared
+//              Cash on Bank), with the per-SDO breakdown listing each
+//              SDO's own figure plus one extra "Cash on Bank (shared)"
+//              line, not attributed to any one SDO.
+//              (3) Reported real issue: SDOs were seeing the same
+//              sacks-need-matching-SIA notifications meant for warehouse
+//              roles - not their job. AppHeader.jsx's bell now skips
+//              that query entirely for role SDO and instead surfaces
+//              their own unpaid Procurement WSRs (count + total bags,
+//              aggregated the same way SdoHome.jsx's own dashboard
+//              already does) and the shared Cash on Bank's latest
+//              value/updater/date.
+export const APP_VERSION = '1.10-177'

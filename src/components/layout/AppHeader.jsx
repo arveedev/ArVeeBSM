@@ -19,6 +19,7 @@ import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { fmtBags, isProcurementTypeName, effectiveCutoffDate } from '../../utils/calculations.js'
+import { dedupeWsrTransactions } from '../../pages/SdoHome.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import Avatar from '../common/Avatar.jsx'
 import AvatarPickerModal from '../common/AvatarPickerModal.jsx'
@@ -153,6 +154,7 @@ function AppHeader({ hidden = false }) {
   //    Clear All below, which only ever clears db.errorLogs rows.
   const isAdmin = user?.role === 'Admin'
   const isVisitor = user?.role === 'Visitor'
+  const isSdo = user?.role === 'SDO'
   const errorEntries = useLiveQuery(
     () => (isAdmin ? db.errorLogs.orderBy('timestamp').reverse().toArray() : []),
     [isAdmin]
@@ -182,7 +184,11 @@ function AppHeader({ hidden = false }) {
   const warehouseNameById = new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w.name]))
   const warehouseById = new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w]))
   const procurementOutstanding = useLiveQuery(async () => {
-    if (warehouseIds.length === 0) return []
+    // Sack-matching is a warehouse-operations concern (Warehouse
+    // Supervisor/Admin/Visitor), not an SDO's job - per explicit
+    // request, an SDO's bell instead surfaces their own unpaid
+    // procurement and the shared Cash on Bank figure (both below).
+    if (warehouseIds.length === 0 || isSdo) return []
     const transactionTypes = await db.transactionTypes.toArray()
     const procurementTypeId = transactionTypes.find((t) => isProcurementTypeName(t.name))?.transactionTypeId
     if (!procurementTypeId) return []
@@ -313,7 +319,40 @@ function AppHeader({ hidden = false }) {
 
     return [...accumulatedEntries, ...overIssuanceEntries]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [warehouseIds.join(',')]) ?? []
+  }, [warehouseIds.join(','), isSdo]) ?? []
+
+  // SDO-only: the two things an SDO actually needs to act on - their own
+  // unpaid Procurement WSRs (across every warehouse they're assigned to,
+  // same aggregation SdoHome.jsx's own dashboard already uses) and the
+  // shared, branch-wide Cash on Bank figure (see Settings.jsx's
+  // SdoCashSection / SdoCashOverviewPanel.jsx - any SDO can update it,
+  // so every SDO's bell should reflect the latest value regardless of
+  // who last touched it).
+  const sdoUnpaidProcurement = useLiveQuery(async () => {
+    if (!isSdo || warehouseIds.length === 0) return null
+    const transactionTypes = await db.transactionTypes.toArray()
+    const procurementTypeIds = new Set(transactionTypes.filter((t) => isProcurementTypeName(t.name)).map((t) => t.transactionTypeId))
+    if (procurementTypeIds.size === 0) return null
+    const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
+    const wsrTransactions = await db.transactions
+      .where('warehouseId').anyOf(warehouseIds)
+      .and((t) => t.type === 'WSR' && t.status === 'Active' && t.cerealCategory === 'Palay' && procurementTypeIds.has(t.transactionTypeId))
+      .toArray()
+    const visible = dedupeWsrTransactions(wsrTransactions).filter((t) => {
+      const cutoff = effectiveCutoffDate(warehouseById.get(t.warehouseId)?.reportingCutoffDate, globalDataStartDate)
+      return !cutoff || t.date > cutoff
+    })
+    const activePrs = await db.purchaseReceipts.where('status').equals('Active').toArray()
+    const paidWsrIds = new Set(activePrs.map((pr) => pr.wsrTransactionId).filter(Boolean))
+    const unpaid = visible.filter((t) => !paidWsrIds.has(t.id))
+    if (unpaid.length === 0) return null
+    return { count: unpaid.length, totalBags: unpaid.reduce((s, t) => s + (t.numberOfBags ?? 0), 0) }
+  }, [isSdo, warehouseIds.join(',')]) ?? null
+
+  const sdoCashOnBankInfo = useLiveQuery(
+    async () => (isSdo ? (await db.reportConfig.get('global')) ?? null : null),
+    [isSdo]
+  ) ?? null
 
   const [notifOpen, setNotifOpen] = useState(false)
   const [confirmingClearNotifs, setConfirmingClearNotifs] = useState(false)
@@ -365,6 +404,29 @@ function AppHeader({ hidden = false }) {
         navigate('/')
       },
     })),
+    // SDO-only entries - see sdoUnpaidProcurement/sdoCashOnBankInfo
+    // above for why these replace the sacks-need-matching-SIA entries
+    // for this role.
+    ...(sdoUnpaidProcurement ? [{
+      id: 'sdo:unpaid-procurement',
+      resolved: false,
+      title: 'Unpaid Procurement',
+      detail: `${sdoUnpaidProcurement.count} WSR${sdoUnpaidProcurement.count === 1 ? '' : 's'} unpaid — ${fmtBags(sdoUnpaidProcurement.totalBags)} bag${sdoUnpaidProcurement.totalBags === 1 ? '' : 's'} total`,
+      onClick: () => {
+        setNotifOpen(false)
+        navigate('/')
+      },
+    }] : []),
+    ...(isSdo && sdoCashOnBankInfo?.cashOnBankUpdatedAt ? [{
+      id: 'sdo:cash-on-bank',
+      resolved: false,
+      title: 'Cash on Bank (shared)',
+      detail: `₱${(sdoCashOnBankInfo.cashOnBank ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — updated by ${sdoCashOnBankInfo.cashOnBankUpdatedBy || 'Unknown'} on ${new Date(sdoCashOnBankInfo.cashOnBankUpdatedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+      onClick: () => {
+        setNotifOpen(false)
+        navigate('/settings')
+      },
+    }] : []),
   ]
   const unresolvedNotifCount = notifEntries.filter((n) => !n.resolved).length
 

@@ -31,6 +31,16 @@ function SdoCashOverviewPanel() {
   const allLedgerEntries = useLiveQuery(() => db.cashLedgerV2.toArray(), []) ?? []
   const allActivePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), []) ?? []
 
+  // Confirmed real correction: Cash on Bank is a single, shared,
+  // branch-wide figure (any SDO can update it - see Settings.jsx's
+  // SdoCashSection) - not per-SDO, and per explicit correction it's
+  // part of the ONE Total CPF figure, not a second separate total.
+  const config = useLiveQuery(() => db.reportConfig.get('global'), [])
+  const cashOnBank = config?.cashOnBank ?? 0
+  const cashOnBankUpdatedLabel = config?.cashOnBankUpdatedAt
+    ? `Updated by ${config.cashOnBankUpdatedBy || 'Unknown'} on ${new Date(config.cashOnBankUpdatedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : 'Not set yet'
+
   const cards = sdoUsers
     .map((u) => {
       const myLedger = allLedgerEntries.filter((e) => e.sdoUid === u.uid)
@@ -39,11 +49,6 @@ function SdoCashOverviewPanel() {
         uid: u.uid,
         name: u.name || u.accessCode || 'Unnamed SDO',
         cashOnHand: computeCashOnHand(myLedger, myPrTotals),
-        // Plain, manually-entered field on the user record (see
-        // Settings.jsx's SdoCashSection) - never derived from the
-        // ledger the way Cash on Hand is, so it's read straight off
-        // the user record with no computation here.
-        cashOnBank: u.cashOnBank ?? 0,
       }
     })
     .sort((a, b) => byAlpha(a.name, b.name))
@@ -56,66 +61,54 @@ function SdoCashOverviewPanel() {
     )
   }
 
-  const totalCash = cards.reduce((s, c) => s + c.cashOnHand, 0)
-  const totalCashOnBank = cards.reduce((s, c) => s + c.cashOnBank, 0)
+  const totalCashOnHand = cards.reduce((s, c) => s + c.cashOnHand, 0)
+  const totalCpf = totalCashOnHand + cashOnBank
 
   return (
     <div className="mt-4">
-      {/* Two separate totals, per explicit request - CPF (ledger-
-          derived) and Cash on Bank (manually entered per SDO in their
-          own Settings) are deliberately never merged into one figure.
-          Either card expands/collapses the same shared per-SDO
-          breakdown below, which shows both figures per SDO. */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="w-full rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-4 py-3 text-left transition-colors hover:border-brand-neon/70"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">Total CPF — All SDOs</p>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="text-xs text-neutral-500">
-                {cards.length} {cards.length === 1 ? 'SDO' : 'SDOs'}
-              </span>
-              <ChevronDown size={16} className={`text-neutral-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-            </div>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-4 py-3 text-left transition-colors hover:border-brand-neon/70"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">Total CPF — All SDOs</p>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-xs text-neutral-500">
+              {cards.length} {cards.length === 1 ? 'SDO' : 'SDOs'}
+            </span>
+            <ChevronDown size={16} className={`text-neutral-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
           </div>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">{fmtPeso(totalCash)}</p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-left transition-colors hover:border-neutral-600"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Total Cash on Bank — All SDOs</p>
-            <ChevronDown size={16} className={`shrink-0 text-neutral-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-          </div>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">{fmtPeso(totalCashOnBank)}</p>
-        </button>
-      </div>
+        </div>
+        <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">{fmtPeso(totalCpf)}</p>
+      </button>
 
       {expanded && (
         <div className="mt-3 space-y-2">
           {cards.map((c) => (
             <div key={c.uid} className="rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
-              <p className="truncate text-base font-semibold text-app-text">{c.name}</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">CPF</p>
-                  <p className={`text-lg font-bold tabular-nums ${c.cashOnHand < 0 ? 'text-brand-crimson' : 'text-app-text'}`}>
-                    {fmtPeso(c.cashOnHand)}
-                  </p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-app-text">{c.name}</p>
                 </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">Cash on Bank</p>
-                  <p className="text-lg font-bold tabular-nums text-app-text">{fmtPeso(c.cashOnBank)}</p>
-                </div>
+                <p className={`shrink-0 text-xl font-bold tabular-nums ${c.cashOnHand < 0 ? 'text-brand-crimson' : 'text-app-text'}`}>
+                  {fmtPeso(c.cashOnHand)}
+                </p>
               </div>
             </div>
           ))}
+          {/* Not attributed to any one SDO - shown as its own line,
+              distinct from the per-SDO cards above, since it's a shared
+              branch figure any of them can update. */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-app-text">Cash on Bank <span className="font-normal text-neutral-500">(shared)</span></p>
+                <p className="mt-0.5 text-xs text-neutral-500">{cashOnBankUpdatedLabel}</p>
+              </div>
+              <p className="shrink-0 text-xl font-bold tabular-nums text-app-text">{fmtPeso(cashOnBank)}</p>
+            </div>
+          </div>
         </div>
       )}
     </div>
