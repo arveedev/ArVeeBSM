@@ -6810,4 +6810,37 @@
 //              show "Net Kgs"/"Net Bags" as a left-aligned label with
 //              the number right-aligned, instead of the label trailing
 //              the number inline.
-export const APP_VERSION = '1.10-183'
+//   1.10-184 - Several more fixes, per direct follow-up feedback and
+//              screenshots from a real mobile device:
+//              (1) Last Activity's sack description now includes the
+//              condition in parentheses (e.g. "PPRE50 (SH)"), same
+//              info SackRow's own per-line display already carries.
+//              (2) The MO/TMO detail modal now closes on Esc (same
+//              convention as every other modal in the app) and toggles
+//              the full list on Space, matching the on-screen button.
+//              (3) Reported real bug: on a narrow phone, the MO/TMO
+//              number truncated and the AI/SIA pills overflowed off
+//              the screen edge entirely, both in the list row and the
+//              modal's own header. Per explicit correction, the number
+//              now wraps/grows downward instead of truncating, and
+//              AI/SIA stack vertically below a narrow breakpoint
+//              instead of forcing a single row.
+//              (4) Reported real bug: the MO/TMO modal (and several
+//              other bottom-sheet modals sharing the same pattern -
+//              AuthorityMonitor.jsx's ChoiceAuthorityModal,
+//              UnwithdrawnDetailModal.jsx, EditBeginningBalanceModal.jsx,
+//              TransactionModal.jsx) sat flush against the bottom edge
+//              on a real device, with no clearance for the iOS home
+//              indicator / Android nav bar. All now add
+//              env(safe-area-inset-bottom) padding, matching the
+//              convention AvatarPickerModal.jsx/CreateEditPileModal.jsx
+//              already used.
+//              (5) Reported real bug: the Login screen's hidden PIN
+//              input still summoned the OS's own virtual keyboard on
+//              load, despite the on-screen number grid being the
+//              intended sole input surface. Switched inputMode from
+//              "numeric" to "none" - the standard fix for a custom-
+//              keypad-plus-hidden-input pattern, which still lets a
+//              physical keyboard type into it via autoFocus without
+//              popping a virtual one on mobile.
+export const APP_VERSION = '1.10-184'

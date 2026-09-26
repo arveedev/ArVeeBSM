@@ -39,6 +39,7 @@ function EditBeginningBalanceModal({ open, pile, warehouseId, onClose }) {
           shape doesn't quite reach. */}
       <div
         className={`max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-t-2xl bg-neutral-900 sm:rounded-2xl ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">

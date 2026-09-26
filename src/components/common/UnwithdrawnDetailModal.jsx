@@ -76,7 +76,11 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
   const bagsUnitLabel = rawBags ? 'bags' : 'net bags'
 
   return createPortal(
-    <div className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`} onClick={handleClose}>
+    <div
+      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
+      style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+      onClick={handleClose}
+    >
       <div
         className={`flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl border border-neutral-800 bg-neutral-900 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
         onClick={(e) => e.stopPropagation()}

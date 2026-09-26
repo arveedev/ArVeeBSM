@@ -129,8 +129,9 @@ function TransactionModal({ open, onClose, onSelectType }) {
         style={{
           transform: hasEntered ? 'translateY(0)' : 'translateY(100%)',
           transition: 'transform 200ms ease-out',
+          paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))',
         }}
-        className="w-full max-w-md rounded-t-3xl border border-neutral-800 bg-neutral-900 p-4 pb-8"
+        className="w-full max-w-md rounded-t-3xl border border-neutral-800 bg-neutral-900 p-4"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleSheetKeyDown}
       >

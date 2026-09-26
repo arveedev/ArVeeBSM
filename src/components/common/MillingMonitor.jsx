@@ -19,6 +19,7 @@ import CompletedMillingModal from './CompletedMillingModal.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
 import { millingOrderMatchesQuery } from '../../utils/monitoringSearch.js'
 import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
+import { isTextEditable } from '../../hooks/useEntryFormShortcuts.js'
 
 const fmtDate = (s) => {
   if (!s) return '—'
@@ -74,6 +75,29 @@ export function MillingOrderDetail({ order, onClose }) {
     setIsClosing(true)
     setTimeout(onClose, 300)
   }
+
+  // Per explicit request: Esc closes this modal (same convention as
+  // every other modal/dialog in the app), and Space toggles the full
+  // list the same way tapping the "Show/Hide full list" button does -
+  // guarded by isTextEditable so it doesn't hijack typing (no text
+  // field lives inside this modal today, but the guard costs nothing
+  // and matches the same pattern used elsewhere in the app).
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (isTextEditable(document.activeElement)) return
+      if (e.key === 'Escape') {
+        handleClose()
+        return
+      }
+      if (e.code === 'Space') {
+        e.preventDefault()
+        setShowList((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { weightUnit, autoAgeMonitoring } = useSettings() ?? {}
   const allTx = [...order.issueTx, ...order.receiptTx].sort((a, b) => {
@@ -139,7 +163,15 @@ export function MillingOrderDetail({ order, onClose }) {
       ? (() => {
           const lines = lastTx.sackLines ?? []
           const pieces = lines.reduce((s, l) => s + (l.pieces ?? 0), 0)
-          const types = [...new Set(lines.map((l) => sackTypeMap.get(l.sackTypeId)?.code).filter(Boolean))].join(', ')
+          // Per explicit follow-up: the condition (e.g. "SH") goes in
+          // parentheses right after the sack type code, same info
+          // SackRow's own per-line display already carries.
+          const types = [...new Set(
+            lines.map((l) => {
+              const code = sackTypeMap.get(l.sackTypeId)?.code
+              return code ? `${code} (${l.condition ?? '—'})` : null
+            }).filter(Boolean)
+          )].join(', ')
           return `${fmtBags(pieces)} ${types || 'sacks'}`
         })()
       : `${fmtBags(lastTx.numberOfBags)} bags`
@@ -227,7 +259,11 @@ export function MillingOrderDetail({ order, onClose }) {
   const issuedCategory = order.issueTx?.find((t) => t.cerealCategory)?.cerealCategory ?? 'Palay'
 
   return createPortal(
-    <div className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`} onClick={handleClose}>
+    <div
+      className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
+      style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+      onClick={handleClose}
+    >
       <div
         className={`flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl border border-neutral-800 bg-neutral-900 ${isClosing ? 'animate-sheet-slide-down' : 'animate-sheet-slide-up'}`}
         onClick={(e) => e.stopPropagation()}
@@ -241,17 +277,21 @@ export function MillingOrderDetail({ order, onClose }) {
             left its last block sitting flush against the modal's
             bottom edge with no gap. */}
         <div className={`shrink-0 p-4 ${shouldRenderList ? 'pb-0' : ''}`}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-lg font-bold text-app-text">{order.number}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            {/* Per explicit request: the number is allowed to wrap/grow
+                downward (no truncate, min-w-0 just stops flex overflow)
+                rather than being clipped off the edge of a narrow
+                screen. */}
+            <div className="min-w-0 flex-1">
+              <p className="break-words text-lg font-bold text-app-text">{order.number}</p>
               <p className="text-base text-neutral-400">{order.ricemillName}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {/* AI/SIA, side by side (not stacked), each its own pill so
-                  they read as clearly separate values - same in-line,
-                  larger treatment as the list row card. */}
+              {/* AI/SIA - side by side on a wide-enough screen, but per
+                  explicit request stacked vertically on a narrow one
+                  instead of overflowing past the screen edge. */}
               {(order.aiNumber || order.siaNumber) && (
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:items-center">
                   {order.aiNumber && (
                     <span className="rounded-md bg-brand-neon/10 px-2 py-1 text-xs font-bold tabular-nums text-brand-neon">
                       AI {order.aiNumber}
@@ -689,21 +729,27 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
         }`}
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="min-w-0 truncate text-base font-semibold text-app-text">{o.number}</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            {/* Per explicit request: the number wraps/grows downward
+                (no truncate) instead of being clipped off a narrow
+                screen's edge. */}
+            <p className="min-w-0 flex-1 break-words text-base font-semibold text-app-text">{o.number}</p>
             {/* AI/SIA, in-line with the MO/TMO number itself (same row,
                 right edge) per explicit request - larger and easier to
                 read than the earlier corner-badge attempt, and doesn't
                 add any extra height to the card the way a separate top
-                row did. Side by side (not stacked), each its own pill so
-                they read as clearly separate values. Visible to every
-                role now (this card is shared between the regular user's
-                Home and AdminMonitoring), not just the admin-only AI/SIA
-                tab it used to be confined to. Every MO/TMO genuinely
-                carries BOTH its own AI and SIA (confirmed directly
-                against the real Sheet) - shows both when both exist. */}
+                row did. Side by side on a wide-enough screen, but per
+                further explicit request stacked vertically on a narrow
+                one instead of overflowing past the screen edge - each
+                its own pill so they read as clearly separate values.
+                Visible to every role now (this card is shared between
+                the regular user's Home and AdminMonitoring), not just
+                the admin-only AI/SIA tab it used to be confined to.
+                Every MO/TMO genuinely carries BOTH its own AI and SIA
+                (confirmed directly against the real Sheet) - shows both
+                when both exist. */}
             {(o.aiNumber || o.siaNumber) && (
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center">
                 {o.aiNumber && (
                   <span className="rounded-md bg-brand-neon/10 px-2 py-1 text-xs font-bold tabular-nums text-brand-neon">
                     AI {o.aiNumber}

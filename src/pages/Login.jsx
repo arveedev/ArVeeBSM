@@ -270,13 +270,21 @@ function Login() {
           Enter your access PIN
         </p>
 
-        {/* type="number" per Section 2.3 — triggers the device-native
-            numeric keypad on focus. Visually hidden; the grid below is the
-            primary input surface. */}
+        {/* Reported real bug: on a real mobile device, autoFocus on
+            this hidden input still popped the OS's own virtual
+            keyboard on page load, even though it's visually hidden and
+            the on-screen number grid below is the intended, sole input
+            surface. inputMode="none" is the standard fix for exactly
+            this "custom keypad + hidden real input" pattern - it tells
+            mobile browsers not to summon a virtual keyboard for this
+            field while still letting it hold focus (so a PHYSICAL
+            keyboard, on desktop, still types into it via autoFocus).
+            type="number" is kept only for numeric-only paste/native
+            validation semantics, not for the keypad it used to imply. */}
         <input
           ref={inputRef}
           type="number"
-          inputMode="numeric"
+          inputMode="none"
           autoFocus
           disabled={isSubmitting}
           value={pin}

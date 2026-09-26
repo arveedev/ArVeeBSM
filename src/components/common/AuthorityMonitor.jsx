@@ -454,6 +454,7 @@ function ChoiceAuthorityModal({ choiceAuthority, onAddNew, onViewTransactions, o
   return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
+      style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
       onClick={handleClose}
     >
       <div
