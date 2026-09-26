@@ -6747,4 +6747,23 @@
 //              (Rice/Palay/By Products) of whatever transaction it's
 //              describing, not just a bare "received 713 pcs" with no
 //              indication of what was actually received.
-export const APP_VERSION = '1.10-180'
+//   1.10-181 - Per explicit request/screenshots, restructured the MO/
+//              TMO detail modal's layout: the summary (By Products/
+//              Source Warehouse/Last Activity/Issued/Received) now
+//              shows FIRST by default, not the Stocks/Sacks transaction
+//              list - tapping the toggle button swaps to the list
+//              instead (the reverse of before). Recovery stays visible
+//              in both states, since it's the one figure worth
+//              comparing regardless of which view is open, and now
+//              shows the achieved recovery percentage in line with the
+//              target percentage (Expected/Actual both carry their own
+//              % row now, not just the target in the card's title).
+//              Then, per direct follow-up feedback on this same
+//              screen: the first summary card became "Stocks" showing
+//              both Palay Issued and Rice Received together, both in
+//              Net Bags; the By Products card dropped its sacks/pcs
+//              line entirely and now shows the real recorded bag count
+//              (WSR's own numberOfBags) instead of a kg/50
+//              approximation, since a By Products bag isn't guaranteed
+//              to weigh exactly 50kg.
+export const APP_VERSION = '1.10-181'

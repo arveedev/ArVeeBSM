@@ -35,40 +35,38 @@ const categoryColor = (category) =>
 export function MillingOrderDetail({ order, onClose }) {
   const [isClosing, setIsClosing] = useState(false)
   const [detailTab, setDetailTab] = useState('stocks')
-  // By Products/Source Warehouse/Last Activity are collapsed by
-  // default - per explicit request, the fixed (non-scrolling) header
-  // section was crowding out the actual transaction list below,
-  // leaving barely any room to view it without collapsing this first.
-  const [showMoreDetails, setShowMoreDetails] = useState(false)
-  // "more details" and the Stocks/Sacks tab section are mutually
-  // exclusive - only one is ever meant to be visible. Running each
-  // through its own independent useDelayedUnmount (as a first attempt
-  // did) meant both played their 250ms transitions in PARALLEL, so for
-  // that whole window both sections were simultaneously mounted -
-  // doubling the modal's content height and visibly overlapping mid-
-  // transition (confirmed via screen recording). This instead SEQUENCES
-  // them: `visibleSection` only flips to the new target once the old
-  // one's exit animation has actually finished, so the two are never
-  // both on screen at once - the currently-displayed section plays its
-  // exit alone, then (and only then) the other one mounts and plays
-  // its entrance.
-  const MORE_DETAILS_TRANSITION_MS = 250
-  const [visibleSection, setVisibleSection] = useState('tabs') // 'tabs' | 'details'
-  const targetSection = showMoreDetails ? 'details' : 'tabs'
+  // Per explicit request/screenshots, the layout is now the reverse of
+  // before: the summary (By Products/Source Warehouse/Last Activity/
+  // Issued/Received) is what shows FIRST, by default - the Stocks/
+  // Sacks transaction list only appears once the user actually asks
+  // for it. Recovery stays visible in BOTH states (see below), since
+  // it's the one figure worth comparing against regardless of which
+  // view is open.
+  const [showList, setShowList] = useState(false)
+  // Summary and the transaction list are mutually exclusive - only one
+  // is ever meant to be visible. Running each through its own
+  // independent useDelayedUnmount (as a first attempt did) meant both
+  // played their 250ms transitions in PARALLEL, so for that whole
+  // window both sections were simultaneously mounted - doubling the
+  // modal's content height and visibly overlapping mid-transition
+  // (confirmed via screen recording). This instead SEQUENCES them:
+  // `visibleSection` only flips to the new target once the old one's
+  // exit animation has actually finished, so the two are never both on
+  // screen at once - the currently-displayed section plays its exit
+  // alone, then (and only then) the other one mounts and plays its
+  // entrance.
+  const SECTION_TRANSITION_MS = 250
+  const [visibleSection, setVisibleSection] = useState('summary') // 'summary' | 'list'
+  const targetSection = showList ? 'list' : 'summary'
   const isSectionLeaving = visibleSection !== targetSection
   // Render conditions derived from visibleSection (the CURRENTLY active
   // section, which lags behind targetSection until the transition timer
-  // below fires) - these were referenced in the JSX further down but
-  // never actually defined, a latent bug from the original sequencing
-  // refactor that crashed only when a completed order (with By
-  // Products/Source Warehouse/Last Activity content) was opened, since
-  // that's the only case where the "Show more details" button - and
-  // thus this code path - exists at all.
-  const shouldRenderMoreDetails = visibleSection === 'details'
-  const shouldRenderTabContent = visibleSection === 'tabs'
+  // below fires).
+  const shouldRenderSummary = visibleSection === 'summary'
+  const shouldRenderList = visibleSection === 'list'
   useEffect(() => {
     if (!isSectionLeaving) return
-    const timer = setTimeout(() => setVisibleSection(targetSection), MORE_DETAILS_TRANSITION_MS)
+    const timer = setTimeout(() => setVisibleSection(targetSection), SECTION_TRANSITION_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetSection])
@@ -177,6 +175,12 @@ export function MillingOrderDetail({ order, onClose }) {
   const meetsExpectedKilos = expectedKilosFromIssued == null || expectedKilosFromIssued === 0 || riceReceivedKilos >= expectedKilosFromIssued
   const meetsExpectedPieces = expectedPiecesFromIssued == null || expectedPiecesFromIssued === 0 || riceReceivedPieces >= expectedPiecesFromIssued
   const showRecoveryComparison = isCompleted && order.type === 'MO' && order.recoveryPercent != null
+  // Per explicit request: the achieved recovery percentage sits right
+  // alongside Expected/Actual, so the target rate (order.recoveryPercent,
+  // already in the card's own title) and what was actually achieved can
+  // be compared at a glance instead of only being inferable from the raw
+  // kg/pcs figures.
+  const actualRecoveryPercent = order.issuedKilos > 0 ? (riceReceivedKilos / order.issuedKilos) * 100 : null
 
   // By Products from this same milling run - same MO/TMO number, but
   // tagged with cerealCategory 'By Products' rather than the main
@@ -187,13 +191,13 @@ export function MillingOrderDetail({ order, onClose }) {
     if (t.type === 'WSR') return sum + (t.numberOfBags ?? 0)
     return sum + (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
   }, 0)
-  // Per explicit request, the "Received" card below now shows the By
-  // Products side of this run exclusively - the Rice side is what the
-  // Recovery card already tracks, so showing it there too (mixed
-  // together, as this card used to) never actually meant one
-  // consistent thing.
-  const byProductsReceivedKilos = byProductsReceiptTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
-  const byProductsReceivedPieces = byProductsReceiptTx.filter((t) => t.type === 'ESR').reduce((s, t) => s + (t.sackLines ?? []).reduce((ls, l) => ls + (l.pieces ?? 0), 0), 0)
+  // Per explicit request, the "By Products Received" card shows the
+  // ACTUAL bag count (WSR's own numberOfBags field) rather than a
+  // Net-Bags figure derived from kg/50 - a By Products bag isn't
+  // guaranteed to weigh exactly 50kg the way this app's other "Net
+  // Bags" conversions assume, so the real recorded count is the
+  // correct number to show here, not an approximation.
+  const byProductsReceivedBags = byProductsReceiptTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
 
   // The issue side (WSI/ESI) is always the unmilled cereal sent TO the
   // mill - typically Palay, but read from the actual transactions
@@ -209,12 +213,12 @@ export function MillingOrderDetail({ order, onClose }) {
         {/* Fixed section - never scrolls, only Transaction History below
             does. pb-0 only makes sense while that scrollable section is
             actually rendered right below it (its own pt-3 continues the
-            spacing) - "more details" and the tab section are mutually
-            exclusive (see shouldRenderTabContent above), so with more
-            details open there's nothing below this section at all, and
-            pb-0 left its last block sitting flush against the modal's
+            spacing) - summary and the transaction list are mutually
+            exclusive (see shouldRenderList above), so with the list
+            open there's nothing below this section at all, and pb-0
+            left its last block sitting flush against the modal's
             bottom edge with no gap. */}
-        <div className={`shrink-0 p-4 ${shouldRenderTabContent ? 'pb-0' : ''}`}>
+        <div className={`shrink-0 p-4 ${shouldRenderList ? 'pb-0' : ''}`}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-lg font-bold text-app-text">{order.number}</p>
@@ -261,78 +265,96 @@ export function MillingOrderDetail({ order, onClose }) {
             )}
           </div>
 
-          {(byProductsBags > 0 || linkedAuthority?.sourceWarehouse || lastTxSummary) && (
-            <>
-              <button
-                type="button"
-                onClick={() => setShowMoreDetails((v) => !v)}
-                className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg py-1 text-sm font-semibold text-brand-neon"
-              >
-                {showMoreDetails ? 'Hide' : 'Show'} more details
-                <ChevronUp size={12} className={`transition-transform ${showMoreDetails ? '' : 'rotate-180'}`} />
-              </button>
-              {shouldRenderMoreDetails && (
-                <div className={showMoreDetails ? 'animate-flow-down' : 'animate-flow-up-exit'}>
-                  {byProductsBags > 0 && (
-                    <div className="mt-2 rounded-lg border border-brand-byproduct/40 bg-brand-byproduct/10 p-2">
-                      <p className="text-sm text-neutral-500">By Products (Total)</p>
-                      <p className="font-semibold tabular-nums text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
-                    </div>
-                  )}
+          {/* Per explicit request/screenshots: summary (By Products/
+              Source Warehouse/Last Activity/Issued/Received) is what
+              shows by default now - this button reveals the Stocks/
+              Sacks transaction list instead, swapping the two, rather
+              than a conditionally-hidden button that only appeared when
+              optional fields had data. */}
+          <button
+            type="button"
+            onClick={() => setShowList((v) => !v)}
+            className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg py-1 text-sm font-semibold text-brand-neon"
+          >
+            {showList ? 'Hide' : 'Show'} full list
+            <ChevronUp size={12} className={`transition-transform ${showList ? '' : 'rotate-180'}`} />
+          </button>
 
-                  {linkedAuthority?.sourceWarehouse && (
-                    <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-base">
-                      <p className="text-sm text-neutral-500">Source Warehouse</p>
-                      <p className="font-semibold text-app-text">{linkedAuthority.sourceWarehouse}</p>
-                    </div>
-                  )}
-
-                  {lastTxSummary && (
-                    <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-                      <p className="text-sm text-neutral-500">Last Activity</p>
-                      <p className="text-base font-medium text-app-text">{lastTxSummary}</p>
-                    </div>
-                  )}
+          {shouldRenderSummary && (
+            <div className={!showList ? 'animate-flow-down' : 'animate-flow-up-exit'}>
+              {byProductsBags > 0 && (
+                <div className="mt-2 rounded-lg border border-brand-byproduct/40 bg-brand-byproduct/10 p-2">
+                  <p className="text-sm text-neutral-500">By Products (Total)</p>
+                  <p className="font-semibold tabular-nums text-brand-byproduct">{fmtBags(byProductsBags)} bags</p>
                 </div>
               )}
-            </>
+
+              {linkedAuthority?.sourceWarehouse && (
+                <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2 text-base">
+                  <p className="text-sm text-neutral-500">Source Warehouse</p>
+                  <p className="font-semibold text-app-text">{linkedAuthority.sourceWarehouse}</p>
+                </div>
+              )}
+
+              {lastTxSummary && (
+                <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                  <p className="text-sm text-neutral-500">Last Activity</p>
+                  <p className="text-base font-medium text-app-text">{lastTxSummary}</p>
+                </div>
+              )}
+
+              {/* Per explicit request: the first card is now the stock
+                  (kilos-based) side of this run - what was issued
+                  (Net Bags, kilos / 50, same derived-unit convention
+                  already used in the NFA Ricemill monitor) alongside
+                  what came back as Rice (also Net Bags, Rice only - see
+                  riceReceivedKilos above). The second card is By
+                  Products only, as an actual bag count rather than a
+                  Net Bags approximation - see byProductsReceivedBags. */}
+              <div className="mt-2 grid grid-cols-2 gap-2 text-base">
+                <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                  <p className="text-sm text-neutral-500">Stocks</p>
+                  <div className="mt-1 space-y-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-xs text-neutral-500">{issuedCategory} Issued</span>
+                      <span className="font-semibold tabular-nums text-app-text">{fmtNetBags(order.issuedKilos != null ? order.issuedKilos / 50 : null)} Net Bags</span>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-xs text-neutral-500">Rice Received</span>
+                      <span className="font-semibold tabular-nums text-app-text">{fmtNetBags(riceReceivedKilos / 50)} Net Bags</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                  <p className="text-sm text-neutral-500">By Products Received</p>
+                  <p className="mt-1 font-semibold tabular-nums text-app-text">{fmtBags(byProductsReceivedBags)} bags</p>
+                </div>
+              </div>
+            </div>
           )}
 
-          {/* Net Bags (kilos / 50) instead of the raw net weight - same
-              derived-unit convention already used in the NFA Ricemill
-              monitor, per direct feedback pointing at these two
-              specific cards (not the per-trial cards further down,
-              which stay on raw Net Kgs). */}
-          <div className="mt-3 grid grid-cols-2 gap-2 text-base">
-            <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-              <p className="text-sm text-neutral-500">{issuedCategory} Issued</p>
-              <p className="font-semibold tabular-nums text-app-text">{fmtBags(order.issuedPieces)} sacks</p>
-              <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(order.issuedKilos != null ? order.issuedKilos / 50 : null)} Net Bags</p>
-            </div>
-            {/* Per explicit request: By Products only - the Rice side of
-                this run's own recovery is tracked by the card below
-                instead, not repeated (and no longer mixed together)
-                here. */}
-            <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-              <p className="text-sm text-neutral-500">By Products Received</p>
-              <p className="font-semibold tabular-nums text-app-text">{fmtBags(byProductsReceivedPieces)} sacks</p>
-              <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(byProductsReceivedKilos / 50)} Net Bags</p>
-            </div>
-          </div>
-
+          {/* Per explicit request: Recovery stays visible regardless of
+              which section above is open - it's the one figure worth
+              comparing at a glance either way, not something tucked
+              behind the summary/list toggle. */}
           {showRecoveryComparison ? (
             <div className={`mt-2 rounded-lg border-2 p-2 text-base ${meetsExpectedKilos && meetsExpectedPieces ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
-              <p className="text-sm tabular-nums text-neutral-500">Recovery ({order.recoveryPercent}%) — Expected vs Actual (Rice only)</p>
+              <p className="text-sm tabular-nums text-neutral-500">Recovery — Expected vs Actual (Rice only)</p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-xs uppercase text-neutral-600">Expected</p>
                   <p className="font-semibold tabular-nums text-app-text">{fmtWeight(expectedKilosFromIssued, weightUnit, 'Net')}</p>
                   <p className="font-semibold tabular-nums text-app-text">{fmtBags(expectedPiecesFromIssued)} pcs</p>
+                  {/* Per explicit request: the target recovery rate sits
+                      right here, in line with Actual's own achieved
+                      rate below, so the two can be compared directly. */}
+                  <p className="font-semibold tabular-nums text-app-text">{order.recoveryPercent}%</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase text-neutral-600">Actual</p>
                   <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtWeight(riceReceivedKilos, weightUnit, 'Net')}</p>
                   <p className={`font-semibold tabular-nums ${meetsExpectedPieces ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtBags(riceReceivedPieces)} pcs</p>
+                  <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{actualRecoveryPercent != null ? `${actualRecoveryPercent.toFixed(2)}%` : '—'}</p>
                 </div>
               </div>
             </div>
@@ -345,8 +367,8 @@ export function MillingOrderDetail({ order, onClose }) {
             )
           )}
 
-          {shouldRenderTabContent && (
-            <div className={`relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1 ${!showMoreDetails ? 'animate-flow-down' : 'animate-flow-up-exit'}`}>
+          {shouldRenderList && (
+            <div className={`relative mt-4 flex gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1 ${showList ? 'animate-flow-down' : 'animate-flow-up-exit'}`}>
               <div
                 className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
                 style={{ transform: detailTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
@@ -358,11 +380,11 @@ export function MillingOrderDetail({ order, onClose }) {
         </div>
 
         {/* Only this section scrolls - hidden along with the tab bar
-            above while "more details" is open, same reasoning: the
-            fixed header was crowding out the list, so the two are
+            above while the summary is showing instead, same reasoning:
+            the fixed header was crowding out the list, so the two are
             mutually exclusive rather than both fighting for space. */}
-        {shouldRenderTabContent && (
-          <div className={`min-h-0 flex-1 overflow-y-auto p-4 pt-3 ${!showMoreDetails ? 'animate-flow-down' : 'animate-flow-up-exit'}`}>
+        {shouldRenderList && (
+          <div className={`min-h-0 flex-1 overflow-y-auto p-4 pt-3 ${showList ? 'animate-flow-down' : 'animate-flow-up-exit'}`}>
             <div key={detailTab} className="animate-flow-down">
               {detailTab === 'stocks' ? (
                 <TransactionGroups
