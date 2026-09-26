@@ -17,13 +17,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, X } from 'lucide-react'
+import { Search, X, Check } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { fmtWeight, isTransferTypeName, dedupeAuthoritiesByRef } from '../../utils/calculations.js'
 import RicemillRecoveryDetail, { AllocationUsageSummary } from './RicemillRecoveryDetail.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
 import { nfaAllocationMatchesQuery } from '../../utils/monitoringSearch.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
 import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
 
@@ -33,11 +34,31 @@ import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
 // component stays mounted even while that tab is hidden (see
 // AdminMonitoring.jsx's own comment on why), so it can't rely on
 // unmounting to reset its search when the user switches away.
-function NfaMillingMonitor({ warehouseId, active = true } = {}) {
+function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {}) {
   const { weightUnit } = useSettings() ?? {}
+  const { user } = useAuth()
   const [expandedNumber, setExpandedNumber] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const containerRef = useRef(null)
+
+  // Marking a Regional Authority Number's milling operation complete is
+  // admin-only, per explicit request - a facility/visitor viewing their
+  // own Ricemill Home page (Home.jsx's NfaMillingMonitor usage, no
+  // isAdmin passed) must never see this control, only Admin Monitoring's
+  // NFA tab does. Purely local bookkeeping on db.ricemillAllocations
+  // itself (manuallyCompleted/completedAt/completedBy) - unlike
+  // MillingMonitor's MO/TMO orders, an allocation has no Google Sheet
+  // STATUS cell of its own to keep in sync, so no sheet write-back is
+  // needed here.
+  const toggleComplete = (a, e) => {
+    e.stopPropagation()
+    const nowCompleted = !a.manuallyCompleted
+    db.ricemillAllocations.update(a.regionalAuthorityNumber, {
+      manuallyCompleted: nowCompleted,
+      completedAt: nowCompleted ? new Date().toISOString() : null,
+      completedBy: nowCompleted ? (user?.name || 'Unknown') : null,
+    })
+  }
 
   useEffect(() => {
     if (!active) setSearchQuery('')
@@ -219,22 +240,58 @@ function NfaMillingMonitor({ warehouseId, active = true } = {}) {
           const used = recovery?.issuedKilos ?? 0
           const isExpanded = expandedNumber === a.regionalAuthorityNumber
           const matches = nfaAllocationMatchesQuery(a.regionalAuthorityNumber, recovery?.transferEntries, searchQuery)
+          const isCompleted = Boolean(a.manuallyCompleted)
           return (
             <ShrinkFilterRow key={a.regionalAuthorityNumber} as="li" matches={matches} gapClass="mt-1.5">
-            <div className={`${listItemClass} flex-col items-stretch`}>
-              <button
-                type="button"
-                onClick={() => setExpandedNumber(isExpanded ? null : a.regionalAuthorityNumber)}
-                className="w-full text-left"
-              >
-                <p className="truncate text-base font-medium text-app-text md:text-lg">{a.regionalAuthorityNumber}</p>
-                <AllocationUsageSummary used={used} total={a.totalNetKgs} weightUnit={weightUnit} />
-              </button>
-              {isExpanded && (
-                <div className="mt-2 border-t border-neutral-800 pt-2">
-                  <RicemillRecoveryDetail recovery={recovery} weightUnit={weightUnit} />
-                </div>
+            <div className="flex items-stretch gap-2">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={(e) => toggleComplete(a, e)}
+                  aria-label={isCompleted ? 'Mark as pending' : 'Mark as completed'}
+                  className={`flex w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                    isCompleted
+                      ? 'border-brand-neon/40 bg-brand-neon/10 text-brand-neon'
+                      : 'border-neutral-800 text-neutral-600 hover:text-neutral-400'
+                  }`}
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+                      isCompleted ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
+                    }`}
+                  >
+                    {isCompleted && <Check size={14} />}
+                  </span>
+                </button>
               )}
+              <div className={`${listItemClass} flex-1 flex-col items-stretch`}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedNumber(isExpanded ? null : a.regionalAuthorityNumber)}
+                  className="w-full text-left"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="truncate text-base font-medium text-app-text md:text-lg">{a.regionalAuthorityNumber}</p>
+                    {isCompleted && (
+                      <span className="shrink-0 rounded-md bg-brand-neon/10 px-2 py-1 text-xs font-bold text-brand-neon">
+                        Completed
+                      </span>
+                    )}
+                  </div>
+                  <AllocationUsageSummary used={used} total={a.totalNetKgs} weightUnit={weightUnit} />
+                  {isCompleted && a.completedAt && (
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Marked complete by {a.completedBy || 'Unknown'} on{' '}
+                      {new Date(a.completedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  )}
+                </button>
+                {isExpanded && (
+                  <div className="mt-2 border-t border-neutral-800 pt-2">
+                    <RicemillRecoveryDetail recovery={recovery} weightUnit={weightUnit} />
+                  </div>
+                )}
+              </div>
             </div>
             </ShrinkFilterRow>
           )

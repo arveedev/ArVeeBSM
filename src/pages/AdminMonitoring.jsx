@@ -280,7 +280,7 @@ function AdminMonitoring() {
         <MillingMonitor isAdmin={isAdmin} active={activeTab === 'MILLING'} />
       </div>
       <div className={activeTab === 'NFA' ? '' : 'hidden'}>
-        <NfaMillingMonitor active={activeTab === 'NFA'} />
+        <NfaMillingMonitor active={activeTab === 'NFA'} isAdmin={isAdmin} />
       </div>
       <div className={activeTab === 'PROCUREMENT' ? '' : 'hidden'}>
         <SdoCashOverviewPanel />

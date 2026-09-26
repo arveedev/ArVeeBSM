@@ -6867,4 +6867,22 @@
 //              "focus on mount" case) and the wrong-PIN retry handler
 //              (now guarded with the same isTouchDevicePointer() check
 //              handlePinInputBlur already used).
-export const APP_VERSION = '1.10-185'
+//   1.10-186 - NFA Milling tab: admin can now mark a Regional Authority
+//              Number's milling operation as complete, per explicit
+//              request. Added a Completed toggle checkbox to each
+//              allocation row in NfaMillingMonitor.jsx, matching the
+//              same checkbox convention MillingOrderRow (MillingMonitor.
+//              jsx) already uses for MO/TMO - admin-only (isAdmin prop,
+//              now passed from AdminMonitoring.jsx's NFA tab; Home.jsx's
+//              facility-own-page usage never passes it, so a
+//              visitor/facility user never sees the control, per
+//              explicit request). Purely local bookkeeping on
+//              db.ricemillAllocations itself (manuallyCompleted/
+//              completedAt/completedBy, no schema version bump needed,
+//              same as cashOnBank* on db.reportConfig) - unlike an MO/
+//              TMO order, an allocation has no Google Sheet STATUS cell
+//              to keep in sync, so no sheet write-back is involved.
+//              Completed rows show a "Completed" badge plus "Marked
+//              complete by X on [date]", same wording convention as the
+//              Cash in Bank update line.
+export const APP_VERSION = '1.10-186'
