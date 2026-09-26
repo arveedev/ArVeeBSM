@@ -233,8 +233,25 @@ function SdoHome() {
     )
   }
 
-  const applySort = (list) =>
-    [...list].sort((a, b) => (sortDesc ? -1 : 1) * ((a.date ?? '').localeCompare(b.date ?? '')))
+  // Reported real bug, confirmed: sorting by date alone let another
+  // SDO's warehouse's own transactions land ahead of this SDO's actual
+  // priority warehouse (e.g. TABACO GID-B's Sept 26 receipt outranking
+  // BSI C's own, even though BSI C is THIS SDO's configured priority).
+  // Per explicit correction, the priority warehouse's own transactions
+  // must group first (own date order preserved within that group),
+  // ahead of every other warehouse - a second, stable sort pass on top
+  // of the date sort below, so only warehouse grouping changes, not the
+  // date order within each group. Moot (and harmless) once a specific
+  // warehouseFilter narrows the list to just one warehouse.
+  const applySort = (list) => {
+    const dateSorted = [...list].sort((a, b) => (sortDesc ? -1 : 1) * ((a.date ?? '').localeCompare(b.date ?? '')))
+    if (!priorityWarehouseId) return dateSorted
+    return dateSorted.sort((a, b) => {
+      const aPriority = a.warehouseId === priorityWarehouseId ? 0 : 1
+      const bPriority = b.warehouseId === priorityWarehouseId ? 0 : 1
+      return aPriority - bPriority
+    })
+  }
 
   const applyWarehouseFilter = (list) =>
     warehouseFilter ? list.filter((t) => t.warehouseId === warehouseFilter) : list

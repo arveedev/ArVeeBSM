@@ -6629,4 +6629,21 @@
 //              jsx/Piles.jsx don't pass it, so their own behavior is
 //              unchanged) - Period From/To (and a narrower preset pill,
 //              if one's active) can still fine-tune within that month.
-export const APP_VERSION = '1.10-173'
+//   1.10-174 - Two more explicit fixes/requests:
+//              (1) Reported real bug, confirmed: SdoHome.jsx's For
+//              Payment/Completed list sorted purely by date, so another
+//              SDO's warehouse (e.g. TABACO GID-B) could rank ahead of
+//              this SDO's own configured priority warehouse (e.g. BSI
+//              C). Now groups the priority warehouse's own transactions
+//              first (own date order preserved within the group) via a
+//              second, stable sort pass on top of the date sort.
+//              (2) Procurement tab redesign: search/warehouse/variety/
+//              sort/paid-filter moved into a "Sort & Filter" modal
+//              (new ProcurementSortFilterModal.jsx, same pattern as
+//              RicemillSortFilterModal.jsx) - only the Period/month row
+//              stays inline, since that's what actually scopes the
+//              page. The card list no longer renders by default either
+//              - a summary row (total bags/transactions/warehouses)
+//              always shows, and tapping it expands/collapses the
+//              actual per-warehouse cards.
+export const APP_VERSION = '1.10-174'

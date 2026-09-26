@@ -17,26 +17,14 @@
 
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, X } from 'lucide-react'
+import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags, calculateNetBags, isProcurementTypeName, effectiveCutoffDate, getPeriodPresetRanges } from '../../utils/calculations.js'
 import { fuzzyMatchesAny } from '../../utils/fuzzySearch.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
-
-const SORTS = [
-  { id: 'date-desc', label: 'Date (Newest)' },
-  { id: 'date-asc', label: 'Date (Oldest)' },
-  { id: 'bags-desc', label: 'Bags (Highest)' },
-  { id: 'bags-asc', label: 'Bags (Lowest)' },
-]
-
-const PAYMENT_FILTERS = [
-  { id: '', label: 'All' },
-  { id: 'paid', label: 'Paid' },
-  { id: 'unpaid', label: 'Unpaid' },
-]
+import ProcurementSortFilterModal from './ProcurementSortFilterModal.jsx'
 
 function ProcurementMonitor() {
   const { weightUnit } = useSettings() ?? {}
@@ -57,6 +45,16 @@ function ProcurementMonitor() {
   // any other field on the transaction itself.
   const [paymentFilter, setPaymentFilter] = useState('')
   const periodToPickerRef = useRef(null)
+  // Per explicit request: search/warehouse/variety/sort/paid-filter move
+  // behind a single "Sort & Filter" button instead of stacking five
+  // controls above the list on every load - only the Period/month row
+  // (which drives the page's primary scope) stays inline.
+  const [filterModalOpen, setFilterModalOpen] = useState(false)
+  const isFiltered = Boolean(searchQuery) || Boolean(warehouseFilter) || Boolean(varietyFilter) || sortBy !== 'date-desc' || Boolean(paymentFilter)
+  // Per explicit request: the card list doesn't show by default - it
+  // expands from a summary row once the admin/visitor actually wants to
+  // see it, instead of always rendering below a wall of controls.
+  const [listExpanded, setListExpanded] = useState(false)
 
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
@@ -206,91 +204,30 @@ function ProcurementMonitor() {
   // its own filtered list.
   const listAnimationKey = [searchQuery, warehouseFilter, varietyFilter, sortBy, paymentFilter, periodFrom, periodTo].join('|')
 
+  const totalRowCount = cards.reduce((s, c) => s + c.rowCount, 0)
+  const totalBagsAllCards = cards.reduce((s, c) => s + c.totalBags, 0)
+
   return (
     <div className="mt-4">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search warehouse or variety"
-            className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <select
-          value={warehouseFilter}
-          onChange={(e) => setWarehouseFilter(e.target.value)}
-          className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setFilterModalOpen(true)}
+          className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all active:scale-95 ${
+            isFiltered
+              ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
+              : 'border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-brand-neon/50 hover:text-brand-neon'
+          }`}
         >
-          <option value="">All warehouses</option>
-          {warehouseOptions.map((w) => <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>)}
-        </select>
-        {/* Per explicit request, brought back alongside the warehouse
-            filter (not in place of it, as it was before) - independent
-            filters, either or both narrow the list. */}
-        <select
-          value={varietyFilter}
-          onChange={(e) => setVarietyFilter(e.target.value)}
-          className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
-        >
-          <option value="">All varieties</option>
-          {varietyOptions.map((v) => <option key={v.varietyId} value={v.varietyId}>{v.name}</option>)}
-        </select>
-      </div>
-
-      <div className="mt-2">
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-app-text"
-        >
-          {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-        </select>
-      </div>
-
-      {/* Paid = an Active Purchase Receipt exists for this WSR on the
-          SDO side; everything else is Unpaid - per explicit request. */}
-      <div className="relative mt-2 flex gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1">
-        <div
-          className="absolute inset-y-1 rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
-          style={{
-            width: `calc(${100 / PAYMENT_FILTERS.length}% - ${(PAYMENT_FILTERS.length - 1) / PAYMENT_FILTERS.length * 0.25}rem)`,
-            transform: `translateX(calc(${PAYMENT_FILTERS.findIndex((p) => p.id === paymentFilter) * 100}% + ${PAYMENT_FILTERS.findIndex((p) => p.id === paymentFilter) * 0.25}rem))`,
-          }}
-        />
-        {PAYMENT_FILTERS.map((p) => (
-          <button
-            key={p.id || 'all'}
-            type="button"
-            onClick={() => setPaymentFilter(p.id)}
-            className={`relative z-10 flex-1 rounded-lg py-2 text-sm transition-colors active:scale-95 ${
-              paymentFilter === p.id ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400 hover:text-app-text'
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
+          <SlidersHorizontal size={13} />
+          Sort &amp; Filter{isFiltered ? ' (active)' : ''}
+        </button>
       </div>
 
       {/* Always scoped to one month by default (see above) - same true
           50/50 two-column split as Reports.jsx on wide screens, stacked
           on narrow ones. */}
-      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+      <div className="mt-2 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs text-neutral-500">Period From</label>
@@ -314,11 +251,25 @@ function ProcurementMonitor() {
         />
       </div>
 
-      {cards.length === 0 ? (
-        <p className="py-8 text-center text-sm text-neutral-600">
-          No Procurement transactions match.
-        </p>
-      ) : (
+      {/* Per explicit request: the list doesn't render by default - this
+          summary row is what's always visible, and tapping it expands/
+          collapses the actual per-warehouse cards below. */}
+      <button
+        type="button"
+        onClick={() => setListExpanded((v) => !v)}
+        className="mt-3 flex w-full items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3 text-left transition-colors hover:border-brand-neon/50"
+      >
+        <span className="text-sm text-app-text">
+          {cards.length === 0
+            ? 'No Procurement transactions match'
+            : `${fmtBags(totalBagsAllCards)} bags across ${totalRowCount} ${totalRowCount === 1 ? 'transaction' : 'transactions'}, ${cards.length} ${cards.length === 1 ? 'warehouse' : 'warehouses'}`}
+        </span>
+        {cards.length > 0 && (
+          <ChevronDown size={16} className={`shrink-0 text-neutral-400 transition-transform ${listExpanded ? 'rotate-180' : ''}`} />
+        )}
+      </button>
+
+      {listExpanded && cards.length > 0 && (
         <div key={listAnimationKey} className="mt-3 space-y-3 stagger-fields">
           {cards.map((c) => (
             <div key={c.warehouseId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
@@ -398,6 +349,33 @@ function ProcurementMonitor() {
             </div>
           ))}
         </div>
+      )}
+
+      {filterModalOpen && (
+        <ProcurementSortFilterModal
+          searchQuery={searchQuery}
+          warehouseFilter={warehouseFilter}
+          varietyFilter={varietyFilter}
+          sortBy={sortBy}
+          paymentFilter={paymentFilter}
+          warehouseOptions={warehouseOptions}
+          varietyOptions={varietyOptions}
+          onChange={(patch) => {
+            if ('searchQuery' in patch) setSearchQuery(patch.searchQuery)
+            if ('warehouseFilter' in patch) setWarehouseFilter(patch.warehouseFilter)
+            if ('varietyFilter' in patch) setVarietyFilter(patch.varietyFilter)
+            if ('sortBy' in patch) setSortBy(patch.sortBy)
+            if ('paymentFilter' in patch) setPaymentFilter(patch.paymentFilter)
+          }}
+          onReset={() => {
+            setSearchQuery('')
+            setWarehouseFilter('')
+            setVarietyFilter('')
+            setSortBy('date-desc')
+            setPaymentFilter('')
+          }}
+          onClose={() => setFilterModalOpen(false)}
+        />
       )}
     </div>
   )
