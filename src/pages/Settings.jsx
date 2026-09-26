@@ -13,7 +13,7 @@ import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
 import { fmtBags, fmtWeight } from '../utils/calculations.js'
 import { fuzzyContains } from '../utils/fuzzySearch.js'
-import { computeCashOnHand } from '../utils/sdoCalculations.js'
+import { computeCashOnHand, roundPeso2 } from '../utils/sdoCalculations.js'
 import { recalculatePileCurrentState } from '../utils/pileLedger.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, editIconClass, deleteIconClass } from '../components/common/admin/shared.js'
@@ -194,11 +194,90 @@ function SdoCashSection({ uid }) {
   const ledgerEntries = useLiveQuery(() => db.cashLedgerV2.where('sdoUid').equals(uid).toArray(), [uid]) ?? []
   const cashOnHand = computeCashOnHand(ledgerEntries, activePrs.map((pr) => pr.totalAmount ?? 0))
 
+  // Plain field on the user record - not indexed, so no Dexie schema/
+  // version bump needed, same as priorityWarehouseId/purity/
+  // moistureContent already are. Deliberately NOT derived from
+  // cashLedgerV2 the way Cash on Hand is above - per explicit request,
+  // this is a separate, manually-entered figure (the SDO's own bank
+  // deposit balance), which the Admin/Visitor Procurement tab's
+  // SdoCashOverviewPanel.jsx reads to show alongside Total CPF.
+  const cashOnBankRecord = useLiveQuery(() => db.users.get(uid), [uid])
+  const cashOnBank = cashOnBankRecord?.cashOnBank ?? 0
+  const [editingBank, setEditingBank] = useState(false)
+  const [bankInput, setBankInput] = useState('')
+
+  const startEditingBank = () => {
+    setBankInput(cashOnBank ? String(cashOnBank) : '')
+    setEditingBank(true)
+  }
+  const saveCashOnBank = async () => {
+    const amount = Number(bankInput)
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error('Enter a valid amount')
+      return
+    }
+    await db.users.update(uid, { cashOnBank: roundPeso2(amount) })
+    toast.success('Cash on Bank updated')
+    setEditingBank(false)
+  }
+
   return (
     <section className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <h2 className="text-base font-semibold text-app-text">Cash Balance</h2>
       <p className="mt-1 text-xs text-neutral-500">Current Cash on Hand and every Replenish/Liquidate entry behind it.</p>
       <p className="mt-2 text-2xl font-bold text-app-text">₱{cashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+
+      <div className="mt-4 border-t border-neutral-800 pt-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium text-app-text">Cash on Bank</p>
+            <p className="text-xs text-neutral-500">Deposited balance - set here by hand, tracked separately from Cash on Hand.</p>
+          </div>
+          {!editingBank && (
+            <button
+              type="button"
+              onClick={startEditingBank}
+              aria-label="Edit Cash on Bank"
+              className={editIconClass}
+            >
+              <Pencil size={16} />
+            </button>
+          )}
+        </div>
+        {editingBank ? (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              autoFocus
+              value={bankInput}
+              onChange={(e) => setBankInput(e.target.value)}
+              placeholder="0.00"
+              className={`flex-1 ${inputClass}`}
+            />
+            <button
+              type="button"
+              onClick={saveCashOnBank}
+              aria-label="Save Cash on Bank"
+              className="shrink-0 rounded-lg bg-brand-neon p-2.5 text-brand-contrast transition-all active:scale-95"
+            >
+              <Check size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingBank(false)}
+              aria-label="Cancel"
+              className="shrink-0 rounded-lg border border-neutral-800 p-2.5 text-neutral-400 transition-all hover:text-app-text active:scale-95"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <p className="mt-1 text-2xl font-bold text-app-text">₱{cashOnBank.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        )}
+      </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button

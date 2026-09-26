@@ -6663,4 +6663,17 @@
 //              "Total Cash on Hand" to "Total CPF" - step one of two;
 //              a separate, SDO-editable "Cash on Bank" figure (set from
 //              the SDO's own Settings) is a follow-up, not built yet.
-export const APP_VERSION = '1.10-175'
+//   1.10-176 - Built the Cash on Bank feature (the follow-up promised
+//              above). New `cashOnBank` plain field on db.users, same
+//              no-schema-bump pattern as priorityWarehouseId/purity/
+//              moistureContent. Settings.jsx's SdoCashSection (any SDO's
+//              own Settings page) now has an editable Cash on Bank row
+//              below Cash on Hand - deliberately NOT derived from
+//              cashLedgerV2 the way Cash on Hand is; a manually-entered
+//              figure the SDO sets by hand. SdoCashOverviewPanel.jsx
+//              (Admin/Visitor Procurement tab) now shows a second
+//              "Total Cash on Bank — All SDOs" card alongside Total CPF
+//              - deliberately kept as two separate totals, never merged
+//              into one figure - and the per-SDO breakdown shows both
+//              CPF and Cash on Bank stacked per SDO.
+export const APP_VERSION = '1.10-176'
