@@ -6901,4 +6901,12 @@
 //              complete/reverting to pending both play the same
 //              700ms glow+collapse row exit animation the other two
 //              monitors use before the DB write actually lands.
-export const APP_VERSION = '1.10-187'
+//   1.10-188 - Dashboard's "Net Bags by Province & Category" table:
+//              enlarged the province code/name (e.g. "ALB Albay") and
+//              TOTAL row label from text-xs/text-sm to text-base, per
+//              explicit request - both were noticeably smaller than the
+//              Rice/Palay figures beside them. Applied to both the
+//              desktop table and the mobile card layout, and to both
+//              the per-row and TOTAL-row versions, for consistency.
+//              AdminHomeStocks.jsx only.
+export const APP_VERSION = '1.10-188'

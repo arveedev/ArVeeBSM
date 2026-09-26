@@ -339,8 +339,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                     {provinceRows.map(({ province, riceValue, palayValue }) => (
                       <tr key={province.provinceId} className="border-b border-neutral-800/50">
                         <Td>
-                          <span className="font-medium text-app-text">{province.code}</span>
-                          <span className="ml-1 text-xs text-neutral-500">{province.name}</span>
+                          <span className="text-base font-medium text-app-text">{province.code}</span>
+                          <span className="ml-1 text-sm text-neutral-500">{province.name}</span>
                         </Td>
                         <Td right><span className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceValue} format={fmt} /></span></Td>
                         <Td right><span className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayValue} format={fmt} /></span></Td>
@@ -349,7 +349,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-neutral-600">
-                      <Td><span className="text-sm font-bold uppercase tracking-wide text-app-text">TOTAL</span></Td>
+                      <Td><span className="text-base font-bold uppercase tracking-wide text-app-text">TOTAL</span></Td>
                       <Td right><span className="text-base font-bold tabular-nums text-blue-400"><CountUpNumber value={riceBranchValue} format={fmt} /></span></Td>
                       <Td right><span className="text-base font-bold tabular-nums text-brand-neon"><CountUpNumber value={palayBranchValue} format={fmt} /></span></Td>
                     </tr>
@@ -360,8 +360,8 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               <div className="space-y-2 sm:hidden">
                 {provinceRows.map(({ province, riceValue, palayValue }) => (
                   <div key={province.provinceId} className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-2.5">
-                    <p className="text-sm font-medium text-app-text">
-                      {province.code} <span className="text-xs text-neutral-500">{province.name}</span>
+                    <p className="text-base font-medium text-app-text">
+                      {province.code} <span className="text-sm text-neutral-500">{province.name}</span>
                     </p>
                     <div className="mt-1.5 grid grid-cols-2 gap-2">
                       <div>
@@ -391,7 +391,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           return (
             <>
               <div className="mt-2 rounded-lg border border-neutral-600 bg-neutral-950/50 p-2.5 sm:hidden">
-                <p className="text-sm font-bold uppercase tracking-wide text-app-text">TOTAL</p>
+                <p className="text-base font-bold uppercase tracking-wide text-app-text">TOTAL</p>
                 <div className="mt-1.5 grid grid-cols-2 gap-2">
                   <div>
                     <p className="text-[10px] uppercase tracking-wide text-neutral-500">Rice ({unitLabel})</p>
