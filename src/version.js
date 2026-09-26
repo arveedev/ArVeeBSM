@@ -6728,4 +6728,23 @@
 //              (real data already saved under those names - renaming
 //              them would need a migration, and nothing reads them by
 //              display label).
-export const APP_VERSION = '1.10-179'
+//   1.10-180 - MillingMonitor.jsx's MO/TMO detail modal, per explicit
+//              request/screenshots: confirmed real bug - "Recovery
+//              (Expected vs Actual)" mixed By Products receipts
+//              together with Rice receipts into "Actual" (no category
+//              filter anywhere in that math), so a run's real rice
+//              recovery rate could look higher than it actually was.
+//              Actual (and the meets-expected coloring) now sums only
+//              WSR/ESR receipts whose cerealCategory isn't 'By
+//              Products'. The Issued/Received sack cards are relabeled
+//              to say what they actually are ("Palay Issued" /
+//              category read from the real issue transactions, "By
+//              Products Received") - Received now shows the By
+//              Products side of the run exclusively, since Rice
+//              recovery is what the card above already tracks; showing
+//              it twice, mixed with By Products, never meant one
+//              consistent thing. Last Activity now names the category
+//              (Rice/Palay/By Products) of whatever transaction it's
+//              describing, not just a bare "received 713 pcs" with no
+//              indication of what was actually received.
+export const APP_VERSION = '1.10-180'

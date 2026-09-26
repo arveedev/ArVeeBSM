@@ -127,7 +127,13 @@ export function MillingOrderDetail({ order, onClose }) {
     const amount = isSack
       ? `${fmtBags((lastTx.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} pcs`
       : `${fmtBags(lastTx.numberOfBags)} net bags`
-    return `${whName} ${isIssue ? 'issued' : 'received'} ${varietyAndPile} ${amount} on ${fmtDate(lastTx.date)}`
+    // Per explicit request, made clearer - the category (Rice/Palay/By
+    // Products) is now spelled out, since "received 713 pcs" alone
+    // never said whether that was the milled Rice or a By Products
+    // output of the same run, the exact ambiguity this line exists to
+    // resolve.
+    const category = lastTx.cerealCategory ?? varietyMap.get(lastTx.varietyId)?.category ?? null
+    return `${whName} ${isIssue ? 'issued' : 'received'} ${category ? `${category} ` : ''}${varietyAndPile} — ${amount} on ${fmtDate(lastTx.date)}`
   })()
 
   // Recovery percent expressed as an equivalent net bags figure, per
@@ -157,20 +163,42 @@ export function MillingOrderDetail({ order, onClose }) {
   const expectedPiecesFromIssued = order.type === 'MO' && order.recoveryPercent != null
     ? order.issuedPieces * (order.recoveryPercent / 100)
     : null
-  const meetsExpectedKilos = expectedKilosFromIssued == null || expectedKilosFromIssued === 0 || order.receivedKilos >= expectedKilosFromIssued
-  const meetsExpectedPieces = expectedPiecesFromIssued == null || expectedPiecesFromIssued === 0 || order.receivedPieces >= expectedPiecesFromIssued
+  // Per explicit request: the Recovery card's "Actual" must reflect
+  // RICE recovery only - By Products (bran, etc.) is a distinct output
+  // of the same milling run, not part of the recovery rate being
+  // measured, so it must never inflate this figure the way it silently
+  // did before (order.receivedKilos/receivedPieces mixed both
+  // together). Same WSR/ESR receipt filter shape as byProductsBags
+  // below, just inverted.
+  const riceReceiptTx = allTx.filter((t) => (t.type === 'WSR' || t.type === 'ESR') && t.cerealCategory !== 'By Products')
+  const riceReceivedKilos = riceReceiptTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
+  const riceReceivedPieces = riceReceiptTx.filter((t) => t.type === 'ESR').reduce((s, t) => s + (t.sackLines ?? []).reduce((ls, l) => ls + (l.pieces ?? 0), 0), 0)
+
+  const meetsExpectedKilos = expectedKilosFromIssued == null || expectedKilosFromIssued === 0 || riceReceivedKilos >= expectedKilosFromIssued
+  const meetsExpectedPieces = expectedPiecesFromIssued == null || expectedPiecesFromIssued === 0 || riceReceivedPieces >= expectedPiecesFromIssued
   const showRecoveryComparison = isCompleted && order.type === 'MO' && order.recoveryPercent != null
 
   // By Products from this same milling run - same MO/TMO number, but
   // tagged with cerealCategory 'By Products' rather than the main
   // Rice/Palay product. Only relevant for receipts (WSR/ESR), since By
   // Products are a milling OUTPUT, not something issued to be milled.
-  const byProductsBags = allTx
-    .filter((t) => t.cerealCategory === 'By Products' && (t.type === 'WSR' || t.type === 'ESR'))
-    .reduce((sum, t) => {
-      if (t.type === 'WSR') return sum + (t.numberOfBags ?? 0)
-      return sum + (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
-    }, 0)
+  const byProductsReceiptTx = allTx.filter((t) => (t.type === 'WSR' || t.type === 'ESR') && t.cerealCategory === 'By Products')
+  const byProductsBags = byProductsReceiptTx.reduce((sum, t) => {
+    if (t.type === 'WSR') return sum + (t.numberOfBags ?? 0)
+    return sum + (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
+  }, 0)
+  // Per explicit request, the "Received" card below now shows the By
+  // Products side of this run exclusively - the Rice side is what the
+  // Recovery card already tracks, so showing it there too (mixed
+  // together, as this card used to) never actually meant one
+  // consistent thing.
+  const byProductsReceivedKilos = byProductsReceiptTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
+  const byProductsReceivedPieces = byProductsReceiptTx.filter((t) => t.type === 'ESR').reduce((s, t) => s + (t.sackLines ?? []).reduce((ls, l) => ls + (l.pieces ?? 0), 0), 0)
+
+  // The issue side (WSI/ESI) is always the unmilled cereal sent TO the
+  // mill - typically Palay, but read from the actual transactions
+  // rather than hard-coded, in case a run's own cerealCategory differs.
+  const issuedCategory = order.issueTx?.find((t) => t.cerealCategory)?.cerealCategory ?? 'Palay'
 
   return createPortal(
     <div className={`fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`} onClick={handleClose}>
@@ -277,20 +305,24 @@ export function MillingOrderDetail({ order, onClose }) {
               which stay on raw Net Kgs). */}
           <div className="mt-3 grid grid-cols-2 gap-2 text-base">
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-              <p className="text-sm text-neutral-500">Issued</p>
+              <p className="text-sm text-neutral-500">{issuedCategory} Issued</p>
               <p className="font-semibold tabular-nums text-app-text">{fmtBags(order.issuedPieces)} sacks</p>
               <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(order.issuedKilos != null ? order.issuedKilos / 50 : null)} Net Bags</p>
             </div>
+            {/* Per explicit request: By Products only - the Rice side of
+                this run's own recovery is tracked by the card below
+                instead, not repeated (and no longer mixed together)
+                here. */}
             <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-              <p className="text-sm text-neutral-500">Received</p>
-              <p className="font-semibold tabular-nums text-app-text">{fmtBags(order.receivedPieces)} sacks</p>
-              <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(order.receivedKilos != null ? order.receivedKilos / 50 : null)} Net Bags</p>
+              <p className="text-sm text-neutral-500">By Products Received</p>
+              <p className="font-semibold tabular-nums text-app-text">{fmtBags(byProductsReceivedPieces)} sacks</p>
+              <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(byProductsReceivedKilos / 50)} Net Bags</p>
             </div>
           </div>
 
           {showRecoveryComparison ? (
             <div className={`mt-2 rounded-lg border-2 p-2 text-base ${meetsExpectedKilos && meetsExpectedPieces ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
-              <p className="text-sm tabular-nums text-neutral-500">Recovery ({order.recoveryPercent}%) — Expected vs Actual</p>
+              <p className="text-sm tabular-nums text-neutral-500">Recovery ({order.recoveryPercent}%) — Expected vs Actual (Rice only)</p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-xs uppercase text-neutral-600">Expected</p>
@@ -299,8 +331,8 @@ export function MillingOrderDetail({ order, onClose }) {
                 </div>
                 <div>
                   <p className="text-xs uppercase text-neutral-600">Actual</p>
-                  <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtWeight(order.receivedKilos, weightUnit, 'Net')}</p>
-                  <p className={`font-semibold tabular-nums ${meetsExpectedPieces ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtBags(order.receivedPieces)} pcs</p>
+                  <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtWeight(riceReceivedKilos, weightUnit, 'Net')}</p>
+                  <p className={`font-semibold tabular-nums ${meetsExpectedPieces ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtBags(riceReceivedPieces)} pcs</p>
                 </div>
               </div>
             </div>
