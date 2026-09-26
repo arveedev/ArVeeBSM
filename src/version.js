@@ -6607,4 +6607,15 @@
 //              that drive auto-fill (findCustomerByName) are
 //              deliberately left untouched - fuzziness there would risk
 //              silently filling a form from the WRONG customer.
-export const APP_VERSION = '1.10-171'
+//   1.10-172 - Reported real bug: the notification bell's procurement-
+//              SIA query (AppHeader.jsx) never applied the reporting-
+//              cutoff-date rule every other view (Reports.jsx,
+//              SdoHome.jsx, ProcurementMonitor.jsx) already respects - a
+//              warehouse's own override, or the global Data Start Date,
+//              whichever is later - so a Procurement receipt dated
+//              before that cutoff (already superseded by a beginning
+//              balance everywhere else) still surfaced as "still needs
+//              a matching SIA" here. Now filters both the WSR and ESI
+//              sides of the query the same way ProcurementMonitor.jsx
+//              does.
+export const APP_VERSION = '1.10-172'

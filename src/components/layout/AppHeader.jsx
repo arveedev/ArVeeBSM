@@ -18,7 +18,7 @@ import { usePageHeader } from '../../context/PageHeaderContext.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
-import { fmtBags, isProcurementTypeName } from '../../utils/calculations.js'
+import { fmtBags, isProcurementTypeName, effectiveCutoffDate } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import Avatar from '../common/Avatar.jsx'
 import AvatarPickerModal from '../common/AvatarPickerModal.jsx'
@@ -180,6 +180,7 @@ function AppHeader({ hidden = false }) {
   // rather than being folded into the accumulated total.
   const warehouseIds = (accessibleWarehouses ?? []).map((w) => w.warehouseId)
   const warehouseNameById = new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w.name]))
+  const warehouseById = new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w]))
   const procurementOutstanding = useLiveQuery(async () => {
     if (warehouseIds.length === 0) return []
     const transactionTypes = await db.transactionTypes.toArray()
@@ -188,6 +189,20 @@ function AppHeader({ hidden = false }) {
 
     const sackTypes = await db.sackTypes.toArray()
     const sackTypeMap = new Map(sackTypes.map((s) => [s.sackTypeId, s]))
+
+    // Reported, confirmed real bug: this never applied the same
+    // reporting-cutoff-date rule every other view (Reports.jsx,
+    // SdoHome.jsx, ProcurementMonitor.jsx) already respects - a
+    // warehouse's own override, or the global Data Start Date,
+    // whichever is later. A Procurement receipt dated before that
+    // cutoff is deliberately out of scope everywhere else in the app
+    // (superseded by a beginning balance), so it must be excluded here
+    // too instead of still surfacing as "still needs a matching SIA".
+    const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
+    const isWithinCutoff = (t) => {
+      const cutoff = effectiveCutoffDate(warehouseById.get(t.warehouseId)?.reportingCutoffDate, globalDataStartDate)
+      return !cutoff || t.date > cutoff
+    }
 
     // Bags aren't lot/batch-tracked - a (warehouse, sackType, condition)
     // group is one fungible pool, so there's no record of which specific
@@ -205,7 +220,7 @@ function AppHeader({ hidden = false }) {
     const receiptsByKey = new Map()
     const procurementWsr = await db.transactions
       .where('warehouseId').anyOf(warehouseIds)
-      .and((t) => t.type === 'WSR' && t.status === 'Active' && t.transactionTypeId === procurementTypeId)
+      .and((t) => t.type === 'WSR' && t.status === 'Active' && t.transactionTypeId === procurementTypeId && isWithinCutoff(t))
       .toArray()
     for (const t of procurementWsr) {
       if (!t.mtsSackTypeId || !t.mtsCondition) continue
@@ -217,7 +232,7 @@ function AppHeader({ hidden = false }) {
     const consumedByKey = new Map()
     const procurementEsi = await db.transactions
       .where('warehouseId').anyOf(warehouseIds)
-      .and((t) => t.type === 'ESI' && t.status === 'Active' && t.transactionTypeId === procurementTypeId)
+      .and((t) => t.type === 'ESI' && t.status === 'Active' && t.transactionTypeId === procurementTypeId && isWithinCutoff(t))
       .toArray()
     for (const t of procurementEsi) {
       for (const line of t.sackLines ?? []) {
