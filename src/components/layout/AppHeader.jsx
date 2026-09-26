@@ -567,14 +567,21 @@ function AppHeader({ hidden = false }) {
       >
         <div className="flex items-start justify-between gap-2 px-4 py-2">
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <Avatar
-              avatarBg={userRecord?.avatarBg}
-              avatarFace={userRecord?.avatarFace}
-              avatarAnim={userRecord?.avatarAnim}
-              name={user?.name}
-              size={40}
-              onClick={canEditAvatar ? () => setAvatarPickerOpen(true) : undefined}
-            />
+            {/* Visitor sessions have no uid (synthetic, not a real
+                db.users row) - previously still showed the default,
+                non-editable avatar anyway; per explicit request,
+                visitors have no use for it at all, so it's skipped
+                entirely rather than shown disabled. */}
+            {!isVisitor && (
+              <Avatar
+                avatarBg={userRecord?.avatarBg}
+                avatarFace={userRecord?.avatarFace}
+                avatarAnim={userRecord?.avatarAnim}
+                name={user?.name}
+                size={40}
+                onClick={canEditAvatar ? () => setAvatarPickerOpen(true) : undefined}
+              />
+            )}
             <div className="min-w-0 overflow-hidden">
               <div style={textMotion}>
                 {/* Reported, real bug: on a narrow phone the pill (below)

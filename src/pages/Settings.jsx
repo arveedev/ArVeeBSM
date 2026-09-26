@@ -840,19 +840,27 @@ function Settings() {
   // preference (that's a Home dashboard concern for warehouse roles).
   // This screen for them is just the profile card + sync status above.
   const isSdo = user?.role === 'SDO'
+  // Visitor sessions have no uid (synthetic, not a real db.users row) -
+  // the avatar here was always non-editable for them anyway (onClick
+  // gated on user.uid below); per explicit request, visitors have no
+  // use for it at all, so it's skipped entirely rather than shown
+  // disabled, matching the same fix on AppHeader.jsx's own avatar.
+  const isVisitor = user?.role === 'Visitor'
 
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
       {user && (
         <div className="mt-4 flex items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-          <Avatar
-            avatarBg={userRecord?.avatarBg}
-            avatarFace={userRecord?.avatarFace}
-            avatarAnim={userRecord?.avatarAnim}
-            name={user.name}
-            size={64}
-            onClick={user.uid ? () => setAvatarPickerOpen(true) : undefined}
-          />
+          {!isVisitor && (
+            <Avatar
+              avatarBg={userRecord?.avatarBg}
+              avatarFace={userRecord?.avatarFace}
+              avatarAnim={userRecord?.avatarAnim}
+              name={user.name}
+              size={64}
+              onClick={user.uid ? () => setAvatarPickerOpen(true) : undefined}
+            />
+          )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-app-text">{user.name}</p>
             <p className="text-xs text-neutral-400">{user.nickname} · {user.role}</p>

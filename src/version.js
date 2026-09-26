@@ -6932,4 +6932,11 @@
 //              regardless of which field changed, so a manual
 //              complete/uncomplete now refreshes the list promptly
 //              instead of waiting on an unrelated coincidence.
-export const APP_VERSION = '1.10-189'
+//   1.10-190 - Removed the avatar for Visitor sessions entirely, per
+//              explicit request - it was already non-editable for them
+//              (synthetic session, no real db.users row/uid), but still
+//              rendered as a static default icon regardless. Now
+//              skipped outright, on both AppHeader.jsx (top-left) and
+//              Settings.jsx's profile card - the name/role/sync-status
+//              pill next to it are unaffected.
+export const APP_VERSION = '1.10-190'
