@@ -6795,4 +6795,19 @@
 //              row, and each row's value is right-aligned with no
 //              per-row unit text - fixes the cramped 2-line wrap
 //              ("750.00 Net Bags" wrapping mid-number) from before.
-export const APP_VERSION = '1.10-182'
+//   1.10-183 - More polish on the same modal, per direct follow-up:
+//              Last Activity now names the actual sack type code(s)
+//              (e.g. "PPRE50") for a sack transaction instead of the
+//              still-vague bare word "sacks". "Stocks"/"Sacks" (both
+//              the card header and the tab buttons) are now uppercase.
+//              The By Products card dropped "Received" from its title
+//              and now breaks its bag count down PER VARIETY instead
+//              of one combined total, since a run's By Products output
+//              can be more than one variety. On the Recovery card,
+//              only the word "RECOVERY" itself is uppercase (not the
+//              rest of the title), "Expected"'s label is now white
+//              instead of muted grey, and both Expected/Actual now
+//              show "Net Kgs"/"Net Bags" as a left-aligned label with
+//              the number right-aligned, instead of the label trailing
+//              the number inline.
+export const APP_VERSION = '1.10-183'

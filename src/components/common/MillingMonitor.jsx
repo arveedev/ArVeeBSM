@@ -12,7 +12,7 @@ import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
 import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
-import { fmtBags, fmtWeight, fmtNetBags, calculateCurrentAge, AGE_BUCKETS, formatTrialLabel, expandTrialNumbers, todayLocalISO } from '../../utils/calculations.js'
+import { fmtBags, fmtWeight, fmtNetBags, fmtKilos, calculateCurrentAge, AGE_BUCKETS, formatTrialLabel, expandTrialNumbers, todayLocalISO } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
@@ -131,8 +131,17 @@ export function MillingOrderDetail({ order, onClose }) {
     const isIssue = lastTx.type === 'WSI' || lastTx.type === 'ESI'
     const isSack = lastTx.type === 'ESI' || lastTx.type === 'ESR'
     const whName = stripWarehouseCodePrefix(warehouseMap.get(lastTx.warehouseId)) || '—'
+    // Per explicit follow-up: bare "sacks" still didn't say what was
+    // actually in them - naming the real sack type code(s) (e.g.
+    // "PPRE50"), same lookup SackRow already uses, is what actually
+    // answers "sacks of what?".
     const amount = isSack
-      ? `${fmtBags((lastTx.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} sacks`
+      ? (() => {
+          const lines = lastTx.sackLines ?? []
+          const pieces = lines.reduce((s, l) => s + (l.pieces ?? 0), 0)
+          const types = [...new Set(lines.map((l) => sackTypeMap.get(l.sackTypeId)?.code).filter(Boolean))].join(', ')
+          return `${fmtBags(pieces)} ${types || 'sacks'}`
+        })()
       : `${fmtBags(lastTx.numberOfBags)} bags`
     return `${whName} ${isIssue ? 'issued' : 'received'} ${amount}`
   })()
@@ -193,13 +202,24 @@ export function MillingOrderDetail({ order, onClose }) {
     if (t.type === 'WSR') return sum + (t.numberOfBags ?? 0)
     return sum + (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
   }, 0)
-  // Per explicit request, the "By Products Received" card shows the
-  // ACTUAL bag count (WSR's own numberOfBags field) rather than a
-  // Net-Bags figure derived from kg/50 - a By Products bag isn't
-  // guaranteed to weigh exactly 50kg the way this app's other "Net
-  // Bags" conversions assume, so the real recorded count is the
-  // correct number to show here, not an approximation.
-  const byProductsReceivedBags = byProductsReceiptTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
+  // Per explicit request, the "By Products" card shows the ACTUAL bag
+  // count (WSR's own numberOfBags field) rather than a Net-Bags figure
+  // derived from kg/50 - a By Products bag isn't guaranteed to weigh
+  // exactly 50kg the way this app's other "Net Bags" conversions
+  // assume, so the real recorded count is the correct number to show
+  // here, not an approximation. Per further explicit request, broken
+  // down PER VARIETY (a By Products output can be more than one
+  // variety - e.g. different bran grades from the same run), not
+  // collapsed into a single combined total the way it was before.
+  const byProductsReceivedByVariety = (() => {
+    const map = new Map()
+    for (const t of byProductsReceiptTx) {
+      if (t.type !== 'WSR') continue
+      const varietyName = varietyMap.get(t.varietyId)?.name ?? 'Unknown'
+      map.set(varietyName, (map.get(varietyName) ?? 0) + (t.numberOfBags ?? 0))
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
+  })()
 
   // The issue side (WSI/ESI) is always the unmilled cereal sent TO the
   // mill - typically Palay, but read from the actual transactions
@@ -320,7 +340,7 @@ export function MillingOrderDetail({ order, onClose }) {
                   byProductsReceivedBags. */}
               <div className="mt-2 grid grid-cols-2 gap-2 text-base">
                 <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-                  <p className="text-sm text-neutral-500">Stocks <span className="text-neutral-600">(Net Bags)</span></p>
+                  <p className="text-sm text-neutral-500"><span className="uppercase">Stocks</span> <span className="text-neutral-600">(Net Bags)</span></p>
                   <div className="mt-1 space-y-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs text-neutral-500">{issuedCategory} Issued</span>
@@ -332,9 +352,20 @@ export function MillingOrderDetail({ order, onClose }) {
                     </div>
                   </div>
                 </div>
+                {/* Per explicit request: broken down per variety (a By
+                    Products output can be more than one variety from
+                    the same run), not collapsed into one combined
+                    total. */}
                 <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-                  <p className="text-sm text-neutral-500">By Products Received</p>
-                  <p className="mt-1 font-semibold tabular-nums text-app-text">{fmtBags(byProductsReceivedBags)} bags</p>
+                  <p className="text-sm text-neutral-500">By Products</p>
+                  <div className="mt-1 space-y-1">
+                    {byProductsReceivedByVariety.map(([varietyName, bags]) => (
+                      <div key={varietyName} className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-neutral-500">{varietyName}</span>
+                        <span className="font-semibold tabular-nums text-app-text">{fmtBags(bags)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -346,22 +377,36 @@ export function MillingOrderDetail({ order, onClose }) {
               behind the summary/list toggle. */}
           {showRecoveryComparison ? (
             <div className={`mt-2 rounded-lg border-2 p-2 text-base ${meetsExpectedKilos ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
-              <p className="text-sm tabular-nums text-neutral-500">Recovery — Expected vs Actual</p>
+              <p className="text-sm tabular-nums text-neutral-500"><span className="uppercase">Recovery</span> — Expected vs Actual</p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <div>
                   {/* Per explicit request: the recovery percentage sits
                       inline with the Expected/Actual label itself, not
                       as a separate row - this also keeps the card the
                       same height it was before the % was added, fixing
-                      it overflowing past the modal. */}
-                  <p className="text-xs uppercase text-neutral-600">Expected ({order.recoveryPercent}%)</p>
-                  <p className="font-semibold tabular-nums text-app-text">{fmtWeight(expectedKilosFromIssued, weightUnit, 'Net')}</p>
-                  <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(expectedKilosFromIssued != null ? expectedKilosFromIssued / 50 : null)} Net Bags</p>
+                      it overflowing past the modal. Expected's own
+                      label is white, not the usual muted grey, per
+                      explicit request. */}
+                  <p className="text-xs uppercase text-app-text">Expected ({order.recoveryPercent}%)</p>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="text-xs text-neutral-500">Net Kgs</span>
+                    <span className="font-semibold tabular-nums text-app-text">{fmtKilos(expectedKilosFromIssued)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-neutral-500">Net Bags</span>
+                    <span className="font-semibold tabular-nums text-app-text">{fmtNetBags(expectedKilosFromIssued != null ? expectedKilosFromIssued / 50 : null)}</span>
+                  </div>
                 </div>
                 <div>
                   <p className={`text-xs uppercase ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>Actual ({actualRecoveryPercent != null ? actualRecoveryPercent.toFixed(2) : '—'}%)</p>
-                  <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtWeight(riceReceivedKilos, weightUnit, 'Net')}</p>
-                  <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtNetBags(riceReceivedKilos / 50)} Net Bags</p>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span className="text-xs text-neutral-500">Net Kgs</span>
+                    <span className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtKilos(riceReceivedKilos)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-neutral-500">Net Bags</span>
+                    <span className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtNetBags(riceReceivedKilos / 50)}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -380,8 +425,8 @@ export function MillingOrderDetail({ order, onClose }) {
                 className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-lg bg-brand-neon transition-transform duration-300 ease-out"
                 style={{ transform: detailTab === 'stocks' ? 'translateX(0%)' : 'translateX(calc(100% + 0.5rem))' }}
               />
-              <button type="button" onClick={() => setDetailTab('stocks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm ${detailTab === 'stocks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>Stocks</button>
-              <button type="button" onClick={() => setDetailTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm ${detailTab === 'sacks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>Sacks</button>
+              <button type="button" onClick={() => setDetailTab('stocks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm uppercase ${detailTab === 'stocks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>Stocks</button>
+              <button type="button" onClick={() => setDetailTab('sacks')} className={`relative z-10 flex-1 rounded-lg py-1.5 text-sm uppercase ${detailTab === 'sacks' ? 'font-bold text-brand-contrast' : 'font-medium text-neutral-400'}`}>Sacks</button>
             </div>
           )}
         </div>
