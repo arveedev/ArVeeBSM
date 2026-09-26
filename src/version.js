@@ -6766,4 +6766,33 @@
 //              (WSR's own numberOfBags) instead of a kg/50
 //              approximation, since a By Products bag isn't guaranteed
 //              to weigh exactly 50kg.
-export const APP_VERSION = '1.10-181'
+//   1.10-182 - More fixes on the same MO/TMO modal, per direct
+//              follow-up feedback/screenshots:
+//              (1) Reported real bug: Last Activity's sentence could
+//              show a literal double dash ("received — — 713 pcs...")
+//              when variety/category both fell back to '—', and "713
+//              pieces" never said what those pieces even were (ESR
+//              sack pieces, a different physical count than the bags
+//              shown everywhere else in this modal). Stripped down to
+//              just "{warehouse} {issued/received} {amount} {sacks|
+//              bags}" - correct unit per transaction type, no variety/
+//              category/dashes. The date moved out of the sentence
+//              entirely, into the card's own header (top-right, inline
+//              with "Last Activity").
+//              (2) Recovery card: dropped "(Rice only)" from the title
+//              (redundant once "Net Bags" replaced "pcs" below - see
+//              next point). The recovery percentage now sits inline
+//              with the Expected/Actual labels themselves instead of
+//              its own row, which also fixed the card growing tall
+//              enough to visibly overflow past the modal/bottom nav.
+//              The second stat row switched from a raw ESR sack-piece
+//              count ("pcs") to Net Bags (kg / 50) - the same unit the
+//              Stocks card above already uses, so the two agree instead
+//              of showing two different physical quantities side by
+//              side.
+//              (3) Stocks card: "(Net Bags)" now sits inline with the
+//              card's own "Stocks" header instead of repeated on every
+//              row, and each row's value is right-aligned with no
+//              per-row unit text - fixes the cramped 2-line wrap
+//              ("750.00 Net Bags" wrapping mid-number) from before.
+export const APP_VERSION = '1.10-182'

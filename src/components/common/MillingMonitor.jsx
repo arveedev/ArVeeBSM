@@ -114,24 +114,27 @@ export function MillingOrderDetail({ order, onClose }) {
   // "Pending" text with something actually informative - e.g. "BSI
   // issued PD1-A 300 bags on 06 Jul 2026".
   const lastTx = [...allTx].sort((a, b) => (a.date > b.date ? -1 : 1))[0]
+  // Per explicit correction: the earlier version tried to pack
+  // warehouse + category + variety + pile + amount + date into one
+  // sentence, which produced a genuinely confusing result (a stray
+  // double dash when variety/category both fell back to '—', "pcs"
+  // with no indication of what that even meant next to a modal
+  // otherwise focused on bags/kg). Stripped down to just what
+  // happened, in its own correct unit - "sacks" for an ESI/ESR (sack)
+  // transaction, "bags" for a WSI/WSR (stock) one, since those are two
+  // different physical counts and conflating them under "pcs" was the
+  // actual source of confusion, not just the wording. The date is no
+  // longer part of this sentence at all - it's shown in the card's own
+  // header instead (see the JSX below).
   const lastTxSummary = (() => {
     if (!lastTx) return null
     const isIssue = lastTx.type === 'WSI' || lastTx.type === 'ESI'
     const isSack = lastTx.type === 'ESI' || lastTx.type === 'ESR'
     const whName = stripWarehouseCodePrefix(warehouseMap.get(lastTx.warehouseId)) || '—'
-    const variety = varietyMap.get(lastTx.varietyId)?.name ?? '—'
-    const pileName = lastTx.pileId ? pileMap.get(lastTx.pileId) : null
-    const varietyAndPile = pileName ? `${variety} (${pileName})` : variety
     const amount = isSack
-      ? `${fmtBags((lastTx.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} pcs`
-      : `${fmtBags(lastTx.numberOfBags)} net bags`
-    // Per explicit request, made clearer - the category (Rice/Palay/By
-    // Products) is now spelled out, since "received 713 pcs" alone
-    // never said whether that was the milled Rice or a By Products
-    // output of the same run, the exact ambiguity this line exists to
-    // resolve.
-    const category = lastTx.cerealCategory ?? varietyMap.get(lastTx.varietyId)?.category ?? null
-    return `${whName} ${isIssue ? 'issued' : 'received'} ${category ? `${category} ` : ''}${varietyAndPile} — ${amount} on ${fmtDate(lastTx.date)}`
+      ? `${fmtBags((lastTx.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0))} sacks`
+      : `${fmtBags(lastTx.numberOfBags)} bags`
+    return `${whName} ${isIssue ? 'issued' : 'received'} ${amount}`
   })()
 
   // Recovery percent expressed as an equivalent net bags figure, per
@@ -158,9 +161,6 @@ export function MillingOrderDetail({ order, onClose }) {
   const expectedKilosFromIssued = order.type === 'MO' && order.recoveryPercent != null
     ? order.issuedKilos * (order.recoveryPercent / 100)
     : null
-  const expectedPiecesFromIssued = order.type === 'MO' && order.recoveryPercent != null
-    ? order.issuedPieces * (order.recoveryPercent / 100)
-    : null
   // Per explicit request: the Recovery card's "Actual" must reflect
   // RICE recovery only - By Products (bran, etc.) is a distinct output
   // of the same milling run, not part of the recovery rate being
@@ -170,16 +170,18 @@ export function MillingOrderDetail({ order, onClose }) {
   // below, just inverted.
   const riceReceiptTx = allTx.filter((t) => (t.type === 'WSR' || t.type === 'ESR') && t.cerealCategory !== 'By Products')
   const riceReceivedKilos = riceReceiptTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
-  const riceReceivedPieces = riceReceiptTx.filter((t) => t.type === 'ESR').reduce((s, t) => s + (t.sackLines ?? []).reduce((ls, l) => ls + (l.pieces ?? 0), 0), 0)
 
   const meetsExpectedKilos = expectedKilosFromIssued == null || expectedKilosFromIssued === 0 || riceReceivedKilos >= expectedKilosFromIssued
-  const meetsExpectedPieces = expectedPiecesFromIssued == null || expectedPiecesFromIssued === 0 || riceReceivedPieces >= expectedPiecesFromIssued
   const showRecoveryComparison = isCompleted && order.type === 'MO' && order.recoveryPercent != null
-  // Per explicit request: the achieved recovery percentage sits right
-  // alongside Expected/Actual, so the target rate (order.recoveryPercent,
-  // already in the card's own title) and what was actually achieved can
-  // be compared at a glance instead of only being inferable from the raw
-  // kg/pcs figures.
+  // Per explicit request: the achieved recovery percentage sits inline
+  // with the Expected/Actual labels themselves, so the target rate and
+  // what was actually achieved can be compared at a glance right there,
+  // instead of a separate row underneath (which also made this card
+  // tall enough to overflow the modal). Below it, per explicit
+  // correction, both columns show Net Bags (kg / 50) - the same unit
+  // the Stocks card above uses - not a raw ESR sack-piece count, which
+  // is a different physical quantity entirely and was the actual
+  // source of confusion ("713 pieces" of what?), not just unlabeled.
   const actualRecoveryPercent = order.issuedKilos > 0 ? (riceReceivedKilos / order.issuedKilos) * 100 : null
 
   // By Products from this same milling run - same MO/TMO number, but
@@ -298,8 +300,11 @@ export function MillingOrderDetail({ order, onClose }) {
 
               {lastTxSummary && (
                 <div className="mt-2 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-                  <p className="text-sm text-neutral-500">Last Activity</p>
-                  <p className="text-base font-medium text-app-text">{lastTxSummary}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-neutral-500">Last Activity</p>
+                    <p className="text-sm text-neutral-500">{fmtDate(lastTx.date)}</p>
+                  </div>
+                  <p className="mt-1 text-base font-medium text-app-text">{lastTxSummary}</p>
                 </div>
               )}
 
@@ -308,20 +313,22 @@ export function MillingOrderDetail({ order, onClose }) {
                   (Net Bags, kilos / 50, same derived-unit convention
                   already used in the NFA Ricemill monitor) alongside
                   what came back as Rice (also Net Bags, Rice only - see
-                  riceReceivedKilos above). The second card is By
-                  Products only, as an actual bag count rather than a
-                  Net Bags approximation - see byProductsReceivedBags. */}
+                  riceReceivedKilos above). "Net Bags" is stated once in
+                  the card's own header rather than repeated per row.
+                  The second card is By Products only, as an actual bag
+                  count rather than a Net Bags approximation - see
+                  byProductsReceivedBags. */}
               <div className="mt-2 grid grid-cols-2 gap-2 text-base">
                 <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-                  <p className="text-sm text-neutral-500">Stocks</p>
+                  <p className="text-sm text-neutral-500">Stocks <span className="text-neutral-600">(Net Bags)</span></p>
                   <div className="mt-1 space-y-1">
-                    <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-xs text-neutral-500">{issuedCategory} Issued</span>
-                      <span className="font-semibold tabular-nums text-app-text">{fmtNetBags(order.issuedKilos != null ? order.issuedKilos / 50 : null)} Net Bags</span>
+                      <span className="font-semibold tabular-nums text-app-text">{fmtNetBags(order.issuedKilos != null ? order.issuedKilos / 50 : null)}</span>
                     </div>
-                    <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-xs text-neutral-500">Rice Received</span>
-                      <span className="font-semibold tabular-nums text-app-text">{fmtNetBags(riceReceivedKilos / 50)} Net Bags</span>
+                      <span className="font-semibold tabular-nums text-app-text">{fmtNetBags(riceReceivedKilos / 50)}</span>
                     </div>
                   </div>
                 </div>
@@ -338,23 +345,23 @@ export function MillingOrderDetail({ order, onClose }) {
               comparing at a glance either way, not something tucked
               behind the summary/list toggle. */}
           {showRecoveryComparison ? (
-            <div className={`mt-2 rounded-lg border-2 p-2 text-base ${meetsExpectedKilos && meetsExpectedPieces ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
-              <p className="text-sm tabular-nums text-neutral-500">Recovery — Expected vs Actual (Rice only)</p>
+            <div className={`mt-2 rounded-lg border-2 p-2 text-base ${meetsExpectedKilos ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
+              <p className="text-sm tabular-nums text-neutral-500">Recovery — Expected vs Actual</p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-xs uppercase text-neutral-600">Expected</p>
+                  {/* Per explicit request: the recovery percentage sits
+                      inline with the Expected/Actual label itself, not
+                      as a separate row - this also keeps the card the
+                      same height it was before the % was added, fixing
+                      it overflowing past the modal. */}
+                  <p className="text-xs uppercase text-neutral-600">Expected ({order.recoveryPercent}%)</p>
                   <p className="font-semibold tabular-nums text-app-text">{fmtWeight(expectedKilosFromIssued, weightUnit, 'Net')}</p>
-                  <p className="font-semibold tabular-nums text-app-text">{fmtBags(expectedPiecesFromIssued)} pcs</p>
-                  {/* Per explicit request: the target recovery rate sits
-                      right here, in line with Actual's own achieved
-                      rate below, so the two can be compared directly. */}
-                  <p className="font-semibold tabular-nums text-app-text">{order.recoveryPercent}%</p>
+                  <p className="font-semibold tabular-nums text-app-text">{fmtNetBags(expectedKilosFromIssued != null ? expectedKilosFromIssued / 50 : null)} Net Bags</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase text-neutral-600">Actual</p>
+                  <p className={`text-xs uppercase ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>Actual ({actualRecoveryPercent != null ? actualRecoveryPercent.toFixed(2) : '—'}%)</p>
                   <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtWeight(riceReceivedKilos, weightUnit, 'Net')}</p>
-                  <p className={`font-semibold tabular-nums ${meetsExpectedPieces ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtBags(riceReceivedPieces)} pcs</p>
-                  <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{actualRecoveryPercent != null ? `${actualRecoveryPercent.toFixed(2)}%` : '—'}</p>
+                  <p className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtNetBags(riceReceivedKilos / 50)} Net Bags</p>
                 </div>
               </div>
             </div>
