@@ -6885,4 +6885,20 @@
 //              Completed rows show a "Completed" badge plus "Marked
 //              complete by X on [date]", same wording convention as the
 //              Cash in Bank update line.
-export const APP_VERSION = '1.10-186'
+//   1.10-187 - Corrected 1.10-186 per explicit feedback: a completed
+//              Regional Authority Number must actually LEAVE the NFA
+//              tab's list, not just show a "Completed" badge in place -
+//              same treatment AI/SIA Authorities and MO/TMO orders
+//              already get. NfaMillingMonitor.jsx's inline list is now
+//              pending-only (filters out manuallyCompleted), with a
+//              "Show Completed" button (admin-only) opening a new
+//              CompletedNfaMillingModal.jsx - same pending-list/
+//              separate-completed-modal convention as
+//              CompletedAuthorityModal.jsx/CompletedMillingModal.jsx.
+//              Extracted the row markup into an exported
+//              NfaAllocationRow so the inline list and the modal share
+//              identical layout (mirrors MillingOrderRow). Marking
+//              complete/reverting to pending both play the same
+//              700ms glow+collapse row exit animation the other two
+//              monitors use before the DB write actually lands.
+export const APP_VERSION = '1.10-187'

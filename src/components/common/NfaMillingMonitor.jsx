@@ -1,10 +1,14 @@
-// NFA Ricemill Monitor - read-only status view of NFA-owned Ricemill
-// milling activity. Setting up (creating/editing/deleting) allocations
-// stays admin-only in Settings > Miller Allocations
+// NFA Ricemill Monitor - status view of NFA-owned Ricemill milling
+// activity. Setting up (creating/editing/deleting) allocations stays
+// admin-only in Settings > Miller Allocations
 // (RicemillAllocationsPanel.jsx) - visitors/facility users must never
-// get create/edit/delete controls anywhere, so this is deliberately
-// display-only, reusing the exact same allocation/usage/recovery
-// computations.
+// get create/edit/delete controls anywhere. Marking a Regional
+// Authority Number's milling operation complete is likewise admin-only
+// (isAdmin prop), matching the exact pending-list/separate-completed-
+// modal convention AuthorityMonitor.jsx/MillingMonitor.jsx already use -
+// per explicit request/correction, a completed allocation must leave
+// this list entirely (not just show a badge in place), same as how
+// AI/SIA authorities and MO/TMO orders are treated.
 //
 // Two usages:
 // - No warehouseId (Admin/Visitor Monitoring page's NFA tab): every
@@ -14,6 +18,8 @@
 //   them - NFA-owned Ricemills don't use MO/TMO numbers at all): scoped
 //   to just that facility's own activity and only the Regional
 //   Authority Number(s) actually assigned to it, not every ricemill's.
+//   Never passes isAdmin, so a facility/visitor user never sees the
+//   Completed toggle here either.
 
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -22,11 +28,85 @@ import { db } from '../../db/dexie.js'
 import { fmtWeight, isTransferTypeName, dedupeAuthoritiesByRef } from '../../utils/calculations.js'
 import RicemillRecoveryDetail, { AllocationUsageSummary } from './RicemillRecoveryDetail.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
+import CompletedNfaMillingModal from './CompletedNfaMillingModal.jsx'
 import { nfaAllocationMatchesQuery } from '../../utils/monitoringSearch.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
 import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
+
+// Must match .animate-row-complete-out's duration in index.css - shared
+// by every other pending/completed list in this app (AuthorityMonitor,
+// MillingMonitor).
+const ROW_EXIT_MS = 700
+
+// Shared pending/completed row renderer - identical layout for both
+// NfaMillingMonitor's inline pending list and CompletedNfaMillingModal's
+// list, extracted so the two never drift, same convention as
+// MillingOrderRow (MillingMonitor.jsx).
+export function NfaAllocationRow({
+  allocation: a,
+  recovery,
+  used,
+  weightUnit,
+  isExpanded,
+  onToggleExpand,
+  isAdmin = false,
+  isAnimating = false,
+  onToggleComplete,
+  matches = true,
+  gapClass = 'mt-1.5',
+}) {
+  const isCompleted = Boolean(a.manuallyCompleted)
+  // Shows checked/unchecked immediately on tap, independent of the
+  // (deliberately delayed) DB write - same pattern as the AI/SIA and
+  // MO/TMO checkboxes.
+  const showsChecked = isCompleted || isAnimating
+
+  return (
+    <ShrinkFilterRow as="li" matches={matches} gapClass={gapClass}>
+      <div className={`flex items-stretch gap-2 ${isAnimating ? 'animate-row-complete-out pointer-events-none' : ''}`}>
+        {isAdmin && onToggleComplete && (
+          <button
+            type="button"
+            onClick={(e) => onToggleComplete(a, e)}
+            aria-label={showsChecked ? 'Mark as pending' : 'Mark as completed'}
+            className={`flex w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+              showsChecked
+                ? 'border-brand-neon/40 bg-brand-neon/10 text-brand-neon'
+                : 'border-neutral-800 text-neutral-600 hover:text-neutral-400'
+            }`}
+          >
+            <span
+              className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+                showsChecked ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
+              }`}
+            >
+              {showsChecked && <Check size={14} />}
+            </span>
+          </button>
+        )}
+        <div className={`${listItemClass} flex-1 flex-col items-stretch`}>
+          <button type="button" onClick={onToggleExpand} className="w-full text-left">
+            <p className="truncate text-base font-medium text-app-text md:text-lg">{a.regionalAuthorityNumber}</p>
+            <AllocationUsageSummary used={used} total={a.totalNetKgs} weightUnit={weightUnit} />
+            {isCompleted && a.completedAt && (
+              <p className="mt-1 text-xs text-neutral-500">
+                Marked complete by {a.completedBy || 'Unknown'} on{' '}
+                {new Date(a.completedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
+            )}
+          </button>
+          {isExpanded && (
+            <div className="mt-2 border-t border-neutral-800 pt-2">
+              <RicemillRecoveryDetail recovery={recovery} weightUnit={weightUnit} />
+            </div>
+          )}
+        </div>
+      </div>
+    </ShrinkFilterRow>
+  )
+}
 
 // `active` - true by default (the facility Home page usage, warehouseId
 // passed, is the only view in that context so it's always active).
@@ -39,26 +119,13 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
   const { user } = useAuth()
   const [expandedNumber, setExpandedNumber] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showCompletedModal, setShowCompletedModal] = useState(false)
   const containerRef = useRef(null)
-
-  // Marking a Regional Authority Number's milling operation complete is
-  // admin-only, per explicit request - a facility/visitor viewing their
-  // own Ricemill Home page (Home.jsx's NfaMillingMonitor usage, no
-  // isAdmin passed) must never see this control, only Admin Monitoring's
-  // NFA tab does. Purely local bookkeeping on db.ricemillAllocations
-  // itself (manuallyCompleted/completedAt/completedBy) - unlike
-  // MillingMonitor's MO/TMO orders, an allocation has no Google Sheet
-  // STATUS cell of its own to keep in sync, so no sheet write-back is
-  // needed here.
-  const toggleComplete = (a, e) => {
-    e.stopPropagation()
-    const nowCompleted = !a.manuallyCompleted
-    db.ricemillAllocations.update(a.regionalAuthorityNumber, {
-      manuallyCompleted: nowCompleted,
-      completedAt: nowCompleted ? new Date().toISOString() : null,
-      completedBy: nowCompleted ? (user?.name || 'Unknown') : null,
-    })
-  }
+  // regionalAuthorityNumber currently playing its "marked complete"
+  // glow+collapse exit animation - mirrors MillingMonitor.jsx's
+  // completingId exactly (delayed DB write, cleared once the live query
+  // confirms the allocation has actually left the pending list).
+  const [completingNumber, setCompletingNumber] = useState(null)
 
   useEffect(() => {
     if (!active) setSearchQuery('')
@@ -75,6 +142,33 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
 
   const allocations = useLiveQuery(() => db.ricemillAllocations.toArray(), []) ?? []
 
+  useEffect(() => {
+    if (!completingNumber) return
+    const stillPending = allocations.some((a) => a.regionalAuthorityNumber === completingNumber && !a.manuallyCompleted)
+    if (!stillPending) setCompletingNumber(null)
+  }, [allocations, completingNumber])
+
+  // Marking a Regional Authority Number's milling operation complete is
+  // admin-only, per explicit request - a facility/visitor viewing their
+  // own Ricemill Home page (Home.jsx's NfaMillingMonitor usage, no
+  // isAdmin passed) must never see this control, only Admin Monitoring's
+  // NFA tab does. Purely local bookkeeping on db.ricemillAllocations
+  // itself (manuallyCompleted/completedAt/completedBy, no schema version
+  // bump needed) - unlike MillingMonitor's MO/TMO orders, an allocation
+  // has no Google Sheet STATUS cell of its own to keep in sync, so no
+  // sheet write-back is needed here.
+  const toggleManualComplete = (a, e) => {
+    e.stopPropagation()
+    setCompletingNumber(a.regionalAuthorityNumber)
+    setTimeout(() => {
+      db.ricemillAllocations.update(a.regionalAuthorityNumber, {
+        manuallyCompleted: true,
+        completedAt: new Date().toISOString(),
+        completedBy: user?.name || 'Unknown',
+      })
+    }, ROW_EXIT_MS)
+  }
+
   // Regional Authority Numbers actually assigned to THIS facility (via
   // its own AI authorities) - a Regional Authority Number maps to
   // exactly one ricemill in practice, so this is what scopes the list
@@ -88,9 +182,16 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
     return new Set(authorities.map((a) => a.regionalAuthorityNumber))
   }, [warehouseId]) ?? null
 
-  const sortedAllocations = [...allocations]
+  const scopedAllocations = [...allocations]
     .filter((a) => !warehouseId || relevantNumbersForWarehouse == null || relevantNumbersForWarehouse.has(a.regionalAuthorityNumber))
     .sort((a, b) => byAlpha(a.regionalAuthorityNumber, b.regionalAuthorityNumber))
+
+  // Inline list is pending-only - completed allocations live in their
+  // own modal (CompletedNfaMillingModal below) instead of staying in
+  // place with a badge, matching the AI/SIA Monitor's and MO/TMO
+  // Monitor's own pending-list/separate-completed-modal convention.
+  const sortedAllocations = scopedAllocations.filter((a) => !a.manuallyCompleted)
+  const completedAllocations = scopedAllocations.filter((a) => a.manuallyCompleted)
 
 
   // Recovery detail, per Regional Authority Number - "rice out" is every
@@ -193,11 +294,22 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
 
   return (
     <div ref={containerRef} className={warehouseId ? '' : 'mt-4'}>
-      <p className="mb-2 text-sm text-neutral-500 md:text-base">
-        {warehouseId
-          ? 'NFA allocation vs. actual usage for this facility.'
-          : 'NFA-owned Ricemill status - allocation vs. actual usage per Regional Authority Number. Set up allocations in Settings > Miller Allocations.'}
-      </p>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <p className="text-sm text-neutral-500 md:text-base">
+          {warehouseId
+            ? 'NFA allocation vs. actual usage for this facility.'
+            : 'NFA-owned Ricemill status - allocation vs. actual usage per Regional Authority Number. Set up allocations in Settings > Miller Allocations.'}
+        </p>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setShowCompletedModal(true)}
+            className="shrink-0 rounded-full border border-neutral-700 px-3 py-1 text-xs font-semibold text-neutral-400 transition-all active:scale-95"
+          >
+            Show Completed
+          </button>
+        )}
+      </div>
       {sortedAllocations.length > 0 && (
         <div className="relative mb-2">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
@@ -220,10 +332,10 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
           )}
         </div>
       )}
-      <ul>
+      <ul className="[contain:layout]">
         {sortedAllocations.length === 0 && (
           <p className="py-6 text-center text-sm text-neutral-500 md:text-base">
-            {warehouseId ? 'No NFA allocation assigned to this facility yet.' : 'No NFA ricemill allocations set up yet.'}
+            {warehouseId ? 'No pending NFA allocation for this facility.' : 'No pending NFA ricemill allocations.'}
           </p>
         )}
         {sortedAllocations.length > 0 && sortedAllocations.every((a) =>
@@ -240,63 +352,32 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
           const used = recovery?.issuedKilos ?? 0
           const isExpanded = expandedNumber === a.regionalAuthorityNumber
           const matches = nfaAllocationMatchesQuery(a.regionalAuthorityNumber, recovery?.transferEntries, searchQuery)
-          const isCompleted = Boolean(a.manuallyCompleted)
           return (
-            <ShrinkFilterRow key={a.regionalAuthorityNumber} as="li" matches={matches} gapClass="mt-1.5">
-            <div className="flex items-stretch gap-2">
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={(e) => toggleComplete(a, e)}
-                  aria-label={isCompleted ? 'Mark as pending' : 'Mark as completed'}
-                  className={`flex w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
-                    isCompleted
-                      ? 'border-brand-neon/40 bg-brand-neon/10 text-brand-neon'
-                      : 'border-neutral-800 text-neutral-600 hover:text-neutral-400'
-                  }`}
-                >
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-md border ${
-                      isCompleted ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
-                    }`}
-                  >
-                    {isCompleted && <Check size={14} />}
-                  </span>
-                </button>
-              )}
-              <div className={`${listItemClass} flex-1 flex-col items-stretch`}>
-                <button
-                  type="button"
-                  onClick={() => setExpandedNumber(isExpanded ? null : a.regionalAuthorityNumber)}
-                  className="w-full text-left"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="truncate text-base font-medium text-app-text md:text-lg">{a.regionalAuthorityNumber}</p>
-                    {isCompleted && (
-                      <span className="shrink-0 rounded-md bg-brand-neon/10 px-2 py-1 text-xs font-bold text-brand-neon">
-                        Completed
-                      </span>
-                    )}
-                  </div>
-                  <AllocationUsageSummary used={used} total={a.totalNetKgs} weightUnit={weightUnit} />
-                  {isCompleted && a.completedAt && (
-                    <p className="mt-1 text-xs text-neutral-500">
-                      Marked complete by {a.completedBy || 'Unknown'} on{' '}
-                      {new Date(a.completedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  )}
-                </button>
-                {isExpanded && (
-                  <div className="mt-2 border-t border-neutral-800 pt-2">
-                    <RicemillRecoveryDetail recovery={recovery} weightUnit={weightUnit} />
-                  </div>
-                )}
-              </div>
-            </div>
-            </ShrinkFilterRow>
+            <NfaAllocationRow
+              key={a.regionalAuthorityNumber}
+              allocation={a}
+              recovery={recovery}
+              used={used}
+              weightUnit={weightUnit}
+              isExpanded={isExpanded}
+              onToggleExpand={() => setExpandedNumber(isExpanded ? null : a.regionalAuthorityNumber)}
+              isAdmin={isAdmin}
+              isAnimating={completingNumber === a.regionalAuthorityNumber}
+              onToggleComplete={toggleManualComplete}
+              matches={matches}
+            />
           )
         })}
       </ul>
+      {showCompletedModal && (
+        <CompletedNfaMillingModal
+          allocations={completedAllocations}
+          recoverySummaryByNumber={recoverySummaryByNumber}
+          weightUnit={weightUnit}
+          onClose={() => setShowCompletedModal(false)}
+          isAdmin={isAdmin}
+        />
+      )}
     </div>
   )
 }
