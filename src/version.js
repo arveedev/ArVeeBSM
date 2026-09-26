@@ -6692,4 +6692,24 @@
 //              aggregated the same way SdoHome.jsx's own dashboard
 //              already does) and the shared Cash on Bank's latest
 //              value/updater/date.
-export const APP_VERSION = '1.10-177'
+//   1.10-178 - Three more explicit corrections in the same round:
+//              (1) SDO's unpaid-Procurement notification is now scoped
+//              to just their own PRIORITY warehouse (not every
+//              warehouse they're assigned to), same scope SdoHome.jsx's
+//              own "Unpaid Procurement" card already defaults to - and
+//              now includes the peso amount, not just bag count. New
+//              shared computeWsrProcurementCost (sdoCalculations.js)
+//              extracts the exact ENW/unit-cost chain SdoHome.jsx's own
+//              total already ran, so both places call the same math
+//              instead of two independently-written copies that could
+//              drift.
+//              (2) Removed the word "shared" from every Cash on Bank
+//              label (notification title, SdoCashOverviewPanel.jsx's
+//              breakdown line) - the value's nature doesn't need
+//              spelling out in the label itself.
+//              (3) Cash on Bank is now edited the same way Buying Price
+//              is - its own modal (new CashOnBankModal.jsx, same
+//              pattern as BuyingPriceModal.jsx: comma-formatted input,
+//              "Current: ..." info line, Save button), opened by
+//              tapping a card, not an inline pencil-edit row.
+export const APP_VERSION = '1.10-178'

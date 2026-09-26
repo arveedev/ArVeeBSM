@@ -15,8 +15,7 @@ import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureState } from '../utils/calculations.js'
 import { fuzzyMatchesAny } from '../utils/fuzzySearch.js'
 import {
-  computeCashOnHand, resolveBuyingPrice, resolveUnitCost,
-  lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost,
+  computeCashOnHand, resolveBuyingPrice, computeWsrProcurementCost,
 } from '../utils/sdoCalculations.js'
 import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.jsx'
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
@@ -192,17 +191,8 @@ function SdoHome() {
   const varietyMap = useMemo(() => new Map(varieties.map((v) => [v.varietyId, v])), [varieties])
   const enwFactors = useLiveQuery(() => db.enwFactors.toArray(), []) ?? []
 
-  const computeWsrBasicCost = (wsr) => {
-    const variety = varietyMap.get(wsr.varietyId)
-    const moistureState = getPalayMoistureState(variety?.name, wsr.cerealCategory)
-    const priceRow = resolveBuyingPrice(buyingPrices, wsr.date)
-    const unitCost = resolveUnitCost(priceRow, moistureState)
-    const factor = lookupEnwFactor(enwFactors, variety, wsr.moistureContent)
-    const netKilos = wsr.netKilos ?? 0
-    if (factor == null || unitCost == null) return 0
-    const enw = computeEquivalentNetWeight(netKilos, factor)
-    return computeBasicCost(enw, unitCost)
-  }
+  const computeWsrBasicCost = (wsr) =>
+    computeWsrProcurementCost(wsr, { varietyMap, buyingPrices, enwFactors, getPalayMoistureState })
 
   const priorityWarehouseId = user?.priorityWarehouseId ?? null
   // Defaults to the priority warehouse, per explicit request, but is

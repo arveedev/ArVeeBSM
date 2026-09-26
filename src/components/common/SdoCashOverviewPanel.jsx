@@ -103,7 +103,7 @@ function SdoCashOverviewPanel() {
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-base font-semibold text-app-text">Cash on Bank <span className="font-normal text-neutral-500">(shared)</span></p>
+                <p className="text-base font-semibold text-app-text">Cash on Bank</p>
                 <p className="mt-0.5 text-xs text-neutral-500">{cashOnBankUpdatedLabel}</p>
               </div>
               <p className="shrink-0 text-xl font-bold tabular-nums text-app-text">{fmtPeso(cashOnBank)}</p>

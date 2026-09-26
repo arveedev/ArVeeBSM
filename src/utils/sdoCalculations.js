@@ -143,6 +143,29 @@ export const resolveUnitCost = (priceRow, moistureState) => {
 }
 
 /**
+ * A single Procurement WSR's own peso Basic Cost - the exact chain
+ * SdoHome.jsx's own "Unpaid Procurement" total already runs
+ * (variety -> moisture state -> price row -> unit cost -> ENW factor ->
+ * Equivalent Net Weight -> Basic Cost), extracted here so any other
+ * screen needing the same figure (the notification bell's own unpaid-
+ * procurement entry, AppHeader.jsx) calls this instead of
+ * re-implementing the chain a second time, which could silently drift
+ * from SdoHome.jsx's own math. Returns 0 when no ENW factor or price
+ * row applies (unresolved WSR), same as SdoHome.jsx's own fallback.
+ */
+export const computeWsrProcurementCost = (wsr, { varietyMap, buyingPrices, enwFactors, getPalayMoistureState }) => {
+  const variety = varietyMap.get(wsr.varietyId)
+  const moistureState = getPalayMoistureState(variety?.name, wsr.cerealCategory)
+  const priceRow = resolveBuyingPrice(buyingPrices, wsr.date)
+  const unitCost = resolveUnitCost(priceRow, moistureState)
+  const factor = lookupEnwFactor(enwFactors, variety, wsr.moistureContent)
+  const netKilos = wsr.netKilos ?? 0
+  if (factor == null || unitCost == null) return 0
+  const enw = computeEquivalentNetWeight(netKilos, factor)
+  return computeBasicCost(enw, unitCost)
+}
+
+/**
  * Cash on Hand is never a stored running number - always this live
  * sum, so cancelling or deleting a Purchase Receipt "reverts the cash"
  * automatically: the instant its status leaves 'Active', it drops out

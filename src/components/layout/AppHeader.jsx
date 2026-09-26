@@ -18,7 +18,8 @@ import { usePageHeader } from '../../context/PageHeaderContext.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
-import { fmtBags, isProcurementTypeName, effectiveCutoffDate } from '../../utils/calculations.js'
+import { fmtBags, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureState } from '../../utils/calculations.js'
+import { computeWsrProcurementCost } from '../../utils/sdoCalculations.js'
 import { dedupeWsrTransactions } from '../../pages/SdoHome.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import Avatar from '../common/Avatar.jsx'
@@ -321,21 +322,26 @@ function AppHeader({ hidden = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warehouseIds.join(','), isSdo]) ?? []
 
-  // SDO-only: the two things an SDO actually needs to act on - their own
-  // unpaid Procurement WSRs (across every warehouse they're assigned to,
-  // same aggregation SdoHome.jsx's own dashboard already uses) and the
-  // shared, branch-wide Cash on Bank figure (see Settings.jsx's
-  // SdoCashSection / SdoCashOverviewPanel.jsx - any SDO can update it,
-  // so every SDO's bell should reflect the latest value regardless of
-  // who last touched it).
+  // SDO-only: the two things an SDO actually needs to act on. Per
+  // explicit correction, unpaid Procurement is scoped to just this
+  // SDO's own PRIORITY warehouse (not every warehouse they're
+  // assigned to) - same scope SdoHome.jsx's own "Unpaid Procurement"
+  // card already defaults to (unpaidWarehouseId), and same reasoning:
+  // nothing to scope a total to without one, so a multi-warehouse SDO
+  // with no priority warehouse configured yet simply gets no entry
+  // here either, matching that card being hidden in the same case.
+  // The peso amount reuses computeWsrProcurementCost (sdoCalculations.js)
+  // - the exact same chain that card's own total runs - rather than a
+  // second, independently-written calculation that could drift from it.
+  const priorityWarehouseId = user?.priorityWarehouseId ?? null
   const sdoUnpaidProcurement = useLiveQuery(async () => {
-    if (!isSdo || warehouseIds.length === 0) return null
+    if (!isSdo || !priorityWarehouseId) return null
     const transactionTypes = await db.transactionTypes.toArray()
     const procurementTypeIds = new Set(transactionTypes.filter((t) => isProcurementTypeName(t.name)).map((t) => t.transactionTypeId))
     if (procurementTypeIds.size === 0) return null
     const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
     const wsrTransactions = await db.transactions
-      .where('warehouseId').anyOf(warehouseIds)
+      .where('warehouseId').equals(priorityWarehouseId)
       .and((t) => t.type === 'WSR' && t.status === 'Active' && t.cerealCategory === 'Palay' && procurementTypeIds.has(t.transactionTypeId))
       .toArray()
     const visible = dedupeWsrTransactions(wsrTransactions).filter((t) => {
@@ -346,8 +352,23 @@ function AppHeader({ hidden = false }) {
     const paidWsrIds = new Set(activePrs.map((pr) => pr.wsrTransactionId).filter(Boolean))
     const unpaid = visible.filter((t) => !paidWsrIds.has(t.id))
     if (unpaid.length === 0) return null
-    return { count: unpaid.length, totalBags: unpaid.reduce((s, t) => s + (t.numberOfBags ?? 0), 0) }
-  }, [isSdo, warehouseIds.join(',')]) ?? null
+    const [varieties, buyingPrices, enwFactors] = await Promise.all([
+      db.varietyTypes.toArray(),
+      db.buyingPrices.toArray(),
+      db.enwFactors.toArray(),
+    ])
+    const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
+    const totalAmount = unpaid.reduce(
+      (s, t) => s + computeWsrProcurementCost(t, { varietyMap, buyingPrices, enwFactors, getPalayMoistureState }),
+      0
+    )
+    return {
+      warehouseName: warehouseNameById.get(priorityWarehouseId) ?? 'your priority warehouse',
+      count: unpaid.length,
+      totalBags: unpaid.reduce((s, t) => s + (t.numberOfBags ?? 0), 0),
+      totalAmount,
+    }
+  }, [isSdo, priorityWarehouseId]) ?? null
 
   const sdoCashOnBankInfo = useLiveQuery(
     async () => (isSdo ? (await db.reportConfig.get('global')) ?? null : null),
@@ -410,8 +431,8 @@ function AppHeader({ hidden = false }) {
     ...(sdoUnpaidProcurement ? [{
       id: 'sdo:unpaid-procurement',
       resolved: false,
-      title: 'Unpaid Procurement',
-      detail: `${sdoUnpaidProcurement.count} WSR${sdoUnpaidProcurement.count === 1 ? '' : 's'} unpaid — ${fmtBags(sdoUnpaidProcurement.totalBags)} bag${sdoUnpaidProcurement.totalBags === 1 ? '' : 's'} total`,
+      title: `Unpaid Procurement — ${sdoUnpaidProcurement.warehouseName}`,
+      detail: `${sdoUnpaidProcurement.count} WSR${sdoUnpaidProcurement.count === 1 ? '' : 's'} unpaid — ${fmtBags(sdoUnpaidProcurement.totalBags)} bag${sdoUnpaidProcurement.totalBags === 1 ? '' : 's'}, ₱${sdoUnpaidProcurement.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       onClick: () => {
         setNotifOpen(false)
         navigate('/')
@@ -420,7 +441,7 @@ function AppHeader({ hidden = false }) {
     ...(isSdo && sdoCashOnBankInfo?.cashOnBankUpdatedAt ? [{
       id: 'sdo:cash-on-bank',
       resolved: false,
-      title: 'Cash on Bank (shared)',
+      title: 'Cash on Bank',
       detail: `₱${(sdoCashOnBankInfo.cashOnBank ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — updated by ${sdoCashOnBankInfo.cashOnBankUpdatedBy || 'Unknown'} on ${new Date(sdoCashOnBankInfo.cashOnBankUpdatedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`,
       onClick: () => {
         setNotifOpen(false)

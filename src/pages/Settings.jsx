@@ -11,9 +11,9 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db, lastSyncErrorDetail } from '../db/dexie.js'
-import { fmtBags, fmtWeight, liveFormatNumber, parseFormattedNumber } from '../utils/calculations.js'
+import { fmtBags, fmtWeight } from '../utils/calculations.js'
 import { fuzzyContains } from '../utils/fuzzySearch.js'
-import { computeCashOnHand, roundPeso2 } from '../utils/sdoCalculations.js'
+import { computeCashOnHand } from '../utils/sdoCalculations.js'
 import { recalculatePileCurrentState } from '../utils/pileLedger.js'
 import useDelayedUnmount from '../hooks/useDelayedUnmount.js'
 import { inputClass, labelClass, primaryButtonClass, byAlpha, editIconClass, deleteIconClass } from '../components/common/admin/shared.js'
@@ -27,6 +27,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import DenominationModal from '../components/common/sdo/DenominationModal.jsx'
 import CashHistoryModal from '../components/common/sdo/CashHistoryModal.jsx'
 import CancelPrModal from '../components/common/sdo/CancelPrModal.jsx'
+import CashOnBankModal from '../components/common/sdo/CashOnBankModal.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
@@ -184,7 +185,7 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
 // Hand figure (not passed down from Home, which no longer renders this)
 // - computed the same way SdoHome.jsx does, from this SDO's own ledger
 // and Active Purchase Receipts.
-function SdoCashSection({ uid, userName }) {
+function SdoCashSection({ uid }) {
   const [openModal, setOpenModal] = useState(null) // 'denomination' | 'history' | 'cancelPr' | null
 
   const activePrs = useLiveQuery(
@@ -206,27 +207,9 @@ function SdoCashSection({ uid, userName }) {
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
   const cashOnBank = config?.cashOnBank ?? 0
   const [editingBank, setEditingBank] = useState(false)
-  const [bankInput, setBankInput] = useState('')
-
-  const startEditingBank = () => {
-    setBankInput(cashOnBank ? String(cashOnBank) : '')
-    setEditingBank(true)
-  }
-  const saveCashOnBank = async () => {
-    const amount = parseFormattedNumber(bankInput)
-    if (!Number.isFinite(amount) || amount < 0) {
-      toast.error('Enter a valid amount')
-      return
-    }
-    const patch = { cashOnBank: roundPeso2(amount), cashOnBankUpdatedAt: new Date().toISOString(), cashOnBankUpdatedBy: userName || 'Unknown' }
-    if (config) await db.reportConfig.update('global', patch)
-    else await db.reportConfig.put({ id: 'global', ...patch })
-    toast.success('Cash on Bank updated')
-    setEditingBank(false)
-  }
 
   const cashOnBankUpdatedLabel = config?.cashOnBankUpdatedAt
-    ? `Last updated by ${config.cashOnBankUpdatedBy || 'Unknown'} on ${new Date(config.cashOnBankUpdatedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    ? `Updated by ${config.cashOnBankUpdatedBy || 'Unknown'} on ${new Date(config.cashOnBankUpdatedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
     : 'Not set yet'
 
   return (
@@ -235,63 +218,20 @@ function SdoCashSection({ uid, userName }) {
       <p className="mt-1 text-xs text-neutral-500">Current Cash on Hand and every Replenish/Liquidate entry behind it.</p>
       <p className="mt-2 text-2xl font-bold text-app-text">₱{cashOnHand.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
 
-      <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950 p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-medium text-app-text">Cash on Bank</p>
-            <p className="text-xs text-neutral-500">Shared across the whole branch - any SDO can update it.</p>
-          </div>
-          {!editingBank && (
-            <button
-              type="button"
-              onClick={startEditingBank}
-              aria-label="Edit Cash on Bank"
-              className={editIconClass}
-            >
-              <Pencil size={16} />
-            </button>
-          )}
-        </div>
-        {editingBank ? (
-          <div className="mt-2">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500">₱</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  autoFocus
-                  value={bankInput}
-                  onChange={(e) => setBankInput(liveFormatNumber(e.target.value))}
-                  placeholder="0.00"
-                  className={`w-full pl-7 ${inputClass}`}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={saveCashOnBank}
-                aria-label="Save Cash on Bank"
-                className="shrink-0 rounded-lg bg-brand-neon p-2.5 text-brand-contrast transition-all active:scale-95"
-              >
-                <Check size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingBank(false)}
-                aria-label="Cancel"
-                className="shrink-0 rounded-lg border border-neutral-800 p-2.5 text-neutral-400 transition-all hover:text-app-text active:scale-95"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">₱{cashOnBank.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="mt-1 text-xs text-neutral-500">{cashOnBankUpdatedLabel}</p>
-          </>
-        )}
-      </div>
+      {/* Per explicit request, edited the same way Buying Price is - its
+          own modal (CashOnBankModal.jsx), opened by tapping this card,
+          not an inline pencil-edit row. */}
+      <button
+        type="button"
+        onClick={() => setEditingBank(true)}
+        className="mt-4 w-full rounded-xl border border-neutral-800 bg-neutral-950 p-3 text-left transition-all hover:border-brand-neon/50 active:scale-[0.98]"
+      >
+        <p className="text-[10px] font-bold uppercase text-neutral-500">Cash on Bank</p>
+        <p className="mt-1.5 text-xl font-bold tabular-nums text-app-text">₱{cashOnBank.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        <p className="mt-1 text-xs text-neutral-500">{cashOnBankUpdatedLabel}</p>
+      </button>
+
+      {editingBank && <CashOnBankModal current={config} onClose={() => setEditingBank(false)} />}
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
@@ -1074,7 +1014,7 @@ function Settings() {
 
       {isSdo && <SdoPositionSection userRecord={userRecord} uid={user.uid} />}
       {isSdo && <SdoAbstractDisplaySection userRecord={userRecord} uid={user.uid} />}
-      {isSdo && <SdoCashSection uid={user.uid} userName={user.name} />}
+      {isSdo && <SdoCashSection uid={user.uid} />}
 
       {!isSdo && (
         <>
