@@ -108,10 +108,14 @@ function Login() {
     return () => { document.body.style.overflow = '' }
   }, [isExiting])
 
-  // Auto-focus on mount so the device's native number pad opens immediately.
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  // Reported real bug: this separate mount-time focus() call was ALSO
+  // unconditionally focusing the hidden input on every device,
+  // regardless of touch/pointer type - completely bypassing the
+  // autoFocus={!isTouchDevicePointer()} guard on the input itself below
+  // and still popping the OS virtual keyboard on a real touch device.
+  // Removed entirely - autoFocus already covers this exact "focus on
+  // mount" behavior for the one case (desktop/physical keyboard) that
+  // actually needs it.
 
   // If already authenticated (e.g. navigated back to /login manually),
   // bounce straight to the home dashboard. Guarded against isExiting so
@@ -180,7 +184,10 @@ function Login() {
       // after any wrong PIN - reported directly. setTimeout(0) waits for
       // the re-render to actually commit (enabling the input) before
       // focusing it, same pattern handlePinInputBlur already uses below.
-      setTimeout(() => inputRef.current?.focus(), 0)
+      // Same isTouchDevicePointer() guard as handlePinInputBlur - this
+      // was the other spot silently refocusing (and re-popping the
+      // virtual keyboard) on a touch device after every wrong attempt.
+      if (!isTouchDevicePointer()) setTimeout(() => inputRef.current?.focus(), 0)
     }
   }
 
@@ -274,18 +281,25 @@ function Login() {
             this hidden input still popped the OS's own virtual
             keyboard on page load, even though it's visually hidden and
             the on-screen number grid below is the intended, sole input
-            surface. inputMode="none" is the standard fix for exactly
-            this "custom keypad + hidden real input" pattern - it tells
-            mobile browsers not to summon a virtual keyboard for this
-            field while still letting it hold focus (so a PHYSICAL
-            keyboard, on desktop, still types into it via autoFocus).
-            type="number" is kept only for numeric-only paste/native
-            validation semantics, not for the keypad it used to imply. */}
+            surface. inputMode="none" alone turned out NOT reliable
+            enough - confirmed still showing the OS keyboard on a real
+            Android device even with it set, a known inconsistency with
+            some mobile browsers/keyboards (Gboard included). The real
+            fix: autoFocus itself is now conditional on
+            !isTouchDevicePointer() (the same touch-device check
+            handlePinInputBlur below already trusts for this exact
+            concern) - a touch device never focuses this input at all,
+            so no virtual keyboard can ever be triggered by it, while a
+            desktop mouse/pointer device still autofocuses it for
+            physical-keyboard entry. appendDigit (the on-screen keypad's
+            own click handler) never depended on this input having
+            focus in the first place, so touch input is completely
+            unaffected either way. */}
         <input
           ref={inputRef}
           type="number"
           inputMode="none"
-          autoFocus
+          autoFocus={!isTouchDevicePointer()}
           disabled={isSubmitting}
           value={pin}
           onChange={handleInputChange}

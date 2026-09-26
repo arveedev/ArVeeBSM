@@ -57,7 +57,7 @@ const LOGOUT_FADE_MS = 500
 function AppHeader({ hidden = false }) {
   const { user, logout } = useAuth() ?? {}
   const { theme, weightUnit, updateSetting } = useSettings() ?? {}
-  const { title, subtitle, setHeaderHeight } = usePageHeader() ?? {}
+  const { title, subtitle, headerHeight, setHeaderHeight } = usePageHeader() ?? {}
   const { currentWarehouseId, accessibleWarehouses, setCurrentWarehouseId } = useWarehouse() ?? {}
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -665,7 +665,23 @@ function AppHeader({ hidden = false }) {
                 </button>
 
                 {notifOpen && (
-                  <div className="absolute right-0 top-full z-[106] mt-2 max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50">
+                  // Reported real bug, confirmed: this used to be
+                  // `absolute right-0` relative to the bell's OWN
+                  // wrapper - since the bell sits mid-cluster among
+                  // several other header icons (sync status, KG/MT
+                  // toggle, theme, logout), not flush against the true
+                  // screen edge, its right edge could sit well left of
+                  // 100vw on a narrow phone, pushing this panel's own
+                  // left edge clean off the screen. `fixed` positioning
+                  // anchored to the viewport's own right edge (not the
+                  // bell's position) fixes this regardless of how
+                  // crowded the header cluster is - same
+                  // headerHeight-based vertical anchoring
+                  // StickyWarehouseIndicator.jsx already uses.
+                  <div
+                    className="fixed right-4 z-[106] max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
+                    style={{ top: `${(headerHeight ?? 60) + 8}px` }}
+                  >
                     <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
                         {unresolvedNotifCount > 0

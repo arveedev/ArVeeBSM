@@ -6843,4 +6843,28 @@
 //              keypad-plus-hidden-input pattern, which still lets a
 //              physical keyboard type into it via autoFocus without
 //              popping a virtual one on mobile.
-export const APP_VERSION = '1.10-184'
+//   1.10-185 - Both real bugs confirmed still broken on a real device
+//              after 1.10-184, root-caused properly this time:
+//              (1) Notification bell panel: was `absolute right-0`
+//              relative to the BELL's own wrapper, not the screen edge
+//              - since the bell sits mid-cluster among several other
+//              header icons (sync status, KG/MT toggle, theme,
+//              logout), its right edge can sit well left of the true
+//              viewport edge on a narrow phone, pushing the panel's own
+//              left edge off-screen (exactly what the screenshot
+//              showed - clipped/truncated text on the left). Switched
+//              to `fixed` positioning anchored to the real viewport
+//              edge (right-4, top computed from headerHeight, same
+//              convention StickyWarehouseIndicator.jsx already uses)
+//              instead of the bell's own on-screen position.
+//              (2) Login virtual keyboard: inputMode="none" alone
+//              wasn't the actual fix - found TWO separate places still
+//              unconditionally calling inputRef.current.focus() on
+//              every device regardless of touch/pointer type,
+//              completely bypassing the autoFocus={!isTouchDevicePointer()}
+//              guard added in 1.10-184: a mount-time useEffect (now
+//              removed entirely - autoFocus already covers that same
+//              "focus on mount" case) and the wrong-PIN retry handler
+//              (now guarded with the same isTouchDevicePointer() check
+//              handlePinInputBlur already used).
+export const APP_VERSION = '1.10-185'
