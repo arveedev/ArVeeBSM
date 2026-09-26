@@ -188,7 +188,7 @@ function AppHeader({ hidden = false }) {
     // Sack-matching is a warehouse-operations concern (Warehouse
     // Supervisor/Admin/Visitor), not an SDO's job - per explicit
     // request, an SDO's bell instead surfaces their own unpaid
-    // procurement and the shared Cash on Bank figure (both below).
+    // procurement and the shared Cash in Bank figure (both below).
     if (warehouseIds.length === 0 || isSdo) return []
     const transactionTypes = await db.transactionTypes.toArray()
     const procurementTypeId = transactionTypes.find((t) => isProcurementTypeName(t.name))?.transactionTypeId
@@ -441,7 +441,7 @@ function AppHeader({ hidden = false }) {
     ...(isSdo && sdoCashOnBankInfo?.cashOnBankUpdatedAt ? [{
       id: 'sdo:cash-on-bank',
       resolved: false,
-      title: 'Cash on Bank',
+      title: 'Cash in Bank',
       detail: `₱${(sdoCashOnBankInfo.cashOnBank ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — updated by ${sdoCashOnBankInfo.cashOnBankUpdatedBy || 'Unknown'} on ${new Date(sdoCashOnBankInfo.cashOnBankUpdatedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`,
       onClick: () => {
         setNotifOpen(false)

@@ -27,7 +27,7 @@ import CalendarDatePicker from '../CalendarDatePicker.jsx'
 
 function BuyingPriceModal({ currentPriceRow, onClose }) {
   const { user } = useAuth()
-  const [price, setPrice] = useState(currentPriceRow ? String(currentPriceRow.dryPrice) : '')
+  const [price, setPrice] = useState(currentPriceRow ? liveFormatNumber(String(currentPriceRow.dryPrice), 2) : '')
   const [effectiveFrom, setEffectiveFrom] = useState(todayLocalISO())
   const [saving, setSaving] = useState(false)
   const [entered, setEntered] = useState(false)

@@ -31,7 +31,7 @@ function SdoCashOverviewPanel() {
   const allLedgerEntries = useLiveQuery(() => db.cashLedgerV2.toArray(), []) ?? []
   const allActivePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), []) ?? []
 
-  // Confirmed real correction: Cash on Bank is a single, shared,
+  // Confirmed real correction: Cash in Bank is a single, shared,
   // branch-wide figure (any SDO can update it - see Settings.jsx's
   // SdoCashSection) - not per-SDO, and per explicit correction it's
   // part of the ONE Total CPF figure, not a second separate total.
@@ -103,7 +103,7 @@ function SdoCashOverviewPanel() {
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-base font-semibold text-app-text">Cash on Bank</p>
+                <p className="text-base font-semibold text-app-text">Cash in Bank</p>
                 <p className="mt-0.5 text-xs text-neutral-500">{cashOnBankUpdatedLabel}</p>
               </div>
               <p className="shrink-0 text-xl font-bold tabular-nums text-app-text">{fmtPeso(cashOnBank)}</p>

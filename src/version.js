@@ -6712,4 +6712,20 @@
 //              pattern as BuyingPriceModal.jsx: comma-formatted input,
 //              "Current: ..." info line, Save button), opened by
 //              tapping a card, not an inline pencil-edit row.
-export const APP_VERSION = '1.10-178'
+//   1.10-179 - Two more explicit fixes:
+//              (1) Reported real bug: CashOnBankModal.jsx's amount
+//              input showed the raw unformatted number (no comma
+//              separator) the moment it opened for editing an existing
+//              value - only typing triggered liveFormatNumber, the
+//              initial useState value never was. Same bug found and
+//              fixed in BuyingPriceModal.jsx too. Standing rule going
+//              forward: every money/amount input's INITIAL value must
+//              be run through liveFormatNumber, not just its onChange.
+//              (2) Renamed "Cash on Bank" to "Cash in Bank" everywhere
+//              user-facing (labels, titles, comments) - the underlying
+//              cashOnBank/cashOnBankUpdatedAt/cashOnBankUpdatedBy field
+//              names on db.reportConfig are deliberately left as-is
+//              (real data already saved under those names - renaming
+//              them would need a migration, and nothing reads them by
+//              display label).
+export const APP_VERSION = '1.10-179'

@@ -1,4 +1,4 @@
-// Cash on Bank — per explicit request, edited the same way Buying Price
+// Cash in Bank — per explicit request, edited the same way Buying Price
 // is (BuyingPriceModal.jsx): its own modal, not an inline pencil-edit
 // row, with the same large comma-formatted input and "Current: ..."
 // info line. Unlike Buying Price, this is a single current figure, not
@@ -15,7 +15,7 @@ import { roundPeso2 } from '../../../utils/sdoCalculations.js'
 
 function CashOnBankModal({ current, onClose }) {
   const { user } = useAuth()
-  const [amount, setAmount] = useState(current?.cashOnBank ? String(current.cashOnBank) : '')
+  const [amount, setAmount] = useState(current?.cashOnBank ? liveFormatNumber(String(current.cashOnBank), 2) : '')
   const [saving, setSaving] = useState(false)
   const [entered, setEntered] = useState(false)
 
@@ -57,13 +57,13 @@ function CashOnBankModal({ current, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <h2 className="text-lg font-semibold text-app-text">Cash on Bank</h2>
+          <h2 className="text-lg font-semibold text-app-text">Cash in Bank</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400 transition-all active:scale-90">✕</button>
         </div>
         <div className="space-y-4 px-4 py-4">
           <p className="text-sm text-neutral-500">Shared across the whole branch - any SDO can update it.</p>
           <div>
-            <label className="text-sm font-semibold uppercase text-neutral-500">Cash on Bank (₱)</label>
+            <label className="text-sm font-semibold uppercase text-neutral-500">Cash in Bank (₱)</label>
             <input
               type="text"
               inputMode="decimal"
@@ -86,7 +86,7 @@ function CashOnBankModal({ current, onClose }) {
             disabled={!canSave}
             className="w-full rounded-xl bg-brand-neon px-3 py-3 text-base font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
           >
-            Save Cash on Bank
+            Save Cash in Bank
           </button>
         </div>
       </div>

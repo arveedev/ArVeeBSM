@@ -195,7 +195,7 @@ function SdoCashSection({ uid }) {
   const ledgerEntries = useLiveQuery(() => db.cashLedgerV2.where('sdoUid').equals(uid).toArray(), [uid]) ?? []
   const cashOnHand = computeCashOnHand(ledgerEntries, activePrs.map((pr) => pr.totalAmount ?? 0))
 
-  // Confirmed real correction: Cash on Bank is NOT per-SDO - it's one
+  // Confirmed real correction: Cash in Bank is NOT per-SDO - it's one
   // shared, branch-wide figure every SDO is jointly responsible for
   // monitoring, any of them can update it, and it should read the same
   // for all of them. Lives on db.reportConfig's 'global' singleton
@@ -226,7 +226,7 @@ function SdoCashSection({ uid }) {
         onClick={() => setEditingBank(true)}
         className="mt-4 w-full rounded-xl border border-neutral-800 bg-neutral-950 p-3 text-left transition-all hover:border-brand-neon/50 active:scale-[0.98]"
       >
-        <p className="text-[10px] font-bold uppercase text-neutral-500">Cash on Bank</p>
+        <p className="text-[10px] font-bold uppercase text-neutral-500">Cash in Bank</p>
         <p className="mt-1.5 text-xl font-bold tabular-nums text-app-text">₱{cashOnBank.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         <p className="mt-1 text-xs text-neutral-500">{cashOnBankUpdatedLabel}</p>
       </button>
