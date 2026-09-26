@@ -6909,4 +6909,27 @@
 //              desktop table and the mobile card layout, and to both
 //              the per-row and TOTAL-row versions, for consistency.
 //              AdminHomeStocks.jsx only.
-export const APP_VERSION = '1.10-188'
+//   1.10-189 - Fixed real, reported bug: marking an MO/TMO complete on
+//              the MILLING tab neither removed it from the pending
+//              list/Per Ricemill Status overview nor made it appear in
+//              Completed Milling. Root cause: MillingMonitor.jsx's
+//              entire `orders` list is computed inside
+//              useDebouncedLiveCompute, which only recomputes when its
+//              own changeSignal string changes - and that signal was
+//              built from millingTxCount/millingOrderCount/
+//              authorityCountForOrders, all raw `.count()`s that don't
+//              change when an EXISTING order's manuallyCompleted field
+//              is toggled (no row added/removed). The recompute stayed
+//              stuck on stale (pre-toggle) data until something
+//              unrelated happened to bump one of those counts, or the
+//              30s maxWaitMs fallback happened to still be armed.
+//              Confirmed via code trace, matching a directly reported
+//              case (MO ALB-2026-I-152 marked complete, still showing
+//              pending). Added a cheap, genuinely reactive
+//              completedOrderCount (db.millingOrders.filter(o =>
+//              o.manuallyCompleted).count()) into the signal - Dexie's
+//              liveQuery re-fires it on every write to that table
+//              regardless of which field changed, so a manual
+//              complete/uncomplete now refreshes the list promptly
+//              instead of waiting on an unrelated coincidence.
+export const APP_VERSION = '1.10-189'

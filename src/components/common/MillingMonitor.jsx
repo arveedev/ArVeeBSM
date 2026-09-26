@@ -1068,8 +1068,23 @@ function MillingMonitor({ isAdmin = false, active = true }) {
   const millingTxCount = useLiveQuery(() => db.transactions.count(), []) ?? 0
   const millingOrderCount = useLiveQuery(() => db.millingOrders.count(), []) ?? 0
   const authorityCountForOrders = useLiveQuery(() => db.authorities.count(), []) ?? 0
+  // Confirmed, reported real bug: millingOrderCount above is a raw
+  // `.count()` - toggling manuallyCompleted on an EXISTING order (the
+  // checkbox in MillingOrderRow) writes to db.millingOrders without
+  // changing its row count, so ordersChangeSignal never changed and
+  // useDebouncedLiveCompute's recompute stayed stuck on stale data: the
+  // order never left the pending list (still showed in the overview/
+  // Per Ricemill Status) and never appeared in Completed Milling until
+  // something UNRELATED happened to bump millingTxCount/millingOrderCount/
+  // authorityCountForOrders (or the 30s maxWaitMs fallback happened to
+  // still be armed). A cheap reactive count of completed orders closes
+  // that gap - db.millingOrders is small (bounded by real MO/TMO
+  // records, unlike db.transactions), so a full-table `.filter().count()`
+  // is fine here, and Dexie's own liveQuery machinery re-fires it on
+  // every write to this table regardless of which field changed.
+  const completedOrderCount = useLiveQuery(() => db.millingOrders.filter((o) => Boolean(o.manuallyCompleted)).count(), []) ?? 0
   const ordersChangeSignal = active
-    ? `${topTab}:${millingTxCount}:${millingOrderCount}:${authorityCountForOrders}`
+    ? `${topTab}:${millingTxCount}:${millingOrderCount}:${authorityCountForOrders}:${completedOrderCount}`
     : `frozen:${topTab}`
   const ordersRaw = useDebouncedLiveCompute(
     () => computeMillingOrderStatuses(topTab),
