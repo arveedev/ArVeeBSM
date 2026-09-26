@@ -17,7 +17,7 @@
 
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags, calculateNetBags, isProcurementTypeName, effectiveCutoffDate, getPeriodPresetRanges } from '../../utils/calculations.js'
@@ -45,16 +45,12 @@ function ProcurementMonitor() {
   // any other field on the transaction itself.
   const [paymentFilter, setPaymentFilter] = useState('')
   const periodToPickerRef = useRef(null)
-  // Per explicit request: search/warehouse/variety/sort/paid-filter move
-  // behind a single "Sort & Filter" button instead of stacking five
-  // controls above the list on every load - only the Period/month row
-  // (which drives the page's primary scope) stays inline.
+  // Per explicit request: warehouse/variety/sort/paid-filter move behind
+  // a single "Sort & Filter" button instead of stacking four controls
+  // above the list on every load - Search stays inline (not part of this
+  // button/modal), same as the Period/month row.
   const [filterModalOpen, setFilterModalOpen] = useState(false)
-  const isFiltered = Boolean(searchQuery) || Boolean(warehouseFilter) || Boolean(varietyFilter) || sortBy !== 'date-desc' || Boolean(paymentFilter)
-  // Per explicit request: the card list doesn't show by default - it
-  // expands from a summary row once the admin/visitor actually wants to
-  // see it, instead of always rendering below a wall of controls.
-  const [listExpanded, setListExpanded] = useState(false)
+  const isFiltered = Boolean(warehouseFilter) || Boolean(varietyFilter) || sortBy !== 'date-desc' || Boolean(paymentFilter)
 
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
@@ -204,16 +200,33 @@ function ProcurementMonitor() {
   // its own filtered list.
   const listAnimationKey = [searchQuery, warehouseFilter, varietyFilter, sortBy, paymentFilter, periodFrom, periodTo].join('|')
 
-  const totalRowCount = cards.reduce((s, c) => s + c.rowCount, 0)
-  const totalBagsAllCards = cards.reduce((s, c) => s + c.totalBags, 0)
-
   return (
     <div className="mt-4">
-      <div className="flex justify-end">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search warehouse or variety"
+            className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setFilterModalOpen(true)}
-          className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all active:scale-95 ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all active:scale-95 ${
             isFiltered
               ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
               : 'border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-brand-neon/50 hover:text-brand-neon'
@@ -251,25 +264,11 @@ function ProcurementMonitor() {
         />
       </div>
 
-      {/* Per explicit request: the list doesn't render by default - this
-          summary row is what's always visible, and tapping it expands/
-          collapses the actual per-warehouse cards below. */}
-      <button
-        type="button"
-        onClick={() => setListExpanded((v) => !v)}
-        className="mt-3 flex w-full items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3 text-left transition-colors hover:border-brand-neon/50"
-      >
-        <span className="text-sm text-app-text">
-          {cards.length === 0
-            ? 'No Procurement transactions match'
-            : `${fmtBags(totalBagsAllCards)} bags across ${totalRowCount} ${totalRowCount === 1 ? 'transaction' : 'transactions'}, ${cards.length} ${cards.length === 1 ? 'warehouse' : 'warehouses'}`}
-        </span>
-        {cards.length > 0 && (
-          <ChevronDown size={16} className={`shrink-0 text-neutral-400 transition-transform ${listExpanded ? 'rotate-180' : ''}`} />
-        )}
-      </button>
-
-      {listExpanded && cards.length > 0 && (
+      {cards.length === 0 ? (
+        <p className="py-8 text-center text-sm text-neutral-600">
+          No Procurement transactions match.
+        </p>
+      ) : (
         <div key={listAnimationKey} className="mt-3 space-y-3 stagger-fields">
           {cards.map((c) => (
             <div key={c.warehouseId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
@@ -353,7 +352,6 @@ function ProcurementMonitor() {
 
       {filterModalOpen && (
         <ProcurementSortFilterModal
-          searchQuery={searchQuery}
           warehouseFilter={warehouseFilter}
           varietyFilter={varietyFilter}
           sortBy={sortBy}
@@ -361,14 +359,12 @@ function ProcurementMonitor() {
           warehouseOptions={warehouseOptions}
           varietyOptions={varietyOptions}
           onChange={(patch) => {
-            if ('searchQuery' in patch) setSearchQuery(patch.searchQuery)
             if ('warehouseFilter' in patch) setWarehouseFilter(patch.warehouseFilter)
             if ('varietyFilter' in patch) setVarietyFilter(patch.varietyFilter)
             if ('sortBy' in patch) setSortBy(patch.sortBy)
             if ('paymentFilter' in patch) setPaymentFilter(patch.paymentFilter)
           }}
           onReset={() => {
-            setSearchQuery('')
             setWarehouseFilter('')
             setVarietyFilter('')
             setSortBy('date-desc')

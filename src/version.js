@@ -6646,4 +6646,21 @@
 //              - a summary row (total bags/transactions/warehouses)
 //              always shows, and tapping it expands/collapses the
 //              actual per-warehouse cards.
-export const APP_VERSION = '1.10-174'
+//   1.10-175 - Correction, per explicit feedback on 1.10-174 (only just
+//              deployed): I'd misread "the whole SDO list must expand
+//              from the total cash on hand" as being about
+//              ProcurementMonitor.jsx's own per-warehouse card list -
+//              it was actually about SdoCashOverviewPanel.jsx's list of
+//              individual SDOs, a component I hadn't seen yet when I
+//              made that call. Reverted: the Procurement card list
+//              renders directly again (no collapse), and Search moved
+//              back out of the Sort & Filter modal - only Warehouse/
+//              Variety/Sort/Paid-filter stay in it. The actual per-SDO
+//              collapse/expand behavior now lives on
+//              SdoCashOverviewPanel.jsx instead - only the combined
+//              total card shows by default, tapping it reveals the
+//              per-SDO breakdown. Also renamed that card's label from
+//              "Total Cash on Hand" to "Total CPF" - step one of two;
+//              a separate, SDO-editable "Cash on Bank" figure (set from
+//              the SDO's own Settings) is a follow-up, not built yet.
+export const APP_VERSION = '1.10-175'

@@ -1,12 +1,13 @@
 // Sort/filter modal for ProcurementMonitor.jsx - per explicit request,
-// search/warehouse/variety/sort/paid-filter move behind a single button
-// instead of stacking five controls above the list on every load; the
-// Period/month row stays inline on the page itself (that's the one
-// control meant to always be visible and drive the page). Same
-// centered-box modal pattern as RicemillSortFilterModal.jsx.
+// warehouse/variety/sort/paid-filter move behind a single button instead
+// of stacking four controls above the list on every load; Search and the
+// Period/month row both stay inline on the page itself (Search is
+// deliberately NOT part of this modal - it needs to stay visible/usable
+// without an extra tap, same as Period). Same centered-box modal pattern
+// as RicemillSortFilterModal.jsx.
 
 import { createPortal } from 'react-dom'
-import { Search, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
 const SORTS = [
   { id: 'date-desc', label: 'Date (Newest)' },
@@ -22,7 +23,7 @@ const PAYMENT_FILTERS = [
 ]
 
 function ProcurementSortFilterModal({
-  searchQuery, warehouseFilter, varietyFilter, sortBy, paymentFilter,
+  warehouseFilter, varietyFilter, sortBy, paymentFilter,
   warehouseOptions, varietyOptions,
   onChange, onReset, onClose,
 }) {
@@ -42,27 +43,6 @@ function ProcurementSortFilterModal({
           >
             <X size={18} />
           </button>
-        </div>
-
-        <div className="relative mt-3">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onChange({ searchQuery: e.target.value })}
-            placeholder="Search warehouse or variety"
-            className="w-full rounded-xl border border-neutral-800 bg-neutral-950 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => onChange({ searchQuery: '' })}
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-neutral-500 transition-colors hover:text-app-text"
-            >
-              <X size={14} />
-            </button>
-          )}
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
