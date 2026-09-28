@@ -7236,4 +7236,25 @@
 //              every outstanding unpaid WSR regardless of age, so
 //              defaulting to "this month only" would have silently
 //              hidden older unpaid records an SDO still needs to act on.
-export const APP_VERSION = '1.10-208'
+//   1.10-209 - SDO Home: new "Select Receipts to Export" icon button
+//              beside the existing Export button, per explicit
+//              request - a deliberate, separate export path
+//              (SelectivePrExportModal.jsx, new file) that lists every
+//              real Purchase Receipt in the chosen period as a
+//              check/uncheck list (all checked by default, matching
+//              the plain Export's own "everything in the period"
+//              behavior), then generates the Abstract from only the
+//              checked subset. The plain Export button/flow
+//              (AbstractExportModal.jsx) is untouched - this is an
+//              addition, not a replacement, so the common "just export
+//              everything" case stays exactly as fast as before. Per
+//              explicit reasoning in the new file's own comment: every
+//              reconciliation total (not just the printed rows) is
+//              computed from the checked subset too, so the abstract
+//              stays internally consistent with what it actually lists
+//              rather than printing a disbursement total the visible
+//              rows don't add up to - opening balance and replenishment
+//              figures stay untouched by the selection, since those
+//              describe real cash movement independent of which PRs
+//              happen to print.
+export const APP_VERSION = '1.10-209'
