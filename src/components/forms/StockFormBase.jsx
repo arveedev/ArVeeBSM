@@ -3374,7 +3374,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               value={customerAddress}
               onChange={(e) => setCustomerAddress(e.target.value)}
               className={inputClass}
-              placeholder="Optional"
+              placeholder="Address"
             />
           </div>
 
@@ -3668,7 +3668,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   value={farmerRsbsa}
                   onChange={(e) => setFarmerRsbsa(e.target.value)}
                   className={inputClass}
-                  placeholder="Optional"
+                  placeholder="RSBSA"
                 />
               </div>
               <div>
@@ -3679,7 +3679,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   onChange={(e) => setFarmerGender(e.target.value)}
                   className={inputClass}
                 >
-                  <option value="">Optional</option>
+                  <option value="">Male or Female</option>
                   {GENDERS.map((g) => (
                     <option key={g} value={g}>
                       {g}
@@ -3702,7 +3702,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 value={poNumber}
                 onChange={(e) => setPoNumber(e.target.value)}
                 className={inputClass}
-                placeholder="Optional"
+                placeholder="Purchase Order Number"
               />
             </div>
           )}

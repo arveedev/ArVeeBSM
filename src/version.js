@@ -6987,4 +6987,10 @@
 //              can actually land in it (header text: "PO No." on the
 //              receipts sheet, "PO NO." on the PR SUMMARY sheet) - see
 //              the chat reply for exact instructions.
-export const APP_VERSION = '1.10-193'
+//   1.10-194 - Replaced the generic "Optional" placeholder text on four
+//              Procurement fields with something actually descriptive,
+//              per explicit request: Address -> "Address", RSBSA ->
+//              "RSBSA", Gender's blank option -> "Male or Female", PO
+//              No. -> "Purchase Order Number". Text only - all four
+//              stay genuinely optional, no validation change.
+export const APP_VERSION = '1.10-194'
