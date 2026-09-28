@@ -667,10 +667,10 @@ function Reports() {
           ) : mainTab === 'stocks' ? (
             Object.entries(stockGroups).sort().map(([cerealType, byVariety]) => (
               <div key={cerealType} className="mb-5">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-neutral-500">{cerealType}</p>
+                <p className="mb-1 text-sm font-semibold uppercase tracking-widest text-neutral-500 md:text-base">{cerealType}</p>
                 {Object.entries(byVariety).sort().map(([varietyName, rows]) => (
                   <div key={varietyName} className="mb-3">
-                    <p className="mb-1.5 text-xs font-medium text-neutral-400">{varietyName}</p>
+                    <p className="mb-1.5 break-words text-sm font-medium text-neutral-400 md:text-base">{varietyName}</p>
                     <ul className="space-y-2">
                       {rows.map((t) => {
                         const isCancelled = t.status === 'Cancelled'
@@ -684,19 +684,19 @@ function Reports() {
                             }`}>
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm font-bold text-app-text">{t.serialNo}</span>
-                                  <span className="text-xs text-neutral-500">{t.date}</span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-mono text-base font-bold text-app-text md:text-lg">{t.serialNo}</span>
+                                  <span className="text-sm text-neutral-500 md:text-base">{t.date}</span>
                                   {!isCancelled && (
-                                    <span className="text-xs tabular-nums text-neutral-500">MC {t.moistureContent ?? '—'}%</span>
+                                    <span className="text-sm tabular-nums text-neutral-500 md:text-base">MC {t.moistureContent ?? '—'}%</span>
                                   )}
                                   {!isCancelled && (t.type === 'WSI' || t.wtsSide === 'issued') && (t.aiNumber || t.linkedDocNo) && (
-                                    <span className="rounded bg-brand-neon/10 px-2 py-0.5 text-xs font-semibold text-brand-neon">
+                                    <span className="rounded bg-brand-neon/10 px-2 py-0.5 text-sm font-semibold text-brand-neon md:text-base">
                                       AI {t.aiNumber || t.linkedDocNo}
                                     </span>
                                   )}
                                   {!isCancelled && t.type === 'WSR' && t.linkedDocNo && (
-                                    <span className="rounded bg-brand-amber/10 px-2 py-0.5 text-xs font-semibold text-brand-amber">
+                                    <span className="rounded bg-brand-amber/10 px-2 py-0.5 text-sm font-semibold text-brand-amber md:text-base">
                                       WSI {t.linkedDocNo}
                                     </span>
                                   )}
@@ -708,23 +708,28 @@ function Reports() {
                                     matches the exported Statement's own
                                     treatment of the same row. */}
                                 {isCancelled ? (
-                                  <p className="mt-0.5 text-sm font-semibold text-red-400">CANCELLED</p>
+                                  <p className="mt-0.5 text-base font-semibold text-red-400 md:text-lg">CANCELLED</p>
                                 ) : (
                                   <>
-                                    <p className="mt-0.5 truncate text-sm font-medium text-app-text">
+                                    {/* break-words, not truncate - per
+                                        explicit, repeated request: real
+                                        data (a customer name here) must
+                                        always be fully readable, never
+                                        clipped with an ellipsis. */}
+                                    <p className="mt-0.5 break-words text-base font-medium text-app-text md:text-lg">
                                       {customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber)}
                                     </p>
-                                    <p className="text-xs text-neutral-500">{t.transactionTypeName} · {t.condition}</p>
+                                    <p className="text-sm text-neutral-500 md:text-base">{t.transactionTypeName} · {t.condition}</p>
                                   </>
                                 )}
                               </div>
                               <div className="shrink-0 text-right">
                                 {isCancelled ? (
-                                  <p className="text-lg font-bold tabular-nums text-neutral-600">—</p>
+                                  <p className="text-xl font-bold tabular-nums text-neutral-600 md:text-2xl">—</p>
                                 ) : (
                                   <>
-                                    <p className="text-lg font-bold tabular-nums text-app-text">{fmtBags(t.numberOfBags)}</p>
-                                    <p className="text-xs tabular-nums text-neutral-400">Net {fmtWeight(t.netKilos, weightUnit)}</p>
+                                    <p className="text-xl font-bold tabular-nums text-app-text md:text-2xl">{fmtBags(t.numberOfBags)}</p>
+                                    <p className="text-sm tabular-nums text-neutral-400 md:text-base">Net {fmtWeight(t.netKilos, weightUnit)}</p>
                                   </>
                                 )}
                               </div>
@@ -741,7 +746,7 @@ function Reports() {
           ) : (
             Object.entries(sackGroups).sort().map(([txTypeName, rows]) => (
               <div key={txTypeName} className="mb-5">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-neutral-500">{txTypeName}</p>
+                <p className="mb-1 text-sm font-semibold uppercase tracking-widest text-neutral-500 md:text-base">{txTypeName}</p>
                 <ul className="space-y-2">
                   {rows.map((t) => {
                     const totalPieces = (t.sackLines ?? []).reduce((s, l) => s + (l.pieces ?? 0), 0)
@@ -752,36 +757,38 @@ function Reports() {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono text-sm font-bold text-app-text">{t.serialNo}</span>
-                                <span className="text-xs text-neutral-500">{t.date}</span>
+                                <span className="font-mono text-base font-bold text-app-text md:text-lg">{t.serialNo}</span>
+                                <span className="text-sm text-neutral-500 md:text-base">{t.date}</span>
                                 {t.transactionTypeName && (
-                                  <span className="text-xs text-neutral-400">{t.transactionTypeName}</span>
+                                  <span className="text-sm text-neutral-400 md:text-base">{t.transactionTypeName}</span>
                                 )}
                                 {t.type === 'ESI' && (t.siaNumber || t.linkedDocNo) && (
-                                  <span className="rounded bg-brand-neon/10 px-2 py-0.5 text-xs font-semibold text-brand-neon">
+                                  <span className="rounded bg-brand-neon/10 px-2 py-0.5 text-sm font-semibold text-brand-neon md:text-base">
                                     SIA {t.siaNumber || t.linkedDocNo}
                                   </span>
                                 )}
                                 {t.type === 'ESR' && t.linkedDocNo && (
-                                  <span className="rounded bg-brand-amber/10 px-2 py-0.5 text-xs font-semibold text-brand-amber">
+                                  <span className="rounded bg-brand-amber/10 px-2 py-0.5 text-sm font-semibold text-brand-amber md:text-base">
                                     ESI {t.linkedDocNo}
                                   </span>
                                 )}
                               </div>
-                              <p className="mt-0.5 truncate text-sm font-medium text-app-text">
+                              {/* break-words, not truncate - see the
+                                  Stocks block above's identical comment. */}
+                              <p className="mt-0.5 break-words text-base font-medium text-app-text md:text-lg">
                                 {customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber)}
                               </p>
                               <div className="flex flex-wrap gap-1.5 mt-0.5">
                                 {(t.enrichedSackLines ?? []).map((l, i) => (
-                                  <span key={i} className="text-xs tabular-nums text-neutral-500">
+                                  <span key={i} className="text-sm tabular-nums text-neutral-500 md:text-base">
                                     {l.code}/{l.condition}: {fmtBags(l.pieces ?? 0)}
                                   </span>
                                 ))}
                               </div>
                             </div>
                             <div className="shrink-0 text-right">
-                              <p className="text-lg font-bold tabular-nums text-app-text">{fmtBags(totalPieces)}</p>
-                              <p className="text-xs text-neutral-400">pieces</p>
+                              <p className="text-xl font-bold tabular-nums text-app-text md:text-2xl">{fmtBags(totalPieces)}</p>
+                              <p className="text-sm text-neutral-400 md:text-base">pieces</p>
                             </div>
                           </div>
                         </button>

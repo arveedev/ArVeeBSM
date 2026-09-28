@@ -7047,4 +7047,28 @@
 //              (14px -> 8px), and slowed every transition (row
 //              duration 220ms -> 320ms, per-row stagger gap 60ms ->
 //              90ms, panel fade 140ms -> 220ms).
-export const APP_VERSION = '1.10-198'
+//   1.10-199 - Two changes, both per explicit request/approved demo:
+//              (1) New nested-accordion Overview card on Procurement
+//              Monitor (Admin/Visitor's Monitor > Procurement tab),
+//              above the existing warehouse list. Groups the exact same
+//              filtered rows the list below shows - Province total,
+//              tap to reveal its Warehouses with their own subtotal,
+//              tap a Warehouse to reveal its Varieties - a real 3-level
+//              tree (Province -> Warehouse -> Variety), reusing the
+//              list's own already-grouped `cards` data one level higher
+//              rather than re-deriving it, so it's guaranteed to always
+//              respond to Search/Sort & Filter/Period From-To exactly
+//              like the list does. Defaults to the current month's
+//              label ("September 2026"), or the actual date range when
+//              narrowed to a sub-period.
+//              (2) Reports.jsx's Stock Statement rows (both Stocks and
+//              Sacks) and DailySummaryCard.jsx's Summary tab: bumped
+//              font sizes up (text-sm/base floor, md: bumped again for
+//              larger displays) and replaced `truncate` with
+//              `break-words` on customer names - a long name like "FTI
+//              DA-DOLE MAKAPA Corp. c/o ..." was being cut off with an
+//              ellipsis. Per repeated feedback, saved as a standing
+//              app-wide memory rule (feedback_no-truncated-data.md):
+//              real data must never be truncated anywhere in this app,
+//              always wrap instead.
+export const APP_VERSION = '1.10-199'

@@ -190,31 +190,31 @@ const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo
     <div className="mt-2">
       <div ref={cardRef} className="rounded-2xl border border-neutral-800 bg-neutral-950 p-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-brand-neon">
+          <p className="text-sm font-semibold uppercase tracking-widest text-brand-neon md:text-base">
             NFA — BSM Summary
           </p>
-          <p className="mt-0.5 text-lg font-bold text-app-text">
+          <p className="mt-0.5 break-words text-xl font-bold text-app-text md:text-2xl">
             {currentWarehouse?.code ?? '—'} · {currentWarehouse?.name ?? '—'}
           </p>
-          <p className="text-xs text-neutral-500">{periodLabel}</p>
+          <p className="text-sm text-neutral-500 md:text-base">{periodLabel}</p>
         </div>
 
         <div className="mt-4 border-t border-neutral-800 pt-4 space-y-4">
           {!hasData && (
-            <p className="text-center text-xs text-neutral-600">
+            <p className="text-center text-sm text-neutral-600 md:text-base">
               No transactions in this period.
             </p>
           )}
 
           {Object.entries(groups).sort().map(([cerealType, byTxType]) => (
             <div key={cerealType}>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-neutral-500">
+              <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-neutral-500 md:text-base">
                 {cerealType}
               </p>
 
               {Object.entries(byTxType).sort().map(([txTypeName, byVariety]) => (
                 <div key={txTypeName} className="mb-3">
-                  <p className="mb-1.5 text-xs font-medium text-neutral-400">{txTypeName}</p>
+                  <p className="mb-1.5 break-words text-sm font-medium text-neutral-400 md:text-base">{txTypeName}</p>
                   <div className="space-y-1">
                     {Object.entries(byVariety).sort().map(([varietyName, totals]) => {
                       const isProcurement = txTypeName === PROCUREMENT_TYPE_NAME
@@ -250,19 +250,25 @@ const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo
                         // isolated reproduction, before shipping.
                         <div key={varietyName} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <span className="min-w-0 flex-1 break-words text-xs text-app-text">{varietyName}</span>
-                            <div className="w-16 shrink-0 text-right">
-                              <p className="text-xs text-neutral-500">Bags</p>
-                              <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-app-text">{fmtBags(totals.bags)}</p>
+                            <span className="min-w-0 flex-1 break-words text-sm text-app-text md:text-base">{varietyName}</span>
+                            {/* Widened from w-16/w-28 (still a fixed px
+                                width, not a `1fr` track - see this
+                                block's own comment on why that matters
+                                for html2canvas) to fit the larger figure
+                                text below without visually overflowing
+                                the column. */}
+                            <div className="w-20 shrink-0 text-right">
+                              <p className="text-sm text-neutral-500 md:text-base">Bags</p>
+                              <p className="whitespace-nowrap font-mono text-base font-semibold tabular-nums text-app-text md:text-lg">{fmtBags(totals.bags)}</p>
                             </div>
-                            <div className="w-28 shrink-0 text-right">
+                            <div className="w-32 shrink-0 text-right">
                               {/* Unit is already this card's own weightUnit
                                   setting - no per-value "kg"/"MT" suffix
                                   needed (that used to be wide enough to
                                   push "kg" onto its own line), just a
                                   unit-aware label instead. */}
-                              <p className="text-xs text-neutral-500">Net {weightUnit === 'mt' ? 'MT' : 'Kilos'}</p>
-                              <p className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-brand-neon">
+                              <p className="text-sm text-neutral-500 md:text-base">Net {weightUnit === 'mt' ? 'MT' : 'Kilos'}</p>
+                              <p className="whitespace-nowrap font-mono text-base font-semibold tabular-nums text-brand-neon md:text-lg">
                                 {weightUnit === 'mt'
                                   ? Number(totals.kilos / 1000).toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
                                   : fmtKilos(totals.kilos)}
@@ -270,7 +276,7 @@ const DailySummaryCard = forwardRef(function DailySummaryCard({ dateFrom, dateTo
                             </div>
                           </div>
                           {isProcurement && (individualCount > 0 || totals.coopCount > 0) && (
-                            <p className="mt-1 text-[11px] text-neutral-500">
+                            <p className="mt-1 break-words text-xs text-neutral-500 md:text-sm">
                               {individualCount > 0 && `${individualCount} individual farmer${individualCount !== 1 ? 's' : ''}`}
                               {individualCount > 0 && totals.coopCount > 0 && ' · '}
                               {totals.coopCount > 0 && (

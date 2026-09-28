@@ -17,7 +17,7 @@
 
 import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import { Search, SlidersHorizontal, X, ChevronDown } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags, calculateNetBags, isProcurementTypeName, effectiveCutoffDate, getPeriodPresetRanges } from '../../utils/calculations.js'
@@ -25,6 +25,121 @@ import { fuzzyMatchesAny } from '../../utils/fuzzySearch.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 import ProcurementSortFilterModal from './ProcurementSortFilterModal.jsx'
+
+// Nested accordion overview card - Province total, tap to reveal its
+// Warehouses with their own subtotal, tap a Warehouse to reveal its
+// Varieties. Per explicit request/approved demo pick: a real 3-level
+// tree, not three separate flat breakdowns. Font sizes bumped for
+// readability on both small and large displays (text-sm/base as the
+// floor, md: bumped again) - per standing app-wide rule, no truncated
+// text anywhere here (province/warehouse/variety names use break-words
+// instead of truncate).
+function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, periodLabel }) {
+  const [expandedProvinces, setExpandedProvinces] = useState(() => new Set())
+  const [expandedWarehouses, setExpandedWarehouses] = useState(() => new Set())
+
+  const toggleProvince = (id) => setExpandedProvinces((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  const toggleWarehouse = (id) => setExpandedWarehouses((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+
+  if (groups.length === 0) return null
+
+  return (
+    <div className="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+      <div className="flex items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+        <div className="min-w-0">
+          <p className="text-base font-bold text-app-text md:text-lg">Overview</p>
+          <p className="text-sm text-neutral-500 md:text-base">Province · Warehouse · Variety</p>
+        </div>
+        {periodLabel && (
+          <span className="shrink-0 rounded-full border border-brand-amber/40 bg-brand-amber/10 px-2.5 py-1 text-sm font-bold text-brand-amber md:text-base">
+            {periodLabel}
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-start justify-between gap-3 py-3">
+        <p className="text-2xl font-bold tabular-nums text-brand-neon md:text-3xl">
+          {fmtBags(grandBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
+        </p>
+        <div className="shrink-0 text-right">
+          <p className="text-xl font-bold tabular-nums text-app-text md:text-2xl">{fmtWeight(grandKilos, weightUnit)}</p>
+          <p className="text-sm font-semibold tabular-nums text-neutral-400 md:text-base">
+            {fmtNetBags(calculateNetBags(grandKilos))} net bags
+          </p>
+        </div>
+      </div>
+
+      <div className="divide-y divide-neutral-800">
+        {groups.map((g) => {
+          const isProvOpen = expandedProvinces.has(g.provinceId)
+          return (
+            <div key={g.provinceId} className="py-2">
+              <button
+                type="button"
+                onClick={() => toggleProvince(g.provinceId)}
+                className="flex w-full items-center justify-between gap-2 py-1 text-left"
+              >
+                <span className="min-w-0 break-words text-base font-bold text-app-text md:text-lg">
+                  {g.province.code} — {g.province.name}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="text-base font-bold tabular-nums text-brand-neon md:text-lg">{fmtBags(g.totalBags)}</span>
+                  <ChevronDown size={16} className={`text-neutral-500 transition-transform ${isProvOpen ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
+
+              {isProvOpen && (
+                <div className="mt-2 space-y-2 pl-3">
+                  {g.warehouses.map((wh) => {
+                    const isWhOpen = expandedWarehouses.has(wh.warehouseId)
+                    return (
+                      <div key={wh.warehouseId} className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleWarehouse(wh.warehouseId)}
+                          className="flex w-full items-center justify-between gap-2 text-left"
+                        >
+                          <span className="min-w-0 break-words text-sm font-semibold text-app-text md:text-base">
+                            {wh.warehouse.code} — {wh.warehouse.name}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className="text-sm font-bold tabular-nums text-blue-400 md:text-base">{fmtBags(wh.totalBags)}</span>
+                            <ChevronDown size={14} className={`text-neutral-600 transition-transform ${isWhOpen ? 'rotate-180' : ''}`} />
+                          </span>
+                        </button>
+
+                        {isWhOpen && (
+                          <div className="mt-2 space-y-1.5 border-t border-neutral-800 pt-2">
+                            {wh.varietyGroups.map((vg) => (
+                              <div key={vg.varietyId} className="flex items-center justify-between gap-2">
+                                <span className="min-w-0 break-words text-sm text-neutral-300 md:text-base">{vg.varietyName}</span>
+                                <span className="shrink-0 text-sm tabular-nums text-neutral-400 md:text-base">
+                                  {fmtBags(vg.subtotalBags)} bags
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 function ProcurementMonitor() {
   const { weightUnit } = useSettings() ?? {}
@@ -53,6 +168,7 @@ function ProcurementMonitor() {
   const isFiltered = Boolean(warehouseFilter) || Boolean(varietyFilter) || sortBy !== 'date-desc' || Boolean(paymentFilter)
 
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
+  const provinces = useLiveQuery(() => db.provinces.toArray(), []) ?? []
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), []) ?? []
   const globalDataStartDate = useLiveQuery(async () => (await db.reportConfig.get('global'))?.dataStartDate || null, []) ?? null
@@ -182,6 +298,52 @@ function ProcurementMonitor() {
     .filter((w) => byWarehouse.has(w.warehouseId))
     .sort((a, b) => (a.code ?? '').localeCompare(b.code ?? ''))
 
+  // Overview card, per explicit request: the SAME `cards` (already
+  // grouped by warehouse, with each warehouse's own varietyGroups
+  // nested inside) grouped one level higher, by province - a real
+  // three-level nesting (Province -> Warehouse -> Variety), not three
+  // independent flat breakdowns. Reuses `cards` directly rather than
+  // re-deriving from visibleTx a second time, so this card is
+  // guaranteed to always agree with the list below it - it responds to
+  // every one of Search/Sort & Filter/Period From-To for free, since
+  // `cards` already reflects all of them.
+  const provinceMap = new Map(provinces.map((p) => [p.provinceId, p]))
+  const byProvince = new Map()
+  for (const c of cards) {
+    const provinceId = c.warehouse.provinceId
+    if (!byProvince.has(provinceId)) byProvince.set(provinceId, [])
+    byProvince.get(provinceId).push(c)
+  }
+  const overviewGroups = [...byProvince.entries()]
+    .map(([provinceId, whCards]) => ({
+      provinceId,
+      province: provinceMap.get(provinceId),
+      // Already sorted by warehouse code (see `cards`'s own sort above).
+      warehouses: whCards,
+      totalBags: whCards.reduce((s, c) => s + c.totalBags, 0),
+      totalKilos: whCards.reduce((s, c) => s + c.totalKilos, 0),
+    }))
+    .filter((g) => g.province)
+    .sort((a, b) => (a.province.code ?? '').localeCompare(b.province.code ?? ''))
+  const overviewGrandBags = cards.reduce((s, c) => s + c.totalBags, 0)
+  const overviewGrandKilos = cards.reduce((s, c) => s + c.totalKilos, 0)
+
+  // "September 2026" for a real whole-calendar-month range (the
+  // default), or "Sep 16 - Sep 22, 2026" for a narrowed sub-period -
+  // matches the screenshot's own "September 2026" heading style when
+  // the two happen to be the same thing.
+  const overviewPeriodLabel = (() => {
+    if (!periodFrom || !periodTo) return ''
+    const from = new Date(`${periodFrom}T00:00:00`)
+    const to = new Date(`${periodTo}T00:00:00`)
+    const lastDayOfToMonth = new Date(to.getFullYear(), to.getMonth() + 1, 0).getDate()
+    const isFullMonth = from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth()
+      && from.getDate() === 1 && to.getDate() === lastDayOfToMonth
+    if (isFullMonth) return from.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })
+    const fmtShort = (d) => d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+    return `${fmtShort(from)} – ${fmtShort(to)}, ${to.getFullYear()}`
+  })()
+
   // Built from cutoffFilteredTx (only the reporting-cutoff rule
   // applied), not the fully-filtered visibleTx - so picking a variety
   // never collapses this list down to just the one already selected,
@@ -263,6 +425,14 @@ function ProcurementMonitor() {
           currentTo={periodTo}
         />
       </div>
+
+      <ProcurementOverviewCard
+        groups={overviewGroups}
+        grandBags={overviewGrandBags}
+        grandKilos={overviewGrandKilos}
+        weightUnit={weightUnit}
+        periodLabel={overviewPeriodLabel}
+      />
 
       {cards.length === 0 ? (
         <p className="py-8 text-center text-sm text-neutral-600">
