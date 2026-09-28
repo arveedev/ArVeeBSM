@@ -7344,4 +7344,36 @@
 //              applyCutoffScoping/findChainableCutoff helpers now drive
 //              both the checklist display and the real export, so they
 //              can never disagree.
-export const APP_VERSION = '1.10-216'
+//   1.10-217 - Four entry-form keyboard fixes, all explicitly reported:
+//              (1) StockFormBase.jsx's Address/RSBSA/Gender/PO No. Tab-
+//              skip chain: root-caused a real, pre-existing bug - it
+//              only ever fired when linkedDocDeductsFromAi was true
+//              (type !== 'WSR'), but isProcurement (which the RSBSA/
+//              Gender/PO branches depend on) can ONLY be true on a
+//              WSR - those branches were dead code the whole time.
+//              Tabbing from Customer Name right after picking a
+//              suggestion (Address/RSBSA/Gender all auto-filled) just
+//              landed on plain Address via native Tab order. Folded
+//              into one shared tabChainSteps/focusNextInChain, now
+//              wired to fire from every field in the chain (not only
+//              MTS) and covering both real reasons this chain exists.
+//              PO No. confirmed to never auto-fill from a customer
+//              match or a prior transaction (already correctly
+//              isolated - only loadTransactionIntoForm/resetToBlankEntry/
+//              its own onChange ever touch it).
+//              (2) CalendarDatePicker.jsx: Left/Right arrow day
+//              navigation only called preventDefault, not
+//              stopPropagation - the entry form's own global Left/Right
+//              series-navigation listener (window-level) still received
+//              the same keypress once it bubbled past the popup, moving
+//              to a different document instead of the calendar cursor.
+//              Escape already had this exact fix; arrows just never got
+//              the matching treatment.
+//              (3) TransactionModal.jsx's digit-key type shortcut
+//              (opened via "+"): only matched e.code Digit1..Digit5 (top
+//              row), not Numpad1..Numpad5 - added.
+//              (4) New back-tab: Shift+Tab now steps backward through
+//              the same Address/RSBSA/Gender/PO chain (focusPrevInChain),
+//              landing on Customer Name at the start - previously only
+//              forward Tab-skip existed, nothing to undo an overshoot.
+export const APP_VERSION = '1.10-217'

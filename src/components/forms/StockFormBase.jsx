@@ -615,15 +615,21 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // column, customerGroup+quantityGroup the other) - Tab from MTS would
   // otherwise land back on Nature of Transaction, not forward at all.
   // Per explicit follow-up request, the same "skip what's already
-  // filled in" rule now also covers the top-level RSBSA/Gender fields
-  // (Procurement, FA off only - a Farmer Org's per-member RSBSA/Gender
-  // are never touched by an AI pick, so there's nothing to skip there).
-  // Same priority-chain approach: the first of Address/RSBSA/Gender
-  // that's still blank gets focus; only once all three are filled does
-  // Tab reach Number of Bags.
+  // filled in" rule now also covers the top-level RSBSA/Gender/PO No.
+  // fields (Procurement only - a Farmer Org's per-member RSBSA/Gender
+  // are never touched by an AI pick, so RSBSA/Gender specifically are
+  // further scoped to FA off; PO No. isn't tied to FA at all, see its
+  // own field comment). Same priority-chain approach: the first of
+  // Address/RSBSA/Gender/PO that's still blank gets focus; only once
+  // all of them are filled does Tab reach Number of Bags. The actual
+  // chain-walking logic (tabSkipApplies/tabChainSteps/
+  // focusNextInChain/focusPrevInChain/handleChainKeyDown) lives further
+  // down, right after `isProcurement` is computed - it isn't available
+  // yet this early in the component.
   const addressInputRef = useRef(null)
   const farmerRsbsaRef = useRef(null)
   const farmerGenderRef = useRef(null)
+  const poNumberRef = useRef(null)
   const numberOfBagsRef = useRef(null)
   // Tracks the most recent key pressed on the Pile ID select - used
   // only by handlePileChange's own NEW_PILE_OPTION guard above, to
@@ -769,6 +775,53 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const selectedVariety = sortedVarieties.find((v) => v.varietyId === varietyId)
   const isProcurement = isProcurementTypeName(selectedTransactionType?.name)
   const isSales = isSalesTypeName(selectedTransactionType?.name)
+
+  // Tab-skip chain logic (see addressInputRef/farmerRsbsaRef/etc.'s own
+  // comment, above, for the full "why"). Confirmed, reported real bug:
+  // this used to only ever fire when linkedDocDeductsFromAi was true
+  // (type !== 'WSR') - but isProcurement can ONLY be true on a WSR, so
+  // the RSBSA/Gender/PO branches were dead code the whole time; tabbing
+  // straight from Customer Name after picking a suggestion (RSBSA/
+  // Gender/Address all auto-filled) just landed on plain Address via
+  // native Tab order instead of skipping anywhere useful.
+  // `tabSkipApplies` now covers BOTH real reasons this chain exists,
+  // and every field in it - not just MTS - runs the same shared
+  // focusNextInChain/focusPrevInChain pair, so Tab/Shift+Tab work
+  // correctly starting from ANY field in the chain, not only when
+  // reached via MTS specifically.
+  const tabSkipApplies = linkedDocDeductsFromAi || isProcurement
+  // Ordered chain of {key, focus fn, relevant?, filled?} - shared by
+  // every field's own onKeyDown below so Tab (skip filled, forward) and
+  // Shift+Tab (step back one relevant field, regardless of fill state -
+  // going back is a deliberate revisit, never skipped past) can never
+  // drift out of sync with each other.
+  const tabChainSteps = [
+    { key: 'address', focus: () => addressInputRef.current?.focus(), relevant: true, filled: Boolean(customerAddress.trim()) },
+    { key: 'rsbsa', focus: () => farmerRsbsaRef.current?.focus(), relevant: isProcurement && !farmerOrgEnabled, filled: Boolean(farmerRsbsa.trim()) },
+    { key: 'gender', focus: () => farmerGenderRef.current?.focus(), relevant: isProcurement && !farmerOrgEnabled, filled: Boolean(farmerGender) },
+    { key: 'po', focus: () => poNumberRef.current?.focus(), relevant: isProcurement, filled: Boolean(poNumber.trim()) },
+  ].filter((step) => step.relevant)
+  const focusNextInChain = (fromKey) => {
+    const startIndex = fromKey ? tabChainSteps.findIndex((s) => s.key === fromKey) + 1 : 0
+    for (let i = startIndex; i < tabChainSteps.length; i++) {
+      if (!tabChainSteps[i].filled) { tabChainSteps[i].focus(); return }
+    }
+    numberOfBagsRef.current?.focus()
+  }
+  // No previous step (at the very start of the chain, or called with no
+  // fromKey) goes to Customer Name rather than nowhere - genuinely the
+  // previous field a person filling this form would expect.
+  const focusPrevInChain = (fromKey) => {
+    const idx = fromKey ? tabChainSteps.findIndex((s) => s.key === fromKey) : -1
+    if (idx <= 0) { customerNameRef.current?.focus(); return }
+    tabChainSteps[idx - 1].focus()
+  }
+  const handleChainKeyDown = (fromKey) => (e) => {
+    if (e.key !== 'Tab' || !tabSkipApplies) return
+    e.preventDefault()
+    if (e.shiftKey) focusPrevInChain(fromKey)
+    else focusNextInChain(fromKey)
+  }
 
   const isAccountabilityFacility = currentWarehouse?.facilityType === 'Mechanical Dryer' || currentWarehouse?.facilityType === 'Ricemill'
   useEffect(() => {
@@ -3326,6 +3379,20 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             onChange={setCustomerName}
             onMatch={handleCustomerMatch}
             warehouseId={currentWarehouseId}
+            // Tab-skip chain, per explicit request/reported bug: after
+            // picking a customer suggestion (which can auto-fill
+            // Address/RSBSA/Gender), plain Tab used to just land on
+            // Address next via native focus order regardless of it
+            // already being filled - now jumps straight to the first
+            // still-blank field in the chain, same as every other field
+            // in it. Forward-only here (Shift+Tab uses the native
+            // default - there's nothing before Customer Name in this
+            // chain to step back to).
+            onKeyDown={(e) => {
+              if (e.key !== 'Tab' || e.shiftKey || !tabSkipApplies) return
+              e.preventDefault()
+              focusNextInChain(undefined)
+            }}
             // Procurement-only "FA" (Farmers Organization) toggle, now
             // in-line with the label itself - per explicit request,
             // moved here from its own separate section further down
@@ -3373,6 +3440,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               type="text"
               value={customerAddress}
               onChange={(e) => setCustomerAddress(e.target.value)}
+              onKeyDown={handleChainKeyDown('address')}
               className={inputClass}
               placeholder="Address"
             />
@@ -3667,6 +3735,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   type="text"
                   value={farmerRsbsa}
                   onChange={(e) => setFarmerRsbsa(e.target.value)}
+                  onKeyDown={handleChainKeyDown('rsbsa')}
                   className={inputClass}
                   placeholder="RSBSA"
                 />
@@ -3677,6 +3746,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   ref={farmerGenderRef}
                   value={farmerGender}
                   onChange={(e) => setFarmerGender(e.target.value)}
+                  onKeyDown={handleChainKeyDown('gender')}
                   className={inputClass}
                 >
                   {/* disabled + hidden - per explicit request, this
@@ -3702,9 +3772,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             <div className="mt-3">
               <label className={labelClass}>PO No.</label>
               <input
+                ref={poNumberRef}
                 type="text"
                 value={poNumber}
                 onChange={(e) => setPoNumber(e.target.value)}
+                onKeyDown={handleChainKeyDown('po')}
                 className={inputClass}
                 placeholder="Purchase Order Number"
               />
@@ -3833,14 +3905,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                 value={sackSelection}
                 onChange={(e) => setSackSelection(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key !== 'Tab' || e.shiftKey || !linkedDocDeductsFromAi) return
+                  // Forward only - Shift+Tab from MTS stays native (goes
+                  // to MC%, same column, already correct) - see this
+                  // chain's own top comment for why only FORWARD Tab
+                  // needed an override here in the first place.
+                  if (e.key !== 'Tab' || e.shiftKey || !tabSkipApplies) return
                   e.preventDefault()
-                  if (!customerAddress.trim()) { addressInputRef.current?.focus(); return }
-                  if (isProcurement && !farmerOrgEnabled) {
-                    if (!farmerRsbsa.trim()) { farmerRsbsaRef.current?.focus(); return }
-                    if (!farmerGender) { farmerGenderRef.current?.focus(); return }
-                  }
-                  numberOfBagsRef.current?.focus()
+                  focusNextInChain(undefined)
                 }}
                 className={`${inputClass} ${!sackSelection ? '!border-brand-amber' : ''}`}
               >

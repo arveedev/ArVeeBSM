@@ -58,8 +58,15 @@ function TransactionModal({ open, onClose, onSelectType }) {
     // reported real bug with Alt+1/2/3 (StockFormBase.jsx's own cereal-
     // tab shortcut) - e.key isn't reliable with a modifier involved on
     // every device, though no modifier is actually needed here since
-    // this sheet has no text field to collide with.
-    const digitIndex = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4 }[e.code]
+    // this sheet has no text field to collide with. Numpad1..Numpad5
+    // included alongside the top-row digits - confirmed, reported real
+    // bug: only the top row worked, since e.code for the numpad keys is
+    // a completely different string ("Numpad1", not "Digit1") even
+    // though e.key reads the same "1" for both.
+    const digitIndex = {
+      Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4,
+      Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3, Numpad5: 4,
+    }[e.code]
     if (digitIndex != null) {
       e.preventDefault()
       const matchedType = FLAT_TYPE_ORDER[digitIndex]

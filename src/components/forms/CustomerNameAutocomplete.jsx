@@ -35,7 +35,15 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
   // Farmers Organization toggle) - per explicit request, that toggle
   // needed to sit right next to this label instead of in its own
   // separate section further down the form.
-  { value, onChange, onMatch, warehouseId = null, required = true, labelRight = null },
+  // onKeyDown: optional passthrough for a caller-owned keydown handler
+  // (e.g. StockFormBase.jsx's own Tab-skip chain) - called at the end
+  // of this field's own internal key handling, only when that internal
+  // handling didn't already fully claim the key (arrow-navigating the
+  // suggestion list, or Enter accepting one). Lets Tab pressed here
+  // (whether or not a suggestion happens to be highlighted) still reach
+  // the caller's own chain-skip logic instead of only ever falling
+  // through to the browser's plain "focus the next DOM field" default.
+  { value, onChange, onMatch, warehouseId = null, required = true, labelRight = null, onKeyDown },
   ref
 ) {
   const [suggestions, setSuggestions] = useState([])
@@ -191,19 +199,34 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
   // default action inside a plain text field, and blocking it also
   // stops it from accidentally submitting anything).
   const handleKeyDown = (e) => {
-    if (!showSuggestions || suggestions.length === 0) return
+    if (!showSuggestions || suggestions.length === 0) {
+      onKeyDown?.(e)
+      return
+    }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setHighlightedIndex((i) => (i + 1) % suggestions.length)
-    } else if (e.key === 'ArrowUp') {
+      return
+    }
+    if (e.key === 'ArrowUp') {
       e.preventDefault()
       setHighlightedIndex((i) => (i - 1 + suggestions.length) % suggestions.length)
-    } else if (e.key === 'Tab' && highlightedIndex >= 0) {
+      return
+    }
+    if (e.key === 'Tab' && highlightedIndex >= 0) {
       handleSelect(suggestions[highlightedIndex])
-    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+      // Falls through to the caller's own onKeyDown (below) - accepting
+      // a suggestion doesn't itself claim where focus goes next, same
+      // as before; a caller-owned chain-skip still gets to decide that.
+      onKeyDown?.(e)
+      return
+    }
+    if (e.key === 'Enter' && highlightedIndex >= 0) {
       e.preventDefault()
       handleSelect(suggestions[highlightedIndex])
+      return
     }
+    onKeyDown?.(e)
   }
 
   return (

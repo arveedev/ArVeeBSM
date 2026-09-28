@@ -174,6 +174,15 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
     const deltaDays = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key]
     if (deltaDays == null || !focusedIso) return
     e.preventDefault()
+    // Confirmed, reported real bug: Left/Right here used to only call
+    // preventDefault, not stopPropagation - the entry form's own global
+    // Left/Right series-navigation listener (useEntryFormShortcuts.js,
+    // attached at window) still received the same keypress once it
+    // finished bubbling past this popup, and moved to a different
+    // document instead of the calendar cursor. Escape (below) already
+    // had this exact same fix with this exact same reasoning documented
+    // on it; arrows just never got the matching treatment.
+    e.stopPropagation()
     const parsed = parseIso(focusedIso)
     const target = new Date(parsed.year, parsed.month, parsed.day + deltaDays)
     if (target.getFullYear() !== viewYear || target.getMonth() !== viewMonth) {
