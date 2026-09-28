@@ -426,43 +426,61 @@ function AppHeader({ hidden = false }) {
   const notifRef = useRef(null)
 
   // Cascade entrance/exit for the notification panel, per explicit
-  // request/demo pick, corrected per direct feedback: the first cut was
-  // never actually visible - NOTIF_PANEL_EXIT_MS (160ms) unmounted the
-  // whole panel well BEFORE a single row's own 320ms fade could even
-  // finish, let alone stagger across several rows, so closing looked
-  // like an instant snap with no motion at all, and opening was over
-  // before it registered. Also corrected: exit never staggered at all
-  // before (every row faded out in lockstep) - it now cascades out too,
-  // in REVERSE order (the last row to cascade in is the first to
-  // cascade out), a deliberate bookend rather than just running the
-  // entrance backwards.
+  // request/demo pick, twice corrected per direct feedback.
   //
-  // notifRendered keeps the panel mounted for the FULL worst-case
-  // stagger sequence past notifOpen going false (a fixed, generous
-  // value rather than computed from the live entry count, so it never
-  // needs to track that count as an effect dependency); notifEntered
-  // drives each row's actual opacity/transform, flipped a frame after
-  // mount so the browser genuinely paints the "before" state first.
-  // The panel's own background/border never animates - it stays fully
-  // opaque the whole time it's mounted, so nothing dims the rows
-  // fading inside it; only the rows themselves move, which is the
-  // actual cascade effect and the whole point of this component.
+  // Round 1 fixed exit not being visible at all (NOTIF_PANEL_EXIT_MS
+  // was shorter than a single row's own fade). Round 2 (here) fixes two
+  // more real bugs, both confirmed against the actual reported
+  // symptoms:
+  //
+  // (a) Entrance showed no animation at all ("just shows, snapping").
+  // Root cause: setNotifRendered(true) AND the requestAnimationFrame
+  // that flipped notifEntered were both inside the SAME effect,
+  // triggered by the SAME notifOpen change - React can (and did) batch
+  // the resulting two renders into one paint, so the browser never
+  // actually painted the "just mounted, still at opacity 0" frame
+  // before jumping straight to the entered state; there was nothing to
+  // transition FROM. Split into two separate effects, the second keyed
+  // on notifRendered rather than notifOpen directly - the second effect
+  // only runs after the FIRST effect's render has already committed and
+  // painted, guaranteeing a real intervening frame at the starting
+  // state. Same two-effect shape TransactionModal.jsx's own
+  // shouldRender/hasEntered pair already uses for exactly this reason.
+  //
+  // (b) On exit, every row visibly finished fading well before the
+  // panel itself disappeared - it sat there empty for a beat. Root
+  // cause: NOTIF_PANEL_EXIT_MS was a fixed, generous constant sized for
+  // the worst case (8 rows, fully staggered), so a shorter, more common
+  // list (1-3 rows) still waited out that same long timer after its own
+  // rows had already finished. notifCountRef (updated every render,
+  // read only once - when the effect actually fires) lets the exit
+  // timer be sized to the REAL row count at the moment of closing
+  // instead of the theoretical maximum.
   const NOTIF_ITEM_MS = 380
   const NOTIF_STAGGER_MS = 110
   const NOTIF_STAGGER_CAP = 5
-  const NOTIF_PANEL_EXIT_MS = NOTIF_ITEM_MS + NOTIF_STAGGER_CAP * NOTIF_STAGGER_MS + 100
   const [notifRendered, setNotifRendered] = useState(false)
   const [notifEntered, setNotifEntered] = useState(false)
+  const notifCountRef = useRef(0)
   useEffect(() => {
     if (notifOpen) {
       setNotifRendered(true)
-      const frame = requestAnimationFrame(() => setNotifEntered(true))
-      return () => cancelAnimationFrame(frame)
+      return
     }
     setNotifEntered(false)
-    const timer = setTimeout(() => setNotifRendered(false), NOTIF_PANEL_EXIT_MS)
+    const count = Math.min(notifCountRef.current, 8)
+    const exitMs = NOTIF_ITEM_MS + Math.min(Math.max(count - 1, 0), NOTIF_STAGGER_CAP) * NOTIF_STAGGER_MS + 80
+    const timer = setTimeout(() => setNotifRendered(false), exitMs)
     return () => clearTimeout(timer)
   }, [notifOpen])
+  // Deliberately keyed on notifRendered (not notifOpen) - see (a)
+  // above. Only fires once the mount from the effect above has actually
+  // committed and painted.
+  useEffect(() => {
+    if (!notifRendered || !notifOpen) return
+    const frame = requestAnimationFrame(() => setNotifEntered(true))
+    return () => cancelAnimationFrame(frame)
+  }, [notifRendered, notifOpen])
 
   useEffect(() => {
     if (!notifOpen) return
@@ -541,6 +559,11 @@ function AppHeader({ hidden = false }) {
     }] : []),
   ]
   const unresolvedNotifCount = notifEntries.filter((n) => !n.resolved).length
+  // Kept fresh every render, read only once - by the closing effect
+  // above, at the moment notifOpen actually flips false - so the exit
+  // stagger's own duration matches how many rows were really showing,
+  // not a worst-case guess.
+  notifCountRef.current = notifEntries.length
 
   // Same table this bell's error source reads from - clearing here is
   // exactly ErrorLogPanel's own "Clear All" action, just reachable

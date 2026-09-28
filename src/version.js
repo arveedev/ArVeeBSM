@@ -7122,4 +7122,29 @@
 //              first to cascade out. Slowed down again per repeated
 //              feedback: row duration 320ms -> 380ms, stagger gap
 //              90ms -> 110ms.
-export const APP_VERSION = '1.10-202'
+//   1.10-203 - Fixed two more real bugs in the notification cascade
+//              (AppHeader.jsx), both confirmed against the exact
+//              reported symptoms:
+//              (a) Entrance showed no animation - rows just appeared.
+//              Root cause: the mount (setNotifRendered) and the
+//              requestAnimationFrame that revealed the rows
+//              (setNotifEntered) were both inside the SAME effect,
+//              triggered by the same notifOpen change - React batched
+//              the two resulting renders into one paint, so the
+//              browser never actually painted the "just mounted, still
+//              invisible" frame before jumping straight to visible -
+//              there was nothing to transition FROM. Split into two
+//              effects, the second keyed on notifRendered (not
+//              notifOpen) so it only runs after the first effect's
+//              render has genuinely committed and painted - same
+//              two-effect shape TransactionModal.jsx's own
+//              shouldRender/hasEntered pair already uses for this
+//              exact reason.
+//              (b) On exit, the empty panel lingered visibly after
+//              every row had already finished fading out. Root cause:
+//              the exit timer was a fixed, generous constant sized for
+//              the theoretical worst case (8 rows). Now sized to the
+//              REAL row count at the moment of closing (notifCountRef),
+//              so a short list's exit timer matches how long its own
+//              (shorter) stagger actually takes.
+export const APP_VERSION = '1.10-203'
