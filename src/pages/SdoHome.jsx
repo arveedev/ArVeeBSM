@@ -6,7 +6,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, SlidersHorizontal, Trash2, FileDown, ListChecks } from 'lucide-react'
+import { Search, SlidersHorizontal, Trash2, FileDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -22,7 +22,6 @@ import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
 import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
 import SdoProcurementFilterModal from '../components/common/sdo/SdoProcurementFilterModal.jsx'
-import SelectivePrExportModal from '../components/common/sdo/SelectivePrExportModal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import { queuePrDeletion } from '../services/syncWorker.js'
 
@@ -97,7 +96,6 @@ function SdoHome() {
   const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | null
   const [editingPrice, setEditingPrice] = useState(false)
   const [showAbstractExport, setShowAbstractExport] = useState(false)
-  const [showSelectivePrExport, setShowSelectivePrExport] = useState(false)
   const [mounted, setMounted] = useState(false)
   // Per explicit request: a Cancelled PR must have somewhere to be
   // permanently deleted from - it has no WSR to hang off of when it's a
@@ -127,7 +125,7 @@ function SdoHome() {
   // without this, the fixed header/nav sat on top of the modal and the
   // page's own scroll plus the modal's own internal scroll produced two
   // visible scrollbars at once.
-  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || showSelectivePrExport || editingPrice || Boolean(deletePrTarget)
+  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || editingPrice || Boolean(deletePrTarget)
   useEffect(() => {
     setChromeHidden?.(anyModalOpen)
     document.body.style.overflow = anyModalOpen ? 'hidden' : ''
@@ -435,21 +433,6 @@ function SdoHome() {
           <FileDown size={15} strokeWidth={2.5} />
           Export
         </button>
-        {/* Special, separate export path, per explicit request - lists
-            every real Purchase Receipt in the chosen period as a
-            check/uncheck list first, so only the checked ones print on
-            the abstract, instead of the plain Export button's own
-            always-everything behavior. Icon-only + its own distinct
-            (non-neon) styling so it doesn't compete with, or get
-            mistaken for, the primary Export action right next to it. */}
-        <button
-          type="button"
-          onClick={() => setShowSelectivePrExport(true)}
-          aria-label="Choose specific receipts to export"
-          className="flex shrink-0 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-neutral-400 transition-all hover:border-brand-neon/50 hover:text-brand-neon active:scale-95"
-        >
-          <ListChecks size={17} strokeWidth={2.5} />
-        </button>
       </div>
 
       {/* Search on its own row, per explicit request - no longer
@@ -608,7 +591,6 @@ function SdoHome() {
         <CashActionModal mode={cashModal} currentCashOnHand={cashOnHand} onClose={() => setCashModal(null)} />
       )}
       {showAbstractExport && <AbstractExportModal onClose={() => setShowAbstractExport(false)} />}
-      {showSelectivePrExport && <SelectivePrExportModal onClose={() => setShowSelectivePrExport(false)} />}
       {editingPrice && <BuyingPriceModal currentPriceRow={currentPriceRow} onClose={() => setEditingPrice(false)} />}
       {filterModalOpen && (
         <SdoProcurementFilterModal

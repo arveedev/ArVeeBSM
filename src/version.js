@@ -7267,4 +7267,19 @@
 //              unaffected - unpaid WSRs have no PR Number yet to sort
 //              by, so it keeps using Sort & Filter's Date/Bags options
 //              exactly as before.
-export const APP_VERSION = '1.10-210'
+//   1.10-211 - Corrected 1.10-209 per explicit follow-up: the receipt
+//              checklist now lives INSIDE the plain Export modal
+//              (AbstractExportModal.jsx) as a toggle icon in its
+//              header, not a separate button/modal with its own
+//              independent period. The checklist's own PR list is
+//              always built from THIS modal's own dateFrom/dateTo, so
+//              changing the period while the checklist is open re-syncs
+//              it automatically. Deleted the now-unused
+//              SelectivePrExportModal.jsx and the separate icon button
+//              on SdoHome.jsx (1.10-209's own additions) entirely.
+//              Behavior is otherwise unchanged: all checked by default,
+//              only checked receipts print, every reconciliation total
+//              reflects the checked subset, and leaving the checklist
+//              closed exports exactly as it always did before any of
+//              this existed.
+export const APP_VERSION = '1.10-211'

@@ -1,16 +1,37 @@
 // Abstract of Cereal Purchases export — free period (no preset range),
 // same idea as the existing Stock Statement export on Reports.jsx.
+//
+// Optional receipt checklist, per explicit request/correction: a
+// checklist icon inside THIS same modal (not a separate button/modal,
+// as a first pass wrongly built it) reveals every real Purchase
+// Receipt in the CURRENT dateFrom/dateTo already set here - so the
+// checklist's own basis is always this modal's own period, never an
+// independent one. All checked by default (matches the plain export's
+// own "everything in the period" behavior); unchecking narrows what
+// actually prints. When the checklist has never been opened, export
+// behaves exactly as it always did - the checklist is purely additive.
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { X } from 'lucide-react'
+import { X, ListChecks, Check } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import { generateSdoAbstract } from '../../../utils/sdoAbstractPdfGenerator.js'
 import { computeCashOnHand } from '../../../utils/sdoCalculations.js'
+
+// Shared numeric-then-string PR Number comparator - same rule the
+// printed table itself uses (a free-typed string field, so a plain
+// number compare is tried first, falling back to a numeric-aware
+// string compare for anything that doesn't parse cleanly).
+const byPrNo = (a, b) => {
+  const na = Number(a.prNo)
+  const nb = Number(b.prNo)
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb
+  return (a.prNo ?? '').localeCompare(b.prNo ?? '', undefined, { numeric: true })
+}
 
 function AbstractExportModal({ onClose }) {
   const { user } = useAuth()
@@ -22,16 +43,56 @@ function AbstractExportModal({ onClose }) {
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [generating, setGenerating] = useState(false)
   const [entered, setEntered] = useState(false)
+  const [showChecklist, setShowChecklist] = useState(false)
+  const [checkedIds, setCheckedIds] = useState(() => new Set())
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true))
     return () => cancelAnimationFrame(frame)
   }, [])
 
+  // Only queried for the checklist display - the export itself always
+  // re-fetches its own copy inside handleExport, same as before the
+  // checklist existed, so a stale live-query snapshot can never affect
+  // what actually gets printed. Same PR scope as the export's own fetch
+  // below - Active AND Cancelled (a void still explains a gap in the PR
+  // Number sequence).
+  const periodPrs = useLiveQuery(async () => {
+    if (!showChecklist || !user?.uid || !dateFrom || !dateTo) return []
+    const prs = await db.purchaseReceipts
+      .where('sdoUid').equals(user.uid)
+      .and((pr) => (pr.status === 'Active' || pr.status === 'Cancelled') && pr.date >= dateFrom && pr.date <= dateTo)
+      .toArray()
+    return [...prs].sort(byPrNo)
+  }, [showChecklist, user?.uid, dateFrom, dateTo]) ?? []
+
+  // Defaults every PR in the CURRENT period to checked whenever the
+  // checklist is opened or the period actually changes while it's open
+  // - re-keyed on the real set of ids rather than the array reference,
+  // so an unrelated re-render (a live sync write touching some OTHER
+  // field) doesn't reset a selection the SDO already made.
+  const periodPrIdsKey = periodPrs.map((pr) => pr.prId).sort().join(',')
+  useEffect(() => {
+    if (showChecklist) setCheckedIds(new Set(periodPrs.map((pr) => pr.prId)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showChecklist, periodPrIdsKey])
+
+  const toggleOne = (prId) => setCheckedIds((prev) => {
+    const next = new Set(prev)
+    if (next.has(prId)) next.delete(prId); else next.add(prId)
+    return next
+  })
+  const allChecked = periodPrs.length > 0 && checkedIds.size === periodPrs.length
+  const toggleAll = () => setCheckedIds(allChecked ? new Set() : new Set(periodPrs.map((pr) => pr.prId)))
+
   const handleExport = async () => {
+    if (showChecklist && checkedIds.size === 0) {
+      toast.error('Check at least one Purchase Receipt to export')
+      return
+    }
     setGenerating(true)
     try {
-      const [allPrs, warehouses, provinces, branches, config, ledgerEntries, activePrsAll] = await Promise.all([
+      const [allPrsRaw, warehouses, provinces, branches, config, ledgerEntries, activePrsAll] = await Promise.all([
         // Per explicit request, a Cancelled PR (voided after issuance, or
         // pre-registered as a skipped series number with no real WSR
         // behind it - see VoidPrModal.jsx) still appears on the export,
@@ -46,8 +107,13 @@ function AbstractExportModal({ onClose }) {
         db.purchaseReceipts.where('[sdoUid+status]').equals([user.uid, 'Active']).toArray(),
       ])
 
+      // Narrowed to the checked subset only when the checklist was
+      // actually engaged - untouched (every PR in the period) when it
+      // never was, so plain export behaves exactly as it always did.
+      const allPrs = showChecklist ? allPrsRaw.filter((pr) => checkedIds.has(pr.prId)) : allPrsRaw
+
       if (allPrs.length === 0) {
-        toast.error('No Purchase Receipts in this period')
+        toast.error(showChecklist ? 'No checked Purchase Receipts to export' : 'No Purchase Receipts in this period')
         return
       }
 
@@ -100,21 +166,11 @@ function AbstractExportModal({ onClose }) {
         }
       })
       // Per explicit request: rows print sorted ascending by PR Number.
-      // prNo is a free-typed string field (serialNumber.js's
-      // suggestNextPrSerial only suggests a numeric default - it isn't
-      // enforced), so a numeric comparison is tried first when both
-      // sides parse cleanly as numbers, falling back to a plain string
-      // compare for anything that doesn't (never throws, never drops a
-      // row for having an unusual PR Number).
-      enriched.sort((a, b) => {
-        const na = Number(a.prNo)
-        const nb = Number(b.prNo)
-        if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb
-        return (a.prNo ?? '').localeCompare(b.prNo ?? '', undefined, { numeric: true })
-      })
+      enriched.sort(byPrNo)
 
-      // Opening balance: everything that happened strictly BEFORE this
-      // period started.
+      // Opening balance stays the REAL, full pre-period balance,
+      // untouched by which PRs are checked - it describes cash carried
+      // in from before this document even starts.
       const openingBalance = computeCashOnHand(
         ledgerEntries.filter((e) => e.date < dateFrom),
         activePrsAll.filter((pr) => pr.date < dateFrom).map((pr) => pr.totalAmount ?? 0)
@@ -143,6 +199,11 @@ function AbstractExportModal({ onClose }) {
         label: `Replenish — Check No. ${e.refNo}`,
         amount: e.amount,
       }))
+      // Per explicit request: when the checklist narrowed the printed
+      // rows, this total (and every reconciliation line built from it)
+      // must reflect that SAME checked subset - not the real full-period
+      // disbursement total - so the abstract stays internally
+      // consistent with what it actually lists.
       const periodTotal = enriched.reduce((s, pr) => s + (pr.totalAmount ?? 0), 0)
 
       // Per explicit request: an SDO-personal toggle (Settings page,
@@ -207,15 +268,30 @@ function AbstractExportModal({ onClose }) {
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950 pb-[env(safe-area-inset-bottom)] transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+        className="flex max-h-[85vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         style={{ transform: entered ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
           <h2 className="text-base font-semibold text-app-text">Export Abstract of Cereal Purchases</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Checklist toggle, per explicit request/correction - lives
+                inside this same modal (not a separate button/modal), so
+                its own PR list is always based on THIS modal's own
+                dateFrom/dateTo, never an independent period. */}
+            <button
+              type="button"
+              onClick={() => setShowChecklist((v) => !v)}
+              aria-label="Choose specific receipts to export"
+              aria-pressed={showChecklist}
+              className={`rounded-lg p-1.5 transition-colors ${showChecklist ? 'bg-brand-neon/15 text-brand-neon' : 'bg-neutral-900 text-neutral-400 hover:text-app-text'}`}
+            >
+              <ListChecks size={18} />
+            </button>
+            <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
+          </div>
         </div>
-        <div className="space-y-3 px-4 py-4">
+        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] font-semibold uppercase text-neutral-500">From</label>
@@ -230,9 +306,64 @@ function AbstractExportModal({ onClose }) {
               </div>
             </div>
           </div>
-          <button type="button" onClick={handleExport} disabled={generating}
+
+          {showChecklist && (
+            <div className="space-y-2 rounded-xl border border-neutral-800 bg-neutral-900/50 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  {periodPrs.length} receipt{periodPrs.length === 1 ? '' : 's'} in period
+                </p>
+                {periodPrs.length > 0 && (
+                  <button type="button" onClick={toggleAll} className="text-xs font-medium text-brand-neon">
+                    {allChecked ? 'Uncheck all' : 'Check all'}
+                  </button>
+                )}
+              </div>
+              {periodPrs.length === 0 ? (
+                <p className="py-4 text-center text-xs text-neutral-500">No Purchase Receipts in this period.</p>
+              ) : (
+                <ul className="max-h-64 space-y-1.5 overflow-y-auto">
+                  {periodPrs.map((pr) => {
+                    const checked = checkedIds.has(pr.prId)
+                    return (
+                      <li key={pr.prId}>
+                        <button
+                          type="button"
+                          onClick={() => toggleOne(pr.prId)}
+                          className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.99] ${
+                            checked ? 'border-brand-neon/40 bg-brand-neon/5' : 'border-neutral-800 bg-neutral-950'
+                          } ${pr.status === 'Cancelled' ? 'opacity-60' : ''}`}
+                        >
+                          <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                            checked ? 'border-brand-neon bg-brand-neon/20' : 'border-neutral-700'
+                          }`}>
+                            {checked && <Check size={12} className="text-brand-neon" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="break-words text-sm font-semibold text-app-text">PR {pr.prNo}</span>
+                              {pr.status === 'Cancelled' ? (
+                                <span className="shrink-0 text-xs font-bold uppercase text-red-400">Cancelled</span>
+                              ) : (
+                                <span className="shrink-0 text-sm font-semibold tabular-nums text-brand-neon">
+                                  ₱{(pr.totalAmount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              )}
+                            </span>
+                            <span className="block break-words text-xs text-neutral-500">{pr.payeeName || '—'} · {pr.date}</span>
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <button type="button" onClick={handleExport} disabled={generating || (showChecklist && checkedIds.size === 0)}
             className="w-full rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40">
-            {generating ? 'Generating…' : 'Export PDF'}
+            {generating ? 'Generating…' : showChecklist ? `Export ${checkedIds.size} Selected` : 'Export PDF'}
           </button>
         </div>
       </div>
