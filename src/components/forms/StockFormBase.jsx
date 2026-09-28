@@ -238,6 +238,7 @@ const blankFormState = {
   customerAddress: '',
   farmerRsbsa: '',
   farmerGender: '',
+  poNumber: '',
   transactionTypeId: '',
   pileId: '',
   varietyId: '',
@@ -288,6 +289,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   const [customerAddress, setCustomerAddress] = useState('')
   const [farmerRsbsa, setFarmerRsbsa] = useState('')
   const [farmerGender, setFarmerGender] = useState('')
+  // Purchase Order Number - per explicit request, a WSR Procurement-only
+  // optional field, independent of the Farmer Org toggle (unlike
+  // RSBSA/Gender above, a PO No. is a procurement-level detail, not tied
+  // to an individual farmer's identity, so it stays visible/saved
+  // whether Farmer Org is on or off).
+  const [poNumber, setPoNumber] = useState('')
   const [transactionTypeId, setTransactionTypeId] = useState('')
   const [pileId, setPileId] = useState('')
   // Multi-pile issuance - lets a single WSI draw from more than one
@@ -1598,6 +1605,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setCustomerName(tx.customerName ?? '')
     setCustomerAddress(tx.customerAddress ?? '')
     setFarmerRsbsa(tx.farmerRsbsa ?? '')
+    setPoNumber(tx.poNumber ?? '')
     setOrNumber(tx.orNumber ?? '')
     setMoNumber(tx.moNumber ?? '')
     setBatchNumber(tx.batchNumber ?? '')
@@ -1675,6 +1683,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setCustomerAddress('')
     setFarmerRsbsa('')
     setFarmerGender('')
+    setPoNumber('')
     setTransactionTypeId('')
     setPileId('')
     setVarietyId('')
@@ -2034,6 +2043,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     moistureContent: null,
     farmerRsbsa: null,
     farmerGender: null,
+    poNumber: null,
     farmerCoops: null,
     // A cancelled record has nothing left to complete - matches the
     // same reasoning googleSheetsBridge.js's importer already uses
@@ -2078,6 +2088,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // still silently save that stale value.
     farmerRsbsa: isProcurement && !farmerOrgEnabled ? farmerRsbsa.trim() || null : null,
     farmerGender: isProcurement && !farmerOrgEnabled ? farmerGender || null : null,
+    // Unlike farmerRsbsa/farmerGender above, not guarded on
+    // !farmerOrgEnabled - a PO No. describes the procurement itself,
+    // not an individual farmer, so it stays whether Farmer Org is on or
+    // off (see its own useState comment).
+    poNumber: isProcurement ? poNumber.trim() || null : null,
     farmerCoops: farmerOrgEnabled ? members.map((m) => ({ ...m })) : null,
     orNumber: isSales ? orNumber.trim() || null : null,
     recordedByName: user?.name ?? user?.nickname ?? null,
@@ -3672,6 +3687,23 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   ))}
                 </select>
               </div>
+            </div>
+          )}
+
+          {/* PO No. - per explicit request: a WSR Procurement-only
+              optional field, shown just below RSBSA/Gender. Unlike
+              those two, it stays visible whether Farmer Org is on or
+              off (see the poNumber useState's own comment). */}
+          {isProcurement && (
+            <div className="mt-3">
+              <label className={labelClass}>PO No.</label>
+              <input
+                type="text"
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                className={inputClass}
+                placeholder="Optional"
+              />
             </div>
           )}
           </div>

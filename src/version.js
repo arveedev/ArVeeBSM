@@ -6956,4 +6956,16 @@
 //              correctly for keyboard type-ahead. Since every backup
 //              write (transaction AND PR summary) funnels through this
 //              one shared function, one fix covers both.
-export const APP_VERSION = '1.10-191'
+//   1.10-192 - Added a new "PO No." (Purchase Order Number) input to the
+//              WSR Procurement transaction form, per explicit request -
+//              optional, positioned just below RSBSA/Gender in
+//              StockFormBase.jsx. Unlike RSBSA/Gender, it's not guarded
+//              on !farmerOrgEnabled - a PO No. describes the
+//              procurement itself, not an individual farmer, so it
+//              stays visible and saved whether Farmer Org is on or off.
+//              New `poNumber` field on the transaction record (no
+//              schema/index change needed, same as farmerRsbsa/
+//              farmerGender). Scoped to StockFormBase.jsx only - no
+//              other screen (reports, Sheets backup, PR generation)
+//              reads it yet.
+export const APP_VERSION = '1.10-192'
