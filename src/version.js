@@ -7086,4 +7086,22 @@
 //              (3) Warehouse and Variety row font sizes bumped up again
 //              (text-base/lg floor, md: bumped to lg/xl) for
 //              readability on both small and large displays.
-export const APP_VERSION = '1.10-200'
+//   1.10-201 - Corrected 1.10-200's Overview card again per explicit
+//              follow-up, ProcurementMonitor.jsx only:
+//              (1) Moved the Net Kgs/Net Bags toggle up beside the
+//              "Overview" title itself, freeing the hero total row -
+//              and the per-Province row further down - to use the
+//              card's full width for a larger figure instead of
+//              sharing that row with the toggle.
+//              (2) Per-Province row restructured the same way
+//              Warehouse/Variety rows already were: name+chevron on
+//              their own line, the actual Bags total on its own line
+//              below at a larger size.
+//              (3) fmtWeight's Kg branch now passes the 'Net' label
+//              param ("23,726.250 Net Kgs", not just "... Kgs"), and
+//              the derived Net Bags branch capitalized to match ("Net
+//              Bags", not "net bags").
+//              (4) tabular-nums made explicit on every numeric element
+//              in this card rather than relying on inheritance from an
+//              ancestor.
+export const APP_VERSION = '1.10-201'

@@ -55,16 +55,50 @@ function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, pe
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
   })
+  // 'Net' label prefix, per explicit request - fmtWeight(kilos, unit,
+  // 'Net') reads "23,726.250 Net Kgs" (or "Net MT"), not just "Kgs" -
+  // same established convention already used elsewhere (e.g.
+  // StockFormBase.jsx's own "AI balance remaining" line), now matched
+  // here for the derived Net Bags branch too ("Net Bags", not "net
+  // bags"). tabular-nums explicit on every numeric element below, not
+  // just inherited, so alignment holds even if a surrounding element
+  // ever loses it.
   const weightLabel = (kilos) => weightMode === 'kg'
-    ? fmtWeight(kilos, weightUnit)
-    : `${fmtNetBags(calculateNetBags(kilos))} net bags`
+    ? fmtWeight(kilos, weightUnit, 'Net')
+    : `${fmtNetBags(calculateNetBags(kilos))} Net Bags`
 
   if (groups.length === 0) return null
 
   return (
     <div className="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <div className="flex items-center justify-between gap-2 border-b border-neutral-800 pb-3">
-        <p className="text-base font-bold text-app-text md:text-lg">Overview</p>
+      {/* Toggle moved up beside the "Overview" title itself, per
+          explicit request - freeing the hero row below (and the
+          per-province row further down) to use the full card width for
+          a larger figure instead of sharing that row with the toggle. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-base font-bold text-app-text md:text-lg">Overview</p>
+          <div className="relative flex shrink-0 items-center overflow-hidden rounded-full border border-neutral-800 bg-neutral-950 text-xs font-bold md:text-sm">
+            <span
+              className="absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-brand-neon transition-transform duration-300 ease-out"
+              style={{ transform: weightMode === 'bags' ? 'translateX(100%)' : 'translateX(0%)' }}
+            />
+            <button
+              type="button"
+              onClick={() => setWeightMode('kg')}
+              className={`relative z-10 px-3 py-2 transition-colors ${weightMode === 'kg' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+            >
+              Net Kgs
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeightMode('bags')}
+              className={`relative z-10 px-3 py-2 transition-colors ${weightMode === 'bags' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+            >
+              Net Bags
+            </button>
+          </div>
+        </div>
         {periodLabel && (
           <span className="shrink-0 rounded-full border border-brand-amber/40 bg-brand-amber/10 px-2.5 py-1 text-sm font-bold text-brand-amber md:text-base">
             {periodLabel}
@@ -72,36 +106,12 @@ function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, pe
         )}
       </div>
 
-      {/* Net Kgs / Net Bags toggle - shared by the hero total below and
-          every Warehouse/Variety row further down, so the whole card
-          always agrees on which figure is showing. Same sliding-pill
-          convention AppHeader.jsx's own KG/MT toggle uses. */}
-      <div className="mt-3 flex items-center justify-between gap-3">
+      <div className="mt-3 flex items-baseline justify-between gap-3">
         <p className="text-2xl font-bold tabular-nums text-brand-neon md:text-3xl">
           {fmtBags(grandBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
         </p>
-        <div className="relative flex shrink-0 items-center overflow-hidden rounded-full border border-neutral-800 bg-neutral-950 text-xs font-bold md:text-sm">
-          <span
-            className="absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-brand-neon transition-transform duration-300 ease-out"
-            style={{ transform: weightMode === 'bags' ? 'translateX(100%)' : 'translateX(0%)' }}
-          />
-          <button
-            type="button"
-            onClick={() => setWeightMode('kg')}
-            className={`relative z-10 px-3 py-2 transition-colors ${weightMode === 'kg' ? 'text-brand-contrast' : 'text-neutral-400'}`}
-          >
-            Net Kgs
-          </button>
-          <button
-            type="button"
-            onClick={() => setWeightMode('bags')}
-            className={`relative z-10 px-3 py-2 transition-colors ${weightMode === 'bags' ? 'text-brand-contrast' : 'text-neutral-400'}`}
-          >
-            Net Bags
-          </button>
-        </div>
+        <p className="shrink-0 text-right text-xl font-semibold tabular-nums text-app-text md:text-2xl">{weightLabel(grandKilos)}</p>
       </div>
-      <p className="mt-1 text-right text-base font-semibold tabular-nums text-app-text md:text-lg">{weightLabel(grandKilos)}</p>
 
       <div className="mt-2 divide-y divide-neutral-800">
         {groups.map((g) => {
@@ -111,15 +121,21 @@ function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, pe
               <button
                 type="button"
                 onClick={() => toggleProvince(g.provinceId)}
-                className="flex w-full items-center justify-between gap-2 py-1 text-left"
+                className="w-full text-left"
               >
-                <span className="min-w-0 break-words text-base font-bold text-app-text md:text-lg">
-                  {g.province.code} — {g.province.name}
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <span className="text-base font-bold tabular-nums text-brand-neon md:text-lg">{fmtBags(g.totalBags)}</span>
-                  <ChevronDown size={16} className={`text-neutral-500 transition-transform ${isProvOpen ? 'rotate-180' : ''}`} />
-                </span>
+                <div className="flex items-center justify-between gap-2 py-1">
+                  <span className="min-w-0 break-words text-base font-bold text-app-text md:text-lg">
+                    {g.province.code} — {g.province.name}
+                  </span>
+                  <ChevronDown size={16} className={`shrink-0 text-neutral-500 transition-transform ${isProvOpen ? 'rotate-180' : ''}`} />
+                </div>
+                {/* Own line, full width - per explicit request, same
+                    reasoning as the Warehouse/Variety rows below: more
+                    room for a larger, easily-read figure instead of
+                    squeezing it in next to the name and chevron. */}
+                <p className="text-xl font-bold tabular-nums text-brand-neon md:text-2xl">
+                  {fmtBags(g.totalBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
+                </p>
               </button>
 
               {isProvOpen && (
