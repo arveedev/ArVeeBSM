@@ -66,6 +66,16 @@ function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, pe
   const weightLabel = (kilos) => weightMode === 'kg'
     ? fmtWeight(kilos, weightUnit, 'Net')
     : `${fmtNetBags(calculateNetBags(kilos))} Net Bags`
+  // Value only, no trailing unit text - for the Bags/Net tile pair
+  // below, which (per explicit request) matches the Pile List's own
+  // label-above-value tile convention (HomePiles.jsx) - the tile's own
+  // "Net Kg"/"Net Bags" caption already says the unit, so repeating it
+  // in the value itself would be redundant, same fix HomePiles.jsx
+  // already applies to its own tiles.
+  const weightValueOnly = (kilos) => weightMode === 'kg'
+    ? fmtWeight(kilos, weightUnit).replace(/\s*(kg|MT)$/, '')
+    : fmtNetBags(calculateNetBags(kilos))
+  const weightTileLabel = weightMode === 'kg' ? 'Net Kg' : 'Net Bags'
 
   if (groups.length === 0) return null
 
@@ -113,68 +123,83 @@ function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, pe
         <p className="shrink-0 text-right text-xl font-semibold tabular-nums text-app-text md:text-2xl">{weightLabel(grandKilos)}</p>
       </div>
 
-      <div className="mt-2 divide-y divide-neutral-800">
+      {/* Indented and visually separated from the branch (grand) total
+          above - per explicit request/correction, provinces must not
+          read as inline with it. The left border + padding is the
+          indent cue; each province is its OWN card (not a flat
+          divide-y list) so the nesting is unambiguous at a glance. */}
+      <div className="mt-3 space-y-3 border-l-2 border-neutral-800 pl-3">
         {groups.map((g) => {
           const isProvOpen = expandedProvinces.has(g.provinceId)
           return (
-            <div key={g.provinceId} className="py-2">
+            <div key={g.provinceId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
               <button
                 type="button"
                 onClick={() => toggleProvince(g.provinceId)}
                 className="w-full text-left"
               >
-                <div className="flex items-center justify-between gap-2 py-1">
+                <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0 break-words text-base font-bold text-app-text md:text-lg">
                     {g.province.code} — {g.province.name}
                   </span>
                   <ChevronDown size={16} className={`shrink-0 text-neutral-500 transition-transform ${isProvOpen ? 'rotate-180' : ''}`} />
                 </div>
-                {/* Own line, full width - per explicit request, same
-                    reasoning as the Warehouse/Variety rows below: more
-                    room for a larger, easily-read figure instead of
-                    squeezing it in next to the name and chevron. */}
-                <p className="text-xl font-bold tabular-nums text-brand-neon md:text-2xl">
+                <p className="mt-1 text-xl font-bold tabular-nums text-brand-neon md:text-2xl">
                   {fmtBags(g.totalBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
                 </p>
               </button>
 
               {isProvOpen && (
-                <div className="mt-2 space-y-2 pl-3">
+                <div className="mt-3 space-y-3 border-t border-neutral-800 pt-3">
                   {g.warehouses.map((wh) => {
                     const isWhOpen = expandedWarehouses.has(wh.warehouseId)
                     return (
-                      <div key={wh.warehouseId} className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-3">
+                      <div key={wh.warehouseId} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-3">
                         <button
                           type="button"
                           onClick={() => toggleWarehouse(wh.warehouseId)}
                           className="w-full text-left"
                         >
                           <div className="flex items-center justify-between gap-2">
+                            {/* Warehouse code dropped, per explicit
+                                request - just the name; the code added
+                                nothing this deep in the tree, already
+                                inside its own province's card. */}
                             <span className="min-w-0 break-words text-base font-semibold text-app-text md:text-lg">
-                              {wh.warehouse.code} — {wh.warehouse.name}
+                              {wh.warehouse.name}
                             </span>
                             <ChevronDown size={16} className={`shrink-0 text-neutral-600 transition-transform ${isWhOpen ? 'rotate-180' : ''}`} />
                           </div>
-                          <div className="mt-1.5 flex items-baseline justify-between gap-3">
-                            <span className="text-lg font-bold tabular-nums text-blue-400 md:text-xl">
-                              {fmtBags(wh.totalBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
-                            </span>
-                            <span className="shrink-0 text-base font-semibold tabular-nums text-neutral-300 md:text-lg">
-                              {weightLabel(wh.totalKilos)}
-                            </span>
+                          {/* Bags/Net tile pair, per explicit request -
+                              same label-above-value card convention the
+                              Pile List (HomePiles.jsx) already uses,
+                              instead of the previous inline row. */}
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <div className="rounded-lg bg-neutral-950 px-2.5 py-2 text-center">
+                              <p className="text-xs uppercase text-neutral-500 md:text-sm">Bags</p>
+                              <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text md:text-xl">{fmtBags(wh.totalBags)}</p>
+                            </div>
+                            <div className="rounded-lg bg-neutral-950 px-2.5 py-2 text-center">
+                              <p className="text-xs uppercase text-neutral-500 md:text-sm">{weightTileLabel}</p>
+                              <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text md:text-xl">{weightValueOnly(wh.totalKilos)}</p>
+                            </div>
                           </div>
                         </button>
 
                         {isWhOpen && (
-                          <div className="mt-2 space-y-2 border-t border-neutral-800 pt-2">
+                          <div className="mt-3 space-y-2 border-t border-neutral-800 pt-3">
                             {wh.varietyGroups.map((vg) => (
-                              <div key={vg.varietyId} className="flex items-center justify-between gap-2">
-                                <span className="min-w-0 break-words text-base text-neutral-200 md:text-lg">{vg.varietyName}</span>
-                                <div className="shrink-0 text-right">
-                                  <p className="text-base font-bold tabular-nums text-app-text md:text-lg">
-                                    {fmtBags(vg.subtotalBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
-                                  </p>
-                                  <p className="text-sm tabular-nums text-neutral-400 md:text-base">{weightLabel(vg.subtotalKilos)}</p>
+                              <div key={vg.varietyId} className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-3">
+                                <p className="min-w-0 break-words text-base font-semibold text-app-text md:text-lg">{vg.varietyName}</p>
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                  <div className="rounded-lg bg-neutral-900 px-2.5 py-2 text-center">
+                                    <p className="text-xs uppercase text-neutral-500 md:text-sm">Bags</p>
+                                    <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text md:text-xl">{fmtBags(vg.subtotalBags)}</p>
+                                  </div>
+                                  <div className="rounded-lg bg-neutral-900 px-2.5 py-2 text-center">
+                                    <p className="text-xs uppercase text-neutral-500 md:text-sm">{weightTileLabel}</p>
+                                    <p className="mt-0.5 text-lg font-bold tabular-nums text-app-text md:text-xl">{weightValueOnly(vg.subtotalKilos)}</p>
+                                  </div>
                                 </div>
                               </div>
                             ))}

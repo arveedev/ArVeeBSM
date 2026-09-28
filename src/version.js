@@ -7175,4 +7175,22 @@
 //              another step (text-sm -> text-base, md: bumped to
 //              text-lg) - the 1.10-204 pass read fine on a large
 //              display but was still a little small on a phone.
-export const APP_VERSION = '1.10-205'
+//   1.10-206 - Restructured the Procurement Overview card's nesting per
+//              explicit request, ProcurementMonitor.jsx only:
+//              (1) Provinces no longer read as inline with the branch
+//              (grand) total above them - moved into their own indented
+//              block (left border + padding as the indent cue), each
+//              province now its own card instead of a flat divide-y
+//              list.
+//              (2) Warehouse rows no longer show the warehouse code -
+//              just the name, since the code added nothing this deep
+//              in the tree (already inside its own province's card).
+//              (3) Warehouse and Variety rows now use the same
+//              label-above-value Bags/Net tile-pair card the Pile List
+//              (HomePiles.jsx) already uses, in place of the previous
+//              inline bags-then-weight row - reads the same on both
+//              small and large displays, matching that established
+//              convention exactly (including stripping the redundant
+//              unit text from the value since the tile's own label
+//              already states it).
+export const APP_VERSION = '1.10-206'
