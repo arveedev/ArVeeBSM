@@ -424,6 +424,33 @@ function AppHeader({ hidden = false }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [confirmingClearNotifs, setConfirmingClearNotifs] = useState(false)
   const notifRef = useRef(null)
+
+  // Cascade entrance/exit for the notification panel, per explicit
+  // request/demo pick - previously notifOpen alone controlled whether
+  // the panel was even in the DOM, so it snapped in and vanished
+  // instantly with no motion at all in either direction.
+  // notifRendered keeps it mounted a little past notifOpen going false
+  // so the exit fade actually has time to play (same
+  // mount-a-moment-longer-than-open pattern TransactionModal.jsx/
+  // CompletedMillingModal.jsx already use); notifEntered drives the
+  // actual opacity/transform values, flipped a frame after mount so the
+  // browser genuinely paints the "before" state first. Must match
+  // NOTIF_ITEM_STAGGER_MS's own max delay below, so the panel doesn't
+  // unmount mid-stagger on a fast open-then-close.
+  const NOTIF_PANEL_EXIT_MS = 160
+  const [notifRendered, setNotifRendered] = useState(false)
+  const [notifEntered, setNotifEntered] = useState(false)
+  useEffect(() => {
+    if (notifOpen) {
+      setNotifRendered(true)
+      const frame = requestAnimationFrame(() => setNotifEntered(true))
+      return () => cancelAnimationFrame(frame)
+    }
+    setNotifEntered(false)
+    const timer = setTimeout(() => setNotifRendered(false), NOTIF_PANEL_EXIT_MS)
+    return () => clearTimeout(timer)
+  }, [notifOpen])
+
   useEffect(() => {
     if (!notifOpen) return
     const handleOutside = (e) => {
@@ -722,7 +749,7 @@ function AppHeader({ hidden = false }) {
                   )}
                 </button>
 
-                {notifOpen && (
+                {notifRendered && (
                   // Reported real bug, confirmed: this used to be
                   // `absolute right-0` relative to the bell's OWN
                   // wrapper - since the bell sits mid-cluster among
@@ -736,9 +763,20 @@ function AppHeader({ hidden = false }) {
                   // crowded the header cluster is - same
                   // headerHeight-based vertical anchoring
                   // StickyWarehouseIndicator.jsx already uses.
+                  //
+                  // Cascade entrance/exit, per explicit request/demo
+                  // pick - the panel itself just fades (fast, no
+                  // stagger), while each notification row below stagers
+                  // in individually on open; closing reverses to a
+                  // single synchronized fade-out (no stagger), same
+                  // asymmetry the approved demo variant used.
                   <div
                     className="fixed right-4 z-[106] max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
-                    style={{ top: `${(headerHeight ?? 60) + 8}px` }}
+                    style={{
+                      top: `${(headerHeight ?? 60) + 8}px`,
+                      opacity: notifEntered ? 1 : 0,
+                      transition: 'opacity 140ms ease',
+                    }}
                   >
                     <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
@@ -766,8 +804,22 @@ function AppHeader({ hidden = false }) {
                       <p className="px-3 py-4 text-center text-xs text-neutral-500">Nothing to show.</p>
                     ) : (
                       <ul className="divide-y divide-neutral-800">
-                        {notifEntries.slice(0, 8).map((notif) => (
-                          <li key={notif.id}>
+                        {notifEntries.slice(0, 8).map((notif, i) => (
+                          <li
+                            key={notif.id}
+                            style={{
+                              opacity: notifEntered ? 1 : 0,
+                              transform: notifEntered ? 'translateX(0)' : 'translateX(14px)',
+                              // Staggered on the way IN (each row a beat
+                              // behind the last, capped at index 4 so a
+                              // long list doesn't drag the entrance out
+                              // forever); 0ms on the way OUT so every row
+                              // fades together instead of trailing off
+                              // one by one.
+                              transitionDelay: notifEntered ? `${Math.min(i, 4) * 60 + 40}ms` : '0ms',
+                              transition: 'opacity 220ms cubic-bezier(.2,.8,.2,1), transform 220ms cubic-bezier(.2,.8,.2,1)',
+                            }}
+                          >
                             <button
                               type="button"
                               onClick={notif.onClick}

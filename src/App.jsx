@@ -32,6 +32,7 @@ import { startBackupWorker } from './services/backupWorker.js'
 import AnimatedToast from './components/common/AnimatedToast.jsx'
 import UpdateChecker from './components/common/UpdateChecker.jsx'
 import useDelayedUnmount from './hooks/useDelayedUnmount.js'
+import { isTextEditable } from './hooks/useEntryFormShortcuts.js'
 
 // Must match the form's own pop-out exit transition duration (see
 // StockFormBase/SackFormBase/WTSForm) - keeps the form mounted long
@@ -115,6 +116,32 @@ function App() {
   const isAdmin = user?.role === 'Admin'
   const isVisitor = user?.role === 'Visitor'
   const isSdo = user?.role === 'SDO'
+
+  // "+" (or numpad +) as a global shortcut for the FAB's own job -
+  // opening the document-type selector - per explicit request. Only
+  // active exactly where the real on-screen FAB itself is actually
+  // shown and usable: logged in, not the Login page, not Visitor/SDO
+  // (neither role has a FAB - see BottomNav.jsx), not on /admin (the
+  // TransactionModal isn't even rendered there - see below), and not
+  // while the bars are hidden (a form or the Admin Dashboard is already
+  // covering the screen). Guarded against a text field having focus
+  // (typing a literal "+" into an amount field must never hijack it)
+  // and against any overlay that already owns keyboard input (the same
+  // data-suppress-form-shortcuts convention StockFormBase.jsx/
+  // CalendarDatePicker.jsx etc. already use).
+  useEffect(() => {
+    if (!user || pathname === '/login' || isVisitor || isSdo || pathname === '/admin' || barsHidden) return
+    const handleKeyDown = (e) => {
+      if (e.key !== '+' && e.code !== 'NumpadAdd') return
+      if (isTransactionModalOpen) return
+      if (isTextEditable(document.activeElement)) return
+      if (document.activeElement?.closest?.('[data-suppress-form-shortcuts]')) return
+      e.preventDefault()
+      setTransactionModalOpen(true)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [user, pathname, isVisitor, isSdo, barsHidden, isTransactionModalOpen])
 
   // Theme defaults to dark (no .light class) - only toggled on when the
   // persisted preference explicitly says 'light'.

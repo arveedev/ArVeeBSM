@@ -7015,4 +7015,24 @@
 //              instead, naming the real SIA number(s) and saying it's
 //              awaiting ESI, so the notification always reflects which
 //              step is actually still outstanding.
-export const APP_VERSION = '1.10-196'
+//   1.10-197 - Two follow-ups, both per explicit request:
+//              (1) Notification panel now has a real entrance/exit
+//              animation (AppHeader.jsx) - previously it snapped in and
+//              vanished instantly with no motion at all. Picked the
+//              "Cascade" option from a set of demoed variants: the
+//              panel itself fades in fast, and each notification row
+//              staggers in individually right after (capped stagger so
+//              a long list doesn't drag it out); closing reverses to a
+//              single synchronized fade, no stagger. Kept mounted a
+//              beat past close (notifRendered) so the exit fade has
+//              time to actually play, same pattern TransactionModal.jsx/
+//              CompletedMillingModal.jsx already use.
+//              (2) "+" (or numpad +) now works as a global keyboard
+//              shortcut for the FAB's job - opening the document-type
+//              selector (App.jsx) - wherever the real on-screen FAB
+//              itself is actually shown and usable (guarded the same
+//              way: not Visitor/SDO, not /admin, not while a form/the
+//              Admin Dashboard already covers the screen, not while a
+//              text field has focus or another overlay owns keyboard
+//              input).
+export const APP_VERSION = '1.10-197'
