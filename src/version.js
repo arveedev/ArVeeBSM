@@ -7257,4 +7257,14 @@
 //              figures stay untouched by the selection, since those
 //              describe real cash movement independent of which PRs
 //              happen to print.
-export const APP_VERSION = '1.10-209'
+//   1.10-210 - SDO Home's Completed tab now always sorts ascending by
+//              PR Number, per explicit request - unconditionally, not
+//              just as a default the Sort & Filter modal's Date/Bags
+//              options can still override. Same numeric-then-string PR
+//              Number comparator AbstractExportModal.jsx's own printed
+//              table already uses, so the on-screen order matches the
+//              exported Abstract's order. The For Payment tab is
+//              unaffected - unpaid WSRs have no PR Number yet to sort
+//              by, so it keeps using Sort & Filter's Date/Bags options
+//              exactly as before.
+export const APP_VERSION = '1.10-210'
