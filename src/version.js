@@ -6939,4 +6939,21 @@
 //              skipped outright, on both AppHeader.jsx (top-left) and
 //              Settings.jsx's profile card - the name/role/sync-status
 //              pill next to it are unaffected.
-export const APP_VERSION = '1.10-190'
+//   1.10-191 - Fixed real, reported bug: the province code was being
+//              written to Google Sheets again (e.g. "ALB ABACORP-B"
+//              instead of just "ABACORP-B") - on both the transaction
+//              backups AND the PR SUMMARY ("PALAY DELIVERIES") backup.
+//              Root cause: googleSheetsBridge.js's shared
+//              stripWarehouseCodePrefix only stripped a HYPHEN-
+//              separated province prefix (/^[A-Z]{2,5}-/), but real
+//              warehouse names use both separators - "ALB-VRT" (hyphen)
+//              and "ALB ABACORP-B" (space, with its own unrelated
+//              hyphen further into the name) - so the space-separated
+//              names were sent to the Sheet completely unstripped.
+//              Widened the regex to match either separator
+//              (/^[A-Z]{2,6}[\s-]+/), the same pattern
+//              forms/shared.js's own stripProvincePrefix already used
+//              correctly for keyboard type-ahead. Since every backup
+//              write (transaction AND PR summary) funnels through this
+//              one shared function, one fix covers both.
+export const APP_VERSION = '1.10-191'

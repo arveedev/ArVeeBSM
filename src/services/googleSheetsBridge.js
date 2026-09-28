@@ -1302,13 +1302,25 @@ const formatLocalTimestamp = () => {
   return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`
 }
 
-// Strips a leading province/warehouse-code-style prefix (e.g. "ALB-",
+// Strips a leading province-code-style prefix (e.g. "ALB-", "ALB ",
 // "CAM-") from a warehouse name before it's sent to Google Sheets - the
 // app's own warehouse.name field has these baked in from an earlier
 // naming convention, but the Sheet should only ever show the plain
 // name (e.g. "ALB-ABACORP A" -> "ABACORP A").
+//
+// Confirmed, reported real bug: the province separator isn't always a
+// hyphen - real warehouse names include both "ALB-VRT" (hyphen) AND
+// "ALB ABACORP-B" (space, with its OWN unrelated hyphen further in) -
+// the old /^[A-Z]{2,5}-/ regex only matched the hyphen case, so a
+// space-separated name like "ALB ABACORP-B" was sent to the Sheets
+// (transaction backups AND the PR SUMMARY backup, both of which call
+// this) completely unstripped, province code and all. Widened to match
+// either separator, same fix already applied to
+// forms/shared.js's own stripProvincePrefix for keyboard type-ahead
+// (kept as a separate, deliberately un-shared copy there - see that
+// file's own comment on why).
 export const stripWarehouseCodePrefix = (name) =>
-  (name ?? '').replace(/^[A-Z]{2,5}-/, '')
+  (name ?? '').replace(/^[A-Z]{2,6}[\s-]+/, '')
 
 const buildBackupRow = (transaction, context) => {
   const { warehouseCode, provinceCode, varietyName, transactionTypeName } = context
