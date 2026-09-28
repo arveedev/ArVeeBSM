@@ -7104,4 +7104,22 @@
 //              (4) tabular-nums made explicit on every numeric element
 //              in this card rather than relying on inheritance from an
 //              ancestor.
-export const APP_VERSION = '1.10-201'
+//   1.10-202 - Fixed the real root cause of "the cascade doesn't show
+//              at all" (AppHeader.jsx): NOTIF_PANEL_EXIT_MS was 160ms -
+//              shorter than a single row's own 320ms fade, so the whole
+//              panel unmounted mid-fade before a stagger across several
+//              rows could ever be visible, on every close. Now a fixed,
+//              generous duration that safely covers the full worst-case
+//              stagger sequence. Also: the panel's own background/
+//              border no longer fades its own opacity at all (it
+//              stays fully opaque for as long as it's mounted) - a
+//              fading PARENT was multiplying against each row's own
+//              opacity, muddying the cascade regardless of the rows'
+//              own timing; all the motion now lives on the rows alone.
+//              Exit now genuinely cascades too (previously it was a
+//              single synchronized fade, no stagger at all) - in
+//              REVERSE row order, the last row to cascade in is the
+//              first to cascade out. Slowed down again per repeated
+//              feedback: row duration 320ms -> 380ms, stagger gap
+//              90ms -> 110ms.
+export const APP_VERSION = '1.10-202'

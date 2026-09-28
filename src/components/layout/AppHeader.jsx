@@ -426,18 +426,31 @@ function AppHeader({ hidden = false }) {
   const notifRef = useRef(null)
 
   // Cascade entrance/exit for the notification panel, per explicit
-  // request/demo pick - previously notifOpen alone controlled whether
-  // the panel was even in the DOM, so it snapped in and vanished
-  // instantly with no motion at all in either direction.
-  // notifRendered keeps it mounted a little past notifOpen going false
-  // so the exit fade actually has time to play (same
-  // mount-a-moment-longer-than-open pattern TransactionModal.jsx/
-  // CompletedMillingModal.jsx already use); notifEntered drives the
-  // actual opacity/transform values, flipped a frame after mount so the
-  // browser genuinely paints the "before" state first. Must match
-  // NOTIF_ITEM_STAGGER_MS's own max delay below, so the panel doesn't
-  // unmount mid-stagger on a fast open-then-close.
-  const NOTIF_PANEL_EXIT_MS = 160
+  // request/demo pick, corrected per direct feedback: the first cut was
+  // never actually visible - NOTIF_PANEL_EXIT_MS (160ms) unmounted the
+  // whole panel well BEFORE a single row's own 320ms fade could even
+  // finish, let alone stagger across several rows, so closing looked
+  // like an instant snap with no motion at all, and opening was over
+  // before it registered. Also corrected: exit never staggered at all
+  // before (every row faded out in lockstep) - it now cascades out too,
+  // in REVERSE order (the last row to cascade in is the first to
+  // cascade out), a deliberate bookend rather than just running the
+  // entrance backwards.
+  //
+  // notifRendered keeps the panel mounted for the FULL worst-case
+  // stagger sequence past notifOpen going false (a fixed, generous
+  // value rather than computed from the live entry count, so it never
+  // needs to track that count as an effect dependency); notifEntered
+  // drives each row's actual opacity/transform, flipped a frame after
+  // mount so the browser genuinely paints the "before" state first.
+  // The panel's own background/border never animates - it stays fully
+  // opaque the whole time it's mounted, so nothing dims the rows
+  // fading inside it; only the rows themselves move, which is the
+  // actual cascade effect and the whole point of this component.
+  const NOTIF_ITEM_MS = 380
+  const NOTIF_STAGGER_MS = 110
+  const NOTIF_STAGGER_CAP = 5
+  const NOTIF_PANEL_EXIT_MS = NOTIF_ITEM_MS + NOTIF_STAGGER_CAP * NOTIF_STAGGER_MS + 100
   const [notifRendered, setNotifRendered] = useState(false)
   const [notifEntered, setNotifEntered] = useState(false)
   useEffect(() => {
@@ -765,26 +778,23 @@ function AppHeader({ hidden = false }) {
                   // StickyWarehouseIndicator.jsx already uses.
                   //
                   // Cascade entrance/exit, per explicit request/demo
-                  // pick - the panel itself just fades, while each
-                  // notification row below staggers in individually on
-                  // open; closing reverses to a single synchronized
-                  // fade-out (no stagger), same asymmetry the approved
-                  // demo variant used. Slowed down and overflow-x-hidden
-                  // added per direct feedback: the first cut felt too
-                  // fast/not smooth, and each row's own translateX slide
-                  // was briefly wider than the panel mid-animation -
-                  // since `overflow-y-auto` alone implicitly computes
-                  // overflow-x to `auto` too (a real CSS overflow-pairing
-                  // rule, not a bug in the values themselves), that
-                  // transient overflow was showing a horizontal
-                  // scrollbar for the duration of the slide.
+                  // pick, corrected per direct feedback (see
+                  // NOTIF_PANEL_EXIT_MS's own comment above for the
+                  // real root cause of "the cascade doesn't show at
+                  // all"). The panel's own background/border no longer
+                  // animates its opacity at all - it stays fully opaque
+                  // for as long as it's mounted, so it never dims what's
+                  // fading inside it (CSS opacity on a parent multiplies
+                  // with a child's own opacity - a parent mid-fade would
+                  // have made the rows' own cascade invisible/muddy
+                  // regardless of how well-timed the rows themselves
+                  // were). All the actual motion now lives on the rows
+                  // below. overflow-x-hidden stays from the earlier
+                  // scrollbar fix - each row's own translateX slide is
+                  // still briefly wider than the panel mid-animation.
                   <div
                     className="fixed right-4 z-[106] max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
-                    style={{
-                      top: `${(headerHeight ?? 60) + 8}px`,
-                      opacity: notifEntered ? 1 : 0,
-                      transition: 'opacity 220ms ease',
-                    }}
+                    style={{ top: `${(headerHeight ?? 60) + 8}px` }}
                   >
                     <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
@@ -810,9 +820,17 @@ function AppHeader({ hidden = false }) {
                     </div>
                     {notifEntries.length === 0 ? (
                       <p className="px-3 py-4 text-center text-xs text-neutral-500">Nothing to show.</p>
-                    ) : (
+                    ) : (() => {
+                      // Captured once so both the entrance AND exit
+                      // stagger below can reference the real row count -
+                      // exit runs in REVERSE row order (the last row to
+                      // cascade in is the first to cascade out), a
+                      // deliberate bookend rather than the entrance
+                      // simply played backwards.
+                      const visibleNotifs = notifEntries.slice(0, 8)
+                      return (
                       <ul className="divide-y divide-neutral-800">
-                        {notifEntries.slice(0, 8).map((notif, i) => (
+                        {visibleNotifs.map((notif, i) => (
                           <li
                             key={notif.id}
                             style={{
@@ -821,21 +839,24 @@ function AppHeader({ hidden = false }) {
                               // feedback the first cut wasn't smooth and
                               // showed a scrollbar; a smaller slide has
                               // less room to transiently overflow the
-                              // panel's width while it's mid-motion (now
-                              // also guarded outright by overflow-x-
+                              // panel's width while it's mid-motion
+                              // (also guarded outright by overflow-x-
                               // hidden on the panel itself, above).
                               transform: notifEntered ? 'translateX(0)' : 'translateX(8px)',
-                              // Staggered on the way IN (each row a beat
-                              // behind the last, capped at index 4 so a
-                              // long list doesn't drag the entrance out
-                              // forever); 0ms on the way OUT so every row
-                              // fades together instead of trailing off
-                              // one by one. Slowed down (both the per-row
-                              // duration and the gap between rows) per
-                              // direct feedback that the first cut felt
-                              // too fast/not smooth.
-                              transitionDelay: notifEntered ? `${Math.min(i, 4) * 90 + 60}ms` : '0ms',
-                              transition: 'opacity 320ms cubic-bezier(.2,.8,.2,1), transform 320ms cubic-bezier(.2,.8,.2,1)',
+                              // Staggered on BOTH the way in (top row
+                              // first) and the way out (bottom row
+                              // first, reversed - see this block's own
+                              // comment above), each capped at
+                              // NOTIF_STAGGER_CAP rows deep so a long
+                              // list doesn't drag either direction out
+                              // forever. Slowed down substantially per
+                              // direct, repeated feedback that earlier
+                              // cuts were too fast to actually register
+                              // as a cascade at all.
+                              transitionDelay: notifEntered
+                                ? `${Math.min(i, NOTIF_STAGGER_CAP) * NOTIF_STAGGER_MS}ms`
+                                : `${Math.min(visibleNotifs.length - 1 - i, NOTIF_STAGGER_CAP) * NOTIF_STAGGER_MS}ms`,
+                              transition: `opacity ${NOTIF_ITEM_MS}ms cubic-bezier(.2,.8,.2,1), transform ${NOTIF_ITEM_MS}ms cubic-bezier(.2,.8,.2,1)`,
                             }}
                           >
                             <button
@@ -860,7 +881,8 @@ function AppHeader({ hidden = false }) {
                           </li>
                         ))}
                       </ul>
-                    )}
+                      )
+                    })()}
                   </div>
                 )}
               </div>
