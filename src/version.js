@@ -7035,4 +7035,16 @@
 //              Admin Dashboard already covers the screen, not while a
 //              text field has focus or another overlay owns keyboard
 //              input).
-export const APP_VERSION = '1.10-197'
+//   1.10-198 - Corrected 1.10-197's cascade notification animation per
+//              direct feedback: too fast/not smooth, and a scrollbar
+//              showed during it. Root cause of the scrollbar: the
+//              panel only sets overflow-y-auto, and CSS's overflow
+//              pairing rule computes overflow-x to auto too whenever
+//              only one axis is set - so each row's own translateX
+//              slide, briefly wider than the panel mid-motion, showed a
+//              real horizontal scrollbar for the duration. Added
+//              overflow-x-hidden outright, shortened the slide distance
+//              (14px -> 8px), and slowed every transition (row
+//              duration 220ms -> 320ms, per-row stagger gap 60ms ->
+//              90ms, panel fade 140ms -> 220ms).
+export const APP_VERSION = '1.10-198'

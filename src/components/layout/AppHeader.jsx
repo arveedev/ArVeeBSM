@@ -765,17 +765,25 @@ function AppHeader({ hidden = false }) {
                   // StickyWarehouseIndicator.jsx already uses.
                   //
                   // Cascade entrance/exit, per explicit request/demo
-                  // pick - the panel itself just fades (fast, no
-                  // stagger), while each notification row below stagers
-                  // in individually on open; closing reverses to a
-                  // single synchronized fade-out (no stagger), same
-                  // asymmetry the approved demo variant used.
+                  // pick - the panel itself just fades, while each
+                  // notification row below staggers in individually on
+                  // open; closing reverses to a single synchronized
+                  // fade-out (no stagger), same asymmetry the approved
+                  // demo variant used. Slowed down and overflow-x-hidden
+                  // added per direct feedback: the first cut felt too
+                  // fast/not smooth, and each row's own translateX slide
+                  // was briefly wider than the panel mid-animation -
+                  // since `overflow-y-auto` alone implicitly computes
+                  // overflow-x to `auto` too (a real CSS overflow-pairing
+                  // rule, not a bug in the values themselves), that
+                  // transient overflow was showing a horizontal
+                  // scrollbar for the duration of the slide.
                   <div
-                    className="fixed right-4 z-[106] max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
+                    className="fixed right-4 z-[106] max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
                     style={{
                       top: `${(headerHeight ?? 60) + 8}px`,
                       opacity: notifEntered ? 1 : 0,
-                      transition: 'opacity 140ms ease',
+                      transition: 'opacity 220ms ease',
                     }}
                   >
                     <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
@@ -809,15 +817,25 @@ function AppHeader({ hidden = false }) {
                             key={notif.id}
                             style={{
                               opacity: notifEntered ? 1 : 0,
-                              transform: notifEntered ? 'translateX(0)' : 'translateX(14px)',
+                              // Shortened from 14px - per direct
+                              // feedback the first cut wasn't smooth and
+                              // showed a scrollbar; a smaller slide has
+                              // less room to transiently overflow the
+                              // panel's width while it's mid-motion (now
+                              // also guarded outright by overflow-x-
+                              // hidden on the panel itself, above).
+                              transform: notifEntered ? 'translateX(0)' : 'translateX(8px)',
                               // Staggered on the way IN (each row a beat
                               // behind the last, capped at index 4 so a
                               // long list doesn't drag the entrance out
                               // forever); 0ms on the way OUT so every row
                               // fades together instead of trailing off
-                              // one by one.
-                              transitionDelay: notifEntered ? `${Math.min(i, 4) * 60 + 40}ms` : '0ms',
-                              transition: 'opacity 220ms cubic-bezier(.2,.8,.2,1), transform 220ms cubic-bezier(.2,.8,.2,1)',
+                              // one by one. Slowed down (both the per-row
+                              // duration and the gap between rows) per
+                              // direct feedback that the first cut felt
+                              // too fast/not smooth.
+                              transitionDelay: notifEntered ? `${Math.min(i, 4) * 90 + 60}ms` : '0ms',
+                              transition: 'opacity 320ms cubic-bezier(.2,.8,.2,1), transform 320ms cubic-bezier(.2,.8,.2,1)',
                             }}
                           >
                             <button
