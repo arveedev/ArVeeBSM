@@ -7326,4 +7326,22 @@
 //              date range happens to cover that date. Confirmed via a
 //              dialog before running, since it's a one-way lock. New
 //              synced db.sdoReportCutoffs table (dexie.js v44).
-export const APP_VERSION = '1.10-215'
+//   1.10-216 - Corrected 1.10-215's Report Cut-Off per direct follow-up:
+//              a cut-off is NOT a blanket "hide these receipts
+//              everywhere forever" flag - a real, reported gap was that
+//              exporting Sept 1-28 (a full historical range spanning
+//              across a Sept 25 cut-off) silently dropped the cut-off's
+//              own 3 receipts entirely, when it should show everything.
+//              Rebuilt the scoping around a precise, three-case rule
+//              (see AbstractExportModal.jsx's own top comment):
+//              dateFrom before the cut-off's date -> no effect at all,
+//              full view; dateFrom === dateTo === the cut-off's exact
+//              date -> re-running that single day reproduces ONLY the
+//              cut-off's own reported receipts; dateFrom === the
+//              cut-off's date with dateTo beyond it -> excludes the
+//              cut-off's receipts and chains the opening balance from
+//              its frozen ending balance, same as before. Shared
+//              applyCutoffScoping/findChainableCutoff helpers now drive
+//              both the checklist display and the real export, so they
+//              can never disagree.
+export const APP_VERSION = '1.10-216'

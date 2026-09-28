@@ -17,17 +17,71 @@
 // the rest once a LATER export covers that date. "Cut Off & Export"
 // (only offered while the checklist is open) does everything the plain
 // checked-subset export does, but additionally writes a
-// db.sdoReportCutoffs row: the checked PRs' own ids (permanently
-// excluded from ever appearing in a later export's checklist/PR list
-// again) and this export's own final ending balance. A LATER export
-// then chains its own opening balance from the most recent applicable
-// cut-off's endingBalance instead of recomputing from raw ledger
-// history, and only considers ledger entries dated strictly AFTER that
-// cut-off - both already folded into the frozen endingBalance, so
-// counting them again would double them. The other (unchecked) PRs
-// from that same day are untouched by the cut-off, so they naturally
-// surface in whichever later export's own date range happens to cover
-// that date, exactly like any other not-yet-reported PR would.
+// db.sdoReportCutoffs row: the checked PRs' own ids and this export's
+// own final ending balance.
+//
+// A cut-off is NOT a blanket "hide these PRs everywhere forever" flag -
+// per explicit correction, a cut-off's own receipts must stay fully
+// visible/exportable in any OTHER report that genuinely covers them.
+// Its effect only ever kicks in when a LATER report's own `dateFrom`
+// exactly matches the cut-off's date:
+//   - dateFrom < cutoffDate (e.g. Sep 1-28 spanning a Sep 25 cut-off):
+//     no effect at all - the cut-off's receipts print normally, right
+//     alongside everything else, same as a full historical/audit view
+//     should.
+//   - dateFrom === cutoffDate === dateTo (re-running the exact same
+//     single day the cut-off itself covered, e.g. Sep 25 alone): shows
+//     ONLY that cut-off's own reported receipts (not the day's other,
+//     still-unreported ones) - reproducing the cut-off's own report
+//     exactly, since that's what "the 25th" now IS as far as reporting
+//     is concerned.
+//   - dateFrom === cutoffDate, dateTo > dateFrom (e.g. Sep 25-28):
+//     excludes the cut-off's own receipts (already reported separately)
+//     and chains this report's own opening balance from the cut-off's
+//     frozen endingBalance instead of recomputing from raw ledger
+//     history - the cut-off's own date's ledger entries (its
+//     replenishment) are already folded into that frozen figure, so
+//     counting them again here would double them.
+// The day's other (unchecked) receipts are never touched by the
+// cut-off itself - they simply surface normally in whichever report's
+// date range happens to cover that date, exactly like any other
+// not-yet-reported receipt would.
+
+// A cut-off whose date exactly matches this query's own dateFrom -
+// per the rule above, the only case where a cut-off does anything to a
+// PR list at all.
+const cutoffsAtDateFrom = (cutoffs, dateFrom) => cutoffs.filter((c) => c.cutoffDate === dateFrom)
+
+// Applies the cut-off scoping rule (see this file's own top comment) to
+// a raw list of PRs already fetched for [dateFrom, dateTo]. Shared by
+// the checklist's own live display and handleExport's real fetch, so
+// they can never disagree about what's actually reportable.
+const applyCutoffScoping = (prs, cutoffs, dateFrom, dateTo) => {
+  const matching = cutoffsAtDateFrom(cutoffs, dateFrom)
+  if (matching.length === 0) return prs
+  const idSet = new Set(matching.flatMap((c) => c.reportedPrIds ?? []))
+  if (dateFrom === dateTo) {
+    // Exact re-run of a cut-off day: show ONLY what that cut-off
+    // itself reported, not the day's other still-unreported receipts.
+    return prs.filter((pr) => idSet.has(pr.prId))
+  }
+  // A range starting exactly at the cut-off date and extending beyond
+  // it: exclude the cut-off's own receipts (already reported).
+  return prs.filter((pr) => !idSet.has(pr.prId))
+}
+
+// The cut-off (if any) this report's own opening balance should chain
+// from - only when dateFrom exactly matches a cut-off's date AND this
+// isn't an exact re-run of that same single day (that case reuses the
+// ORIGINAL pre-cut-off opening balance instead, computed the normal
+// way - see applyCutoffScoping's own comment on why that case is
+// different). Multiple cut-offs sharing the same date (unusual, but
+// possible) resolve to whichever was created most recently.
+const findChainableCutoff = (cutoffs, dateFrom, dateTo) => {
+  if (dateFrom === dateTo) return null
+  const matching = cutoffsAtDateFrom(cutoffs, dateFrom)
+  return matching.reduce((latest, c) => (!latest || c.createdAt > latest.createdAt ? c : latest), null)
+}
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
@@ -76,37 +130,27 @@ function AbstractExportModal({ onClose }) {
   }, [])
 
   // Every cut-off this SDO has ever made, live - drives both the
-  // checklist's own PR query (a previously cut-off PR must never
-  // reappear as something to check/report again) and handleExport's
-  // opening-balance chaining below.
+  // checklist's own PR query and handleExport's real fetch below, via
+  // the shared applyCutoffScoping/findChainableCutoff helpers above.
   const cutoffs = useLiveQuery(
     () => user?.uid ? db.sdoReportCutoffs.where('sdoUid').equals(user.uid).toArray() : [],
     [user?.uid]
   ) ?? []
-  const cutoffExcludedPrIds = new Set(cutoffs.flatMap((c) => c.reportedPrIds ?? []))
-  // The most recent cut-off that actually applies to THIS export's own
-  // period - one with a cutoffDate after this report's own dateTo
-  // hasn't happened yet relative to what's being exported, so it must
-  // never be chained from (a real edge case: running an older/backdated
-  // export after a later cut-off already exists).
-  const latestApplicableCutoff = cutoffs
-    .filter((c) => c.cutoffDate <= dateTo)
-    .reduce((latest, c) => (!latest || c.cutoffDate > latest.cutoffDate ? c : latest), null)
 
   // Only queried for the checklist display - the export itself always
   // re-fetches its own copy inside handleExport, same as before the
   // checklist existed, so a stale live-query snapshot can never affect
   // what actually gets printed. Same PR scope as the export's own fetch
   // below - Active AND Cancelled (a void still explains a gap in the PR
-  // Number sequence) - MINUS anything already cut off in a past export,
-  // so it can never be checked/reported a second time.
+  // Number sequence) - scoped by applyCutoffScoping so the checklist
+  // never offers something already locked into a past cut-off.
   const periodPrs = useLiveQuery(async () => {
     if (!showChecklist || !user?.uid || !dateFrom || !dateTo) return []
     const prs = await db.purchaseReceipts
       .where('sdoUid').equals(user.uid)
-      .and((pr) => (pr.status === 'Active' || pr.status === 'Cancelled') && pr.date >= dateFrom && pr.date <= dateTo && !cutoffExcludedPrIds.has(pr.prId))
+      .and((pr) => (pr.status === 'Active' || pr.status === 'Cancelled') && pr.date >= dateFrom && pr.date <= dateTo)
       .toArray()
-    return [...prs].sort(byPrNo)
+    return applyCutoffScoping(prs, cutoffs, dateFrom, dateTo).sort(byPrNo)
   }, [showChecklist, user?.uid, dateFrom, dateTo, cutoffs.length]) ?? []
 
   // Defaults every PR in the CURRENT period to checked whenever the
@@ -150,14 +194,12 @@ function AbstractExportModal({ onClose }) {
         db.purchaseReceipts.where('[sdoUid+status]').equals([user.uid, 'Active']).toArray(),
       ])
 
-      // Already-cut-off PRs are excluded unconditionally, checklist or
-      // not - a plain "export everything in the period" must never
-      // silently re-list (or re-charge against the fund balance) a
-      // receipt an earlier cut-off already reported. On top of that,
+      // Cut-off scoping applies regardless of the checklist (see this
+      // file's own top comment for the full rule) - on top of that,
       // narrowed to the checked subset only when the checklist was
       // actually engaged.
-      const notCutOff = allPrsRaw.filter((pr) => !cutoffExcludedPrIds.has(pr.prId))
-      const allPrs = showChecklist ? notCutOff.filter((pr) => checkedIds.has(pr.prId)) : notCutOff
+      const cutoffScoped = applyCutoffScoping(allPrsRaw, cutoffs, dateFrom, dateTo)
+      const allPrs = showChecklist ? cutoffScoped.filter((pr) => checkedIds.has(pr.prId)) : cutoffScoped
 
       if (allPrs.length === 0) {
         toast.error(showChecklist ? 'No checked Purchase Receipts to export' : 'No Purchase Receipts in this period')
@@ -217,14 +259,20 @@ function AbstractExportModal({ onClose }) {
 
       // Opening balance stays the REAL, full pre-period balance,
       // untouched by which PRs are checked - it describes cash carried
-      // in from before this document even starts. UNLESS a prior cut-off
-      // already applies to this period, in which case it chains from
-      // that cut-off's own frozen endingBalance instead of recomputing
-      // from raw ledger history - the cut-off already accounts for
-      // every peso through its own date, so redoing that math here
-      // would either duplicate or (worse) silently diverge from it.
-      const openingBalance = latestApplicableCutoff
-        ? latestApplicableCutoff.endingBalance
+      // in from before this document even starts. UNLESS a cut-off
+      // exactly at this report's own dateFrom applies (see
+      // findChainableCutoff/this file's own top comment), in which case
+      // it chains from that cut-off's own frozen endingBalance instead
+      // of recomputing from raw ledger history - the cut-off already
+      // accounts for every peso through its own date, so redoing that
+      // math here would either duplicate or (worse) silently diverge
+      // from it. A report whose dateFrom is BEFORE the cut-off's date
+      // (a full historical view spanning across it) never chains -
+      // computeCashOnHand already correctly covers that whole span on
+      // its own.
+      const chainableCutoff = findChainableCutoff(cutoffs, dateFrom, dateTo)
+      const openingBalance = chainableCutoff
+        ? chainableCutoff.endingBalance
         : computeCashOnHand(
             ledgerEntries.filter((e) => e.date < dateFrom),
             activePrsAll.filter((pr) => pr.date < dateFrom).map((pr) => pr.totalAmount ?? 0)
@@ -242,18 +290,15 @@ function AbstractExportModal({ onClose }) {
       // "only replenishment with check number should appear" per
       // explicit request.
       //
-      // Lower bound is the later of dateFrom or (when a cut-off
-      // applies) the day strictly after that cut-off's own date - any
-      // ledger entry dated at or before it is already folded into
+      // Lower bound: when a cut-off is being chained from (see above),
+      // strictly AFTER that cut-off's own date - any ledger entry dated
+      // at or before it (e.g. the very replenishment that funded the
+      // cut-off's own reported receipts) is already folded into
       // openingBalance above, so counting it again here would double
-      // it (e.g. the very replenishment that funded the cut-off's own
-      // reported receipts).
-      const ledgerLowerBound = latestApplicableCutoff && latestApplicableCutoff.cutoffDate >= dateFrom
-        ? latestApplicableCutoff.cutoffDate
-        : null
+      // it. Otherwise the plain dateFrom bound, unchanged.
       const periodLedgerEntries = ledgerEntries.filter((e) => {
         if (e.voided || e.date > dateTo) return false
-        return ledgerLowerBound ? e.date > ledgerLowerBound : e.date >= dateFrom
+        return chainableCutoff ? e.date > chainableCutoff.cutoffDate : e.date >= dateFrom
       })
       const periodReplenishEntries = periodLedgerEntries.filter((e) => e.type === 'replenish')
       const checkedReplenishEntries = periodReplenishEntries.filter((e) => e.refNo && e.refNo !== 'Opening balance')
@@ -407,20 +452,26 @@ function AbstractExportModal({ onClose }) {
                   </button>
                 )}
               </div>
-              {/* Transparency for the exclusion handleExport/periodPrs
-                  both apply silently - so a previously cut-off receipt
-                  from earlier in this same date range isn't just
-                  mysteriously absent with no explanation. */}
-              {cutoffs.length > 0 && (() => {
-                const hiddenCount = cutoffs
-                  .filter((c) => c.cutoffDate >= dateFrom && c.cutoffDate <= dateTo)
-                  .reduce((s, c) => s + (c.reportedPrIds?.length ?? 0), 0)
-                return hiddenCount > 0 ? (
+              {/* Transparency for the scoping applyCutoffScoping applies
+                  silently - so a previously cut-off receipt isn't just
+                  mysteriously absent (or the list mysteriously narrowed
+                  to just a few) with no explanation. Only a cut-off
+                  exactly at this dateFrom is ever relevant - see this
+                  file's own top comment. */}
+              {(() => {
+                const matching = cutoffsAtDateFrom(cutoffs, dateFrom)
+                if (matching.length === 0) return null
+                const count = matching.reduce((s, c) => s + (c.reportedPrIds?.length ?? 0), 0)
+                if (count === 0) return null
+                const note = dateFrom === dateTo
+                  ? `Showing only the ${count} receipt${count === 1 ? '' : 's'} already cut off and reported for this date.`
+                  : `${count} receipt${count === 1 ? '' : 's'} already reported in an earlier cut-off for ${dateFrom} - not shown here.`
+                return (
                   <p className="flex items-center gap-1 text-[11px] text-neutral-500">
                     <Scissors size={11} className="shrink-0" />
-                    {hiddenCount} receipt{hiddenCount === 1 ? '' : 's'} already reported in an earlier cut-off - not shown here.
+                    {note}
                   </p>
-                ) : null
+                )
               })()}
               {periodPrs.length === 0 ? (
                 <p className="py-4 text-center text-xs text-neutral-500">No Purchase Receipts in this period.</p>
