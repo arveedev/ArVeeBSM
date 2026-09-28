@@ -7298,4 +7298,13 @@
 //              suggestion (which also blurs the input first, since
 //              buttons are focusable) still lets that click's own
 //              onClick run before anything closes.
-export const APP_VERSION = '1.10-213'
+//   1.10-214 - DenominationModal.jsx: tapping the backdrop or the X
+//              used to call onClose directly, discarding every
+//              bundle/piece typed so far (only the explicit "Save
+//              Count" button ever persisted it) - forcing a full
+//              recount after an accidental close, per direct request.
+//              Both now save first, same as pressing Save Count itself,
+//              guarded against writing blank values over an existing
+//              saved count if closed before that count has even
+//              finished loading.
+export const APP_VERSION = '1.10-214'

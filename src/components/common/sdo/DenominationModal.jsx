@@ -108,11 +108,33 @@ function DenominationModal({ currentCashOnHand, onClose }) {
     onClose()
   }
 
+  // Confirmed, reported real concern: tapping the backdrop or the X
+  // (easy to do by accident on a phone, especially mid-count with many
+  // rows to fill in) used to call onClose directly - every bundle/piece
+  // typed so far was only ever in local `counts` state until the
+  // explicit "Save Count" button was pressed, so an accidental close
+  // silently threw all of it away, forcing a full recount. Any way this
+  // modal closes now saves first, same as pressing Save Count itself -
+  // the button stays for an explicit, unambiguous "I'm done" action,
+  // but it's no longer the ONLY thing that persists progress.
+  // Guarded on `saved !== undefined` (useLiveQuery's own "still
+  // loading" signal, not yet the real record or null) - a close that
+  // happens to land before the existing saved count has even loaded
+  // into `counts` would otherwise write blank/zero values over whatever
+  // was already saved, instead of just leaving it untouched.
+  const handleClose = () => {
+    if (saved !== undefined) {
+      handleSave()
+    } else {
+      onClose()
+    }
+  }
+
   // Portaled to document.body - see PurchaseReceiptModal.jsx's own comment.
   return createPortal(
     <div
       className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-200 ${entered ? 'opacity-100' : 'opacity-0'}`}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
@@ -124,7 +146,7 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             <h2 className="text-base font-semibold text-app-text">Denomination Count</h2>
             <p className="text-xs text-neutral-500">A bundle is {BUNDLE_SIZE} pieces</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
+          <button type="button" onClick={handleClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
         </div>
         {/* Compact rows + sticky summary (chosen from three redesign demos) -
             the list is the ONLY scrollable region now; the totals/diff/Save
