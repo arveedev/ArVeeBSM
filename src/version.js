@@ -6993,4 +6993,10 @@
 //              "RSBSA", Gender's blank option -> "Male or Female", PO
 //              No. -> "Purchase Order Number". Text only - all four
 //              stay genuinely optional, no validation change.
-export const APP_VERSION = '1.10-194'
+//   1.10-195 - Corrected 1.10-194 per explicit follow-up: Gender's
+//              "Male or Female" placeholder was a real, pickable
+//              <option value="">, letting it be re-selected as if it
+//              were a third gender choice. Now disabled + hidden - it
+//              still shows while nothing is picked, but Male/Female are
+//              the only two selectable options.
+export const APP_VERSION = '1.10-195'

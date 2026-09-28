@@ -3679,7 +3679,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   onChange={(e) => setFarmerGender(e.target.value)}
                   className={inputClass}
                 >
-                  <option value="">Male or Female</option>
+                  {/* disabled + hidden - per explicit request, this
+                      placeholder shows when nothing is picked yet but
+                      is never itself a selectable option; Male/Female
+                      (GENDERS below) are the only real choices. */}
+                  <option value="" disabled hidden>Male or Female</option>
                   {GENDERS.map((g) => (
                     <option key={g} value={g}>
                       {g}
