@@ -7193,4 +7193,26 @@
 //              convention exactly (including stripping the redundant
 //              unit text from the value since the tile's own label
 //              already states it).
-export const APP_VERSION = '1.10-206'
+//   1.10-207 - Corrected 1.10-206's Overview card per direct feedback
+//              (screenshots): every depth level looked nearly
+//              identical, making it impossible to tell where a
+//              warehouse card ended and the next began, and long
+//              figures (e.g. "225,459.115") were overflowing their
+//              tile once nested three cards deep. ProcurementMonitor.jsx
+//              only:
+//              (1) Each depth now gets a genuinely distinct treatment:
+//              Total gets its own highlighted neon card (was bare
+//              floating text before); the Province indent bar is neon,
+//              Warehouse's is blue, Variety's is amber; "Warehouses"/
+//              "Varieties" uppercase eyebrow labels now head each
+//              nested list explicitly, not just implied by indentation.
+//              (2) Fixed the overflow: tightened card/tile padding at
+//              every level and stepped the tile value font size down
+//              with depth (Warehouse tiles text-base/lg, Variety tiles
+//              text-sm/base, both down from a flat text-lg/xl that
+//              didn't account for how much width three levels of
+//              nested padding actually leaves on a real phone), plus
+//              min-w-0 + break-words on every tile so a figure that
+//              still doesn't fit wraps instead of visually overflowing
+//              its rounded box.
+export const APP_VERSION = '1.10-207'
