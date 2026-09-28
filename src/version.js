@@ -7376,4 +7376,20 @@
 //              the same Address/RSBSA/Gender/PO chain (focusPrevInChain),
 //              landing on Customer Name at the start - previously only
 //              forward Tab-skip existed, nothing to undo an overshoot.
-export const APP_VERSION = '1.10-217'
+//   1.10-218 - Fixed 1.10-217's Tab-skip chain still not working on the
+//              FIRST customer selection, per direct follow-up: the
+//              exact keydown that accepts a suggestion (Tab-to-accept)
+//              and this chain's own Tab-forward handling run in the
+//              SAME synchronous event - the customer match's setState
+//              calls (Address/RSBSA/Gender) hadn't committed yet at the
+//              moment the chain read them, so it still saw the
+//              PREVIOUS (pre-selection) values the very first time,
+//              only working a second time once a re-render had already
+//              landed from something else. Deferred every
+//              focusNextInChain/focusPrevInChain call one animation
+//              frame, reading them through refs kept fresh on every
+//              render (same pattern useDebouncedLiveCompute.js already
+//              uses) so the deferred callback always sees the just-
+//              committed data instead of the stale closure that
+//              existed at keydown time.
+export const APP_VERSION = '1.10-218'

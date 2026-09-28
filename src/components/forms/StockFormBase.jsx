@@ -816,11 +816,35 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     if (idx <= 0) { customerNameRef.current?.focus(); return }
     tabChainSteps[idx - 1].focus()
   }
+  // Confirmed, reported real bug: the VERY FIRST Tab after picking a
+  // customer suggestion (via CustomerNameAutocomplete's own Tab-to-
+  // accept flow) still landed on plain Address, even though the
+  // selection had just auto-filled Address/RSBSA/Gender - a SECOND,
+  // later attempt worked correctly. Root cause: accepting the
+  // suggestion and this chain's own Tab handling both run inside the
+  // SAME synchronous keydown event - the setState calls from onMatch
+  // (customerAddress/farmerRsbsa/farmerGender) don't commit until
+  // AFTER this handler returns, so tabChainSteps' `filled` checks were
+  // still reading the PREVIOUS render's (pre-selection) values the
+  // first time. Refs updated unconditionally every render (not inside
+  // an effect - same "always holds the latest closure" pattern
+  // useDebouncedLiveCompute.js already uses) let a deferred
+  // requestAnimationFrame callback call the FRESHEST focusNextInChain/
+  // focusPrevInChain once React has actually committed the just-picked
+  // customer's data, instead of whichever stale closure captured this
+  // particular keydown.
+  const focusNextInChainRef = useRef(focusNextInChain)
+  focusNextInChainRef.current = focusNextInChain
+  const focusPrevInChainRef = useRef(focusPrevInChain)
+  focusPrevInChainRef.current = focusPrevInChain
   const handleChainKeyDown = (fromKey) => (e) => {
     if (e.key !== 'Tab' || !tabSkipApplies) return
     e.preventDefault()
-    if (e.shiftKey) focusPrevInChain(fromKey)
-    else focusNextInChain(fromKey)
+    const shiftKey = e.shiftKey
+    requestAnimationFrame(() => {
+      if (shiftKey) focusPrevInChainRef.current(fromKey)
+      else focusNextInChainRef.current(fromKey)
+    })
   }
 
   const isAccountabilityFacility = currentWarehouse?.facilityType === 'Mechanical Dryer' || currentWarehouse?.facilityType === 'Ricemill'
@@ -3387,11 +3411,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             // still-blank field in the chain, same as every other field
             // in it. Forward-only here (Shift+Tab uses the native
             // default - there's nothing before Customer Name in this
-            // chain to step back to).
+            // chain to step back to). Deferred via
+            // focusNextInChainRef - see that ref's own comment: this
+            // exact Tab press is very often the SAME one that just
+            // accepted the suggestion (Tab-to-accept), whose
+            // Address/RSBSA/Gender state hasn't committed yet at the
+            // moment this handler runs synchronously.
             onKeyDown={(e) => {
               if (e.key !== 'Tab' || e.shiftKey || !tabSkipApplies) return
               e.preventDefault()
-              focusNextInChain(undefined)
+              requestAnimationFrame(() => focusNextInChainRef.current(undefined))
             }}
             // Procurement-only "FA" (Farmers Organization) toggle, now
             // in-line with the label itself - per explicit request,
@@ -3911,7 +3940,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   // needed an override here in the first place.
                   if (e.key !== 'Tab' || e.shiftKey || !tabSkipApplies) return
                   e.preventDefault()
-                  focusNextInChain(undefined)
+                  requestAnimationFrame(() => focusNextInChainRef.current(undefined))
                 }}
                 className={`${inputClass} ${!sackSelection ? '!border-brand-amber' : ''}`}
               >
