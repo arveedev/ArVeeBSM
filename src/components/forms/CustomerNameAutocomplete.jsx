@@ -222,6 +222,22 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
         }}
         onFocus={() => setShowSuggestions(true)}
         onKeyDown={handleKeyDown}
+        // Confirmed, reported real bug: the dropdown only ever closed
+        // via the mousedown-based "click outside" listener below - Tab
+        // (or any other keyboard focus change) never fires a mousedown
+        // at all, so tabbing away with nothing selected left the
+        // suggestion list sitting open, overlapping whatever field
+        // focus actually landed on next. e.relatedTarget (the element
+        // about to receive focus) is checked against the dropdown
+        // itself, not just closed unconditionally - a genuine click on
+        // a suggestion also blurs this input first (buttons are
+        // focusable by default), and that transition must NOT close
+        // the list before the button's own onClick (which fires after
+        // blur, on mouseup) gets a chance to run.
+        onBlur={(e) => {
+          if (dropdownRef.current?.contains(e.relatedTarget)) return
+          setShowSuggestions(false)
+        }}
         className={`${inputClass} ${required && !(value ?? '').trim() ? '!border-brand-amber' : ''}`}
         placeholder="Name"
         autoComplete="off"

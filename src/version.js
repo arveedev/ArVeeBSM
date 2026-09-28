@@ -7285,4 +7285,17 @@
 //   1.10-212 - Corrected 1.10-210 per direct follow-up: SDO Home's
 //              Completed tab now sorts DESCENDING by PR Number
 //              (highest first), not ascending.
-export const APP_VERSION = '1.10-212'
+//   1.10-213 - Fixed real, reported bug: the Customer Name
+//              autocomplete's suggestion dropdown could stay open and
+//              overlapping the next field after the user tabbed (or
+//              otherwise moved keyboard focus) away without picking
+//              anything (CustomerNameAutocomplete.jsx). Root cause: the
+//              dropdown only ever closed via a mousedown-based "click
+//              outside" listener - Tab and other keyboard focus changes
+//              never fire a mousedown, so nothing ever told it to
+//              close in that case. Added an onBlur handler that closes
+//              it, guarded by e.relatedTarget so a genuine click on a
+//              suggestion (which also blurs the input first, since
+//              buttons are focusable) still lets that click's own
+//              onClick run before anything closes.
+export const APP_VERSION = '1.10-213'
