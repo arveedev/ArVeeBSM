@@ -7071,4 +7071,19 @@
 //              app-wide memory rule (feedback_no-truncated-data.md):
 //              real data must never be truncated anywhere in this app,
 //              always wrap instead.
-export const APP_VERSION = '1.10-199'
+//   1.10-200 - Corrected 1.10-199's Overview card per explicit
+//              follow-up, all in ProcurementMonitor.jsx:
+//              (1) Removed the "Province · Warehouse · Variety" subtext
+//              under the card's own "Overview" title.
+//              (2) Net Kilos and (derived) Net Bags no longer show
+//              stacked together anywhere in this card - added a Net
+//              Kgs/Net Bags sliding-pill toggle (same convention
+//              AppHeader.jsx's own KG/MT toggle uses) that picks
+//              exactly one, shared by the hero total and every
+//              Warehouse/Variety row. Actual (real counted) Bags stays
+//              visible regardless of the toggle at every level - a
+//              different figure entirely from the kilos-derived one.
+//              (3) Warehouse and Variety row font sizes bumped up again
+//              (text-base/lg floor, md: bumped to lg/xl) for
+//              readability on both small and large displays.
+export const APP_VERSION = '1.10-200'

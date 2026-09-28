@@ -37,6 +37,13 @@ import ProcurementSortFilterModal from './ProcurementSortFilterModal.jsx'
 function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, periodLabel }) {
   const [expandedProvinces, setExpandedProvinces] = useState(() => new Set())
   const [expandedWarehouses, setExpandedWarehouses] = useState(() => new Set())
+  // 'kg' | 'bags' - per explicit correction, Net Kilos and (derived)
+  // Net Bags must never show stacked together at any level - exactly
+  // one of the two, picked by this toggle. Actual (counted) Bags stays
+  // visible regardless of this toggle at every level - it's a
+  // different figure entirely (the real WSR bag count, not a
+  // kilos-derived one).
+  const [weightMode, setWeightMode] = useState('kg')
 
   const toggleProvince = (id) => setExpandedProvinces((prev) => {
     const next = new Set(prev)
@@ -48,16 +55,16 @@ function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, pe
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
   })
+  const weightLabel = (kilos) => weightMode === 'kg'
+    ? fmtWeight(kilos, weightUnit)
+    : `${fmtNetBags(calculateNetBags(kilos))} net bags`
 
   if (groups.length === 0) return null
 
   return (
     <div className="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <div className="flex items-center justify-between gap-2 border-b border-neutral-800 pb-3">
-        <div className="min-w-0">
-          <p className="text-base font-bold text-app-text md:text-lg">Overview</p>
-          <p className="text-sm text-neutral-500 md:text-base">Province · Warehouse · Variety</p>
-        </div>
+        <p className="text-base font-bold text-app-text md:text-lg">Overview</p>
         {periodLabel && (
           <span className="shrink-0 rounded-full border border-brand-amber/40 bg-brand-amber/10 px-2.5 py-1 text-sm font-bold text-brand-amber md:text-base">
             {periodLabel}
@@ -65,19 +72,38 @@ function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, pe
         )}
       </div>
 
-      <div className="flex items-start justify-between gap-3 py-3">
+      {/* Net Kgs / Net Bags toggle - shared by the hero total below and
+          every Warehouse/Variety row further down, so the whole card
+          always agrees on which figure is showing. Same sliding-pill
+          convention AppHeader.jsx's own KG/MT toggle uses. */}
+      <div className="mt-3 flex items-center justify-between gap-3">
         <p className="text-2xl font-bold tabular-nums text-brand-neon md:text-3xl">
           {fmtBags(grandBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
         </p>
-        <div className="shrink-0 text-right">
-          <p className="text-xl font-bold tabular-nums text-app-text md:text-2xl">{fmtWeight(grandKilos, weightUnit)}</p>
-          <p className="text-sm font-semibold tabular-nums text-neutral-400 md:text-base">
-            {fmtNetBags(calculateNetBags(grandKilos))} net bags
-          </p>
+        <div className="relative flex shrink-0 items-center overflow-hidden rounded-full border border-neutral-800 bg-neutral-950 text-xs font-bold md:text-sm">
+          <span
+            className="absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-brand-neon transition-transform duration-300 ease-out"
+            style={{ transform: weightMode === 'bags' ? 'translateX(100%)' : 'translateX(0%)' }}
+          />
+          <button
+            type="button"
+            onClick={() => setWeightMode('kg')}
+            className={`relative z-10 px-3 py-2 transition-colors ${weightMode === 'kg' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+          >
+            Net Kgs
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeightMode('bags')}
+            className={`relative z-10 px-3 py-2 transition-colors ${weightMode === 'bags' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+          >
+            Net Bags
+          </button>
         </div>
       </div>
+      <p className="mt-1 text-right text-base font-semibold tabular-nums text-app-text md:text-lg">{weightLabel(grandKilos)}</p>
 
-      <div className="divide-y divide-neutral-800">
+      <div className="mt-2 divide-y divide-neutral-800">
         {groups.map((g) => {
           const isProvOpen = expandedProvinces.has(g.provinceId)
           return (
@@ -101,29 +127,39 @@ function ProcurementOverviewCard({ groups, grandBags, grandKilos, weightUnit, pe
                   {g.warehouses.map((wh) => {
                     const isWhOpen = expandedWarehouses.has(wh.warehouseId)
                     return (
-                      <div key={wh.warehouseId} className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2.5">
+                      <div key={wh.warehouseId} className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-3">
                         <button
                           type="button"
                           onClick={() => toggleWarehouse(wh.warehouseId)}
-                          className="flex w-full items-center justify-between gap-2 text-left"
+                          className="w-full text-left"
                         >
-                          <span className="min-w-0 break-words text-sm font-semibold text-app-text md:text-base">
-                            {wh.warehouse.code} — {wh.warehouse.name}
-                          </span>
-                          <span className="flex shrink-0 items-center gap-2">
-                            <span className="text-sm font-bold tabular-nums text-blue-400 md:text-base">{fmtBags(wh.totalBags)}</span>
-                            <ChevronDown size={14} className={`text-neutral-600 transition-transform ${isWhOpen ? 'rotate-180' : ''}`} />
-                          </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 break-words text-base font-semibold text-app-text md:text-lg">
+                              {wh.warehouse.code} — {wh.warehouse.name}
+                            </span>
+                            <ChevronDown size={16} className={`shrink-0 text-neutral-600 transition-transform ${isWhOpen ? 'rotate-180' : ''}`} />
+                          </div>
+                          <div className="mt-1.5 flex items-baseline justify-between gap-3">
+                            <span className="text-lg font-bold tabular-nums text-blue-400 md:text-xl">
+                              {fmtBags(wh.totalBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
+                            </span>
+                            <span className="shrink-0 text-base font-semibold tabular-nums text-neutral-300 md:text-lg">
+                              {weightLabel(wh.totalKilos)}
+                            </span>
+                          </div>
                         </button>
 
                         {isWhOpen && (
-                          <div className="mt-2 space-y-1.5 border-t border-neutral-800 pt-2">
+                          <div className="mt-2 space-y-2 border-t border-neutral-800 pt-2">
                             {wh.varietyGroups.map((vg) => (
                               <div key={vg.varietyId} className="flex items-center justify-between gap-2">
-                                <span className="min-w-0 break-words text-sm text-neutral-300 md:text-base">{vg.varietyName}</span>
-                                <span className="shrink-0 text-sm tabular-nums text-neutral-400 md:text-base">
-                                  {fmtBags(vg.subtotalBags)} bags
-                                </span>
+                                <span className="min-w-0 break-words text-base text-neutral-200 md:text-lg">{vg.varietyName}</span>
+                                <div className="shrink-0 text-right">
+                                  <p className="text-base font-bold tabular-nums text-app-text md:text-lg">
+                                    {fmtBags(vg.subtotalBags)} <span className="text-sm font-normal text-neutral-500 md:text-base">bags</span>
+                                  </p>
+                                  <p className="text-sm tabular-nums text-neutral-400 md:text-base">{weightLabel(vg.subtotalKilos)}</p>
+                                </div>
                               </div>
                             ))}
                           </div>
