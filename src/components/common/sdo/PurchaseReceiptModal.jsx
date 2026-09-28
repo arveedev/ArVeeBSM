@@ -184,6 +184,7 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
           payeeName: wsr.customerName,
           payeeAddress: wsr.customerAddress,
           rsbsa: resolvedRsbsa,
+          poNumber: wsr.poNumber ?? null,
           varietyId: wsr.varietyId,
           classification: variety?.name ?? null,
           purityLetter: variety?.purityLetter ?? null,

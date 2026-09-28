@@ -6968,4 +6968,23 @@
 //              farmerGender). Scoped to StockFormBase.jsx only - no
 //              other screen (reports, Sheets backup, PR generation)
 //              reads it yet.
-export const APP_VERSION = '1.10-192'
+//   1.10-193 - Wired the new PO No. field (1.10-192) into both Sheets
+//              backups, per explicit follow-up request:
+//              - Transaction backup (buildBackupRow, WSR only): new
+//                'PO No.' key.
+//              - PR SUMMARY ("PALAY DELIVERIES") backup
+//                (buildPrSummaryRow): new 'PO NO.' key (all-caps,
+//                matching that sheet's own header convention), resolved
+//                from context.poNumber (read off the underlying WSR in
+//                syncWorker.js) falling back to pr.poNumber, same
+//                two-layer pattern already used for rsbsa. Also copies
+//                poNumber onto the purchaseReceipts record itself at
+//                PR-creation time (PurchaseReceiptModal.jsx), so that
+//                fallback has real data to fall back to.
+//              Both write actions map object keys to Sheet columns by
+//              EXACT header-name match - a manual column add is
+//              required on each real spreadsheet before either backup
+//              can actually land in it (header text: "PO No." on the
+//              receipts sheet, "PO NO." on the PR SUMMARY sheet) - see
+//              the chat reply for exact instructions.
+export const APP_VERSION = '1.10-193'

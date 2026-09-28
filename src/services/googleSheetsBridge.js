@@ -1362,6 +1362,7 @@ const buildBackupRow = (transaction, context) => {
       'WSR #': transaction.serialNo,
       'WSI #': transaction.linkedDocNo ?? null,
       'Batch No': transaction.batchNo ?? null,
+      'PO No.': transaction.poNumber ?? null,
       AGE: ageValue,
       'Age Unit': ageUnit,
       'MO Number': transaction.moNumber ?? null,
@@ -1781,7 +1782,7 @@ const PR_SUMMARY_MATCH_COLUMN = 'PR NO.'
 // document's backup - per explicit decision, the SUMMARY sheet should
 // never show a "CANCELLED" placeholder row at all).
 const buildPrSummaryRow = (pr, context) => {
-  const { warehouseName, sdoName, wsrSerialNo, wsrDate, isFarmersAssociation, farmerMembersText, farmerRsbsa, farmerGender } = context
+  const { warehouseName, sdoName, wsrSerialNo, wsrDate, isFarmersAssociation, farmerMembersText, farmerRsbsa, farmerGender, poNumber } = context
   // The sheet's own WSR column is a plain number, not a string - sent as
   // one whenever the serial actually parses as one (it always should),
   // falling back to the raw string rather than silently dropping it.
@@ -1792,6 +1793,12 @@ const buildPrSummaryRow = (pr, context) => {
   // farmer member's number, not be left blank or stuck on whatever the
   // PR's own top-level rsbsa field happens to hold.
   const rsbsa = farmerRsbsa ?? pr.rsbsa ?? null
+  // Same fallback pattern as rsbsa above - context.poNumber (read off
+  // the underlying WSR directly, see syncWorker.js) takes priority,
+  // falling back to pr.poNumber (copied onto the record at PR-creation
+  // time, PurchaseReceiptModal.jsx) for a PR whose linked WSR can't be
+  // found for some reason.
+  const poNumberResolved = poNumber ?? pr.poNumber ?? null
   return {
     // The underlying WSR's own date (the actual delivery date), not
     // pr.date (when the SDO happened to record the payment) - per
@@ -1801,6 +1808,7 @@ const buildPrSummaryRow = (pr, context) => {
     'DATE': toSheetDateFormat(wsrDate ?? pr.date),
     'PR NO.': pr.prNo,
     'WSR': wsrNum != null ? wsrNum : (wsrSerialNo ?? null),
+    'PO NO.': poNumberResolved,
     'RSBSA NO.': rsbsa,
     'NAME': pr.payeeName ?? null,
     'ADDRESS': pr.payeeAddress ?? null,

@@ -289,6 +289,14 @@ const runSyncQueue = async () => {
           farmerGender: wsr?.farmerCoops?.length
             ? wsr.farmerCoops.map((m) => m.gender).filter(Boolean).join(' / ') || null
             : (wsr?.farmerGender ?? null),
+          // Per explicit request: written to the PR SUMMARY backup too,
+          // not just the transaction backups. Read off the underlying
+          // WSR directly (same as farmerRsbsa/farmerGender above) -
+          // buildPrSummaryRow falls back to pr.poNumber (copied onto the
+          // PurchaseReceiptModal.jsx record at PR-creation time) for a
+          // PR whose linked WSR record can't be found for some reason,
+          // same fallback pattern already used for rsbsa.
+          poNumber: wsr?.poNumber ?? null,
         }
 
         // Per explicit decision, a Cancelled PR must never appear on the
