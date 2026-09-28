@@ -7156,4 +7156,23 @@
 //              14px -> 16px to stay proportional. Panel widened
 //              (w-80 -> md:w-96) to give the larger text room to wrap
 //              comfortably on desktop instead of forcing more lines.
-export const APP_VERSION = '1.10-204'
+//   1.10-205 - Two more notification-panel fixes, both per explicit
+//              follow-up, AppHeader.jsx:
+//              (1) Fixed the panel showing disconnected/floating well
+//              below the bell on a real device. Root cause: the
+//              vertical position was derived from headerHeight (the
+//              WHOLE sticky header bar's measured height) plus a flat
+//              8px - on a device where the greeting wraps across more
+//              lines than usual (a longer name under a narrow avatar
+//              column), that total drifted away from where the bell
+//              icon itself actually sits. Now measures the bell
+//              button's own real position directly
+//              (getBoundingClientRect) every time the panel opens, so
+//              it's always anchored to where the bell genuinely is,
+//              independent of how tall the rest of the header happens
+//              to be.
+//              (2) Bumped the panel's small-display text size up
+//              another step (text-sm -> text-base, md: bumped to
+//              text-lg) - the 1.10-204 pass read fine on a large
+//              display but was still a little small on a phone.
+export const APP_VERSION = '1.10-205'

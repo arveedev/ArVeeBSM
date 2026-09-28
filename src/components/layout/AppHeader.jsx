@@ -57,7 +57,14 @@ const LOGOUT_FADE_MS = 500
 function AppHeader({ hidden = false }) {
   const { user, logout } = useAuth() ?? {}
   const { theme, weightUnit, updateSetting } = useSettings() ?? {}
-  const { title, subtitle, headerHeight, setHeaderHeight } = usePageHeader() ?? {}
+  // headerHeight itself is no longer read here - the notification
+  // panel now measures the bell button's own position directly (see
+  // notifTop below) instead of deriving it from the whole header bar's
+  // height, which drifted from the bell's real position whenever the
+  // greeting wrapped across more lines than usual. setHeaderHeight
+  // still needs to be called (StickyWarehouseIndicator.jsx and others
+  // read the context value it feeds).
+  const { title, subtitle, setHeaderHeight } = usePageHeader() ?? {}
   const { currentWarehouseId, accessibleWarehouses, setCurrentWarehouseId } = useWarehouse() ?? {}
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -424,6 +431,19 @@ function AppHeader({ hidden = false }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [confirmingClearNotifs, setConfirmingClearNotifs] = useState(false)
   const notifRef = useRef(null)
+  // Reported, confirmed real bug: the panel's vertical position was
+  // computed from headerHeight (the WHOLE sticky header bar's own
+  // measured height) plus a flat 8px - on a device where the greeting
+  // wraps across an unusual number of lines (a long name like "Ting"
+  // under a narrow avatar column), that total no longer matched where
+  // the bell icon itself actually sits, leaving the panel looking
+  // disconnected, floating well below the bell instead of right under
+  // it. Measures the bell button's OWN real position instead, every
+  // time the panel opens, so it's always anchored to where the bell
+  // genuinely is on screen regardless of how tall the rest of the
+  // header happens to be.
+  const bellButtonRef = useRef(null)
+  const [notifTop, setNotifTop] = useState(60)
 
   // Cascade entrance/exit for the notification panel, per explicit
   // request/demo pick, twice corrected per direct feedback.
@@ -464,6 +484,8 @@ function AppHeader({ hidden = false }) {
   const notifCountRef = useRef(0)
   useEffect(() => {
     if (notifOpen) {
+      const rect = bellButtonRef.current?.getBoundingClientRect()
+      if (rect) setNotifTop(rect.bottom + 8)
       setNotifRendered(true)
       return
     }
@@ -772,6 +794,7 @@ function AppHeader({ hidden = false }) {
             {!isVisitor && (
               <div ref={notifRef} className="relative">
                 <button
+                  ref={bellButtonRef}
                   type="button"
                   onClick={() => setNotifOpen((o) => !o)}
                   aria-label="Notifications"
@@ -817,10 +840,10 @@ function AppHeader({ hidden = false }) {
                   // still briefly wider than the panel mid-animation.
                   <div
                     className="fixed right-4 z-[106] max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50 md:w-96"
-                    style={{ top: `${(headerHeight ?? 60) + 8}px` }}
+                    style={{ top: `${notifTop}px` }}
                   >
                     <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
-                      <p className="text-sm font-semibold uppercase tracking-wide text-neutral-400 md:text-base">
+                      <p className="text-base font-semibold uppercase tracking-wide text-neutral-400 md:text-lg">
                         {unresolvedNotifCount > 0
                           ? `${unresolvedNotifCount} unresolved`
                           : 'Notifications'}
@@ -835,14 +858,14 @@ function AppHeader({ hidden = false }) {
                         <button
                           type="button"
                           onClick={() => setConfirmingClearNotifs(true)}
-                          className="shrink-0 text-sm font-medium text-neutral-500 transition-colors hover:text-brand-crimson md:text-base"
+                          className="shrink-0 text-base font-medium text-neutral-500 transition-colors hover:text-brand-crimson md:text-lg"
                         >
                           Clear All
                         </button>
                       )}
                     </div>
                     {notifEntries.length === 0 ? (
-                      <p className="px-3 py-4 text-center text-sm text-neutral-500 md:text-base">Nothing to show.</p>
+                      <p className="px-3 py-4 text-center text-base text-neutral-500 md:text-lg">Nothing to show.</p>
                     ) : (() => {
                       // Captured once so both the entrance AND exit
                       // stagger below can reference the real row count -
@@ -897,8 +920,8 @@ function AppHeader({ hidden = false }) {
                                     it spans multiple warehouses and
                                     truncating away the amount/warehouse
                                     would defeat the whole point. */}
-                                <span className="block break-words text-sm font-medium text-app-text md:text-base">{notif.title}</span>
-                                <span className="block break-words text-sm text-neutral-500 md:text-base">{notif.detail}</span>
+                                <span className="block break-words text-base font-medium text-app-text md:text-lg">{notif.title}</span>
+                                <span className="block break-words text-base text-neutral-500 md:text-lg">{notif.detail}</span>
                               </span>
                             </button>
                           </li>
