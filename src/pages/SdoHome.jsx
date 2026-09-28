@@ -256,22 +256,20 @@ function SdoHome() {
   // touching this priority-grouping behavior.
   const applySort = (list) => {
     // Completed tab, per explicit request: always ascending by PR
-    // Number, unconditionally - the Sort & Filter modal's own Date/Bags
+    // Number DESCENDING, unconditionally - per direct correction (was
+    // briefly ascending). The Sort & Filter modal's own Date/Bags
     // options don't apply here (a PR Number is the real, permanent
-    // reference for a paid WSR, the same way the Abstract export
-    // itself always sorts by it - see AbstractExportModal.jsx's own
-    // identical numeric-then-string PR Number comparator), and no
-    // priority-warehouse grouping on top of it either - the ask is a
-    // single, always-on order, not a default that Sort & Filter can
-    // still override.
+    // reference for a paid WSR), and no priority-warehouse grouping on
+    // top of it either - the ask is a single, always-on order, not a
+    // default that Sort & Filter can still override.
     if (listTab === 'completed') {
       return [...list].sort((a, b) => {
         const prNoA = activePrByWsrId.get(a.id)?.prNo
         const prNoB = activePrByWsrId.get(b.id)?.prNo
         const na = Number(prNoA)
         const nb = Number(prNoB)
-        if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb
-        return (prNoA ?? '').localeCompare(prNoB ?? '', undefined, { numeric: true })
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) return nb - na
+        return (prNoB ?? '').localeCompare(prNoA ?? '', undefined, { numeric: true })
       })
     }
     const primarySorted = [...list].sort((a, b) => {

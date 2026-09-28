@@ -7282,4 +7282,7 @@
 //              reflects the checked subset, and leaving the checklist
 //              closed exports exactly as it always did before any of
 //              this existed.
-export const APP_VERSION = '1.10-211'
+//   1.10-212 - Corrected 1.10-210 per direct follow-up: SDO Home's
+//              Completed tab now sorts DESCENDING by PR Number
+//              (highest first), not ascending.
+export const APP_VERSION = '1.10-212'
