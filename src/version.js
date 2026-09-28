@@ -7147,4 +7147,13 @@
 //              REAL row count at the moment of closing (notifCountRef),
 //              so a short list's exit timer matches how long its own
 //              (shorter) stagger actually takes.
-export const APP_VERSION = '1.10-203'
+//   1.10-204 - Enlarged the notification panel's text, per explicit
+//              request - it was entirely text-xs with no responsive
+//              bump at all (unlike most of the rest of this app's
+//              text-sm/md:text-base convention). Header label, Clear
+//              All, "Nothing to show", and each row's title/detail all
+//              bumped to text-sm md:text-base; the row icons bumped
+//              14px -> 16px to stay proportional. Panel widened
+//              (w-80 -> md:w-96) to give the larger text room to wrap
+//              comfortably on desktop instead of forcing more lines.
+export const APP_VERSION = '1.10-204'

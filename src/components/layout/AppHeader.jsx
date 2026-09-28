@@ -816,11 +816,11 @@ function AppHeader({ hidden = false }) {
                   // scrollbar fix - each row's own translateX slide is
                   // still briefly wider than the panel mid-animation.
                   <div
-                    className="fixed right-4 z-[106] max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
+                    className="fixed right-4 z-[106] max-h-96 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50 md:w-96"
                     style={{ top: `${(headerHeight ?? 60) + 8}px` }}
                   >
                     <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-neutral-400 md:text-base">
                         {unresolvedNotifCount > 0
                           ? `${unresolvedNotifCount} unresolved`
                           : 'Notifications'}
@@ -835,14 +835,14 @@ function AppHeader({ hidden = false }) {
                         <button
                           type="button"
                           onClick={() => setConfirmingClearNotifs(true)}
-                          className="shrink-0 text-xs font-medium text-neutral-500 transition-colors hover:text-brand-crimson"
+                          className="shrink-0 text-sm font-medium text-neutral-500 transition-colors hover:text-brand-crimson md:text-base"
                         >
                           Clear All
                         </button>
                       )}
                     </div>
                     {notifEntries.length === 0 ? (
-                      <p className="px-3 py-4 text-center text-xs text-neutral-500">Nothing to show.</p>
+                      <p className="px-3 py-4 text-center text-sm text-neutral-500 md:text-base">Nothing to show.</p>
                     ) : (() => {
                       // Captured once so both the entrance AND exit
                       // stagger below can reference the real row count -
@@ -888,8 +888,8 @@ function AppHeader({ hidden = false }) {
                               className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-neutral-800"
                             >
                               {notif.resolved
-                                ? <Check size={14} className="mt-0.5 shrink-0 text-brand-neon" />
-                                : <AlertTriangle size={14} className="mt-0.5 shrink-0 text-brand-crimson" />}
+                                ? <Check size={16} className="mt-0.5 shrink-0 text-brand-neon" />
+                                : <AlertTriangle size={16} className="mt-0.5 shrink-0 text-brand-crimson" />}
                               <span className="min-w-0 flex-1">
                                 {/* break-words, not truncate - per
                                     explicit request, the detail must be
@@ -897,8 +897,8 @@ function AppHeader({ hidden = false }) {
                                     it spans multiple warehouses and
                                     truncating away the amount/warehouse
                                     would defeat the whole point. */}
-                                <span className="block break-words text-xs font-medium text-app-text">{notif.title}</span>
-                                <span className="block break-words text-xs text-neutral-500">{notif.detail}</span>
+                                <span className="block break-words text-sm font-medium text-app-text md:text-base">{notif.title}</span>
+                                <span className="block break-words text-sm text-neutral-500 md:text-base">{notif.detail}</span>
                               </span>
                             </button>
                           </li>
