@@ -6999,4 +6999,20 @@
 //              were a third gender choice. Now disabled + hidden - it
 //              still shows while nothing is picked, but Male/Female are
 //              the only two selectable options.
-export const APP_VERSION = '1.10-195'
+//   1.10-196 - Two-stage sacks-need-matching-SIA notification, per
+//              explicit request/follow-up: previously the bell always
+//              said "sacks need matching SIA" for a procured-but-not-
+//              yet-issued bag total, regardless of whether an SIA had
+//              actually already been created for it - confusing when
+//              an admin had already made the SIA and was just waiting
+//              to record the ESI. AppHeader.jsx's procurementOutstanding
+//              now cross-checks each outstanding (warehouse, sack type,
+//              condition) group against real SIA authorities'
+//              sackLines: a group with NO matching SIA yet keeps the
+//              original message, folded into the per-warehouse
+//              accumulated total as before; a group that DOES have a
+//              matching SIA is pulled out into its own specific entry
+//              instead, naming the real SIA number(s) and saying it's
+//              awaiting ESI, so the notification always reflects which
+//              step is actually still outstanding.
+export const APP_VERSION = '1.10-196'

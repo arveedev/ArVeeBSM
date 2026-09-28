@@ -279,24 +279,70 @@ function AppHeader({ hidden = false }) {
       byKey.set(key, { amount: -consumed, minDate: null, maxDate: null })
     }
 
-    // Accumulate every still-positive key into one total per warehouse,
-    // spanning the full date range of every receipt that contributed to
-    // it - this is the "accumulated number of bags... with the period"
-    // notification per explicit request. Negative (over-issuance) keys
-    // stay their own specific entries, named by warehouse AND sack
-    // type/condition, since that's a real discrepancy worth pinpointing
-    // exactly, not folding into a total.
+    // Two-stage notification, per explicit request: an outstanding key
+    // (procured but not yet issued) that has NO matching SIA authority
+    // at all stays the original "sacks need matching SIA" message,
+    // folded into the per-warehouse accumulated total same as before.
+    // A key that DOES have a matching SIA authority already - the
+    // physical Sacks Issuance (ESI) just hasn't been recorded yet -
+    // gets pulled OUT of that total into its own specific entry
+    // instead, naming the real SIA number so it's clear the authority
+    // step is already done and only the ESI itself is outstanding.
+    // Matched by (warehouse, sackType, condition), same grouping this
+    // whole computation already keys everything else by - an SIA's own
+    // sackLines carry that same shape (RicemillRecoveryDetail.jsx/
+    // AuthorityMonitor.jsx already read authority.sackLines the same
+    // way an ESI transaction's own sackLines are read).
+    const siaAuthorities = await db.authorities
+      .where('assignedWarehouse').anyOf(warehouseIds)
+      .and((a) => a.type === 'SIA')
+      .toArray()
+    const siaNumbersByKey = new Map()
+    for (const a of siaAuthorities) {
+      if (!a.siaNumber) continue
+      for (const line of a.sackLines ?? []) {
+        if (!line.sackTypeId || !line.condition) continue
+        const lineKey = `${a.assignedWarehouse}::${line.sackTypeId}::${line.condition}`
+        const list = siaNumbersByKey.get(lineKey) ?? []
+        if (!list.includes(a.siaNumber)) list.push(a.siaNumber)
+        siaNumbersByKey.set(lineKey, list)
+      }
+    }
+
+    // Accumulate every still-positive, no-SIA-yet key into one total per
+    // warehouse, spanning the full date range of every receipt that
+    // contributed to it - this is the "accumulated number of bags...
+    // within the period" notification per explicit request. Negative
+    // (over-issuance) keys, and positive keys that already have a
+    // matching SIA, stay their own specific entries instead - each a
+    // real, individually-actionable case, not folded into a total.
     const accumulatedByWarehouse = new Map()
     const overIssuanceEntries = []
+    const siaPendingEntries = []
     for (const [key, { amount, minDate, maxDate }] of byKey) {
       if (amount === 0) continue
       const [warehouseId, sackTypeId, condition] = key.split('::')
       if (amount > 0) {
-        const acc = accumulatedByWarehouse.get(warehouseId) ?? { amount: 0, minDate: null, maxDate: null }
-        acc.amount += amount
-        if (minDate && (!acc.minDate || minDate < acc.minDate)) acc.minDate = minDate
-        if (maxDate && (!acc.maxDate || maxDate > acc.maxDate)) acc.maxDate = maxDate
-        accumulatedByWarehouse.set(warehouseId, acc)
+        const siaNumbers = siaNumbersByKey.get(key)
+        if (siaNumbers?.length) {
+          siaPendingEntries.push({
+            key,
+            warehouseId,
+            warehouseName: warehouseNameById.get(warehouseId) ?? 'Unknown warehouse',
+            code: sackTypeMap.get(sackTypeId)?.code ?? sackTypeId,
+            condition,
+            amount,
+            minDate,
+            maxDate,
+            siaNumbers,
+          })
+        } else {
+          const acc = accumulatedByWarehouse.get(warehouseId) ?? { amount: 0, minDate: null, maxDate: null }
+          acc.amount += amount
+          if (minDate && (!acc.minDate || minDate < acc.minDate)) acc.minDate = minDate
+          if (maxDate && (!acc.maxDate || maxDate > acc.maxDate)) acc.maxDate = maxDate
+          accumulatedByWarehouse.set(warehouseId, acc)
+        }
       } else {
         overIssuanceEntries.push({
           key,
@@ -318,7 +364,7 @@ function AppHeader({ hidden = false }) {
       maxDate,
     }))
 
-    return [...accumulatedEntries, ...overIssuanceEntries]
+    return [...accumulatedEntries, ...siaPendingEntries, ...overIssuanceEntries]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warehouseIds.join(','), isSdo]) ?? []
 
@@ -402,19 +448,24 @@ function AppHeader({ hidden = false }) {
     // per explicit correction, with entries now spanning every
     // accessible warehouse rather than just the currently selected one,
     // which warehouse a given line is about is no longer implied by
-    // context and must be explicit on every entry. Two shapes coming
+    // context and must be explicit on every entry. Three shapes coming
     // out of procurementOutstanding now: an accumulated total per
-    // warehouse (amount > 0, minDate/maxDate set, no code/condition -
-    // the common case) and a specific over-issuance entry (amount < 0,
-    // code/condition set, no dates - see procurementOutstanding's own
-    // comment for why that one stays granular).
-    ...procurementOutstanding.map(({ key, warehouseId, warehouseName, code, condition, amount, minDate, maxDate }) => ({
+    // warehouse with no matching SIA yet (amount > 0, no siaNumbers -
+    // the original, common case), a specific per-key entry once an SIA
+    // DOES exist for it (amount > 0, siaNumbers set - see
+    // procurementOutstanding's own comment on the two-stage split), and
+    // a specific over-issuance entry (amount < 0, code/condition set).
+    ...procurementOutstanding.map(({ key, warehouseId, warehouseName, code, condition, amount, minDate, maxDate, siaNumbers }) => ({
       id: `procurement:${key}`,
       resolved: false,
-      title: `${warehouseName} — sacks need matching SIA`,
-      detail: amount > 0
-        ? `${fmtBags(amount)} bag${amount === 1 ? '' : 's'} still need${amount === 1 ? 's' : ''} a matching SIA${fmtDateRange(minDate, maxDate) ? ` (procured ${fmtDateRange(minDate, maxDate)})` : ''}`
-        : `${code} (${condition}): SIA-backed issuance exceeds Procurement by ${fmtBags(Math.abs(amount))} - check for an over-issuance`,
+      title: siaNumbers?.length
+        ? `${warehouseName} — SIA issued, awaiting ESI`
+        : `${warehouseName} — sacks need matching SIA`,
+      detail: siaNumbers?.length
+        ? `SIA ${siaNumbers.join(', ')} — ${fmtBags(amount)} bag${amount === 1 ? '' : 's'} authorized, still awaiting issuance (ESI)${fmtDateRange(minDate, maxDate) ? ` (procured ${fmtDateRange(minDate, maxDate)})` : ''}`
+        : amount > 0
+          ? `${fmtBags(amount)} bag${amount === 1 ? '' : 's'} still need${amount === 1 ? 's' : ''} a matching SIA${fmtDateRange(minDate, maxDate) ? ` (procured ${fmtDateRange(minDate, maxDate)})` : ''}`
+          : `${code} (${condition}): SIA-backed issuance exceeds Procurement by ${fmtBags(Math.abs(amount))} - check for an over-issuance`,
       onClick: () => {
         setNotifOpen(false)
         // Switches the app's own current-warehouse context to the one
