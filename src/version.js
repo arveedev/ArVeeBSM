@@ -7215,4 +7215,25 @@
 //              min-w-0 + break-words on every tile so a figure that
 //              still doesn't fit wraps instead of visually overflowing
 //              its rounded box.
-export const APP_VERSION = '1.10-207'
+//   1.10-208 - SDO Home's own For Payment/Completed list gains a real
+//              Sort & Filter (SdoHome.jsx), per explicit request: it
+//              previously only had Search, a plain newest/oldest icon
+//              toggle, and a Warehouse filter - no way to narrow by
+//              date range or Variety at all. Now: Search sits alone on
+//              its own row; a new "Sort & Filter" button sits in its
+//              own row right below it, opening SdoProcurementFilterModal.jsx
+//              (new file) with Period From/To, month picker, period
+//              presets, and a proper Sort by select (added Bags Highest/
+//              Lowest alongside the existing Date options); Warehouse
+//              and Variety (new) sit together in their own row below
+//              that. No payment-status control added to the modal - the
+//              existing "For Payment"/"Completed" tabs already ARE that
+//              filter, so a second one would be redundant with, and
+//              could contradict, whichever tab is selected. Unlike
+//              ProcurementMonitor.jsx's own Period controls, Period
+//              From/To here default to blank (no restriction) rather
+//              than the current month - this list's job is surfacing
+//              every outstanding unpaid WSR regardless of age, so
+//              defaulting to "this month only" would have silently
+//              hidden older unpaid records an SDO still needs to act on.
+export const APP_VERSION = '1.10-208'

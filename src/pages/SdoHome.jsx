@@ -6,7 +6,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, ArrowUpDown, Trash2, FileDown } from 'lucide-react'
+import { Search, SlidersHorizontal, Trash2, FileDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -21,6 +21,7 @@ import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
 import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
+import SdoProcurementFilterModal from '../components/common/sdo/SdoProcurementFilterModal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import { queuePrDeletion } from '../services/syncWorker.js'
 
@@ -69,9 +70,27 @@ function SdoHome() {
 
   const [listTab, setListTab] = useState('payment')
   const [warehouseFilter, setWarehouseFilter] = useState('')
+  // Per explicit request: Search/Sort & Filter/Warehouse+Variety now
+  // mirror ProcurementMonitor.jsx's own control set (Period From/To,
+  // month picker, period presets, sort by), moved behind a "Sort &
+  // Filter" button in its own row instead of a single sort-direction
+  // icon - Warehouse and Variety get their own always-visible row below
+  // it. Payment status deliberately NOT duplicated here - the existing
+  // "For Payment"/"Completed" tabs above already ARE that filter (each
+  // tab is already scoped to exactly one payment state by definition),
+  // so a second paid/unpaid control inside this modal would be
+  // redundant with - and could contradict - the tab already selected.
+  const [varietyFilter, setVarietyFilter] = useState('')
+  const [periodFrom, setPeriodFrom] = useState('')
+  const [periodTo, setPeriodTo] = useState('')
+  const [filterModalOpen, setFilterModalOpen] = useState(false)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounced(search)
-  const [sortDesc, setSortDesc] = useState(true)
+  // 'date-desc' | 'date-asc' | 'bags-desc' | 'bags-asc' - replaces the
+  // old plain newest/oldest icon toggle, now living inside the Sort &
+  // Filter modal alongside the new Period controls.
+  const [sortBy, setSortBy] = useState('date-desc')
+  const isFiltered = Boolean(varietyFilter) || Boolean(periodFrom) || Boolean(periodTo) || sortBy !== 'date-desc'
   const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE)
   const [activeWsr, setActiveWsr] = useState(null)
   const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | null
@@ -89,7 +108,7 @@ function SdoHome() {
   // list actually is, rather than an unrelated stale count.
   useEffect(() => {
     setVisibleCount(LIST_PAGE_SIZE)
-  }, [listTab, warehouseFilter, debouncedSearch, sortDesc])
+  }, [listTab, warehouseFilter, varietyFilter, periodFrom, periodTo, debouncedSearch, sortBy])
 
   useEffect(() => {
     setPageHeader?.({ title: 'Disbursing Officer', subtitle: `Welcome back, ${user?.nickname ?? ''}.` })
@@ -230,13 +249,19 @@ function SdoHome() {
   // Per explicit correction, the priority warehouse's own transactions
   // must group first (own date order preserved within that group),
   // ahead of every other warehouse - a second, stable sort pass on top
-  // of the date sort below, so only warehouse grouping changes, not the
-  // date order within each group. Moot (and harmless) once a specific
-  // warehouseFilter narrows the list to just one warehouse.
+  // of the primary sort below, so only warehouse grouping changes, not
+  // the order within each group. Moot (and harmless) once a specific
+  // warehouseFilter narrows the list to just one warehouse. Extended to
+  // cover the new Bags sort options (previously date-only) without
+  // touching this priority-grouping behavior.
   const applySort = (list) => {
-    const dateSorted = [...list].sort((a, b) => (sortDesc ? -1 : 1) * ((a.date ?? '').localeCompare(b.date ?? '')))
-    if (!priorityWarehouseId) return dateSorted
-    return dateSorted.sort((a, b) => {
+    const primarySorted = [...list].sort((a, b) => {
+      if (sortBy === 'bags-desc') return (b.numberOfBags ?? 0) - (a.numberOfBags ?? 0)
+      if (sortBy === 'bags-asc') return (a.numberOfBags ?? 0) - (b.numberOfBags ?? 0)
+      return (sortBy === 'date-asc' ? 1 : -1) * ((a.date ?? '').localeCompare(b.date ?? ''))
+    })
+    if (!priorityWarehouseId) return primarySorted
+    return primarySorted.sort((a, b) => {
       const aPriority = a.warehouseId === priorityWarehouseId ? 0 : 1
       const bPriority = b.warehouseId === priorityWarehouseId ? 0 : 1
       return aPriority - bPriority
@@ -245,9 +270,32 @@ function SdoHome() {
 
   const applyWarehouseFilter = (list) =>
     warehouseFilter ? list.filter((t) => t.warehouseId === warehouseFilter) : list
+  const applyVarietyFilter = (list) =>
+    varietyFilter ? list.filter((t) => t.varietyId === varietyFilter) : list
+  // Unrestricted by default (both blank) - unlike ProcurementMonitor.jsx's
+  // admin-wide overview, this list's whole job is showing an SDO every
+  // outstanding unpaid WSR regardless of age, so defaulting it to the
+  // current month the way that screen does would silently hide older
+  // unpaid records still needing action. Only narrows once the SDO
+  // explicitly sets a period via the new modal.
+  const applyPeriodFilter = (list) => list.filter((t) => {
+    if (periodFrom && t.date < periodFrom) return false
+    if (periodTo && t.date > periodTo) return false
+    return true
+  })
 
-  const fullList = applySort(applySearch(applyWarehouseFilter(listTab === 'payment' ? unpaid : paid)))
+  const baseList = listTab === 'payment' ? unpaid : paid
+  const fullList = applySort(applySearch(applyPeriodFilter(applyVarietyFilter(applyWarehouseFilter(baseList)))))
   const visibleList = fullList.slice(0, visibleCount)
+
+  // Built from the tab's own full base list (before the variety filter
+  // itself narrows it) - same reasoning ProcurementMonitor.jsx's own
+  // varietyOptions uses - so picking a variety never collapses this
+  // dropdown down to just the one already selected.
+  const varietyOptionIds = new Set(applyWarehouseFilter(baseList).map((t) => t.varietyId).filter(Boolean))
+  const varietyOptions = varieties
+    .filter((v) => varietyOptionIds.has(v.varietyId))
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
 
   // Every Cancelled PR this SDO has (a real one voided after issuance,
   // or a number reserved as cancelled with nothing behind it at all) -
@@ -368,53 +416,75 @@ function SdoHome() {
         </button>
       </div>
 
-      {/* Search+sort stay their own row at every width; the warehouse
-          filter drops to its own full-width row below them on small
-          screens (three controls competing for one narrow row was
-          cramped) and rejoins the same row once there's room, sm+. */}
-      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-        {/* flex-1 here (not just on the search box inside it) is what
-            makes this whole cluster actually grow to fill the row on
-            wide screens - without it, this wrapper only ever took its
-            own content width, leaving the rest of the row (and the
-            warehouse filter/sort next to it) stranded on the left with
-            empty space filling the remaining width. */}
-        <div className="flex flex-1 gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 transition-colors focus-within:border-brand-neon">
-            <Search size={14} className="text-neutral-500" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search farmer, WSR, PR no."
-              className="w-full bg-transparent text-xs text-app-text outline-none placeholder:text-neutral-500" />
-          </div>
-          <button type="button" onClick={() => setSortDesc((v) => !v)} aria-label="Toggle sort order" className="shrink-0 rounded-lg border border-neutral-800 bg-neutral-900 p-2 text-neutral-400 transition-all active:scale-95 sm:hidden">
-            <ArrowUpDown size={14} />
-          </button>
-        </div>
-        {(accessibleWarehouses ?? []).length > 1 && (
-          <select
-            value={warehouseFilter}
-            onChange={(e) => setWarehouseFilter(e.target.value)}
-            aria-label="Filter by warehouse"
-            className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-2 text-xs text-neutral-300 outline-none transition-colors focus:border-brand-neon sm:w-auto sm:py-0"
-          >
-            <option value="">All warehouses</option>
-            {/* Deduped defensively by warehouseId - this list is already
-                scoped to exactly this SDO's own assignedWarehouses via
-                useWarehouse()'s shared accessibleWarehouses (the same
-                source every other page's warehouse picker uses), so a
-                warehouse this SDO isn't assigned to can't appear here;
-                if one seems to, the fix is that user's Assigned
-                Warehouses in Admin > Structure > Users, not this list. */}
-            {[...new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w])).values()]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((w) => (
-                <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>
-              ))}
-          </select>
-        )}
-        <button type="button" onClick={() => setSortDesc((v) => !v)} aria-label="Toggle sort order" className="hidden shrink-0 rounded-lg border border-neutral-800 bg-neutral-900 p-2 text-neutral-400 transition-all active:scale-95 sm:block">
-          <ArrowUpDown size={14} />
-        </button>
+      {/* Search on its own row, per explicit request - no longer
+          sharing a row with anything else. */}
+      <div className="mt-2 flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 transition-colors focus-within:border-brand-neon">
+        <Search size={14} className="text-neutral-500" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search farmer, WSR, PR no."
+          className="w-full bg-transparent text-xs text-app-text outline-none placeholder:text-neutral-500" />
       </div>
+
+      {/* Sort & Filter, its OWN row below Search, per explicit request -
+          holds everything ProcurementMonitor.jsx's own Sort & Filter
+          modal doesn't already cover (Period From/To, month picker,
+          period presets, Sort by) via SdoProcurementFilterModal.jsx. */}
+      <button
+        type="button"
+        onClick={() => setFilterModalOpen(true)}
+        className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-all active:scale-95 ${
+          isFiltered
+            ? 'border-brand-neon bg-brand-neon/10 text-brand-neon'
+            : 'border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-brand-neon/50 hover:text-brand-neon'
+        }`}
+      >
+        <SlidersHorizontal size={13} />
+        Sort &amp; Filter{isFiltered ? ' (active)' : ''}
+      </button>
+
+      {/* Warehouse + Variety, one row below Sort & Filter, per explicit
+          request. Warehouse only shows for an SDO actually assigned to
+          more than one (matches the original single-control behavior);
+          Variety takes the full row alone in that case instead of
+          leaving half of it empty. */}
+      {(() => {
+        const showWarehouseFilter = (accessibleWarehouses ?? []).length > 1
+        return (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {showWarehouseFilter && (
+              <select
+                value={warehouseFilter}
+                onChange={(e) => setWarehouseFilter(e.target.value)}
+                aria-label="Filter by warehouse"
+                className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-2 text-xs text-neutral-300 outline-none transition-colors focus:border-brand-neon"
+              >
+                <option value="">All warehouses</option>
+                {/* Deduped defensively by warehouseId - this list is
+                    already scoped to exactly this SDO's own
+                    assignedWarehouses via useWarehouse()'s shared
+                    accessibleWarehouses (the same source every other
+                    page's warehouse picker uses), so a warehouse this
+                    SDO isn't assigned to can't appear here; if one
+                    seems to, the fix is that user's Assigned Warehouses
+                    in Admin > Structure > Users, not this list. */}
+                {[...new Map((accessibleWarehouses ?? []).map((w) => [w.warehouseId, w])).values()]
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((w) => (
+                    <option key={w.warehouseId} value={w.warehouseId}>{w.code} — {w.name}</option>
+                  ))}
+              </select>
+            )}
+            <select
+              value={varietyFilter}
+              onChange={(e) => setVarietyFilter(e.target.value)}
+              aria-label="Filter by variety"
+              className={`w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-2 text-xs text-neutral-300 outline-none transition-colors focus:border-brand-neon ${showWarehouseFilter ? '' : 'col-span-2'}`}
+            >
+              <option value="">All varieties</option>
+              {varietyOptions.map((v) => <option key={v.varietyId} value={v.varietyId}>{v.name}</option>)}
+            </select>
+          </div>
+        )
+      })()}
 
       <div key={listTab} className="mt-3 animate-flow-down space-y-2">
         {visibleList.length === 0 && <p className="py-6 text-center text-xs text-neutral-500">Nothing here.</p>}
@@ -503,6 +573,24 @@ function SdoHome() {
       )}
       {showAbstractExport && <AbstractExportModal onClose={() => setShowAbstractExport(false)} />}
       {editingPrice && <BuyingPriceModal currentPriceRow={currentPriceRow} onClose={() => setEditingPrice(false)} />}
+      {filterModalOpen && (
+        <SdoProcurementFilterModal
+          periodFrom={periodFrom}
+          periodTo={periodTo}
+          sortBy={sortBy}
+          onChange={(patch) => {
+            if ('periodFrom' in patch) setPeriodFrom(patch.periodFrom)
+            if ('periodTo' in patch) setPeriodTo(patch.periodTo)
+            if ('sortBy' in patch) setSortBy(patch.sortBy)
+          }}
+          onReset={() => {
+            setPeriodFrom('')
+            setPeriodTo('')
+            setSortBy('date-desc')
+          }}
+          onClose={() => setFilterModalOpen(false)}
+        />
+      )}
     </div>
   )
 }
