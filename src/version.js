@@ -7307,4 +7307,23 @@
 //              guarded against writing blank values over an existing
 //              saved count if closed before that count has even
 //              finished loading.
-export const APP_VERSION = '1.10-214'
+//   1.10-215 - New Report Cut-Off feature on SDO Home's Export Abstract
+//              modal, per explicit request: an SDO can now report only
+//              PART of a day's Purchase Receipts (e.g. 3 of 11 same-day
+//              PRs) via the existing checklist, then "Cut Off" (instead
+//              of the plain Export button) to lock those checked PRs in
+//              as reported and freeze this export's own ending balance.
+//              A later export automatically excludes anything already
+//              cut off from ever reappearing (its own checklist/PR list
+//              silently drops them, with a small note explaining why),
+//              and chains its opening balance from the most recent
+//              applicable cut-off's frozen ending balance instead of
+//              recomputing from raw ledger history - so a real,
+//              check-numbered replenishment tied to an already-cut-off
+//              date is never double-counted in a later report. The
+//              other (unchecked) PRs from that same day are untouched -
+//              they naturally surface in whichever later export's own
+//              date range happens to cover that date. Confirmed via a
+//              dialog before running, since it's a one-way lock. New
+//              synced db.sdoReportCutoffs table (dexie.js v44).
+export const APP_VERSION = '1.10-215'

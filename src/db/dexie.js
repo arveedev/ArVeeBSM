@@ -1064,6 +1064,27 @@ db.version(43).stores({}).upgrade(async (tx) => {
   }
 })
 
+// v44 — sdoReportCutoffs: per explicit request, lets an SDO "cut off" a
+// partial-day report (e.g. only 3 of 11 same-day Purchase Receipts
+// reported for now) without losing track of - or double-reporting -
+// the rest later. One row per cut-off actually made: `reportedPrIds`
+// (the checked PRs' own prId, permanently excluded from ever appearing
+// in a LATER export again) and `endingBalance` (the Fund Balance this
+// exact cut-off's own abstract ended on, printed as its own final
+// TOTAL row - see sdoAbstractPdfGenerator.js). A later export's opening
+// balance chains from the most recent applicable cut-off's
+// endingBalance instead of recomputing from raw ledger history, and its
+// own ledger-entry window starts strictly AFTER that cut-off's date -
+// both already folded into the frozen endingBalance, so counting them
+// again would double them. `cutoffId` a real UUID string (app-assigned,
+// not Dexie's native auto-increment) - see cashLedgerV2's own comment
+// above for exactly why that distinction matters for Dexie Cloud sync.
+// A real, shared financial record (not a per-device cache), so this
+// stays a synced table - not added to unsyncedTables below.
+db.version(44).stores({
+  sdoReportCutoffs: 'cutoffId, sdoUid, cutoffDate',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

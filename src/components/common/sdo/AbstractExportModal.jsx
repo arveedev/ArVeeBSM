@@ -10,15 +10,34 @@
 // own "everything in the period" behavior); unchecking narrows what
 // actually prints. When the checklist has never been opened, export
 // behaves exactly as it always did - the checklist is purely additive.
+//
+// Report cut-off, per explicit follow-up request: sometimes an SDO
+// needs to report only PART of a day's Purchase Receipts now (e.g. 3
+// of 11 same-day PRs) without losing track of, or double-reporting,
+// the rest once a LATER export covers that date. "Cut Off & Export"
+// (only offered while the checklist is open) does everything the plain
+// checked-subset export does, but additionally writes a
+// db.sdoReportCutoffs row: the checked PRs' own ids (permanently
+// excluded from ever appearing in a later export's checklist/PR list
+// again) and this export's own final ending balance. A LATER export
+// then chains its own opening balance from the most recent applicable
+// cut-off's endingBalance instead of recomputing from raw ledger
+// history, and only considers ledger entries dated strictly AFTER that
+// cut-off - both already folded into the frozen endingBalance, so
+// counting them again would double them. The other (unchecked) PRs
+// from that same day are untouched by the cut-off, so they naturally
+// surface in whichever later export's own date range happens to cover
+// that date, exactly like any other not-yet-reported PR would.
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { X, ListChecks, Check } from 'lucide-react'
+import { X, ListChecks, Check, Scissors } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
+import ConfirmDialog from '../ConfirmDialog.jsx'
 import { generateSdoAbstract } from '../../../utils/sdoAbstractPdfGenerator.js'
 import { computeCashOnHand } from '../../../utils/sdoCalculations.js'
 
@@ -45,26 +64,50 @@ function AbstractExportModal({ onClose }) {
   const [entered, setEntered] = useState(false)
   const [showChecklist, setShowChecklist] = useState(false)
   const [checkedIds, setCheckedIds] = useState(() => new Set())
+  // Per explicit request: a cut-off permanently locks the checked PRs
+  // out of ever being reported again, so it's confirmed before running,
+  // not fired straight from the button's own onClick the way a plain
+  // export is.
+  const [confirmingCutoff, setConfirmingCutoff] = useState(false)
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true))
     return () => cancelAnimationFrame(frame)
   }, [])
 
+  // Every cut-off this SDO has ever made, live - drives both the
+  // checklist's own PR query (a previously cut-off PR must never
+  // reappear as something to check/report again) and handleExport's
+  // opening-balance chaining below.
+  const cutoffs = useLiveQuery(
+    () => user?.uid ? db.sdoReportCutoffs.where('sdoUid').equals(user.uid).toArray() : [],
+    [user?.uid]
+  ) ?? []
+  const cutoffExcludedPrIds = new Set(cutoffs.flatMap((c) => c.reportedPrIds ?? []))
+  // The most recent cut-off that actually applies to THIS export's own
+  // period - one with a cutoffDate after this report's own dateTo
+  // hasn't happened yet relative to what's being exported, so it must
+  // never be chained from (a real edge case: running an older/backdated
+  // export after a later cut-off already exists).
+  const latestApplicableCutoff = cutoffs
+    .filter((c) => c.cutoffDate <= dateTo)
+    .reduce((latest, c) => (!latest || c.cutoffDate > latest.cutoffDate ? c : latest), null)
+
   // Only queried for the checklist display - the export itself always
   // re-fetches its own copy inside handleExport, same as before the
   // checklist existed, so a stale live-query snapshot can never affect
   // what actually gets printed. Same PR scope as the export's own fetch
   // below - Active AND Cancelled (a void still explains a gap in the PR
-  // Number sequence).
+  // Number sequence) - MINUS anything already cut off in a past export,
+  // so it can never be checked/reported a second time.
   const periodPrs = useLiveQuery(async () => {
     if (!showChecklist || !user?.uid || !dateFrom || !dateTo) return []
     const prs = await db.purchaseReceipts
       .where('sdoUid').equals(user.uid)
-      .and((pr) => (pr.status === 'Active' || pr.status === 'Cancelled') && pr.date >= dateFrom && pr.date <= dateTo)
+      .and((pr) => (pr.status === 'Active' || pr.status === 'Cancelled') && pr.date >= dateFrom && pr.date <= dateTo && !cutoffExcludedPrIds.has(pr.prId))
       .toArray()
     return [...prs].sort(byPrNo)
-  }, [showChecklist, user?.uid, dateFrom, dateTo]) ?? []
+  }, [showChecklist, user?.uid, dateFrom, dateTo, cutoffs.length]) ?? []
 
   // Defaults every PR in the CURRENT period to checked whenever the
   // checklist is opened or the period actually changes while it's open
@@ -85,7 +128,7 @@ function AbstractExportModal({ onClose }) {
   const allChecked = periodPrs.length > 0 && checkedIds.size === periodPrs.length
   const toggleAll = () => setCheckedIds(allChecked ? new Set() : new Set(periodPrs.map((pr) => pr.prId)))
 
-  const handleExport = async () => {
+  const handleExport = async (markCutoff = false) => {
     if (showChecklist && checkedIds.size === 0) {
       toast.error('Check at least one Purchase Receipt to export')
       return
@@ -107,10 +150,14 @@ function AbstractExportModal({ onClose }) {
         db.purchaseReceipts.where('[sdoUid+status]').equals([user.uid, 'Active']).toArray(),
       ])
 
-      // Narrowed to the checked subset only when the checklist was
-      // actually engaged - untouched (every PR in the period) when it
-      // never was, so plain export behaves exactly as it always did.
-      const allPrs = showChecklist ? allPrsRaw.filter((pr) => checkedIds.has(pr.prId)) : allPrsRaw
+      // Already-cut-off PRs are excluded unconditionally, checklist or
+      // not - a plain "export everything in the period" must never
+      // silently re-list (or re-charge against the fund balance) a
+      // receipt an earlier cut-off already reported. On top of that,
+      // narrowed to the checked subset only when the checklist was
+      // actually engaged.
+      const notCutOff = allPrsRaw.filter((pr) => !cutoffExcludedPrIds.has(pr.prId))
+      const allPrs = showChecklist ? notCutOff.filter((pr) => checkedIds.has(pr.prId)) : notCutOff
 
       if (allPrs.length === 0) {
         toast.error(showChecklist ? 'No checked Purchase Receipts to export' : 'No Purchase Receipts in this period')
@@ -170,11 +217,18 @@ function AbstractExportModal({ onClose }) {
 
       // Opening balance stays the REAL, full pre-period balance,
       // untouched by which PRs are checked - it describes cash carried
-      // in from before this document even starts.
-      const openingBalance = computeCashOnHand(
-        ledgerEntries.filter((e) => e.date < dateFrom),
-        activePrsAll.filter((pr) => pr.date < dateFrom).map((pr) => pr.totalAmount ?? 0)
-      )
+      // in from before this document even starts. UNLESS a prior cut-off
+      // already applies to this period, in which case it chains from
+      // that cut-off's own frozen endingBalance instead of recomputing
+      // from raw ledger history - the cut-off already accounts for
+      // every peso through its own date, so redoing that math here
+      // would either duplicate or (worse) silently diverge from it.
+      const openingBalance = latestApplicableCutoff
+        ? latestApplicableCutoff.endingBalance
+        : computeCashOnHand(
+            ledgerEntries.filter((e) => e.date < dateFrom),
+            activePrsAll.filter((pr) => pr.date < dateFrom).map((pr) => pr.totalAmount ?? 0)
+          )
       // Reported real bug (first pass): "Fund available" always printed
       // 0.00 - hardcoded, never derived from anything. Second report:
       // showing every replenishment folded into one COH — Fund Balance
@@ -187,7 +241,20 @@ function AbstractExportModal({ onClose }) {
       // folded into the fundBalance figure itself, same as before -
       // "only replenishment with check number should appear" per
       // explicit request.
-      const periodLedgerEntries = ledgerEntries.filter((e) => !e.voided && e.date >= dateFrom && e.date <= dateTo)
+      //
+      // Lower bound is the later of dateFrom or (when a cut-off
+      // applies) the day strictly after that cut-off's own date - any
+      // ledger entry dated at or before it is already folded into
+      // openingBalance above, so counting it again here would double
+      // it (e.g. the very replenishment that funded the cut-off's own
+      // reported receipts).
+      const ledgerLowerBound = latestApplicableCutoff && latestApplicableCutoff.cutoffDate >= dateFrom
+        ? latestApplicableCutoff.cutoffDate
+        : null
+      const periodLedgerEntries = ledgerEntries.filter((e) => {
+        if (e.voided || e.date > dateTo) return false
+        return ledgerLowerBound ? e.date > ledgerLowerBound : e.date >= dateFrom
+      })
       const periodReplenishEntries = periodLedgerEntries.filter((e) => e.type === 'replenish')
       const checkedReplenishEntries = periodReplenishEntries.filter((e) => e.refNo && e.refNo !== 'Opening balance')
       const uncheckedReplenished = periodReplenishEntries
@@ -250,6 +317,27 @@ function AbstractExportModal({ onClose }) {
           notedBy: config?.disbursementNotedBy,
         },
       })
+
+      // Cut-off, per explicit request - only ever written once the PDF
+      // itself has been built successfully (never on a failed export).
+      // endingBalance mirrors exactly what the PDF's own final TOTAL row
+      // prints (see sdoAbstractPdfGenerator.js: fundBalance/
+      // combinedFundBalance + addEntries - lessEntries, running), so a
+      // later export's chained opening balance always matches what this
+      // document itself actually showed as its own ending figure.
+      if (markCutoff) {
+        const endingBalance = showReplenishmentDetails
+          ? fundBalance + addEntries.reduce((s, e) => s + e.amount, 0) - periodTotal
+          : combinedFundBalance - periodTotal
+        await db.sdoReportCutoffs.put({
+          cutoffId: crypto.randomUUID(),
+          sdoUid: user.uid,
+          cutoffDate: dateTo,
+          reportedPrIds: allPrs.map((pr) => pr.prId),
+          endingBalance,
+          createdAt: new Date().toISOString(),
+        })
+      }
 
       doc.save(`Abstract-${dateFrom}-to-${dateTo}.pdf`)
       onClose()
@@ -319,6 +407,21 @@ function AbstractExportModal({ onClose }) {
                   </button>
                 )}
               </div>
+              {/* Transparency for the exclusion handleExport/periodPrs
+                  both apply silently - so a previously cut-off receipt
+                  from earlier in this same date range isn't just
+                  mysteriously absent with no explanation. */}
+              {cutoffs.length > 0 && (() => {
+                const hiddenCount = cutoffs
+                  .filter((c) => c.cutoffDate >= dateFrom && c.cutoffDate <= dateTo)
+                  .reduce((s, c) => s + (c.reportedPrIds?.length ?? 0), 0)
+                return hiddenCount > 0 ? (
+                  <p className="flex items-center gap-1 text-[11px] text-neutral-500">
+                    <Scissors size={11} className="shrink-0" />
+                    {hiddenCount} receipt{hiddenCount === 1 ? '' : 's'} already reported in an earlier cut-off - not shown here.
+                  </p>
+                ) : null
+              })()}
               {periodPrs.length === 0 ? (
                 <p className="py-4 text-center text-xs text-neutral-500">No Purchase Receipts in this period.</p>
               ) : (
@@ -361,12 +464,41 @@ function AbstractExportModal({ onClose }) {
             </div>
           )}
 
-          <button type="button" onClick={handleExport} disabled={generating || (showChecklist && checkedIds.size === 0)}
-            className="w-full rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40">
-            {generating ? 'Generating…' : showChecklist ? `Export ${checkedIds.size} Selected` : 'Export PDF'}
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => handleExport(false)} disabled={generating || (showChecklist && checkedIds.size === 0)}
+              className="flex-1 rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40">
+              {generating ? 'Generating…' : showChecklist ? `Export ${checkedIds.size} Selected` : 'Export PDF'}
+            </button>
+            {/* Cut Off & Export, per explicit request - only offered
+                while the checklist is open, since a cut-off's whole job
+                is locking in EXACTLY which checked receipts count as
+                reported, something a plain "export everything" action
+                has no use for. */}
+            {showChecklist && (
+              <button
+                type="button"
+                onClick={() => setConfirmingCutoff(true)}
+                disabled={generating || checkedIds.size === 0}
+                aria-label="Cut off and export - locks the checked receipts as reported"
+                className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-3 text-sm font-semibold text-brand-amber transition-all hover:bg-brand-amber/20 active:scale-95 disabled:opacity-40"
+              >
+                <Scissors size={15} />
+                Cut Off
+              </button>
+            )}
+          </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingCutoff}
+        title="Cut off this report?"
+        description={`${checkedIds.size} checked receipt${checkedIds.size === 1 ? '' : 's'} will be locked in as reported and can never be reported again. Any unchecked receipts in this period stay available for a later export.`}
+        confirmLabel="Cut Off & Export"
+        icon={Scissors}
+        onConfirm={() => { setConfirmingCutoff(false); handleExport(true) }}
+        onCancel={() => setConfirmingCutoff(false)}
+      />
     </div>,
     document.body
   )
