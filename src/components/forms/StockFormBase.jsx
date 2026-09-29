@@ -82,7 +82,7 @@ import {
 } from '../../utils/serialNumber.js'
 import { applyTransactionToPile, reverseTransactionFromPile, reapplyTransactionToPile, getOrCreateAccountabilityPile, computePileStockBreakdown } from '../../utils/pileLedger.js'
 import { fetchTransactionBySerial, fetchSerialFloorFromSheet, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
-import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
+import { isPreloadComplete, waitForPreloadComplete, getPreloadFailureInfo } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName, buildCustomerAliasMap, normalizeCustomerName } from '../../utils/customerDirectory.js'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
@@ -1930,7 +1930,18 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       const preloaded = await waitForPreloadComplete(currentWarehouseId, type)
       if (latestRequestedSerial.current !== serial) return false // moved on during the wait - discard
       if (!preloaded) {
-        toast.error('Still syncing this warehouse\'s data - please wait a moment and try this serial again.', { duration: 4000 })
+        // failCount >= 2 means this isn't a normal brief catch-up -
+        // the pull has already failed and retried at least once (see
+        // preloadOneType's backoff) - a different, more honest message
+        // than "please wait a moment", which wrongly implies retrying
+        // sooner would help.
+        const { failCount } = await getPreloadFailureInfo(currentWarehouseId, type)
+        toast.error(
+          failCount >= 2
+            ? 'Can\'t reach the Sheets backup to verify this warehouse\'s history - check your connection. Retrying automatically in the background.'
+            : 'Still syncing this warehouse\'s data - please wait a moment and try this serial again.',
+          { duration: 5000 }
+        )
         return false
       }
       if (loadedTransaction) {

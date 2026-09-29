@@ -7518,4 +7518,26 @@
 //              so it only ever surfaced a confusing "already running"
 //              toast for work that was genuinely proceeding correctly
 //              in the background. Now just reports the re-queued count.
-export const APP_VERSION = '1.10-224'
+//   1.10-225 - Root-caused the reported "new warehouse's first receipt
+//              permanently stuck on 'Still syncing this warehouse's
+//              data'" bug, with the "endless pushing and pulling" that
+//              followed it: a brand-new warehouse's first-ever Sheets
+//              history pull (transactionPreload.js's preloadOneType)
+//              kept failing on the known Apps Script echo-redirect
+//              flakiness (confirmed in the console: the same 404 seen
+//              before) - preloadState.complete is only ever written
+//              after a genuinely SUCCESSFUL pull, so a persistently
+//              failing one can never complete on its own, and with no
+//              backoff, the exact same failing pull got retried on the
+//              very next 30-second cycle forever - piling more load on
+//              an already-struggling endpoint, which is what the
+//              "endless" push/pull was actually showing. Added real
+//              backoff (30s/1min/2min/5min, resets on a genuine
+//              success) so a failing pull gets real recovery room
+//              between attempts instead of none. Also gave the form's
+//              own toast a second, more honest message ("can't reach
+//              the Sheets backup - check your connection") once a pull
+//              has already failed and retried at least once, instead
+//              of always saying "please wait a moment," which wrongly
+//              implied trying again sooner would help.
+export const APP_VERSION = '1.10-225'

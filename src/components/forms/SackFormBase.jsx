@@ -42,7 +42,7 @@ import {
 } from '../../utils/serialNumber.js'
 import { rememberCustomer, resolveRolePrefixedPerson, isRolePrefixedName, buildCustomerAliasMap, normalizeCustomerName } from '../../utils/customerDirectory.js'
 import { fetchTransactionBySerial, fetchSerialFloorFromSheet, resolveCanonicalAuthority } from '../../services/googleSheetsBridge.js'
-import { isPreloadComplete, waitForPreloadComplete } from '../../services/transactionPreload.js'
+import { isPreloadComplete, waitForPreloadComplete, getPreloadFailureInfo } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
 import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName, isAuthorityComplete, TRIAL_ALL, expandTrialNumbers } from '../../utils/calculations.js'
@@ -663,7 +663,17 @@ const SackFormBase = forwardRef(function SackFormBase(
       const preloaded = await waitForPreloadComplete(currentWarehouseId, type)
       if (latestRequestedSerial.current !== serial) return false // moved on during the wait - discard
       if (!preloaded) {
-        toast.error('Still syncing this warehouse\'s data - please wait a moment and try this serial again.', { duration: 4000 })
+        // See StockFormBase.jsx's identical fix for the full reasoning -
+        // failCount >= 2 means the pull has already failed and retried
+        // at least once (preloadOneType's backoff), not a normal brief
+        // catch-up.
+        const { failCount } = await getPreloadFailureInfo(currentWarehouseId, type)
+        toast.error(
+          failCount >= 2
+            ? 'Can\'t reach the Sheets backup to verify this warehouse\'s history - check your connection. Retrying automatically in the background.'
+            : 'Still syncing this warehouse\'s data - please wait a moment and try this serial again.',
+          { duration: 5000 }
+        )
         return false
       }
 

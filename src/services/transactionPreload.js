@@ -673,8 +673,28 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
   const needsIncremental = []
   let oldestIncrementalCheck = null
 
+  // Confirmed, reported real bug: a brand-new warehouse's first-ever
+  // full pull can keep failing (the known Apps Script echo-redirect
+  // flakiness, already retried inside fetchTransactionsBulk - see its
+  // own comments - but not guaranteed to clear up within just 3
+  // attempts under sustained load) - without any backoff, this exact
+  // same (warehouse, type) pair got retried on literally the next 30-
+  // second cycle forever, piling more load onto an endpoint that's
+  // already struggling and producing the reported "endless push and
+  // pull" with the entry form stuck showing "Still syncing" - since
+  // preloadState.complete is only ever written after a SUCCESSFUL
+  // fetch (see processGroup below), a persistently failing pull can
+  // never complete on its own. failCount/nextRetryAt (written on
+  // failure, see processGroup's catch path) space out retries instead
+  // (1 -> 30s, 2 -> 1min, 3 -> 2min, 4+ -> capped at 5min), giving the
+  // endpoint real recovery room between attempts rather than none.
+  const now = Date.now()
+  const stateByWarehouseId = new Map(warehouses.map((w, i) => [w.warehouseId, states[i]]))
   warehouses.forEach((warehouse, i) => {
     const state = states[i]
+    if (state?.nextRetryAt && new Date(state.nextRetryAt).getTime() > now) {
+      return // still in backoff cooldown from a recent failure - skip this cycle entirely
+    }
     if (!state || !state.complete) {
       needsFull.push(warehouse)
     } else {
@@ -710,12 +730,34 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
 
   const highestImportedByWarehouse = new Map()
 
+  const BACKOFF_STEPS_MS = [30_000, 60_000, 120_000, 300_000]
   const processGroup = async (group, modifiedSince) => {
     if (group.length === 0) return
     const result = await fetchTransactionsBulk(type, group.map((w) => w.name), { modifiedSince })
     if (!result.ok) {
       console.error(`preloadOneType: fetchTransactionsBulk did not succeed for ${type}, warehouses:`, group.map((w) => w.name), result)
-      return // network/offline - preloadState left as-is for this group, retried next login
+      // Backoff instead of leaving preloadState untouched (which used
+      // to mean an immediate retry on the very next 30s cycle, forever,
+      // piling more load onto an endpoint that just failed) - see this
+      // function's own comment above for the full reasoning. `complete`
+      // stays whatever it already was (false for a still-pending full
+      // pull, true for an incremental check that failed - either way
+      // this write only ever adds/advances the backoff, never
+      // regresses a genuinely completed warehouse back to incomplete).
+      for (const warehouse of group) {
+        const existing = stateByWarehouseId.get(warehouse.warehouseId)
+        const failCount = (existing?.failCount ?? 0) + 1
+        const delayMs = BACKOFF_STEPS_MS[Math.min(failCount - 1, BACKOFF_STEPS_MS.length - 1)]
+        await db.preloadState.put({
+          warehouseId: warehouse.warehouseId,
+          type,
+          complete: existing?.complete ?? false,
+          lastCheckedAt: existing?.lastCheckedAt ?? null,
+          failCount,
+          nextRetryAt: new Date(Date.now() + delayMs).toISOString(),
+        })
+      }
+      return // network/offline - retried after backoff instead of the next unconditional cycle
     }
 
     const totalRowsSeen = result.bySource.reduce((sum, s) => sum + (s.ok ? s.rows.length : 0), 0)
@@ -867,7 +909,10 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
 
     // Only mark this batch's warehouses complete after their fetch
     // genuinely succeeded - a network failure above already returned
-    // early, leaving preloadState untouched for a clean retry next login.
+    // early instead (with its own backoff, see that branch). put()
+    // fully replaces the record, so a prior failure's failCount/
+    // nextRetryAt is naturally dropped here on a real success -
+    // backoff always resets once a pull actually gets through.
     for (const warehouse of group) {
       await db.preloadState.put({
         warehouseId: warehouse.warehouseId,
@@ -905,6 +950,18 @@ export const isPreloadComplete = async (warehouseId, type) => {
   if (!warehouseId) return false
   const state = await db.preloadState.get([warehouseId, type])
   return Boolean(state?.complete)
+}
+
+// Lets a caller tell "still catching up, will finish shortly" apart
+// from "genuinely stuck retrying a failing pull" (see preloadOneType's
+// backoff) - the two look identical from isPreloadComplete alone, but
+// deserve a different message: the first is a normal, brief wait, the
+// second means the Sheets bridge itself is unreachable/erroring and no
+// amount of waiting inside this form will fix it.
+export const getPreloadFailureInfo = async (warehouseId, type) => {
+  if (!warehouseId) return { failCount: 0 }
+  const state = await db.preloadState.get([warehouseId, type])
+  return { failCount: state?.failCount ?? 0 }
 }
 
 // checkAndLoadSerial refuses to guess (see its own comment) while
