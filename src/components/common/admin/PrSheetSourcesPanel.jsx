@@ -256,8 +256,16 @@ function PrSheetSourcesPanel() {
         toast('No Purchase Receipts found with a real date in that range', { icon: 'ℹ️' })
         return
       }
-      toast.success(`Re-queued ${matched} Purchase Receipt(s) - running Sync Now...`)
-      await handleSyncNow()
+      // No explicit handleSyncNow() call here - each db.purchaseReceipts
+      // .update() above already fired its own automatic background sync
+      // (registerImmediateSyncOnSave's 'updating' hook, syncWorker.js),
+      // so an explicit call here would just race those and near-
+      // certainly lose (one already holds the lock), surfacing a
+      // confusing "already running" toast for something that's actually
+      // working correctly in the background. Confirmed, reported real
+      // case: re-queuing 68 records fired 68 near-simultaneous triggers,
+      // and this call was simply never going to be the one that won.
+      toast.success(`Re-queued ${matched} Purchase Receipt(s) - syncing in the background now.`)
     } catch (err) {
       setRequeuing(false)
       toast.error('Re-queue failed — please try again')

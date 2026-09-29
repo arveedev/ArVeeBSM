@@ -7508,4 +7508,14 @@
 //              today" red one) that names every entry currently
 //              overlapping today's date, since a stopgap tie-break is
 //              not a fix - a human still needs to delete the wrong one.
-export const APP_VERSION = '1.10-223'
+//   1.10-224 - Removed the Re-queue tool's own trailing Sync Now call
+//              (PrSheetSourcesPanel.jsx) - each re-queued record's own
+//              update() already fires an automatic background sync
+//              (registerImmediateSyncOnSave), so re-queuing many records
+//              at once (confirmed, reported case: 68) triggers that many
+//              near-simultaneous sync attempts; the explicit trailing
+//              call was never going to be the one that wins the lock,
+//              so it only ever surfaced a confusing "already running"
+//              toast for work that was genuinely proceeding correctly
+//              in the background. Now just reports the re-queued count.
+export const APP_VERSION = '1.10-224'
