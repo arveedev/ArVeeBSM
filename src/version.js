@@ -7518,4 +7518,27 @@
 //              so it only ever surfaced a confusing "already running"
 //              toast for work that was genuinely proceeding correctly
 //              in the background. Now just reports the re-queued count.
-export const APP_VERSION = '1.10-224'
+//   1.10-225 - Root-caused the actual reason a device could sit
+//              completely un-synced for hours despite "connected"-
+//              looking Dexie Cloud state (this is what was blocking
+//              PR Sheet Sources, and very likely what caused the SDO
+//              Report Cut-Off to not show on another device too): the
+//              device's LOCALLY STORED refresh token was issued for a
+//              different Dexie Cloud database than the one currently
+//              configured, confirmed directly via Settings.jsx's own
+//              diagnostic panel - "HTTP 401: Refresh token
+//              verification failed: jwt audience invalid." The
+//              existing auto-recovery on a 401 (dexie.js) couldn't
+//              fix this specific case: a plain login() re-uses that
+//              same broken token to request a new access token, so it
+//              fails identically forever, not the transient blip that
+//              retry was built for. Now detects this exact error text
+//              and does logout()+login() instead (discards the stale
+//              keypair/token entirely - local data is untouched - so
+//              the next login() must request a genuinely fresh pair),
+//              on its own longer 5-minute throttle. Also added a
+//              manual "Re-authenticate Cloud Sync" button to
+//              Settings.jsx's sync diagnostics section (shown whenever
+//              sync status is red or an error is captured) as a
+//              visible, on-demand version of the same fix.
+export const APP_VERSION = '1.10-225'
