@@ -152,6 +152,25 @@ function PrSheetSourcesPanel() {
     return source.dateFrom <= today && (!source.dateTo || today <= source.dateTo)
   }
 
+  // Confirmed, reported real bug: the overlap guard in handleSave below
+  // only ever checks against sources THIS device can already see
+  // locally - two devices each adding their own recovery entry while
+  // genuinely isolated from each other (neither having synced the
+  // other's write yet, e.g. both separately recovering from the same
+  // "no active source" gap around the same time) can each pass that
+  // check independently, and Dexie Cloud's add-based merge has no
+  // server-side uniqueness constraint to catch it afterward - both
+  // records survive and sync to every device. Not a sync failure (the
+  // sync itself worked correctly - that's WHY both now show up
+  // everywhere) but a genuine duplicate that needs a human to delete
+  // one. getPrSheetSourceForDate (googleSheetsBridge.js) now picks
+  // between them deterministically so at least every device agrees on
+  // the SAME one meanwhile, but that's a stopgap, not a fix - surfaced
+  // here so it actually gets resolved instead of silently tie-broken
+  // forever.
+  const activeSourcesToday = sources.filter(isActiveToday)
+  const hasOverlappingActiveSources = activeSourcesToday.length > 1
+
   // Deleting the entry currently covering today is the highest-blast-
   // radius mistake this panel allows - every Purchase Receipt from
   // today onward silently has nowhere to back up to until someone
@@ -283,6 +302,23 @@ function PrSheetSourcesPanel() {
           <p className="text-xs text-brand-crimson">
             No PR sheet source currently covers today's date - every Purchase Receipt dated from
             now on is failing to back up to any Sheet. Add (or extend) an entry that covers today.
+          </p>
+        </div>
+      )}
+
+      {/* Two (or more) entries covering the same date, most likely from
+          two devices each independently adding their own recovery entry
+          before either had synced the other's - see the comment above
+          hasOverlappingActiveSources. Both are real, synced records;
+          only a human deleting one actually resolves it. */}
+      {hasOverlappingActiveSources && (
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand-amber/40 bg-brand-amber/10 px-3 py-2.5">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-brand-amber" />
+          <p className="text-xs text-brand-amber">
+            {activeSourcesToday.length} entries all cover today's date ({activeSourcesToday.map((s) => `"${s.label}"`).join(', ')}) -
+            most likely created on two different devices before either had synced the other's.
+            Which one Purchase Receipts actually route to is no longer guessable - delete all but
+            the one with the correct, currently-working URL.
           </p>
         </div>
       )}

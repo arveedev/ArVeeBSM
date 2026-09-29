@@ -121,11 +121,33 @@ const PR_WRITE_ALLOWLIST_KEYS = ['summarySheetName']
 /** Every configured sheet source, oldest first. */
 const getAllSheetSources = async () => db.sheetSources.orderBy('dateFrom').toArray()
 
+// Picks ONE match, deterministically, when more than one source's date
+// range covers the same date - confirmed, reported real bug: the
+// client-side overlap guard at save time only ever checks against
+// records this device can already see locally, so two devices each
+// adding their own source while genuinely isolated from each other
+// (e.g. both recovering from the same "no active source" gap at
+// roughly the same time, neither having synced the other's write yet)
+// can both succeed independently, and Dexie Cloud's add-based merge has
+// no server-side uniqueness constraint to catch it after the fact -
+// both records survive. Preferring the LATEST dateFrom (a real,
+// meaningful signal - the most recently-STARTING range is the more
+// specific/intentional one), then the greater `id` as a last-resort
+// tie-break, makes the pick identical on every device instead of
+// depending on IndexedDB's unspecified tie order for equal dateFrom
+// values (which is NOT guaranteed to agree across devices) - this does
+// not fix a genuine duplicate/overlap, only stops it from silently
+// routing data inconsistently depending on which device happens to push
+// it; see PrSheetSourcesPanel.jsx's own banner for surfacing the
+// overlap itself so an admin actually resolves it.
+const pickMostSpecificSource = (matches) =>
+  matches.length <= 1 ? (matches[0] ?? null) : [...matches].sort((a, b) => b.dateFrom.localeCompare(a.dateFrom) || String(b.id).localeCompare(String(a.id)))[0]
+
 /** The single source whose date range covers a given date, or null if
  * none does. */
 const getSheetSourceForDate = async (date) => {
   const sources = await getAllSheetSources()
-  return sources.find((s) => s.dateFrom <= date && (!s.dateTo || date <= s.dateTo)) ?? null
+  return pickMostSpecificSource(sources.filter((s) => s.dateFrom <= date && (!s.dateTo || date <= s.dateTo)))
 }
 
 /** The single source whose date range covers today, or null if none does
@@ -142,7 +164,7 @@ const getActiveSheetSource = async () => getSheetSourceForDate(todayLocalISO())
  * since these are genuinely different spreadsheet files per the user. */
 const getPrSheetSourceForDate = async (date) => {
   const sources = await db.prSheetSources.orderBy('dateFrom').toArray()
-  return sources.find((s) => s.dateFrom <= date && (!s.dateTo || date <= s.dateTo)) ?? null
+  return pickMostSpecificSource(sources.filter((s) => s.dateFrom <= date && (!s.dateTo || date <= s.dateTo)))
 }
 
 const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false

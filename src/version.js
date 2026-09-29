@@ -7484,4 +7484,28 @@
 //              (Web Locks' own built-in mechanism for exactly this)
 //              instead of deferring forever to a holder that's never
 //              coming back.
-export const APP_VERSION = '1.10-222'
+//   1.10-223 - Fixed a reported real duplicate: two PR Sheet Sources
+//              both covering the same September date range, each with
+//              its own URL, appearing after being added independently
+//              on two different devices. Not a sync failure - both
+//              records genuinely synced correctly to every device,
+//              which is exactly why both now show up everywhere - the
+//              overlap guard at save time only ever checks against
+//              records THIS device can already see locally, and Dexie
+//              Cloud's add-based merge has no server-side uniqueness
+//              constraint to catch two devices independently creating
+//              conflicting entries while neither has synced the other's
+//              write yet (a real, structural limit of any offline-first,
+//              eventually-consistent sync layer, not something fixable
+//              purely client-side). getPrSheetSourceForDate/
+//              getSheetSourceForDate (googleSheetsBridge.js) now pick
+//              between overlapping matches deterministically (latest
+//              dateFrom, then greatest id) so every device at least
+//              agrees on the SAME one meanwhile, instead of an
+//              IndexedDB tie-order that isn't guaranteed to match across
+//              devices. PrSheetSourcesPanel.jsx also gained a second
+//              banner (amber, alongside the existing "no source covers
+//              today" red one) that names every entry currently
+//              overlapping today's date, since a stopgap tie-break is
+//              not a fix - a human still needs to delete the wrong one.
+export const APP_VERSION = '1.10-223'
