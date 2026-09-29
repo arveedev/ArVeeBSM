@@ -7540,4 +7540,23 @@
 //              has already failed and retried at least once, instead
 //              of always saying "please wait a moment," which wrongly
 //              implied trying again sooner would help.
-export const APP_VERSION = '1.10-225'
+//   1.10-226 - Fixed a reported real gap: the "NFA-owned Ricemills
+//              don't use MO/TMO numbers at all" rule (already
+//              established elsewhere in the app - NfaMillingMonitor.jsx,
+//              RicemillAllocationsPanel.jsx, dexie.js's own schema
+//              comment - their only reference is the Regional Authority
+//              Number) was never actually applied to the WSR/WSI entry
+//              form itself. MO Number/Batch (under transaction type
+//              "Milling") and TMO Number/Trial (under "Test Milling")
+//              still rendered - and looked required via their amber-
+//              border-when-empty styling - for a Ricemill-facility-type
+//              warehouse, even though they're meaningless there
+//              (millingOrderOptions never has anything to show for a
+//              warehouse that was never assigned an MO/TMO in the first
+//              place). StockFormBase.jsx now skips rendering both
+//              blocks entirely when the current warehouse's
+//              facilityType is 'Ricemill' - buildTransactionPayload
+//              already saves moNumber/batchNumber/tmoNumber/trialNumber
+//              as null whenever their state stays at its empty default,
+//              so no other change was needed for them to save correctly.
+export const APP_VERSION = '1.10-226'

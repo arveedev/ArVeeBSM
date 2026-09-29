@@ -468,6 +468,19 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   )
   const isMilling = isMillingTypeName(selectedTransactionType?.name)
   const isTestMilling = isTestMillingTypeName(selectedTransactionType?.name)
+  // NFA-owned Ricemills (facilityType === 'Ricemill' - see dexie.js's
+  // own schema comment) don't use MO/TMO numbers at all, per the
+  // already-established rule elsewhere in the app (NfaMillingMonitor.jsx,
+  // RicemillAllocationsPanel.jsx) - their only reference is the
+  // Regional Authority Number, with allocations tracked admin-side, not
+  // per-MO/TMO. Confirmed, reported real gap: that rule was never
+  // actually applied to this entry form - the MO/TMO Number and Batch/
+  // Trial Number fields still rendered (and looked required, via their
+  // amber-border-when-empty styling) regardless of facility type, even
+  // though they're meaningless here (millingOrderOptions never has
+  // anything to show for a warehouse that was never assigned an MO/TMO
+  // in the first place).
+  const isNfaRicemill = currentWarehouse?.facilityType === 'Ricemill'
 
   const linkedMillingOrder = useLiveQuery(async () => {
     if (type === 'WSR' || !linkedAuthority?.aiNumber) return null
@@ -3572,7 +3585,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             </div>
           )}
 
-          {isMilling && (() => {
+          {isMilling && !isNfaRicemill && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableMoOrders = millingOrderOptions
               // Completed orders are only hidden when creating a brand
@@ -3675,7 +3688,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             )
           })()}
 
-          {isTestMilling && (() => {
+          {isTestMilling && !isNfaRicemill && (() => {
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableTmoNumbers = millingOrderOptions
               // Same manuallyCompleted-only gate as the MO picker above
