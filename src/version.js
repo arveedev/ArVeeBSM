@@ -7463,4 +7463,25 @@
 //              automatically; does not remove whatever row already
 //              landed on the wrong month's spreadsheet, which still
 //              needs a manual delete there.
-export const APP_VERSION = '1.10-221'
+//   1.10-222 - Fixed "a sync is already running, try again later"
+//              persisting for hours with no way to recover. The cross-
+//              tab Web Lock guarding processSyncQueue (syncWorker.js)
+//              can only be released by whichever tab/context actually
+//              holds it - normally fast, but a genuinely large backlog
+//              (many dozens of records, each worth up to several
+//              retried HTTP attempts under known Apps Script echo-
+//              redirect flakiness) can legitimately run for minutes,
+//              and a tab that gets frozen/suspended mid-run (a
+//              backgrounded mobile PWA, bfcache) can leave the lock
+//              held indefinitely with nothing left running to ever
+//              release it - exactly the reported symptom, likely
+//              triggered by the large backlog the new Re-queue tool
+//              (1.10-221) just created. A localStorage timestamp (per-
+//              browser, matching the lock's own same-origin/cross-tab
+//              scope - no Dexie Cloud sync involved) now tracks when
+//              the current run actually started; a later call sees a
+//              lock held past 3 minutes as stale and steals it outright
+//              (Web Locks' own built-in mechanism for exactly this)
+//              instead of deferring forever to a holder that's never
+//              coming back.
+export const APP_VERSION = '1.10-222'

@@ -81,6 +81,26 @@ const withOneRetry = async (attempt, delayMs = 1500) => {
  * drains any queued offline deletions. Returns a summary of how many
  * records were synced / failed, so the UI can surface results via toast.
  */
+const SYNC_LOCK_NAME = 'bsm-sync-queue-lock'
+const SYNC_LOCK_STARTED_AT_KEY = 'bsm-sync-queue-started-at'
+// A held Web Lock can only ever be released by whichever tab/context is
+// holding it - normally fast, since every request inside runSyncQueue
+// is timeout-bounded, but a genuinely large backlog (many dozens of
+// records, each worth up to several retried HTTP attempts under
+// sustained Apps Script flakiness) can legitimately run for a few
+// minutes, and a tab that gets frozen/suspended mid-run (a backgrounded
+// mobile PWA, bfcache) can leave the lock held indefinitely with
+// nothing left running to ever release it. Confirmed, reported real
+// bug: "a sync is already running, try again later" for HOURS, with no
+// way to recover short of clearing site data. This ceiling is generous
+// relative to even a large legitimate backlog, but finite - past it, a
+// later call steals the lock outright (Web Locks' own built-in
+// mechanism for exactly this) instead of deferring forever to a holder
+// that's never coming back. localStorage (not Dexie) tracks this - it's
+// shared across tabs of this same browser, exactly matching the Web
+// Lock's own scope, with no cross-device sync concerns to worry about.
+const STALE_SYNC_LOCK_MS = 3 * 60 * 1000
+
 export const processSyncQueue = async () => {
   // Cross-tab lock: if the app is open in more than one tab (a common,
   // easy-to-miss scenario - e.g. one tab running the app, another open
@@ -94,9 +114,24 @@ export const processSyncQueue = async () => {
   // context. Falls back to the plain in-memory flag (same-tab
   // protection only) if this API isn't available in a given browser.
   if (typeof navigator !== 'undefined' && navigator.locks?.request) {
-    return navigator.locks.request('bsm-sync-queue-lock', { ifAvailable: true }, (lock) => {
+    let isStale = false
+    try {
+      const startedAt = Number(localStorage.getItem(SYNC_LOCK_STARTED_AT_KEY) ?? '')
+      isStale = Number.isFinite(startedAt) && startedAt > 0 && (Date.now() - startedAt > STALE_SYNC_LOCK_MS)
+    } catch {
+      // localStorage unavailable (private browsing, etc.) - falls
+      // through to the normal ifAvailable behavior below, unchanged
+      // from before this fix.
+    }
+    const lockOptions = isStale ? { steal: true } : { ifAvailable: true }
+    return navigator.locks.request(SYNC_LOCK_NAME, lockOptions, async (lock) => {
       if (!lock) return { synced: 0, failed: 0, skipped: true }
-      return runSyncQueue()
+      try { localStorage.setItem(SYNC_LOCK_STARTED_AT_KEY, String(Date.now())) } catch {}
+      try {
+        return await runSyncQueue()
+      } finally {
+        try { localStorage.removeItem(SYNC_LOCK_STARTED_AT_KEY) } catch {}
+      }
     })
   }
   if (isSyncing) {
