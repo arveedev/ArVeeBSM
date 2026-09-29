@@ -265,7 +265,17 @@ const runSyncQueue = async () => {
           // The WSR's own date - per explicit correction, this (not
           // pr.date) is what both the row's DATE column and which
           // monthly Sheet source it belongs to are resolved from.
-          wsrDate: wsr?.date ?? null,
+          // pr.wsrDate (denormalized onto the record at PR-creation
+          // time, PurchaseReceiptModal.jsx) is preferred over this live
+          // lookup - confirmed, reported real bug: `wsr` above can
+          // transiently miss on a device that hasn't yet received this
+          // PR's linked WSR via Dexie Cloud (no ordering guarantee
+          // between two separately-synced records), silently falling
+          // through to the pr.date fallback below and routing the row
+          // to the wrong monthly spreadsheet. A PR issued before this
+          // field existed has no pr.wsrDate, so the live lookup stays as
+          // the fallback for those, not removed.
+          wsrDate: pr.wsrDate ?? wsr?.date ?? null,
           isFarmersAssociation: Boolean(wsr?.farmerCoops?.length),
           // Per explicit correction: FARMER MEMBER holds every member's
           // name, RSBSA NO. every member's own RSBSA, GENDER every

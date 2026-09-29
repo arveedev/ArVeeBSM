@@ -181,6 +181,22 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
           warehouseId: wsr.warehouseId,
           status: 'Active',
           date: datePaid,
+          // Denormalized off the real `wsr` object already in hand here,
+          // rather than making syncWorker.js re-look it up by
+          // wsrTransactionId at sync time - that live lookup can
+          // transiently miss on a DIFFERENT device than the one that
+          // created this PR, if Dexie Cloud hasn't finished syncing this
+          // WSR down to that device yet when its own background sync
+          // worker happens to pick up this now-locally-present PR first
+          // (eventual-consistency ordering between two separately-synced
+          // records is never guaranteed). Confirmed, reported real bug:
+          // several Sept 25-28 Purchase Receipts backed up under their
+          // own payment date instead of the WSR's real delivery date,
+          // routing them to the wrong monthly PALAY DELIVERIES
+          // spreadsheet - the live-lookup fallback to pr.date (see
+          // syncWorker.js/googleSheetsBridge.js's resolvePrSourceDate)
+          // silently absorbed that race instead of surfacing it.
+          wsrDate: wsr.date,
           payeeName: wsr.customerName,
           payeeAddress: wsr.customerAddress,
           rsbsa: resolvedRsbsa,

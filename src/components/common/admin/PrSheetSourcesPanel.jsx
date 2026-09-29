@@ -45,6 +45,9 @@ function PrSheetSourcesPanel() {
   const [editingId, setEditingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
   const [syncing, setSyncing] = useState(false)
+  const [requeueFrom, setRequeueFrom] = useState('')
+  const [requeueTo, setRequeueTo] = useState('')
+  const [requeuing, setRequeuing] = useState(false)
 
   const sources = useLiveQuery(() => db.prSheetSources.toArray(), []) ?? []
   const sortedSources = [...sources].sort((a, b) => byAlpha(b.dateFrom, a.dateFrom))
@@ -187,6 +190,62 @@ function PrSheetSourcesPanel() {
     }
   }
 
+  // Recovery tool for the reported real incident: Purchase Receipts
+  // whose backup already succeeded (isSynced: true), but against the
+  // WRONG monthly source - the live wsrTransactionId lookup that
+  // resolves which source to use (syncWorker.js) missed the linked WSR
+  // on this device (Dexie Cloud sync ordering isn't guaranteed between
+  // two separately-synced records) and silently fell back to the PR's
+  // own payment date instead. Now fixed going forward (PurchaseReceipt-
+  // Modal.jsx denormalizes the WSR's date onto the record at creation
+  // time), but that does nothing for PRs that already synced wrong
+  // before the fix. This resets isSynced/hasBeenBackedUp so the normal
+  // sync queue treats them as pending again and pushes them fresh
+  // against whatever source actually covers their real WSR date now -
+  // it does NOT remove whatever row already exists on the wrong
+  // month's spreadsheet, which still needs a manual delete there.
+  const handleRequeue = async () => {
+    if (!requeueFrom || !requeueTo) {
+      toast.error('Pick both a From and To date')
+      return
+    }
+    setRequeuing(true)
+    try {
+      const candidates = await db.purchaseReceipts.filter((pr) => pr.status !== 'Cancelled').toArray()
+      let matched = 0
+      for (const pr of candidates) {
+        let realDate = pr.wsrDate ?? null
+        if (!realDate && pr.wsrTransactionId) {
+          const wsr = await db.transactions.get(pr.wsrTransactionId)
+          realDate = wsr?.date ?? null
+        }
+        realDate = realDate ?? pr.date
+        if (realDate < requeueFrom || realDate > requeueTo) continue
+        matched += 1
+        // Also backfills wsrDate here (if it was missing) so this same
+        // record is protected against the race on any future re-sync,
+        // not just going forward for brand-new PRs.
+        await db.purchaseReceipts.update(pr.prId, {
+          isSynced: false,
+          hasBeenBackedUp: false,
+          syncFailureLogged: false,
+          wsrDate: pr.wsrDate ?? realDate,
+        })
+      }
+      setRequeuing(false)
+      if (matched === 0) {
+        toast('No Purchase Receipts found with a real date in that range', { icon: 'ℹ️' })
+        return
+      }
+      toast.success(`Re-queued ${matched} Purchase Receipt(s) - running Sync Now...`)
+      await handleSyncNow()
+    } catch (err) {
+      setRequeuing(false)
+      toast.error('Re-queue failed — please try again')
+      console.error(err)
+    }
+  }
+
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <div className="flex items-start justify-between gap-2">
@@ -326,6 +385,37 @@ function PrSheetSourcesPanel() {
           ))}
         </div>
       )}
+
+      <div className="mt-4 rounded-xl border border-brand-amber/40 bg-brand-amber/5 p-3">
+        <h3 className="text-sm font-semibold text-app-text">Re-queue Purchase Receipts for Sync</h3>
+        <p className="mt-1 text-xs text-neutral-400">
+          Recovery tool for a Purchase Receipt that already synced against the WRONG monthly
+          source (its underlying WSR's real date wasn't available yet when it was pushed - now
+          fixed for new PRs going forward). Pick the real WSR delivery date range to re-check;
+          any match gets marked pending again and pushed fresh, then Sync Now runs automatically.
+          This does NOT remove whatever row already exists on the wrong month's spreadsheet - that
+          still needs a manual delete there.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div>
+            <label className={labelClass}>From</label>
+            <CalendarDatePicker value={requeueFrom} onChange={setRequeueFrom} required={false} />
+          </div>
+          <div>
+            <label className={labelClass}>To</label>
+            <CalendarDatePicker value={requeueTo} onChange={setRequeueTo} required={false} />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleRequeue}
+          disabled={requeuing || syncing}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-brand-amber/50 px-3 py-2 text-xs font-semibold text-brand-amber transition-all hover:bg-brand-amber/10 active:scale-95 disabled:opacity-50"
+        >
+          <RefreshCw size={14} className={requeuing ? 'animate-spin' : ''} />
+          {requeuing ? 'Re-queuing…' : 'Re-queue & Sync'}
+        </button>
+      </div>
 
       <ConfirmDialog
         open={pendingDelete !== null}

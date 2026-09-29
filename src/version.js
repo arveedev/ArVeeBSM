@@ -7435,4 +7435,32 @@
 //              shows a sharper, explicitly-worded warning (title +
 //              AlertTriangle icon) naming the exact consequence, instead
 //              of the same generic confirmation every other entry gets.
-export const APP_VERSION = '1.10-220'
+//   1.10-221 - Root-caused the reported "Sept 25-28 Purchase Receipts
+//              missing from the PR Sheet" bug for real: the fix that
+//              routes a PR's Sheet backup by its underlying WSR's own
+//              date (not the PR's own payment date) was already in
+//              place, but relied on a LIVE lookup of the linked WSR by
+//              wsrTransactionId at sync time (syncWorker.js) - which can
+//              transiently miss on a device that hasn't yet received
+//              that WSR via Dexie Cloud (no ordering guarantee between
+//              two separately-synced records, especially when the
+//              background sync worker on a DIFFERENT device than the
+//              one that created the PR picks it up first). That silent
+//              miss fell through to the pr.date fallback, routing the
+//              row to the wrong monthly PALAY DELIVERIES spreadsheet
+//              with no error anywhere - the push genuinely succeeded,
+//              just against the wrong file. Fixed by denormalizing the
+//              WSR's date directly onto the Purchase Receipt record at
+//              creation time (PurchaseReceiptModal.jsx sets wsrDate from
+//              the real `wsr` object already in hand there, no lookup
+//              needed), with syncWorker.js now preferring that stored
+//              value over the live lookup (which stays as a fallback
+//              for PRs issued before this field existed). Also added a
+//              "Re-queue Purchase Receipts for Sync" recovery tool to
+//              PrSheetSourcesPanel.jsx - pick the real WSR date range,
+//              it resets isSynced/hasBeenBackedUp (and backfills
+//              wsrDate) for every match, then runs Sync Now
+//              automatically; does not remove whatever row already
+//              landed on the wrong month's spreadsheet, which still
+//              needs a manual delete there.
+export const APP_VERSION = '1.10-221'
