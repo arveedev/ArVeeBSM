@@ -15,7 +15,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, Trash2, RefreshCw } from 'lucide-react'
+import { Pencil, Trash2, RefreshCw, AlertTriangle } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { todayLocalISO } from '../../../utils/calculations.js'
 import { processSyncQueue } from '../../../services/syncWorker.js'
@@ -149,6 +149,20 @@ function PrSheetSourcesPanel() {
     return source.dateFrom <= today && (!source.dateTo || today <= source.dateTo)
   }
 
+  // Deleting the entry currently covering today is the highest-blast-
+  // radius mistake this panel allows - every Purchase Receipt from
+  // today onward silently has nowhere to back up to until someone
+  // notices and re-adds it (the exact incident reported: several days
+  // of PRs went un-synced before anyone caught it). No code path
+  // deletes a source automatically - this can only happen via this
+  // exact button - so the real risk is a misclick (e.g. meaning to
+  // delete an old, superseded month but hitting the active one instead,
+  // easy to do once the list has several similar-looking entries). A
+  // sharper, explicitly-labeled warning here is the actual fix, not a
+  // "why did this happen" mystery to keep chasing.
+  const pendingDeleteSource = sources.find((s) => s.id === pendingDelete) ?? null
+  const pendingDeleteIsActive = pendingDeleteSource ? isActiveToday(pendingDeleteSource) : false
+
   // On-demand push for Purchase Receipts sitting locally but not yet on
   // any Sheet - most relevant right after adding a new month's source,
   // when there can already be a real backlog of PRs dated into that
@@ -197,6 +211,22 @@ function PrSheetSourcesPanel() {
         to a Sheet immediately, instead of waiting for the automatic
         background sync.
       </p>
+
+      {/* Surfaces the exact gap that let several days of PRs silently
+          fail to back up before anyone noticed - no source covering
+          today at all previously had no visible signal anywhere in the
+          app; the only way to find out was noticing the Sheet itself
+          had gone stale. Shown right up top so it's impossible to miss
+          on this panel. */}
+      {sources.length > 0 && !sources.some(isActiveToday) && (
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand-crimson/40 bg-brand-crimson/10 px-3 py-2.5">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-brand-crimson" />
+          <p className="text-xs text-brand-crimson">
+            No PR sheet source currently covers today's date - every Purchase Receipt dated from
+            now on is failing to back up to any Sheet. Add (or extend) an entry that covers today.
+          </p>
+        </div>
+      )}
 
       <div className="mt-4 space-y-3">
         <div>
@@ -299,8 +329,13 @@ function PrSheetSourcesPanel() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete this PR sheet source?"
-        description="This cannot be undone. Purchase Receipts already backed up to it are unaffected."
+        icon={pendingDeleteIsActive ? AlertTriangle : undefined}
+        title={pendingDeleteIsActive ? 'Delete the ACTIVE PR sheet source?' : 'Delete this PR sheet source?'}
+        description={
+          pendingDeleteIsActive
+            ? `"${pendingDeleteSource?.label}" is the source currently covering today's date. Deleting it stops every Purchase Receipt dated from now on from backing up to any Sheet at all until a new source is added to cover this date - it will fail silently in the background, not with an obvious error. Only do this if you're about to immediately add its replacement.`
+            : 'This cannot be undone. Purchase Receipts already backed up to it are unaffected.'
+        }
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
       />

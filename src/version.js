@@ -7415,4 +7415,24 @@
 //              Kg total, for an independently-chosen date period and
 //              optional single-warehouse filter (its own state, not tied
 //              to ProcurementMonitor's own Search/Sort & Filter/Period).
-export const APP_VERSION = '1.10-219'
+//   1.10-220 - Sack Type & Condition Breakdown modal, per direct
+//              follow-up: dropped Net Kg entirely (from both the
+//              per-group tiles and the grand total) - only the sack
+//              type/condition identity and its bag count are needed.
+//              Also, per the reported "active PR sheet source got
+//              deleted, app said synced but the Sheet never updated"
+//              incident: no code path deletes a db.prSheetSources
+//              record automatically (confirmed by direct search) -
+//              every deletion requires the explicit Delete + Confirm
+//              button on PrSheetSourcesPanel.jsx, so this can only be
+//              an accidental manual delete, most likely of the wrong
+//              (currently-active) entry among several similar-looking
+//              ones. Two safeguards added: (1) a persistent red banner
+//              at the top of the panel whenever NO source currently
+//              covers today's date, so the gap is caught immediately
+//              instead of days later when the Sheet is noticed stale;
+//              (2) deleting the entry that currently covers today now
+//              shows a sharper, explicitly-worded warning (title +
+//              AlertTriangle icon) naming the exact consequence, instead
+//              of the same generic confirmation every other entry gets.
+export const APP_VERSION = '1.10-220'

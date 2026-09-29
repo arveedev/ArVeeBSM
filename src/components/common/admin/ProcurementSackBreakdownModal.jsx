@@ -1,24 +1,24 @@
 // Procurement Sack Breakdown — admin-only, opened from the icon beside
 // the "Procurement" label on AdminMonitoring.jsx. Shows every distinct
 // sack weight/condition combo (e.g. "50kg - BN") actually used across
-// Procurement-type WSRs, each with its own Bags/Net Kg total, for a
-// chosen date period and (optionally) one warehouse - independent of
-// whatever Search/Sort & Filter/Period state ProcurementMonitor's own
-// list currently has, since this is a separate lookup, not a view of
-// the same filtered list.
+// Procurement-type WSRs, each with its own bag count, for a chosen date
+// period and (optionally) one warehouse - independent of whatever
+// Search/Sort & Filter/Period state ProcurementMonitor's own list
+// currently has, since this is a separate lookup, not a view of the
+// same filtered list. Net Kg deliberately left out, per explicit
+// request - only the sack type/condition identity and its bag count
+// matter here.
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X, Package } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
-import { useSettings } from '../../../context/SettingsContext.jsx'
-import { fmtBags, fmtWeight, isProcurementTypeName, effectiveCutoffDate, getPeriodPresetRanges } from '../../../utils/calculations.js'
+import { fmtBags, isProcurementTypeName, effectiveCutoffDate, getPeriodPresetRanges } from '../../../utils/calculations.js'
 import PeriodPresetPicker from '../PeriodPresetPicker.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 
 function ProcurementSackBreakdownModal({ onClose }) {
-  const { weightUnit } = useSettings() ?? {}
   const [periodFrom, setPeriodFrom] = useState(() => getPeriodPresetRanges(0).monthFrom)
   const [periodTo, setPeriodTo] = useState(() => getPeriodPresetRanges(0).monthTo)
   const [warehouseFilter, setWarehouseFilter] = useState('')
@@ -74,18 +74,15 @@ function ProcurementSackBreakdownModal({ onClose }) {
         label: sackType && t.mtsCondition ? `${sackType.code} - ${t.mtsCondition}` : 'Unspecified',
         rowCount: 0,
         totalBags: 0,
-        totalKilos: 0,
       })
     }
     const group = byGroup.get(key)
     group.rowCount += 1
     group.totalBags += t.numberOfBags ?? 0
-    group.totalKilos += t.netKilos ?? 0
   }
 
   const groups = [...byGroup.values()].sort((a, b) => b.totalBags - a.totalBags)
   const grandBags = groups.reduce((s, g) => s + g.totalBags, 0)
-  const grandKilos = groups.reduce((s, g) => s + g.totalKilos, 0)
 
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -146,12 +143,9 @@ function ProcurementSackBreakdownModal({ onClose }) {
           <>
             <div className="mt-3 rounded-xl border border-brand-neon/30 bg-brand-neon/5 p-3">
               <p className="text-xs font-bold uppercase tracking-wide text-brand-neon/70">Total</p>
-              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <p className="text-xl font-bold tabular-nums text-brand-neon">
-                  {fmtBags(grandBags)} <span className="text-sm font-normal text-neutral-500">bags</span>
-                </p>
-                <p className="text-base font-semibold tabular-nums text-app-text">{fmtWeight(grandKilos, weightUnit, 'Net')}</p>
-              </div>
+              <p className="mt-1 text-xl font-bold tabular-nums text-brand-neon">
+                {fmtBags(grandBags)} <span className="text-sm font-normal text-neutral-500">bags</span>
+              </p>
             </div>
 
             <div className="mt-3 space-y-2">
@@ -163,15 +157,9 @@ function ProcurementSackBreakdownModal({ onClose }) {
                       {g.rowCount} {g.rowCount === 1 ? 'transaction' : 'transactions'}
                     </span>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-1.5">
-                    <div className="min-w-0 rounded-lg bg-neutral-900 px-1.5 py-1.5 text-center">
-                      <p className="text-[10px] uppercase text-neutral-500">Bags</p>
-                      <p className="mt-0.5 break-words text-base font-bold tabular-nums text-app-text">{fmtBags(g.totalBags)}</p>
-                    </div>
-                    <div className="min-w-0 rounded-lg bg-neutral-900 px-1.5 py-1.5 text-center">
-                      <p className="text-[10px] uppercase text-neutral-500">Net Kg</p>
-                      <p className="mt-0.5 break-words text-base font-bold tabular-nums text-app-text">{fmtWeight(g.totalKilos, weightUnit).replace(/\s*(kg|MT)$/, '')}</p>
-                    </div>
+                  <div className="mt-2 rounded-lg bg-neutral-900 px-1.5 py-1.5 text-center">
+                    <p className="text-[10px] uppercase text-neutral-500">Bags</p>
+                    <p className="mt-0.5 break-words text-base font-bold tabular-nums text-app-text">{fmtBags(g.totalBags)}</p>
                   </div>
                 </div>
               ))}
