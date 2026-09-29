@@ -830,37 +830,6 @@ function Settings() {
     const interval = setInterval(() => setSyncErrorDetail(lastSyncErrorDetail.value), 1000)
     return () => clearInterval(interval)
   }, [])
-
-  // Confirmed, reported real bug: "Refresh token verification failed:
-  // jwt audience invalid" - a device's LOCALLY STORED refresh token was
-  // issued for a different Dexie Cloud database than the one currently
-  // configured (a stale token from a while back, never refreshed since,
-  // now permanently rejected). dexie.js's existing auto-recovery
-  // (login() on a 401, see its own comment) can't fix this specific
-  // case: login() re-uses the SAME stored, now-invalid refresh token to
-  // ask for a new access token, so it fails identically every time,
-  // forever - confirmed here as an actual stuck-error loop, not a
-  // transient one. logout() discards the stored keypair/tokens
-  // entirely (local DATA is untouched - this is purely the auth
-  // session), so the following login() has no choice but to request a
-  // genuinely fresh keypair+token pair via fetchTokens, correctly
-  // scoped to the current database.
-  const [reauthenticating, setReauthenticating] = useState(false)
-  const handleReauthenticate = async () => {
-    setReauthenticating(true)
-    try {
-      await db.cloud.logout({ disableWebSocket: true }).catch(() => {})
-      await db.cloud.login()
-      lastSyncErrorDetail.value = null
-      setSyncErrorDetail(null)
-      toast.success('Re-authenticated - sync should recover shortly.')
-    } catch (err) {
-      toast.error('Re-authentication failed — check your connection and try again')
-      console.error(err)
-    } finally {
-      setReauthenticating(false)
-    }
-  }
   useEffect(() => {
     setPageHeader?.({ title: 'Settings', subtitle: '' })
   }, [])
@@ -1039,25 +1008,6 @@ function Settings() {
                 <p className="select-all break-all rounded-lg bg-neutral-950 px-2 py-1.5 font-mono text-sm text-brand-crimson">
                   {syncErrorDetail}
                 </p>
-              </div>
-            )}
-            {(syncStatusColor === 'red' || syncErrorDetail) && (
-              <div className="rounded-lg border border-brand-crimson/30 bg-neutral-950 p-2.5">
-                <p className="text-xs uppercase text-neutral-600">Re-authenticate Cloud Sync</p>
-                <p className="mt-1 text-xs text-neutral-400">
-                  Discards this device's stored session (keypair/tokens only - never local data) and
-                  requests a completely fresh one. Fixes a stuck "invalid refresh token" / "jwt
-                  audience invalid" error that keeps recurring, which the automatic retry can't fix
-                  on its own since it re-uses the same broken token every time.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleReauthenticate}
-                  disabled={reauthenticating}
-                  className="mt-2 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-app-text active:scale-[0.98] disabled:opacity-50"
-                >
-                  {reauthenticating ? 'Re-authenticating…' : 'Re-authenticate'}
-                </button>
               </div>
             )}
             <div>

@@ -1256,7 +1256,6 @@ db.cloud.currentUser.subscribe((user) => {
 export const lastSyncErrorDetail = { value: null }
 
 let lastAuto401RecoveryAttempt = 0
-let lastAutoReauthAttempt = 0
 const originalFetch = window.fetch
 window.fetch = async (...args) => {
   const response = await originalFetch(...args)
@@ -1274,30 +1273,7 @@ window.fetch = async (...args) => {
         // fresh token. Throttled to at most once every 30 seconds so
         // this can never become a retry loop if a 401 keeps recurring
         // for some other, unrelated reason.
-        //
-        // Confirmed, reported real bug: a device can end up with a
-        // STORED refresh token whose own "aud" claim was issued for a
-        // different Dexie Cloud database than the one currently
-        // configured - a plain login() re-uses that exact same broken
-        // token to ask for a new access token, so it fails identically
-        // every single time, forever (not a transient 401 this retry
-        // was actually designed to fix). Detected by matching the
-        // server's own error text ("jwt audience invalid", "Refresh
-        // token verification failed") - when it's this specific case,
-        // logout() first to discard the stale token/keypair entirely
-        // (local DATA is untouched, this is purely the auth session),
-        // so the following login() has no choice but to request a
-        // genuinely fresh pair via fetchTokens. A separate, longer
-        // throttle (5 min) than the plain-401 one above, since this is
-        // a heavier recovery step.
-        const isInvalidRefreshToken = /jwt audience invalid|refresh token verification failed|invalid refresh token/i.test(body)
-        if (response.status === 401 && isInvalidRefreshToken && Date.now() - lastAutoReauthAttempt > 5 * 60 * 1000) {
-          lastAutoReauthAttempt = Date.now()
-          console.warn('[DEXIE-CLOUD-DIAGNOSTIC] Invalid refresh token detected - attempting automatic full re-authentication.')
-          db.cloud.logout({ disableWebSocket: true }).catch(() => {}).then(() => db.cloud.login()).catch((err) => {
-            console.error('[DEXIE-CLOUD-DIAGNOSTIC] Auto re-authentication attempt failed:', err)
-          })
-        } else if (response.status === 401 && Date.now() - lastAuto401RecoveryAttempt > 30000) {
+        if (response.status === 401 && Date.now() - lastAuto401RecoveryAttempt > 30000) {
           lastAuto401RecoveryAttempt = Date.now()
           console.warn('[DEXIE-CLOUD-DIAGNOSTIC] 401 detected - attempting automatic re-login.')
           db.cloud.login().catch((err) => {
