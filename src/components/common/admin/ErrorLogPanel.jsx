@@ -8,10 +8,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, CheckCircle2, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { AlertTriangle, CheckCircle2, RefreshCw, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
+import { processSyncQueue } from '../../../services/syncWorker.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
-import { dangerButtonClass } from './shared.js'
+import { dangerButtonClass, primaryButtonClass } from './shared.js'
 
 function fmtTimestamp(iso) {
   if (!iso) return '—'
@@ -30,6 +32,48 @@ function ErrorLogPanel({ focusEntryId = null, onFocusHandled } = {}) {
   const [expandedId, setExpandedId] = useState(null)
   const [pendingClearAll, setPendingClearAll] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState(null)
+  const [isForceSyncing, setIsForceSyncing] = useState(false)
+
+  // Same "not yet pushed to the Sheet" criteria syncWorker.js itself
+  // uses (see processSyncQueue) - shown here so the admin can see the
+  // real backlog size before/after a forced sync, not just guess at it.
+  const pendingTxCount = useLiveQuery(
+    () => db.transactions.filter((tx) => tx.isSynced === false && !tx.isInitialBalance).count(),
+    []
+  ) ?? 0
+  const pendingPrCount = useLiveQuery(
+    () => db.purchaseReceipts.filter((pr) => pr.isSynced !== true).count(),
+    []
+  ) ?? 0
+  const pendingCount = pendingTxCount + pendingPrCount
+
+  // Runs the exact same push logic the background worker runs every 30s
+  // (processSyncQueue) - since transactions/purchaseReceipts sync
+  // between devices via Dexie Cloud regardless of which device created
+  // them, this can push another device's backlog to the Sheet too, not
+  // just whatever this admin's own browser created. Useful when a
+  // field device's own background worker has stalled (e.g. a
+  // backgrounded/throttled mobile tab) - triggering it here reaches the
+  // same pending records without needing that device back online.
+  const handleForceSync = async () => {
+    setIsForceSyncing(true)
+    try {
+      const result = await processSyncQueue()
+      if (result.offline) {
+        toast.error('This device is offline - cannot reach the Sheet right now.')
+      } else if (result.skipped) {
+        toast('A sync is already in progress.', { icon: '⏳' })
+      } else if (result.failed > 0) {
+        toast.error(`Synced ${result.synced}, but ${result.failed} still failed - see the log below for details.`)
+      } else if (result.synced > 0) {
+        toast.success(`Synced ${result.synced} record${result.synced === 1 ? '' : 's'} to the Sheet.`)
+      } else {
+        toast.success('Nothing pending - already up to date.')
+      }
+    } finally {
+      setIsForceSyncing(false)
+    }
+  }
 
   // Deep-link support, from AppHeader.jsx's admin-only error
   // notification bell: `focusEntryId` names one specific entry to jump
@@ -87,6 +131,23 @@ function ErrorLogPanel({ focusEntryId = null, onFocusHandled } = {}) {
             Clear All
           </button>
         )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5">
+        <p className="text-xs text-neutral-400">
+          {pendingCount > 0
+            ? `${pendingCount} record${pendingCount === 1 ? '' : 's'} not yet pushed to the Sheet.`
+            : 'Everything is pushed to the Sheet.'}
+        </p>
+        <button
+          type="button"
+          onClick={handleForceSync}
+          disabled={isForceSyncing}
+          className={`flex shrink-0 items-center gap-1.5 ${primaryButtonClass} disabled:opacity-50`}
+        >
+          <RefreshCw size={14} className={isForceSyncing ? 'animate-spin' : ''} />
+          {isForceSyncing ? 'Syncing…' : 'Force Sync Now'}
+        </button>
       </div>
 
       {entries.length === 0 ? (

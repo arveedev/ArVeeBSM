@@ -7392,4 +7392,27 @@
 //              uses) so the deferred callback always sees the just-
 //              committed data instead of the stale closure that
 //              existed at keydown time.
-export const APP_VERSION = '1.10-218'
+//   1.10-219 - Added a "Force Sync Now" button to the admin Error Log
+//              panel, per direct request after a reported SDO Sheets
+//              backup gap (app had data through Sept 28, the Sheet only
+//              through Sept 25). processSyncQueue already retries
+//              automatically every 30s and on reconnect/save, but had no
+//              manual trigger - this runs the exact same push logic on
+//              demand, from any device, and since transactions/
+//              purchaseReceipts sync between devices via Dexie Cloud
+//              regardless of which one created them, triggering it from
+//              the admin's own browser can push a field device's stalled
+//              backlog too (e.g. a backgrounded/throttled mobile tab
+//              whose own timers stopped firing), without needing that
+//              device back online. Shows the live pending count
+//              (isSynced !== true, same criteria the worker itself uses)
+//              next to the button. Also added a Procurement-tab-only
+//              admin feature, per explicit request: a small icon beside
+//              the "Procurement" label on AdminMonitoring.jsx opens a new
+//              ProcurementSackBreakdownModal.jsx showing every distinct
+//              sack weight/condition combo (e.g. "50kg - BN") actually
+//              used across Procurement WSRs, each with its own Bags/Net
+//              Kg total, for an independently-chosen date period and
+//              optional single-warehouse filter (its own state, not tied
+//              to ProcurementMonitor's own Search/Sort & Filter/Period).
+export const APP_VERSION = '1.10-219'

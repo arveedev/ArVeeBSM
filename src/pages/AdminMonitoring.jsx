@@ -16,7 +16,7 @@
 
 import { useDeferredValue, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, X, Check } from 'lucide-react'
+import { Search, X, Check, Package } from 'lucide-react'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
@@ -29,6 +29,7 @@ import CompletedAuthorityModal from '../components/common/CompletedAuthorityModa
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
 import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
 import ProcurementMonitor from '../components/common/ProcurementMonitor.jsx'
+import ProcurementSackBreakdownModal from '../components/common/admin/ProcurementSackBreakdownModal.jsx'
 import SdoCashOverviewPanel from '../components/common/SdoCashOverviewPanel.jsx'
 
 const TABS = ['AI', 'SIA', 'MILLING', 'NFA', 'PROCUREMENT']
@@ -43,6 +44,7 @@ function AdminMonitoring() {
   const [selectedAuthority, setSelectedAuthority] = useState(null)
   const [showCompleted, setShowCompleted] = useState(false)
   const [regionalAuthFilter, setRegionalAuthFilter] = useState('')
+  const [showSackBreakdown, setShowSackBreakdown] = useState(false)
   // authId currently playing its "marked complete" glow+collapse exit
   // animation - admin-only, mirrors AuthorityMonitor.jsx's exact
   // pattern (the DB write is deliberately delayed until the animation
@@ -284,8 +286,22 @@ function AdminMonitoring() {
       </div>
       <div className={activeTab === 'PROCUREMENT' ? '' : 'hidden'}>
         <SdoCashOverviewPanel />
-        <h2 className="mt-6 text-base font-semibold text-app-text">Procurement</h2>
+        <div className="mt-6 flex items-center gap-1.5">
+          <h2 className="text-base font-semibold text-app-text">Procurement</h2>
+          <button
+            type="button"
+            onClick={() => setShowSackBreakdown(true)}
+            aria-label="Sack type & condition breakdown"
+            title="Sack type & condition breakdown"
+            className="rounded-full p-1 text-neutral-500 transition-colors hover:text-brand-neon"
+          >
+            <Package size={16} />
+          </button>
+        </div>
         <ProcurementMonitor />
+        {showSackBreakdown && (
+          <ProcurementSackBreakdownModal onClose={() => setShowSackBreakdown(false)} />
+        )}
       </div>
       <div className={activeTab === 'MILLING' || activeTab === 'NFA' || activeTab === 'PROCUREMENT' ? 'hidden' : ''}>
       {/* Reported, real gap: this box only ever appeared when the admin
