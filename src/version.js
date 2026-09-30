@@ -7653,4 +7653,15 @@
 //              a later report ("CPF Cash Disbursement Record") - not
 //              used anywhere else yet. Read-only (already-issued) view
 //              shows which one was actually used.
-export const APP_VERSION = '1.10-233'
+//   1.10-234 - Per explicit request, the Check No. field
+//              (PurchaseReceiptModal.jsx, added in 1.10-233) now grows/
+//              shrinks in and out instead of instantly appearing -
+//              toggling to Check pushes everything below it down as
+//              the field grows to its full height, and switching back
+//              to Cash shrinks it back to nothing, pulling everything
+//              back up. Uses the CSS grid-template-rows 0fr/1fr trick
+//              (animates to the content's own natural height without
+//              measuring it in JS), always rendered so both directions
+//              of the transition can actually play, rather than only
+//              ever snapping open/closed on a conditional mount.
+export const APP_VERSION = '1.10-234'

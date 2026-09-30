@@ -445,21 +445,33 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
             </div>
           </div>
 
-          {/* Only shown while actively issuing with Check selected - per
-              explicit request, right below Date/PR No. Amber border
-              while empty (same convention as StockFormBase.jsx's MO
-              Number/Batch/Trial fields) since it's required to Save &
-              Issue in this state, enforced by canIssue above. */}
-          {!isReadOnly && paymentMethod === 'Check' && (
-            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-              <label className="text-xs font-semibold uppercase text-neutral-500">Check No.</label>
-              <input
-                type="text"
-                value={checkNumber}
-                onChange={(e) => setCheckNumber(e.target.value)}
-                placeholder="Check number"
-                className={`mt-1 w-full rounded-lg border bg-neutral-950 px-2.5 py-1.5 text-base text-app-text outline-none focus:border-brand-neon ${!checkNumber.trim() ? 'border-brand-amber' : 'border-neutral-800'}`}
-              />
+          {/* Only relevant while actively issuing with Check selected -
+              per explicit request, right below Date/PR No., with a real
+              grow/shrink push animation (not just a fade) - the grid-
+              rows 0fr/1fr trick animates to/from the content's own
+              natural height without needing to measure it in JS, so
+              entering pushes everything below it down as it grows, and
+              exiting shrinks it back to nothing as everything moves
+              back up. Always rendered (not conditionally mounted) so
+              both directions of this transition can actually play -
+              the collapsed (Cash) state is fully hidden via zero rows
+              height + overflow-hidden, not removed from the DOM. */}
+          {!isReadOnly && (
+            <div
+              className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-out ${paymentMethod === 'Check' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+            >
+              <div className="min-h-0 overflow-hidden">
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+                  <label className="text-xs font-semibold uppercase text-neutral-500">Check No.</label>
+                  <input
+                    type="text"
+                    value={checkNumber}
+                    onChange={(e) => setCheckNumber(e.target.value)}
+                    placeholder="Check number"
+                    className={`mt-1 w-full rounded-lg border bg-neutral-950 px-2.5 py-1.5 text-base text-app-text outline-none focus:border-brand-neon ${!checkNumber.trim() ? 'border-brand-amber' : 'border-neutral-800'}`}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
