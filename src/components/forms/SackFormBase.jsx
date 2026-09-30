@@ -1903,15 +1903,25 @@ const SackFormBase = forwardRef(function SackFormBase(
         confirmDisabled={isSaving}
       />
 
+      {/* Confirmed, reported real bug: this used to force the user back
+          to the latest serial no matter which button they tapped (both
+          literally read "OK", going to the same handler) - genuinely
+          starting a NEW, separate series/booklet with a lower number
+          than anything recorded so far (a real, legitimate scenario,
+          not just a typo) had no way to proceed at all. Now offers a
+          real choice: "Use This Serial" just closes the dialog and
+          leaves the typed serial as a fresh new entry exactly as
+          typed; "Go to Latest" is the original snap-back behavior, for
+          when this actually was a typo. */}
       <ConfirmDialog
         open={showFloorWarning}
         icon={AlertTriangle}
-        title={`Series #${serialNo.trim()} does not exist`}
-        description={`No ${type} records exist before #${floorSerialNumber} for this warehouse. Tap OK to return to the latest available serial.`}
-        confirmLabel="OK"
-        cancelLabel="OK"
+        title={`#${serialNo.trim()} is below any known ${type} for this warehouse`}
+        description={`No ${type} records exist before #${floorSerialNumber} here. If this is a typo, go to the latest known serial instead - if you're genuinely starting a new series/booklet, use this serial as-is.`}
+        confirmLabel="Go to Latest"
+        cancelLabel="Use This Serial"
         onConfirm={handleFloorWarningAcknowledge}
-        onCancel={handleFloorWarningAcknowledge}
+        onCancel={() => setShowFloorWarning(false)}
       />
 
       {showAuthorityPicker && currentWarehouseId && (

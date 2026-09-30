@@ -7627,4 +7627,19 @@
 //              By Products variety not in this fixed list falls back
 //              to alphabetical, appended after. Every other cereal
 //              type's sort is completely unchanged.
-export const APP_VERSION = '1.10-231'
+//   1.10-232 - Fixed a serious reported bug: typing a serial lower than
+//              anything on record for a warehouse (the "floor" guard,
+//              meant to catch typos) showed a dialog with two buttons
+//              that BOTH read "OK" and both did the exact same thing -
+//              force the user back to the latest known serial, with no
+//              way to actually proceed. This made it impossible to
+//              start a genuinely new, separate series/booklet with a
+//              lower starting number than the warehouse's existing
+//              history, a real and legitimate scenario, not just a
+//              typo. Both StockFormBase.jsx and SackFormBase.jsx's
+//              identical floor-warning dialog now offer a real choice:
+//              "Use This Serial" closes the dialog and keeps the typed
+//              serial as a fresh new entry (the form was already
+//              correctly set up in that state underneath the dialog);
+//              "Go to Latest" is the original typo-recovery snap-back.
+export const APP_VERSION = '1.10-232'
