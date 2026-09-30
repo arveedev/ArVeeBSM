@@ -29,6 +29,13 @@ import IdleCloseWarning from '../IdleCloseWarning.jsx'
 function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   const { user } = useAuth()
   const [prNo, setPrNo] = useState('')
+  // Per explicit request: captured for a later report ("CPF Cash
+  // Disbursement Record") - not read or used anywhere else in this
+  // modal beyond gating Save & Issue below. Defaults to Cash, the
+  // overwhelmingly common case, so nothing changes for an SDO who never
+  // touches this toggle.
+  const [paymentMethod, setPaymentMethod] = useState('Cash')
+  const [checkNumber, setCheckNumber] = useState('')
   // Defaults to today, not the WSR's own (often earlier, backlogged)
   // date - this is genuinely when the SDO is paying, and is what gets
   // written onto the PR record itself. Per explicit correction, the
@@ -145,6 +152,7 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   const showPricerBlock = isReadOnly ? existingPr.pricerAmount != null : pricerEnabled
 
   const canIssue = prsLoaded && !isReadOnly && factor != null && unitCost != null && displayed.prNo?.trim() && !saving
+    && (paymentMethod !== 'Check' || checkNumber.trim())
 
   const handleIssue = async () => {
     if (!canIssue || issuingRef.current) return
@@ -181,6 +189,12 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
           warehouseId: wsr.warehouseId,
           status: 'Active',
           date: datePaid,
+          // Per explicit request, for a later report ("CPF Cash
+          // Disbursement Record") - checkNumber is only ever non-null
+          // when paymentMethod is 'Check', enforced by canIssue's own
+          // gate above (Save & Issue is disabled until one is entered).
+          paymentMethod,
+          checkNumber: paymentMethod === 'Check' ? checkNumber.trim() : null,
           // Denormalized off the real `wsr` object already in hand here,
           // rather than making syncWorker.js re-look it up by
           // wsrTransactionId at sync time - that live lookup can
@@ -336,8 +350,46 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <div className="inline-block rounded-full border border-neutral-800 bg-neutral-900 px-3.5 py-2 font-mono text-base font-bold text-app-text">
-            WSR {wsr.serialNo}
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-block rounded-full border border-neutral-800 bg-neutral-900 px-3.5 py-2 font-mono text-base font-bold text-app-text">
+              WSR {wsr.serialNo}
+            </div>
+            {/* Cash/Check toggle - per explicit request, in line with the
+                WSR badge. Read-only view just states which one this PR
+                was actually issued under, matching the read-only
+                treatment every other field in this modal already gets. */}
+            {isReadOnly ? (
+              existingPr.paymentMethod === 'Check' ? (
+                <span className="rounded-full bg-brand-amber/10 px-3 py-1.5 text-xs font-bold uppercase text-brand-amber">
+                  Check {existingPr.checkNumber}
+                </span>
+              ) : (
+                <span className="rounded-full bg-neutral-900 px-3 py-1.5 text-xs font-bold uppercase text-neutral-400">
+                  Cash
+                </span>
+              )
+            ) : (
+              <div className="relative flex shrink-0 items-center overflow-hidden rounded-full border border-neutral-800 bg-neutral-900 text-xs font-bold">
+                <span
+                  className="absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-brand-neon transition-transform duration-300 ease-out"
+                  style={{ transform: paymentMethod === 'Check' ? 'translateX(100%)' : 'translateX(0%)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('Cash')}
+                  className={`relative z-10 px-3 py-2 transition-colors ${paymentMethod === 'Cash' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+                >
+                  Cash
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('Check')}
+                  className={`relative z-10 px-3 py-2 transition-colors ${paymentMethod === 'Check' ? 'text-brand-contrast' : 'text-neutral-400'}`}
+                >
+                  Check
+                </button>
+              </div>
+            )}
           </div>
 
           {hasDuplicatePrs && (
@@ -392,6 +444,24 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
               )}
             </div>
           </div>
+
+          {/* Only shown while actively issuing with Check selected - per
+              explicit request, right below Date/PR No. Amber border
+              while empty (same convention as StockFormBase.jsx's MO
+              Number/Batch/Trial fields) since it's required to Save &
+              Issue in this state, enforced by canIssue above. */}
+          {!isReadOnly && paymentMethod === 'Check' && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+              <label className="text-xs font-semibold uppercase text-neutral-500">Check No.</label>
+              <input
+                type="text"
+                value={checkNumber}
+                onChange={(e) => setCheckNumber(e.target.value)}
+                placeholder="Check number"
+                className={`mt-1 w-full rounded-lg border bg-neutral-950 px-2.5 py-1.5 text-base text-app-text outline-none focus:border-brand-neon ${!checkNumber.trim() ? 'border-brand-amber' : 'border-neutral-800'}`}
+              />
+            </div>
+          )}
 
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-base">
             <p className="text-xs font-semibold uppercase text-neutral-500">Payee</p>

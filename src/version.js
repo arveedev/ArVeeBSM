@@ -7642,4 +7642,15 @@
 //              serial as a fresh new entry (the form was already
 //              correctly set up in that state underneath the dialog);
 //              "Go to Latest" is the original typo-recovery snap-back.
-export const APP_VERSION = '1.10-232'
+//   1.10-233 - New feature, per explicit request: PurchaseReceiptModal.jsx
+//              (SDO's Purchase Receipt entry) gains a Cash/Check toggle,
+//              in line with the WSR badge in the header, defaulting to
+//              Cash. Selecting Check reveals a Check No. field right
+//              below Date/PR No. - amber-bordered while empty (matches
+//              StockFormBase.jsx's MO Number convention) - and Save &
+//              Issue is disabled until it's filled in. Stored on the
+//              purchaseReceipts record as paymentMethod/checkNumber, for
+//              a later report ("CPF Cash Disbursement Record") - not
+//              used anywhere else yet. Read-only (already-issued) view
+//              shows which one was actually used.
+export const APP_VERSION = '1.10-233'
