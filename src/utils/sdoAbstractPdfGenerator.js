@@ -316,19 +316,37 @@ export const generateSdoAbstract = ({
   }
 
   // PASS 1 - a throwaway measurement render (discarded jsPDF instance,
-  // never shown to the user) using the UNaugmented body0, purely to
-  // learn where autoTable's own layout engine will actually put each
-  // page break. This has to be a real render, not an estimate - the
-  // real column widths/wrapping/row heights are exactly what decide
-  // where a page fills up, and nothing short of actually laying it out
-  // predicts that reliably. Needed because inserting a BROUGHT FORWARD
-  // row (per explicit request, "add the subtotal of the last page as
-  // the first row of the 2nd page") has to be part of the real `body`
-  // BEFORE the real render, for autoTable's own pagination to place it
-  // correctly at the top of the page it belongs on - there's no way to
-  // retroactively insert a new row into a page that's already been
-  // drawn without reflowing everything below it.
-  const insertionPoints = []
+  // never shown to the user) using body0, purely to learn where
+  // autoTable's own layout engine will actually put each page break.
+  // This has to be a real render, not an estimate - the real column
+  // widths/wrapping/row heights are exactly what decide where a page
+  // fills up, and nothing short of actually laying it out predicts that
+  // reliably.
+  //
+  // Confirmed, reported real bug (direct correction with a real
+  // screenshot): the first version of this fed the discovered break
+  // index straight back into ONE single augmented `body` array (with a
+  // continuation row spliced in) and let autoTable's OWN pagination
+  // place it - relying on jspdf-autotable's per-cell `styles.pageBreak`
+  // to force it onto the right page. That style key does not exist -
+  // jspdf-autotable only reads `pageBreak` as a whole-TABLE option,
+  // never per-row/per-cell - so it was silently ignored, and the
+  // continuation row (short, mostly-blank) kept fitting into whatever
+  // slack space was left at the bottom of the PREVIOUS page even when
+  // the real, taller (wrapped-text) row that belonged there next
+  // couldn't - landing it on the wrong page every time real data (with
+  // varying row heights) was used, exactly as reported.
+  //
+  // Fixed by splitting the real render into one autoTable() CALL PER
+  // PAGE instead of one call for the whole document: each page's own
+  // slice of body0 (known exactly from this measurement pass) becomes
+  // its own call, and every call after the first passes the table-level
+  // `pageBreak: 'always'` option - confirmed, from jspdf-autotable's own
+  // source, to unconditionally start a fresh page before that call
+  // draws anything, with no space-fitting judgment call involved at
+  // all. This is the actual, real mechanism the previous attempt was
+  // trying to reach for.
+  const pageStartIndices = []
   {
     const measureDoc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
     const firstRowIndexByPage = new Map()
@@ -342,14 +360,13 @@ export const generateSdoAbstract = ({
       },
     })
     const measuredPages = [...firstRowIndexByPage.keys()].sort((a, b) => a - b)
-    for (const pageNum of measuredPages.slice(1)) insertionPoints.push(firstRowIndexByPage.get(pageNum))
+    for (const pageNum of measuredPages) pageStartIndices.push(firstRowIndexByPage.get(pageNum))
   }
 
-  // Totals of every real (non-spacer, non-continuation) row in body0
-  // strictly before `uptoIndexExclusive` - i.e. everything already
-  // printed on earlier pages by the time this insertion point is
-  // reached, the exact figure a "brought forward" line is supposed to
-  // carry.
+  // Totals of every real (non-spacer) row in body0 strictly before
+  // `uptoIndexExclusive` - i.e. everything already printed on earlier
+  // pages by the time this page's own opening index is reached, the
+  // exact figure its own continuation row is supposed to carry.
   const cumulativeThrough = (uptoIndexExclusive) => {
     const prs = []
     for (let i = 0; i < uptoIndexExclusive; i++) {
@@ -360,147 +377,93 @@ export const generateSdoAbstract = ({
   }
 
   // Per explicit correction, labeled the same "SUB-TOTAL" as the row at
-  // the bottom of the previous page (the exact same figure, carried
-  // onto the next page - no separate "BROUGHT FORWARD" wording).
-  // pageBreak: 'always' unconditionally starts a fresh page at this
-  // row, regardless of how much space remains - without it, this row
-  // (short, mostly-blank cells) could still fit in whatever slack was
-  // left at the bottom of the previous page even when the row that
-  // naturally belongs there next couldn't, landing the continuation row
-  // on the WRONG page (confirmed, reported: it appeared as an extra row
-  // at the bottom of the page it should have opened, not the top of the
-  // next one).
-  const CONTINUATION_STYLES = { fontStyle: 'bolditalic', fillColor: [240, 240, 240], pageBreak: 'always' }
+  // the bottom of the previous page - the exact same figure, carried
+  // onto the next page, not a separately-worded "BROUGHT FORWARD" line.
+  const CONTINUATION_STYLES = { fontStyle: 'bolditalic', fillColor: [240, 240, 240] }
   const buildContinuationRow = (t) => [
     { content: 'SUB-TOTAL', colSpan: 7, styles: CONTINUATION_STYLES },
     ...buildTotalsRowCells(t).map((content) => ({ content, styles: CONTINUATION_STYLES })),
   ]
 
-  // Insert in descending index order so each earlier insertion point
-  // (computed against the ORIGINAL, unaugmented body0) is still valid
-  // by the time it's used - inserting at a later index first never
-  // shifts anything before it.
-  const body = [...body0]
-  const rowMeta = [...rowMeta0]
-  const marks = [...marks0]
-  for (const idx of [...insertionPoints].sort((a, b) => b - a)) {
-    body.splice(idx, 0, buildContinuationRow(cumulativeThrough(idx)))
-    rowMeta.splice(idx, 0, { type: 'continuation' })
-    marks.splice(idx, 0, '')
-  }
-
-  // PASS 2 - the real render, on the real `doc`, using the augmented
-  // body (BROUGHT FORWARD rows already inserted at exactly the indices
-  // pass 1 discovered).
-  //
-  // Per explicit request: a page that this table overflows onto showed
-  // the FULL grand total (autoTable's default `foot` behavior repeats
-  // the foot row on every page, same as `head` does) - misleading,
-  // since it reads as if it were that page's own total when it's
-  // actually the total of every row across every page. showFoot:
-  // 'lastPage' below stops that repetition (the real grand TOTAL now
-  // only ever prints once, on the true last page); this map tracks
-  // which body rows landed on which page (and how far down that page's
-  // table content actually reached) so a real running SUB-TOTAL -
-  // everything from the very first row through the end of that page,
-  // computed straight from `purchaseReceipts` via rowMeta, never
-  // duplicating the `totals` reduce above - can be drawn under the
-  // table on every page except the last. Deliberately a RUNNING total
-  // (not just that one page's own rows) so it always matches the
-  // BROUGHT FORWARD figure carried onto the next page exactly - the
-  // whole point of a continuation line. A single-page export never
-  // touches any of this at all: its one real TOTAL (already correct) is
-  // already sufficient, per explicit instruction.
-  const pageRowInfo = new Map() // pageNumber -> { rowIndices: number[], bottomY: number }
-  // Each column's own x/width, captured straight off the real table's
-  // drawn cells (head row - same widths as every other row/section in
-  // an autoTable table) so the manually-drawn SUB-TOTAL row below can
-  // line its borders and text up exactly, without a second nested
-  // autoTable() call - that was tried first and silently misplaced rows
-  // (its own page-break logic decided some rows didn't fit and pushed
-  // them onto a different physical page than the one requested).
-  const columnX = new Map() // colIndex -> { x, width }
+  // PASS 2 - the real render, on the real `doc`, one autoTable() call
+  // per page (see this whole section's opening comment for why).
+  const columnX = new Map() // colIndex -> { x, width } - captured once, from any call's head row (identical column config every time)
   let footRowHeight = 7.66 // cellPadding(1.3)*2 + fontSize(8)*~1.15 - fallback only, overwritten by the real foot row's own height below
+  let mainFinalY = 0
+  let cumulative = { bags: 0, gross: 0, sack: 0, net: 0, enw: 0, basic: 0, pricer: 0, total: 0 }
 
-  autoTable(doc, {
-    ...sharedTableOptions,
-    body,
-    // Per explicit request: a page after the first only needs the
-    // report title/period, not the full NATIONAL FOOD AUTHORITY/branch
-    // block and its divider line - that identifying header only needs
-    // to appear once, on page 1.
-    didDrawPage: (data) => drawBranchHeader(doc, { branchLabel, periodLabel, isFirstPage: data.pageNumber === 1 }),
-    // Draws each row's BN/SH mark just past the table's own right edge
-    // once that row's last real column has been placed - small, light
-    // gray, never part of the bordered grid itself. Also records this
-    // row's page/position for the per-page running sub-total drawn
-    // after the table finishes (see pageRowInfo above).
-    didDrawCell: (data) => {
-      if (data.section === 'head') {
-        columnX.set(data.column.index, { x: data.cell.x, width: data.cell.width })
-      }
-      if (data.section === 'foot') {
-        footRowHeight = data.cell.height
-      }
-      if (data.section === 'body') {
-        const pageNum = doc.internal.getCurrentPageInfo().pageNumber
-        if (!pageRowInfo.has(pageNum)) pageRowInfo.set(pageNum, { rowIndices: [], bottomY: 0 })
-        const info = pageRowInfo.get(pageNum)
-        info.bottomY = Math.max(info.bottomY, data.cell.y + data.cell.height)
-        if (data.column.index === 0) info.rowIndices.push(data.row.index)
-      }
-      if (data.section !== 'body' || data.column.index !== lastColIndex) return
-      const mark = marks[data.row.index]
-      if (!mark) return
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.5)
-      doc.setTextColor(...GRAY_TEXT)
-      doc.text(mark, data.cell.x + data.cell.width + 2, data.cell.y + data.cell.height / 2 + 1)
-      doc.setTextColor(...BLACK)
-    },
-  })
+  pageStartIndices.forEach((rangeStart, pageIdx) => {
+    const isFirstPage = pageIdx === 0
+    const isLastPage = pageIdx === pageStartIndices.length - 1
+    const rangeEnd = pageIdx + 1 < pageStartIndices.length ? pageStartIndices[pageIdx + 1] : body0.length
+    const pageRowsMeta = rowMeta0.slice(rangeStart, rangeEnd)
+    const pageBody = body0.slice(rangeStart, rangeEnd)
+    const pageMarks = marks0.slice(rangeStart, rangeEnd)
+    const chunkBody = isFirstPage ? pageBody : [buildContinuationRow(cumulativeThrough(rangeStart)), ...pageBody]
+    const chunkMarks = isFirstPage ? pageMarks : ['', ...pageMarks]
 
-  // `doc.lastAutoTable` reflects only the table just drawn above - read
-  // it now, before anything else runs, so the footer placement further
-  // down always has the real table's own finalY/page (nothing else in
-  // this function calls autoTable() again).
-  const mainFinalY = doc.lastAutoTable.finalY
-  const lastTablePage = doc.internal.getCurrentPageInfo().pageNumber
+    let bottomY = 0
+    autoTable(doc, {
+      ...sharedTableOptions,
+      body: chunkBody,
+      // Per explicit request: a page that this table overflows onto
+      // used to show the FULL grand total on every page (autoTable's
+      // default `foot` behavior repeats it, same as `head`) - the real
+      // grand TOTAL only ever prints once now, attached to just the
+      // true last page's own call.
+      ...(isLastPage ? { foot, showFoot: 'lastPage' } : {}),
+      // Forces this page to genuinely start fresh, regardless of
+      // remaining space on the previous page - see this section's
+      // opening comment.
+      ...(isFirstPage ? {} : { pageBreak: 'always' }),
+      didDrawPage: () => drawBranchHeader(doc, { branchLabel, periodLabel, isFirstPage }),
+      // Draws each row's BN/SH mark just past the table's own right
+      // edge once that row's last real column has been placed - small,
+      // light gray, never part of the bordered grid itself.
+      didDrawCell: (data) => {
+        if (data.section === 'head') {
+          columnX.set(data.column.index, { x: data.cell.x, width: data.cell.width })
+        }
+        if (data.section === 'foot') {
+          footRowHeight = data.cell.height
+        }
+        if (data.section === 'body') {
+          bottomY = Math.max(bottomY, data.cell.y + data.cell.height)
+        }
+        if (data.section !== 'body' || data.column.index !== lastColIndex) return
+        const mark = chunkMarks[data.row.index]
+        if (!mark) return
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6.5)
+        doc.setTextColor(...GRAY_TEXT)
+        doc.text(mark, data.cell.x + data.cell.width + 2, data.cell.y + data.cell.height / 2 + 1)
+        doc.setTextColor(...BLACK)
+      },
+    })
 
-  // Draw each non-last page's own running SUB-TOTAL row - same shape
-  // and grid styling as the real `foot` TOTAL row above, positioned
-  // directly under that page's own table content. Drawn by hand with
-  // doc.rect/doc.line/doc.text against the real table's own captured
-  // column x/width (`columnX`) rather than a second autoTable() call -
-  // that was tried first and silently misplaced rows onto the wrong
-  // physical page (autoTable's own page-break logic decided a row
-  // begun near a page's bottom margin didn't fit and pushed it onto
-  // whichever page came next in the document, not necessarily page
-  // `pageNum`).
-  const tablePages = [...pageRowInfo.keys()].sort((a, b) => a - b)
-  if (tablePages.length > 1) {
-    let cumulative = { bags: 0, gross: 0, sack: 0, net: 0, enw: 0, basic: 0, pricer: 0, total: 0 }
-    for (const pageNum of tablePages.slice(0, -1)) {
-      const info = pageRowInfo.get(pageNum)
-      const pagePrs = info.rowIndices
-        .map((rowIndex) => rowMeta[rowIndex])
-        .filter((meta) => meta?.type === 'pr')
-        .map((meta) => meta.pr)
-      const pageOwnTotals = sumPrTotals(pagePrs)
-      cumulative = {
-        bags: cumulative.bags + pageOwnTotals.bags,
-        gross: cumulative.gross + pageOwnTotals.gross,
-        sack: cumulative.sack + pageOwnTotals.sack,
-        net: cumulative.net + pageOwnTotals.net,
-        enw: cumulative.enw + pageOwnTotals.enw,
-        basic: cumulative.basic + pageOwnTotals.basic,
-        pricer: cumulative.pricer + pageOwnTotals.pricer,
-        total: cumulative.total + pageOwnTotals.total,
-      }
+    mainFinalY = doc.lastAutoTable.finalY
+
+    const pageOwnTotals = sumPrTotals(pageRowsMeta.filter((m) => m.type === 'pr').map((m) => m.pr))
+    cumulative = {
+      bags: cumulative.bags + pageOwnTotals.bags,
+      gross: cumulative.gross + pageOwnTotals.gross,
+      sack: cumulative.sack + pageOwnTotals.sack,
+      net: cumulative.net + pageOwnTotals.net,
+      enw: cumulative.enw + pageOwnTotals.enw,
+      basic: cumulative.basic + pageOwnTotals.basic,
+      pricer: cumulative.pricer + pageOwnTotals.pricer,
+      total: cumulative.total + pageOwnTotals.total,
+    }
+
+    // Draw this page's own running SUB-TOTAL row - same shape and grid
+    // styling as the real `foot` TOTAL row, positioned directly under
+    // this page's own table content. Drawn by hand with doc.rect/
+    // doc.line/doc.text against this call's own captured column x/
+    // width (`columnX`) rather than as a real table row, so it never
+    // competes for the same page-fit budget the rows themselves use.
+    if (!isLastPage) {
       const subtotalCells = [{ content: 'SUB-TOTAL', colSpan: 7 }, ...buildTotalsRowCells(cumulative)]
-
-      doc.setPage(pageNum)
-      const rowY = info.bottomY
+      const rowY = bottomY
       const rowH = footRowHeight
 
       doc.setFillColor(240, 240, 240)
@@ -529,8 +492,9 @@ export const generateSdoAbstract = ({
       doc.line(margin, rowY, pageW - margin, rowY)
       doc.line(margin, rowY + rowH, pageW - margin, rowY + rowH)
     }
-    doc.setPage(lastTablePage)
-  }
+  })
+
+  const lastTablePage = doc.internal.getCurrentPageInfo().pageNumber
 
   // Footer (signatories lower-left, reconciliation lower-right) prints
   // exactly once, right after the table's true final row - wherever

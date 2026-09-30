@@ -7719,4 +7719,26 @@
 //              margin.top is now a much smaller, continuation-page-
 //              sized reservation while startY keeps page 1 exactly as
 //              it was.
-export const APP_VERSION = '1.10-236'
+//   1.10-237 - Root-caused and properly fixed 1.10-236's continuation
+//              row still landing on the wrong page, per direct
+//              correction with a real screenshot. The real bug: jspdf-
+//              autotable's `pageBreak` option only exists as a whole-
+//              TABLE setting, never as a per-row/per-cell style - the
+//              `styles: { pageBreak: 'always' }` added last time was
+//              silently ignored (confirmed by reading the library's own
+//              source), so the continuation row kept relying on plain
+//              space-fitting exactly as before, and a short, mostly-
+//              blank row can still fit into leftover space that a
+//              taller, wrapped-text row genuinely can't. Rebuilt the
+//              real render as one autoTable() call PER PAGE instead of
+//              one call for the whole document - every call after the
+//              first passes the real, confirmed, whole-table
+//              `pageBreak: 'always'` option, which unconditionally
+//              starts a fresh page before that call draws anything, no
+//              space-fitting judgment involved at all. Verified this
+//              time against a real rendered 2-page PDF built from the
+//              user's own reported data (same 16 farmers, including the
+//              wrapping "FFSPPFA C/O BAYANI ABARQUEZ" row) before
+//              shipping - page 2 now genuinely opens with its own
+//              SUB-TOTAL row, no duplicate on page 1.
+export const APP_VERSION = '1.10-237'
