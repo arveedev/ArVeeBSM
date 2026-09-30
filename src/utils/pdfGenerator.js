@@ -51,6 +51,16 @@ const fmtKilos = (n) =>
     maximumFractionDigits: 3,
   })
 
+// Per explicit request: the exported Stock Statement (addStockStatement-
+// Page only - every other report in this file keeps the standard 3-
+// decimal fmtKilos above untouched) rounds kilos to 2 decimal places
+// instead of 3.
+const fmtKilosStatement = (n) =>
+  (n == null || n === 0) ? '-' : Number(n).toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
 const fmtDate = (s) => {
   if (!s) return ''
   const d = new Date(s + 'T00:00:00')
@@ -596,8 +606,8 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
       t.varietyName ?? '',
       ...(isByProducts ? [] : [t.moistureContent != null ? Number(t.moistureContent).toFixed(1) : '-']),
       fmtBags(t.numberOfBags),
-      fmtKilos(t.grossKilos),
-      fmtKilos(t.netKilos),
+      fmtKilosStatement(t.grossKilos),
+      fmtKilosStatement(t.netKilos),
     ]
     if (isIssues) row.splice(5, 0, t.orNumber ?? '')
     return row
@@ -608,8 +618,8 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
     ...(isByProducts ? [] : ['']),
     { content: fmtBags(totBags), styles: { fontStyle: 'bold', halign: 'right' } },
-    { content: fmtKilos(totGross), styles: { fontStyle: 'bold', halign: 'right' } },
-    { content: fmtKilos(totNet), styles: { fontStyle: 'bold', halign: 'right' } },
+    { content: fmtKilosStatement(totGross), styles: { fontStyle: 'bold', halign: 'right' } },
+    { content: fmtKilosStatement(totNet), styles: { fontStyle: 'bold', halign: 'right' } },
   ]
   if (isIssues) totalRow.splice(5, 0, '')
   body.push(totalRow)
