@@ -459,10 +459,10 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
     return [
       mtsWeight != null ? `${variety?.name ?? varietyId} (${mtsWeight.toFixed(3)})` : (variety?.name ?? varietyId),
       condition,
-      fmtBags(beg.bags), fmtKilos(beg.kilos),
-      fmtBags(recBags), fmtKilos(recKilos),
-      fmtBags(issBags), fmtKilos(issKilos),
-      fmtBags(endBags), fmtKilos(endKilos),
+      fmtBags(beg.bags), fmtKilosStatement(beg.kilos),
+      fmtBags(recBags), fmtKilosStatement(recKilos),
+      fmtBags(issBags), fmtKilosStatement(issKilos),
+      fmtBags(endBags), fmtKilosStatement(endKilos),
     ]
   })
 
@@ -474,10 +474,10 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   const bold = (content) => ({ content, styles: { fontStyle: 'bold', halign: 'right' } })
   body.push([
     { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold', halign: 'left' } },
-    bold(fmtBags(totBegBags)), bold(fmtKilos(totBegKilos)),
-    bold(fmtBags(totRecBags)), bold(fmtKilos(totRecKilos)),
-    bold(fmtBags(totIssBags)), bold(fmtKilos(totIssKilos)),
-    bold(fmtBags(endTotBags)), bold(fmtKilos(endTotKilos)),
+    bold(fmtBags(totBegBags)), bold(fmtKilosStatement(totBegKilos)),
+    bold(fmtBags(totRecBags)), bold(fmtKilosStatement(totRecKilos)),
+    bold(fmtBags(totIssBags)), bold(fmtKilosStatement(totIssKilos)),
+    bold(fmtBags(endTotBags)), bold(fmtKilosStatement(endTotKilos)),
   ])
 
   autoTable(doc, {
@@ -737,12 +737,12 @@ const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, si
     const body = Object.entries(byVC).sort().map(([k, v]) => {
       const [vName, cond] = k.split('::')
       actBags += v.bags; actKilos += v.kilos
-      return [vName, cond, fmtBags(v.bags), fmtKilos(v.kilos)]
+      return [vName, cond, fmtBags(v.bags), fmtKilosStatement(v.kilos)]
     })
     body.push([
       { content: 'TOTAL PER ACTIVITY', colSpan: 2, styles: { fontStyle: 'bold' } },
       { content: fmtBags(actBags), styles: { fontStyle: 'bold', halign: 'right' } },
-      { content: fmtKilos(actKilos), styles: { fontStyle: 'bold', halign: 'right' } },
+      { content: fmtKilosStatement(actKilos), styles: { fontStyle: 'bold', halign: 'right' } },
     ])
     grandBags += actBags; grandKilos += actKilos
 
@@ -765,7 +765,7 @@ const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, si
     body: [[
       { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold' } },
       { content: fmtBags(grandBags), styles: { fontStyle: 'bold', halign: 'right' } },
-      { content: fmtKilos(grandKilos), styles: { fontStyle: 'bold', halign: 'right' } },
+      { content: fmtKilosStatement(grandKilos), styles: { fontStyle: 'bold', halign: 'right' } },
     ]],
     columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
   })
