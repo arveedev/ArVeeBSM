@@ -7693,4 +7693,30 @@
 //              next page exactly - the same number, printed twice, at
 //              the seam. A single-page export is completely unaffected
 //              by any of this, same as before.
-export const APP_VERSION = '1.10-235'
+//   1.10-236 - Fixed 1.10-235's continuation row landing on the WRONG
+//              page, per direct correction with a real screenshot: it
+//              appeared as an extra row at the BOTTOM of the page it
+//              should have OPENED, since a short, mostly-blank row can
+//              still fit in whatever slack space is left even when the
+//              real next row (taller, wrapped text) can't. Added
+//              pageBreak: 'always' to the continuation row's own
+//              styles, so it unconditionally starts a fresh page
+//              regardless of remaining space - verified with a real
+//              rendered multi-page PDF this time (a patched local test
+//              copy, working around a Node-only ESM/jsPDF import quirk
+//              that doesn't affect the actual Vite-bundled app) before
+//              shipping, not just a clean build. Also, per direct
+//              correction: relabeled "BROUGHT FORWARD" to the same
+//              "SUB-TOTAL" wording used at the bottom of each page (no
+//              separate label needed - it's the same running figure).
+//              And: continuation pages' now-much-shorter header (title/
+//              period only) was still reserving the SAME 36mm of top
+//              margin the full first-page header needs, wasting real
+//              space on every page after the first and pushing the
+//              footer onto an unnecessary extra page - jspdf-autotable
+//              treats `startY` (page 1 only) and `margin.top` (every
+//              later page break) as genuinely separate settings, so
+//              margin.top is now a much smaller, continuation-page-
+//              sized reservation while startY keeps page 1 exactly as
+//              it was.
+export const APP_VERSION = '1.10-236'

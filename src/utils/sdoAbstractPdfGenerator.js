@@ -80,18 +80,35 @@ const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { min
 // (this local copy, and sdoCalculations.js's own enwDecimalsForFactor)
 // no longer applies here.
 
+// Page 1's table content starts at TABLE_START_Y (36) to clear the full
+// org identity block. A continuation page's much shorter header (title/
+// period only, per explicit request) needs far less room - reusing the
+// same 36mm reservation left a large, pointless blank gap at the top of
+// every continuation page, which is real usable space wasted on every
+// single page after the first (confirmed, reported: this was pushing
+// the signature block onto a 3rd page that shouldn't have been needed).
+// CONTINUATION_MARGIN_TOP is that page-break-time reservation instead -
+// separate from TABLE_START_Y because jspdf-autotable itself treats
+// them as two different things: `startY` only ever applies to the very
+// first page a table appears on, while `margin.top` is what every
+// LATER internal page break resumes content at - exactly the lever
+// needed to give page 1 and continuation pages two different header
+// heights within the same single autoTable() call.
+const TABLE_START_Y = 36
+const CONTINUATION_MARGIN_TOP = 20
+
 // isFirstPage - per explicit request, a continuation page (2nd onward)
 // only needs the report title/period, not the full org identity block
 // (NATIONAL FOOD AUTHORITY/branch) and its divider line - that only
-// needs to appear once. The title/period keep the exact same y
-// positions either way, rather than shifting up into the now-empty
-// space above them, so the table's own fixed startY (36) stays valid
-// on every page regardless of which header shape it's paired with.
+// needs to appear once. Positioned to fit within CONTINUATION_MARGIN_TOP
+// above (with the same ~2mm clearance page 1's own header keeps before
+// its table starts), not at the same y as page 1's title - it's sitting
+// in a much shorter reserved space now, not the same slot.
 const drawBranchHeader = (doc, { branchLabel, periodLabel, isFirstPage = true }) => {
+  doc.setTextColor(...BLACK)
   if (isFirstPage) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(12)
-    doc.setTextColor(...BLACK)
     doc.text('NATIONAL FOOD AUTHORITY', pageW / 2, 12, { align: 'center' })
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
@@ -101,14 +118,20 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel, isFirstPage = true })
     doc.setDrawColor(...BLACK)
     doc.setLineWidth(0.3)
     doc.line(margin, 20, pageW - margin, 20)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 26, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 31, { align: 'center' })
+  } else {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 10, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 15, { align: 'center' })
   }
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...BLACK)
-  doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 26, { align: 'center' })
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 31, { align: 'center' })
 }
 
 /**
@@ -271,8 +294,8 @@ export const generateSdoAbstract = ({
   // page instead, never dividing a single farmer's data across two
   // pages.
   const sharedTableOptions = {
-    startY: 36,
-    margin: { left: margin, right: margin, top: 36 },
+    startY: TABLE_START_Y,
+    margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP },
     head,
     foot,
     showFoot: 'lastPage',
@@ -336,9 +359,20 @@ export const generateSdoAbstract = ({
     return sumPrTotals(prs)
   }
 
-  const CONTINUATION_STYLES = { fontStyle: 'bolditalic', fillColor: [240, 240, 240] }
+  // Per explicit correction, labeled the same "SUB-TOTAL" as the row at
+  // the bottom of the previous page (the exact same figure, carried
+  // onto the next page - no separate "BROUGHT FORWARD" wording).
+  // pageBreak: 'always' unconditionally starts a fresh page at this
+  // row, regardless of how much space remains - without it, this row
+  // (short, mostly-blank cells) could still fit in whatever slack was
+  // left at the bottom of the previous page even when the row that
+  // naturally belongs there next couldn't, landing the continuation row
+  // on the WRONG page (confirmed, reported: it appeared as an extra row
+  // at the bottom of the page it should have opened, not the top of the
+  // next one).
+  const CONTINUATION_STYLES = { fontStyle: 'bolditalic', fillColor: [240, 240, 240], pageBreak: 'always' }
   const buildContinuationRow = (t) => [
-    { content: 'BROUGHT FORWARD', colSpan: 7, styles: CONTINUATION_STYLES },
+    { content: 'SUB-TOTAL', colSpan: 7, styles: CONTINUATION_STYLES },
     ...buildTotalsRowCells(t).map((content) => ({ content, styles: CONTINUATION_STYLES })),
   ]
 
@@ -555,7 +589,7 @@ export const generateSdoAbstract = ({
   const footerH = Math.max(reconBoxH, sigBoxH)
 
   let y = mainFinalY + 10
-  if (y + footerH > pageH - margin) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel, isFirstPage: false }); y = 40 }
+  if (y + footerH > pageH - margin) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel, isFirstPage: false }); y = CONTINUATION_MARGIN_TOP + 4 }
 
   const usableW = pageW - margin * 2
   const reconW = 78
