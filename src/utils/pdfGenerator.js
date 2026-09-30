@@ -428,7 +428,29 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   let totRecBags = 0, totRecKilos = 0
   let totIssBags = 0, totIssKilos = 0
 
-  const body = [...keys].sort().map((key) => {
+  // Per explicit request: By Products rows on the Summary page sort in
+  // a fixed DKA, DKB, DKC, BIN order (any other variety not in this
+  // list falls back to alphabetical, appended after) rather than the
+  // plain key sort below, which sorts by the raw varietyId (a UUID) -
+  // essentially an arbitrary order that happened to read as DKA, DKC,
+  // DKB, BIN in the reported case. Every other cereal type keeps its
+  // existing sort completely unchanged.
+  const BY_PRODUCTS_ORDER = ['DKA', 'DKB', 'DKC', 'BIN']
+  const sortedKeys = cerealType === 'By Products'
+    ? [...keys].sort((a, b) => {
+        const nameOf = (k) => varieties.find((v) => v.varietyId === k.split('::')[0])?.name ?? k
+        const nameA = nameOf(a)
+        const nameB = nameOf(b)
+        const idxA = BY_PRODUCTS_ORDER.indexOf(nameA)
+        const idxB = BY_PRODUCTS_ORDER.indexOf(nameB)
+        if (idxA === -1 && idxB === -1) return nameA.localeCompare(nameB)
+        if (idxA === -1) return 1
+        if (idxB === -1) return -1
+        return idxA - idxB
+      })
+    : [...keys].sort()
+
+  const body = sortedKeys.map((key) => {
     const [varietyId, condition, mtsWeightStr] = key.split('::')
     const mtsWeight = mtsWeightStr ? parseFloat(mtsWeightStr) : null
     const variety = varieties.find((v) => v.varietyId === varietyId)

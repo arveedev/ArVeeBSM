@@ -7617,4 +7617,14 @@
 //              document is now consistently 2 decimals, with the
 //              shared 3-decimal fmtKilos elsewhere in the app still
 //              completely untouched.
-export const APP_VERSION = '1.10-230'
+//   1.10-231 - Per explicit request, the Stock Statement's By Products
+//              Summary page (addStockSummaryPage, pdfGenerator.js) now
+//              sorts its rows in a fixed DKA, DKB, DKC, BIN order
+//              instead of the plain key sort, which actually sorted by
+//              the raw varietyId (a UUID) rather than the variety name
+//              - an essentially arbitrary order that happened to read
+//              as DKA, DKC, DKB, BIN in the reported case. Any other
+//              By Products variety not in this fixed list falls back
+//              to alphabetical, appended after. Every other cereal
+//              type's sort is completely unchanged.
+export const APP_VERSION = '1.10-231'
