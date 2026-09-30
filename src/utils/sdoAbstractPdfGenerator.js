@@ -80,21 +80,31 @@ const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { min
 // (this local copy, and sdoCalculations.js's own enwDecimalsForFactor)
 // no longer applies here.
 
-const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12)
-  doc.setTextColor(...BLACK)
-  doc.text('NATIONAL FOOD AUTHORITY', pageW / 2, 12, { align: 'center' })
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  doc.text((branchLabel ?? '').toUpperCase(), pageW / 2, 17, { align: 'center' })
-  // Rule between the org block and the report title - present on the
-  // reference layout, missing here before.
-  doc.setDrawColor(...BLACK)
-  doc.setLineWidth(0.3)
-  doc.line(margin, 20, pageW - margin, 20)
+// isFirstPage - per explicit request, a continuation page (2nd onward)
+// only needs the report title/period, not the full org identity block
+// (NATIONAL FOOD AUTHORITY/branch) and its divider line - that only
+// needs to appear once. The title/period keep the exact same y
+// positions either way, rather than shifting up into the now-empty
+// space above them, so the table's own fixed startY (36) stays valid
+// on every page regardless of which header shape it's paired with.
+const drawBranchHeader = (doc, { branchLabel, periodLabel, isFirstPage = true }) => {
+  if (isFirstPage) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(...BLACK)
+    doc.text('NATIONAL FOOD AUTHORITY', pageW / 2, 12, { align: 'center' })
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.text((branchLabel ?? '').toUpperCase(), pageW / 2, 17, { align: 'center' })
+    // Rule between the org block and the report title - present on the
+    // reference layout, missing here before.
+    doc.setDrawColor(...BLACK)
+    doc.setLineWidth(0.3)
+    doc.line(margin, 20, pageW - margin, 20)
+  }
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
+  doc.setTextColor(...BLACK)
   doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 26, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
@@ -147,8 +157,10 @@ export const generateSdoAbstract = ({
   // didDrawCell below, instead. Padded with one blank entry on each end
   // to stay aligned with body's own leading/trailing spacer rows below
   // (a blank mark is a no-op - didDrawCell's `if (!mark) return` guard
-  // already skips it).
-  const marks = ['', ...purchaseReceipts.map((pr) => (pr.mtsCondition ?? '').toLowerCase()), '']
+  // already skips it). Re-padded with one more blank per inserted
+  // BROUGHT FORWARD row further below, so it always stays aligned to
+  // the augmented body actually rendered.
+  const marks0 = ['', ...purchaseReceipts.map((pr) => (pr.mtsCondition ?? '').toLowerCase()), '']
 
   // Column order per explicit request: Address comes right after the
   // farmer's name, RSBSA after Address (was Name -> RSBSA -> Address).
@@ -188,7 +200,7 @@ export const generateSdoAbstract = ({
   // CANCELLED replaces the farmer name, matching the same convention
   // the main NFA stock report already uses for a voided WSR/WSI row.
   const isCancelled = (pr) => pr.status === 'Cancelled'
-  const body = purchaseReceipts.map((pr) => isCancelled(pr) ? [
+  const buildPrRow = (pr) => isCancelled(pr) ? [
     fmtRowDate(pr.date), (pr.warehouseCode ?? '').toUpperCase(), 'CANCELLED',
     '', '', (pr.prNo ?? '').toUpperCase(), '', '', '', '', '', '', '', '', '', '', '',
     ...(pricerEnabled ? ['', '', ''] : []),
@@ -205,14 +217,26 @@ export const generateSdoAbstract = ({
     pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 4), fmtKilos(pr.unitCost, 2),
     ...(pricerEnabled ? [fmtPeso(pr.basicCost), fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),
     fmtPeso(pr.totalAmount),
-  ])
-  body.unshift(spacerRow)
-  body.push(spacerRow)
+  ]
+  const body0 = purchaseReceipts.map(buildPrRow)
+  body0.unshift(spacerRow)
+  body0.push(spacerRow)
+
+  // Parallel to body0 (and, after insertion below, to the augmented
+  // body actually rendered) - lets every later step (SUB-TOTAL/BROUGHT
+  // FORWARD totals, the BN/SH mark) look up what a given rendered row
+  // actually IS by type, instead of the old `purchaseReceipts[rowIndex
+  // - 1]` arithmetic, which only worked because body0 had a fixed,
+  // predictable shape (exactly one spacer row on each end). Inserting a
+  // BROUGHT FORWARD row per page break (see below) breaks that fixed
+  // arithmetic entirely - this is what keeps every downstream lookup
+  // correct regardless of how many rows get inserted, and where.
+  const rowMeta0 = [{ type: 'spacer' }, ...purchaseReceipts.map((pr) => ({ type: 'pr', pr })), { type: 'spacer' }]
 
   // Cancelled rows never had real weights/costs to begin with, so they
   // contribute nothing to any total - same isCountable-style exclusion
   // the main NFA stock report already applies to its own cancelled rows.
-  const totals = purchaseReceipts.filter((pr) => !isCancelled(pr)).reduce((a, pr) => ({
+  const sumPrTotals = (prs) => prs.filter((pr) => !isCancelled(pr)).reduce((a, pr) => ({
     bags: a.bags + (pr.numberOfBags ?? 0),
     gross: a.gross + (pr.grossKilos ?? 0),
     sack: a.sack + (pr.sackKilos ?? 0),
@@ -222,18 +246,119 @@ export const generateSdoAbstract = ({
     pricer: a.pricer + (pr.pricerAmount ?? 0),
     total: a.total + (pr.totalAmount ?? 0),
   }), { bags: 0, gross: 0, sack: 0, net: 0, enw: 0, basic: 0, pricer: 0, total: 0 })
+  const totals = sumPrTotals(purchaseReceipts)
 
-  const foot = [[
-    { content: 'TOTAL', colSpan: 7 },
-    fmtBags(totals.bags), '', '', '',
-    fmtKilos(totals.gross), fmtKilos(totals.sack), fmtKilos(totals.net),
-    '', fmtKilos(totals.enw, 4), '',
-    ...(pricerEnabled ? [fmtPeso(totals.basic), '', fmtPeso(totals.pricer)] : []),
-    fmtPeso(totals.total),
-  ]]
+  // Shared shape for every totals-style row (TOTAL/SUB-TOTAL/BROUGHT
+  // FORWARD all print the exact same column layout, just with a
+  // different label and figures) - factored out so the three stay
+  // provably in sync instead of three hand-copied column lists that
+  // could drift apart.
+  const buildTotalsRowCells = (t) => [
+    fmtBags(t.bags), '', '', '',
+    fmtKilos(t.gross), fmtKilos(t.sack), fmtKilos(t.net),
+    '', fmtKilos(t.enw, 4), '',
+    ...(pricerEnabled ? [fmtPeso(t.basic), '', fmtPeso(t.pricer)] : []),
+    fmtPeso(t.total),
+  ]
+
+  const foot = [[{ content: 'TOTAL', colSpan: 7 }, ...buildTotalsRowCells(totals)]]
 
   const lastColIndex = head[0].length - 1
 
+  // Confirmed, reported real bug: a row that didn't fully fit at the
+  // bottom of a page used to get SPLIT across the page break (autoTable's
+  // default rowPageBreak: 'auto') - the whole row now moves to the next
+  // page instead, never dividing a single farmer's data across two
+  // pages.
+  const sharedTableOptions = {
+    startY: 36,
+    margin: { left: margin, right: margin, top: 36 },
+    head,
+    foot,
+    showFoot: 'lastPage',
+    theme: 'grid',
+    rowPageBreak: 'avoid',
+    styles: { font: 'helvetica', fontSize: 8, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.3, halign: 'center' },
+    headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center', valign: 'middle' },
+    footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 8, halign: 'center' },
+    // Col 2 Name of Farmer, col 3 Address - both left-aligned. Col 4
+    // RSBSA NO. gets a fixed, modest cellWidth - per explicit feedback,
+    // an FA row's now-multi-value RSBSA ("A / B") was left to
+    // auto-size and ate up disproportionate space, squeezing every
+    // other column. Constrained width wraps a multi-value RSBSA onto a
+    // second line (autoTable's default overflow behavior) rather than
+    // stretching the column - a plain single-value RSBSA still fits on
+    // one line comfortably at this width.
+    columnStyles: { 2: { halign: 'left' }, 3: { halign: 'left' }, 4: { cellWidth: 26 } },
+  }
+
+  // PASS 1 - a throwaway measurement render (discarded jsPDF instance,
+  // never shown to the user) using the UNaugmented body0, purely to
+  // learn where autoTable's own layout engine will actually put each
+  // page break. This has to be a real render, not an estimate - the
+  // real column widths/wrapping/row heights are exactly what decide
+  // where a page fills up, and nothing short of actually laying it out
+  // predicts that reliably. Needed because inserting a BROUGHT FORWARD
+  // row (per explicit request, "add the subtotal of the last page as
+  // the first row of the 2nd page") has to be part of the real `body`
+  // BEFORE the real render, for autoTable's own pagination to place it
+  // correctly at the top of the page it belongs on - there's no way to
+  // retroactively insert a new row into a page that's already been
+  // drawn without reflowing everything below it.
+  const insertionPoints = []
+  {
+    const measureDoc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
+    const firstRowIndexByPage = new Map()
+    autoTable(measureDoc, {
+      ...sharedTableOptions,
+      body: body0,
+      didDrawCell: (data) => {
+        if (data.section !== 'body' || data.column.index !== 0) return
+        const pageNum = measureDoc.internal.getCurrentPageInfo().pageNumber
+        if (!firstRowIndexByPage.has(pageNum)) firstRowIndexByPage.set(pageNum, data.row.index)
+      },
+    })
+    const measuredPages = [...firstRowIndexByPage.keys()].sort((a, b) => a - b)
+    for (const pageNum of measuredPages.slice(1)) insertionPoints.push(firstRowIndexByPage.get(pageNum))
+  }
+
+  // Totals of every real (non-spacer, non-continuation) row in body0
+  // strictly before `uptoIndexExclusive` - i.e. everything already
+  // printed on earlier pages by the time this insertion point is
+  // reached, the exact figure a "brought forward" line is supposed to
+  // carry.
+  const cumulativeThrough = (uptoIndexExclusive) => {
+    const prs = []
+    for (let i = 0; i < uptoIndexExclusive; i++) {
+      const meta = rowMeta0[i]
+      if (meta.type === 'pr') prs.push(meta.pr)
+    }
+    return sumPrTotals(prs)
+  }
+
+  const CONTINUATION_STYLES = { fontStyle: 'bolditalic', fillColor: [240, 240, 240] }
+  const buildContinuationRow = (t) => [
+    { content: 'BROUGHT FORWARD', colSpan: 7, styles: CONTINUATION_STYLES },
+    ...buildTotalsRowCells(t).map((content) => ({ content, styles: CONTINUATION_STYLES })),
+  ]
+
+  // Insert in descending index order so each earlier insertion point
+  // (computed against the ORIGINAL, unaugmented body0) is still valid
+  // by the time it's used - inserting at a later index first never
+  // shifts anything before it.
+  const body = [...body0]
+  const rowMeta = [...rowMeta0]
+  const marks = [...marks0]
+  for (const idx of [...insertionPoints].sort((a, b) => b - a)) {
+    body.splice(idx, 0, buildContinuationRow(cumulativeThrough(idx)))
+    rowMeta.splice(idx, 0, { type: 'continuation' })
+    marks.splice(idx, 0, '')
+  }
+
+  // PASS 2 - the real render, on the real `doc`, using the augmented
+  // body (BROUGHT FORWARD rows already inserted at exactly the indices
+  // pass 1 discovered).
+  //
   // Per explicit request: a page that this table overflows onto showed
   // the FULL grand total (autoTable's default `foot` behavior repeats
   // the foot row on every page, same as `head` does) - misleading,
@@ -242,11 +367,15 @@ export const generateSdoAbstract = ({
   // 'lastPage' below stops that repetition (the real grand TOTAL now
   // only ever prints once, on the true last page); this map tracks
   // which body rows landed on which page (and how far down that page's
-  // table content actually reached) so a real SUB-total - just that
-  // page's own rows, computed straight from `purchaseReceipts`, never
+  // table content actually reached) so a real running SUB-TOTAL -
+  // everything from the very first row through the end of that page,
+  // computed straight from `purchaseReceipts` via rowMeta, never
   // duplicating the `totals` reduce above - can be drawn under the
-  // table on every page except the last. A single-page export never
-  // touches this at all: its one real TOTAL (already correct) is
+  // table on every page except the last. Deliberately a RUNNING total
+  // (not just that one page's own rows) so it always matches the
+  // BROUGHT FORWARD figure carried onto the next page exactly - the
+  // whole point of a continuation line. A single-page export never
+  // touches any of this at all: its one real TOTAL (already correct) is
   // already sufficient, per explicit instruction.
   const pageRowInfo = new Map() // pageNumber -> { rowIndices: number[], bottomY: number }
   // Each column's own x/width, captured straight off the real table's
@@ -260,31 +389,18 @@ export const generateSdoAbstract = ({
   let footRowHeight = 7.66 // cellPadding(1.3)*2 + fontSize(8)*~1.15 - fallback only, overwritten by the real foot row's own height below
 
   autoTable(doc, {
-    startY: 36,
-    margin: { left: margin, right: margin, top: 36 },
-    head,
+    ...sharedTableOptions,
     body,
-    foot,
-    showFoot: 'lastPage',
-    theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 8, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.3, halign: 'center' },
-    headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center', valign: 'middle' },
-    footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 8, halign: 'center' },
-    // Col 2 Name of Farmer, col 3 Address - both left-aligned. Col 4
-    // RSBSA NO. gets a fixed, modest cellWidth - per explicit feedback,
-    // an FA row's now-multi-value RSBSA ("A / B") was left to
-    // auto-size and ate up disproportionate space, squeezing every
-    // other column. Constrained width wraps a multi-value RSBSA onto a
-    // second line (autoTable's default overflow behavior) rather than
-    // stretching the column - a plain single-value RSBSA still fits on
-    // one line comfortably at this width.
-    columnStyles: { 2: { halign: 'left' }, 3: { halign: 'left' }, 4: { cellWidth: 26 } },
-    didDrawPage: () => drawBranchHeader(doc, { branchLabel, periodLabel }),
+    // Per explicit request: a page after the first only needs the
+    // report title/period, not the full NATIONAL FOOD AUTHORITY/branch
+    // block and its divider line - that identifying header only needs
+    // to appear once, on page 1.
+    didDrawPage: (data) => drawBranchHeader(doc, { branchLabel, periodLabel, isFirstPage: data.pageNumber === 1 }),
     // Draws each row's BN/SH mark just past the table's own right edge
     // once that row's last real column has been placed - small, light
     // gray, never part of the bordered grid itself. Also records this
-    // row's page/position for the per-page sub-total drawn after the
-    // table finishes (see pageRowInfo above).
+    // row's page/position for the per-page running sub-total drawn
+    // after the table finishes (see pageRowInfo above).
     didDrawCell: (data) => {
       if (data.section === 'head') {
         columnX.set(data.column.index, { x: data.cell.x, width: data.cell.width })
@@ -317,47 +433,37 @@ export const generateSdoAbstract = ({
   const mainFinalY = doc.lastAutoTable.finalY
   const lastTablePage = doc.internal.getCurrentPageInfo().pageNumber
 
-  // Draw each non-last page's own SUB-TOTAL row - same shape and grid
-  // styling as the real `foot` TOTAL row above (just that page's own
-  // rows, computed straight from `purchaseReceipts`, never duplicating
-  // the `totals` reduce above), positioned directly under that page's
-  // own table content. Drawn by hand with doc.rect/doc.line/doc.text
-  // against the real table's own captured column x/width
-  // (`columnX`) rather than a second autoTable() call - that was tried
-  // first and silently misplaced rows onto the wrong physical page
-  // (autoTable's own page-break logic decided a row begun near a
-  // page's bottom margin didn't fit and pushed it onto whichever page
-  // came next in the document, not necessarily page `pageNum`).
-  // `body` has a leading and trailing spacer row (see spacerRow above)
-  // with no matching purchaseReceipts entry - row index N (1-based
-  // within body, after the leading spacer) maps to
-  // purchaseReceipts[N - 1].
+  // Draw each non-last page's own running SUB-TOTAL row - same shape
+  // and grid styling as the real `foot` TOTAL row above, positioned
+  // directly under that page's own table content. Drawn by hand with
+  // doc.rect/doc.line/doc.text against the real table's own captured
+  // column x/width (`columnX`) rather than a second autoTable() call -
+  // that was tried first and silently misplaced rows onto the wrong
+  // physical page (autoTable's own page-break logic decided a row
+  // begun near a page's bottom margin didn't fit and pushed it onto
+  // whichever page came next in the document, not necessarily page
+  // `pageNum`).
   const tablePages = [...pageRowInfo.keys()].sort((a, b) => a - b)
   if (tablePages.length > 1) {
+    let cumulative = { bags: 0, gross: 0, sack: 0, net: 0, enw: 0, basic: 0, pricer: 0, total: 0 }
     for (const pageNum of tablePages.slice(0, -1)) {
       const info = pageRowInfo.get(pageNum)
-      const pageTotals = info.rowIndices.reduce((a, rowIndex) => {
-        const pr = purchaseReceipts[rowIndex - 1]
-        if (!pr || isCancelled(pr)) return a
-        return {
-          bags: a.bags + (pr.numberOfBags ?? 0),
-          gross: a.gross + (pr.grossKilos ?? 0),
-          sack: a.sack + (pr.sackKilos ?? 0),
-          net: a.net + (pr.netKilos ?? 0),
-          enw: a.enw + (pr.enw ?? 0),
-          basic: a.basic + (pr.basicCost ?? 0),
-          pricer: a.pricer + (pr.pricerAmount ?? 0),
-          total: a.total + (pr.totalAmount ?? 0),
-        }
-      }, { bags: 0, gross: 0, sack: 0, net: 0, enw: 0, basic: 0, pricer: 0, total: 0 })
-      const subtotalCells = [
-        { content: 'SUB-TOTAL', colSpan: 7 },
-        fmtBags(pageTotals.bags), '', '', '',
-        fmtKilos(pageTotals.gross), fmtKilos(pageTotals.sack), fmtKilos(pageTotals.net),
-        '', fmtKilos(pageTotals.enw, 4), '',
-        ...(pricerEnabled ? [fmtPeso(pageTotals.basic), '', fmtPeso(pageTotals.pricer)] : []),
-        fmtPeso(pageTotals.total),
-      ]
+      const pagePrs = info.rowIndices
+        .map((rowIndex) => rowMeta[rowIndex])
+        .filter((meta) => meta?.type === 'pr')
+        .map((meta) => meta.pr)
+      const pageOwnTotals = sumPrTotals(pagePrs)
+      cumulative = {
+        bags: cumulative.bags + pageOwnTotals.bags,
+        gross: cumulative.gross + pageOwnTotals.gross,
+        sack: cumulative.sack + pageOwnTotals.sack,
+        net: cumulative.net + pageOwnTotals.net,
+        enw: cumulative.enw + pageOwnTotals.enw,
+        basic: cumulative.basic + pageOwnTotals.basic,
+        pricer: cumulative.pricer + pageOwnTotals.pricer,
+        total: cumulative.total + pageOwnTotals.total,
+      }
+      const subtotalCells = [{ content: 'SUB-TOTAL', colSpan: 7 }, ...buildTotalsRowCells(cumulative)]
 
       doc.setPage(pageNum)
       const rowY = info.bottomY
@@ -449,7 +555,7 @@ export const generateSdoAbstract = ({
   const footerH = Math.max(reconBoxH, sigBoxH)
 
   let y = mainFinalY + 10
-  if (y + footerH > pageH - margin) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel }); y = 40 }
+  if (y + footerH > pageH - margin) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel, isFirstPage: false }); y = 40 }
 
   const usableW = pageW - margin * 2
   const reconW = 78

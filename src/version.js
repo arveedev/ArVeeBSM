@@ -7664,4 +7664,33 @@
 //              measuring it in JS), always rendered so both directions
 //              of the transition can actually play, rather than only
 //              ever snapping open/closed on a conditional mount.
-export const APP_VERSION = '1.10-234'
+//   1.10-235 - Three explicit-request fixes to the SDO Abstract of
+//              Cereal Purchases PDF's multi-page pagination
+//              (sdoAbstractPdfGenerator.js):
+//              (1) A page after the first no longer repeats the full
+//              NATIONAL FOOD AUTHORITY/branch block and its divider
+//              line - just the report title and period, which is all
+//              a continuation page needs.
+//              (2) rowPageBreak: 'avoid' added - a row that doesn't
+//              fully fit at the bottom of a page now moves entirely to
+//              the next page instead of visually splitting across the
+//              break, which used to happen (reported, confirmed with a
+//              real screenshot).
+//              (3) New "BROUGHT FORWARD" row, per explicit request -
+//              carries the running total through the end of the
+//              previous page onto the first row of the next one, like
+//              a real ledger continuation. Required a genuine two-pass
+//              render: a throwaway measurement pass first discovers
+//              exactly where autoTable's own layout will place each
+//              page break (needed BEFORE the real render, since a new
+//              row can't be retroactively inserted into an
+//              already-drawn page), then the real pass renders the
+//              augmented body with BROUGHT FORWARD rows already spliced
+//              in at those exact points. The existing per-page
+//              SUB-TOTAL (drawn under each page's own last row) is now
+//              a running total through that page too, so it always
+//              matches the BROUGHT FORWARD figure carried onto the
+//              next page exactly - the same number, printed twice, at
+//              the seam. A single-page export is completely unaffected
+//              by any of this, same as before.
+export const APP_VERSION = '1.10-235'
