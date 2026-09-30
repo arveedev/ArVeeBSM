@@ -7572,4 +7572,18 @@
 //              gained a `reconciliation.totalLabel` option (defaults to
 //              'TOTAL') to make the final row's label configurable at
 //              all, which it wasn't before.
-export const APP_VERSION = '1.10-227'
+//   1.10-228 - Per direct follow-up: the MO detail sheet's Recovery
+//              "Expected vs Actual" card now shows as soon as there's
+//              at least one rice receipt against the order, instead of
+//              only once it's fully completed - expectedKilosFromIssued
+//              was already computed off the order's running cumulative
+//              issued-so-far figure, so it's a genuinely valid
+//              comparison mid-run too, not something that only made
+//              sense once done. Kept the amber "shortfall" flagging
+//              gated on completion, though - an in-progress batch
+//              routinely running behind its own issued-so-far figure is
+//              normal (drying/milling takes time), not a real problem,
+//              so the card renders in a neutral color with an "(in
+//              progress)" tag while the order isn't complete yet, only
+//              turning neon/amber pass-or-fail once it actually is.
+export const APP_VERSION = '1.10-228'

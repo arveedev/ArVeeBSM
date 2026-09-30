@@ -213,7 +213,20 @@ export function MillingOrderDetail({ order, onClose }) {
   const riceReceivedKilos = riceReceiptTx.filter((t) => t.type === 'WSR').reduce((s, t) => s + (t.netKilos ?? 0), 0)
 
   const meetsExpectedKilos = expectedKilosFromIssued == null || expectedKilosFromIssued === 0 || riceReceivedKilos >= expectedKilosFromIssued
-  const showRecoveryComparison = isCompleted && order.type === 'MO' && order.recoveryPercent != null
+  // Per explicit follow-up request: shows as soon as there's at least
+  // one rice receipt against this order, not just once it's fully
+  // completed - expectedKilosFromIssued is already computed off
+  // order.issuedKilos, which is the running cumulative issued-so-far
+  // figure regardless of completion status, so it's a genuinely valid
+  // "expected for what's been sent so far" comparison mid-run too, not
+  // something that only makes sense once the order is done. The amber
+  // "shortfall" flagging below is still gated on isCompleted, though -
+  // an in-progress batch routinely running behind its own cumulative
+  // issued-so-far figure is normal (drying/milling takes time), not a
+  // real problem worth flagging the way a genuinely finished order
+  // under-recovering is.
+  const showRecoveryComparison = order.type === 'MO' && order.recoveryPercent != null && riceReceivedKilos > 0
+  const recoveryComparisonIsNeutral = !isCompleted
   // Per explicit request: the achieved recovery percentage sits inline
   // with the Expected/Actual labels themselves, so the target rate and
   // what was actually achieved can be compared at a glance right there,
@@ -416,8 +429,11 @@ export function MillingOrderDetail({ order, onClose }) {
               comparing at a glance either way, not something tucked
               behind the summary/list toggle. */}
           {showRecoveryComparison ? (
-            <div className={`mt-2 rounded-lg border-2 p-2 text-base ${meetsExpectedKilos ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
-              <p className="text-sm tabular-nums text-neutral-500"><span className="uppercase">Recovery</span> — Expected vs Actual</p>
+            <div className={`mt-2 rounded-lg border-2 p-2 text-base ${recoveryComparisonIsNeutral ? 'border-neutral-800 bg-neutral-950' : meetsExpectedKilos ? 'border-brand-neon bg-brand-neon/5' : 'border-brand-amber bg-brand-amber/5'}`}>
+              <p className="text-sm tabular-nums text-neutral-500">
+                <span className="uppercase">Recovery</span> — Expected vs Actual
+                {recoveryComparisonIsNeutral && <span className="ml-1 text-neutral-600">(in progress)</span>}
+              </p>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 <div>
                   {/* Per explicit request: the recovery percentage sits
@@ -438,14 +454,20 @@ export function MillingOrderDetail({ order, onClose }) {
                   </div>
                 </div>
                 <div>
-                  <p className={`text-xs uppercase ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>Actual ({actualRecoveryPercent != null ? actualRecoveryPercent.toFixed(2) : '—'}%)</p>
+                  {/* No amber "shortfall" flagging while still in
+                      progress - an in-progress batch routinely running
+                      behind its own cumulative issued-so-far figure is
+                      normal (drying/milling takes time), not a real
+                      problem, so this stays neutral until the order is
+                      actually completed. */}
+                  <p className={`text-xs uppercase ${recoveryComparisonIsNeutral ? 'text-app-text' : meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>Actual ({actualRecoveryPercent != null ? actualRecoveryPercent.toFixed(2) : '—'}%)</p>
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <span className="text-xs text-neutral-500">Net Kgs</span>
-                    <span className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtKilos(riceReceivedKilos)}</span>
+                    <span className={`font-semibold tabular-nums ${recoveryComparisonIsNeutral ? 'text-app-text' : meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtKilos(riceReceivedKilos)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs text-neutral-500">Net Bags</span>
-                    <span className={`font-semibold tabular-nums ${meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtNetBags(riceReceivedKilos / 50)}</span>
+                    <span className={`font-semibold tabular-nums ${recoveryComparisonIsNeutral ? 'text-app-text' : meetsExpectedKilos ? 'text-brand-neon' : 'text-brand-amber'}`}>{fmtNetBags(riceReceivedKilos / 50)}</span>
                   </div>
                 </div>
               </div>
