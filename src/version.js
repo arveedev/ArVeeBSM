@@ -7559,4 +7559,17 @@
 //              already saves moNumber/batchNumber/tmoNumber/trialNumber
 //              as null whenever their state stays at its empty default,
 //              so no other change was needed for them to save correctly.
-export const APP_VERSION = '1.10-226'
+//   1.10-227 - Per explicit request, relabeled the SDO Abstract's
+//              simplified cash reconciliation box (the
+//              showReplenishmentDetails-off shape, Settings' "Show
+//              combined Fund Balance only" toggle) - "Fund Balance"
+//              (opening figure) is now "Cash Advance from CPF", "LESS:
+//              This Period's Replenishment" is now "LESS: Paid PR's",
+//              and the final bold total row is now "Fund Balance"
+//              instead of "TOTAL". Only these three labels changed -
+//              same underlying math, and the other (details-on) shape
+//              of this box is untouched. sdoAbstractPdfGenerator.js
+//              gained a `reconciliation.totalLabel` option (defaults to
+//              'TOTAL') to make the final row's label configurable at
+//              all, which it wasn't before.
+export const APP_VERSION = '1.10-227'

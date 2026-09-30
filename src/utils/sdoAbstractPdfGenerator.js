@@ -108,7 +108,7 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel }) => {
  * live data after being issued, so a later Buying Price or variety
  * edit can't silently reshape an already-issued document).
  * `purityDisplayFormat`: 'range' | 'letter'.
- * `reconciliation`: { fundBalanceLabel, fundBalance, addEntries: [{label, amount}], lessEntries: [{label, amount}] } - fundBalanceLabel defaults to 'COH — Fund Balance' if not given.
+ * `reconciliation`: { fundBalanceLabel, fundBalance, addEntries: [{label, amount}], lessEntries: [{label, amount}], totalLabel } - fundBalanceLabel defaults to 'COH — Fund Balance', totalLabel to 'TOTAL', if not given.
  * `signatories`: { preparedBy: {name, position}, verifiedBy, notedBy }
  *
  * Whether the Rate/Amount/Basic Cost columns print is decided from the
@@ -420,6 +420,13 @@ export const generateSdoAbstract = ({
   // real check to reference. One running TOTAL after all of them
   // together, not one per entry, so a period with several replenishments
   // doesn't turn into a wall of repeated TOTAL rows.
+  // totalLabel - per explicit request, the SDO Abstract's simplified
+  // ("showReplenishmentDetails off") reconciliation box now reads "Cash
+  // Advance from CPF" / "LESS: Paid PR's" / "Fund Balance" instead of
+  // the generic "Fund Balance" / "LESS: This Period's Replenishment" /
+  // "TOTAL" - defaults to 'TOTAL' so the other (details-on) shape,
+  // which never passes this, is completely unaffected.
+  const totalLabel = reconciliation?.totalLabel ?? 'TOTAL'
   const reconRows = [{ label: reconciliation?.fundBalanceLabel ?? 'COH — Fund Balance', amt: fundBalance }]
   const addEntries = reconciliation?.addEntries ?? []
   for (const e of addEntries) {
@@ -427,12 +434,12 @@ export const generateSdoAbstract = ({
     reconRows.push({ label: e.label, amt: e.amount })
   }
   if (addEntries.length > 0) {
-    reconRows.push({ label: 'TOTAL', amt: running, bold: true })
+    reconRows.push({ label: totalLabel, amt: running, bold: true })
   }
   for (const e of reconciliation?.lessEntries ?? []) {
     running -= e.amount ?? 0
     reconRows.push({ label: e.label, amt: e.amount })
-    reconRows.push({ label: 'TOTAL', amt: running, bold: true })
+    reconRows.push({ label: totalLabel, amt: running, bold: true })
   }
   // The box itself starts 4mm ABOVE `y` (see `ry = y - 4` below), so its
   // true bottom relative to `y` is 3mm plus one 7mm row per reconRows

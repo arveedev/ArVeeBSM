@@ -348,10 +348,18 @@ function AbstractExportModal({ onClose }) {
               lessEntries: [{ label: 'This period’s disbursements', amount: periodTotal }],
             }
           : {
-              fundBalanceLabel: 'Fund Balance',
+              // Per explicit request/correction: relabeled to read as a
+              // cash-advance reconciliation - "Cash Advance from CPF"
+              // (the opening figure), "LESS: Paid PR's" (this period's
+              // disbursements), ending on a "Fund Balance" total -
+              // instead of the previous generic "Fund Balance" /
+              // "LESS: This Period's Replenishment" / "TOTAL". Same
+              // underlying math either way, only the labels changed.
+              fundBalanceLabel: 'Cash Advance from CPF',
               fundBalance: combinedFundBalance,
               addEntries: [],
-              lessEntries: [{ label: "LESS: This Period's Replenishment", amount: periodTotal }],
+              lessEntries: [{ label: "LESS: Paid PR's", amount: periodTotal }],
+              totalLabel: 'Fund Balance',
             },
         signatories: {
           // Always the SDO who actually generated this export, not an
