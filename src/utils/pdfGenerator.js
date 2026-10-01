@@ -74,7 +74,21 @@ const fmtKilosStatement = (n) =>
 // is then built entirely from already-2-decimal values, so a page's
 // displayed rows always add up to its own displayed total exactly,
 // and every page agrees with the others on the same underlying data.
-const round2 = (n) => (n == null ? n : Math.round(n * 100) / 100)
+//
+// Confirmed, reported real bug (second pass): the first version of
+// this used `Math.round(n * 100) / 100` - plain binary floating-point
+// multiplication, which is NOT exact for most decimal fractions.
+// 296.215 * 100 actually evaluates to 29621.499999999996 in a 64-bit
+// float, not 29621.5, so Math.round rounds it DOWN to 296.21 instead
+// of the correct 296.22 - reported directly, with the exact entry
+// form value (296.215 Net Kilos) that reproduced it. toLocaleString
+// (used here, and already relied on by fmtKilosStatement/fmtKilos
+// elsewhere in this file) performs correctly-rounded decimal
+// conversion instead of raw binary multiplication, and does not have
+// this failure mode - confirmed directly against 296.215, 1.005,
+// 2.675, and 0.125, the classic floating-point-rounding trap values,
+// all of which round UP exactly as a human would expect.
+const round2 = (n) => (n == null ? n : Number(n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false })))
 
 const fmtDate = (s) => {
   if (!s) return ''

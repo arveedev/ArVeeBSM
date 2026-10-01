@@ -7769,4 +7769,20 @@
 //              exactly as-is, per explicit instruction - rounding it
 //              risked two genuinely different sack weights (e.g. 0.095
 //              vs 0.100) displaying as the same "0.10" label.
-export const APP_VERSION = '1.10-239'
+//   1.10-240 - Fixed a real floating-point rounding bug in 1.10-239's
+//              new round2() helper, per direct report with the exact
+//              value that reproduced it: a WSI with Net Kilos 296.215
+//              printed as 296.21 on the exported Statement instead of
+//              the correct 296.22. round2() was using
+//              `Math.round(n * 100) / 100` - plain binary floating-
+//              point multiplication, which is not exact for most
+//              decimal fractions (296.215 * 100 actually evaluates to
+//              29621.499999999996 in a 64-bit float, rounding DOWN
+//              instead of up). Switched to the same toLocaleString-
+//              based correctly-rounded decimal conversion
+//              fmtKilosStatement/fmtKilos already use elsewhere in
+//              this file, which doesn't have this failure mode -
+//              confirmed directly against 296.215 and the other
+//              classic floating-point-rounding trap values (1.005,
+//              2.675, 0.125), all now rounding up exactly as expected.
+export const APP_VERSION = '1.10-240'
