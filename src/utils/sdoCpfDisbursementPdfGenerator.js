@@ -28,7 +28,12 @@ const HEADER_BG = [232, 232, 232]
 // real paper record's own convention, confirmed directly against a
 // sample).
 const REPLENISH_BLUE = [37, 61, 173]
-const margin = 0.3 * 25.4
+// 0.22in, tighter than the Abstract's 0.3in - this table's 19 columns
+// need every bit of width they can get; every column width below is
+// measured directly against the widest real string it actually has to
+// hold (including bold SUB-TOTAL/TOTAL row variants), and even then
+// only clears the available width by ~2mm at this margin.
+const margin = 0.22 * 25.4
 // Same physical paper/orientation as the Abstract (8.5 x 13in,
 // landscape) - this report's column count (19) is in the same range.
 const PAGE_W_IN = 13
@@ -73,14 +78,19 @@ const fmtBags = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-PH'))
 const fmtKilos = (n, d = 3) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d }))
 const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
-// Confirmed, reported real bug (correction to an earlier "more
-// breathing room" change that overcorrected): the gap between the
-// officer identification block and the table only needs to read as
-// roughly one table row's worth of space, not the much larger gap 48
-// produced - 43 leaves about one row height below the block's own
-// label line (ends ~36).
-const TABLE_START_Y = 43
-const CONTINUATION_MARGIN_TOP = 16
+// Confirmed, reported real bug (second correction - the first pass,
+// 43, still read as too much space on a real export): every header gap
+// is now built from this one shared unit instead of separately-guessed
+// numbers, so "one row" means the same thing everywhere it's used -
+// title block to officer block, officer block to the table on page 1,
+// and title/period to the table on every continuation page.
+const ROW_GAP = 5
+const TITLE_END_Y = 23 // page 1's own last title line (cityLabel)
+const BLOCK_Y = TITLE_END_Y + ROW_GAP // officer block's value line
+const BLOCK_LABEL_OFFSET = 6 // label line sits this far below its own value line, inside the block
+const TABLE_START_Y = BLOCK_Y + BLOCK_LABEL_OFFSET + ROW_GAP
+const CONTINUATION_TITLE_END_Y = 15 // continuation page's own last title line (period)
+const CONTINUATION_MARGIN_TOP = CONTINUATION_TITLE_END_Y + ROW_GAP
 
 // isFirstPage - only page 1 carries the full report title/org identity/
 // officer-identification block; a continuation page just needs the
@@ -104,7 +114,7 @@ const drawHeader = (doc, { branchLabel, cityLabel, periodLabel, officer, isFirst
   doc.setFontSize(9)
   doc.text((branchLabel ?? '').toUpperCase(), pageW / 2, 19, { align: 'center' })
   doc.setFont('helvetica', 'normal')
-  doc.text((cityLabel ?? '').toUpperCase(), pageW / 2, 23, { align: 'center' })
+  doc.text((cityLabel ?? '').toUpperCase(), pageW / 2, TITLE_END_Y, { align: 'center' })
 
   // Officer identification block - one person's Name / Official
   // Designation / Station, confirmed directly against a real sample:
@@ -121,7 +131,6 @@ const drawHeader = (doc, { branchLabel, cityLabel, periodLabel, officer, isFirst
     // per-branch/per-SDO signatory - always literally "FINANCE".
     { value: 'FINANCE', label: 'STATION' },
   ]
-  const blockY = 30
   blocks.forEach((b, i) => {
     // Confirmed, reported real bug: this was the column's own LEFT edge
     // (margin + i*colW), not its center - centering text ON a left edge
@@ -130,13 +139,13 @@ const drawHeader = (doc, { branchLabel, cityLabel, periodLabel, officer, isFirst
     const x = margin + i * colW + colW / 2
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(10)
-    doc.text(b.value, x, blockY, { align: 'center', maxWidth: colW - 4 })
+    doc.text(b.value, x, BLOCK_Y, { align: 'center', maxWidth: colW - 4 })
     doc.setLineWidth(0.3)
-    doc.line(x - colW / 2 + 6, blockY + 2, x + colW / 2 - 6, blockY + 2)
+    doc.line(x - colW / 2 + 6, BLOCK_Y + 2, x + colW / 2 - 6, BLOCK_Y + 2)
     doc.setFont('helvetica', 'italic')
     doc.setFontSize(7.5)
     doc.setTextColor(90, 90, 90)
-    doc.text(b.label, x, blockY + 6, { align: 'center' })
+    doc.text(b.label, x, BLOCK_Y + BLOCK_LABEL_OFFSET, { align: 'center' })
     doc.setTextColor(...BLACK)
   })
 }
@@ -337,21 +346,82 @@ export const generateCpfDisbursementRecord = ({
   // LIQUIDATION (6), right-aligned instead of the default center -
   // numbers read far more naturally lining up on their decimal point.
   const RIGHT_ALIGN_COLS = new Set([6, 11, 12, 13, 14, 15, 16, 17, 18])
+  // Confirmed, reported real bug: every column except 3 and 6 was left
+  // to autoTable's own 'auto' width - computed independently PER CALL
+  // from whatever rows that specific call happened to receive, since
+  // this report is one autoTable() call per page (not one call for the
+  // whole document). Two calls with different row content can and did
+  // land on visibly different column widths, so the table no longer
+  // lined up from one page to the next. Giving every column an explicit
+  // cellWidth removes content from the width calculation entirely - the
+  // same fixed widths are used regardless of which rows a given page's
+  // call happens to carry, so every page is pixel-identical.
+  // Confirmed, reported real overflow warnings - measured directly with
+  // doc.getTextWidth() rather than guessed, against the two actual
+  // culprits: a full RSBSA string ("05-05-10-017-000045", one
+  // unbreakable hyphenated token, no spaces to wrap at) measures ~25.3mm
+  // at this table's own font/size, wider than the 22mm column 4 was
+  // given; column 6's own header text "CASH ADVANCE RECEIVED/" (its own
+  // first forced line) measures ~33.5mm bold, leaving almost no margin
+  // against a 36mm column once cellPadding is subtracted. Both widened
+  // with real headroom this time, not another guess.
+  // Every width below was checked against doc.getTextWidth() for the
+  // actual longest real string that column has to hold - including the
+  // BOLD TOTAL/SUB-TOTAL row variants, which run measurably wider than
+  // the same figure in a plain body row and were the source of several
+  // of the overflow warnings this set went through (e.g. a 4-decimal
+  // ENW kg SUB-TOTAL, or the WSR No. column's own 8-digit values, were
+  // never checked against their real content the first few times this
+  // was sized by eye).
+  // Isolated directly with a placeholder-content render: once every
+  // column has its own explicit cellWidth (none left 'auto'),
+  // autoTable's own default width mode still tries to STRETCH the table
+  // to fill the full page and logs a benign "X units width could not
+  // fit page" warning when it can't cleanly redistribute the leftover
+  // slack among already-fixed columns - not an actual content-clipping
+  // bug (reproduced with trivial single-character cells, nothing to do
+  // with real content width). tableWidth: 'wrap' below (not used until
+  // now) tells it to just use these widths exactly instead of trying to
+  // stretch them, which removes the warning entirely.
+  // The actual source of every remaining overflow warning, found by
+  // isolating it to a placeholder BODY with the REAL multi-row head:
+  // the two-line column sub-headers ("VARIETY\nCODE", "NO. OF\nBAGS",
+  // "ENW\nFACTOR", a single-line "PURITY") are each wider, on their own
+  // longest line, than the narrow numeric columns they were first
+  // given - "VARIETY" alone needs ~13.9mm, not the ~9mm a "PD1"-sized
+  // body value suggested. Every width below is now checked against
+  // BOTH its header's own longest line and its widest real body value.
+  const columnStyles = {
+    0: { cellWidth: 11 }, // DATE
+    1: { cellWidth: 13 }, // PR No.
+    2: { cellWidth: 15 }, // WSR No.
+    3: { cellWidth: 25, halign: 'left' }, // NAME OF FARMER/ADDRESS
+    4: { cellWidth: 28 }, // RSBSA #
+    5: { cellWidth: 11 }, // NATURE OF PAYMENT
+    6: { cellWidth: 37, halign: 'right' }, // CASH ADVANCE RECEIVED/...
+    7: { cellWidth: 12 }, // NO. OF BAGS
+    8: { cellWidth: 14 }, // VARIETY CODE
+    9: { cellWidth: 9 }, // MC
+    10: { cellWidth: 12 }, // PURITY
+    11: { cellWidth: 18, halign: 'right' }, // GROSS KG
+    12: { cellWidth: 11 }, // MTS
+    13: { cellWidth: 18, halign: 'right' }, // Net kg
+    14: { cellWidth: 13 }, // ENW FACTOR
+    15: { cellWidth: 19, halign: 'right' }, // ENW kg
+    16: { cellWidth: 10 }, // UNIT COST
+    17: { cellWidth: 18, halign: 'right' }, // AMOUNT
+    18: { cellWidth: 23, halign: 'right' }, // CASH ADVANCE/FUND BALANCE
+  }
   const sharedTableOptions = {
     margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP },
     head,
     theme: 'grid',
     rowPageBreak: 'avoid',
+    tableWidth: 'wrap',
     styles: { font: 'helvetica', fontSize: 7.5, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.2, halign: 'center', valign: 'middle' },
     headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7, halign: 'center', valign: 'middle' },
     footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center' },
-    columnStyles: {
-      3: { cellWidth: 32 },
-      6: { cellWidth: 26, halign: 'right' },
-      11: { halign: 'right' }, 12: { halign: 'right' }, 13: { halign: 'right' },
-      14: { halign: 'right' }, 15: { halign: 'right' }, 16: { halign: 'right' },
-      17: { halign: 'right' }, 18: { halign: 'right' },
-    },
+    columnStyles,
   }
 
   // PASS 1 - throwaway measurement renders (discarded jsPDF instances)

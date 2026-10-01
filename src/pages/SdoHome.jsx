@@ -6,7 +6,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Search, SlidersHorizontal, Trash2, FileDown, Banknote } from 'lucide-react'
+import { Search, SlidersHorizontal, Trash2, FileDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -20,7 +20,6 @@ import {
 import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.jsx'
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
 import AbstractExportModal from '../components/common/sdo/AbstractExportModal.jsx'
-import CpfDisbursementExportModal from '../components/common/sdo/CpfDisbursementExportModal.jsx'
 import BuyingPriceModal from '../components/common/sdo/BuyingPriceModal.jsx'
 import SdoProcurementFilterModal from '../components/common/sdo/SdoProcurementFilterModal.jsx'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
@@ -97,7 +96,6 @@ function SdoHome() {
   const [cashModal, setCashModal] = useState(null) // 'replenish' | 'liquidate' | null
   const [editingPrice, setEditingPrice] = useState(false)
   const [showAbstractExport, setShowAbstractExport] = useState(false)
-  const [showCpfExport, setShowCpfExport] = useState(false)
   const [mounted, setMounted] = useState(false)
   // Per explicit request: a Cancelled PR must have somewhere to be
   // permanently deleted from - it has no WSR to hang off of when it's a
@@ -127,7 +125,7 @@ function SdoHome() {
   // without this, the fixed header/nav sat on top of the modal and the
   // page's own scroll plus the modal's own internal scroll produced two
   // visible scrollbars at once.
-  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || showCpfExport || editingPrice || Boolean(deletePrTarget)
+  const anyModalOpen = Boolean(activeWsr) || Boolean(cashModal) || showAbstractExport || editingPrice || Boolean(deletePrTarget)
   useEffect(() => {
     setChromeHidden?.(anyModalOpen)
     document.body.style.overflow = anyModalOpen ? 'hidden' : ''
@@ -442,26 +440,19 @@ function SdoHome() {
             Completed
           </button>
         </div>
-        <div className="flex gap-1.5 sm:shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowAbstractExport(true)}
-            aria-label="Export Abstract of Cereal Purchases"
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-neon px-4 py-2 text-xs font-bold text-brand-contrast shadow-lg shadow-brand-neon/20 transition-all active:scale-95 sm:flex-initial"
-          >
-            <FileDown size={15} strokeWidth={2.5} />
-            Abstract
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowCpfExport(true)}
-            aria-label="Export CPF Cash Disbursement Record"
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand-neon/40 bg-brand-neon/10 px-4 py-2 text-xs font-bold text-brand-neon transition-all active:scale-95 sm:flex-initial"
-          >
-            <Banknote size={15} strokeWidth={2.5} />
-            CPF
-          </button>
-        </div>
+        {/* Per explicit request: the CPF export now lives only on
+            Settings.jsx's SDO Cash Balance section, not duplicated here
+            too - this row goes back to being the plain single Abstract
+            export button it always was. */}
+        <button
+          type="button"
+          onClick={() => setShowAbstractExport(true)}
+          aria-label="Export Abstract of Cereal Purchases"
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-neon px-4 py-2 text-xs font-bold text-brand-contrast shadow-lg shadow-brand-neon/20 transition-all active:scale-95 sm:w-auto"
+        >
+          <FileDown size={15} strokeWidth={2.5} />
+          Export
+        </button>
       </div>
 
       {/* Search on its own row, per explicit request - no longer
@@ -620,7 +611,6 @@ function SdoHome() {
         <CashActionModal mode={cashModal} currentCashOnHand={cashOnHand} onClose={() => setCashModal(null)} />
       )}
       {showAbstractExport && <AbstractExportModal onClose={() => setShowAbstractExport(false)} />}
-      {showCpfExport && <CpfDisbursementExportModal onClose={() => setShowCpfExport(false)} />}
       {editingPrice && <BuyingPriceModal currentPriceRow={currentPriceRow} onClose={() => setEditingPrice(false)} />}
       {filterModalOpen && (
         <SdoProcurementFilterModal

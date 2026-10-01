@@ -8004,4 +8004,45 @@
 //              continuation row that page would actually carry, instead
 //              of trusting one whole-document estimate computed without
 //              it.
-export const APP_VERSION = '1.10-249'
+//   1.10-250 - Third polish round on the CPF Cash Disbursement Record,
+//              per direct feedback: (1) Removed the duplicate "CPF"
+//              export button from SdoHome.jsx - per explicit request
+//              it now lives only on Settings.jsx's SDO Cash Balance
+//              section, SdoHome's Export row goes back to being the
+//              plain single Abstract button it always was. (2) Page 1's
+//              header gaps (title-to-officer-block, officer-block-to-
+//              table) and every continuation page's title-to-table gap
+//              are now all built from one shared ROW_GAP constant
+//              instead of separately-guessed numbers, so "one row"
+//              means the same thing everywhere it's used. (3) Fixed a
+//              real bug: every column except 2 was left to autoTable's
+//              own 'auto' width, computed independently PER PAGE CALL
+//              from whichever rows that call happened to receive (this
+//              report is one autoTable() call per page) - two pages
+//              with different row content could and did land on
+//              visibly different column widths. Every column now has
+//              an explicit, identical cellWidth, so every page is
+//              pixel-identical regardless of its own content. Getting
+//              there required several real rounds of trial and error,
+//              each one isolated with a dedicated Node script rather
+//              than guessed: an initial attempt sized columns by eye
+//              and triggered real jspdf-autotable overflow warnings
+//              (RSBSA numbers and the column 6 header text both
+//              measurably wider than their first-guess widths); a
+//              second attempt switched to tableWidth 'wrap' + much
+//              wider values and hit a DIFFERENT warning that turned out
+//              to be autoTable failing to redistribute unused leftover
+//              width against fixed columns (benign, not real content
+//              clipping - confirmed by reproducing it against
+//              placeholder single-character content); and a final round
+//              found the real remaining cause once leftover-space was
+//              ruled out - the table's own two-line column sub-headers
+//              ("VARIETY\nCODE", "NO. OF\nBAGS", "ENW\nFACTOR") were
+//              each wider on their own longest line than the narrow
+//              numeric columns a "PD1"-sized body value had suggested.
+//              Every column width is now checked with
+//              doc.getTextWidth() against both its header's longest
+//              line and its widest real body/SUB-TOTAL value, verified
+//              zero-warning against the same 45-PR, multi-page,
+//              multi-replenishment test dataset before shipping.
+export const APP_VERSION = '1.10-250'
