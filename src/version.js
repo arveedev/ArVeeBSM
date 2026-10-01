@@ -7803,4 +7803,27 @@
 //              figures are affected; every other report, and the per-
 //              variety sack-weight label left untouched per the user's
 //              explicit "No don't change that", are unaffected.
-export const APP_VERSION = '1.10-241'
+//   1.10-242 - Fixed a real bug, reported with exact screenshots: one
+//              period's printed ENDING balance on the Stock Statement
+//              Summary page did not match the very next period's printed
+//              BEGINNING balance for the same variety/condition (e.g.
+//              132.70 ending vs 132.69 beginning for DKB/GQ; TOTAL off by
+//              0.02). Root cause: Reports.jsx's beginning-balance
+//              accumulator (addToBeginningBal) summed every prior
+//              transaction's RAW, unrounded netKilos and rounded the
+//              running total only once at the very end - a different
+//              rounding order than every other total in this export
+//              (which rounds each transaction's own kilos BEFORE summing,
+//              per round2's own comment in pdfGenerator.js). The two
+//              orders can land a cent apart, so a period's ending balance
+//              (built the per-transaction-rounded way) silently drifted
+//              from the next period's beginning balance (built the raw-
+//              then-rounded-once way) for the same underlying pile.
+//              Exported round2 from pdfGenerator.js and now round each
+//              transaction's netKilos to the configured
+//              stockStatementDecimals precision at the point
+//              addToBeginningBal first reads it, matching every other
+//              running total in the report - a period's ending balance
+//              now always exactly equals the next period's beginning
+//              balance.
+export const APP_VERSION = '1.10-242'

@@ -93,7 +93,7 @@ const fmtKilosStatement = (n, decimals = 2) =>
 // this failure mode - confirmed directly against 296.215, 1.005,
 // 2.675, and 0.125, the classic floating-point-rounding trap values,
 // all of which round UP exactly as a human would expect.
-const round2 = (n, decimals = 2) => (n == null ? n : Number(n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals, useGrouping: false })))
+export const round2 = (n, decimals = 2) => (n == null ? n : Number(n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals, useGrouping: false })))
 
 const fmtDate = (s) => {
   if (!s) return ''

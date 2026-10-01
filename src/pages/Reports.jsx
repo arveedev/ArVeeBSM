@@ -23,7 +23,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
-import { generateNfaReport } from '../utils/pdfGenerator.js'
+import { generateNfaReport, round2 } from '../utils/pdfGenerator.js'
 import { fmtBags, fmtWeight, fmtDateForFilename, sanitizeForFilename, todayLocalISO, customerNameWithMillingRef, effectiveCutoffDate } from '../utils/calculations.js'
 import { splitStockTransactions } from '../utils/wtsAdapter.js'
 import DailySummaryCard from '../components/cards/DailySummaryCard.jsx'
@@ -329,6 +329,7 @@ function Reports() {
         : null
       const branch = province?.branchId ? await db.branches.get(province.branchId) : null
       const reportConfig = await db.reportConfig.get('global')
+      const decimals = reportConfig?.stockStatementDecimals ?? 2
       const supervisorSignatory = user ? await db.signatories.get(user.uid) : null
 
       const certifiedCorrect = {
@@ -360,7 +361,7 @@ function Reports() {
       // reports display; serial-number checks and other form-level
       // lookups query transactions directly and are entirely
       // unaffected by this report-only filter.
-      const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
+      const globalDataStartDate = reportConfig?.dataStartDate || null
       const reportingCutoffDate = effectiveCutoffDate(currentWarehouse?.reportingCutoffDate, globalDataStartDate)
       const warehousePiles = await db.piles.where('warehouseId').equals(currentWarehouseId).toArray()
       // Pile-based MTS fallback for display-grouping purposes only -
@@ -424,7 +425,24 @@ function Reports() {
         const cur = catMap.get(key) ?? { bags: 0, kilos: 0 }
         catMap.set(key, {
           bags: cur.bags + (t.numberOfBags ?? 0) * sign,
-          kilos: cur.kilos + (t.netKilos ?? 0) * sign,
+          // Reported real bug: this used to sum each transaction's raw,
+          // unrounded netKilos and round the running total only once at
+          // the very end (via addStockSummaryPage's own round2(val.kilos)
+          // call) - a DIFFERENT rounding order than every other total in
+          // this export, which rounds each transaction's own kilos BEFORE
+          // summing (see pdfGenerator.js's round2 comment). The two
+          // orders can land on different results by a cent, so a period's
+          // printed ENDING balance (built the per-transaction-rounded way)
+          // stopped matching the NEXT period's printed BEGINNING balance
+          // (built this raw-then-rounded-once way) for the exact same
+          // underlying pile - confirmed live, e.g. 132.70 ending vs 132.69
+          // beginning for the same DKB/GQ group. Rounding each
+          // transaction's netKilos here too, at the same `decimals`
+          // precision as the rest of the export, makes every running
+          // total in the report built from the same per-transaction-
+          // rounded figures, so a period's ending balance always exactly
+          // equals the next period's beginning balance.
+          kilos: cur.kilos + round2(t.netKilos ?? 0, decimals) * sign,
         })
       }
       for (const t of priorReceipts) addToBeginningBal(t, 1)
@@ -477,7 +495,7 @@ function Reports() {
         sackTypes,
         sackTypeMap,
         pileMtsById,
-        decimals: reportConfig?.stockStatementDecimals ?? 2,
+        decimals,
       })
 
       const filename = `${sanitizeForFilename(currentWarehouse?.name) || 'WH'}-StockReport-${fmtDateForFilename(stmtFrom)}-${fmtDateForFilename(stmtTo)}.pdf`
