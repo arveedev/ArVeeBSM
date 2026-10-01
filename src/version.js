@@ -7826,4 +7826,30 @@
 //              running total in the report - a period's ending balance
 //              now always exactly equals the next period's beginning
 //              balance.
-export const APP_VERSION = '1.10-242'
+//   1.10-243 - Fixed two reported entry-form keyboard bugs:
+//              (1) CalendarDatePicker - "sometimes moving with the
+//              arrows moves the series not the date." Opening the
+//              popup takes two render/effect passes before real DOM
+//              focus actually lands on a day cell; until then
+//              document.activeElement is still the trigger button,
+//              which sat outside the popup's own
+//              data-suppress-form-shortcuts region. A keyboard user who
+//              opens the picker and immediately presses an arrow key
+//              hit the window-level series-navigation shortcut
+//              (useEntryFormShortcuts.js) instead of moving the
+//              calendar cursor. Now marks the trigger's own container
+//              suppressed for as long as the popup is open, closing
+//              that timing gap. (2) StockFormBase.jsx's Procurement/FA
+//              Tab-skip chain had no step at all for the Farmer
+//              Organization Members list - picking/toggling on an FA
+//              auto-fills Address but always starts Member 1 blank
+//              (per existing explicit design), yet Tab from Customer
+//              Name/Address fell straight through RSBSA/Gender (not
+//              relevant while FA is on) and PO No. to Number of Bags,
+//              skipping right past the still-empty member name. Added
+//              a 'memberName' step to tabChainSteps, relevant only
+//              while isProcurement && farmerOrgEnabled, and gave
+//              MemberNameAutocomplete.jsx a forwardRef/focus() so the
+//              chain can actually land on it (same pattern
+//              CustomerNameAutocomplete.jsx already uses).
+export const APP_VERSION = '1.10-243'

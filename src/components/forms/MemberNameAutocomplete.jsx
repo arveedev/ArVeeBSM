@@ -17,13 +17,13 @@
 // or FA-toggle slot, and duplicating the small amount of shared logic
 // here keeps that already-proven component untouched.
 
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { User } from 'lucide-react'
 import { searchCustomers, findCustomerByName } from '../../utils/customerDirectory.js'
 import { inputClass } from './shared.js'
 
-function MemberNameAutocomplete({ value, onChange, onMatch, placeholder = 'Member Full Name', required = false }) {
+const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ value, onChange, onMatch, placeholder = 'Member Full Name', required = false }, ref) {
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   // Same Arrow Down/Up + Tab-to-accept behavior as CustomerNameAutocomplete.jsx.
@@ -32,6 +32,13 @@ function MemberNameAutocomplete({ value, onChange, onMatch, placeholder = 'Membe
   const containerRef = useRef(null)
   const dropdownRef = useRef(null)
   const inputRef = useRef(null)
+
+  // First member row's own ref, used by StockFormBase.jsx's Tab-skip
+  // chain to focus it directly after the FA toggle turns on / a Farmer
+  // Org customer is picked - see that chain's own comment for why.
+  useImperativeHandle(ref, () => ({
+    focus: (opts) => inputRef.current?.focus(opts),
+  }))
 
   useEffect(() => {
     setHighlightedIndex(-1)
@@ -158,6 +165,6 @@ function MemberNameAutocomplete({ value, onChange, onMatch, placeholder = 'Membe
       )}
     </div>
   )
-}
+})
 
 export default MemberNameAutocomplete

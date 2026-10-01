@@ -227,7 +227,24 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
   const todayIso = toIso(today.getFullYear(), today.getMonth(), today.getDate())
 
   return (
-    <div ref={containerRef} className="relative">
+    // Confirmed, reported real bug ("sometimes moving with the arrows
+    // moves the series not the date"): data-suppress-form-shortcuts
+    // only ever lived on the portaled popup div below, not here on the
+    // trigger. Opening the popup (isOpen -> true) takes two more render/
+    // effect passes before real DOM focus actually lands on a day
+    // button (one effect seeds focusedIso, a second one then calls
+    // .focus() on the matching cell) - until that happens,
+    // document.activeElement is still this trigger button, which sat
+    // OUTSIDE any suppressed region. A keyboard-only user who opens the
+    // picker (Enter/Space on the trigger) and immediately presses an
+    // arrow key - entirely plausible, it's the very next key someone
+    // reaches for - fired that arrow on the window-level series-
+    // navigation listener instead, stepping to a different document
+    // instead of moving the calendar cursor, exactly as reported.
+    // Marking the trigger's own container suppressed for as long as
+    // isOpen is true closes that gap regardless of which element
+    // currently holds focus during the brief window before it moves.
+    <div ref={containerRef} className="relative" {...(isOpen ? { 'data-suppress-form-shortcuts': true } : {})}>
       <button
         ref={triggerRef}
         type="button"

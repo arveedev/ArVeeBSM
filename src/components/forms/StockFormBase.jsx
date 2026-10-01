@@ -640,6 +640,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // down, right after `isProcurement` is computed - it isn't available
   // yet this early in the component.
   const addressInputRef = useRef(null)
+  const firstMemberNameRef = useRef(null)
   const farmerRsbsaRef = useRef(null)
   const farmerGenderRef = useRef(null)
   const poNumberRef = useRef(null)
@@ -810,6 +811,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // drift out of sync with each other.
   const tabChainSteps = [
     { key: 'address', focus: () => addressInputRef.current?.focus(), relevant: true, filled: Boolean(customerAddress.trim()) },
+    // Confirmed, reported real bug: an FA (Farmer Org) pick/toggle-on
+    // auto-fills the FA's own Address but always starts the Members
+    // list with one deliberately blank row (see handleCustomerMatch's
+    // own comment) - yet this chain had no step for it at all, so Tab
+    // from Customer Name/Address fell straight through to RSBSA/Gender
+    // (not relevant while farmerOrgEnabled - filtered out below) and
+    // then PO No., skipping right past the still-empty first member's
+    // name on its way to Number of Bags. Mirrors rsbsa/gender's own
+    // isProcurement && farmerOrgEnabled gating, just the opposite toggle
+    // state.
+    { key: 'memberName', focus: () => firstMemberNameRef.current?.focus(), relevant: isProcurement && farmerOrgEnabled, filled: Boolean(members[0]?.name?.trim()) },
     { key: 'rsbsa', focus: () => farmerRsbsaRef.current?.focus(), relevant: isProcurement && !farmerOrgEnabled, filled: Boolean(farmerRsbsa.trim()) },
     { key: 'gender', focus: () => farmerGenderRef.current?.focus(), relevant: isProcurement && !farmerOrgEnabled, filled: Boolean(farmerGender) },
     { key: 'po', focus: () => poNumberRef.current?.focus(), relevant: isProcurement, filled: Boolean(poNumber.trim()) },
@@ -3536,6 +3548,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                           objecting. `required` matches Customer Name's
                           own amber-border convention exactly. */}
                       <MemberNameAutocomplete
+                        ref={i === 0 ? firstMemberNameRef : undefined}
                         value={m.name}
                         onChange={(v) => updateMember(i, 'name', v)}
                         onMatch={(customer) => handleMemberMatch(i, customer)}
