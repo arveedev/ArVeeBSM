@@ -7749,4 +7749,24 @@
 //              single ESI with 2+ sack lines (e.g. BN and SH of the
 //              same code) used to blank those columns after its first
 //              row, reading as incomplete.
-export const APP_VERSION = '1.10-238'
+//   1.10-239 - Fixed a real reported discrepancy: the Stock Statement's
+//              earlier 2-decimal fix (1.10-229/230) only rounded kilos
+//              at DISPLAY time (fmtKilosStatement) - every SUM behind
+//              the scenes still added up the raw, full-precision
+//              values, so a page's own printed TOTAL didn't necessarily
+//              equal its own rows added together by hand, and the
+//              Summary/Statement/Recapitulation pages (each re-deriving
+//              totals from the same transactions at different
+//              granularities) could land on genuinely different grand
+//              totals for the same period. New round2() now rounds
+//              each transaction's own gross/net kilos to 2 decimals at
+//              the point it's first read, in all three page builders -
+//              every later sum is built entirely from already-rounded
+//              values, so a page's displayed rows always add up to its
+//              own displayed total exactly, and every page agrees with
+//              the others. The one remaining 3-decimal figure (the per-
+//              variety sack weight label on the Summary page) is left
+//              exactly as-is, per explicit instruction - rounding it
+//              risked two genuinely different sack weights (e.g. 0.095
+//              vs 0.100) displaying as the same "0.10" label.
+export const APP_VERSION = '1.10-239'

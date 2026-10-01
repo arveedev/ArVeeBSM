@@ -52,14 +52,29 @@ const fmtKilos = (n) =>
   })
 
 // Per explicit request: the exported Stock Statement (addStockStatement-
-// Page only - every other report in this file keeps the standard 3-
-// decimal fmtKilos above untouched) rounds kilos to 2 decimal places
-// instead of 3.
+// Page, addStockSummaryPage, addStockRecapPage only - every other
+// report in this file keeps the standard 3-decimal fmtKilos above
+// untouched) rounds kilos to 2 decimal places instead of 3.
 const fmtKilosStatement = (n) =>
   (n == null || n === 0) ? '-' : Number(n).toLocaleString('en-PH', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+
+// Confirmed, reported real bug: rounding only at DISPLAY time (via
+// fmtKilosStatement above) left every SUM still computed from the
+// underlying raw, full-precision kilos values - so a page's own
+// printed TOTAL didn't necessarily equal its own printed rows added
+// together by hand, and the Summary/Statement/Recap pages (each
+// re-deriving its own totals from the same transactions, but summing
+// at different granularities) could land on genuinely different
+// grand totals. This rounds the actual NUMBER to 2 decimals at the
+// point each transaction's own gross/net kilos is first read, in
+// every one of the three page builders below - every subsequent sum
+// is then built entirely from already-2-decimal values, so a page's
+// displayed rows always add up to its own displayed total exactly,
+// and every page agrees with the others on the same underlying data.
+const round2 = (n) => (n == null ? n : Math.round(n * 100) / 100)
 
 const fmtDate = (s) => {
   if (!s) return ''
@@ -463,14 +478,14 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
     if (beginBalMap) {
       for (const [rawKey, val] of beginBalMap.entries()) {
         if (displayKeyOf(rawKey) === key) {
-          beg = { bags: beg.bags + val.bags, kilos: beg.kilos + val.kilos }
+          beg = { bags: beg.bags + val.bags, kilos: beg.kilos + round2(val.kilos) }
         }
       }
     }
     const recBags = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
-    const recKilos = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.netKilos ?? 0), 0)
+    const recKilos = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + round2(t.netKilos ?? 0), 0)
     const issBags = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
-    const issKilos = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.netKilos ?? 0), 0)
+    const issKilos = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + round2(t.netKilos ?? 0), 0)
     const endBags = beg.bags + recBags - issBags
     const endKilos = beg.kilos + recKilos - issKilos
 
@@ -610,10 +625,18 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
 
   let totBags = 0, totGross = 0, totNet = 0
   const body = sorted.map((t) => {
+    // Rounded once, right here, before either display or the running
+    // totals below ever read it - see round2's own comment for why
+    // rounding only at display time (the old behavior) let a page's
+    // printed TOTAL drift away from its own rows added together by
+    // hand, and let different pages of this same export disagree with
+    // each other on the same underlying data.
+    const grossKilos = round2(t.grossKilos)
+    const netKilos = round2(t.netKilos)
     if (isCountable(t)) {
       totBags += t.numberOfBags ?? 0
-      totGross += t.grossKilos ?? 0
-      totNet += t.netKilos ?? 0
+      totGross += grossKilos ?? 0
+      totNet += netKilos ?? 0
     }
     const row = [
       dateYear ? fmtDateNoYear(t.date) : fmtDate(t.date),
@@ -628,8 +651,8 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
       t.varietyName ?? '',
       ...(isByProducts ? [] : [t.moistureContent != null ? Number(t.moistureContent).toFixed(1) : '-']),
       fmtBags(t.numberOfBags),
-      fmtKilosStatement(t.grossKilos),
-      fmtKilosStatement(t.netKilos),
+      fmtKilosStatement(grossKilos),
+      fmtKilosStatement(netKilos),
     ]
     if (isIssues) row.splice(5, 0, t.orNumber ?? '')
     return row
@@ -752,7 +775,7 @@ const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, si
       const k = `${t.varietyName}::${t.condition}`
       if (!byVC[k]) byVC[k] = { bags: 0, kilos: 0 }
       byVC[k].bags += t.numberOfBags ?? 0
-      byVC[k].kilos += t.netKilos ?? 0
+      byVC[k].kilos += round2(t.netKilos ?? 0)
     }
 
     let actBags = 0, actKilos = 0
