@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureState } from '../utils/calculations.js'
-import { fuzzyMatchesAny } from '../utils/fuzzySearch.js'
+import { fuzzyMatchesAny, fuzzyMatchesAnyRank } from '../utils/fuzzySearch.js'
 import {
   computeCashOnHand, resolveBuyingPrice, computeWsrProcurementCost,
 } from '../utils/sdoCalculations.js'
@@ -242,6 +242,24 @@ function SdoHome() {
     )
   }
 
+  // Confirmed, reported real bug ("app-wide... exact match does not
+  // appear on top"), now extended to this screen per explicit follow-up
+  // request - this one DOES get ranked on top of its own date/bags/
+  // priority-warehouse sort (unlike the earlier, more conservative call
+  // on ProcurementMonitor.jsx), since a stable sort by relevance here
+  // only reorders WITHIN what applySort already decided: ties (same
+  // relevance tier) keep applySort's own order exactly, so a search for
+  // an exact serial/name still surfaces it first without discarding the
+  // date/priority-warehouse grouping for everything else.
+  const applySearchRank = (list) => {
+    const q = debouncedSearch.trim()
+    if (!q) return list
+    return [...list].sort((a, b) =>
+      fuzzyMatchesAnyRank(q, [a.customerName, a.serialNo, activePrByWsrId.get(a.id)?.prNo])
+      - fuzzyMatchesAnyRank(q, [b.customerName, b.serialNo, activePrByWsrId.get(b.id)?.prNo])
+    )
+  }
+
   // Reported real bug, confirmed: sorting by date alone let another
   // SDO's warehouse's own transactions land ahead of this SDO's actual
   // priority warehouse (e.g. TABACO GID-B's Sept 26 receipt outranking
@@ -302,7 +320,7 @@ function SdoHome() {
   })
 
   const baseList = listTab === 'payment' ? unpaid : paid
-  const fullList = applySort(applySearch(applyPeriodFilter(applyVarietyFilter(applyWarehouseFilter(baseList)))))
+  const fullList = applySearchRank(applySort(applySearch(applyPeriodFilter(applyVarietyFilter(applyWarehouseFilter(baseList))))))
   const visibleList = fullList.slice(0, visibleCount)
 
   // Built from the tab's own full base list (before the variety filter

@@ -7883,4 +7883,16 @@
 //              matchesQuery functions, built from the same shared
 //              candidate-field lists so "what counts as a match" and
 //              "what counts as the best match" can never drift apart.
-export const APP_VERSION = '1.10-244'
+//   1.10-245 - Per explicit follow-up: extended 1.10-244's exact-match-
+//              first search ranking to SdoHome.jsx's own transaction
+//              search too (customer name/serial no./PR no.) - a new
+//              applySearchRank stable-sorts by fuzzyMatchesAnyRank on
+//              top of the existing date/bags/priority-warehouse sort, so
+//              ties within the same relevance tier keep that sort's own
+//              order exactly (the priority-warehouse grouping and date/
+//              bags ordering for everything else is untouched - only
+//              which tier each row lands in changes while actively
+//              searching). ProcurementMonitor.jsx (an Admin Monitoring
+//              screen, not the SDO's own) stays as a plain filter, per
+//              1.10-244's original reasoning.
+export const APP_VERSION = '1.10-245'
