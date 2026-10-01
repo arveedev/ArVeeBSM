@@ -7785,4 +7785,22 @@
 //              confirmed directly against 296.215 and the other
 //              classic floating-point-rounding trap values (1.005,
 //              2.675, 0.125), all now rounding up exactly as expected.
-export const APP_VERSION = '1.10-240'
+//   1.10-241 - Per explicit request: the exported Stock Statement's kilos
+//              precision (2 vs 3 decimals, from the 1.10-229/230/239/240
+//              rounds above) is now an admin-configurable toggle instead
+//              of a hardcoded value. New Admin Dashboard > System >
+//              "Stock Report Decimals" panel
+//              (StockReportDecimalsPanel.jsx) writes
+//              db.reportConfig.global.stockStatementDecimals (2 or 3),
+//              defaulting to 2 - the app's current behavior - when unset.
+//              fmtKilosStatement and round2 (pdfGenerator.js) both now
+//              take a `decimals` parameter instead of being hardcoded to
+//              2; generateNfaReport and addStockSummaryPage/
+//              addStockStatementPage/addStockRecapPage thread it through.
+//              Reports.jsx's export call now reads the stored value (or
+//              2 if never set) and passes it in. Scope is unchanged from
+//              the earlier rounds - only the Stock Statement's kilos
+//              figures are affected; every other report, and the per-
+//              variety sack-weight label left untouched per the user's
+//              explicit "No don't change that", are unaffected.
+export const APP_VERSION = '1.10-241'

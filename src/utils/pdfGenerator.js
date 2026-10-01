@@ -54,11 +54,16 @@ const fmtKilos = (n) =>
 // Per explicit request: the exported Stock Statement (addStockStatement-
 // Page, addStockSummaryPage, addStockRecapPage only - every other
 // report in this file keeps the standard 3-decimal fmtKilos above
-// untouched) rounds kilos to 2 decimal places instead of 3.
-const fmtKilosStatement = (n) =>
+// untouched) rounds kilos to 2 decimal places instead of 3 by default -
+// `decimals` is admin-configurable (Settings.jsx > Admin Dashboard >
+// System > Stock Report, db.reportConfig.global.stockStatementDecimals,
+// 2 or 3 - see generateNfaReport's own `decimals` param for how it
+// reaches here), so a site that preferred the old 3-decimal precision
+// can switch back without a code change.
+const fmtKilosStatement = (n, decimals = 2) =>
   (n == null || n === 0) ? '-' : Number(n).toLocaleString('en-PH', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   })
 
 // Confirmed, reported real bug: rounding only at DISPLAY time (via
@@ -88,7 +93,7 @@ const fmtKilosStatement = (n) =>
 // this failure mode - confirmed directly against 296.215, 1.005,
 // 2.675, and 0.125, the classic floating-point-rounding trap values,
 // all of which round UP exactly as a human would expect.
-const round2 = (n) => (n == null ? n : Number(n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false })))
+const round2 = (n, decimals = 2) => (n == null ? n : Number(n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals, useGrouping: false })))
 
 const fmtDate = (s) => {
   if (!s) return ''
@@ -397,7 +402,7 @@ const addFooter = (doc) => {
 
 // ── STOCK REPORT PAGES ────────────────────────────────────────────────────────
 
-const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, issues, beginBalMap, sackTypeMap, pileMtsById, sigCtx }) => {
+const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, issues, beginBalMap, sackTypeMap, pileMtsById, sigCtx, decimals = 2 }) => {
   doc.addPage()
   let y = addPageHeader(doc, { ...header, subtitle: 'Summary of Weekly Stock Receipts, Issues and Balances' })
   y = addRegionProvinceCodeWhse(doc, header, y)
@@ -492,14 +497,14 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
     if (beginBalMap) {
       for (const [rawKey, val] of beginBalMap.entries()) {
         if (displayKeyOf(rawKey) === key) {
-          beg = { bags: beg.bags + val.bags, kilos: beg.kilos + round2(val.kilos) }
+          beg = { bags: beg.bags + val.bags, kilos: beg.kilos + round2(val.kilos, decimals) }
         }
       }
     }
     const recBags = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
-    const recKilos = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + round2(t.netKilos ?? 0), 0)
+    const recKilos = receipts.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + round2(t.netKilos ?? 0, decimals), 0)
     const issBags = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
-    const issKilos = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + round2(t.netKilos ?? 0), 0)
+    const issKilos = issues.filter(matchesGroup).filter(isCountable).reduce((s, t) => s + round2(t.netKilos ?? 0, decimals), 0)
     const endBags = beg.bags + recBags - issBags
     const endKilos = beg.kilos + recKilos - issKilos
 
@@ -510,10 +515,10 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
     return [
       mtsWeight != null ? `${variety?.name ?? varietyId} (${mtsWeight.toFixed(3)})` : (variety?.name ?? varietyId),
       condition,
-      fmtBags(beg.bags), fmtKilosStatement(beg.kilos),
-      fmtBags(recBags), fmtKilosStatement(recKilos),
-      fmtBags(issBags), fmtKilosStatement(issKilos),
-      fmtBags(endBags), fmtKilosStatement(endKilos),
+      fmtBags(beg.bags), fmtKilosStatement(beg.kilos, decimals),
+      fmtBags(recBags), fmtKilosStatement(recKilos, decimals),
+      fmtBags(issBags), fmtKilosStatement(issKilos, decimals),
+      fmtBags(endBags), fmtKilosStatement(endKilos, decimals),
     ]
   })
 
@@ -525,10 +530,10 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   const bold = (content) => ({ content, styles: { fontStyle: 'bold', halign: 'right' } })
   body.push([
     { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold', halign: 'left' } },
-    bold(fmtBags(totBegBags)), bold(fmtKilosStatement(totBegKilos)),
-    bold(fmtBags(totRecBags)), bold(fmtKilosStatement(totRecKilos)),
-    bold(fmtBags(totIssBags)), bold(fmtKilosStatement(totIssKilos)),
-    bold(fmtBags(endTotBags)), bold(fmtKilosStatement(endTotKilos)),
+    bold(fmtBags(totBegBags)), bold(fmtKilosStatement(totBegKilos, decimals)),
+    bold(fmtBags(totRecBags)), bold(fmtKilosStatement(totRecKilos, decimals)),
+    bold(fmtBags(totIssBags)), bold(fmtKilosStatement(totIssKilos, decimals)),
+    bold(fmtBags(endTotBags)), bold(fmtKilosStatement(endTotKilos, decimals)),
   ])
 
   autoTable(doc, {
@@ -558,7 +563,7 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   addSignatories(doc, sigCtx, doc.lastAutoTable.finalY)
 }
 
-const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues, sigCtx }) => {
+const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues, sigCtx, decimals = 2 }) => {
   doc.addPage()
   let y = addPageHeader(doc, {
     ...header,
@@ -645,8 +650,8 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     // printed TOTAL drift away from its own rows added together by
     // hand, and let different pages of this same export disagree with
     // each other on the same underlying data.
-    const grossKilos = round2(t.grossKilos)
-    const netKilos = round2(t.netKilos)
+    const grossKilos = round2(t.grossKilos, decimals)
+    const netKilos = round2(t.netKilos, decimals)
     if (isCountable(t)) {
       totBags += t.numberOfBags ?? 0
       totGross += grossKilos ?? 0
@@ -665,8 +670,8 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
       t.varietyName ?? '',
       ...(isByProducts ? [] : [t.moistureContent != null ? Number(t.moistureContent).toFixed(1) : '-']),
       fmtBags(t.numberOfBags),
-      fmtKilosStatement(grossKilos),
-      fmtKilosStatement(netKilos),
+      fmtKilosStatement(grossKilos, decimals),
+      fmtKilosStatement(netKilos, decimals),
     ]
     if (isIssues) row.splice(5, 0, t.orNumber ?? '')
     return row
@@ -677,8 +682,8 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
     { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
     ...(isByProducts ? [] : ['']),
     { content: fmtBags(totBags), styles: { fontStyle: 'bold', halign: 'right' } },
-    { content: fmtKilosStatement(totGross), styles: { fontStyle: 'bold', halign: 'right' } },
-    { content: fmtKilosStatement(totNet), styles: { fontStyle: 'bold', halign: 'right' } },
+    { content: fmtKilosStatement(totGross, decimals), styles: { fontStyle: 'bold', halign: 'right' } },
+    { content: fmtKilosStatement(totNet, decimals), styles: { fontStyle: 'bold', halign: 'right' } },
   ]
   if (isIssues) totalRow.splice(5, 0, '')
   body.push(totalRow)
@@ -753,7 +758,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   addSignatories(doc, sigCtx, doc.lastAutoTable.finalY)
 }
 
-const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, sigCtx }) => {
+const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, sigCtx, decimals = 2 }) => {
   doc.addPage()
   let y = addPageHeader(doc, {
     ...header,
@@ -789,19 +794,19 @@ const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, si
       const k = `${t.varietyName}::${t.condition}`
       if (!byVC[k]) byVC[k] = { bags: 0, kilos: 0 }
       byVC[k].bags += t.numberOfBags ?? 0
-      byVC[k].kilos += round2(t.netKilos ?? 0)
+      byVC[k].kilos += round2(t.netKilos ?? 0, decimals)
     }
 
     let actBags = 0, actKilos = 0
     const body = Object.entries(byVC).sort().map(([k, v]) => {
       const [vName, cond] = k.split('::')
       actBags += v.bags; actKilos += v.kilos
-      return [vName, cond, fmtBags(v.bags), fmtKilosStatement(v.kilos)]
+      return [vName, cond, fmtBags(v.bags), fmtKilosStatement(v.kilos, decimals)]
     })
     body.push([
       { content: 'TOTAL PER ACTIVITY', colSpan: 2, styles: { fontStyle: 'bold' } },
       { content: fmtBags(actBags), styles: { fontStyle: 'bold', halign: 'right' } },
-      { content: fmtKilosStatement(actKilos), styles: { fontStyle: 'bold', halign: 'right' } },
+      { content: fmtKilosStatement(actKilos, decimals), styles: { fontStyle: 'bold', halign: 'right' } },
     ])
     grandBags += actBags; grandKilos += actKilos
 
@@ -824,7 +829,7 @@ const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, si
     body: [[
       { content: 'TOTAL', colSpan: 2, styles: { fontStyle: 'bold' } },
       { content: fmtBags(grandBags), styles: { fontStyle: 'bold', halign: 'right' } },
-      { content: fmtKilosStatement(grandKilos), styles: { fontStyle: 'bold', halign: 'right' } },
+      { content: fmtKilosStatement(grandKilos, decimals), styles: { fontStyle: 'bold', halign: 'right' } },
     ]],
     columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
   })
@@ -1064,6 +1069,7 @@ export const generateNfaReport = ({
   stockBeginningBals, sackBeginningBals,
   signatories, certifiedCorrect,
   varieties, sackTypes, sackTypeMap, pileMtsById,
+  decimals = 2,
 }) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   doc.deletePage(1)
@@ -1119,14 +1125,14 @@ export const generateNfaReport = ({
     // Summary always renders (beginning/ending balance is meaningful even
     // with zero activity). Statement/recap pages only render if there is
     // actual activity to list - a statement of zero rows is meaningless.
-    addStockSummaryPage(doc, { header, cerealType, varieties: catVars, receipts: catRec, issues: catIss, beginBalMap, sackTypeMap, pileMtsById, sigCtx })
+    addStockSummaryPage(doc, { header, cerealType, varieties: catVars, receipts: catRec, issues: catIss, beginBalMap, sackTypeMap, pileMtsById, sigCtx, decimals })
     if (catRec.length > 0) {
-      addStockStatementPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx })
-      addStockRecapPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx })
+      addStockStatementPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx, decimals })
+      addStockRecapPage(doc, { header, cerealType, transactions: catRec, isIssues: false, sigCtx, decimals })
     }
     if (catIss.length > 0) {
-      addStockStatementPage(doc, { header, cerealType, transactions: catIss, isIssues: true, sigCtx })
-      addStockRecapPage(doc, { header, cerealType, transactions: catIss, isIssues: true, sigCtx })
+      addStockStatementPage(doc, { header, cerealType, transactions: catIss, isIssues: true, sigCtx, decimals })
+      addStockRecapPage(doc, { header, cerealType, transactions: catIss, isIssues: true, sigCtx, decimals })
     }
   }
 

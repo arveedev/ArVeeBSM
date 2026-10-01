@@ -477,6 +477,7 @@ function Reports() {
         sackTypes,
         sackTypeMap,
         pileMtsById,
+        decimals: reportConfig?.stockStatementDecimals ?? 2,
       })
 
       const filename = `${sanitizeForFilename(currentWarehouse?.name) || 'WH'}-StockReport-${fmtDateForFilename(stmtFrom)}-${fmtDateForFilename(stmtTo)}.pdf`

@@ -27,6 +27,7 @@ import SheetSourcesPanel from '../components/common/admin/SheetSourcesPanel.jsx'
 import PrSheetSourcesPanel from '../components/common/admin/PrSheetSourcesPanel.jsx'
 import BackupPanel from '../components/common/admin/BackupPanel.jsx'
 import DataStartDatePanel from '../components/common/admin/DataStartDatePanel.jsx'
+import StockReportDecimalsPanel from '../components/common/admin/StockReportDecimalsPanel.jsx'
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
 import DisbursementSettingsPanel from '../components/common/admin/DisbursementSettingsPanel.jsx'
@@ -79,6 +80,7 @@ const GROUPS = [
       { id: 'sheets', label: 'Sheet Sources', Panel: SheetSourcesPanel },
       { id: 'prSheets', label: 'PR Sheet Sources', Panel: PrSheetSourcesPanel },
       { id: 'dataStartDate', label: 'Data Start Date', Panel: DataStartDatePanel },
+      { id: 'stockReportDecimals', label: 'Stock Report Decimals', Panel: StockReportDecimalsPanel },
       { id: 'backup', label: 'Backup', Panel: BackupPanel },
       { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
       { id: 'sessionTimeouts', label: 'Session Timeouts', Panel: SessionTimeoutsPanel },
