@@ -7969,4 +7969,39 @@
 //              Logbook Export" - not just SdoHome.jsx's original entry
 //              point. Re-verified against the same Node test harness
 //              before shipping.
-export const APP_VERSION = '1.10-248'
+//   1.10-249 - Second polish round on the CPF Cash Disbursement Record,
+//              per direct feedback: (1) Reduced the gap between the
+//              officer block and the table on page 1, and above
+//              CERTIFICATION on the last page, from the previous "more
+//              breathing room" overcorrection down to roughly one table
+//              row's worth of space (48->43, +14->+8). (2) Added the
+//              same per-page running SUB-TOTAL/continuation-row
+//              mechanism sdoAbstractPdfGenerator.js already uses -
+//              every page except the last gets a hand-drawn cumulative
+//              SUB-TOTAL row at its bottom, and every page except the
+//              first opens with a real table row carrying that exact
+//              same figure forward, so a reader never loses the running
+//              totals across a page break. Building this surfaced two
+//              more real bugs, both caught and fixed before shipping by
+//              testing against a realistic 45-PR, multi-replenishment
+//              dataset large enough to force several page breaks: (a)
+//              passing the full page-1 startY unconditionally on every
+//              per-page call (copying the Abstract's own pattern
+//              literally) left a large, pointless gap at the top of
+//              every continuation page, since each is its own separate
+//              autoTable() call and startY governs where THAT call's
+//              own first page starts regardless of pageBreak:'always' -
+//              now only page 1 passes it, continuation pages fall back
+//              to margin.top, matching the old single-call version's
+//              already-correct spacing. (b) The page-break measurement
+//              pass never accounted for the continuation row's own
+//              extra height on pages 2+, so a page measured as exactly
+//              full silently overflowed onto an unplanned second page
+//              within that same per-page call the instant a
+//              continuation row was added - corrupting that page's own
+//              SUB-TOTAL math in a financial ledger. Rewritten to
+//              measure one page at a time, each time including the real
+//              continuation row that page would actually carry, instead
+//              of trusting one whole-document estimate computed without
+//              it.
+export const APP_VERSION = '1.10-249'

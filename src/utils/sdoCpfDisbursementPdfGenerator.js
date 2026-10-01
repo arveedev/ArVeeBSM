@@ -73,10 +73,13 @@ const fmtBags = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-PH'))
 const fmtKilos = (n, d = 3) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d }))
 const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
-// Per explicit request, more breathing room between the officer
-// identification block and the table itself - was crowding right up
-// against it.
-const TABLE_START_Y = 48
+// Confirmed, reported real bug (correction to an earlier "more
+// breathing room" change that overcorrected): the gap between the
+// officer identification block and the table only needs to read as
+// roughly one table row's worth of space, not the much larger gap 48
+// produced - 43 leaves about one row height below the block's own
+// label line (ends ~36).
+const TABLE_START_Y = 43
 const CONTINUATION_MARGIN_TOP = 16
 
 // isFirstPage - only page 1 carries the full report title/org identity/
@@ -216,7 +219,11 @@ export const generateCpfDisbursementRecord = ({
   // event, in the already-sorted chronological order above - a
   // replenishment adds, a liquidation subtracts, a Cash disbursement
   // subtracts its own totalAmount, exactly mirroring computeCashOnHand's
-  // own sign conventions (sdoCalculations.js).
+  // own sign conventions (sdoCalculations.js). runningAfterRow[i] - the
+  // balance immediately after body0[i] is processed - is captured
+  // alongside each row so the per-page SUB-TOTAL/continuation rows below
+  // can show the real balance at that exact point, not a meaningless sum
+  // of running balances.
   let running = openingBalance
 
   const openingRow = [
@@ -270,47 +277,74 @@ export const generateCpfDisbursementRecord = ({
     ]
   }
 
-  const body = [openingRow, ...events.map(buildEventRow)]
+  const runningAfterRow = [openingBalance]
+  const rowMeta0 = [{ type: 'opening' }]
+  const body0 = [openingRow]
+  for (const ev of events) {
+    body0.push(buildEventRow(ev))
+    runningAfterRow.push(running)
+    rowMeta0.push({ type: ev.kind, ev })
+  }
 
-  const totals = purchaseReceipts.reduce((a, pr) => ({
-    bags: a.bags + (pr.numberOfBags ?? 0),
-    gross: a.gross + (pr.grossKilos ?? 0),
-    net: a.net + (pr.netKilos ?? 0),
-    enw: a.enw + (pr.enw ?? 0),
-    amount: a.amount + (pr.totalAmount ?? 0),
+  // Sums only the real PR (disbursement) rows in `metas` - a ledger
+  // event or the opening-balance row never contributes to the
+  // DISBURSEMENTS totals, only to the running balance itself.
+  const sumPrTotals = (metas) => metas.filter((m) => m.type === 'pr').reduce((a, m) => ({
+    bags: a.bags + (m.ev.pr.numberOfBags ?? 0),
+    gross: a.gross + (m.ev.pr.grossKilos ?? 0),
+    net: a.net + (m.ev.pr.netKilos ?? 0),
+    enw: a.enw + (m.ev.pr.enw ?? 0),
+    amount: a.amount + (m.ev.pr.totalAmount ?? 0),
   }), { bags: 0, gross: 0, net: 0, enw: 0, amount: 0 })
+
+  const totals = sumPrTotals(rowMeta0)
+  // Every real (non-spacer) row in body0 strictly before
+  // `uptoIndexExclusive` - i.e. everything already printed on earlier
+  // pages by the time a given page's own opening index is reached. Same
+  // "per-page call, per-page SUB-TOTAL" approach sdoAbstractPdfGenerator
+  // uses - see that file's own top comment for the full reasoning and
+  // the real jspdf-autotable pagination bug it works around.
+  const cumulativeThrough = (uptoIndexExclusive) => sumPrTotals(rowMeta0.slice(0, uptoIndexExclusive))
+
+  // Shared cell shape for TOTAL/SUB-TOTAL - `runningBalance` is null for
+  // the real TOTAL row (a SUM of running balances is meaningless, so it
+  // stays blank, confirmed directly against a real sample) and the
+  // actual balance at that point for a SUB-TOTAL/continuation row (which
+  // genuinely needs to carry that figure forward across the page break).
+  const buildTotalsRowCells = (t, runningBalance) => [
+    fmtBags(t.bags), '', '', '',
+    fmtKilos(t.gross), '', fmtKilos(t.net),
+    '', fmtKilos(t.enw, 4), '',
+    fmtPeso(t.amount),
+    runningBalance == null ? '' : fmtPeso(runningBalance),
+  ]
 
   // TOTAL row only sums the DISBURSEMENTS group's own totalable columns
   // (bags, gross kg, net kg, enw kg, amount) - confirmed directly
   // against a real sample, which leaves MC/Purity/MTS/ENW Factor/Unit
-  // Cost blank (rates, not totals) and the running-balance column blank
-  // too (a sum of running balances is meaningless).
-  const foot = [[
-    { content: 'TOTAL', colSpan: 7 },
-    fmtBags(totals.bags), '', '', '',
-    fmtKilos(totals.gross), '', fmtKilos(totals.net),
-    '', fmtKilos(totals.enw, 4), '',
-    fmtPeso(totals.amount),
-    '',
-  ]]
+  // Cost blank (rates, not totals).
+  const foot = [[{ content: 'TOTAL', colSpan: 7 }, ...buildTotalsRowCells(totals, null)]]
 
-  autoTable(doc, {
-    startY: TABLE_START_Y,
+  const lastColIndex = 18 // DATE..RSBSA(5) + NATURE+CASH ADV RECEIVED(2) + 11 DISBURSEMENTS cols + balance = 19 cols, 0-indexed
+  const CONTINUATION_STYLES = { fontStyle: 'bolditalic', fillColor: [240, 240, 240] }
+  const buildContinuationRow = (t, runningBalance) => [
+    { content: 'SUB-TOTAL', colSpan: 7, styles: CONTINUATION_STYLES },
+    ...buildTotalsRowCells(t, runningBalance).map((content) => ({ content, styles: CONTINUATION_STYLES })),
+  ]
+
+  // Per explicit request: GROSS KG through CASH ADVANCE/FUND BALANCE
+  // (columns 11-18), plus CASH ADVANCE RECEIVED/REPLENISHMENT/
+  // LIQUIDATION (6), right-aligned instead of the default center -
+  // numbers read far more naturally lining up on their decimal point.
+  const RIGHT_ALIGN_COLS = new Set([6, 11, 12, 13, 14, 15, 16, 17, 18])
+  const sharedTableOptions = {
     margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP },
     head,
-    body,
-    foot,
-    showFoot: 'lastPage',
     theme: 'grid',
     rowPageBreak: 'avoid',
     styles: { font: 'helvetica', fontSize: 7.5, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.2, halign: 'center', valign: 'middle' },
     headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7, halign: 'center', valign: 'middle' },
     footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center' },
-    // Per explicit request: every money/weight figure from GROSS KG
-    // through CASH ADVANCE/FUND BALANCE (columns 11-18), plus the CASH
-    // ADVANCE RECEIVED/REPLENISHMENT/LIQUIDATION column (6), right-
-    // aligned instead of the default center - numbers read far more
-    // naturally lining up on their decimal point than centered.
     columnStyles: {
       3: { cellWidth: 32 },
       6: { cellWidth: 26, halign: 'right' },
@@ -318,13 +352,148 @@ export const generateCpfDisbursementRecord = ({
       14: { halign: 'right' }, 15: { halign: 'right' }, 16: { halign: 'right' },
       17: { halign: 'right' }, 18: { halign: 'right' },
     },
-    didDrawPage: (data) => drawHeader(doc, {
-      branchLabel, cityLabel, periodLabel, officer,
-      isFirstPage: data.pageNumber === 1,
-    }),
+  }
+
+  // PASS 1 - throwaway measurement renders (discarded jsPDF instances)
+  // purely to learn where autoTable's own layout engine will actually
+  // put each page break. Confirmed, reported real bug: an earlier
+  // version measured ONCE against body0 with no continuation rows ever
+  // spliced in, then reused those same breakpoints for the real
+  // per-page render where pages 2+ DO carry an extra continuation row -
+  // a page measured as exactly full choked on that one extra row and
+  // silently overflowed onto an unplanned second page within that same
+  // per-page autoTable() call, corrupting that page's own SUB-TOTAL
+  // (financial data - this is not a cosmetic risk). Now measures one
+  // page at a time, starting fresh from wherever the previous page
+  // ended and including the REAL continuation row that page would
+  // actually carry, so every page boundary already accounts for it.
+  const pageStartIndices = [0]
+  {
+    let cursor = 0
+    while (cursor < body0.length) {
+      const isFirstChunk = cursor === 0
+      const prefix = isFirstChunk ? [] : [buildContinuationRow(cumulativeThrough(cursor), runningAfterRow[cursor - 1])]
+      const measureDoc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
+      let overflowIndex = null
+      autoTable(measureDoc, {
+        ...sharedTableOptions,
+        startY: isFirstChunk ? TABLE_START_Y : CONTINUATION_MARGIN_TOP,
+        body: [...prefix, ...body0.slice(cursor)],
+        didDrawCell: (data) => {
+          if (data.section !== 'body' || data.column.index !== 0) return
+          const pageNum = measureDoc.internal.getCurrentPageInfo().pageNumber
+          // data.row.index is relative to [...prefix, ...rest] - map back
+          // to body0's own index space, and only the FIRST row that lands
+          // on page 2 of this measurement matters (that's where THIS
+          // page's own content actually has to stop).
+          if (pageNum === 2 && overflowIndex === null) {
+            overflowIndex = cursor + (data.row.index - prefix.length)
+          }
+        },
+      })
+      cursor = overflowIndex ?? body0.length
+      if (cursor < body0.length) pageStartIndices.push(cursor)
+    }
+  }
+
+  // PASS 2 - the real render, one autoTable() call per page (see
+  // sdoAbstractPdfGenerator.js's own top comment for why a single call
+  // relying on autoTable's own pagination can't reliably place a
+  // continuation row on the right page).
+  const columnX = new Map()
+  let footRowHeight = 7.66
+  let mainFinalY = 0
+  let cumulative = { bags: 0, gross: 0, net: 0, enw: 0, amount: 0 }
+
+  pageStartIndices.forEach((rangeStart, pageIdx) => {
+    const isFirstPage = pageIdx === 0
+    const isLastPage = pageIdx === pageStartIndices.length - 1
+    const rangeEnd = pageIdx + 1 < pageStartIndices.length ? pageStartIndices[pageIdx + 1] : body0.length
+    const pageRowsMeta = rowMeta0.slice(rangeStart, rangeEnd)
+    const pageBody = body0.slice(rangeStart, rangeEnd)
+    const chunkBody = isFirstPage
+      ? pageBody
+      : [buildContinuationRow(cumulativeThrough(rangeStart), runningAfterRow[rangeStart - 1]), ...pageBody]
+
+    let bottomY = 0
+    autoTable(doc, {
+      ...sharedTableOptions,
+      // Confirmed, reported real bug: passing the full-page-1 startY
+      // (43, reserved for the officer identification block) on EVERY
+      // per-page call - not just the first - left a large, pointless
+      // gap at the top of every continuation page, since each is its
+      // own separate autoTable() call and startY governs where ITS OWN
+      // first page starts regardless of pageBreak:'always'. Only page 1
+      // reserves that much room; continuation pages fall back to
+      // margin.top (CONTINUATION_MARGIN_TOP) instead, same as the old
+      // single-call version already did correctly.
+      ...(isFirstPage ? { startY: TABLE_START_Y } : {}),
+      body: chunkBody,
+      ...(isLastPage ? { foot, showFoot: 'lastPage' } : {}),
+      ...(isFirstPage ? {} : { pageBreak: 'always' }),
+      didDrawPage: () => drawHeader(doc, { branchLabel, cityLabel, periodLabel, officer, isFirstPage }),
+      didDrawCell: (data) => {
+        if (data.section === 'head') columnX.set(data.column.index, { x: data.cell.x, width: data.cell.width })
+        if (data.section === 'foot') footRowHeight = data.cell.height
+        if (data.section === 'body') bottomY = Math.max(bottomY, data.cell.y + data.cell.height)
+      },
+    })
+
+    mainFinalY = doc.lastAutoTable.finalY
+
+    const pageOwnTotals = sumPrTotals(pageRowsMeta)
+    cumulative = {
+      bags: cumulative.bags + pageOwnTotals.bags,
+      gross: cumulative.gross + pageOwnTotals.gross,
+      net: cumulative.net + pageOwnTotals.net,
+      enw: cumulative.enw + pageOwnTotals.enw,
+      amount: cumulative.amount + pageOwnTotals.amount,
+    }
+
+    // Draws this page's own running SUB-TOTAL row by hand against this
+    // call's own captured column x/width, same approach (and same
+    // reasoning) as sdoAbstractPdfGenerator.js's identical block.
+    if (!isLastPage) {
+      const runningAtPageEnd = runningAfterRow[rangeEnd - 1]
+      const subtotalCells = [{ content: 'SUB-TOTAL', colSpan: 7 }, ...buildTotalsRowCells(cumulative, runningAtPageEnd)]
+      const rowY = bottomY
+      const rowH = footRowHeight
+
+      doc.setFillColor(240, 240, 240)
+      doc.rect(margin, rowY, pageW - margin * 2, rowH, 'F')
+      doc.setDrawColor(150, 150, 150)
+      doc.setLineWidth(0.1)
+      doc.setFont('helvetica', 'bolditalic')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...BLACK)
+
+      let colIndex = 0
+      for (const cellItem of subtotalCells) {
+        const span = (typeof cellItem === 'object' && cellItem.colSpan) || 1
+        const text = typeof cellItem === 'object' ? cellItem.content : cellItem
+        const first = columnX.get(colIndex)
+        let w = 0
+        for (let s = 0; s < span; s++) w += columnX.get(colIndex + s)?.width ?? 0
+        if (first) {
+          doc.line(first.x, rowY, first.x, rowY + rowH)
+          if (text !== '') {
+            if (RIGHT_ALIGN_COLS.has(colIndex)) {
+              doc.text(String(text), first.x + w - 1.5, rowY + rowH / 2 + 1.5, { align: 'right' })
+            } else {
+              doc.text(String(text), first.x + w / 2, rowY + rowH / 2 + 1.5, { align: 'center' })
+            }
+          }
+        }
+        colIndex += span
+      }
+      const lastCol = columnX.get(lastColIndex)
+      if (lastCol) doc.line(lastCol.x + lastCol.width, rowY, lastCol.x + lastCol.width, rowY + rowH)
+      doc.line(margin, rowY, pageW - margin, rowY)
+      doc.line(margin, rowY + rowH, pageW - margin, rowY + rowH)
+    }
   })
 
-  const finalY = doc.lastAutoTable.finalY
+  const finalY = mainFinalY
 
   // CERTIFICATION block - one signature line only (the Accountable
   // Officer themselves), confirmed directly against a real sample: a
@@ -332,11 +501,14 @@ export const generateCpfDisbursementRecord = ({
   // period, then a centered signature line with "Name and Signature" /
   // "Date" labels underneath, unlike the Abstract's three-column
   // Prepared/Verified/Noted By footer.
-  let y = finalY + 14
+  // Confirmed, reported real bug (correction to an earlier change):
+  // the gap above CERTIFICATION only needs to read as roughly one
+  // table row's worth of space, not the much larger gap +14 produced.
+  let y = finalY + 8
   if (y + 30 > pageH - margin) {
     doc.addPage()
     drawHeader(doc, { branchLabel, cityLabel, periodLabel, officer, isFirstPage: false })
-    y = CONTINUATION_MARGIN_TOP + 14
+    y = CONTINUATION_MARGIN_TOP + 8
   }
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
