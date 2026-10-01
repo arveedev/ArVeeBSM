@@ -193,7 +193,7 @@ function SdoCashSection({ uid }) {
     [uid]
   ) ?? []
   const ledgerEntries = useLiveQuery(() => db.cashLedgerV2.where('sdoUid').equals(uid).toArray(), [uid]) ?? []
-  const cashOnHand = computeCashOnHand(ledgerEntries, activePrs.map((pr) => pr.totalAmount ?? 0))
+  const cashOnHand = computeCashOnHand(ledgerEntries, activePrs)
 
   // Confirmed real correction: Cash in Bank is NOT per-SDO - it's one
   // shared, branch-wide figure every SDO is jointly responsible for

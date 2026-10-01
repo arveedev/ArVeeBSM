@@ -275,7 +275,7 @@ function AbstractExportModal({ onClose }) {
         ? chainableCutoff.endingBalance
         : computeCashOnHand(
             ledgerEntries.filter((e) => e.date < dateFrom),
-            activePrsAll.filter((pr) => pr.date < dateFrom).map((pr) => pr.totalAmount ?? 0)
+            activePrsAll.filter((pr) => pr.date < dateFrom)
           )
       // Reported real bug (first pass): "Fund available" always printed
       // 0.00 - hardcoded, never derived from anything. Second report:

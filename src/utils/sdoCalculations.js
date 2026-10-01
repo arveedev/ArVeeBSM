@@ -169,11 +169,23 @@ export const computeWsrProcurementCost = (wsr, { varietyMap, buyingPrices, enwFa
  * Cash on Hand is never a stored running number - always this live
  * sum, so cancelling or deleting a Purchase Receipt "reverts the cash"
  * automatically: the instant its status leaves 'Active', it drops out
- * of `activePrTotal` on its own. A voided ledger entry (see
+ * of `disbursed` on its own. A voided ledger entry (see
  * CashHistoryModal.jsx) is excluded the same way - it stays in the
  * table as a visible, explained record, it just no longer counts.
+ *
+ * `activePrs` - full PR records (not pre-mapped totals - see below).
+ *
+ * Confirmed, reported real bug: this used to sum EVERY active PR's
+ * totalAmount regardless of paymentMethod - but a Check-paid PR draws
+ * from the SDO's bank account, never from the physical CPF cash advance
+ * this function is actually tracking, so it was being deducted from
+ * Cash on Hand exactly as if it had been paid in cash. Now only sums
+ * Cash-paid PRs; a record with no paymentMethod at all predates the
+ * Cash/Check toggle (PurchaseReceiptModal.jsx) and is treated as Cash -
+ * the only option that existed before that field was added - so
+ * historical data keeps deducting exactly as it always did.
  */
-export const computeCashOnHand = (ledgerEntries, activePrTotals) => {
+export const computeCashOnHand = (ledgerEntries, activePrs) => {
   const live = (ledgerEntries ?? []).filter((e) => !e.voided)
   const replenished = live
     .filter((e) => e.type === 'replenish')
@@ -181,7 +193,9 @@ export const computeCashOnHand = (ledgerEntries, activePrTotals) => {
   const liquidated = live
     .filter((e) => e.type === 'liquidate')
     .reduce((s, e) => s + e.amount, 0)
-  const disbursed = (activePrTotals ?? []).reduce((s, amt) => s + amt, 0)
+  const disbursed = (activePrs ?? [])
+    .filter((pr) => pr.paymentMethod !== 'Check')
+    .reduce((s, pr) => s + (pr.totalAmount ?? 0), 0)
   return roundPeso2(replenished - liquidated - disbursed)
 }
 

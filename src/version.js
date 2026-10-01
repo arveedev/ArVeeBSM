@@ -7895,4 +7895,22 @@
 //              searching). ProcurementMonitor.jsx (an Admin Monitoring
 //              screen, not the SDO's own) stays as a plain filter, per
 //              1.10-244's original reasoning.
-export const APP_VERSION = '1.10-245'
+//   1.10-246 - Fixed a real, pre-existing bug found while researching the
+//              CPF Cash Disbursement Record report: computeCashOnHand
+//              (sdoCalculations.js) summed EVERY active Purchase
+//              Receipt's totalAmount regardless of paymentMethod, so a
+//              Check-paid PR (added in 1.10-233, explicitly for this
+//              report) was deducted from Cash on Hand exactly as if it
+//              had been paid in cash - but a check draws from the SDO's
+//              bank account, never from the physical CPF cash advance
+//              this figure is supposed to track. Per explicit request,
+//              fixed app-wide, not just inside the new report: the
+//              function now takes full PR records (not pre-mapped
+//              totals) and only sums Cash-paid ones (a record with no
+//              paymentMethod at all predates the toggle and is treated
+//              as Cash, matching the only option that existed then).
+//              Every call site updated: SdoHome.jsx's own Cash on Hand
+//              display, Settings.jsx's SDO cash section, the admin Total
+//              CPF panel (SdoCashOverviewPanel.jsx), and
+//              AbstractExportModal.jsx's opening-balance chain.
+export const APP_VERSION = '1.10-246'

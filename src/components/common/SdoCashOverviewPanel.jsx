@@ -44,11 +44,11 @@ function SdoCashOverviewPanel() {
   const cards = sdoUsers
     .map((u) => {
       const myLedger = allLedgerEntries.filter((e) => e.sdoUid === u.uid)
-      const myPrTotals = allActivePrs.filter((pr) => pr.sdoUid === u.uid).map((pr) => pr.totalAmount ?? 0)
+      const myActivePrs = allActivePrs.filter((pr) => pr.sdoUid === u.uid)
       return {
         uid: u.uid,
         name: u.name || u.accessCode || 'Unnamed SDO',
-        cashOnHand: computeCashOnHand(myLedger, myPrTotals),
+        cashOnHand: computeCashOnHand(myLedger, myActivePrs),
       }
     })
     .sort((a, b) => byAlpha(a.name, b.name))
