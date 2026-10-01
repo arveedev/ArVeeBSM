@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, ShieldCheck, User, Clock, Check, X, Trash2, Wallet, History } from 'lucide-react'
+import { Pencil, ShieldCheck, User, Clock, Check, X, Trash2, Wallet, History, Banknote } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -28,6 +28,7 @@ import DenominationModal from '../components/common/sdo/DenominationModal.jsx'
 import CashHistoryModal from '../components/common/sdo/CashHistoryModal.jsx'
 import CancelPrModal from '../components/common/sdo/CancelPrModal.jsx'
 import CashOnBankModal from '../components/common/sdo/CashOnBankModal.jsx'
+import CpfDisbursementExportModal from '../components/common/sdo/CpfDisbursementExportModal.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
@@ -187,6 +188,12 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
 // and Active Purchase Receipts.
 function SdoCashSection({ uid }) {
   const [openModal, setOpenModal] = useState(null) // 'denomination' | 'history' | 'cancelPr' | null
+  // Per explicit request - the CPF Cash Disbursement Record export,
+  // also reachable from here (alongside its original SdoHome.jsx entry
+  // point), kept as its own boolean rather than folded into openModal
+  // since CpfDisbursementExportModal.jsx is self-sufficient (reads the
+  // current user via useAuth() itself, same as it does on SdoHome).
+  const [showCpfExport, setShowCpfExport] = useState(false)
 
   const activePrs = useLiveQuery(
     () => db.purchaseReceipts.where('[sdoUid+status]').equals([uid, 'Active']).toArray(),
@@ -265,9 +272,22 @@ function SdoCashSection({ uid }) {
         <span className="text-xs font-semibold">Cancel PR</span>
       </button>
 
+      {/* Per explicit request - the CPF Cash Disbursement Record export,
+          also offered here (its original entry point stays on
+          SdoHome.jsx's own Export row too). */}
+      <button
+        type="button"
+        onClick={() => setShowCpfExport(true)}
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-brand-neon/40 bg-brand-neon/10 px-3 py-3 text-brand-neon transition-all hover:bg-brand-neon/20 active:scale-[0.97]"
+      >
+        <Banknote size={20} />
+        <span className="text-xs font-semibold">CPF Logbook Export</span>
+      </button>
+
       {openModal === 'denomination' && <DenominationModal currentCashOnHand={cashOnHand} onClose={() => setOpenModal(null)} />}
       {openModal === 'history' && <CashHistoryModal onClose={() => setOpenModal(null)} />}
       {openModal === 'cancelPr' && <CancelPrModal onClose={() => setOpenModal(null)} />}
+      {showCpfExport && <CpfDisbursementExportModal onClose={() => setShowCpfExport(false)} />}
     </section>
   )
 }

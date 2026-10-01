@@ -64,7 +64,13 @@ function CpfDisbursementExportModal({ onClose }) {
       const branchMap = new Map(branches.map((b) => [b.branchId, b]))
       const firstWarehouse = warehouseMap.get(periodPrsRaw.find((pr) => pr.warehouseId)?.warehouseId)
       const branch = branchMap.get(provinceMap.get(firstWarehouse?.provinceId)?.branchId)
-      const branchLabel = branch?.name ? `${branch.name} Branch Office` : ''
+      // Confirmed, reported real bug: branch.name already carries
+      // "Branch" in it (e.g. "Albay Branch"), so unconditionally
+      // appending " Branch Office" produced "Albay Branch Branch
+      // Office". Only appends the word still missing.
+      const branchLabel = branch?.name
+        ? /\bbranch\b/i.test(branch.name) ? `${branch.name} Office` : `${branch.name} Branch Office`
+        : ''
       const cityLabel = branch?.address ?? ''
 
       const wsrIds = periodPrsRaw.map((pr) => pr.wsrTransactionId).filter(Boolean)

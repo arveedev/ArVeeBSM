@@ -7943,4 +7943,30 @@
 //              including a replenishment and a liquidation mid-period,
 //              before shipping - the running balance math checked out
 //              exactly across every transition.
-export const APP_VERSION = '1.10-247'
+//   1.10-248 - Polish round on the new CPF Cash Disbursement Record,
+//              per direct feedback with real exported screenshots:
+//              (1) Fixed a real bug - the officer identification block's
+//              NAME was being centered ON its column's own left edge
+//              (margin + i*colW) instead of the column's actual center,
+//              clipping half the text off the page ("JOSEPHINE" printing
+//              as "...HINE"). (2) The CASH ADVANCE RECEIVED/
+//              REPLENISHMENT/LIQUIDATION column header now breaks at
+//              explicit "/" boundaries instead of auto-wrapping, which
+//              was stranding a lone "N" on its own line. (3) Fixed
+//              CpfDisbursementExportModal.jsx producing "ALBAY BRANCH
+//              BRANCH OFFICE" - branch.name already contains "Branch",
+//              so blindly appending " Branch Office" doubled it; now
+//              only appends what's missing. (4) GROSS KG through CASH
+//              ADVANCE/FUND BALANCE, plus CASH ADVANCE RECEIVED, are now
+//              right-aligned instead of centered. (5) A replenishment
+//              row's text now prints in blue, matching the real paper
+//              record's own convention. (6) Added the missing signature-
+//              style underline above the certification block's "Date"
+//              label - was just floating text with nothing to sign.
+//              (7) More breathing room between the officer block and
+//              the table (TABLE_START_Y 40 -> 48). (8) Also offered from
+//              Settings.jsx's SDO Cash Balance section now, as "CPF
+//              Logbook Export" - not just SdoHome.jsx's original entry
+//              point. Re-verified against the same Node test harness
+//              before shipping.
+export const APP_VERSION = '1.10-248'

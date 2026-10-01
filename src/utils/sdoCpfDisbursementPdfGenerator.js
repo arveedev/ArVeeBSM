@@ -24,6 +24,10 @@ import autoTable from 'jspdf-autotable'
 
 const BLACK = [0, 0, 0]
 const HEADER_BG = [232, 232, 232]
+// Per explicit request - a replenishment row's own text (matching the
+// real paper record's own convention, confirmed directly against a
+// sample).
+const REPLENISH_BLUE = [37, 61, 173]
 const margin = 0.3 * 25.4
 // Same physical paper/orientation as the Abstract (8.5 x 13in,
 // landscape) - this report's column count (19) is in the same range.
@@ -69,7 +73,10 @@ const fmtBags = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-PH'))
 const fmtKilos = (n, d = 3) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d }))
 const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 
-const TABLE_START_Y = 40
+// Per explicit request, more breathing room between the officer
+// identification block and the table itself - was crowding right up
+// against it.
+const TABLE_START_Y = 48
 const CONTINUATION_MARGIN_TOP = 16
 
 // isFirstPage - only page 1 carries the full report title/org identity/
@@ -113,7 +120,11 @@ const drawHeader = (doc, { branchLabel, cityLabel, periodLabel, officer, isFirst
   ]
   const blockY = 30
   blocks.forEach((b, i) => {
-    const x = margin + i * colW
+    // Confirmed, reported real bug: this was the column's own LEFT edge
+    // (margin + i*colW), not its center - centering text ON a left edge
+    // pushes half of it off the page to the left, clipping the first
+    // block's own name ("JOSE..." printing as "...HINE M. ETCOY").
+    const x = margin + i * colW + colW / 2
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(10)
     doc.text(b.value, x, blockY, { align: 'center', maxWidth: colW - 4 })
@@ -185,7 +196,13 @@ export const generateCpfDisbursementRecord = ({
       { content: 'NAME OF FARMER/\nADDRESS', rowSpan: 2, styles: { valign: 'middle' } },
       { content: 'RSBSA #', rowSpan: 2, styles: { valign: 'middle' } },
       { content: 'NATURE OF\nPAYMENT', rowSpan: 2, styles: { valign: 'middle' } },
-      { content: 'CASH ADVANCE RECEIVED/\nREPLENISHMENT/LIQUIDATION', rowSpan: 2, styles: { valign: 'middle' } },
+      // Explicit 3-way break (not left to auto-wrap) - confirmed,
+      // reported real bug: auto-wrapping "REPLENISHMENT/LIQUIDATION"
+      // inside too narrow a column let a single stray letter ("N") spill
+      // onto its own fourth line. Forcing the breaks at the "/"
+      // boundaries, together with this column's own explicit cellWidth
+      // below, keeps it to a clean 3 lines.
+      { content: 'CASH ADVANCE RECEIVED/\nREPLENISHMENT/\nLIQUIDATION', rowSpan: 2, styles: { valign: 'middle' } },
       { content: 'DISBURSEMENTS', colSpan: 11 },
       { content: 'CASH ADVANCE/\nFUND BALANCE', rowSpan: 2, styles: { valign: 'middle' } },
     ],
@@ -223,13 +240,19 @@ export const generateCpfDisbursementRecord = ({
         ? `REPLENISHMENT OF CPF — Check No. ${e.refNo ?? ''}`
         : `PARTIAL LIQUIDATION PER OR# ${e.refNo ?? ''}`
       running += isReplenish ? (e.amount ?? 0) : -(e.amount ?? 0)
+      // Per explicit request, a replenishment row's text prints in blue
+      // - every cell, even blank ones, so the row reads as one
+      // consistent color (a blank cell's own color never actually
+      // shows, but keeping it uniform avoids any doubt).
+      const replenishStyle = isReplenish ? { textColor: REPLENISH_BLUE } : {}
+      const cell = (content, extra = {}) => ({ content, styles: { ...replenishStyle, ...extra } })
       return [
-        fmtRowDate(e.date), '', '',
-        { content: label, styles: { halign: 'left' } },
-        '', '',
-        fmtPeso(e.amount),
-        '', '', '', '', '', '', '', '', '', '',
-        fmtPeso(running),
+        cell(fmtRowDate(e.date)), cell(''), cell(''),
+        cell(label, { halign: 'left' }),
+        cell(''), cell(''),
+        cell(fmtPeso(e.amount)),
+        cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''),
+        cell(fmtPeso(running)),
       ]
     }
     const pr = ev.pr
@@ -283,7 +306,18 @@ export const generateCpfDisbursementRecord = ({
     styles: { font: 'helvetica', fontSize: 7.5, textColor: BLACK, lineColor: [150, 150, 150], lineWidth: 0.1, cellPadding: 1.2, halign: 'center', valign: 'middle' },
     headStyles: { fillColor: HEADER_BG, textColor: BLACK, fontStyle: 'bold', fontSize: 7, halign: 'center', valign: 'middle' },
     footStyles: { fillColor: [240, 240, 240], textColor: BLACK, fontStyle: 'bold', fontSize: 7.5, halign: 'center' },
-    columnStyles: { 3: { cellWidth: 32 } },
+    // Per explicit request: every money/weight figure from GROSS KG
+    // through CASH ADVANCE/FUND BALANCE (columns 11-18), plus the CASH
+    // ADVANCE RECEIVED/REPLENISHMENT/LIQUIDATION column (6), right-
+    // aligned instead of the default center - numbers read far more
+    // naturally lining up on their decimal point than centered.
+    columnStyles: {
+      3: { cellWidth: 32 },
+      6: { cellWidth: 26, halign: 'right' },
+      11: { halign: 'right' }, 12: { halign: 'right' }, 13: { halign: 'right' },
+      14: { halign: 'right' }, 15: { halign: 'right' }, 16: { halign: 'right' },
+      17: { halign: 'right' }, 18: { halign: 'right' },
+    },
     didDrawPage: (data) => drawHeader(doc, {
       branchLabel, cityLabel, periodLabel, officer,
       isFirstPage: data.pageNumber === 1,
@@ -329,7 +363,16 @@ export const generateCpfDisbursementRecord = ({
   doc.setFontSize(7.5)
   doc.setTextColor(90, 90, 90)
   doc.text('Name and Signature', pageW / 2, sigY + 5, { align: 'center' })
-  doc.text('Date', pageW / 2, sigY + 14, { align: 'center' })
+  // Confirmed, reported missing: a second signature-style line for the
+  // Date itself, same shape as the Name/Signature line above it
+  // (shorter, since a date needs far less room) - was just the label
+  // with nothing to actually sign on.
+  const dateLineY = sigY + 12
+  const dateLineW = 30
+  doc.setDrawColor(...BLACK)
+  doc.setLineWidth(0.3)
+  doc.line(pageW / 2 - dateLineW / 2, dateLineY, pageW / 2 + dateLineW / 2, dateLineY)
+  doc.text('Date', pageW / 2, dateLineY + 5, { align: 'center' })
   doc.setTextColor(...BLACK)
 
   return doc
