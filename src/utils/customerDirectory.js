@@ -17,7 +17,7 @@
 
 import { db } from '../db/dexie.js'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
-import { fuzzyContains } from './fuzzySearch.js'
+import { fuzzyContains, fuzzyMatchRank } from './fuzzySearch.js'
 
 // Prefixes a warehouse's own name/GID onto its address so a WS/MPO
 // suggestion's address reads e.g. "Tabaco GID, Tabaco City, Albay"
@@ -135,10 +135,16 @@ export const searchCustomers = async (query, limit = 6, warehouseId = null) => {
   // Per explicit request, tolerant of small typos - see fuzzySearch.js.
   const matches = all.filter((c) => fuzzyContains(c.normalizedName, normalizedQuery))
 
+  // Confirmed, reported real bug: this used to only distinguish "starts
+  // with the query" from everything else, so a customer whose name is an
+  // EXACT match still had to share the top tier with every other
+  // starts-with match and could lose the alphabetical tiebreak to one of
+  // them - typing a full, exact name wasn't guaranteed to put it first.
+  // fuzzyMatchRank's finer tiers (exact > starts-with > contains > fuzzy)
+  // fix that; alphabetical order is still the tiebreak within a tier.
   matches.sort((a, b) => {
-    const aStarts = a.normalizedName.startsWith(normalizedQuery)
-    const bStarts = b.normalizedName.startsWith(normalizedQuery)
-    if (aStarts !== bStarts) return aStarts ? -1 : 1
+    const rankDiff = fuzzyMatchRank(a.normalizedName, normalizedQuery) - fuzzyMatchRank(b.normalizedName, normalizedQuery)
+    if (rankDiff !== 0) return rankDiff
     return a.name.localeCompare(b.name)
   })
 

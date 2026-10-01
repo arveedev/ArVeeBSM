@@ -29,7 +29,8 @@ import { fmtWeight, isTransferTypeName, dedupeAuthoritiesByRef } from '../../uti
 import RicemillRecoveryDetail, { AllocationUsageSummary } from './RicemillRecoveryDetail.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
 import CompletedNfaMillingModal from './CompletedNfaMillingModal.jsx'
-import { nfaAllocationMatchesQuery } from '../../utils/monitoringSearch.js'
+import { nfaAllocationMatchesQuery, nfaAllocationMatchRank } from '../../utils/monitoringSearch.js'
+import { rankSortKeepingAll } from '../../utils/fuzzySearch.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { byAlpha, listItemClass } from './admin/shared.js'
@@ -292,6 +293,15 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
     return summary
   }, recoveryChangeSignal, new Map(), { maxWaitMs: 30000 }) ?? new Map()
 
+  // Confirmed, reported real bug: typing an exact match left it wherever
+  // plain alphabetical Regional Authority Number order put it.
+  // rankSortKeepingAll reorders without dropping anything, so every
+  // allocation row still mounts/animates exactly as before.
+  const rankedAllocations = searchQuery.trim()
+    ? rankSortKeepingAll(sortedAllocations, (a) =>
+        nfaAllocationMatchRank(a.regionalAuthorityNumber, recoverySummaryByNumber.get(a.regionalAuthorityNumber)?.transferEntries, searchQuery))
+    : sortedAllocations
+
   return (
     <div ref={containerRef} className={warehouseId ? '' : 'mt-4'}>
       <div className="mb-2 flex items-start justify-between gap-2">
@@ -333,17 +343,17 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
         </div>
       )}
       <ul className="[contain:layout]">
-        {sortedAllocations.length === 0 && (
+        {rankedAllocations.length === 0 && (
           <p className="py-6 text-center text-sm text-neutral-500 md:text-base">
             {warehouseId ? 'No pending NFA allocation for this facility.' : 'No pending NFA ricemill allocations.'}
           </p>
         )}
-        {sortedAllocations.length > 0 && sortedAllocations.every((a) =>
+        {rankedAllocations.length > 0 && rankedAllocations.every((a) =>
           !nfaAllocationMatchesQuery(a.regionalAuthorityNumber, recoverySummaryByNumber.get(a.regionalAuthorityNumber)?.transferEntries, searchQuery)
         ) && (
           <p className="py-6 text-center text-sm text-neutral-500 md:text-base">No Regional Authority Numbers match that search.</p>
         )}
-        {sortedAllocations.map((a) => {
+        {rankedAllocations.map((a) => {
           const recovery = recoverySummaryByNumber.get(a.regionalAuthorityNumber)
           // The allocation is a PALAY quota, not a rice quota - what
           // draws it down is Issuance (palay in), not Receipt (rice

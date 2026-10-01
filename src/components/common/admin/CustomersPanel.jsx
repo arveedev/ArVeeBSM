@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 import { Pencil, Trash2, Search, X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { normalizeCustomerName } from '../../../utils/customerDirectory.js'
-import { fuzzyContains } from '../../../utils/fuzzySearch.js'
+import { fuzzyContains, fuzzyMatchesAnyRank, rankSortKeepingAll } from '../../../utils/fuzzySearch.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import ShrinkFilterRow from '../ShrinkFilterRow.jsx'
 import {
@@ -149,7 +149,20 @@ function CustomersPanel() {
     const nicknames = nicknamesByCustomer.get(c.customerId) ?? []
     return nicknames.some((n) => fuzzyContains(normalizeCustomerName(n), normalizedSearch))
   }
-  const sortedCustomers = [...(customers ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  const alphaSorted = [...(customers ?? [])].sort((a, b) => byAlpha(a.name, b.name))
+  // Confirmed, reported real bug: typing an exact match left it wherever
+  // plain alphabetical order put it. rankSortKeepingAll reorders without
+  // dropping anything, so ShrinkFilterRow below still gets every row to
+  // mount/animate exactly as before.
+  const matchRank = (c) => {
+    const nicknames = nicknamesByCustomer.get(c.customerId) ?? []
+    return fuzzyMatchesAnyRank(normalizedSearch, [
+      c.normalizedName,
+      c.address ? normalizeCustomerName(c.address) : null,
+      ...nicknames.map((n) => normalizeCustomerName(n)),
+    ])
+  }
+  const sortedCustomers = normalizedSearch ? rankSortKeepingAll(alphaSorted, matchRank) : alphaSorted
   const filtered = sortedCustomers.filter(matchesQuery)
 
   const listRef = useRef(null)

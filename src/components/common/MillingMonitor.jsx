@@ -17,7 +17,8 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
-import { millingOrderMatchesQuery } from '../../utils/monitoringSearch.js'
+import { millingOrderMatchesQuery, millingOrderMatchRank } from '../../utils/monitoringSearch.js'
+import { rankSortKeepingAll } from '../../utils/fuzzySearch.js'
 import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 import { isTextEditable } from '../../hooks/useEntryFormShortcuts.js'
 
@@ -1227,9 +1228,15 @@ function MillingMonitor({ isAdmin = false, active = true }) {
   // guaranteed to match the Sheet's own row/number order), per
   // explicit request. `numeric: true` makes "...-10" sort before
   // "...-9" (not after, which plain string comparison would give).
-  const filtered = orders
+  const numberSorted = orders
     .filter((o) => !isOrderCompleted(o) && passesSharedFilters(o))
     .sort((a, b) => b.number.localeCompare(a.number, undefined, { numeric: true, sensitivity: 'base' }))
+  // Confirmed, reported real bug: typing an exact match left it wherever
+  // plain MO/TMO-number order put it. rankSortKeepingAll reorders
+  // without dropping anything, so ShrinkFilterRow below still gets every
+  // row to mount/animate exactly as before.
+  const matchRank = (o) => millingOrderMatchRank(o, searchQuery, authorityByOrderId.get(o.orderId), warehouseMap)
+  const filtered = searchQuery.trim() ? rankSortKeepingAll(numberSorted, matchRank) : numberSorted
   // Newest activity first, oldest last - per explicit request, matches
   // CompletedAuthorityModal's own newest-first sort.
   const lastActivityDate = (o) => {

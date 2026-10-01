@@ -50,20 +50,66 @@ const allowedDistance = (queryLength) => {
   return 2
 }
 
+// Confirmed, reported real bug ("app-wide... when the user has already
+// typed the exact name, series or etc, that exact match does not appear
+// on top of the list, or... should be the only thing showing"): every
+// search box in the app built on this file only ever FILTERED with a
+// plain boolean (fuzzyContains/fuzzyMatchesAny below) - it never ranked
+// what survived the filter, so the results stayed in whatever order the
+// underlying array already had (insertion order, date order, alphabetical,
+// ...), regardless of how well each one actually matched. Typing a full,
+// exact name could leave it buried in the middle of a long list below a
+// dozen looser partial matches.
+//
+// fuzzyMatchRank gives every match a relevance tier - 0 (exact) always
+// beats 1 (starts with the query) always beats 2 (contains it as a plain
+// substring) always beats 3 (typo-tolerant match only) - so a caller that
+// stably sorts its already-filtered results by this number gets exact
+// matches on top for free, with every other tier naturally grouped below
+// it in the same relative order they were already in. fuzzyContains/
+// fuzzyMatchesAny are now both defined in terms of this ranker (rank !==
+// Infinity) instead of duplicating the same match logic, so every call
+// site - whether it only needs a yes/no filter or wants to rank its
+// results too - stays provably in sync with the exact same notion of
+// "matches."
+export const fuzzyMatchRank = (text, query) => {
+  const t = (text ?? '').toString().toLowerCase()
+  const q = (query ?? '').toString().trim().toLowerCase()
+  if (!q) return 0
+  if (t === q) return 0
+  if (t.startsWith(q)) return 1
+  if (t.includes(q)) return 2
+  const maxDist = allowedDistance(q.length)
+  if (maxDist > 0 && approxContainsDistance(t, q) <= maxDist) return 3
+  return Infinity
+}
+
 /**
  * True if `text` contains `query`, tolerant of small typos. Always tries
  * a plain exact substring match first (the common case, and strictly
  * correct - never rejects a real match) before falling back to the
  * typo-tolerant check.
  */
-export const fuzzyContains = (text, query) => {
-  const t = (text ?? '').toString().toLowerCase()
-  const q = (query ?? '').toString().trim().toLowerCase()
-  if (!q) return true
-  if (t.includes(q)) return true
-  const maxDist = allowedDistance(q.length)
-  if (maxDist === 0) return false
-  return approxContainsDistance(t, q) <= maxDist
+export const fuzzyContains = (text, query) => fuzzyMatchRank(text, query) !== Infinity
+
+/**
+ * The BEST (lowest/most relevant) rank across every candidate field for
+ * one record - Infinity if none match at all. A drop-in companion to
+ * fuzzyMatchesAny for ranking instead of just filtering: a record whose
+ * SERIAL NO. matches exactly ranks 0 even if its customer name is only a
+ * loose fuzzy match, since any one field being an exact hit is what a
+ * person searching by that field actually means.
+ */
+export const fuzzyMatchesAnyRank = (query, candidates) => {
+  const q = (query ?? '').toString().trim()
+  if (!q) return 0
+  let best = Infinity
+  for (const c of candidates) {
+    if (c == null) continue
+    const r = fuzzyMatchRank(String(c), q)
+    if (r < best) best = r
+  }
+  return best
 }
 
 /**
@@ -71,8 +117,46 @@ export const fuzzyContains = (text, query) => {
  * string; nullish entries are skipped) - a drop-in replacement for a
  * chain of `.toLowerCase().includes(q)` checks across several fields.
  */
-export const fuzzyMatchesAny = (query, candidates) => {
-  const q = (query ?? '').toString().trim()
-  if (!q) return true
-  return candidates.some((c) => c != null && fuzzyContains(String(c), q))
+export const fuzzyMatchesAny = (query, candidates) => fuzzyMatchesAnyRank(query, candidates) !== Infinity
+
+/**
+ * Stably sorts `items` by their fuzzy-match rank (exact > starts-with >
+ * contains > fuzzy), computed per item via `getRank`. Items that don't
+ * match at all (rank === Infinity) are dropped, same as a `.filter` would
+ * - this is meant to REPLACE a separate filter step, not follow one, so a
+ * caller gets both the filtering and the relevance ordering from a single
+ * pass. Ties keep their original relative order (Array.prototype.sort is
+ * already stable in every engine this app targets), so within the same
+ * tier nothing else about the existing order (date, alphabetical, ...)
+ * is disturbed.
+ */
+export const sortByFuzzyRank = (items, getRank) => {
+  return items
+    .map((item, index) => ({ item, index, rank: getRank(item) }))
+    .filter((x) => x.rank !== Infinity)
+    .sort((a, b) => (a.rank - b.rank) || (a.index - b.index))
+    .map((x) => x.item)
+}
+
+/**
+ * Same relevance ordering as sortByFuzzyRank, but never drops anything -
+ * a non-match (rank Infinity) sorts to the END instead of being removed.
+ * For the handful of screens (Admin/Visitor Monitoring's AI/SIA, Milling,
+ * NFA lists) that deliberately keep every row mounted while searching and
+ * let a non-matching one shrink itself away via its own CSS animation
+ * (ShrinkFilterRow) rather than being unmounted outright - reordering the
+ * array those screens map() over still needs every row present, just in
+ * relevance order, so the exact/best match rises to the top instead of
+ * wherever the list's default sort (ref number, date, ...) happened to
+ * put it.
+ */
+export const rankSortKeepingAll = (items, getRank) => {
+  return items
+    .map((item, index) => ({ item, index, rank: getRank(item) }))
+    .sort((a, b) => {
+      const ra = a.rank === Infinity ? Number.MAX_SAFE_INTEGER : a.rank
+      const rb = b.rank === Infinity ? Number.MAX_SAFE_INTEGER : b.rank
+      return (ra - rb) || (a.index - b.index)
+    })
+    .map((x) => x.item)
 }

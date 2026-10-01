@@ -13,7 +13,8 @@ import { X, AlertTriangle, Search } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { NfaAllocationRow } from './NfaMillingMonitor.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
-import { nfaAllocationMatchesQuery } from '../../utils/monitoringSearch.js'
+import { nfaAllocationMatchesQuery, nfaAllocationMatchRank } from '../../utils/monitoringSearch.js'
+import { rankSortKeepingAll } from '../../utils/fuzzySearch.js'
 
 // Must match the transition duration below.
 const CLOSE_ANIMATION_MS = 300
@@ -82,6 +83,13 @@ function CompletedNfaMillingModal({ allocations, recoverySummaryByNumber = new M
 
   const matchesQuery = (a) =>
     nfaAllocationMatchesQuery(a.regionalAuthorityNumber, recoverySummaryByNumber.get(a.regionalAuthorityNumber)?.transferEntries, searchQuery)
+  // Confirmed, reported real bug: typing an exact match left it wherever
+  // the list's default order put it. rankSortKeepingAll reorders without
+  // dropping anything, so every row still renders exactly as before.
+  const rankedAllocations = searchQuery.trim()
+    ? rankSortKeepingAll(allocations, (a) =>
+        nfaAllocationMatchRank(a.regionalAuthorityNumber, recoverySummaryByNumber.get(a.regionalAuthorityNumber)?.transferEntries, searchQuery))
+    : allocations
 
   // Portaled straight to document.body - same reasoning as
   // CompletedMillingModal.jsx: this component is opened from deep
@@ -135,11 +143,11 @@ function CompletedNfaMillingModal({ allocations, recoverySummaryByNumber = new M
           <p className="py-6 text-center text-xs text-neutral-500">No completed NFA allocations.</p>
         ) : (
           <>
-            {allocations.every((a) => !matchesQuery(a)) && (
+            {rankedAllocations.every((a) => !matchesQuery(a)) && (
               <p className="py-2 text-center text-xs text-neutral-500">No completed Regional Authority Numbers match that search.</p>
             )}
             <ul className="[contain:layout]">
-              {allocations.map((a) => {
+              {rankedAllocations.map((a) => {
                 const recovery = recoverySummaryByNumber.get(a.regionalAuthorityNumber)
                 const used = recovery?.issuedKilos ?? 0
                 const isExpanded = expandedNumber === a.regionalAuthorityNumber

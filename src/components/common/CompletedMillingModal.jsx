@@ -13,7 +13,8 @@ import { db } from '../../db/dexie.js'
 import { markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { MillingOrderRow } from './MillingMonitor.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
-import { millingOrderMatchesQuery } from '../../utils/monitoringSearch.js'
+import { millingOrderMatchesQuery, millingOrderMatchRank } from '../../utils/monitoringSearch.js'
+import { rankSortKeepingAll } from '../../utils/fuzzySearch.js'
 
 // Must match the transition duration below.
 const CLOSE_ANIMATION_MS = 300
@@ -56,6 +57,13 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
     ])
   )
   const matchesQuery = (o) => millingOrderMatchesQuery(o, searchQuery, authorityByOrderId.get(o.orderId), warehouseMap)
+  const matchRank = (o) => millingOrderMatchRank(o, searchQuery, authorityByOrderId.get(o.orderId), warehouseMap)
+  // Confirmed, reported real bug: typing an exact match left it wherever
+  // the list's default (date) order put it. rankSortKeepingAll reorders
+  // without dropping anything, so every row still renders (and can still
+  // get its "no match" treatment below) exactly as before, just ranked
+  // by relevance while actively searching.
+  const rankedOrders = searchQuery.trim() ? rankSortKeepingAll(orders, matchRank) : orders
   const handleClose = () => {
     setIsClosing(true)
     setTimeout(onClose, CLOSE_ANIMATION_MS)
@@ -201,11 +209,11 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
           </p>
         ) : (
           <>
-            {orders.every((o) => !matchesQuery(o)) && (
+            {rankedOrders.every((o) => !matchesQuery(o)) && (
               <p className="py-2 text-center text-xs text-neutral-500">No completed {type} operations match that search.</p>
             )}
           <ul className="[contain:layout]">
-            {orders.map((o) => (
+            {rankedOrders.map((o) => (
               <MillingOrderRow
                 key={o.orderId}
                 order={o}

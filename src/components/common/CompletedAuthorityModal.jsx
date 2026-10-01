@@ -15,7 +15,8 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import AuthorityReconciliationPanel from './AuthorityReconciliationPanel.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
-import { authorityMatchesQuery } from '../../utils/monitoringSearch.js'
+import { authorityMatchesQuery, authorityMatchRank } from '../../utils/monitoringSearch.js'
+import { rankSortKeepingAll } from '../../utils/fuzzySearch.js'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -166,7 +167,8 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
   // instantly - month/year/regional/warehouse changes still hard-remove
   // rows immediately, since those aren't live-typing.
   const matchesQuery = ({ a }) => authorityMatchesQuery(a, searchQuery, warehouseMap)
-  const preSearchFiltered = authorities
+  const matchRank = ({ a }) => authorityMatchRank(a, searchQuery, warehouseMap)
+  const refFiltered = authorities
     .map((a) => ({ a, completedDate: lastDateFor(type === 'AI' ? a.aiNumber : a.siaNumber) }))
     .filter(({ completedDate }) => {
       // No transaction date at all (manually completed, nothing to
@@ -197,6 +199,13 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
       const yRef = type === 'AI' ? y.a.aiNumber : y.a.siaNumber
       return (yRef ?? '').localeCompare(xRef ?? '', undefined, { numeric: true, sensitivity: 'base' })
     })
+  // Confirmed, reported real bug: typing an exact match left it wherever
+  // plain ref-number order put it. rankSortKeepingAll reorders without
+  // dropping anything, so ShrinkFilterRow below still gets every row to
+  // mount/animate exactly as before.
+  const preSearchFiltered = searchQuery.trim()
+    ? rankSortKeepingAll(refFiltered, matchRank)
+    : refFiltered
   const filtered = preSearchFiltered.filter(matchesQuery)
 
   // Portaled straight to document.body - opened from AuthorityMonitor,

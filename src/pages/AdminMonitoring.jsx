@@ -23,7 +23,8 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, dedupeAuthoritiesByRef, fmtBags, fmtWeight } from '../utils/calculations.js'
 import ShrinkFilterRow from '../components/common/ShrinkFilterRow.jsx'
-import { authorityMatchesQuery } from '../utils/monitoringSearch.js'
+import { authorityMatchesQuery, authorityMatchRank } from '../utils/monitoringSearch.js'
+import { rankSortKeepingAll } from '../utils/fuzzySearch.js'
 import AuthorityReconciliationPanel from '../components/common/AuthorityReconciliationPanel.jsx'
 import CompletedAuthorityModal from '../components/common/CompletedAuthorityModal.jsx'
 import MillingMonitor from '../components/common/MillingMonitor.jsx'
@@ -173,13 +174,23 @@ function AdminMonitoring() {
   // number, remarks/notes - not just the ref number) per explicit
   // request - see monitoringSearch.js for the exact field list.
   const matchesQuery = (a) => authorityMatchesQuery(a, searchQuery, warehouseMap)
-  const preSearchFiltered = dedupeAuthoritiesByRef(typeAuthorities.filter((a) => !isAuthorityComplete(a)))
+  const refSorted = dedupeAuthoritiesByRef(typeAuthorities.filter((a) => !isAuthorityComplete(a)))
     .filter((a) => !regionalAuthFilter.trim() || a.regionalAuthorityNumber === regionalAuthFilter.trim())
     .sort((a, b) => {
       const aRef = a.type === 'AI' ? a.aiNumber : a.siaNumber
       const bRef = b.type === 'AI' ? b.aiNumber : b.siaNumber
       return (aRef ?? '').localeCompare(bRef ?? '')
     })
+  // Confirmed, reported real bug: typing an exact match left it wherever
+  // plain ref-number order put it, buried below looser partial matches.
+  // Re-ranked by relevance (exact > starts-with > contains > fuzzy) only
+  // once there's an actual query - rankSortKeepingAll keeps every row in
+  // the array (never drops one), it only reorders, so ShrinkFilterRow
+  // below still gets every row to mount/animate exactly as before, just
+  // in relevance order instead of ref-number order while searching.
+  const preSearchFiltered = searchQuery.trim()
+    ? rankSortKeepingAll(refSorted, (a) => authorityMatchRank(a, searchQuery, warehouseMap))
+    : refSorted
   const filtered = preSearchFiltered.filter(matchesQuery)
   const completedList = dedupeAuthoritiesByRef(typeAuthorities.filter(isAuthorityComplete))
 

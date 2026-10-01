@@ -7852,4 +7852,35 @@
 //              MemberNameAutocomplete.jsx a forwardRef/focus() so the
 //              chain can actually land on it (same pattern
 //              CustomerNameAutocomplete.jsx already uses).
-export const APP_VERSION = '1.10-243'
+//   1.10-244 - Fixed a reported app-wide bug: fuzzy search never ranked
+//              its results, only filtered them, so an exact match stayed
+//              wherever the list's default order (alphabetical, ref
+//              number, date) happened to put it instead of rising to the
+//              top. fuzzySearch.js's fuzzyContains/fuzzyMatchesAny are
+//              now both defined on top of a new fuzzyMatchRank (0 exact,
+//              1 starts-with, 2 contains, 3 typo-tolerant, Infinity no
+//              match), with two new sort helpers - sortByFuzzyRank
+//              (filters+ranks) and rankSortKeepingAll (ranks without
+//              dropping anything, for screens that keep every row
+//              mounted and let ShrinkFilterRow animate non-matches away
+//              instead of unmounting them). Applied to every exact-match-
+//              matters search box per explicit request: AdminMonitoring/
+//              CompletedAuthorityModal (AI/SIA), MillingMonitor/
+//              CompletedMillingModal (MO/TMO), NfaMillingMonitor/
+//              CompletedNfaMillingModal (Regional Authority Numbers),
+//              CustomersPanel, and customerDirectory.js's searchCustomers
+//              (Customer/Member Name autocomplete suggestions - replaced
+//              its own coarser "starts-with only" tiebreak with the same
+//              ranker). Deliberately left ProcurementMonitor.jsx and
+//              SdoHome.jsx's transaction search untouched - both already
+//              have their own explicit, user-chosen sort control (date/
+//              bags/PR number, plus SdoHome's priority-warehouse
+//              grouping), and silently overriding that chosen order the
+//              moment the user types a search term would trade one
+//              surprise for another; monitoringSearch.js gained
+//              authorityMatchRank/millingOrderMatchRank/
+//              nfaAllocationMatchRank alongside the existing boolean
+//              matchesQuery functions, built from the same shared
+//              candidate-field lists so "what counts as a match" and
+//              "what counts as the best match" can never drift apart.
+export const APP_VERSION = '1.10-244'
