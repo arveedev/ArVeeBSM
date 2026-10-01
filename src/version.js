@@ -7741,4 +7741,12 @@
 //              wrapping "FFSPPFA C/O BAYANI ABARQUEZ" row) before
 //              shipping - page 2 now genuinely opens with its own
 //              SUB-TOTAL row, no duplicate on page 1.
-export const APP_VERSION = '1.10-237'
+//   1.10-238 - Per explicit request: on the exported Stock Statement's
+//              MTS Receipts/Issues pages (addSackStatementPage,
+//              pdfGenerator.js), DATE/NATURE OF TRANSACTION/ESI-ESR-WTS
+//              #/SIA-ESI #/ISSUED-RECEIVED NAME now repeat on every sack
+//              -breakdown row for a transaction, not just the first - a
+//              single ESI with 2+ sack lines (e.g. BN and SH of the
+//              same code) used to blank those columns after its first
+//              row, reading as incomplete.
+export const APP_VERSION = '1.10-238'

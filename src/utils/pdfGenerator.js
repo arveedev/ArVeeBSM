@@ -883,13 +883,18 @@ const addSackStatementPage = (doc, { header, transactions, isIssues, sackTypeMap
       const l = lines[i]
       const pcs = l?.pieces ?? 0
       if (isCountable(t)) grandTotal += pcs
+      // Per explicit request: DATE/NATURE/serial/linked-doc/NAME repeat
+      // on every sack-breakdown row for this same transaction, not just
+      // the first - even a single-ESI transaction with 2+ sack lines
+      // (e.g. BN and SH of the same code) must read as complete on each
+      // row, not blank out after the first.
       body.push([
-        i === 0 ? (dateYear ? fmtDateNoYear(t.date) : fmtDate(t.date)) : '',
-        i === 0 ? (t.transactionTypeName ?? '') : '',
-        i === 0 ? (t.serialNo ?? '') : '',
-        i === 0 ? (isIssues ? (t.siaNumber ?? t.linkedDocNo ?? '') : (t.linkedDocNo ?? '')) : '',
+        dateYear ? fmtDateNoYear(t.date) : fmtDate(t.date),
+        t.transactionTypeName ?? '',
+        t.serialNo ?? '',
+        isIssues ? (t.siaNumber ?? t.linkedDocNo ?? '') : (t.linkedDocNo ?? ''),
         // Same UPPER CASE uniformity rule as the stock statement page.
-        i === 0 ? (t.status === 'Cancelled' ? 'CANCELLED' : customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber).toUpperCase()) : '',
+        t.status === 'Cancelled' ? 'CANCELLED' : customerNameWithMillingRef(t.customerName, t.transactionTypeName, t.batchNumber, t.trialNumber).toUpperCase(),
         sackTypeMap.get(l?.sackTypeId)?.code ?? (i === 0 ? sackCodes : ''),
         sackTypeMap.get(l?.sackTypeId) ? (l?.condition === 'BN' ? 'BN' : l?.condition === 'SH' ? 'SH' : l?.condition ?? '') : '',
         pcs > 0 ? pcs.toLocaleString('en-PH') : '-',
