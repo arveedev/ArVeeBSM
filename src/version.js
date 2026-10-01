@@ -7913,4 +7913,34 @@
 //              display, Settings.jsx's SDO cash section, the admin Total
 //              CPF panel (SdoCashOverviewPanel.jsx), and
 //              AbstractExportModal.jsx's opening-balance chain.
-export const APP_VERSION = '1.10-246'
+//   1.10-247 - New feature, per explicit request (the Cash/Check toggle
+//              added in 1.10-233 was built specifically for this): the
+//              CPF Cash Disbursement Record export, SDO side. New
+//              sdoCpfDisbursementPdfGenerator.js (self-contained, same
+//              landscape 8.5x13in convention as
+//              sdoAbstractPdfGenerator.js) prints a running cash ledger
+//              for a period - every Active, CASH-paid Purchase Receipt
+//              interleaved in date order with every CPF replenishment/
+//              liquidation event (db.cashLedgerV2), each row carrying
+//              its own running CASH ADVANCE/FUND BALANCE figure,
+//              confirmed directly against a real sample of this
+//              document (opening "Balance brought forward" row, a multi-
+//              row DISBURSEMENTS column group, a TOTAL row, and a single
+//              CERTIFICATION/signature block for the Accountable
+//              Officer - genuinely simpler than the Abstract's three-
+//              signatory footer, since this document only has one).
+//              Check-paid PRs and Cancelled PRs are both excluded
+//              entirely (a check never drew CPF cash; a cancelled PR
+//              never actually disbursed anything - a different concern
+//              than the Abstract's own deliberate Cancelled-row-for-
+//              sequence-gap convention). New
+//              CpfDisbursementExportModal.jsx (dateFrom/dateTo only - no
+//              checklist/cut-off, unlike the Abstract, since this is a
+//              plain period ledger, not a per-PR reportable document),
+//              triggered from a new "CPF" button next to SdoHome.jsx's
+//              existing "Abstract" export button. Verified by a patched
+//              Node test harness against realistic sample data,
+//              including a replenishment and a liquidation mid-period,
+//              before shipping - the running balance math checked out
+//              exactly across every transition.
+export const APP_VERSION = '1.10-247'
