@@ -289,6 +289,9 @@ export const generateCpfDisbursementRecord = ({
       const label = isReplenish
         ? `REPLENISHMENT OF CPF — Check No. ${e.refNo ?? ''}`
         : `PARTIAL LIQUIDATION PER OR# ${e.refNo ?? ''}`
+      const extras = [e.dvNo ? `DV No. ${e.dvNo}` : '', e.remarks ?? ''].filter(Boolean)
+      const fullLabel = extras.length ? `${label}
+${extras.join(' — ')}` : label
       running += isReplenish ? (e.amount ?? 0) : -(e.amount ?? 0)
       // Per explicit request, a replenishment row's text prints in blue
       // - every cell, even blank ones, so the row reads as one
@@ -299,7 +302,7 @@ export const generateCpfDisbursementRecord = ({
       return [
         cell(fmtRowDate(e.date)), cell(''), cell(''),
         // Label spans NAME OF FARMER through NATURE OF PAYMENT (3 columns).
-        { ...cell(label, { halign: 'left' }), colSpan: 3 },
+        { ...cell(fullLabel, { halign: 'left' }), colSpan: 3 },
         cell(fmtPeso(e.amount)),
         cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''),
         cell(fmtPeso(running)),

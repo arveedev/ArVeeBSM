@@ -23,6 +23,8 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
   const isReplenish = mode === 'replenish'
   const [amount, setAmount] = useState('')
   const [refNo, setRefNo] = useState('')
+  const [dvNo, setDvNo] = useState('')
+  const [remarks, setRemarks] = useState('')
   const [isOpeningBalance, setIsOpeningBalance] = useState(false)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [saving, setSaving] = useState(false)
@@ -48,6 +50,8 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
         amount: amountNum,
         refNo: isOpeningBalance ? 'Opening balance' : refNo.trim(),
         date,
+        dvNo: dvNo.trim() || null,
+        remarks: remarks.trim() || null,
         createdAt: Date.now(),
       })
       toast.success(isReplenish ? 'Replenishment saved' : 'Liquidation saved')
@@ -94,6 +98,16 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
                 className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none transition-colors focus:border-brand-neon" />
             </div>
           )}
+          <div>
+            <label className="text-[10px] font-semibold uppercase text-neutral-500">DV No. <span className="normal-case text-neutral-600">(optional, CPF logbook only)</span></label>
+            <input type="text" value={dvNo} onChange={(e) => setDvNo(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none transition-colors focus:border-brand-neon" />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase text-neutral-500">Remarks <span className="normal-case text-neutral-600">(optional, CPF logbook only)</span></label>
+            <textarea rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none transition-colors focus:border-brand-neon" />
+          </div>
           <div>
             <label className="text-[10px] font-semibold uppercase text-neutral-500">Date</label>
             <div className="mt-1">

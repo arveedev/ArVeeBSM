@@ -8150,4 +8150,9 @@
 //   1.10-257 - CPF Logbook export: top/bottom margin 0.5cm, and the table
 //            now reserves room for the hand-drawn per-page SUB-TOTAL row -
 //            at the 0.3cm bottom margin it was pushed off the page.
-export const APP_VERSION = '1.10-257'
+//   1.10-258 - Replenish/Liquidate modal (and its history edit form) gain
+//            optional DV No. and Remarks fields, stored on the cashLedger
+//            row (no schema change) and printed under the label in the
+//            replenishment/liquidation rows of the exported CPF Logbook
+//            only.
+export const APP_VERSION = '1.10-258'

@@ -35,6 +35,8 @@ function EditEntryForm({ entry, onSave, onCancel }) {
   const [amount, setAmount] = useState(() => liveFormatNumber(String(entry.amount ?? ''), 2))
   const [refNo, setRefNo] = useState(entry.refNo === 'Opening balance' ? '' : (entry.refNo ?? ''))
   const [date, setDate] = useState(entry.date)
+  const [dvNo, setDvNo] = useState(entry.dvNo ?? '')
+  const [remarks, setRemarks] = useState(entry.remarks ?? '')
   const [saving, setSaving] = useState(false)
 
   const amountNum = parseFormattedNumber(amount)
@@ -45,7 +47,7 @@ function EditEntryForm({ entry, onSave, onCancel }) {
     if (!canSave) return
     setSaving(true)
     try {
-      await onSave({ amount: amountNum, refNo: isOpeningBalance ? 'Opening balance' : refNo.trim(), date })
+      await onSave({ amount: amountNum, refNo: isOpeningBalance ? 'Opening balance' : refNo.trim(), date, dvNo: dvNo.trim() || null, remarks: remarks.trim() || null })
     } finally {
       setSaving(false)
     }
@@ -65,6 +67,16 @@ function EditEntryForm({ entry, onSave, onCancel }) {
             className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none focus:border-brand-neon" />
         </div>
       )}
+      <div>
+        <label className="text-[10px] font-semibold uppercase text-neutral-500">DV No.</label>
+        <input type="text" value={dvNo} onChange={(e) => setDvNo(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none focus:border-brand-neon" />
+      </div>
+      <div>
+        <label className="text-[10px] font-semibold uppercase text-neutral-500">Remarks</label>
+        <textarea rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none focus:border-brand-neon" />
+      </div>
       <div>
         <label className="text-[10px] font-semibold uppercase text-neutral-500">Date</label>
         <div className="mt-1"><CalendarDatePicker value={date} onChange={setDate} /></div>
