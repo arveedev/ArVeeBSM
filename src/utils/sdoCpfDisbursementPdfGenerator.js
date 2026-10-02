@@ -114,7 +114,7 @@ const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { min
 // and title/period to the table on every continuation page.
 const ROW_GAP = 5
 const TITLE_END_Y = 23 // page 1's own last title line (cityLabel)
-const BLOCK_Y = TITLE_END_Y + ROW_GAP // officer block's value line
+const BLOCK_Y = TITLE_END_Y + ROW_GAP * 2 // two row gaps (one extra, per request) between the title and officer block's value line
 const BLOCK_LABEL_OFFSET = 6 // label line sits this far below its own value line, inside the block
 const TABLE_START_Y = BLOCK_Y + BLOCK_LABEL_OFFSET + ROW_GAP
 const CONTINUATION_TITLE_END_Y = 15 // continuation page's own last title line (period)

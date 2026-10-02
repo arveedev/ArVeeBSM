@@ -8155,4 +8155,7 @@
 //            row (no schema change) and printed under the label in the
 //            replenishment/liquidation rows of the exported CPF Logbook
 //            only.
-export const APP_VERSION = '1.10-258'
+//   1.10-259 - CPF Logbook page 1: one more row of space between the title
+//            block and the name/designation/station block (the table
+//            shifts down with it).
+export const APP_VERSION = '1.10-259'
