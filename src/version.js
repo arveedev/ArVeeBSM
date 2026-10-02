@@ -8115,4 +8115,23 @@
 //              their variety's category (listing each), and rewrites
 //              them to match on confirmation - fixes records mis-filed
 //              by the old fallback or older Sheet imports.
-export const APP_VERSION = '1.10-253'
+//   1.10-254 - New Admin tool (System > Move Records): moves SELECTED
+//            transactions encoded under the wrong warehouse to the right
+//            one, as a literal move (nothing left at the source). Pile
+//            name stays the same - the destination pile is matched by
+//            name + cereal type, merged into if it exists, created empty
+//            (no layout box) if not; a same-named pile with a different
+//            variety blocks. Serial numbers are unchanged; a record whose
+//            [type+warehouse+serial] already exists at the destination
+//            blocks. Multi-pile groups (groupSerialNo siblings) move
+//            together. WTS pile ids and linked Purchase Receipts follow.
+//            Pile balances and serial counters are recomputed on both
+//            sides. Moved records get isSynced:false so the normal sync
+//            queue calls updateTransactionBackup with the new warehouse
+//            (row matched by serial, only warehouse fields change, with
+//            automatic retry). Authorities are untouched. A preview
+//            step lists blockers/warnings before anything changes, and
+//            every move is recorded in the error log (context
+//            'Warehouse Move') with the old/new pile ids for reversal.
+//            Initial-balance seeds cannot be moved.
+export const APP_VERSION = '1.10-254'
