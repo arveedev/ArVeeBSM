@@ -8143,4 +8143,8 @@
 //            forward figure (plus replenishment/liquidation running
 //            balances) now lands in the CASH ADVANCE/FUND BALANCE column -
 //            those rows were one cell short and printed under AMOUNT.
-export const APP_VERSION = '1.10-255'
+//   1.10-256 - CPF Logbook export: page margin set to 0.3cm on all sides
+//            (was 0.18in left/right, library default at the bottom), and
+//            NAME OF FARMER/ADDRESS now takes all the width the other
+//            measured columns don't need.
+export const APP_VERSION = '1.10-256'

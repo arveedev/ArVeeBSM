@@ -33,7 +33,7 @@ const REPLENISH_BLUE = [37, 61, 173]
 // measured directly against the widest real string it actually has to
 // hold (including bold SUB-TOTAL/TOTAL row variants), and even then
 // only clears the available width by ~2mm at this margin.
-const margin = 0.18 * 25.4
+const margin = 3 // mm (0.3cm) on every side - widest printable area; surplus width goes to NAME OF FARMER
 // Same physical paper/orientation as the Abstract (8.5 x 13in,
 // landscape) - this report's column count (19) is in the same range.
 const PAGE_W_IN = 13
@@ -455,8 +455,11 @@ export const generateCpfDisbursementRecord = ({
     17: { cellWidth: 20, halign: 'right' }, // AMOUNT
     18: { cellWidth: 25, halign: 'right' }, // CASH ADVANCE/FUND BALANCE
   }
+  // NAME OF FARMER absorbs every mm the other (measured) columns don't need.
+  const otherColsW = Object.entries(columnStyles).filter(([i]) => Number(i) !== 3).reduce((a, [, c]) => a + c.cellWidth, 0)
+  columnStyles[3].cellWidth = Math.max(25, Math.floor((pageW - margin * 2 - otherColsW - 0.2) * 10) / 10)
   const sharedTableOptions = {
-    margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP },
+    margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP, bottom: margin },
     head,
     theme: 'grid',
     rowPageBreak: 'avoid',
