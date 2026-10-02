@@ -406,9 +406,16 @@ export const getMatchingTransaction = async (type, warehouseId, serialNo, exclud
  */
 export const isCategoryCompatible = async (tx, requestedCategory) => {
   if (requestedCategory == null) return true
-  if (!tx.cerealCategory || tx.cerealCategory === 'Unknown' || tx.cerealCategory === requestedCategory) return true
+  // The record's own variety is the stronger truth: the entry form
+  // already derives the active tab from it (see StockFormBase's
+  // loadedTransaction effect), so a record whose stored cerealCategory
+  // says Palay but whose variety is Rice would load under the Palay
+  // tab, then immediately flip the tab back to Rice - the reported
+  // "can't open the Palay tab, the blank form turns into an update
+  // form" loop. Variety wins whenever it resolves.
   const variety = tx.varietyId ? await db.varietyTypes.get(tx.varietyId) : null
-  return variety?.category === requestedCategory
+  if (variety?.category) return variety.category === requestedCategory
+  return !tx.cerealCategory || tx.cerealCategory === 'Unknown' || tx.cerealCategory === requestedCategory
 }
 
 export const findTransactionBySerial = async (type, warehouseId, serialNo, cerealCategory = null) => {

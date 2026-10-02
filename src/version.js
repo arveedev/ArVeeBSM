@@ -8101,4 +8101,18 @@
 //              variety's real category matches, may be adopted.
 //              NOTE: a Rice record already hit by this bug keeps the
 //              wrong stored cerealCategory until repaired.
-export const APP_VERSION = '1.10-252'
+//   1.10-253 - Follow-up to 1.10-252 (two screenshots): the Palay tab
+//              still opened an "Update" form for WSR 11766901, a
+//              Milling receipt whose variety (WD1) is Rice but whose
+//              stored cerealCategory said Palay - the Palay lookup
+//              found it, then its variety flipped the tab back to Rice.
+//              isCategoryCompatible now lets the record's variety win
+//              whenever it resolves, and checkAndLoadSerial applies it
+//              to the primary category-scoped lookup too, so a
+//              mismatched record is never loaded under the wrong tab.
+//              New Admin Dashboard > System > Data Repair panel scans
+//              for transactions whose cerealCategory disagrees with
+//              their variety's category (listing each), and rewrites
+//              them to match on confirmation - fixes records mis-filed
+//              by the old fallback or older Sheet imports.
+export const APP_VERSION = '1.10-253'

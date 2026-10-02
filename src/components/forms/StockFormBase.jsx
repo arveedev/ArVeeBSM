@@ -1830,6 +1830,10 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     setIsLookingUp(true)
     try {
       let existing = await findTransactionBySerial(type, currentWarehouseId, serial, skipCategoryFilter ? null : activeCategory)
+      // A record stored under this category whose variety actually
+      // belongs to another one (see isCategoryCompatible) isn't this
+      // category's document - loading it just makes the tab flip back.
+      if (existing && !skipCategoryFilter && !(await isCategoryCompatible(existing, activeCategory))) existing = null
       if (latestRequestedSerial.current !== serial) return false // superseded by a newer request - discard this stale result
       // A multi-pile issuance's extra piles are saved as their own
       // sibling records (base serial + letter suffix, e.g. "12345-A")
