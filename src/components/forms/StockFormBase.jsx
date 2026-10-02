@@ -75,6 +75,7 @@ import {
   getMatchingTransaction,
   stepSerial,
   findTransactionBySerial,
+  isCategoryCompatible,
   findNextAvailableSerial,
   recordSerialUsed,
   recalculateSerialCounter,
@@ -1907,7 +1908,17 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
       if (!skipCategoryFilter) {
         const uncategorized = await findTransactionBySerial(type, currentWarehouseId, serial, null)
         if (latestRequestedSerial.current !== serial) return false
-        if (uncategorized) {
+        // Confirmed, reported real bug (switching to the Palay tab on a
+        // warehouse with no Palay history snapped straight back to
+        // Rice): the suggested Palay serial happened to equal a real
+        // RICE document's serial - Rice and Palay run separate series,
+        // so that's a coincidence, not a mislabeled copy - but this
+        // fallback adopted it anyway: it loaded the Rice record (whose
+        // variety then flipped the tab back) AND overwrote its stored
+        // cerealCategory to Palay, mis-filing a real Rice transaction in
+        // every category-scoped report. Only a record whose category is
+        // genuinely missing/stale qualifies now.
+        if (uncategorized && await isCategoryCompatible(uncategorized, activeCategory)) {
           if (uncategorized.cerealCategory !== activeCategory) {
             await db.transactions.update(uncategorized.id, { cerealCategory: activeCategory })
             uncategorized.cerealCategory = activeCategory

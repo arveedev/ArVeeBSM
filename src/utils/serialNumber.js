@@ -396,6 +396,21 @@ export const getMatchingTransaction = async (type, warehouseId, serialNo, exclud
  * series for the same warehouse - without this filter, navigating to
  * "WSR #50" on the Rice tab could incorrectly load Palay's #50 instead.
  */
+/**
+ * Whether a record found by a category-LESS serial lookup may be treated
+ * as belonging to `requestedCategory`. Rice and Palay (and By Products)
+ * keep entirely separate series, so the same serial number in another
+ * category is a different document, not a mislabeled copy. Only a record
+ * whose own category is missing/'Unknown', or whose category field is
+ * stale but whose variety's real category matches, qualifies.
+ */
+export const isCategoryCompatible = async (tx, requestedCategory) => {
+  if (requestedCategory == null) return true
+  if (!tx.cerealCategory || tx.cerealCategory === 'Unknown' || tx.cerealCategory === requestedCategory) return true
+  const variety = tx.varietyId ? await db.varietyTypes.get(tx.varietyId) : null
+  return variety?.category === requestedCategory
+}
+
 export const findTransactionBySerial = async (type, warehouseId, serialNo, cerealCategory = null) => {
   if (!serialNo || !warehouseId) return null
   // Same compound-index fix as isSerialTaken above - this one runs on
@@ -459,8 +474,14 @@ export const findAdjacentTransaction = async (type, warehouseId, serialNo, cerea
   // numeric-guess fallback path on every single step instead of ever
   // walking the real sequence. Confirmed as a real, reproduced cause of
   // navigation getting stuck.
-  const current = (await findTransactionBySerial(type, warehouseId, serialNo, cerealCategory))
-    ?? (cerealCategory != null ? await findTransactionBySerial(type, warehouseId, serialNo, null) : null)
+  // Only for a record whose category is genuinely missing/stale, never
+  // one that belongs to a DIFFERENT real category - see
+  // isCategoryCompatible.
+  let current = await findTransactionBySerial(type, warehouseId, serialNo, cerealCategory)
+  if (!current && cerealCategory != null) {
+    const loose = await findTransactionBySerial(type, warehouseId, serialNo, null)
+    if (loose && await isCategoryCompatible(loose, cerealCategory)) current = loose
+  }
   if (!current) return null
 
   // Pool is intentionally NOT category-filtered when `current` itself

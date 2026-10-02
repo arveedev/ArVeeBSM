@@ -8080,4 +8080,25 @@
 //              total) multi-page test dataset using the same messy real
 //              RSBSA formats, not just the smaller/cleaner dataset
 //              earlier rounds were checked against.
-export const APP_VERSION = '1.10-251'
+//   1.10-252 - Fixed a reported bug (screen recording): on a WSR for a
+//              warehouse with no Palay history, clicking the Palay tab
+//              snapped straight back to Rice, and stepping the series
+//              then showed the "leave unsaved" warning before the tab
+//              flipped to Palay by itself. Root cause:
+//              StockFormBase.checkAndLoadSerial's "retry without the
+//              category filter" fallback (meant for a record whose
+//              cerealCategory is missing/stale) also matched a genuine
+//              RICE document that merely shared the suggested Palay
+//              serial number - Rice and Palay run separate series, so
+//              that's coincidence, not a mislabeled copy. It loaded the
+//              Rice record (its variety then flipped the tab back to
+//              Rice) AND overwrote that record's stored cerealCategory
+//              to Palay, mis-filing a real Rice transaction in every
+//              category-scoped report. New isCategoryCompatible()
+//              (serialNumber.js) now gates that fallback, and the
+//              equivalent fallback in findAdjacentTransaction: only a
+//              record whose category is missing/'Unknown', or whose
+//              variety's real category matches, may be adopted.
+//              NOTE: a Rice record already hit by this bug keeps the
+//              wrong stored cerealCategory until repaired.
+export const APP_VERSION = '1.10-252'
