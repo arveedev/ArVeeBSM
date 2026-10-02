@@ -8170,4 +8170,12 @@
 //            ascending by check number in the Abstract (CPF Logbook: by
 //            date first, since its running balance is chronological, then
 //            check number for same-day entries).
-export const APP_VERSION = '1.10-261'
+//   1.10-262 - The cash-advance checkbox becomes a toggle. Replenish modal:
+//            Replenishment (default) / Cash Advance / Additional Cash
+//            Advance. Liquidate modal: Partial (default) / Full. Stored as
+//            entryKind on the ledger row (older isCashAdvance rows map
+//            automatically; no schema change) and used for the label in
+//            Cash History (incl. its edit form), the Abstract and the CPF
+//            Logbook ("... CASH ADVANCE", "ADDITIONAL CASH ADVANCE",
+//            "FULL LIQUIDATION" etc). Cash on Hand math is unchanged.
+export const APP_VERSION = '1.10-262'

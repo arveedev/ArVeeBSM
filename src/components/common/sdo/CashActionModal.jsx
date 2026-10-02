@@ -16,6 +16,8 @@ import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
+import EntryKindToggle from './EntryKindToggle.jsx'
+import { REPLENISH_KINDS, LIQUIDATE_KINDS } from '../../../utils/cashEntryKind.js'
 import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
 
 function CashActionModal({ mode, currentCashOnHand, onClose }) {
@@ -24,7 +26,7 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
   const [amount, setAmount] = useState('')
   const [refNo, setRefNo] = useState('')
   const [dvNo, setDvNo] = useState('')
-  const [isCashAdvance, setIsCashAdvance] = useState(false)
+  const [entryKind, setEntryKind] = useState(mode === 'replenish' ? 'replenishment' : 'partial')
   const [remarks, setRemarks] = useState('')
   const [isOpeningBalance, setIsOpeningBalance] = useState(false)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -51,7 +53,7 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
         amount: amountNum,
         refNo: isOpeningBalance ? 'Opening balance' : refNo.trim(),
         date,
-        isCashAdvance: isReplenish && isCashAdvance,
+        entryKind,
         dvNo: dvNo.trim() || null,
         remarks: remarks.trim() || null,
         createdAt: Date.now(),
@@ -87,12 +89,7 @@ function CashActionModal({ mode, currentCashOnHand, onClose }) {
             <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(liveFormatNumber(e.target.value, 2))}
               className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-base text-app-text outline-none transition-colors focus:border-brand-neon" placeholder="0.00" />
           </div>
-          {isReplenish && (
-            <label className="flex items-center gap-2 text-xs text-neutral-400">
-            <input type="checkbox" checked={isCashAdvance} onChange={(e) => setIsCashAdvance(e.target.checked)} className="accent-brand-neon" />
-            This is a Cash Advance (not a replenishment)
-          </label>
-          )}
+          <EntryKindToggle options={isReplenish ? REPLENISH_KINDS : LIQUIDATE_KINDS} value={entryKind} onChange={setEntryKind} />
           {isReplenish && (
             <label className="flex items-center gap-2 text-xs text-neutral-400">
               <input type="checkbox" checked={isOpeningBalance} onChange={(e) => setIsOpeningBalance(e.target.checked)} className="accent-brand-neon" />

@@ -27,6 +27,8 @@ import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
+import EntryKindToggle from './EntryKindToggle.jsx'
+import { REPLENISH_KINDS, LIQUIDATE_KINDS, entryKindOf, entryKindLabel } from '../../../utils/cashEntryKind.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 
 const LIST_PAGE_SIZE = 50
@@ -36,7 +38,7 @@ function EditEntryForm({ entry, onSave, onCancel }) {
   const [refNo, setRefNo] = useState(entry.refNo === 'Opening balance' ? '' : (entry.refNo ?? ''))
   const [date, setDate] = useState(entry.date)
   const [dvNo, setDvNo] = useState(entry.dvNo ?? '')
-  const [isCashAdvance, setIsCashAdvance] = useState(Boolean(entry.isCashAdvance))
+  const [entryKind, setEntryKind] = useState(entryKindOf(entry))
   const [remarks, setRemarks] = useState(entry.remarks ?? '')
   const [saving, setSaving] = useState(false)
 
@@ -48,7 +50,7 @@ function EditEntryForm({ entry, onSave, onCancel }) {
     if (!canSave) return
     setSaving(true)
     try {
-      await onSave({ amount: amountNum, refNo: isOpeningBalance ? 'Opening balance' : refNo.trim(), date, dvNo: dvNo.trim() || null, isCashAdvance: entry.type === 'replenish' && isCashAdvance, remarks: remarks.trim() || null })
+      await onSave({ amount: amountNum, refNo: isOpeningBalance ? 'Opening balance' : refNo.trim(), date, dvNo: dvNo.trim() || null, entryKind, remarks: remarks.trim() || null })
     } finally {
       setSaving(false)
     }
@@ -61,12 +63,7 @@ function EditEntryForm({ entry, onSave, onCancel }) {
         <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(liveFormatNumber(e.target.value, 2))}
           className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-2 text-sm text-app-text outline-none focus:border-brand-neon" />
       </div>
-      {entry.type === 'replenish' && (
-        <label className="flex items-center gap-2 text-xs text-neutral-400">
-          <input type="checkbox" checked={isCashAdvance} onChange={(e) => setIsCashAdvance(e.target.checked)} className="accent-brand-neon" />
-          Cash Advance (not a replenishment)
-        </label>
-      )}
+      <EntryKindToggle options={entry.type === 'replenish' ? REPLENISH_KINDS : LIQUIDATE_KINDS} value={entryKind} onChange={setEntryKind} />
       {!isOpeningBalance && (
         <div>
           <label className="text-[10px] font-semibold uppercase text-neutral-500">{entry.type === 'replenish' ? 'Check No.' : 'OR No.'}</label>
@@ -206,7 +203,7 @@ function CashHistoryModal({ onClose }) {
               <div key={e.id} className={`rounded-xl border p-3 text-sm ${e.voided ? 'border-neutral-900 bg-neutral-900/40 opacity-60' : 'border-neutral-800 bg-neutral-900'}`}>
                 <div className="flex items-center justify-between">
                   <span className={`text-xs font-bold uppercase ${isReplenish ? 'text-brand-neon' : 'text-brand-amber'}`}>
-                    {isReplenish ? (e.isCashAdvance ? 'Cash Advance' : 'Replenish') : 'Liquidate'}
+                    {entryKindLabel(e)}
                   </span>
                   <span className={`font-bold tabular-nums ${e.voided ? 'text-neutral-500 line-through' : 'text-app-text'}`}>
                     {isReplenish ? '+' : '−'}₱{(e.amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}

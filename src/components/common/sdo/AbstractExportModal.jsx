@@ -84,6 +84,7 @@ const findChainableCutoff = (cutoffs, dateFrom, dateTo) => {
 }
 
 import { useState, useEffect } from 'react'
+import { entryKindLabel } from '../../../utils/cashEntryKind.js'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
@@ -311,7 +312,7 @@ function AbstractExportModal({ onClose }) {
       const periodLiquidated = periodLedgerEntries.filter((e) => e.type === 'liquidate').reduce((s, e) => s + e.amount, 0)
       const fundBalance = openingBalance + uncheckedReplenished - periodLiquidated
       const addEntries = checkedReplenishEntries.map((e) => ({
-        label: `${e.isCashAdvance ? 'Cash Advance' : 'Replenish'} — Check No. ${e.refNo}`,
+        label: `${entryKindLabel(e)} — Check No. ${e.refNo}`,
         amount: e.amount,
       }))
       // Per explicit request: when the checklist narrowed the printed

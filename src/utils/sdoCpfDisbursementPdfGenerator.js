@@ -21,6 +21,7 @@
 
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { entryKindCpfLabel } from './cashEntryKind.js'
 
 const BLACK = [0, 0, 0]
 const HEADER_BG = [232, 232, 232]
@@ -290,9 +291,7 @@ export const generateCpfDisbursementRecord = ({
       // An "Opening balance" entry (or any entry with no reference) has no
       // real check/OR number - print the bare label, no "Check No." tail.
       const hasRef = Boolean(e.refNo) && e.refNo !== 'Opening balance'
-      const label = isReplenish
-        ? `${e.isCashAdvance ? 'CASH ADVANCE' : 'REPLENISHMENT OF CPF'}${hasRef ? ` — Check No. ${e.refNo}` : ''}`
-        : `PARTIAL LIQUIDATION${hasRef ? ` PER OR# ${e.refNo}` : ''}`
+      const label = `${entryKindCpfLabel(e)}${hasRef ? (isReplenish ? ` — Check No. ${e.refNo}` : ` PER OR# ${e.refNo}`) : ''}`
       const extras = [e.dvNo ? `DV No. ${e.dvNo}` : '', e.remarks ?? ''].filter(Boolean)
       const fullLabel = extras.length ? `${label}
 ${extras.join(' — ')}` : label
