@@ -8045,4 +8045,39 @@
 //              line and its widest real body/SUB-TOTAL value, verified
 //              zero-warning against the same 45-PR, multi-page,
 //              multi-replenishment test dataset before shipping.
-export const APP_VERSION = '1.10-250'
+//   1.10-251 - Fourth polish round on the CPF Cash Disbursement Record,
+//              per direct feedback with real production-scale data:
+//              (1) Fixed NATURE OF PAYMENT's header auto-wrapping
+//              mid-word ("NATUR"/"E OF"/"PAYME"/"NT") - "NATURE OF"
+//              together (14.15mm bold) was actually wider than
+//              "PAYMENT" alone (11.48mm), so the existing 2-line break
+//              still needed a wider column than the single word did.
+//              Now 3 lines, one word each, which only ever needs as
+//              much width as the single longest word. (2) Fixed RSBSA
+//              values splitting mid-digit/mid-code instead of at a
+//              hyphen - an RSBSA has no spaces at all, so jsPDF's own
+//              wrapping (which only ever breaks at whitespace) fell
+//              back to forcing a break at an arbitrary character
+//              position once a real column width still wasn't enough
+//              for every actual format this app has seen (3-digit
+//              province codes, alphanumeric suffixes, FA joined multi-
+//              member values). New hyphenWrap() inserts a real space
+//              after every hyphen so it always has a genuine place to
+//              break, and that place only ever falls on a hyphen
+//              boundary - confirmed directly against the real
+//              alphanumeric RSBSA that used to split as "05-005-07-
+//              043-Q1N"/"WAG", now wraps as "05- 005- 07- 043-"/
+//              "Q1NWAG". (3) Widened AMOUNT and CASH ADVANCE/FUND
+//              BALANCE for genuine 7-8 digit running totals (the real
+//              data's TOTAL row amount, "11,695,773.77", was wider
+//              than the column that had only been checked against a
+//              smaller test dataset). (4) Per explicit request, DATE
+//              now stacks Month over Day instead of sitting side by
+//              side on one line (new fmtDateStacked), freeing width for
+//              everything that actually needed it - NATURE OF PAYMENT,
+//              RSBSA, AMOUNT, and the balance column. Re-verified
+//              zero-warning against an 85-PR, production-scale (₱16.1M
+//              total) multi-page test dataset using the same messy real
+//              RSBSA formats, not just the smaller/cleaner dataset
+//              earlier rounds were checked against.
+export const APP_VERSION = '1.10-251'

@@ -28,12 +28,12 @@ const HEADER_BG = [232, 232, 232]
 // real paper record's own convention, confirmed directly against a
 // sample).
 const REPLENISH_BLUE = [37, 61, 173]
-// 0.22in, tighter than the Abstract's 0.3in - this table's 19 columns
+// 0.2in, tighter than the Abstract's 0.3in - this table's 19 columns
 // need every bit of width they can get; every column width below is
 // measured directly against the widest real string it actually has to
 // hold (including bold SUB-TOTAL/TOTAL row variants), and even then
 // only clears the available width by ~2mm at this margin.
-const margin = 0.22 * 25.4
+const margin = 0.18 * 25.4
 // Same physical paper/orientation as the Abstract (8.5 x 13in,
 // landscape) - this report's column count (19) is in the same range.
 const PAGE_W_IN = 13
@@ -48,10 +48,18 @@ const fmtDateLong = (iso) => {
   const [y, m, d] = iso.split('-').map(Number)
   return `${MONTHS[m - 1]} ${d}, ${y}`
 }
-const fmtDateShort = (iso) => {
+// Per explicit request: the month stacked above the day instead of side
+// by side on one line - a narrower DATE column this way, freeing width
+// for every other column that actually needed it (RSBSA, NATURE OF
+// PAYMENT, AMOUNT, CASH ADVANCE/FUND BALANCE). The year, when every row
+// shares one (the common case - see commonYear below), already lives in
+// the column header, so stacking just needs Month/Day; a period that
+// genuinely crosses a year boundary stacks "Mon D" over the year
+// instead, so that information isn't lost.
+const fmtDateStacked = (iso, yearInHeader) => {
   if (!iso) return ''
-  const [, m, d] = iso.split('-').map(Number)
-  return `${MONTHS[m - 1].slice(0, 3)} ${d}`
+  const [y, m, d] = iso.split('-').map(Number)
+  return yearInHeader ? `${MONTHS[m - 1].slice(0, 3)}\n${d}` : `${MONTHS[m - 1].slice(0, 3)} ${d}\n${y}`
 }
 const fmtPeriodLabel = (dateFrom, dateTo) =>
   dateFrom === dateTo ? fmtDateLong(dateFrom) : `${fmtDateLong(dateFrom)} to ${fmtDateLong(dateTo)}`
@@ -73,6 +81,21 @@ const dayBefore = (iso) => {
 
 // Same base-classifier extraction as the Abstract's baseVarietyCode.
 const baseVarietyCode = (name) => name?.match(/^P[DW]\d+/)?.[0] ?? name ?? ''
+
+// Confirmed, reported real bug: an RSBSA number has no spaces at all
+// (just hyphen-joined segments), and a real RSBSA column width - sized
+// for the common case - is too narrow for every real format this app
+// has actually seen (some provinces use a 3-digit code, some suffixes
+// are alphanumeric, an FA's joined multi-member value can run even
+// longer). jsPDF's own text wrapping only ever breaks at whitespace;
+// with none in the string at all, it falls back to forcing a break at
+// an arbitrary CHARACTER position instead, splitting a number or a
+// code letter in half. A real space after every hyphen gives it a
+// genuine place to break that only ever falls on a hyphen boundary -
+// confirmed directly: the same real alphanumeric RSBSA that used to
+// split as "05-005-07-043-Q1N" / "WAG" now breaks as "05- 005- 07-
+// 043-" / "Q1NWAG" regardless of how narrow the column actually is.
+const hyphenWrap = (s) => (s ?? '').replace(/-/g, '- ')
 
 const fmtBags = (n) => (n == null ? '' : Math.round(n).toLocaleString('en-PH'))
 const fmtKilos = (n, d = 3) => (n == null ? '' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d }))
@@ -197,7 +220,7 @@ export const generateCpfDisbursementRecord = ({
 
   const allDates = [dayBefore(dateFrom), ...events.map((e) => e.date)]
   const year = commonYear(allDates)
-  const fmtRowDate = (iso) => (year ? fmtDateShort(iso) : fmtDateLong(iso))
+  const fmtRowDate = (iso) => fmtDateStacked(iso, Boolean(year))
   const dateHeader = year ? { content: `DATE\n${year}`, rowSpan: 2, styles: { valign: 'middle' } } : { content: 'DATE', rowSpan: 2, styles: { valign: 'middle' } }
 
   const head = [
@@ -207,7 +230,13 @@ export const generateCpfDisbursementRecord = ({
       { content: 'WSR No.', rowSpan: 2, styles: { valign: 'middle' } },
       { content: 'NAME OF FARMER/\nADDRESS', rowSpan: 2, styles: { valign: 'middle' } },
       { content: 'RSBSA #', rowSpan: 2, styles: { valign: 'middle' } },
-      { content: 'NATURE OF\nPAYMENT', rowSpan: 2, styles: { valign: 'middle' } },
+      // Confirmed, reported real bug: "NATURE OF" together (14.15mm
+      // bold) is wider than "PAYMENT" alone (11.48mm) - a 2-line break
+      // here still needed a wider column than the narrower single word
+      // did, and the column was sized for the single word, forcing
+      // "NATURE" and "PAYMENT" to each auto-wrap mid-word. 3 lines, one
+      // word each, needs only as much width as the single longest word.
+      { content: 'NATURE\nOF\nPAYMENT', rowSpan: 2, styles: { valign: 'middle' } },
       // Explicit 3-way break (not left to auto-wrap) - confirmed,
       // reported real bug: auto-wrapping "REPLENISHMENT/LIQUIDATION"
       // inside too narrow a column let a single stray letter ("N") spill
@@ -276,7 +305,7 @@ export const generateCpfDisbursementRecord = ({
     return [
       fmtRowDate(pr.date), (pr.prNo ?? '').toUpperCase(), (pr.wsrSerialNo ?? '').toUpperCase(),
       { content: `${(pr.payeeName ?? '').toUpperCase()}\n${(pr.payeeAddress ?? '').toUpperCase()}`, styles: { halign: 'left' } },
-      (pr.rsbsa ?? '').toUpperCase(), 'CASH', '',
+      hyphenWrap((pr.rsbsa ?? '').toUpperCase()), 'CASH', '',
       fmtBags(pr.numberOfBags), baseVarietyCode(pr.classification).toUpperCase(),
       fmtKilos(pr.moistureContent, 1), purityText(pr).toUpperCase(),
       fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
@@ -391,17 +420,26 @@ export const generateCpfDisbursementRecord = ({
   // given - "VARIETY" alone needs ~13.9mm, not the ~9mm a "PD1"-sized
   // body value suggested. Every width below is now checked against
   // BOTH its header's own longest line and its widest real body value.
+  // Confirmed, reported real bugs against actual production data (much
+  // larger figures and messier real-world formats than the test
+  // dataset this was first tuned against): AMOUNT/BALANCE needed more
+  // room for genuine 7-8 digit running totals, RSBSA needed real
+  // headroom for 3-digit province codes and alphanumeric suffixes (see
+  // hyphenWrap's own comment for the rest of that fix), and the DATE
+  // column shrinks now that its value stacks Month over Day instead of
+  // sitting side by side on one line - freeing width for everything
+  // that actually needed it.
   const columnStyles = {
-    0: { cellWidth: 11 }, // DATE
+    0: { cellWidth: 10 }, // DATE (stacked Month/Day) - "DATE" header itself needs ~6.5mm bold
     1: { cellWidth: 13 }, // PR No.
     2: { cellWidth: 15 }, // WSR No.
     3: { cellWidth: 25, halign: 'left' }, // NAME OF FARMER/ADDRESS
-    4: { cellWidth: 28 }, // RSBSA #
-    5: { cellWidth: 11 }, // NATURE OF PAYMENT
+    4: { cellWidth: 26 }, // RSBSA # (hyphenWrap handles the rest)
+    5: { cellWidth: 15 }, // NATURE OF PAYMENT (3-line header)
     6: { cellWidth: 37, halign: 'right' }, // CASH ADVANCE RECEIVED/...
     7: { cellWidth: 12 }, // NO. OF BAGS
-    8: { cellWidth: 14 }, // VARIETY CODE
-    9: { cellWidth: 9 }, // MC
+    8: { cellWidth: 13 }, // VARIETY CODE
+    9: { cellWidth: 8 }, // MC
     10: { cellWidth: 12 }, // PURITY
     11: { cellWidth: 18, halign: 'right' }, // GROSS KG
     12: { cellWidth: 11 }, // MTS
@@ -409,8 +447,8 @@ export const generateCpfDisbursementRecord = ({
     14: { cellWidth: 13 }, // ENW FACTOR
     15: { cellWidth: 19, halign: 'right' }, // ENW kg
     16: { cellWidth: 10 }, // UNIT COST
-    17: { cellWidth: 18, halign: 'right' }, // AMOUNT
-    18: { cellWidth: 23, halign: 'right' }, // CASH ADVANCE/FUND BALANCE
+    17: { cellWidth: 20, halign: 'right' }, // AMOUNT
+    18: { cellWidth: 25, halign: 'right' }, // CASH ADVANCE/FUND BALANCE
   }
   const sharedTableOptions = {
     margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP },
