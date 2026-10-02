@@ -8161,4 +8161,13 @@
 //   1.10-260 - CPF Logbook: a replenishment/liquidation with no check/OR
 //            number (the "Opening balance" entries) no longer prints
 //            "Check No. Opening balance"; just the plain label.
-export const APP_VERSION = '1.10-260'
+//   1.10-261 - Replenish modal gains a "Cash Advance (not a replenishment)"
+//            checkbox (default off; also in the history edit form), stored
+//            as isCashAdvance on the ledger row - the amount still adds to
+//            Cash on Hand exactly like a replenishment, but is labelled
+//            "Cash Advance" in the history list, the Abstract and the CPF
+//            Logbook. Check-numbered replenishments/cash advances now sort
+//            ascending by check number in the Abstract (CPF Logbook: by
+//            date first, since its running balance is chronological, then
+//            check number for same-day entries).
+export const APP_VERSION = '1.10-261'

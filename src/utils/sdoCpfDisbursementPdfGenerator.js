@@ -220,7 +220,8 @@ export const generateCpfDisbursementRecord = ({
       if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb
       return (a.pr.prNo ?? '').localeCompare(b.pr.prNo ?? '', undefined, { numeric: true })
     }
-    return 0
+    // Two ledger events on the same day: ascending check number.
+    return String(a.entry.refNo ?? '').localeCompare(String(b.entry.refNo ?? ''), undefined, { numeric: true })
   })
 
   const allDates = [dayBefore(dateFrom), ...events.map((e) => e.date)]
@@ -290,7 +291,7 @@ export const generateCpfDisbursementRecord = ({
       // real check/OR number - print the bare label, no "Check No." tail.
       const hasRef = Boolean(e.refNo) && e.refNo !== 'Opening balance'
       const label = isReplenish
-        ? `REPLENISHMENT OF CPF${hasRef ? ` — Check No. ${e.refNo}` : ''}`
+        ? `${e.isCashAdvance ? 'CASH ADVANCE' : 'REPLENISHMENT OF CPF'}${hasRef ? ` — Check No. ${e.refNo}` : ''}`
         : `PARTIAL LIQUIDATION${hasRef ? ` PER OR# ${e.refNo}` : ''}`
       const extras = [e.dvNo ? `DV No. ${e.dvNo}` : '', e.remarks ?? ''].filter(Boolean)
       const fullLabel = extras.length ? `${label}

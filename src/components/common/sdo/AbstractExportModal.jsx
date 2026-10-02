@@ -301,14 +301,17 @@ function AbstractExportModal({ onClose }) {
         return chainableCutoff ? e.date > chainableCutoff.cutoffDate : e.date >= dateFrom
       })
       const periodReplenishEntries = periodLedgerEntries.filter((e) => e.type === 'replenish')
-      const checkedReplenishEntries = periodReplenishEntries.filter((e) => e.refNo && e.refNo !== 'Opening balance')
+      // Ascending by check number (natural/numeric order), then date.
+      const checkedReplenishEntries = periodReplenishEntries
+        .filter((e) => e.refNo && e.refNo !== 'Opening balance')
+        .sort((a, b) => String(a.refNo).localeCompare(String(b.refNo), undefined, { numeric: true }) || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
       const uncheckedReplenished = periodReplenishEntries
         .filter((e) => !(e.refNo && e.refNo !== 'Opening balance'))
         .reduce((s, e) => s + e.amount, 0)
       const periodLiquidated = periodLedgerEntries.filter((e) => e.type === 'liquidate').reduce((s, e) => s + e.amount, 0)
       const fundBalance = openingBalance + uncheckedReplenished - periodLiquidated
       const addEntries = checkedReplenishEntries.map((e) => ({
-        label: `Replenish — Check No. ${e.refNo}`,
+        label: `${e.isCashAdvance ? 'Cash Advance' : 'Replenish'} — Check No. ${e.refNo}`,
         amount: e.amount,
       }))
       // Per explicit request: when the checklist narrowed the printed
