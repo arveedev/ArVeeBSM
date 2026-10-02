@@ -286,9 +286,12 @@ export const generateCpfDisbursementRecord = ({
     if (ev.kind === 'ledger') {
       const e = ev.entry
       const isReplenish = e.type === 'replenish'
+      // An "Opening balance" entry (or any entry with no reference) has no
+      // real check/OR number - print the bare label, no "Check No." tail.
+      const hasRef = Boolean(e.refNo) && e.refNo !== 'Opening balance'
       const label = isReplenish
-        ? `REPLENISHMENT OF CPF — Check No. ${e.refNo ?? ''}`
-        : `PARTIAL LIQUIDATION PER OR# ${e.refNo ?? ''}`
+        ? `REPLENISHMENT OF CPF${hasRef ? ` — Check No. ${e.refNo}` : ''}`
+        : `PARTIAL LIQUIDATION${hasRef ? ` PER OR# ${e.refNo}` : ''}`
       const extras = [e.dvNo ? `DV No. ${e.dvNo}` : '', e.remarks ?? ''].filter(Boolean)
       const fullLabel = extras.length ? `${label}
 ${extras.join(' — ')}` : label

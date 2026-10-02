@@ -8158,4 +8158,7 @@
 //   1.10-259 - CPF Logbook page 1: one more row of space between the title
 //            block and the name/designation/station block (the table
 //            shifts down with it).
-export const APP_VERSION = '1.10-259'
+//   1.10-260 - CPF Logbook: a replenishment/liquidation with no check/OR
+//            number (the "Opening balance" entries) no longer prints
+//            "Check No. Opening balance"; just the plain label.
+export const APP_VERSION = '1.10-260'
