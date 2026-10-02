@@ -293,8 +293,7 @@ export const generateCpfDisbursementRecord = ({
       const hasRef = Boolean(e.refNo) && e.refNo !== 'Opening balance'
       const label = `${entryKindCpfLabel(e)}${hasRef ? (isReplenish ? ` — Check No. ${e.refNo}` : ` PER OR# ${e.refNo}`) : ''}`
       const extras = [e.dvNo ? `DV No. ${e.dvNo}` : '', e.remarks ?? ''].filter(Boolean)
-      const fullLabel = extras.length ? `${label}
-${extras.join(' — ')}` : label
+      const fullLabel = extras.length ? label + '\n' + extras.join(' — ') : label
       running += isReplenish ? (e.amount ?? 0) : -(e.amount ?? 0)
       // Per explicit request, a replenishment row's text prints in blue
       // - every cell, even blank ones, so the row reads as one
