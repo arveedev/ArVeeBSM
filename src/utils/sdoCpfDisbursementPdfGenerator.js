@@ -33,6 +33,11 @@ const REPLENISH_BLUE = [37, 61, 173]
 // measured directly against the widest real string it actually has to
 // hold (including bold SUB-TOTAL/TOTAL row variants), and even then
 // only clears the available width by ~2mm at this margin.
+// 0.5cm top/bottom page margin; the per-page SUB-TOTAL row is drawn by
+// hand BELOW the table, so the table's own bottom limit also reserves that
+// row's height (~7.7mm) - otherwise it fell off the page.
+const BOTTOM_MARGIN = 5
+const SUBTOTAL_ROW_RESERVE = 8
 const margin = 3 // mm (0.3cm) on every side - widest printable area; surplus width goes to NAME OF FARMER
 // Same physical paper/orientation as the Abstract (8.5 x 13in,
 // landscape) - this report's column count (19) is in the same range.
@@ -459,7 +464,7 @@ export const generateCpfDisbursementRecord = ({
   const otherColsW = Object.entries(columnStyles).filter(([i]) => Number(i) !== 3).reduce((a, [, c]) => a + c.cellWidth, 0)
   columnStyles[3].cellWidth = Math.max(25, Math.floor((pageW - margin * 2 - otherColsW - 0.2) * 10) / 10)
   const sharedTableOptions = {
-    margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP, bottom: margin },
+    margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP, bottom: BOTTOM_MARGIN + SUBTOTAL_ROW_RESERVE },
     head,
     theme: 'grid',
     rowPageBreak: 'avoid',
@@ -621,7 +626,7 @@ export const generateCpfDisbursementRecord = ({
   // the gap above CERTIFICATION only needs to read as roughly one
   // table row's worth of space, not the much larger gap +14 produced.
   let y = finalY + 8
-  if (y + 30 > pageH - margin) {
+  if (y + 30 > pageH - BOTTOM_MARGIN) {
     doc.addPage()
     drawHeader(doc, { branchLabel, cityLabel, periodLabel, officer, isFirstPage: false })
     y = CONTINUATION_MARGIN_TOP + 8

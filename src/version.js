@@ -8147,4 +8147,7 @@
 //            (was 0.18in left/right, library default at the bottom), and
 //            NAME OF FARMER/ADDRESS now takes all the width the other
 //            measured columns don't need.
-export const APP_VERSION = '1.10-256'
+//   1.10-257 - CPF Logbook export: top/bottom margin 0.5cm, and the table
+//            now reserves room for the hand-drawn per-page SUB-TOTAL row -
+//            at the 0.3cm bottom margin it was pushed off the page.
+export const APP_VERSION = '1.10-257'
