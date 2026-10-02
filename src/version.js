@@ -8134,4 +8134,13 @@
 //            every move is recorded in the error log (context
 //            'Warehouse Move') with the old/new pile ids for reversal.
 //            Initial-balance seeds cannot be moved.
-export const APP_VERSION = '1.10-254'
+//   1.10-255 - CPF Logbook export fixes: PR No. column is now sized from
+//            the longest real PR number (measured), so it never breaks
+//            after the hyphen; the Cash Advance Received/Replenishment/
+//            Liquidation column is narrower (header now 4 lines); each
+//            replenishment/liquidation label spans the NAME OF FARMER
+//            through NATURE OF PAYMENT columns; and the Balance brought
+//            forward figure (plus replenishment/liquidation running
+//            balances) now lands in the CASH ADVANCE/FUND BALANCE column -
+//            those rows were one cell short and printed under AMOUNT.
+export const APP_VERSION = '1.10-255'

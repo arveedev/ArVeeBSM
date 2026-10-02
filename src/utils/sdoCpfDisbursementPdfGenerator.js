@@ -243,7 +243,7 @@ export const generateCpfDisbursementRecord = ({
       // onto its own fourth line. Forcing the breaks at the "/"
       // boundaries, together with this column's own explicit cellWidth
       // below, keeps it to a clean 3 lines.
-      { content: 'CASH ADVANCE RECEIVED/\nREPLENISHMENT/\nLIQUIDATION', rowSpan: 2, styles: { valign: 'middle' } },
+      { content: 'CASH ADVANCE\nRECEIVED/\nREPLENISHMENT/\nLIQUIDATION', rowSpan: 2, styles: { valign: 'middle' } },
       { content: 'DISBURSEMENTS', colSpan: 11 },
       { content: 'CASH ADVANCE/\nFUND BALANCE', rowSpan: 2, styles: { valign: 'middle' } },
     ],
@@ -268,7 +268,7 @@ export const generateCpfDisbursementRecord = ({
     { content: fmtRowDate(dayBefore(dateFrom)), styles: { fontStyle: 'bolditalic' } },
     '', '',
     { content: `Balance brought forward`, styles: { fontStyle: 'bolditalic', halign: 'left' } },
-    '', '', '', '', '', '', '', '', '', '', '', '', '',
+    '', '', '', '', '', '', '', '', '', '', '', '', '', '',
     { content: fmtPeso(running), styles: { fontStyle: 'bolditalic' } },
   ]
   const rowStyles = { fillColor: [245, 245, 245] }
@@ -293,10 +293,10 @@ export const generateCpfDisbursementRecord = ({
       const cell = (content, extra = {}) => ({ content, styles: { ...replenishStyle, ...extra } })
       return [
         cell(fmtRowDate(e.date)), cell(''), cell(''),
-        cell(label, { halign: 'left' }),
-        cell(''), cell(''),
+        // Label spans NAME OF FARMER through NATURE OF PAYMENT (3 columns).
+        { ...cell(label, { halign: 'left' }), colSpan: 3 },
         cell(fmtPeso(e.amount)),
-        cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''),
+        cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''), cell(''),
         cell(fmtPeso(running)),
       ]
     }
@@ -429,14 +429,19 @@ export const generateCpfDisbursementRecord = ({
   // column shrinks now that its value stacks Month over Day instead of
   // sitting side by side on one line - freeing width for everything
   // that actually needed it.
+  // PR No. must stay on one line (never break after a hyphen): sized from
+  // the longest real PR number in this report, measured at body font.
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  const prNoWidth = Math.max(13, ...events.filter((ev) => ev.kind === 'pr').map((ev) => doc.getTextWidth((ev.pr.prNo ?? '').toUpperCase()) + 3.4))
   const columnStyles = {
     0: { cellWidth: 10 }, // DATE (stacked Month/Day) - "DATE" header itself needs ~6.5mm bold
-    1: { cellWidth: 13 }, // PR No.
+    1: { cellWidth: prNoWidth }, // PR No. (one line, measured)
     2: { cellWidth: 15 }, // WSR No.
     3: { cellWidth: 25, halign: 'left' }, // NAME OF FARMER/ADDRESS
     4: { cellWidth: 26 }, // RSBSA # (hyphenWrap handles the rest)
     5: { cellWidth: 15 }, // NATURE OF PAYMENT (3-line header)
-    6: { cellWidth: 37, halign: 'right' }, // CASH ADVANCE RECEIVED/...
+    6: { cellWidth: 26, halign: 'right' }, // CASH ADVANCE RECEIVED/...
     7: { cellWidth: 12 }, // NO. OF BAGS
     8: { cellWidth: 13 }, // VARIETY CODE
     9: { cellWidth: 8 }, // MC
