@@ -8202,4 +8202,7 @@
 //            now blocked from moves since sack inventory is per warehouse.
 //            Admin > Operations > Authority Links: read-only scan of
 //            orphaned linked documents and flagged authorities.
-export const APP_VERSION = '1.10-263'
+//   1.10-264 - Abstract of Cereal Purchases export: 1 inch (25.4mm) of extra
+//            blank space above the content on every page (title block,
+//            table and continuation pages) for punching and filing.
+export const APP_VERSION = '1.10-264'

@@ -94,8 +94,12 @@ const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { min
 // LATER internal page break resumes content at - exactly the lever
 // needed to give page 1 and continuation pages two different header
 // heights within the same single autoTable() call.
-const TABLE_START_Y = 36
-const CONTINUATION_MARGIN_TOP = 20
+// Extra blank space above everything on EVERY page (title block, table,
+// continuation pages) so the printed report can be punched and filed
+// without cutting into content - per explicit request, at least 1 inch.
+const TOP_FILING_MARGIN = 25.4
+const TABLE_START_Y = 36 + TOP_FILING_MARGIN
+const CONTINUATION_MARGIN_TOP = 20 + TOP_FILING_MARGIN
 
 // isFirstPage - per explicit request, a continuation page (2nd onward)
 // only needs the report title/period, not the full org identity block
@@ -109,28 +113,28 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel, isFirstPage = true })
   if (isFirstPage) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(12)
-    doc.text('NATIONAL FOOD AUTHORITY', pageW / 2, 12, { align: 'center' })
+    doc.text('NATIONAL FOOD AUTHORITY', pageW / 2, 12 + TOP_FILING_MARGIN, { align: 'center' })
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
-    doc.text((branchLabel ?? '').toUpperCase(), pageW / 2, 17, { align: 'center' })
+    doc.text((branchLabel ?? '').toUpperCase(), pageW / 2, 17 + TOP_FILING_MARGIN, { align: 'center' })
     // Rule between the org block and the report title - present on the
     // reference layout, missing here before.
     doc.setDrawColor(...BLACK)
     doc.setLineWidth(0.3)
-    doc.line(margin, 20, pageW - margin, 20)
+    doc.line(margin, 20 + TOP_FILING_MARGIN, pageW - margin, 20 + TOP_FILING_MARGIN)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(11)
-    doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 26, { align: 'center' })
+    doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 26 + TOP_FILING_MARGIN, { align: 'center' })
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 31, { align: 'center' })
+    doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 31 + TOP_FILING_MARGIN, { align: 'center' })
   } else {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(11)
-    doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 10, { align: 'center' })
+    doc.text('ABSTRACT OF CEREAL PURCHASES', pageW / 2, 10 + TOP_FILING_MARGIN, { align: 'center' })
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 15, { align: 'center' })
+    doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 15 + TOP_FILING_MARGIN, { align: 'center' })
   }
 }
 
