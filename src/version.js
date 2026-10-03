@@ -8205,4 +8205,15 @@
 //   1.10-264 - Abstract of Cereal Purchases export: 1 inch (25.4mm) of extra
 //            blank space above the content on every page (title block,
 //            table and continuation pages) for punching and filing.
-export const APP_VERSION = '1.10-264'
+//   1.10-265 - Abstract export, fix for 1.10-264 (reported with a photo of
+//            page 2): the filing margin is now 0.5 inch (12.7mm), not 1
+//            inch. The real bug was older and only exposed by the extra
+//            margin: every per-page autoTable call still carried the grand
+//            TOTAL `foot`, so a non-last page reserved room for it, pushed
+//            its last farmer plus the TOTAL onto an extra internal page,
+//            and that page was drawn with the first-page header over the
+//            table head, with the data continuing on page 3. Non-last
+//            pages now get showFoot 'never'. Reproduced and verified in a
+//            node harness (10-45 purchase receipts): the first-page header
+//            now appears on page 1 only.
+export const APP_VERSION = '1.10-265'

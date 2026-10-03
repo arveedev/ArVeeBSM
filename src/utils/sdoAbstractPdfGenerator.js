@@ -96,8 +96,9 @@ const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { min
 // heights within the same single autoTable() call.
 // Extra blank space above everything on EVERY page (title block, table,
 // continuation pages) so the printed report can be punched and filed
-// without cutting into content - per explicit request, at least 1 inch.
-const TOP_FILING_MARGIN = 25.4
+// without cutting into content - 0.5 inch (12.7mm), per explicit request
+// (1 inch was tried first and judged too large).
+const TOP_FILING_MARGIN = 12.7
 const TABLE_START_Y = 36 + TOP_FILING_MARGIN
 const CONTINUATION_MARGIN_TOP = 20 + TOP_FILING_MARGIN
 
@@ -415,11 +416,19 @@ export const generateSdoAbstract = ({
       // default `foot` behavior repeats it, same as `head`) - the real
       // grand TOTAL only ever prints once now, attached to just the
       // true last page's own call.
-      ...(isLastPage ? { foot, showFoot: 'lastPage' } : {}),
+      // sharedTableOptions carries `foot` (needed for the measurement pass),
+      // and autoTable reserves room for - and draws - a foot at the end of
+      // EVERY call that has one, so a non-last page's call used to try to
+      // fit the grand TOTAL row too. At the old margins it just happened to
+      // fit; with a larger top margin it pushed the page's last farmer
+      // (and the TOTAL) onto an extra internal page that was then drawn
+      // with the first-page header on top of the table head. Non-last
+      // pages must never have a foot at all.
+      ...(isLastPage ? { foot, showFoot: 'lastPage' } : { foot: undefined, showFoot: 'never' }),
       // Forces this page to genuinely start fresh, regardless of
       // remaining space on the previous page - see this section's
       // opening comment.
-      ...(isFirstPage ? {} : { pageBreak: 'always' }),
+      ...(isFirstPage ? {} : { pageBreak: 'always', startY: CONTINUATION_MARGIN_TOP }),
       didDrawPage: () => drawBranchHeader(doc, { branchLabel, periodLabel, isFirstPage }),
       // Draws each row's BN/SH mark just past the table's own right
       // edge once that row's last real column has been placed - small,
