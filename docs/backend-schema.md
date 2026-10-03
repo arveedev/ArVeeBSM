@@ -180,6 +180,7 @@ sack documents and vice versa.
 | `transactionTypeId` | string (FK → `transactionTypes`) | Nature of Transaction |
 | `customerName` | string | Free text, backed by the `customers` autocomplete directory |
 | `needsCompletion` | boolean | Flags a record synced in from the Sheet that's missing fields only the app itself can supply |
+| `authorityAckAt` / `authorityAckNote` | number (ms) / string, optional | Set when a user verifies or re-links the transaction after its authority changed. A transaction needs review when its authority's latest change (or missing-from-Sheet stamp) is newer than `max(authorityAckAt, createdAt)`. Acknowledging touches only these two fields |
 
 ### `serialCounterCache` *(unsynced)*
 | Field | Type | Notes |
@@ -219,6 +220,10 @@ sack documents and vice versa.
 | `totalIssuedBags` / `totalIssuedKilos` | number | Derived from actual linked transactions |
 | `sackLines` | array | SIA only — one array covering every sack-type+condition combination the SIA number authorizes; matched by SIA number alone, never split into multiple records |
 | `ageGroup`, `orNumber`, `note1`, `note2`, `remarks` | string | Extra sheet-sourced detail fields, surfaced via `authorityExtraDetails()` |
+| `changeLog` | array, optional | Last 10 entries `{ at, changes: [{ field, from, to }] }` appended by the sync when a material field changes on an authority that Active transactions already use (null/value backfills and unused authorities are never logged). Plain field, no schema bump. Drives the Authority Review notifications |
+| `missingFromSheetAt` | string (ISO), optional | Set after a complete, non-suspicious full Sheet pull no longer contains this authority and transactions use it (usually a renumber); cleared when it reappears |
+| `firstSeenAt` | string (ISO), optional | When this record was first created locally; a recency signal for replacement suggestions |
+| `sourceId` | string | Which `sheetSources` row it came from; scopes the missing-from-Sheet pass to one source |
 
 ### `millingOrders` *(unsynced — read-only cache)*
 | Field | Type | Notes |
@@ -281,7 +286,9 @@ sack documents and vice versa.
 | `id` (PK) | string | |
 | `sdoUid` | string (FK) | Indexed |
 | `type` | string | Indexed. `'replenish'` \| `'liquidate'` |
-| `amount`, `refNo`, `date` | | |
+| `amount`, `refNo`, `date` | | `refNo` is the check number (replenish) or OR number (liquidate); the literal `'Opening balance'` marks an opening-balance replenishment and is never printed as a check number |
+| `entryKind` | string, optional | Replenish: `'replenishment'` (default) \| `'cashAdvance'` \| `'additionalCashAdvance'`; liquidate: `'partial'` (default) \| `'full'`. Label only - `type` alone drives Cash on Hand. Older rows carry only `isCashAdvance` (boolean), mapped to `'cashAdvance'` on read |
+| `dvNo`, `remarks` | string, optional | Disbursement Voucher number and free-text remarks; printed in the CPF Logbook only |
 | `voided` | boolean | A voided entry stays on record (with `voidReason`) — simply excluded from the Cash on Hand sum, never deleted |
 
 ### `cashDenominationCounts`
@@ -372,6 +379,7 @@ autocomplete + auto-fill on every Customer Name field.
 | `timestamp` | string (ISO) | Indexed |
 | Error detail, user, device | | Captures form save/update/delete/void failures and `SectionErrorBoundary`-caught page crashes; deliberately synced (unlike the per-device caches above) so an admin can review what broke on any device from anywhere |
 | `refId` | string, optional | Only present on a background sheet-sync-failure entry (`logSyncFailure()`) — the specific `transactions`/`pendingSheetDeletions` row this failure is about, so a later successful retry can find and update this exact entry rather than leaving it stale |
+| `context = 'Warehouse Move'` | string | An admin warehouse move is recorded here as an already-resolved entry whose message holds the source/destination warehouse, the pile-id mapping and each moved record's old pile ids - the audit trail for reversing a move |
 | `resolved`, `resolvedAt` | boolean, string (ISO) | Set the moment that same record's push finally succeeds on a later automatic retry — a sync failure is never shown to the regular user as an alarming toast (see app-flow.md §8); this is the only place it surfaces, and it tells the whole story (failed, then synced) rather than just disappearing |
 
 ## 8. Entity-Relationship Summary

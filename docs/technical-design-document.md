@@ -460,6 +460,62 @@ that's lost the bulk of its rows to truncation, loose enough to tolerate
 a sheet that's legitimately shrunk (e.g. a fresh year's copy starting
 smaller than the prior year's).
 
+### 2.14 A transaction's variety, not its stored category, decides its cereal tab
+
+**Decision**: when a transaction's stored `cerealCategory` disagrees with
+its variety's category, the variety's category wins in serial lookup and
+tab selection (`isCategoryCompatible`), and an admin Data Repair tool
+rewrites the stored value on confirmation.
+
+**Rationale**: the original category-less fallback could file a record
+under the wrong tab, and gating the fallback alone left already-corrupted
+records behind, which kept reopening as Update forms. The variety is
+chosen deliberately by the user and is permanent per pile; the category is
+derived. Repair is scan-first because applying the rule to a record whose
+variety was itself mistaken would only move the error.
+
+### 2.15 Warehouse moves: previewed, selective, and re-synced rather than rewritten
+
+**Decision**: Move Records (and the per-transaction move offered from the
+Authority Review screen) share one planner/executor. The planner is a
+pure dry run returning blockers and warnings; the executor applies the
+result in one Dexie transaction (create missing destination piles, re-point
+`warehouseId`/`pileId`/WTS pile ids, move linked Purchase Receipts, write
+the audit entry), then recomputes both sides' pile balances and serial
+counters from the real ledgers. Moved records are marked `isSynced:false`
+so the existing sync queue calls `updateTransactionBackup` (matched by
+serial) with the new warehouse's context.
+
+**Rationale**: reusing the established retry-and-failure-logging path
+avoids a second Sheet-writing mechanism. Recomputing from ledgers, rather
+than adjusting running totals, avoids the lost-update gap documented in
+§2.7. Sack records (ESR/ESI) are excluded because sack inventory is per
+warehouse and is not part of this move. A serial change on move reuses the
+serial rename path, which leaves the old Sheet row for manual cleanup.
+
+### 2.16 Authority change detection is derived, not stored per user
+
+**Decision**: the sync appends a small `changeLog` entry to an authority
+only when a material field changes on an authority that Active
+transactions use, and stamps `missingFromSheetAt` only after a complete,
+non-suspicious full pull (same completeness checks as §2.13), refusing to
+flag if more than 15% of a source's authorities appear missing. Whether a
+transaction needs review is computed live by comparing that stamp with the
+transaction's `authorityAckAt`/`createdAt`; no per-user notification rows
+exist. Every helper swallows its own errors.
+
+**Rationale**: stored alerts would need a new synced table, per-user
+targeting, and deduplication across devices that each run the sync;
+deriving them from two plain fields needs no schema bump and cannot
+duplicate. The noise guards (ignore null/value backfills, ignore
+authorities nothing uses, mass-missing refusal) exist because a false alarm
+here would reach every warehouse user. Acknowledging stamps one field and
+nothing else; every corrective action is a user-initiated edit of a single
+transaction. Rejected alternatives: app-authored authorities written to the
+Sheet (the admin must keep editing the Sheet), and automatic migration on
+renumber (silent integrity risk in production). Open question: a stable ID
+issued at the Sheet root would remove the need for any of this.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

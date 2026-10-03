@@ -421,6 +421,52 @@ Receipt, track Cash on Hand, export a period's Abstract of Cereal
 Purchases) with zero changes required to any existing warehouse
 role's own screens or data.
 
+## Phase 9 — Post-Launch Corrections and Admin Tooling
+
+- **Cereal-tab corruption (incident).** A Rice-variety WSR could be
+  stored under the Palay category by StockFormBase's category-less serial
+  fallback; opening the Palay tab then loaded that record as an Update
+  form instead of a blank one. The first fix gated the fallback - the
+  user then reported identical symptoms on a real record, which proved
+  the stored data was already wrong, so the real fix made the variety's
+  category the truth (`isCategoryCompatible`), applied it to the primary
+  lookup as well, and added Admin > System > Data Repair to scan and
+  rewrite existing mismatches on confirmation. Lesson: the first fix
+  addressed how the bad data was *created*, not the bad data already
+  there. Repair is scan-first because a record whose variety itself was
+  wrong would be mis-filed by the variety-wins rule.
+- **Stock Statement decimals and rounding.** An admin decimals setting,
+  and a beginning/ending balance rounding fix so columns foot.
+- **Fuzzy search ranking.** Exact matches now rank first in every
+  fuzzy-search surface, including the SDO side.
+- **CPF Cash Disbursement Record.** Built over many rounds against real
+  printed samples. Recurring root causes: autoTable auto-widths differing
+  per page (fixed with explicit per-column widths measured with
+  `getTextWidth`), a hand-drawn per-page SUB-TOTAL row falling off the page
+  when the bottom margin shrank (the table now reserves that row's
+  height), and ledger rows one cell short that printed the running
+  balance under AMOUNT instead of the fund-balance column. Later
+  refinements: cash-entry kinds, DV No./Remarks, no "Check No. Opening
+  balance" text, ascending check-number ordering, 0.3 cm side and 0.5 cm
+  top/bottom margins with the surplus width given to Name of Farmer.
+- **Admin Move Records.** Selected-record warehouse move with preview,
+  pile merge/create, collision blocking, grouped-sibling handling and an
+  audit entry (see TDD §2.15).
+- **Authority change notifications.** Detection in the sync, per-user
+  bell, review screen with verify/re-link/move, and an admin overview
+  (see TDD §2.16). An earlier proposal to have the app write authorities
+  to the Sheet, and another to auto-migrate transactions on renumber,
+  were both rejected: the admin must keep editing the Sheet directly, and
+  automatic rewrites risk silent data-integrity errors in production.
+  Open: a renumber is only noticed after a full Sheet pull; a stable ID
+  at the Sheet root remains the only option that would prevent the
+  problem outright.
+
+**Milestone**: a wrongly filed record, a wrongly warehoused record, and a
+renumbered authority can each be found and corrected by the people who
+own them, one transaction at a time, with nothing changed behind their
+backs.
+
 ## Testing and Rollout Approach
 
 - **No dedicated automated test suite is assumed as a blocking gate** —

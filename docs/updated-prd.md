@@ -336,6 +336,26 @@ Equivalent Net Weight (ENW) factor table.
   Liquidate). Cash History supports editing or voiding a past
   Replenish/Liquidate entry directly, with a year selector limited to
   years that actually have data.
+- **Cash entry kinds**: a Replenish entry is one of Replenishment
+  (default), Cash Advance, or Additional Cash Advance; a Liquidate entry
+  is Partial (default) or Full. The kind is a label only - Cash on Hand
+  math looks at nothing but replenish-vs-liquidate. An entry also carries
+  an optional DV No. and Remarks, printed in the CPF Logbook only. An
+  "opening balance" replenishment has no check number and never prints
+  one. Check-numbered replenishments/cash advances list in ascending
+  check-number order in the Abstract; the CPF Logbook keeps strict date
+  order (its running balance is chronological) and sorts by check number
+  only within the same day.
+- **CPF Cash Disbursement Record (CPF Logbook)**: a second SDO export
+  (Settings > CPF Logbook Export), 8.5 x 13 in landscape, listing every
+  Purchase Receipt and every replenishment/cash advance/liquidation of a
+  chosen period in one chronological ledger with a running Cash Advance/
+  Fund Balance column, a balance-brought-forward opening row, per-page
+  running SUB-TOTAL rows, a final TOTAL, and an officer identification
+  block and certification. Columns hold identical widths on every page;
+  nothing is truncated (names and RSBSA numbers break only at hyphens or
+  spaces, PR numbers never break); replenishment rows print in blue and
+  span the Name-of-Farmer through Nature-of-Payment columns.
 
 ## 11. Reporting
 
@@ -350,7 +370,10 @@ historical pile state (replaying every transaction up to the selected
 date) rather than always showing today's live totals, correctly handling
 WTS's two-sided structure. PDF export never truncates a field — long
 values wrap instead, with every wrapped line's height reserved correctly
-in the layout.
+in the layout. The Stock Statement's decimal display is an admin-level
+setting (Admin > System > Stock Report Decimals), applied to every
+figure of the exported statement, with beginning and ending balances
+rounded consistently so a column always foots.
 
 ## 12. Data Integrity Principles
 
@@ -367,6 +390,29 @@ in the layout.
   pass can never import the same not-yet-local row twice.
 - PINs are one-way hashed before storage or comparison; nothing in the
   app ever displays or pre-fills a stored PIN.
+- **The variety is the truth for a transaction's cereal tab.** When a
+  transaction's stored cereal category disagrees with its own variety's
+  category, the variety wins everywhere (serial lookup, tab selection).
+  Admin > System > Data Repair scans for such records and rewrites them
+  only on confirmation.
+- **Moving records between warehouses is admin-driven, selective and
+  previewed.** Admin > System > Move Records moves selected transactions
+  (never a whole warehouse) wrongly encoded under another warehouse:
+  pile name unchanged (merge into the destination pile of that name and
+  cereal type, or create it empty), serial numbers unchanged and blocked
+  on collision, grouped multi-pile records moving together, sack records
+  and initial-balance seeds excluded, pile balances and serial counters
+  recomputed on both sides, the Sheet row's warehouse updated through the
+  normal re-sync, and every move recorded for reversal.
+- **Authority changes are detected and surfaced, never auto-repaired.**
+  Authorities remain Sheet-sourced and matched by AI/SIA number. When an
+  authority real transactions already use changes materially, or
+  disappears from a complete full Sheet pull (typically a renumber), the
+  users assigned to the affected warehouses and the admin are notified
+  through the bell and review each affected transaction one by one
+  (verify, open and edit, re-link to a suggested replacement authority,
+  or move to the authority's new warehouse). The system never rewrites a
+  transaction, balance or Sheet row on its own initiative.
 
 ## 13. Technical Foundation
 

@@ -188,6 +188,15 @@ per screen.
 - **Validation messaging**: inline, directly under the field it
   concerns, one or two lines, stating what's wrong and how to fix it —
   never a top-of-form summary list disconnected from the actual fields.
+- **Segmented kind toggle** (`EntryKindToggle`): a row of equal-width
+  pills in a bordered tray for choosing one of 2-3 mutually exclusive
+  labels inside a modal (Replenishment / Cash Advance / Additional Cash
+  Advance; Partial / Full). The active pill uses the brand-neon fill with
+  contrast text; inactive pills are muted. Used instead of a checkbox when
+  the choice is between named kinds rather than an on/off flag.
+- **Review lists**: an item needing action shows its identity on one line,
+  its context on a muted second line, and its actions as a wrapped row of
+  small buttons (the primary action in brand-neon, the rest outlined).
 
 ## 6. Motion Language
 

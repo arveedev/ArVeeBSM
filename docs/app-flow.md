@@ -313,3 +313,66 @@ the step-by-step journey.*
    every warehouse, and renders the NFA-format PDF (8.5 × 13 in
    landscape) — Basic Cost/Rate/Amount columns appear only if at least
    one PR in the exported period actually has pricer data on it.
+
+7. Replenish and Liquidate each open with a kind toggle: Replenishment /
+   Cash Advance / Additional Cash Advance, or Partial / Full liquidation,
+   plus optional DV No. and Remarks (the same fields are editable from
+   Cash History). The kind and DV/Remarks affect labels in Cash History,
+   the Abstract and the CPF Logbook only, never Cash on Hand.
+8. Settings' "CPF Logbook Export" prompts for a date range and renders
+   the CPF Cash Disbursement Record PDF (see `docs/updated-prd.md` §10)
+   - opening balance row, then every Purchase Receipt and cash-ledger
+   entry in date order with a running fund balance.
+
+## 10. Admin Moving Records Between Warehouses
+
+*See `docs/updated-prd.md` §12 for the rules.*
+
+1. Admin opens Admin > System > Move Records and picks the source and
+   destination warehouse.
+2. The source warehouse's transactions list (initial-balance seeds
+   excluded) can be filtered by type, serial or date; the admin ticks the
+   records to move.
+3. "Preview move" changes nothing. It lists blockers (a serial already
+   at the destination, a same-named pile with a different variety, a
+   sack record), warnings (a source pile that would go negative), the
+   grouped siblings added automatically, and per pile whether the move
+   merges into an existing destination pile or creates a new one.
+4. With no blockers, "Move" asks for confirmation, then moves the
+   records, recomputes both warehouses' pile balances and serial
+   counters, and flags the records for the normal Sheet re-sync, which
+   updates only the warehouse columns of the existing row. The move is
+   recorded in the Error Log (context "Warehouse Move") with the old and
+   new pile ids.
+5. A newly created destination pile has no Pile Layout box; someone with
+   access places it on the layout afterward. Authorities are untouched -
+   the user re-assigns the authority on each moved record.
+
+## 11. Authority Change Review Flow
+
+*See `docs/updated-prd.md` §12 and `docs/technical-design-document.md`
+§2.16.*
+
+1. During the normal authority sync, a material change to an authority
+   that Active transactions already use (warehouse, variety, transaction
+   type, allocated bags/kilos, SIA sack lines) is recorded on that
+   authority; an authority missing from a complete full Sheet pull is
+   flagged as no longer in the Sheet.
+2. Users assigned to the affected warehouses, and the admin, see one bell
+   entry per affected authority ("AI 123 was changed" / "no longer in the
+   Sheet", with the number of transactions to review). Tapping it opens
+   the Authority Review screen, which lists what changed and every
+   affected transaction.
+3. Per transaction the user can: Open it in its normal entry form;
+   Verify OK / Keep as is (stamps an acknowledgment and clears it from
+   the list); Find replacement (ranked candidate authorities with the
+   reasons for each match; Link re-points only that transaction and
+   recomputes issued totals); or Move to the authority's new warehouse
+   when both warehouses are the user's own (optionally taking the next
+   serial of the destination warehouse's series).
+4. The entry leaves the bell once no transaction under that authority
+   remains unreviewed.
+5. Admin > Operations > Authority Links gives the admin a read-only scan
+   of orphaned linked documents (a stale AI/SIA number with no authority
+   at all) and of flagged authorities with unreviewed transactions.
+   A renumber is only noticed after a full Sheet pull (Force Resync).
