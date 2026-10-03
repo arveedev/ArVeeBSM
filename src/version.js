@@ -8178,4 +8178,28 @@
 //            Cash History (incl. its edit form), the Abstract and the CPF
 //            Logbook ("... CASH ADVANCE", "ADDITIONAL CASH ADVANCE",
 //            "FULL LIQUIDATION" etc). Cash on Hand math is unchanged.
-export const APP_VERSION = '1.10-262'
+//   1.10-263 - Authority change notifications (detection + user-driven
+//            review; nothing is ever changed automatically).
+//            Sync: when an authority that Active transactions already use
+//            changes a material field (warehouse, variety, transaction
+//            type, allocated bags/kilos, SIA sack lines), the sync appends
+//            an entry to that authority's own changeLog; after a COMPLETE,
+//            non-suspicious full pull, an authority no longer in the Sheet
+//            (usually a renumber) gets missingFromSheetAt. Null<->value
+//            backfills, authorities nothing links to, and a mass "missing"
+//            result (>15%) are ignored; every helper swallows its own
+//            errors so the sync can't break. New authorities also get
+//            firstSeenAt. No schema/version change (plain fields).
+//            Bell: users assigned to the affected warehouses plus the admin
+//            get one entry per affected authority, opening an Authority
+//            Review screen listing each affected transaction: Open (normal
+//            entry form), Verify OK/Keep as is (stamps authorityAckAt only),
+//            Find replacement (ranked suggestions among other authorities;
+//            Link re-points just that transaction's AI/SIA number and
+//            re-derives issued totals), and Move to the authority's new
+//            warehouse (same planner as Admin > Move Records, optional next
+//            serial of the destination series). Sack records (ESR/ESI) are
+//            now blocked from moves since sack inventory is per warehouse.
+//            Admin > Operations > Authority Links: read-only scan of
+//            orphaned linked documents and flagged authorities.
+export const APP_VERSION = '1.10-263'

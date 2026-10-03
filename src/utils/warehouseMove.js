@@ -63,6 +63,7 @@ export const planWarehouseMove = async (selectedIds, sourceWarehouseId, destWare
   if (records.length === 0) return { records, siblingsAdded, piles: [], blockers: ['Nothing selected.'], warnings }
 
   for (const t of records) {
+    if (t.type === 'ESR' || t.type === 'ESI') blockers.push(`${t.type} ${t.serialNo} is a sack record - sack inventory is tracked per warehouse and is not moved by this tool.`)
     if (t.isInitialBalance) blockers.push(`${t.type} ${t.serialNo} is an initial-balance seed and cannot be moved.`)
     const clash = await db.transactions
       .where('[type+warehouseId+serialNo]').equals([t.type, destWarehouseId, t.serialNo]).first()

@@ -69,6 +69,7 @@
 // since network access is never guaranteed in this offline-first app —
 // callers are expected to check `.ok` before using `.data`.
 
+import { buildChangeLogPatch, markMissingAuthorities } from '../utils/authorityChanges.js'
 import { db } from '../db/dexie.js'
 import { normalizeWarehouseAlias } from '../utils/warehouseMatching.js'
 import { todayLocalISO } from '../utils/calculations.js'
@@ -501,12 +502,22 @@ const upsertAuthority = async (incoming, cacheByAiNumber = null) => {
     // that actually differ need to be sent at all.
     const aiChangedFields = diffPatch(existing, incoming)
     if (Object.keys(aiChangedFields).length > 0) {
+      // Detection only (utils/authorityChanges.js) - records WHAT changed
+      // on an authority real transactions already use, so the affected
+      // warehouse users can be notified. Never throws, never edits a
+      // transaction.
+      Object.assign(aiChangedFields, await buildChangeLogPatch(existing, incoming))
+    }
+    // Back in the Sheet (e.g. a full pull after a transient miss) - clear the flag.
+    if (existing.missingFromSheetAt) aiChangedFields.missingFromSheetAt = null
+    if (Object.keys(aiChangedFields).length > 0) {
       await db.authorities.update(existing.authId, aiChangedFields)
     }
   } else {
     final = {
       authId: crypto.randomUUID(),
       ...incoming,
+      firstSeenAt: new Date().toISOString(),
       totalIssuedBags: 0,
       totalIssuedKilos: 0,
       status: 'Pending',
@@ -580,16 +591,23 @@ const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null) => {
     }
     const siaChangedFields = diffPatch(existing, scalarPatch)
     const sackLinesChanged = !sackLinesEqual(existing.sackLines ?? [], mergedLines)
-    if (Object.keys(siaChangedFields).length > 0 || sackLinesChanged) {
+    const siaLogPatch = (Object.keys(siaChangedFields).length > 0 || sackLinesChanged)
+      ? await buildChangeLogPatch(existing, scalarPatch, mergedLines)
+      : {}
+    const siaClearMissing = existing.missingFromSheetAt ? { missingFromSheetAt: null } : {}
+    if (Object.keys(siaChangedFields).length > 0 || sackLinesChanged || existing.missingFromSheetAt) {
       await db.authorities.update(existing.authId, {
         ...siaChangedFields,
         ...(sackLinesChanged ? { sackLines: mergedLines } : {}),
+        ...siaLogPatch,
+        ...siaClearMissing,
       })
     }
   } else {
     final = {
       authId: crypto.randomUUID(),
       type: 'SIA',
+      firstSeenAt: new Date().toISOString(),
       siaNumber: incoming.siaNumber,
       aiNumber: null,
       date: incoming.date,
@@ -856,7 +874,7 @@ const dedupeStaleAuthorities = async () => {
  * from the one thing that structurally cannot drift - the transactions
  * themselves.
  */
-const recalculateAuthorityIssuedTotals = async () => {
+export const recalculateAuthorityIssuedTotals = async () => {
   const [aiAuthorities, siaAuthorities, wsiTx, esiTx] = await Promise.all([
     db.authorities.where('type').equals('AI').toArray(),
     db.authorities.where('type').equals('SIA').toArray(),
@@ -1012,6 +1030,8 @@ const runAuthoritiesSync = async () => {
       // lastSyncedAt write below can tell a full pull apart from a
       // routine delta tick.
       const wasFullPull = !source.lastSyncedAt
+      const seenAiNumbers = new Set()
+      const seenSiaNumbers = new Set()
       const [aiRows, siaRows] = await Promise.all([
         fetchAuthorityRows(source, 'AI'),
         fetchAuthorityRows(source, 'SIA'),
@@ -1081,6 +1101,7 @@ const runAuthoritiesSync = async () => {
           note2: row['Note2'] ?? null,
           sourceId: source.id,
         }, aiCache)
+        seenAiNumbers.add(aiNum)
         aiCount += 1
         // TEMPORARY diagnostic - the fix chain (header restored, hybrid
         // header-name/position read) hasn't yet been confirmed actually
@@ -1209,6 +1230,7 @@ const runAuthoritiesSync = async () => {
           })),
           sourceId: source.id,
         }, siaCache)
+        seenSiaNumbers.add(siaNum)
         siaCount += 1
       }
 
@@ -1281,6 +1303,9 @@ const runAuthoritiesSync = async () => {
         // period happened to return.
         if (wasFullPull) {
           update.lastFullPullRowCounts = { ai: aiRows.length, sia: siaRows.length }
+          // Only a complete, non-suspicious full pull is trustworthy
+          // enough to conclude an authority has left the Sheet.
+          await markMissingAuthorities(source.id, seenAiNumbers, seenSiaNumbers)
         }
         await db.sheetSources.update(source.id, update)
       }

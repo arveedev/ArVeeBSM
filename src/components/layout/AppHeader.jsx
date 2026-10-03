@@ -22,6 +22,8 @@ import { fmtBags, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureSt
 import { computeWsrProcurementCost } from '../../utils/sdoCalculations.js'
 import { dedupeWsrTransactions } from '../../pages/SdoHome.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
+import AuthorityReviewModal from '../common/AuthorityReviewModal.jsx'
+import { computeReviewGroups } from '../../utils/authorityReview.js'
 import Avatar from '../common/Avatar.jsx'
 import AvatarPickerModal from '../common/AvatarPickerModal.jsx'
 import { REGULAR_NAV_COLUMN } from './BottomNav.jsx'
@@ -429,6 +431,7 @@ function AppHeader({ hidden = false }) {
   ) ?? null
 
   const [notifOpen, setNotifOpen] = useState(false)
+  const [reviewAuthId, setReviewAuthId] = useState(null)
   const [confirmingClearNotifs, setConfirmingClearNotifs] = useState(false)
   const notifRef = useRef(null)
   // Reported, confirmed real bug: the panel's vertical position was
@@ -513,7 +516,25 @@ function AppHeader({ hidden = false }) {
     return () => document.removeEventListener('mousedown', handleOutside)
   }, [notifOpen])
 
+  // Authorities these users' transactions rely on that changed (or left the
+  // Sheet) since the transaction was made/acknowledged - derived live, scoped
+  // to the user's own warehouses (admin: all). See utils/authorityReview.js.
+  const reviewGroups = useLiveQuery(
+    () => (isVisitor || isSdo ? [] : computeReviewGroups({ isAdmin, warehouseIds })),
+    [isAdmin, isVisitor, isSdo, warehouseIds.join(',')]
+  ) ?? []
+
   const notifEntries = [
+    ...reviewGroups.map((g) => ({
+      id: `authreview:${g.key}`,
+      resolved: false,
+      title: `${g.authority.type} ${g.number} ${g.kind === 'missing' ? 'no longer in the Sheet' : 'was changed'}`,
+      detail: `${g.transactions.length} transaction${g.transactions.length === 1 ? '' : 's'} to review`,
+      onClick: () => {
+        setNotifOpen(false)
+        setReviewAuthId(g.key)
+      },
+    })),
     ...errorEntries.map((entry) => ({
       id: `error:${entry.id}`,
       resolved: Boolean(entry.resolved),
@@ -1015,6 +1036,8 @@ function AppHeader({ hidden = false }) {
         onConfirm={handleLogoutConfirmed}
         onCancel={() => setConfirmingLogout(false)}
       />
+
+      {reviewAuthId && <AuthorityReviewModal authId={reviewAuthId} onClose={() => setReviewAuthId(null)} />}
 
       {isAdmin && (
         <ConfirmDialog
