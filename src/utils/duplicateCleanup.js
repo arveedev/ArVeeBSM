@@ -97,7 +97,20 @@ export const scanDuplicates = async () => {
     }
     const uniqueReasons = [...new Set(reasons)]
 
+    // History merge (owner-approved): the app only uses data after the cutoff,
+    // so for copies wholly on/before it, differing descriptive values (names,
+    // age units...) don't block. The most complete copy stays and fills its
+    // blanks from the others. Still never removes a copy that is linked to a
+    // Purchase Receipt, holds a pile/group link the kept copy lacks, or is
+    // waiting to sync.
+    const linkDiffers = (o) =>
+      ['pileId', 'receivedPileId', 'issuedPileId', 'groupSerialNo'].some((f) => !isEmpty(o[f]) && !sameValue(o[f], keeper[f]))
+    const historyMergeOk =
+      beforeCutoff && AUTO_TYPES.has(first.type) && rows.every((t) => t.isSynced !== false) &&
+      others.every((o) => !referencedIds.has(o.id) && !linkDiffers(o))
+
     if (uniqueReasons.length === 0) auto.push({ ...label, keeper, remove: others })
+    else if (historyMergeOk) auto.push({ ...label, keeper, remove: others, historyMerge: true })
     else manual.push({ ...label, reasons: uniqueReasons, keeperId: keeper.id, rows })
   }
 

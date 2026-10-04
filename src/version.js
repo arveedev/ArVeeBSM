@@ -8254,4 +8254,9 @@
 //            has an old bare Sheet copy (e.g. ESR 1730452). The Error Log
 //            'Serial collision' wording is corrected: it is usually a real
 //            entry plus a Sheet copy, not two different transactions.
-export const APP_VERSION = '1.10-269'
+//   1.10-270 - Duplicate Cleanup: copies wholly on/before the cutoff no longer
+//            need identical descriptive values (names, age unit, auto-net
+//            flag): the most complete copy stays and absorbs the others'
+//            blanks. Still skipped: PR-linked copies, differing pile/group
+//            links, and anything pending sync. Live-period cases stay manual.
+export const APP_VERSION = '1.10-270'
