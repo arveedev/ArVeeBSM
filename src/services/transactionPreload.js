@@ -658,7 +658,7 @@ const dedupeDuplicateTransactions = async (type, warehouseIds) => {
       new Error(
         `${survivor.warehouseId} / ${survivor.cerealCategory ?? 'n/a'}: ` +
         [survivor, ...others].map(describe).join(' vs. ') +
-        ' - these look like two different real transactions sharing one serial number, not a duplicate. Nothing was deleted or merged; one needs to be renumbered by hand.'
+        ' - two records share this serial. This is usually one real entry plus an old copy created from the Sheet (open Admin > Duplicate Cleanup to review), or occasionally two different transactions typed with the same number. Nothing was deleted or merged.'
       ),
       { nickname: 'Background sync', role: 'System' }
     )

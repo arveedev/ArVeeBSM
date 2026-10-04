@@ -8250,4 +8250,8 @@
 //            review and never changed. A snapshot file of removed records
 //            is downloaded before any delete, and Restore puts them back.
 //            Local database only; the Google Sheet is not touched.
-export const APP_VERSION = '1.10-268'
+//   1.10-269 - Duplicate Cleanup now also handles a live-period real entry that
+//            has an old bare Sheet copy (e.g. ESR 1730452). The Error Log
+//            'Serial collision' wording is corrected: it is usually a real
+//            entry plus a Sheet copy, not two different transactions.
+export const APP_VERSION = '1.10-269'

@@ -6,7 +6,8 @@
 //  - A group is AUTO-eligible only when every copy except the one kept is
 //    a bare Sheet placeholder (no pile, MTS, gross weight, group link, and
 //    not referenced by a Purchase Receipt), the date is on/before the
-//    warehouse's effective cutoff (history, not live data), nothing is
+//    warehouse's effective cutoff (or the copy kept is one the app itself
+//    created, so the others are just old Sheet echoes), nothing is
 //    waiting to sync, and no field holds a different value from the kept
 //    copy. Anything else is listed as MANUAL and never touched here.
 //  - Before any delete, the full removed records (and the kept copies as
@@ -83,7 +84,12 @@ export const scanDuplicates = async () => {
     if (!AUTO_TYPES.has(first.type)) reasons.push('record type not covered')
     if (nonPlaceholders.length > 1) reasons.push(`${nonPlaceholders.length} copies hold real data (pile / weights / links)`)
     const cutoff = cutoffByWh.get(first.warehouseId)
-    if (!cutoff || rows.some((t) => !t.date || t.date > cutoff)) reasons.push('not clearly before the warehouse cutoff (live period)')
+    // Live-period copies are allowed only in the safest shape: one copy the
+    // app itself created (not from the Sheet, nothing left to complete) and
+    // the rest bare placeholders - i.e. an old Sheet echo of a real entry.
+    const keeperIsAppMade = keeper.fromSheetImport !== true && keeper.needsCompletion !== true && nonPlaceholders.length === 1
+    const beforeCutoff = cutoff && rows.every((t) => t.date && t.date <= cutoff)
+    if (!beforeCutoff && !keeperIsAppMade) reasons.push('live period and no app-made copy to keep')
     if (rows.some((t) => t.isSynced === false)) reasons.push('a copy is still waiting to sync')
     for (const o of others) {
       const bad = conflictingFields(keeper, o)
