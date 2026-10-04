@@ -8259,4 +8259,9 @@
 //            flag): the most complete copy stays and absorbs the others'
 //            blanks. Still skipped: PR-linked copies, differing pile/group
 //            links, and anything pending sync. Live-period cases stay manual.
-export const APP_VERSION = '1.10-270'
+//   1.10-271 - Duplicate Cleanup: a bare Sheet copy (no figures/names, e.g. a
+//            cancelled row) next to an app-made entry is removed even if its
+//            date/status differ; the app-made copy is always preferred as the
+//            one kept, history Sheet copies with another pile are removed too,
+//            and piles are recalculated after a cleanup.
+export const APP_VERSION = '1.10-271'

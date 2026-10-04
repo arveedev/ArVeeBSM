@@ -22,7 +22,7 @@ import { logError } from './errorLog.js'
 const IGNORED_FIELDS = new Set([
   'id', 'isSynced', 'hasBeenBackedUp', 'syncFailureLogged', 'staleCleanupLogged',
   'fromSheetImport', 'needsCompletion', 'changeLog', 'createdAt', 'updatedAt',
-  'firstSeenAt', 'lastSeenAt', 'missingFromSheetAt', 'staleSheetSerials',
+  'firstSeenAt', 'lastSeenAt', 'missingFromSheetAt', 'staleSheetSerials', 'autoComputeNet',
 ])
 const AUTO_TYPES = new Set(['WSR', 'WSI', 'WTS', 'ESR', 'ESI'])
 const BATCH = 200
@@ -37,6 +37,10 @@ const isPlaceholder = (t, referencedIds) =>
   !t.pileId && !t.receivedPileId && !t.issuedPileId &&
   isEmpty(t.grossKilos) && isEmpty(t.mtsSackTypeId) && isEmpty(t.groupSerialNo) &&
   !referencedIds.has(t.id)
+
+// A Sheet copy carrying no figures or names at all (e.g. a cancelled row).
+const isBare = (t) =>
+  isEmpty(t.numberOfBags) && isEmpty(t.grossKilos) && isEmpty(t.netKilos) && isEmpty(t.aiNumber) && isEmpty(t.customerName)
 
 const conflictingFields = (keeper, other) => {
   const out = []
@@ -77,21 +81,25 @@ export const scanDuplicates = async () => {
     const placeholders = rows.filter((t) => isPlaceholder(t, referencedIds))
     const nonPlaceholders = rows.filter((t) => !placeholders.includes(t))
     const pool = nonPlaceholders.length > 0 ? nonPlaceholders : rows
-    const keeper = [...pool].sort((a, b) => completeness(b) - completeness(a))[0]
+    const keeper = [...pool].sort((a, b) => (a.fromSheetImport === true) - (b.fromSheetImport === true) || completeness(b) - completeness(a))[0]
     const others = rows.filter((t) => t.id !== keeper.id)
 
+    const cutoff = cutoffByWh.get(first.warehouseId)
+    const keeperIsAppMade = keeper.fromSheetImport !== true && keeper.needsCompletion !== true
+    const beforeCutoff = cutoff && rows.every((t) => t.date && t.date <= cutoff)
     const reasons = []
     if (!AUTO_TYPES.has(first.type)) reasons.push('record type not covered')
     if (nonPlaceholders.length > 1) reasons.push(`${nonPlaceholders.length} copies hold real data (pile / weights / links)`)
-    const cutoff = cutoffByWh.get(first.warehouseId)
     // Live-period copies are allowed only in the safest shape: one copy the
     // app itself created (not from the Sheet, nothing left to complete) and
     // the rest bare placeholders - i.e. an old Sheet echo of a real entry.
-    const keeperIsAppMade = keeper.fromSheetImport !== true && keeper.needsCompletion !== true && nonPlaceholders.length === 1
-    const beforeCutoff = cutoff && rows.every((t) => t.date && t.date <= cutoff)
-    if (!beforeCutoff && !keeperIsAppMade) reasons.push('live period and no app-made copy to keep')
+    if (!beforeCutoff && !(keeperIsAppMade && nonPlaceholders.length === 1)) reasons.push('live period and no app-made copy to keep')
     if (rows.some((t) => t.isSynced === false)) reasons.push('a copy is still waiting to sync')
     for (const o of others) {
+      // Bare Sheet echo of an app-made entry (same serial, e.g. the Sheet's
+      // old cancelled row for a serial the app later reused): nothing in it
+      // to lose, so a different date/status does not block.
+      if (keeperIsAppMade && placeholders.includes(o) && isBare(o)) continue
       const bad = conflictingFields(keeper, o)
       if (bad.length) reasons.push(`values differ: ${bad.join(', ')}`)
     }
@@ -107,7 +115,7 @@ export const scanDuplicates = async () => {
       ['pileId', 'receivedPileId', 'issuedPileId', 'groupSerialNo'].some((f) => !isEmpty(o[f]) && !sameValue(o[f], keeper[f]))
     const historyMergeOk =
       beforeCutoff && AUTO_TYPES.has(first.type) && rows.every((t) => t.isSynced !== false) &&
-      others.every((o) => !referencedIds.has(o.id) && !linkDiffers(o))
+      others.every((o) => !referencedIds.has(o.id) && (!linkDiffers(o) || (keeperIsAppMade && o.fromSheetImport === true)))
 
     if (uniqueReasons.length === 0) auto.push({ ...label, keeper, remove: others })
     else if (historyMergeOk) auto.push({ ...label, keeper, remove: others, historyMerge: true })
@@ -181,6 +189,15 @@ export const applyDuplicateCleanup = async (groups, onProgress = () => {}) => {
       await recalculateAuthorityIssuedTotals()
     } catch (err) {
       console.error('Authority totals recalculation after duplicate cleanup failed:', err)
+    }
+  }
+  const pileIds = [...new Set(groups.flatMap((g) => g.remove.flatMap((r) => [r.pileId, r.receivedPileId, r.issuedPileId])).filter(Boolean))]
+  if (pileIds.length > 0) {
+    try {
+      const { recalculatePileCurrentState } = await import('./pileLedger.js')
+      for (const id of pileIds) await recalculatePileCurrentState(id)
+    } catch (err) {
+      console.error('Pile recalculation after duplicate cleanup failed:', err)
     }
   }
   logError(
