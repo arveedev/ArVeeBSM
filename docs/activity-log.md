@@ -17393,3 +17393,1094 @@ findings/decisions from this round's back-and-forth:
 Re-verified with `node --check`. Waiting on the user to run the new
 export tool against each of the 9 GSR pages and share the results before
 the actual GSR generator can be designed/built.
+
+## Round 49: GSR Phase 1 build (Inventory + Prices + Procurement)
+
+User re-shared all 9 GSR report pages using the new formula-enriched
+schema export tool from Round 48, giving real live formulas, bold flags,
+merges, and column widths for the first time. Analyzed them and asked 4
+more clarifying questions before building:
+
+- **Price bulletin (P29/P33/P35/P38-or-20/P39)**: confirmed these are a
+  0-3/>3 age-tier price pair PER DISTRIBUTION SCHEME, not a flat two-tier
+  price - needs to be configurable per scheme since NFA changes these.
+- **Sheet naming**: `PROCURMENT 1`/`PROCURMENT 2` (missing the E, baked in
+  since the sheets were first created) - user confirmed: fix it now.
+- **Palay Inventory Sub-Total formulas**: confirmed genuine copy-paste
+  drift (one column sums a different row range than its neighbor for the
+  same age-bracket block) - auto-correct to consistent per-block ranges.
+- **PROC.MILL #DIV/0! formulas**: confirmed - wrap all in
+  `IFERROR(..., "-")`, matching the pattern already used inconsistently
+  in some rows.
+
+Entered plan mode to design the Phase 1 build. User corrected two things
+in the plan before approving:
+- **Filename date was backwards**: originally planned filename = period
+  date + 1 day (the creation/dated date). Corrected: filename uses the
+  PERIOD date being reported, not the creation date - generating on
+  August 21 for the August 20 period produces `GSR AUGUST 20`, never
+  `GSR AUGUST 21`. The internal memo's own "dated" line still uses the
+  creation date, matching the legacy `18 August 2026` memo-date /
+  `SUBJECT: ... FOR AUGUST 17, 2026` one-day-lag pattern.
+- **Admin-gating doesn't extend to a future web trigger**: user asked
+  directly whether `Config!B4` (admin emails) would let the BSM web app
+  generate the report. Answered no - an Apps Script Web App deployed as
+  "Execute as: Me" reports the DEPLOYING account's email to
+  `Session.getEffectiveUser()` regardless of who actually made the HTTP
+  call, so that allowlist only means something for manual in-sheet menu
+  clicks. Flagged as an open design item for the (explicitly deferred)
+  Phase 2 web-trigger integration, along with a "no duplicate/missing
+  data" requirement carried into that future phase.
+- Also tightened the Inventory hide/unhide design per user request
+  ("make sure this is efficient and accurate"): hide/unhide state is
+  recomputed FRESH from the actual generated data every run (never
+  carried over from a prior period's hidden state), using batched
+  `hideRows`/`hideColumns` range calls instead of per-cell operations.
+
+### Built (`docs/gsr-report-script.js`, new)
+
+New standalone Apps Script project (separate from both Daily Inventory/
+Age Monitoring AND from the Round-48 schema-export tool, which stays
+attached to the OLD hand-built GSR spreadsheet as a diagnostic only).
+Reuses the established house patterns rather than reinventing them:
+header-name column resolution (`getSheetHeaders_`/`resolveColumnIndex_`/
+`resolveColumnIndexByPrefix_`), email-allowlist admin gating via
+`Session.getEffectiveUser()` (generation-only - submission forms stay
+open, same split as Age Monitoring's QA form), `LockService` around the
+generation run, and the modal-HTML-file + `google.script.run` form
+pattern.
+
+New Config sheet (14 labeled cells: production/Age-Monitoring URLs, admin
+emails, Palay Deliveries folder ID, GSR output root folder ID,
+signatories x3, default addressee) plus 6 new admin-maintained/
+submission-populated tables: `ProcurementTargets`, `DistributionSchemeMap`,
+`PriceBulletin`, `WarehouseProvince`, `CpfBalance`, `WeeklyCerealPrices` -
+replacing what used to be hardcoded literals scattered through formulas
+and headers in the legacy sheet.
+
+Core logic:
+- `readProcurementAccomplishment_`: `DATA_ENTRY` rows with
+  `Transaction = "PROCUREMENT"` dated exactly on the period date, deduped
+  by `WSR #` (same trustworthy-key convention as Daily Inventory),
+  grouped by province via `WarehouseProvince` - accomplishment (bags) and
+  farmers served (row count) both come from this same filtered set, per
+  the user's own description. Unmapped warehouses are counted under an
+  explicit `UNMAPPED` bucket and flagged in the summary, never silently
+  dropped or misfiled.
+- `readCpfBalanceForPeriod_`: latest `CpfBalance` submission on/before the
+  period date, per province.
+- `readUnpaidDeliveries_`: best-effort comparison against the monthly
+  Palay Deliveries spreadsheet (resolved via the documented Drive
+  folder/naming pattern). Since the real column layout of that file
+  hasn't been sampled yet, this returns an explicit error (surfaced in
+  the generation summary) rather than a guessed number if it can't
+  confidently resolve Date/Amount/Paid columns - documented as a known
+  limitation to tighten once a real sample is available.
+- `readQaInventoryBaseline_`: reads Age Monitoring's `QA_AGE_SUBMISSIONS`
+  directly at full age-bracket granularity (not collapsed to Daily
+  Inventory's coarser 5-bucket system) - the same granularity the legacy
+  hand-built GSR displayed. Flags (not hides) any entry based on QA data
+  older than 45 days.
+- `renderInventorySheet_`: pivots the QA baseline into variety x warehouse
+  x age-bracket blocks, writes ONE consistent Sub-Total row range per
+  block reused across every warehouse column (the actual fix for the
+  drifted-ranges bug), and hides zero-data rows via `batchHideRows_`
+  (merges contiguous row numbers into the fewest possible `hideRows`
+  calls - sandbox-verified: `[2,3,4,10,11,15]` -> 3 calls, not 6).
+- `renderProcurementSheet_`: writes raw counts as values, `% Accomplished`
+  as a live `IFERROR(C/B, "-")` formula per row (never a static number),
+  fixing the legacy `#DIV/0!` class of bug at the source.
+- `renderPricesSheet_`: this-week/last-week pulled from
+  `WeeklyCerealPrices`' `Is Current` flag.
+- `generateGsrReport`: admin-gated, locked, prompts for the period date,
+  resolves/creates the `GSR/{year}/{MM MONTHNAME}/` Drive folder chain,
+  names the file after the PERIOD date (not creation date - see the
+  plan-mode correction above), writes the memo header (creation date +
+  one-day-lag SUBJECT line + signatories from Config), then calls the
+  three render functions.
+
+Sheet names fixed throughout: `PROCUREMENT 1`/`PROCUREMENT 2` (not
+`PROCURMENT`), per the user's explicit "fix this now."
+
+### Also added
+`docs/gsr-cpf-balance-form.html`, `docs/gsr-weekly-price-form.html` (new
+submission forms, same pattern as `age-submission-form.html` - one
+upserts by date+province, the other flips the prior "current" row to
+false before inserting the new one). Updated `docs/sheets-reports-setup.md`
+with a full GSR Phase 1 setup section, including the Unpaid Deliveries
+limitation.
+
+### Verified
+`node --check docs/gsr-report-script.js` - OK. Sandbox-simulated (Node,
+outside Apps Script) `columnToLetter_`, `batchHideRows_`, the filename
+date logic (confirmed period-date-not-creation-date), and the Sub-Total
+per-block range-consistency logic against synthetic data - all matched
+expected output.
+
+### Explicitly deferred (per the approved plan)
+Milling Status (bottom half of Proc.Mill), Dispersal, full Distribution
+breakdown, and BSM-App-triggered generation (the `doGet`/`doPost` +
+`webAppUrl` wiring already exists in `src/services/googleSheetsBridge.js`/
+`GoogleSheetsPanel.jsx` for a later phase, but needs its own admin gate
+design - see the Config!B4 caveat above).
+
+## Round 50: GSR Phase 1 fixes (repair function, real warehouse data, CPF/price restructure, calendar period picker, Drive ID bug)
+
+User hit a blocking error immediately after installing Round 49's
+generator: `Exception: Invalid file or folder ID` on `Config!B6`, because
+`DriveApp.getFolderById()` needs a bare ID, not the full Drive URL the
+user (reasonably) pasted. Also asked directly what B6 actually points to.
+Answered: B6 is the TOP-LEVEL "GSR" folder containing the year folders -
+confirmed the user's original folder link was conceptually correct, the
+only problem was the URL-vs-ID mismatch.
+
+Also raised, in one batch:
+- Need a non-destructive "Repair" function separate from "Initialize" -
+  for when a column/row gets accidentally hidden or deleted, or a
+  label/header gets overwritten, without wiping existing data.
+- Confirmed DistributionSchemeMap matching should be case-insensitive
+  (checked the existing code - it already was, both sides uppercase
+  before comparison; no change needed, just confirmed to the user).
+- PriceBulletin should be price PER KILO, not per bag.
+- WarehouseProvince needs real data filled in - rule: `CTD GID 2`/`GID 2`
+  is CATANDUANES, everything else is ALBAY.
+- Asked directly whether warehouse nicknames (GSR spelling vs Authority/
+  backup-sheet spelling) are being reconciled - answered no, that's a
+  real gap (Apps Script reports can't reach the BSM App's client-side
+  `warehouseAliases` Dexie table), fixed by adding a dedicated
+  `WarehouseAliases` sheet to GSR itself.
+- Weekly Cereal Price was missing the Wholesale/Retail split the legacy
+  sheet actually has per item.
+- Every numeric input/output should be comma-separated.
+- CPF Balance: Cash in Bank is a single BRANCH-wide figure, separate from
+  each Disbursing Officer's own cash-on-hand - these were wrongly bundled
+  as two required fields on one form/row.
+- Period selection must be a calendar FROM/TO picker, not a typed date
+  string - same date in both fields means a single-day report.
+
+### Changed (`docs/gsr-report-script.js`, substantially rewritten)
+
+- `extractDriveId_`: accepts either a bare Drive ID or a full URL (any of
+  the common folder/file URL shapes) for Config!B5/B6 - fixes the
+  blocking error at its source instead of just documenting around it.
+  Sandbox-verified against the user's exact failing URL.
+- `repairGsrSheets_` (new, menu item "🛠️ Repair Config & Data Sheets"):
+  restores Config's labels and every table sheet's header row, and
+  un-hides any hidden rows/columns, WITHOUT touching existing data rows.
+  Only recreates a sheet from scratch (empty, no re-seeding) if the whole
+  sheet is missing. `initializeGsrSheets` still never re-seeds/touches an
+  existing sheet, unchanged from Round 49 - Repair is the new, separate,
+  safe-to-rerun-anytime tool for structural damage.
+- `WarehouseProvince` seeded with real warehouse names from the legacy
+  GSR's inventory pages (LEGGID, LEGGID-A, ABACORP, ABACORP-A, TAB GID,
+  TABACO GID, LEGAZPI GID, VRT, BSI, BSI-B, PHF-SHED, ROREDO GYM, KINALE
+  -> ALBAY; GID 2, CTD GID 2 -> CATANDUANES). `resolveProvinceForWarehouse_`
+  also codes the CTD/GID2-vs-everything-else rule directly as a fallback,
+  so a warehouse missing from the table still resolves correctly instead
+  of an "unmapped" bucket - sandbox-verified against every real warehouse
+  name plus an unlisted one.
+- `WarehouseAliases` (new sheet + `readWarehouseAliasMap_`/
+  `normalizeWarehouse_`): registers known spelling variants; applied
+  before grouping in both `readProcurementAccomplishment_` (DATA_ENTRY)
+  and `readQaInventoryBaseline_` (QA_AGE_SUBMISSIONS) so the two data
+  sources reconcile even if they don't spell a warehouse identically. A
+  warehouse with no registered alias resolves to itself, unchanged.
+- `PriceBulletin` header relabeled "Price per Kilo"; comments updated -
+  the underlying seed values (33/29) were already per-kilo figures
+  (matching the legacy sheet's own per-kilo RMR/WMR prices), only the
+  label was wrong.
+- `CpfBalance` restructured: two entry types, `SDO` (per officer, cash on
+  hand) and `BANK` (branch-wide, no officer) - no longer one form with
+  both required. `readCpfBalanceForPeriod_` rewritten to sum every
+  officer's own latest cash-on-hand entry plus the branch's latest
+  cash-in-bank entry into the true total - sandbox-verified with a stale
+  older SDO submission correctly superseded by a newer one, summed
+  correctly with a separate officer and the bank figure.
+- `WeeklyCerealPrices` gets a `Price Type` (Wholesale/Retail) dimension;
+  `recordWeeklyPrice`'s "flip previous current row" logic and
+  `renderPricesSheet_`'s this-week/last-week pivot both now key on
+  (province, item, priceType) instead of just (province, item).
+- Every numeric output column (Procurement bags/target/farmers/CPF,
+  Inventory bags, Prices) gets `setNumberFormat("#,##0.00")`; table
+  sheets' numeric columns (Target, Price, Amount) get the same format
+  applied to the whole column at creation time so future admin/
+  submission-form entries inherit it automatically, not just the seed
+  rows.
+- Period is now a FROM/TO range end to end: `generateGsrReport` (single
+  date) replaced by `generateGsrReportForPeriod({from, to})`, driven by
+  the new calendar-picker modal instead of a text `ui.prompt`.
+  `dateWithinRange_` (inclusive, GMT+8, string-compared) replaces every
+  exact-day match in `readProcurementAccomplishment_` and
+  `readUnpaidDeliveries_`. `readUnpaidDeliveries_` now sums across every
+  distinct month's Palay Deliveries file touched by the range
+  (`monthFileNamesInRange_`) in case a combined range crosses a month
+  boundary - sandbox-verified (range check, and a July/August-spanning
+  range correctly pulling both months' filenames vs. a within-August
+  range correctly pulling only one). `buildGsrFilename_` unchanged in
+  behavior (already accepted a from/to shape from Round 49) but now
+  actually driven by two real calendar-picked dates instead of a single
+  prompted date duplicated for both ends.
+
+### Added
+`docs/gsr-generate-period-form.html` (new - calendar From/To picker, To
+auto-follows From until manually changed, covering the common single-day
+case with no extra clicks). `docs/gsr-cpf-balance-form.html` and
+`docs/gsr-weekly-price-form.html` rewritten for the new entry-type/
+price-type fields, both now with a shared comma-formatting input helper
+(format-as-you-type, parsed back to a plain number before submission)
+applied to every numeric field, per the user's "always put a comma
+separator" request. Updated `docs/sheets-reports-setup.md` section 3 to
+match every change above, including the B5/B6 ID-or-URL note and an
+explicit restatement of which folder B6 actually is.
+
+### Verified
+`node --check docs/gsr-report-script.js` - OK. Sandbox-simulated (Node,
+outside Apps Script): `extractDriveId_` against the user's exact failing
+URL and a bare ID and a `/file/d/.../view` shape; `resolveProvinceForWarehouse_`
+against every real warehouse name plus an explicit-table-override case;
+the CPF SDO+BANK combination logic (multiple officers, a stale entry
+correctly superseded, summed with the bank figure); `dateWithinRange_`
+inclusive boundaries; `monthFileNamesInRange_` for both a
+single-month and a month-spanning range. All matched expected output.
+
+## Round 51: GSR Phase 1 - Inventory layout rebuild after first real generation attempt
+
+User ran a real generation for the first time and reported the output
+"was not even close to what the actual GSR looks like." Asked for
+screenshots rather than guessing again, and got them (MEMO, INVENTORY
+DETAIL, PRICES, PROCUREMENT tabs).
+
+Diagnosis from the screenshots:
+- The core mechanics were actually working correctly - the Sub-Total/
+  hide-row logic was functioning as designed (rows jumping straight to a
+  block's SUB-TOTAL just meant everything between was a correctly-hidden
+  zero-data bracket), and numbers were comma-formatted throughout.
+- The real problem was layout, not math: Round 49/50 used a flat, generic
+  pivot table (one combined "INVENTORY DETAIL" sheet mixing Palay and
+  Rice varieties together, no ALBAY/CATANDUANES column grouping, no
+  NFA-style section titles) instead of anything resembling the actual
+  report's structure. Confirmed with the user this was the core
+  complaint, and that they want the rebuild to match the original
+  structure closely (separate Palay/Rice sheets, ALBAY/CATANDUANES column
+  grouping with merged headers, same SUB-TOTAL/GRAND TOTAL placement).
+- Also spotted two more issues in the same screenshots: the Inventory
+  tab showed variety names `PD1s-A`/`PD1s-B`/`PD2s-A` with an extra "s"
+  not matching the canonical `PD1-A`/`PD1-B`/`PD2-A` spelling - same
+  class of naming-drift problem as the warehouse aliases, but for
+  varieties. And PROCUREMENT came back completely blank (not even a
+  zero-value row) - user confirmed there genuinely was no procurement
+  activity that day, so the underlying logic was correct, but a
+  fully-blank table still isn't good presentation since Target/CPF
+  Balance are meaningful independent of that day's accomplishment.
+- User's fix preference for variety naming: correct it inside the GSR
+  script/spreadsheet itself (not by asking QA to retype their existing
+  Age Monitoring data), matching the same non-destructive philosophy as
+  WarehouseAliases.
+
+### Changed (`docs/gsr-report-script.js`)
+
+- `renderInventorySheet_` (flat combined table) replaced entirely by
+  `renderInventoryCommoditySheet_(gsrSs, sheetName, sectionTitle, qaResult, commodity, warehouseProvinceMap)`,
+  called twice from `generateGsrReportForPeriod` - once for
+  `"PALAY INVENTORY"` / `"I.A. PALAY INVENTORY PER VARIETY, AGE AND
+  PROVINCE"`, once for `"RICE INVENTORY"` / `"I.B. RICE INVENTORY PER
+  VARIETY, AGE AND PROVINCE"`. New layout: merged section-title row,
+  merged "ALBAY"/"CATANDUANES" column-group headers (warehouses split via
+  the existing `resolveProvinceForWarehouse_`), a per-row SUB-TOTAL
+  formula for each province plus a per-row GRAND TOTAL formula
+  (ALBAY SUB-TOTAL + CATANDUANES SUB-TOTAL), one block per variety with a
+  bottom SUB-TOTAL row summing ONE consistent range across every column
+  in that block (both the per-row and per-block subtotal mechanisms
+  mirror the legacy sheet's actual two-tier pattern, just computed
+  consistently instead of drifting), and a final GRAND TOTAL row summing
+  only the block SUB-TOTAL rows (matching the legacy sheet's own
+  `=D87+D76+D70+D42`-style pattern). Sandbox-verified end-to-end with a
+  numeric simulation (not just formula-string construction) confirming
+  per-row subtotals, per-block subtotals, grand total, hide-row
+  detection, and commodity filtering (a rice variety correctly excluded
+  from the palay pivot) all match hand-computed expected values.
+- `VarietyAliases` (new sheet, same pattern as `WarehouseAliases`):
+  `readVarietyAliasMap_`/`normalizeVariety_`, seeded with the exact
+  `PD1s-A → PD1-A`, `PD1s-B → PD1-B`, `PD2s-A → PD2-A` variants observed
+  in the real generated report. Applied inside `readQaInventoryBaseline_`
+  (now takes a `varietyAliasMap` parameter) before both the pivot-grouping
+  key AND the `varietyTypeMap` category lookup, so a QA-typed spelling
+  variant groups under the canonical name and still correctly resolves to
+  "palay" or "rice" instead of silently falling through as unmapped.
+  Added to `initializeGsrSheets`, `TABLE_SHEET_DEFS` (repair), and
+  `ensureTableSheet_`.
+- `readProcurementAccomplishment_`: now always populates every known
+  province (`ALBAY`, `CATANDUANES`, plus anything in `WarehouseProvince`)
+  in its result even when zero PROCUREMENT transactions matched that
+  province for the period, instead of returning an empty object that
+  rendered as a blank table.
+
+### Verified
+`node --check docs/gsr-report-script.js` - OK. Sandbox-simulated (Node,
+outside Apps Script): the new column-index layout (ALBAY/CATANDUANES
+start/subtotal/grand-total column math) and formula-string construction
+for both subtotal tiers and the multi-block grand total; a full numeric
+end-to-end simulation of the pivot/render logic against synthetic data
+(album/cat split, per-row and per-block subtotals, hide-row list, and
+commodity filtering) - all matched hand-computed expected values;
+`normalizeVariety_` against the three seeded aliases plus an unaliased
+variety passed through unchanged.
+
+## Round 52: GSR Inventory pages - faithful structural rebuild (round 3)
+
+User sent screenshots comparing the round-2 output against the real legacy
+PALAY/RICE inventory pages (`palay.txt`/`rice.txt`). Round 2's ALBAY/
+CATANDUANES column grouping was correct, but three real structural
+elements were still missing, only visible once the real pages were
+compared directly: (1) the memo lives at the TOP of the PALAY INVENTORY
+sheet itself, not a separate cover sheet; (2) there's an AGE-letter
+column (A/B/C...) that turned out, on inspection of the real formulas, to
+be inconsistently hand-typed (e.g. "D" reused for two non-adjacent
+bracket ranges) rather than a computed rule - confirmed with the user to
+drop it rather than fabricate a pattern; (3) each commodity page has a
+SECOND, coarser rollup table below the fine-grained one, and Rice's page
+additionally has an unwithdrawn (FTI)/unwithdrawn (LGU)/POTENTIAL STOCKS
+block that Palay's does not have.
+
+Went back to plan mode given three consecutive misses - re-read the full
+formula-level `palay.txt`/`rice.txt` JSON directly (not relying on
+recollection) to design against real structure, and confirmed 2 more
+decisions with the user before building: build the rollup + unwithdrawn
+block in this same round (not deferred), and match the real Rice-only
+asymmetry for the unwithdrawn block exactly rather than adding it to
+Palay too.
+
+### Changed (`docs/gsr-report-script.js`)
+
+- `renderInventoryCommoditySheet_` signature changed to operate on an
+  ALREADY-CREATED sheet passed in by the caller (instead of creating its
+  own), starting at a `startRow` parameter - this is what lets the Palay
+  sheet carry the memo above the table while Rice starts near the top.
+  Added `subtitle` (Rice's "I - LOCAL RICE" line), `rollupBoundaries` +
+  `rollupTitle`, and `unwithdrawnResult` (null for Palay, computed data
+  for Rice) parameters. Internally refactored into two small helpers
+  (`writeSectionHeader_`, `writeDataRow_`) reused for the fine table, the
+  unwithdrawn block, and the rollup table, since all three share the same
+  ALBAY/CATANDUANES column layout and per-row SUB-TOTAL/GRAND-TOTAL
+  formula pattern.
+- New `PALAY_ROLLUP_BOUNDARIES`/`RICE_ROLLUP_BOUNDARIES` constants +
+  `buildRollupBands_` helper: map each commodity's real coarse age bands
+  (Palay: 0-2, 2-4, 4-5, 5-6, 6-9, 9-12, 12-15, 15-18, >18; Rice: 0-1,
+  1-2, 2-3, 3-6, 6-9, 9-12, 12-15, 15-18, >18 - genuinely different
+  boundaries per commodity, confirmed from the real files) to the exact
+  `AGE_BRACKETS` fine labels each band covers, via integer array-index
+  math (label index k always starts at month k) rather than parsing
+  label strings. Sandbox-verified full, non-overlapping coverage of all
+  61 fine labels for both commodities.
+- Rollup band values are computed programmatically in the render function
+  (sum across every variety present × every fine label in that band) as
+  plain values, not copied from a hardcoded per-band cell list - this is
+  what fixes the exact bug class found in the real `PD`/`TOTAL LOCAL
+  RICE...` formulas, which silently omitted a variety from at least one
+  band's sum. Sandbox-verified: a second variety with data in the same
+  band is automatically included with no special-casing needed.
+- New `readUnwithdrawnForGsr_`, adapted from `daily-inventory-report-
+  script.js`'s `readUnwithdrawnBaseline_` (same AI + Issues Backup
+  comparison, same 30-day lookback, same FTI/LGU/OTHER customer-name
+  categorization) but scoped to rice varieties only and returning one
+  total per warehouse per category (matching the real single-row-per-
+  category shape) instead of Daily Inventory's per-variety/age
+  breakdown. Deliberately extends the real sheet's FTI/LGU-only rows with
+  an OTHER row too, so POTENTIAL STOCKS (= fine-table GRAND TOTAL − FTI −
+  LGU − OTHER, per warehouse column) never silently overstates by
+  ignoring non-FTI/LGU unwithdrawn stock. Sandbox-verified categorization
+  and the subtraction against synthetic AI/Issues-Backup-shaped data.
+- `generateGsrReportForPeriod`: removed the separate `MEMO` sheet: the
+  default first sheet is renamed `PALAY INVENTORY` and gets the memo
+  block written into its top rows before `renderInventoryCommoditySheet_`
+  is called at `startRow: 9`; `RICE INVENTORY` is inserted fresh and
+  rendered at `startRow: 1` with `includeUnwithdrawn` wired to a real
+  `readUnwithdrawnForGsr_` call. Confirmed via code inspection that the
+  Palay call passes `null` for the unwithdrawn parameter and the Rice
+  call always passes the computed result - the exact asymmetry confirmed
+  with the user.
+
+### Verified
+`node --check docs/gsr-report-script.js` - OK. Sandbox-simulated (Node,
+outside Apps Script), matching every item in the approved plan's
+verification section: full/non-overlapping rollup-band-to-fine-label
+coverage for both commodities; the rollup sum's automatic inclusion of
+every variety (the specific "forgotten variety" bug class this fixes);
+`readUnwithdrawnForGsr_`'s categorization and POTENTIAL STOCKS
+subtraction against synthetic data; and confirmed by inspection that only
+the Rice call receives a real `unwithdrawnResult`.
+
+## Round 53: GSR Inventory - template-based architecture (replaces from-scratch rendering)
+
+User's verdict after three rounds of trying to reconstruct the Inventory
+layout in code: "this is creating a GSR that is far beyond what the
+actual GSR looks like, can we instead create a template, then the GSR
+will fill it with necessary data?" - proposed the architectural fix
+directly rather than asking for a fourth iteration.
+
+Agreed this was the right call and explained why: every prior miss came
+from trying to rebuild merges/section-titles/column-layout from schema
+JSON, which can never be perfectly faithful. A template flips that - the
+visual structure comes from an actual spreadsheet that already looks
+correct (a real copy of the user's own GSR), and the generator's only job
+becomes writing values into cells it locates, never reconstructing
+layout.
+
+Walked the user through creating a template (File > Make a copy of the
+real GSR, renamed, moved out of the dated-report folder structure) and
+got its ID. Two design decisions confirmed along the way:
+- Cell targeting: user chose named-ranges initially, but on inspection
+  the fine-grained Inventory grid (variety x warehouse x age-bracket) is
+  too large for named ranges to stay practical (hundreds of cells), so
+  switched to label-based lookup for Inventory specifically (locate a
+  cell by matching the template's own printed labels - variety in column
+  A, bracket text in column C, warehouse name in the header row) -
+  explained the tradeoff and this was accepted as the practical choice.
+  This also sidesteps a real risk: the schema-export tool drops entirely
+  blank rows, so literal row numbers from any prior export were never
+  reliable to hardcode against the live sheet anyway.
+- Missing age-bracket rows: confirmed a ONE-TIME template preparation
+  (pre-fill every variety block with all 61 possible brackets now) over
+  having the generator insert rows on the fly every run - less ongoing
+  complexity/risk, matches the same "recomputed fresh, never fragile"
+  principle already used elsewhere in this project.
+
+### Added: `docs/gsr-template-prepare-script.js` (new, one-time use)
+
+Run once by the user against their GSR TEMPLATE copy only. For each
+known variety in PALAY INVENTORY / RICE INVENTORY: locates the existing
+block of bracket rows by scanning for the variety's exact label text,
+then walks AGE_BRACKET_LABELS in order, inserting a row wherever a
+bracket is missing - IN THE CORRECT POSITION, including into gaps in the
+middle of an existing block (the real WD1 data jumps from 13.1-14.0
+straight to 16.1-17.0; naively appending missing brackets at the end
+would have put them in the wrong place). Uses a shift-tracking algorithm
+so every row reference recorded before an insertion is corrected by the
+accumulated shift when later used - sandbox-verified against this exact
+real gap: two missing brackets inserted precisely between 13.1-14.0 and
+16.1-17.0, Sub-Total row correctly shifted by 2. Rebuilds each variety's
+Sub-Total formula with one consistent range across the now-complete
+block, clears all data values, and deletes every sheet except the two
+Inventory ones (avoids future name collisions with the generator's own
+fresh-built Prices/Procurement sheets).
+
+Explicitly does NOT try to fix the rollup tables' or unwithdrawn block's
+formulas - those reference specific cells (not hardcoded literal
+numbers), so Google Sheets automatically re-points them when
+insertRowAfter shifts rows below, the same mechanism that keeps a
+formula correct when you insert a row by hand. This meant the
+PALAY_ROLLUP_BOUNDARIES/RICE_ROLLUP_BOUNDARIES/buildRollupBands_/
+readUnwithdrawnForGsr_ code built in Round 52 became unnecessary and was
+removed entirely - the template's own real formulas now handle all of
+that natively once its rows are extended.
+
+### Changed (`docs/gsr-report-script.js`)
+
+- Config gets `B15` (GSR TEMPLATE spreadsheet, ID or full URL).
+- `renderInventoryCommoditySheet_` (the from-scratch builder) removed
+  entirely, replaced by:
+  - `duplicateTemplate_`: `DriveApp` copy of the template into the
+    correct period folder with the correct filename - replaces
+    `SpreadsheetApp.create()` as the file-creation step.
+  - `locateCommoditySheetPositions_`: finds the header row (containing
+    "SUB-TOTAL"), the GRAND TOTAL column, every warehouse's column, and
+    every requested variety's bracket-row map, purely by reading the
+    sheet's own labels. A bug was caught and fixed here during sandbox
+    verification: the warehouse-column filter excluded a placeholder
+    label ("AGE BRACKET") left over from Round 52's own generated
+    column headers, instead of the real template's actual two separate
+    "AGE" and "MONTHS" header columns - would have silently included
+    both as fake "warehouses" in every real run. Fixed and re-verified.
+  - `fillInventorySheet_`: writes this period's pivot values into the
+    located cells only (never a formula), resets and recomputes row
+    visibility fresh every run, and reports (never silently drops) any
+    variety or warehouse with real data but no matching block/column
+    found in the template.
+  - `locateMemoCells_`: finds the memo's SUBJECT/FOR/Prepared-by lines by
+    their own label text in the first 15 rows, replacing the old
+    hardcoded A1/A2/A3-style writes.
+- `generateGsrReportForPeriod` rewritten around this: duplicate template
+  → locate memo cells and update them → `fillInventorySheet_` for both
+  commodity sheets → Prices/Procurement still built fresh as before (no
+  collision now, since the prepared template only has the two Inventory
+  sheets). Summary now reports per-commodity unmatched varieties/
+  warehouses/stale entries instead of one combined Inventory status.
+- Removed now-dead `columnToLetter_` (only used by the deleted
+  from-scratch renderer).
+- Header comment and Config cell-map documentation rewritten to describe
+  the two-piece setup (prepare the template once, then the generator).
+
+### Verified
+`node --check` on both `.js` files - OK, no dangling references to any
+removed function/constant (grepped to confirm). Sandbox-simulated (Node,
+outside Apps Script): the gap-aware row-insertion algorithm against the
+real WD1 gap (see above); a full end-to-end simulation of
+locate-then-fill against a synthetic sheet, including a variety with no
+matching block and a warehouse with no matching column (both correctly
+reported as unmatched, not silently dropped) - this run is what caught
+and led to fixing the AGE/MONTHS column-filter bug described above.
+
+### Updated
+`docs/sheets-reports-setup.md` section 3 rewritten for the three-piece
+setup (GSR TEMPLATE + its one-time prep script + the ongoing generator),
+including the known remaining imperfection (Rice rollup's WD0 omission,
+now easy to fix by hand since row numbers are stable post-prep).
+
+## Round 54: GSR template - fixed GRAND TOTAL bug and stopped deleting the template's other sheets
+
+User's generation run surfaced two problems from Round 53 at once: "could
+not find a GRAND TOTAL column - skipped entirely" for both Inventory
+sheets, and a list of deleted sheets (PROCURMENT 1/2, PROC.MILL, PRICES,
+DISPERSAL, DIST.*, INVENTORY, _Config_) - then asked directly why those
+were deleted from the template when they're needed for later phases.
+
+Root cause of the GRAND TOTAL failure: the real sheet's header is two
+rows, not one - one row has VARIETY/AGE/MONTHS/ALBAY/CATANDUANES/GRAND
+TOTAL, the row directly below has the actual warehouse names plus
+SUB-TOTAL (twice). Both `gsr-template-prepare-script.js` and
+`gsr-report-script.js` searched for "GRAND TOTAL" on the SAME row as
+"SUB-TOTAL", which never has it - meaning `prepareGsrTemplate()` never
+actually extended/fixed the Inventory blocks despite running to
+"completion", because the per-sheet failure didn't stop the (separately
+buggy) sheet-deletion step that followed it unconditionally.
+
+Root cause of the deletion complaint: agreed with the user - deleting
+Prices/Proc.Mill/Procurement 1&2/Dispersal/Distribution/_Config_ from the
+TEMPLATE was wrong. That deletion only existed to stop the generator's
+OWN output files from colliding with stale copies of sheet names it
+builds fresh each run - it should have operated on the disposable
+per-period duplicate, never on the reusable template that future phases
+still need.
+
+### Fixed
+
+- `gsr-template-prepare-script.js`: new `findGrandTotalColumn_` searches
+  a small window of rows around the "SUB-TOTAL" row (a few rows above,
+  one below) instead of assuming same-row placement - sandbox-verified
+  against the real two-row header shape. Removed the sheet-deletion step
+  from `prepareGsrTemplate()` entirely - it now only ever touches PALAY
+  INVENTORY/RICE INVENTORY, confirmed via the confirmation dialog text
+  and the header comment.
+- `gsr-report-script.js`'s `locateCommoditySheetPositions_`: on
+  inspection, `grandTotalCol` was never actually used anywhere
+  downstream (only `warehouseCols`/`varietyRows` are) - so instead of
+  fixing the same two-row search there too, removed the GRAND TOTAL
+  dependency entirely, sidestepping the ambiguity rather than papering
+  over it. Sandbox-verified the simplified locate logic still correctly
+  detects exactly the real warehouse columns with no error.
+- `generateGsrReportForPeriod`: moved the stale-sheet cleanup to run
+  AFTER duplicating the template, operating only on `gsrFile` (the
+  disposable per-period copy) - covers PRICES/PROCUREMENT (would
+  otherwise collide with the ones this script inserts fresh) plus the
+  other out-of-Phase-1-scope sheets (would otherwise show stale
+  hardcoded numbers sitting in an otherwise-generated report). The
+  shared GSR TEMPLATE spreadsheet is never touched by this cleanup.
+
+### User-facing recovery guidance given
+Since the buggy run already deleted sheets from the user's real template
+and left Palay/Rice Inventory unprepared, advised using Google Sheets'
+own version history (File > Version history > See version history) on
+the GSR TEMPLATE spreadsheet to restore to the point before the prep
+script ran, then re-run the fixed script.
+
+### Verified
+`node --check` on both files - OK. Sandbox-verified `findGrandTotalColumn_`
+against the real two-row header shape (GRAND TOTAL found one row above
+the SUB-TOTAL row). Sandbox-verified the simplified (GRAND-TOTAL-free)
+locate logic end-to-end against the same real header shape - correct
+warehouse columns, no error, no AGE/MONTHS/VARIETY leaking into
+warehouseCols.
+
+## Round 55: Age bracket cap reduced from 60 to 36 months (3 years)
+
+User had to cancel the template-prep run because it was inserting rows
+all the way up to a 60.1-61.0 bracket (5 years) - pointed out realistic
+oldest stock is around 3 years, so 36.1-37.0 is enough. Asked whether to
+also cap Age Monitoring's QA submission dropdown to match, since leaving
+it at 60 while GSR only supported 36 would let QA record something GSR
+had no row for - exactly the kind of silent-data-loss risk this project
+has avoided throughout. User confirmed: cap everywhere.
+
+### Changed
+`buildAgeBrackets_`'s loop bound changed from `i <= 60` to `i <= 36` in
+all four scripts that had their own copy: `gsr-template-prepare-
+script.js` (controls how many rows get pre-inserted per variety block -
+this was the one actually blocking the user), `gsr-report-script.js`
+(the `AGE_BRACKETS` used to validate incoming QA data), `age-monitoring-
+report-script.js` (drives the QA submission form's Age Bracket dropdown
+and its own validation), and `daily-inventory-report-script.js` (its own
+validation copy). All four now agree: 37 brackets total (0-1.0 through
+36.1-37.0), roughly halving the row-insertion work in the template prep
+step. Sandbox-verified the label count and top bracket after the change.
+
+## Round 56: GSR - fixed row-misalignment root cause, two date bugs, and reversed variety naming direction
+
+User reported multiple compounding issues from the latest generation:
+data written in misaligned rows relative to their real labels, hide/
+unhide not working, missing Sub-Total/GRAND TOTAL formulas, the memo's
+"dated" line showing the actual run date (Aug 22) instead of a
+period-relative date, the SUBJECT line off by one day (Aug 17 instead of
+Aug 18), and confirmed the variety-alias direction was backwards -
+"PD1s-A" (QA's Age Monitoring spelling) is the CORRECT/canonical form,
+not "PD1-A" (the legacy template's spelling), reversing what Round 52
+assumed.
+
+### Root cause found: an undocumented extra row per variety block
+
+At least one variety (PDm) has an extra row of warehouse REFERENCE-CODE
+numbers (e.g. 50520, 50501, 50563...) sitting between its variety label
+and its first real age-bracket row - visible in the user's screenshot,
+never seen in any prior schema export. Both `gsr-report-script.js`'s
+`locateCommoditySheetPositions_` and `gsr-template-prepare-script.js`'s
+`prepareCommoditySheet_` assumed bracket data always starts exactly one
+row after the label (`blockStartRow = r + 2`), so for any variety with
+this extra row, every downstream row number (block boundaries, Sub-Total
+placement, hide/unhide range) was computed wrong - explaining all of the
+misalignment/missing-totals/broken-hide symptoms at once, not separate
+bugs.
+
+**Fix (both files)**: block-start detection now scans FORWARD from the
+label row for the first row that actually has bracket-like content in
+column C, skipping any non-bracket row in between, instead of assuming a
+fixed +1 offset. Sandbox-verified against a synthetic reference-code-row
+case matching the real PDm structure.
+
+### Date bugs fixed
+
+- The memo's own "dated" line must always be PERIOD END + 1 day (matching
+  the original design intent - "a GSR dated Aug 21 reports Aug 20's
+  transactions"), not the real calendar date the script happens to run
+  on. Was using `new Date()` (literal today); changed to
+  `toDate + 1 day`, computed regardless of when the script actually runs
+  - needed since the user is generating this several days after the
+  period, not the day after.
+- `new Date(payload.from)` on a plain "YYYY-MM-DD" string has genuinely
+  inconsistent UTC-vs-local parsing behavior across JS engines/versions,
+  which can silently shift the result by a day depending on the server's
+  default timezone - this very likely explains the SUBJECT line showing
+  "AUGUST 17" for a requested "AUGUST 18" period. New `parseDateOnly_`
+  helper parses the year/month/day components explicitly via the LOCAL
+  Date constructor, removing the ambiguity entirely regardless of any
+  timezone setting. Sandbox-verified: parses "2026-08-18" to exactly
+  Aug 18 (not Aug 17 or 19), and the dated-line computation correctly
+  produces Aug 19.
+
+### Variety naming direction reversed
+
+Confirmed with the user: QA's Age Monitoring spelling ("PD1s-A"/
+"PD1s-B"/"PD2s-A") is the correct/canonical form; the legacy GSR
+template's row labels ("PD1-A"/"PD1-B"/"PD2-A") are the outdated ones
+that need to change to match, not the other way around as Round 52
+assumed. Updated:
+- `gsr-template-prepare-script.js`'s `KNOWN_VARIETIES` now searches for
+  the "s" spelling. Added an explicit BEFORE-RUNNING instruction in its
+  header comment: the user must manually rename the 3 cells in PALAY
+  INVENTORY's column A from "PD1-A"/"PD1-B"/"PD2-A" to "PD1s-A"/
+  "PD1s-B"/"PD2s-A" before running the prep script, since it searches by
+  exact text match and can't rename existing labels itself.
+- `gsr-report-script.js`'s `VarietyAliases` seed reversed to
+  `PD1-A → PD1s-A` etc. (any straggler old-spelling data normalizes to
+  the now-canonical form) with comments corrected to describe the actual
+  direction and clarify the alias table normalizes incoming QA data only
+  - it can't rename what's already printed in the template.
+
+### Verified
+`node --check` on both files - OK. Sandbox-verified: block-detection
+correctly skips a synthetic reference-code row and lands on the true
+first bracket row; `parseDateOnly_` against "2026-08-18" and the
+resulting +1-day "dated" computation.
+
+### User-facing guidance given
+Given the template has now been through two buggy prepare runs (one that
+skipped Inventory entirely due to the earlier GRAND TOTAL bug, one that
+likely mis-inserted rows due to the reference-code-row bug), recommended
+restoring the template via Google Sheets version history to a pristine
+state AGAIN, manually renaming the 3 PD variety cells in PALAY INVENTORY
+first, then re-running the now-fixed prep script before the next
+generation attempt.
+
+## Round 57: GSR template - automated the variety rename instead of manual
+
+User pushed back on the manual-rename instruction from Round 56 ("you
+should've included this in the gsr template prepare, so it can be
+replaced on every sheet") - fair, a one-time text find/replace is
+exactly the kind of thing the prep script should do itself rather than
+handing back as a manual chore.
+
+### Added (`gsr-template-prepare-script.js`)
+`VARIETY_RENAMES` (old legacy spelling -> canonical QA spelling) and
+`renameVarietyLabels_(sheet)`: scans every column-A cell in the sheet and
+renames any exact match, reporting each rename in the summary alert.
+Called automatically for both PALAY INVENTORY and RICE INVENTORY at the
+start of `prepareGsrTemplate()`, before block extension - so the
+"PD1-A"/"PD1-B"/"PD2-A" -> "PD1s-A"/"PD1s-B"/"PD2s-A" rename (and any
+future naming fixes added to the map) happens automatically on every
+prep run, no manual spreadsheet editing required first. Updated the
+header comment, confirmation dialog, and `docs/sheets-reports-setup.md`
+to match - removed the manual-rename instruction entirely.
+
+### Verified
+`node --check` - OK. Sandbox-verified `renameVarietyLabels_`'s logic
+against a synthetic column A containing all three legacy-spelled labels
+plus unrelated entries - renamed exactly the three expected cells,
+left everything else untouched.
+
+## Round 58: GSR - date-row hardcoding bug, bracket-coverage diagnostic, Daily Inventory cross-check
+
+User reported after a confirmed clean restore + fresh prep run: date still
+in the wrong place, period/SUBJECT date still wrong, rows still showing
+without data, and other warehouses with real Daily Inventory data still
+missing from GSR entirely. Also provided the real sheet tab order (Palay,
+Rice, Distribution per Variety, Dist. Today/Month/Year, Dispersal,
+Procurement 1/2, Proc.Mill, Prices, Inventory) for future phases.
+
+### Root cause found: same class of bug as the block-detection fix, one level up
+
+`locateMemoCells_` hardcoded the date to row 1 - but the real template has
+16 frozen rows and the date isn't necessarily the very first row (the
+schema-export tool's row-compaction hides blank/spacer rows above it,
+same reason literal row numbers were never safe to hardcode for the
+bracket data either). Fixed by locating the date row dynamically:
+scanning for a row containing a month name AND a 4-digit year, EXCLUDING
+rows already claimed by SUBJECT/FOR/PREPARED BY/MEMO/ALB-BSM/CERTIFIED/
+NOTED labels (the SUBJECT line itself also contains a month+year, so a
+naive month+year search alone would have misfired on it - sandbox-caught
+before shipping). `generateGsrReportForPeriod` now guards against
+`dateRow === -1` instead of writing unconditionally.
+
+### Data source clarification: asked, not guessed
+
+User's "why don't other warehouses have data even though Daily Inventory
+has it" pointed at a real architecture question, not a simple bug: GSR
+Inventory reads from Age Monitoring's QA_AGE_SUBMISSIONS (manual QA
+counts), not Daily Inventory's continuously-computed ledger - a warehouse
+QA hasn't recently counted shows zero in GSR even with real Daily
+Inventory stock. Asked whether to switch sources entirely; surfaced the
+real conflict before building anything: Daily Inventory only tracks 5
+COARSE age buckets (0-3/>3/0-6/6.1-12/>12), with no month-by-month
+breakdown, so switching sources outright would lose the real report's
+fine-grained month rows entirely. User confirmed the resolution: keep QA
+as the actual data source (preserves fine granularity), add a
+cross-check against Daily Inventory that FLAGS (never silently drops)
+any warehouse+variety where Daily Inventory shows real stock QA hasn't
+submitted a count for yet.
+
+### Added (`gsr-report-script.js`)
+- `readDailyInventoryCrossCheck_(configSheet, asOfDate, warehouseAliasMap, varietyAliasMap)`:
+  reads Daily Inventory's own hidden `STATE (do not edit)` sheet (a keyed
+  `Month | Key (Warehouse|Variety|Age) | Ending Balance | Rendered At`
+  snapshot Daily Inventory already maintains for its own month-to-month
+  carry-forward - far simpler and more reliable to read than Daily
+  Inventory's 3-row month-sheet header) via `Config!B2`, totals ending
+  balances per warehouse+variety (summed across age buckets) for the
+  report's period month.
+- `findMissingFromQa_`: compares those totals against what QA's baseline
+  actually covers, returning every warehouse+variety with real Daily
+  Inventory stock but no QA submission at all - wired into the
+  generation summary as an explicit warning, never silently dropped.
+  Sandbox-verified: month-filtering excludes other months' STATE rows
+  correctly, and a warehouse covered by QA is correctly excluded from
+  the missing list while an uncovered one is correctly flagged.
+- `fillInventorySheet_` now also returns `coverageWarnings`: if fewer
+  bracket rows were located for a variety than `AGE_BRACKETS.labels`
+  actually has, this is reported explicitly (e.g. "found 22 of 37
+  expected bracket rows") - gives concrete, checkable numbers for the
+  still-unresolved "rows showing without data" symptom instead of
+  another round of guessing blind.
+
+### Verified
+`node --check` - OK. Sandbox-verified: the date-row pattern correctly
+matches "18 August 2026" while correctly EXCLUDING the SUBJECT line
+(which also contains a month name and year) - caught and fixed a
+same-pattern false-positive before shipping, not after. Cross-check
+totaling and missing-warehouse detection verified against synthetic
+STATE-sheet-shaped data.
+
+### Explicitly not yet resolved
+The root cause of "rows still showing without data" isn't confirmed -
+the coverage diagnostic above is meant to surface a concrete number
+(rows found vs. expected) on the next generation attempt rather than
+guess further blind. Sheet-order info from the user (Palay, Rice, Dist.
+per Variety/Today/Month/Year, Dispersal, Procurement 1/2, Proc.Mill,
+Prices, Inventory) noted for later phases - out of scope for Phase 1,
+which doesn't build those sheets yet.
+
+## Round 59: GSR - fixed against the real GSR's own exported schema (ground truth), reversed a wrong Round-56 assumption
+
+User ended the "fix, report, fix again" cycle by sending the full
+schema-export of the REAL, currently-in-use GSR (12 files: palay, rice,
+prices, procmill, procurement1/2, inventory, dispersal, distmonth,
+distribution, disttoday, distyear - dated August 19 reporting on August
+18), directly readable ground truth instead of the schema-export tool's
+row-compacted approximations relied on before, and asked for autonomous
+iteration against it rather than another round of report-and-guess.
+
+### Wrong assumption from Round 56 found and reversed: variety spelling
+
+Directly re-reading palay.txt's own JSON showed the real GSR's row labels
+are `PD1-A`/`PD1-B`/`PD2-A` - NOT the "s" form (`PD1s-A`) Round 56 renamed
+them to, based on treating QA's Age Monitoring dropdown spelling as
+canonical. That was backwards: the real report itself never used the "s"
+spelling. Reverted:
+- `gsr-template-prepare-script.js`: removed `VARIETY_RENAMES` /
+  `renameVarietyLabels_` entirely - the template keeps the real GSR's own
+  spelling, unmodified.
+- `gsr-report-script.js`: `VarietyAliases` seed reversed to map QA's "s"
+  spelling DOWN to the template's real spelling (`PD1s-A` → `PD1-A`, etc.)
+  instead of the other way around.
+
+### Also found: PALAY's variety list included two rollup sections as if they were raw data blocks
+
+`KNOWN_VARIETIES["PALAY INVENTORY"]` included `PW` and `RR1` alongside the
+five real per-warehouse data blocks (`PDm`, `PDs`, `PD1-A`, `PD1-B`,
+`PD2-A`). Re-reading palay.txt showed `PW` is a formula-only rollup
+section (its cells are cross-references summing other rows, not raw
+warehouse columns) and `RR1` doesn't appear in Palay at all (it's a Rice
+variety). Trying to locate/extend/fill either of these as if they were
+normal variety blocks would either silently fail or corrupt real rollup
+formulas. Removed both from the list - only the five real blocks remain.
+
+### Memo layout: SUBJECT/FOR were overwriting their own static labels
+
+Round 58 wrote the whole "SUBJECT: ..." / "FOR: ..." string into column A
+- the same column the real template's static labels ("SUBJECT:",
+"FOR            :") already live in, so every generation was clobbering
+the label itself instead of filling in a separate value cell. Re-reading
+palay.txt's real row layout showed the labels stay in column A untouched;
+the dynamic content (subject text; addressee name/title, one per row for
+FOR) belongs in column C on the same row. Fixed `locateMemoCells_` and the
+write logic in `generateGsrReportForPeriod` accordingly, and also wired up
+two rows that were previously static/unmanaged: `MEMO ${year}` (was
+hardcoded to whatever year the template happened to be copied from) and
+the `ALB-BSM-{MM}-____` control number's month segment (existing manual
+suffix after the month is preserved, only the month digits update).
+
+### Verified
+`node --check` on both scripts - OK. Sandbox-verified (against literal
+values copied from the real palay.txt): every real bracket-label text
+sample (`"0      -   1.0"`, `"9.1 -   10.0"`, `"10.1-11.0"`, etc.)
+normalizes to match an `AGE_BRACKETS` label with no misses. Sandbox-
+verified `locateMemoCells_` against the real row 1-8 column-A values
+(date/MEMO/control-number/FOR/SUBJECT rows) - located every row at its
+exact real position (1, 2, 3, 4, 7 respectively) with no false positives.
+
+### Explicitly not yet done this round
+Prices, Proc.Mill, Procurement 1/2, Dispersal, and the three Distribution
+pages are still built as separate simplified renders
+(`renderPricesSheet_`, `renderProcurementSheet_`) or left untouched in the
+template - NOT yet template-filled to match their real schema the way
+Palay/Rice Inventory now are. The real schema for all of these is now on
+hand (this round's 12 files), so a future round can extend the same
+label-based template-fill approach to them, but that's out of scope for
+this round given it wasn't part of the user's specific complaint list -
+flagged directly rather than silently claimed done.
+
+## Round 60: GSR - actual scope gap found (most sheets were deleted, not out of order), plus a real-Sheets-specific defensive fix a simulation can't prove
+
+Round 59 built a Node-based simulation harness (mock GAS Sheet/Range API +
+a grid reconstructed directly from the real palay.txt/rice.txt) and ran
+the actual production functions against it - 51 checks, all passing,
+including a byte-for-byte diff of the generated memo text against the
+real schema for an actual Aug 18 run. User reported the SAME symptoms
+persisted anyway ("still the same problem... rows with no data still
+showing, warehouses with missing data... arrangement of sheets").
+
+### Root cause of the "arrangement of sheets" complaint: those sheets don't exist in the output at all
+
+Re-reading `generateGsrReportForPeriod` found the actual bug: it
+DELETES "PRICES", "PROCUREMENT", "PROC.MILL", "PROCURMENT 1",
+"PROCURMENT 2", "DISPERSAL", all three DIST. pages, "DISTRIBUTION PER
+VARIETY", and "INVENTORY" from every generated report - only Palay/Rice
+Inventory ever survived. This wasn't scoped as a known gap clearly enough
+in the prior round's summary - "arrangement" isn't the problem, EXISTENCE
+is. Fixed:
+- Removed the deletion list entirely (only the internal `_Config_` sheet
+  is still removed - a real GSR would never have it). Every real sheet
+  the GSR TEMPLATE has (which the user's 10 additional schema files this
+  session confirm is a faithful set) now survives into every generated
+  report, untouched, either recomputing on its own via its existing
+  formulas (Inventory summary, parts of Procurement 2) once Palay/Rice
+  Inventory are filled, or carrying over whatever the template has for
+  sheets this project has no automated data source for yet.
+- Added explicit tab reordering via `moveActiveSheet` to the exact real
+  order the user gave directly: Palay, Rice, Distribution per Variety,
+  Dist. Today/Month/Year, Dispersal, Procurement 1/2, Proc.Mill, Prices,
+  Inventory.
+- Removed `renderPricesSheet_`/`renderProcurementSheet_` entirely - they
+  built sheets named "PRICES"/"PROCUREMENT" from scratch, which is now
+  actively broken (colliding with the real "PRICES" sheet now kept from
+  the template; "PROCUREMENT" was never a real GSR sheet name to begin
+  with - the real ones are PROCURMENT 1/2 and PROC.MILL). The underlying
+  data reads (procurement accomplishment, CPF balance, unpaid deliveries)
+  still compute and still feed the generation summary text; only the
+  dedicated sheet-building was removed.
+
+### A real-Sheets-specific risk no array-based simulation can prove or disprove
+
+Round 59's simulation is a plain JS array under the hood - it cannot
+reproduce Google Sheets' own `insertRowAfter` behavior, which can
+silently extend a NEARBY merged range (the real template has multiple
+full-row merges: variety title rows, the two-row VARIETY/AGE/MONTHS
+header) onto a freshly inserted row. A row absorbed into a merge can't
+hide/show independently - which would look EXACTLY like "this row still
+shows even with no data", indistinguishable from the outside from a
+data-matching bug, and invisible to any grid-value-only test. Added a
+defensive `breakApart()` on every newly inserted bracket row in
+`gsr-template-prepare-script.js`'s `prepareCommoditySheet_` - both right
+after `insertRowAfter` (in case Sheets auto-merged it) and again right
+after the `copyTo(..., {formatOnly:true})` format-copy (which could
+reintroduce a merge from the source row's own formatting). This can't be
+proven correct by the same simulation that already couldn't reproduce the
+bug it's defending against - it's a defensive fix against a documented
+real Sheets behavior, flagged as exactly that rather than claimed as a
+proven fix.
+
+### Verified
+`node --check` on both scripts - OK. Re-ran the full Round 59 simulation
+suite (36 checks) with the `breakApart()` calls now in
+`prepareCommoditySheet_` - still 36/36 passing, confirming the defensive
+merge-stripping didn't break the row-insertion/labeling logic itself.
+The sheet-existence and tab-order fix could not be simulated the same way
+(no merge/tab-order concept in the mock) - correctness there rests on
+direct code review against the user's own stated real order, not an
+automated check.
+
+## Round 61: GSR - the actual root cause, found from the generation summary text itself, not another guess
+
+User generated a real report and pasted back the actual warning text:
+`⚠ Palay Inventory: varieties with data but no matching block in the
+template (not written): PD1s-A, PD2s-A, PD1s-B` plus `⚠ Palay Inventory:
+warehouses ... ABACORP A` / `⚠ Rice Inventory: warehouses ... LEG GID,
+ABACORP A`, and reported the symptom got WORSE - a flood of new blank
+visible rows, on top of the still-unresolved missing-warehouse-data
+complaint. Frustration was justified: five rounds of "fixed" that didn't
+land from the user's side.
+
+### Root cause 1, proven by the warning text itself: the alias-direction fix from Round 59 never reached the user's existing spreadsheet
+
+Round 59 reversed `VarietyAliases`' SEED direction (`PD1-A → PD1s-A`
+became `PD1s-A → PD1-A`), but `ensureTableSheet_` deliberately never
+re-seeds a sheet that already exists ("would silently wipe admin edits") -
+which is correct behavior for protecting real admin data, but means the
+user's ALREADY-EXISTING VarietyAliases sheet, created back when the seed
+was backwards, was never touched by that fix. QA's raw submissions are
+still spelled "PD1s-A" etc, and the live (stale) alias table still maps
+the wrong direction (or doesn't have a "PD1S-A" key to match against at
+all) - so `normalizeVariety_` never resolves them to the template's real
+"PD1-A"/"PD1-B"/"PD2-A" blocks. Exactly matches the warning text.
+
+Fixed in `gsr-report-script.js`: `readVarietyAliasMap_` now calls a new
+`migrateBackwardsVarietyAliases_(sheet)` every run, which scans for rows
+matching the EXACT known-backwards pattern (`KNOWN_BACKWARDS_VARIETY_
+ALIASES_`: `PD1-A→PD1s-A`, `PD1-B→PD1s-B`, `PD2-A→PD2s-A`) and swaps them
+in place on the live sheet, then uses the corrected direction for that
+same run - no more waiting on a manual fix or a future "Repair" run. This
+only ever touches rows matching that EXACT stale pattern; any other,
+genuinely custom alias row an admin added is left completely alone.
+Surfaced in the generation summary (`🛠 Fixed N backwards VarietyAliases
+row(s)...`) so it's visible when it happens, not silent.
+
+### Root cause 2: an unmatched variety's newly-inserted rows default to VISIBLE, and nothing ever hides them if the match fails
+
+This is what explains "now it has added a lot of rows with no data":
+`fillInventorySheet_` only shows/hides a variety's rows AFTER it's found
+in `positions.varietyRows` - if a variety's name can't be matched (like
+every "PD1s-A"-under-the-stale-alias case above), the function returns
+early for that variety and NEVER TOUCHES its rows' visibility at all.
+Since `gsr-template-prepare-script.js`'s `prepareCommoditySheet_`
+previously left freshly-inserted rows in their default (visible) state,
+an unmatched variety's ~30+ newly-inserted blank rows stayed fully
+visible, forever - a structural gap independent of the specific
+alias bug, and exactly the kind of silent failure mode that produces
+"more empty rows than before" instead of an obvious error.
+
+Fixed: `prepareCommoditySheet_` now hides every bracket row in a block
+immediately after clearing its data (the one point where it's provably
+guaranteed to have zero data) - HIDDEN is now the safe default a block
+starts in, and `fillInventorySheet_` only ever SHOWS the specific rows a
+successfully-matched variety actually has data for. A future variety-name
+mismatch (whatever the cause) now fails SAFE (stays hidden) instead of
+failing LOUD (sits there blank and visible).
+
+### Root cause 3 (config, not code) surfaced but not auto-fixed: two new WarehouseAliases gaps
+
+`ABACORP A` (space) and `LEG GID` have no matching column - almost
+certainly `ABACORP-A` (hyphen) and `LEGAZPI GID` (abbreviation) based on
+the real warehouse list, but NOT auto-corrected in code: after Round 56's
+costly wrong guess on the variety-alias direction, guessing at
+warehouse-name intent again without confirmation isn't worth repeating.
+Told the user directly what to add to `WarehouseAliases` instead of
+guessing silently in code.
+
+### Verified
+`node --check` on both scripts - OK. New regression suite
+(`run-regression.js`, 8 checks) built specifically to reproduce the
+user's EXACT reported failure mode: a `VarietyAliases` sheet seeded with
+the OLD backwards direction (byte-for-byte what the user's real
+spreadsheet has), confirming (a) the migration fixes it in place on the
+live sheet, (b) QA's real "PD1s-A" submission then correctly resolves and
+gets written, (c) the row with real data ends up VISIBLE, and (d) every
+OTHER bracket row in that same variety's block stays correctly HIDDEN -
+no flood. Also confirmed every bracket row across every variety is hidden
+immediately after a fresh prep run, before any generation has happened at
+all. Re-ran the full Round 59/60 simulation suite (36 checks) - still
+36/36, confirming these two fixes didn't regress the already-verified
+matching/round-trip logic.
+
+## Round 62: GSR - stopped requiring manual WarehouseAliases entries for plain spacing/punctuation differences; user explicitly confirmed the two specific ones
+
+User said the whole WarehouseAliases/canonical-warehouse concept was
+confusing jargon, and pushed back harder on a real point: "you already
+have all the data, all the schema... why can't you match everything?" -
+and explicitly confirmed both outstanding cases in plain terms: `ABACORP
+A` and `ABACORP-A` are the same warehouse, and so are `LEG GID` and
+`LEGAZPI GID`.
+
+### Reduced how much needs a manual alias row at all
+
+Added `normalizeWarehouseSpacing_(s)` to `gsr-report-script.js`: reduces
+a name to just its letters/digits with single spaces between them,
+uppercased - `ABACORP-A`, `ABACORP  A`, and `ABACORP A` all become the
+same key. `fillInventorySheet_` now tries this as a FALLBACK match
+whenever an exact (case-insensitive) match fails, before giving up on a
+warehouse - so a plain hyphen/spacing/punctuation difference between how
+a name got typed in QA/DATA_ENTRY vs. how the template prints it no
+longer needs its own WarehouseAliases row at all. Genuinely different
+text (an abbreviation like "LEG GID" for "LEGAZPI GID") still can't be
+inferred this way and still needs an explicit alias - but that's now the
+ONLY case that does. Fuzzy matches are reported in the generation summary
+(`ℹ ... matched despite a spacing/punctuation difference (no alias
+needed): ...`) for transparency, not silently absorbed.
+
+### Auto-added the one alias that genuinely needs to exist, now that it's confirmed (not guessed)
+
+Same safe pattern as Round 61's variety-alias migration:
+`ensureConfirmedWarehouseAliases_` appends `LEG GID → LEGAZPI GID` to
+WarehouseAliases if that exact row isn't already there - append-only,
+never overwrites or touches any other row, and confirmed idempotent (a
+second run doesn't duplicate it). This wasn't guessed - it's exactly what
+the user just confirmed in chat, unlike the earlier variety-spelling
+mistake that came from an unconfirmed assumption. Surfaced in the
+generation summary (`🛠 Added N confirmed WarehouseAliases row(s): ...`).
+
+### Verified
+`node --check` - OK. New suite (`run-warehouse-fix.js`, 10 checks):
+confirmed `ABACORP A`/`ABACORP-A` normalize identically while `LEG GID`/
+`LEGAZPI GID` correctly do NOT (proving the fuzzy match is conservative,
+not a loose fuzzy-match-everything hack that could misfire on two
+different real warehouses); confirmed the auto-heal appends the row,
+leaves an unrelated pre-existing admin row completely untouched, and does
+NOT duplicate the row on a second run; end-to-end against the real
+RICE INVENTORY template with data submitted as "ABACORP A" (space, no
+alias row present at all) - confirmed it lands in the real "ABACORP-A"
+column with zero unmatched-warehouse warning. Re-ran the full Round 59-61
+suite (36 + 8 checks) - all still passing, confirming no regression.
+
+## 2026-10-05 - Duplicate Cleanup tool; Sheet-import crash fix (v1.10-267 to 271)
+
+Fixed a missing `logError` import in `transactionPreload.js` that made the ESR Sheet-import pass fail on every
+cycle once a serial collision existed. Built Admin > Duplicate Cleanup (`utils/duplicateCleanup.js`,
+`DuplicateCleanupPanel.jsx`): scan, snapshot download before delete, Restore, batched deletes, pile and authority
+totals recalculated afterwards, Sheet untouched. Owner cleaned about 1,685 repeated serials (old Sheet-import
+copies, cancelled-document echoes, July 8 CTD-GID 2 pair). Safety rules are in the file header.
+
