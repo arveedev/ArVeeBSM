@@ -8242,4 +8242,12 @@
 //            was never imported, so the whole pass for that type (ESR)
 //            failed every cycle with 'logError is not defined'. The import
 //            is added; the collision is now reported as intended.
-export const APP_VERSION = '1.10-267'
+//   1.10-268 - New Admin > Duplicate Cleanup tool for serials held twice in
+//            one warehouse (old Sheet-import copies). Scan is read-only.
+//            Only bare placeholder copies from before the cutoff, with no
+//            pile/weights/links and no differing value against the copy
+//            that stays, are removable; everything else is listed for
+//            review and never changed. A snapshot file of removed records
+//            is downloaded before any delete, and Restore puts them back.
+//            Local database only; the Google Sheet is not touched.
+export const APP_VERSION = '1.10-268'

@@ -31,6 +31,7 @@ import StockReportDecimalsPanel from '../components/common/admin/StockReportDeci
 import DataRepairPanel from '../components/common/admin/DataRepairPanel.jsx'
 import AuthorityLinksPanel from '../components/common/admin/AuthorityLinksPanel.jsx'
 import MoveRecordsPanel from '../components/common/admin/MoveRecordsPanel.jsx'
+import DuplicateCleanupPanel from '../components/common/admin/DuplicateCleanupPanel.jsx'
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
 import DisbursementSettingsPanel from '../components/common/admin/DisbursementSettingsPanel.jsx'
@@ -88,6 +89,7 @@ const GROUPS = [
       { id: 'backup', label: 'Backup', Panel: BackupPanel },
       { id: 'dataRepair', label: 'Data Repair', Panel: DataRepairPanel },
       { id: 'moveRecords', label: 'Move Records', Panel: MoveRecordsPanel },
+      { id: 'duplicateCleanup', label: 'Duplicate Cleanup', Panel: DuplicateCleanupPanel },
       { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
       { id: 'sessionTimeouts', label: 'Session Timeouts', Panel: SessionTimeoutsPanel },
     ],
