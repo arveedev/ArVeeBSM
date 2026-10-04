@@ -56,6 +56,15 @@
  * every sync, since the app deliberately never sends a REMARKS key and
  * the old code turned "not sent" into "write blank" for the whole row.
  *
+ * UPDATED AGAIN: the REMARKS formula on the monthly PALAY DELIVERIES
+ * "SUMMARY" sheet is now filled in automatically for every row the app
+ * writes (see FORMULA_COLUMNS / fillFormulaColumns below). Only a cell
+ * that is completely BLANK is ever filled - a formula or value already
+ * there (including one edited by hand) is never touched. The formula
+ * refers to the WHSE column found by its header name, so it does not
+ * depend on WHSE being column K. Run backfillFormulaColumns() once from
+ * the editor to fill rows that were written before this update.
+ *
  * ── Safety, enforced here, not just trusted from the calling app ──
  * This app must NEVER write to the AI or SIA sheets - WRITE_ALLOWLIST
  * below is checked on every single write request BEFORE anything
@@ -168,6 +177,80 @@ function preformatSerialColumnAsText(sheet, headers, columnName, rowIndex) {
 }
 
 /**
+ * Columns that the SHEET owns (formulas) but that this script fills in for
+ * rows the app writes. Keyed by sheet name. `header` is the formula column;
+ * `sourceHeader` is the column the formula reads (looked up by name, so
+ * moving columns around does not break it); `build(cell)` returns the
+ * formula text for a row, where `cell` is e.g. "K18".
+ */
+const FORMULA_COLUMNS = {
+  'SUMMARY': [
+    {
+      header: 'REMARKS',
+      sourceHeader: 'WHSE',
+      build: (cell) => '=IF(OR(' + cell + '="GID 2",' + cell + '="GID 2 A"),"CTD","ALB")',
+    },
+  ],
+};
+
+/** 1-based column number -> letters (1 = A, 27 = AA). */
+function columnLetter(n) {
+  let letters = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letters = String.fromCharCode(65 + rem) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
+}
+
+/**
+ * Fills the sheet-owned formula column(s) for ONE row - but only where
+ * the cell is completely blank. A formula or value that is already there
+ * (including one edited by hand) is never overwritten. No-ops quietly if
+ * the sheet has no entry in FORMULA_COLUMNS or a header is not found.
+ */
+function fillFormulaColumns(sheet, headers, rowIndex) {
+  const defs = FORMULA_COLUMNS[sheet.getName()];
+  if (!defs) return;
+  defs.forEach((def) => {
+    const targetIdx = headers.indexOf(def.header);
+    const sourceIdx = headers.indexOf(def.sourceHeader);
+    if (targetIdx === -1 || sourceIdx === -1) return;
+    const cell = sheet.getRange(rowIndex, targetIdx + 1);
+    if (cell.getFormula() !== '' || cell.getValue() !== '') return; // already has something
+    cell.setFormula(def.build(columnLetter(sourceIdx + 1) + rowIndex));
+  });
+}
+
+/**
+ * ONE-TIME helper for rows written before this update: run it from the
+ * Apps Script editor (select backfillFormulaColumns, press Run) on each
+ * monthly spreadsheet. Fills the formula column for every data row that
+ * has a PR number and a blank formula cell. Safe to run repeatedly.
+ */
+function backfillFormulaColumns() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let filled = 0;
+  Object.keys(FORMULA_COLUMNS).forEach((name) => {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const keyIdx = headers.indexOf('PR NO.');
+    if (keyIdx === -1) return;
+    const keys = sheet.getRange(2, keyIdx + 1, sheet.getLastRow() - 1, 1).getValues();
+    keys.forEach((row, i) => {
+      if (String(row[0]).trim() === '') return;
+      const before = sheet.getRange(i + 2, headers.indexOf(FORMULA_COLUMNS[name][0].header) + 1).getFormula();
+      fillFormulaColumns(sheet, headers, i + 2);
+      const after = sheet.getRange(i + 2, headers.indexOf(FORMULA_COLUMNS[name][0].header) + 1).getFormula();
+      if (before === '' && after !== '') filled += 1;
+    });
+  });
+  Logger.log('backfillFormulaColumns: filled ' + filled + ' cell(s).');
+}
+
+/**
  * Writes ONLY the cells the caller actually provided in `rowData` (plus
  * Last Modified, stamped with the server's own current time so it's
  * consistent regardless of any device's clock being off). Any header
@@ -194,6 +277,8 @@ function writeRowCells(sheet, rowIndex, headers, rowData, lastModIndex) {
   if (lastModIndex !== -1) {
     sheet.getRange(rowIndex, lastModIndex + 1).setValue(new Date().toISOString());
   }
+  // Sheet-owned formula columns (e.g. REMARKS on SUMMARY): filled only if blank.
+  fillFormulaColumns(sheet, headers, rowIndex);
 }
 
 /**
