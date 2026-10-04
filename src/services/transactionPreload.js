@@ -52,6 +52,7 @@ import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePref
 import { recordSerialUsed } from '../utils/serialNumber.js'
 import { recalculatePileStatesForWarehouses } from '../utils/pileLedger.js'
 import { isTransactionSyncPaused } from './syncPauseState.js'
+import { logError } from '../utils/errorLog.js'
 
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
 const SERIAL_COLUMN_BY_TYPE = { WSR: 'WSR #', WSI: 'WSI #', ESR: 'ESR#', ESI: 'ESI#' }

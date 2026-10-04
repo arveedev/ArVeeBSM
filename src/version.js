@@ -8236,4 +8236,10 @@
 //            to existing records now treats an empty cereal category on
 //            either side as a match, which was the source of the duplicated
 //            history serials. Updates to existing records are unchanged.
-export const APP_VERSION = '1.10-266'
+//   1.10-267 - Fixed a crash in the Sheet-import preload: when two real
+//            transactions shared one serial (a collision it reports to the
+//            Error Log), the reporting call used a logging function that
+//            was never imported, so the whole pass for that type (ESR)
+//            failed every cycle with 'logError is not defined'. The import
+//            is added; the collision is now reported as intended.
+export const APP_VERSION = '1.10-267'
