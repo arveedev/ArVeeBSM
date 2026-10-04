@@ -1797,6 +1797,52 @@ export const deleteTransactionBackup = async (serialNo, type, warehouseCode) => 
   })
 }
 
+// Same warehouse? The Sheet holds the app's name WITHOUT its province prefix
+// ("BSI C" for the app's "ALB-BSI C"), sometimes spelled differently ("TABACO
+// GID-A" for "TABACO GID A") and, on older rows, still with a prefix ("ALB
+// ABACORP-B"). Only the APP's name gets its prefix stripped (stripping a
+// Sheet label such as "BSI C" again would damage it); case, spaces and
+// hyphens are ignored. "GID 2" and "GID 2 A" stay different warehouses.
+const squashLabel = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+const sameWarehouseLabel = (sheetLabel, appName) => {
+  const app = squashLabel(stripWarehouseCodePrefix(appName))
+  return squashLabel(sheetLabel) === app || squashLabel(stripWarehouseCodePrefix(sheetLabel)) === app
+}
+
+/**
+ * Removes the Sheet row a record left behind under an OLD serial after a
+ * serial change (see utils/serialRename.js). Safe by construction: it first
+ * reads the row, and only deletes it when it really is this record's old
+ * row (same warehouse and, for WSR/WSI, the same bag count), because the
+ * Sheet script deletes by serial alone and a different warehouse could hold
+ * the same number. Anything it cannot verify is left alone and reported -
+ * it never guesses.
+ * Returns { done: true } when the row is gone (or never existed), else
+ * { done: false, reason } so the caller keeps the old serial and retries.
+ */
+export const removeStaleSheetRow = async (tx, oldSerial, warehouse) => {
+  if (tx.type === 'WTS') {
+    const result = await deleteTransactionBackup(oldSerial, 'WTS', warehouse?.code)
+    return result.ok ? { done: true } : { done: false, reason: result.reason ?? 'delete_failed' }
+  }
+  const found = await fetchTransactionBySerial(tx.type, null, oldSerial)
+  if (!found.ok) return { done: false, reason: found.reason ?? 'lookup_failed' }
+  if (!found.row) return { done: true, alreadyGone: true }
+
+  const sameWarehouse = sameWarehouseLabel(found.row['Warehouse Name'], warehouse?.name)
+  const quantityMatches = tx.type === 'WSR' || tx.type === 'WSI'
+    ? Number(found.row['Bags']) === Number(tx.numberOfBags)
+    : true
+  if (!sameWarehouse || !quantityMatches) return { done: false, reason: 'row_does_not_match_this_record' }
+
+  const result = await deleteTransactionBackup(oldSerial, tx.type, warehouse?.code)
+  if (!result.ok) return { done: false, reason: result.reason ?? 'delete_failed' }
+  // The row exists (we just read it) but the delete script looked elsewhere:
+  // it lives on a different date-ranged source than the active one.
+  if (result.found === false) return { done: false, reason: 'row_is_on_a_different_sheet_source' }
+  return { done: true }
+}
+
 // ── SDO Purchase Receipt "SUMMARY" Sheet backup ──────────────────────────
 //
 // A Purchase Receipt is not a db.transactions row (a structurally

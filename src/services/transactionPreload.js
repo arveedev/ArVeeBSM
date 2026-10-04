@@ -47,6 +47,7 @@
 // count. This was the primary cause of a very slow first preload.
 
 import { db } from '../db/dexie.js'
+import { effectiveCutoffDate } from '../utils/calculations.js'
 import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix, markRowsSeen, isWtsBackupSerial } from './googleSheetsBridge.js'
 import { recordSerialUsed } from '../utils/serialNumber.js'
 import { recalculatePileStatesForWarehouses } from '../utils/pileLedger.js'
@@ -724,8 +725,27 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
   // ESI/WTS have no cerealCategory dimension, so their rows all key on
   // `''`, unaffected.
   const existingByWarehouse = new Map(warehouseIds.map((id) => [id, new Map()]))
+  // Serial-only index alongside the category-aware one above: a record whose
+  // cereal category is empty on EITHER side (an incoming Sheet row whose
+  // variety name did not resolve, or an older local record) is still the
+  // same document. Without this, such a row was imported as a SECOND copy
+  // of a record the app already had (1,671 duplicated serials found in the
+  // pre-cutoff history).
+  const existingBySerial = new Map(warehouseIds.map((id) => [id, new Map()]))
   for (const tx of localTx) {
     existingByWarehouse.get(tx.warehouseId)?.set(`${tx.serialNo}::${tx.cerealCategory ?? ''}`, tx)
+    const bySerial = existingBySerial.get(tx.warehouseId)
+    if (bySerial) {
+      const key = String(tx.serialNo)
+      if (!bySerial.has(key)) bySerial.set(key, [])
+      bySerial.get(key).push(tx)
+    }
+  }
+  const findLocalMatch = (warehouseId, serialNo, importedCategory) => {
+    const exact = existingByWarehouse.get(warehouseId)?.get(`${serialNo}::${importedCategory ?? ''}`)
+    if (exact) return exact
+    return existingBySerial.get(warehouseId)?.get(String(serialNo))
+      ?.find((tx) => !importedCategory || !tx.cerealCategory) ?? null
   }
 
   const highestImportedByWarehouse = new Map()
@@ -775,6 +795,17 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
       : undefined
     const transactionTypesByName = new Map((await db.transactionTypes.toArray()).map((t) => [t.name.trim().toLowerCase(), t.transactionTypeId]))
 
+    // The app is the source of truth for every record dated AFTER a
+    // warehouse's effective cutoff (the later of its own reportingCutoffDate
+    // and the global data start date, exactly as the reports use it). A
+    // Sheet row dated after it that the app has no record of is NOT turned
+    // into a record: such a row can only be a leftover (for example the old
+    // row of a serial that was changed) and importing it created empty,
+    // double-counted placeholders. It is reported instead - see below.
+    const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
+    const warehouseById = new Map(group.map((w) => [w.warehouseId, w]))
+    const skippedLiveRows = []
+
     for (const sourceResult of result.bySource) {
       if (!sourceResult.ok) continue
       const seenSerialsForThisSource = []
@@ -809,7 +840,7 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
 
         const imported = mapSheetRowToTransaction(type, row, { warehouseId: rowWarehouseId, varietyByName, transactionTypesByName })
         const existingRecords = existingByWarehouse.get(rowWarehouseId)
-        const existing = existingRecords?.get(`${serialNo}::${imported.cerealCategory ?? ''}`)
+        const existing = findLocalMatch(rowWarehouseId, serialNo, imported.cerealCategory)
 
         // Advances for every row seen (existing or new), not just fresh
         // imports, so the ordinal always reflects this row's true position
@@ -866,6 +897,12 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
           continue
         }
 
+        const liveCutoff = effectiveCutoffDate(warehouseById.get(rowWarehouseId)?.reportingCutoffDate, globalDataStartDate)
+        if (liveCutoff && imported.date && imported.date > liveCutoff) {
+          skippedLiveRows.push({ serialNo: String(serialNo), date: imported.date, warehouseId: rowWarehouseId, cutoff: liveCutoff })
+          continue
+        }
+
         // One last LIVE check against the real database, not the
         // existingByWarehouse snapshot taken at the top of this
         // function - that snapshot is exactly what the same-device
@@ -880,13 +917,21 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
         // slips through even this.
         const stillMissing = !(await db.transactions
           .where('[type+warehouseId+serialNo]').equals([type, rowWarehouseId, String(serialNo)])
-          .and((t) => (t.cerealCategory ?? '') === (imported.cerealCategory ?? ''))
+          .and((t) => !t.cerealCategory || !imported.cerealCategory || t.cerealCategory === imported.cerealCategory)
           .first())
         if (!stillMissing) { skippedUnchanged++; continue }
 
         imported.createdAt = ordinal
         await db.transactions.add(imported)
         existingRecords?.set(`${serialNo}::${imported.cerealCategory ?? ''}`, { id: imported.id, isSynced: true })
+        {
+          const bySerial = existingBySerial.get(rowWarehouseId)
+          const key = String(serialNo)
+          if (bySerial) {
+            if (!bySerial.has(key)) bySerial.set(key, [])
+            bySerial.get(key).push({ id: imported.id, isSynced: true, cerealCategory: imported.cerealCategory ?? null })
+          }
+        }
         importedCount++
 
         const num = parseInt(String(serialNo).replace(/\D/g, ''), 10)
@@ -904,6 +949,29 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
       // best-effort and never throws.
       markRowsSeen(type, sourceResult.sourceId, seenSerialsForThisSource)
     }
+
+    // Reported, not imported: one idempotent Error Log entry per row (same id
+    // every time, so repeated cycles never pile up duplicates). Capped per
+    // cycle so a very large leftover set cannot flood the log.
+    for (const row of skippedLiveRows.slice(0, 25)) {
+      try {
+        const warehouseName = warehouseById.get(row.warehouseId)?.name ?? 'a warehouse'
+        await db.errorLogs.put({
+          id: `skip-live-sheet-row:${type}:${row.warehouseId}:${row.serialNo}`,
+          timestamp: new Date().toISOString(),
+          context: 'Sheet import skipped',
+          message: `${type} ${row.serialNo} (${row.date}, ${warehouseName}) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after ${row.cutoff}. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.`,
+          stack: null,
+          userName: null,
+          userRole: null,
+          refId: null,
+          resolved: false,
+        })
+      } catch (err) {
+        console.error('Could not record a skipped live Sheet row:', err)
+      }
+    }
+    if (skippedLiveRows.length > 0) console.warn(`preloadOneType(${type}): ${skippedLiveRows.length} Sheet row(s) after the cutoff have no app record and were not imported`)
 
     console.log(`preloadOneType(${type}): saw ${totalRowsSeen} row(s) from the Sheet, imported ${importedCount}, updated ${updatedCount}, skipped ${skippedUnchanged} unchanged, skipped ${skippedNoWarehouseMatch} for no warehouse-name match, skipped ${skippedUnsyncedConflict} for an unsynced local conflict (expected names: ${group.map((w) => w.name).join(', ')})`)
 

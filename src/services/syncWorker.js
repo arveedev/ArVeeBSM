@@ -10,7 +10,7 @@
 
 import toast from 'react-hot-toast'
 import { db } from '../db/dexie.js'
-import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, pushPrBackup, updatePrBackup, deletePrBackup, stripWarehouseCodePrefix, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
+import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, removeStaleSheetRow, pushPrBackup, updatePrBackup, deletePrBackup, stripWarehouseCodePrefix, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
 import { preloadTransactionsForUser } from './transactionPreload.js'
 import { pauseTransactionSync, resumeTransactionSync, isTransactionSyncPaused } from './syncPauseState.js'
 import { logSyncFailure, resolveSyncFailure } from '../utils/errorLog.js'
@@ -226,6 +226,43 @@ const runSyncQueue = async () => {
           await db.transactions.update(tx.id, { syncFailureLogged: true })
         }
       }
+    }
+
+    // Old Sheet rows left behind by a serial change (utils/serialRename.js).
+    // Only for records whose NEW-serial row is already confirmed on the
+    // Sheet (isSynced === true), so the Sheet never loses its only copy.
+    // A row that cannot be verified as this record's own is left alone and
+    // reported once; everything else retries on every cycle until done.
+    try {
+      const withStale = await db.transactions
+        .filter((tx) => tx.isSynced === true && Array.isArray(tx.staleSheetSerials) && tx.staleSheetSerials.length > 0)
+        .toArray()
+      for (const tx of withStale) {
+        try {
+          const warehouse = tx.warehouseId ? await db.warehouses.get(tx.warehouseId) : null
+          const remaining = []
+          let lastReason = null
+          for (const oldSerial of tx.staleSheetSerials) {
+            const outcome = await removeStaleSheetRow(tx, oldSerial, warehouse)
+            if (!outcome.done) { remaining.push(oldSerial); lastReason = outcome.reason }
+          }
+          if (remaining.length !== tx.staleSheetSerials.length) {
+            await db.transactions.update(tx.id, { staleSheetSerials: remaining })
+          }
+          if (remaining.length === 0 && tx.staleCleanupLogged) {
+            await resolveSyncFailure(tx.id)
+            await db.transactions.update(tx.id, { staleCleanupLogged: false })
+          }
+          if (remaining.length > 0 && !tx.staleCleanupLogged) {
+            await logSyncFailure('Sheet sync', `${tx.type} ${tx.serialNo}: the old Sheet row for previous serial ${remaining.join(', ')} could not be removed yet (${lastReason}) - will keep retrying automatically; if it keeps failing, delete that row on the Sheet by hand.`, tx.id)
+            await db.transactions.update(tx.id, { staleCleanupLogged: true })
+          }
+        } catch (err) {
+          console.error(`Stale Sheet row cleanup failed for ${tx.type} ${tx.serialNo}:`, err)
+        }
+      }
+    } catch (err) {
+      console.error('Stale Sheet row cleanup pass failed:', err)
     }
 
     // Drain queued offline deletions - by the time these can retry, the

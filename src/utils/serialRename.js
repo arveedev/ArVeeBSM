@@ -23,13 +23,14 @@
 // longer matches anything (which would silently break their Reports/
 // PDF grouping).
 //
-// Deliberately does NOT touch the Google Sheets backup directly - the
-// old row (still under the old serial) is left as-is; marking the
-// record unsynced (isSynced: false) lets the existing background push
-// create/overwrite a row for the NEW serial on the next sync, the same
-// path any other edit already goes through. Cleaning up the old,
-// now-orphaned Sheet row is a separate manual step for whoever manages
-// that sheet.
+// Does not call the Google Sheets backup directly. Marking the record
+// unsynced (isSynced: false) lets the existing background push create a
+// row for the NEW serial on the next sync, the same path any other edit
+// already goes through. The OLD serial is remembered on the record
+// (staleSheetSerials) and syncWorker.js removes that old Sheet row once
+// the new one is confirmed, retrying until it succeeds. (Before this, the
+// old row was left behind as a "manual step" and the Sheet-import preload
+// later re-created it as an empty ghost record.)
 
 import { db } from '../db/dexie.js'
 import { isSerialTaken } from './serialNumber.js'
@@ -57,13 +58,27 @@ export const renameTransactionSerial = async (transaction, newSerialRaw, { type,
           serialNo: suffix ? `${newSerial}${suffix}` : sibling.serialNo,
           groupSerialNo: newSerial,
           isSynced: false,
+          // The Sheet still has a row under the sibling's OLD serial - see
+          // staleSheetSerials below.
+          staleSheetSerials: [...(sibling.staleSheetSerials ?? []), sibling.serialNo],
         })
       }
     }
+    // Confirmed, reported real bug: this used to leave the Sheet row under
+    // the OLD serial behind forever (the header comment above even called
+    // it "a separate manual step"). The Sheet-import preload later found
+    // that orphan row and re-created it in the app as an empty placeholder
+    // - a ghost that double-counted the receipt in procurement and the
+    // authority's issued total. The old serial is now remembered on the
+    // record (an array, so a second rename before the first cleanup ran
+    // can't lose the first orphan) and syncWorker removes that Sheet row
+    // - but only AFTER the new-serial row is confirmed on the Sheet, so
+    // the Sheet never loses its only copy - retrying until it succeeds.
     await db.transactions.update(transaction.id, {
       serialNo: newSerial,
       ...(transaction.groupSerialNo ? { groupSerialNo: isGroupPrimary ? newSerial : transaction.groupSerialNo } : {}),
       isSynced: false,
+      staleSheetSerials: [...(transaction.staleSheetSerials ?? []), oldSerial],
     })
   })
 

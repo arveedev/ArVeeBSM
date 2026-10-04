@@ -8216,4 +8216,24 @@
 //            pages now get showFoot 'never'. Reproduced and verified in a
 //            node harness (10-45 purchase receipts): the first-page header
 //            now appears on page 1 only.
-export const APP_VERSION = '1.10-265'
+//   1.10-266 - Two data-integrity fixes behind the "ghost receipts" found on
+//            2026-10-04 (WSR 11756875 / WSI 26341972 were empty placeholders
+//            of receipts whose serial had been corrected, counted twice in
+//            procurement and in an authority's issued total).
+//            1) Changing a serial (admin rename) now removes the OLD Sheet
+//            row: the old serial is remembered on the record
+//            (staleSheetSerials) and syncWorker deletes that row only AFTER
+//            the new-serial row is confirmed on the Sheet, retrying every
+//            cycle until it succeeds. The row is read first and deleted only
+//            if it is verifiably this record's own (same warehouse, and for
+//            WSR/WSI the same bag count) - anything else is left alone and
+//            reported in the Error Log. Group siblings and WTS included.
+//            2) The Sheet-import preload no longer creates records for rows
+//            dated after a warehouse's effective cutoff (the later of its
+//            own cutoff and the global data start date): the app is the
+//            source of truth there. Such a row is reported once in the Error
+//            Log ("Sheet import skipped") instead. Matching of incoming rows
+//            to existing records now treats an empty cereal category on
+//            either side as a match, which was the source of the duplicated
+//            history serials. Updates to existing records are unchanged.
+export const APP_VERSION = '1.10-266'
