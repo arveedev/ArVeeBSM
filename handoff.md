@@ -1,6 +1,10 @@
 # Project Handoff — BSM App
 
 ## Last Updated
+2026-10-05 addendum: app is now v1.10-271 and live (production, real data since Sept 1).
+Only the entry at the top of "In Progress / Not Yet Done" and docs/backup-and-restore-plan.md
+(sections 24-25) are current for this period; the rest of this file was last verified in August.
+
 Complete rewrite. This file had gone severely stale (still said Dexie
 v13, said Home.jsx split was never done, said the pile layout grid was
 12x10) - user caught this directly and flagged it as a serious process
@@ -564,6 +568,20 @@ re-reading the actual discussion.
   URL - corrected.
 
 ## In Progress / Not Yet Done
+
+### OPEN (2026-10-05 session) - Sheet sync audit, duplicate cleanup, backup rollout - PUSHED (v1.10-266 to 271)
+
+Done: serial rename removes the old Sheet row after the new one is confirmed (`staleSheetSerials`); the
+Sheet importer no longer creates records dated after the effective cutoff; missing `logError` import in
+`transactionPreload.js` fixed (ESR import had been failing every cycle); Admin > Duplicate Cleanup built
+(`utils/duplicateCleanup.js`) and run by the owner - about 1,685 repeated serials removed, snapshot files
+kept in the owner's Downloads; REMARKS formula auto-filled by the Apps Script; daily GitHub backup plus
+read-only Sheet audit running in the bsm-backups repo.
+
+Still open: delete ghosts WSR 11756875 (ALB-BSI C) and WSI 26341972 (ALB-BSI B) from their forms;
+re-queue PR 5798086-0 (ALB-VRT A) to the October sheet; confirm ESR 1730452 / WSI 26530752 look right
+after cleanup; backup rollout remaining phases (restore rehearsal on a scratch DB, Drive copy, monitoring
+ping, parallel run, restore runbook) - see docs/backup-and-restore-plan.md sections 24-25.
 
 ### OPEN (2026-08-17 session, round 38) - trial number reuse no longer restricted - NOT YET COMMITTED/PUSHED
 

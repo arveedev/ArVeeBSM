@@ -18484,3 +18484,5 @@ cycle once a serial collision existed. Built Admin > Duplicate Cleanup (`utils/d
 totals recalculated afterwards, Sheet untouched. Owner cleaned about 1,685 repeated serials (old Sheet-import
 copies, cancelled-document echoes, July 8 CTD-GID 2 pair). Safety rules are in the file header.
 
+Handoff refreshed 2026-10-05: `handoff.md` now carries a v1.10-271 addendum and an open-items entry for the cleanup and backup work above.
+
