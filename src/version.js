@@ -8264,4 +8264,7 @@
 //            date/status differ; the app-made copy is always preferred as the
 //            one kept, history Sheet copies with another pile are removed too,
 //            and piles are recalculated after a cleanup.
-export const APP_VERSION = '1.10-271'
+//   1.10-272 - Beginning Balances: a pile with no balance line yet now shows its
+//            saved "As of" date when edited (it showed today's date, so a
+//            back-dated start looked reverted and the next Save overwrote it).
+export const APP_VERSION = '1.10-272'

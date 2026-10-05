@@ -156,7 +156,10 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
             // silently lose its one recorded value on the next edit.
             dateProcured: s.dateProcured ?? (i === 0 ? (pile.dateProcured ?? '') : ''),
           }))
-        : [emptyLine()])
+        // A pile with no seed line yet (e.g. created empty) shows its own
+        // saved start date, not today's - otherwise a back-dated "As of" looks
+        // like it reverted, and the next Save would overwrite it with today.
+        : [{ ...emptyLine(), dateReceived: pile.dateOfReceipt || todayLocalISO() }])
       // The app only stores the normalized days value, not which unit it
       // was originally entered in - previously this always hardcoded
       // 'Days' regardless, meaning a pile entered in Months would show
