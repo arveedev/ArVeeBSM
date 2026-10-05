@@ -8267,4 +8267,8 @@
 //   1.10-272 - Beginning Balances: a pile with no balance line yet now shows its
 //            saved "As of" date when edited (it showed today's date, so a
 //            back-dated start looked reverted and the next Save overwrote it).
-export const APP_VERSION = '1.10-272'
+//   1.10-273 - New Admin > Inventory > Copy Layout: copies the pile-layout boxes
+//            (position/size, optionally names) of one warehouse to another as
+//            vacant boxes. No piles or assignments; existing destination boxes
+//            are never changed, overlapping copies are skipped.
+export const APP_VERSION = '1.10-273'

@@ -32,6 +32,7 @@ import DataRepairPanel from '../components/common/admin/DataRepairPanel.jsx'
 import AuthorityLinksPanel from '../components/common/admin/AuthorityLinksPanel.jsx'
 import MoveRecordsPanel from '../components/common/admin/MoveRecordsPanel.jsx'
 import DuplicateCleanupPanel from '../components/common/admin/DuplicateCleanupPanel.jsx'
+import CopyLayoutPanel from '../components/common/admin/CopyLayoutPanel.jsx'
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
 import DisbursementSettingsPanel from '../components/common/admin/DisbursementSettingsPanel.jsx'
@@ -55,6 +56,7 @@ const GROUPS = [
       { id: 'varieties', label: 'Varieties', Panel: VarietyTypesPanel },
       { id: 'sacks', label: 'Sack Types', Panel: SackTypesPanel },
       { id: 'balances', label: 'Beginning Balances', Panel: BeginningBalancesPanel },
+      { id: 'copyLayout', label: 'Copy Layout', Panel: CopyLayoutPanel },
     ],
   },
   {
