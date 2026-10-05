@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-05T01:14:22.906Z",
+  "exportedAt": "2026-10-05T01:14:27.887Z",
   "databaseName": "BSMDatabase",
   "schemaVersion": 44,
   "tables": {
@@ -365,7 +365,8 @@
         "initiallySynced": true,
         "serverRevision": "1:190911",
         "yServerRevision": "1:143868",
-        "timestamp": "2026-10-03T06:03:23.222Z"
+        "timestamp": "2026-10-05T01:14:25.329Z",
+        "error": "TypeError: Load failed"
       }
     ],
     "$baseRevs": [
@@ -244893,6 +244894,19 @@
         "deviceLabel": "Chrome on Windows"
       },
       {
+        "id": "93cd41de-ed90-4f9b-a773-49ae041c83fd",
+        "timestamp": "2026-10-05T01:14:25.306Z",
+        "context": "Automatic backup",
+        "message": "Load failed",
+        "stack": null,
+        "userName": "Background sync",
+        "userRole": "System",
+        "deviceId": "51e196c2-9435-45e8-adb7-7d94363a3f73",
+        "deviceLabel": "Safari on iOS",
+        "owner": "bsm-app-service@system.local",
+        "realmId": "bsm-app-service@system.local"
+      },
+      {
         "id": "a3f2d91d-c5aa-45b1-a0a3-e16d11c718b1",
         "owner": "bsm-app-service@system.local",
         "refId": "12714fe8-9d63-4145-b9f3-b2ce9cfc97d7",
@@ -253232,7 +253246,34 @@
     "$pileLayoutHistory_mutations": [],
     "$customerAliases_mutations": [],
     "$userAliases_mutations": [],
-    "$errorLogs_mutations": [],
+    "$errorLogs_mutations": [
+      {
+        "type": "insert",
+        "ts": 1791162865311,
+        "opNo": 1,
+        "keys": [
+          "93cd41de-ed90-4f9b-a773-49ae041c83fd"
+        ],
+        "txid": "6IxyBvE9YEYaf3/g4kZyVA==",
+        "userId": "bsm-app-service@system.local",
+        "values": [
+          {
+            "id": "93cd41de-ed90-4f9b-a773-49ae041c83fd",
+            "timestamp": "2026-10-05T01:14:25.306Z",
+            "context": "Automatic backup",
+            "message": "Load failed",
+            "stack": null,
+            "userName": "Background sync",
+            "userRole": "System",
+            "deviceId": "51e196c2-9435-45e8-adb7-7d94363a3f73",
+            "deviceLabel": "Safari on iOS",
+            "owner": "bsm-app-service@system.local",
+            "realmId": "bsm-app-service@system.local"
+          }
+        ],
+        "rev": 14
+      }
+    ],
     "$buyingPrices_mutations": [],
     "$purchaseReceipts_mutations": [],
     "$sdoSerialCounterCache_mutations": [],
