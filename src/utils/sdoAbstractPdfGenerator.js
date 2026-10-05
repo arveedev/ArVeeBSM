@@ -352,11 +352,20 @@ export const generateSdoAbstract = ({
   // all. This is the actual, real mechanism the previous attempt was
   // trying to reach for.
   const pageStartIndices = []
-  {
+  // One measurement render of the CURRENT body0 (foot included, so the real
+  // grand TOTAL's own height is part of the fit). Returns where each page's
+  // first body row sits and how many pages the whole table - foot included -
+  // actually took.
+  const measureLayout = () => {
     const measureDoc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
     const firstRowIndexByPage = new Map()
     autoTable(measureDoc, {
       ...sharedTableOptions,
+      // No foot in the measurement: the grand TOTAL is drawn by hand on the
+      // last page (see footByHand below), exactly like each page's SUB-TOTAL,
+      // so pages fill the same way whether or not they are the last one.
+      foot: undefined,
+      showFoot: 'never',
       body: body0,
       didDrawCell: (data) => {
         if (data.section !== 'body' || data.column.index !== 0) return
@@ -364,9 +373,28 @@ export const generateSdoAbstract = ({
         if (!firstRowIndexByPage.has(pageNum)) firstRowIndexByPage.set(pageNum, data.row.index)
       },
     })
-    const measuredPages = [...firstRowIndexByPage.keys()].sort((a, b) => a - b)
-    for (const pageNum of measuredPages) pageStartIndices.push(firstRowIndexByPage.get(pageNum))
+    const starts = [...firstRowIndexByPage.keys()].sort((a, b) => a - b).map((n) => firstRowIndexByPage.get(n))
+    return { starts, totalPages: measureDoc.internal.getNumberOfPages() }
   }
+
+  let measured = measureLayout()
+  // Confirmed, reported real bug (October 5 export): the blank spacer row that
+  // closes the table did not fit under the last farmer, so it spilled onto a
+  // page of its own - which then carried a SUB-TOTAL, the TOTAL and the
+  // signatories for a page holding no farmer at all, while page 1 ended in a
+  // SUB-TOTAL where the TOTAL itself could have gone. The closing spacer is
+  // only cosmetic: when it would be alone on the last page, drop it and measure
+  // again so the TOTAL can sit directly under the last farmer.
+  if (measured.starts.length > 1 && rowMeta0.slice(measured.starts[measured.starts.length - 1]).every((m) => m.type === 'spacer')) {
+    body0.pop(); rowMeta0.pop(); marks0.pop()
+    measured = measureLayout()
+  }
+  pageStartIndices.push(...measured.starts)
+  // The real grand TOTAL row is drawn by hand under the last farmer, the same
+  // way each page's SUB-TOTAL is (in the bottom margin if need be), instead of
+  // by autoTable's own foot - whose reserved height used to push the TOTAL
+  // alone onto an extra page while a SUB-TOTAL of identical size fitted fine.
+  const footByHand = true
 
   // Totals of every real (non-spacer) row in body0 strictly before
   // `uptoIndexExclusive` - i.e. everything already printed on earlier
@@ -393,7 +421,8 @@ export const generateSdoAbstract = ({
   // PASS 2 - the real render, on the real `doc`, one autoTable() call
   // per page (see this whole section's opening comment for why).
   const columnX = new Map() // colIndex -> { x, width } - captured once, from any call's head row (identical column config every time)
-  let footRowHeight = 7.66 // cellPadding(1.3)*2 + fontSize(8)*~1.15 - fallback only, overwritten by the real foot row's own height below
+  // Height of a totals row (cellPadding 1.3 x2 + one 8pt line), measured against autoTable's own foot row. Used for the hand-drawn SUB-TOTAL and TOTAL rows.
+  const footRowHeight = 5.8456
   let mainFinalY = 0
   let cumulative = { bags: 0, gross: 0, sack: 0, net: 0, enw: 0, basic: 0, pricer: 0, total: 0 }
 
@@ -424,7 +453,7 @@ export const generateSdoAbstract = ({
       // (and the TOTAL) onto an extra internal page that was then drawn
       // with the first-page header on top of the table head. Non-last
       // pages must never have a foot at all.
-      ...(isLastPage ? { foot, showFoot: 'lastPage' } : { foot: undefined, showFoot: 'never' }),
+      ...(isLastPage && !footByHand ? { foot, showFoot: 'lastPage' } : { foot: undefined, showFoot: 'never' }),
       // Forces this page to genuinely start fresh, regardless of
       // remaining space on the previous page - see this section's
       // opening comment.
@@ -436,9 +465,6 @@ export const generateSdoAbstract = ({
       didDrawCell: (data) => {
         if (data.section === 'head') {
           columnX.set(data.column.index, { x: data.cell.x, width: data.cell.width })
-        }
-        if (data.section === 'foot') {
-          footRowHeight = data.cell.height
         }
         if (data.section === 'body') {
           bottomY = Math.max(bottomY, data.cell.y + data.cell.height)
@@ -474,8 +500,8 @@ export const generateSdoAbstract = ({
     // doc.line/doc.text against this call's own captured column x/
     // width (`columnX`) rather than as a real table row, so it never
     // competes for the same page-fit budget the rows themselves use.
-    if (!isLastPage) {
-      const subtotalCells = [{ content: 'SUB-TOTAL', colSpan: 7 }, ...buildTotalsRowCells(cumulative)]
+    if (!isLastPage || footByHand) {
+      const subtotalCells = [{ content: isLastPage ? 'TOTAL' : 'SUB-TOTAL', colSpan: 7 }, ...buildTotalsRowCells(cumulative)]
       const rowY = bottomY
       const rowH = footRowHeight
 
@@ -483,7 +509,7 @@ export const generateSdoAbstract = ({
       doc.rect(margin, rowY, pageW - margin * 2, rowH, 'F')
       doc.setDrawColor(150, 150, 150)
       doc.setLineWidth(0.1)
-      doc.setFont('helvetica', 'bolditalic')
+      doc.setFont('helvetica', isLastPage ? 'bold' : 'bolditalic')
       doc.setFontSize(8)
       doc.setTextColor(...BLACK)
 
@@ -504,6 +530,7 @@ export const generateSdoAbstract = ({
       if (lastCol) doc.line(lastCol.x + lastCol.width, rowY, lastCol.x + lastCol.width, rowY + rowH)
       doc.line(margin, rowY, pageW - margin, rowY)
       doc.line(margin, rowY + rowH, pageW - margin, rowY + rowH)
+      if (isLastPage) mainFinalY = rowY + rowH
     }
   })
 

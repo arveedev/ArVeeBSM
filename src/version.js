@@ -8296,4 +8296,11 @@
 //            SDO saves from now on is never seen by them. Applies to the Home
 //            price card, the Unpaid Procurement total, the bell, and Purchase
 //            Receipts. Already-issued PRs keep their own saved unit cost.
-export const APP_VERSION = '1.10-281'
+//   1.10-282 - Abstract export: the grand TOTAL is now drawn directly under the last
+//            farmer the same way each page's SUB-TOTAL is (it used to be left to
+//            autoTable's reserved footer, which could push the TOTAL alone onto a
+//            second page while a SUB-TOTAL of the same size fitted on page 1, and
+//            drag the signatories with it). Signatories still move to the next page
+//            only when they do not fit. The closing blank row can no longer spill
+//            onto a page of its own.
+export const APP_VERSION = '1.10-282'
