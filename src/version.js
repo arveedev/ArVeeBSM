@@ -8288,4 +8288,6 @@
 //            fallback, with the later nested value preferred over the stale one.
 //   1.10-279 - SDO For Payment / Completed lists: each WSR card now shows its date
 //            (bottom-right of the warehouse line).
-export const APP_VERSION = '1.10-279'
+//   1.10-280 - SDO lists: For Payment shows the WSR date, Completed shows the PR
+//            date (each labelled).
+export const APP_VERSION = '1.10-280'

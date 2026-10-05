@@ -555,7 +555,10 @@ function SdoHome() {
               <p className="mt-1 text-base font-semibold text-app-text">{t.customerName}</p>
               <div className="flex items-center justify-between gap-2 text-sm text-neutral-500">
                 <span>{warehouse ? `${warehouse.code} — ${warehouse.name}` : ''}</span>
-                <span className="shrink-0 font-medium text-neutral-400">{fmtListDate(t.date)}</span>
+                {/* For Payment shows the WSR date; Completed shows the PR date (falls back to the WSR date if a PR somehow has none). */}
+                <span className="shrink-0 font-medium text-neutral-400">
+                  {listTab === 'completed' && pr?.date ? `PR ${fmtListDate(pr.date)}` : `WSR ${fmtListDate(t.date)}`}
+                </span>
               </div>
               <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
                 <span className="text-neutral-400">{fmtBags(t.numberOfBags)} bags · {fmtKilos(t.netKilos)} kg net</span>
