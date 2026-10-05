@@ -35,6 +35,13 @@ export const UNSPECIFIED_AGE = 'Unspecified Age'
 // still far better than a hard 0 that hides real unwithdrawn stock.
 export const resolveBags = (rawBags, kilos) => (rawBags > 0 ? rawBags : (kilos ?? 0) / 50)
 
+// The mirror of resolveBags: an AI allocated in BAGS only (no kilos, which
+// the Sheet allows) used to count its bags but 0 kg, so a warehouse's
+// bags figure and its kilos figure described different sets of authorities
+// (e.g. 115 bags unwithdrawn but 4,850 kg, with Potential 0 bags yet 21.6 kg).
+// Kilos now fall back to bags x 50, the same conversion used everywhere.
+export const resolveKilos = (rawKilos, bags) => (rawKilos > 0 ? rawKilos : (bags ?? 0) * 50)
+
 // Best-effort: pulls a representative day-count out of an AI's free-text
 // ageGroup field (the Sheet's repurposed "Note3"/"Age Group" column,
 // e.g. "0-6 months", ">12 months", "6.1-12") so it can run through the
@@ -112,7 +119,7 @@ export const computeUnwithdrawnByVariety = async (warehouseId) => {
   for (const a of authorities) {
     const { withdrawnBags, withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
     const unwithdrawnBags = Math.max(0, resolveBags(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0) - withdrawnBags)
-    const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
+    const unwithdrawnKilos = Math.max(0, resolveKilos(a.totalAllocationKilos, a.totalAllocationBags) - withdrawnKilos)
     if (unwithdrawnBags <= 0 && unwithdrawnKilos <= 0) continue
 
     const cur = result.get(a.varietyId) ?? { bags: 0, kilos: 0 }
@@ -148,7 +155,7 @@ export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter
     const { withdrawals, withdrawnBags, withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
     const allocatedBags = resolveBags(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0)
     const unwithdrawnBags = Math.max(0, allocatedBags - withdrawnBags)
-    const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
+    const unwithdrawnKilos = Math.max(0, resolveKilos(a.totalAllocationKilos, a.totalAllocationBags) - withdrawnKilos)
     if (unwithdrawnBags <= 0 && unwithdrawnKilos <= 0) continue
 
     const category = categoryByVarietyId.get(a.varietyId) ?? null
@@ -157,7 +164,7 @@ export const getUnwithdrawnDetail = async (warehouseId, varietyIds, bucketFilter
       authority: a,
       category,
       allocatedBags,
-      allocatedKilos: a.totalAllocationKilos ?? 0,
+      allocatedKilos: resolveKilos(a.totalAllocationKilos, a.totalAllocationBags),
       withdrawnBags,
       withdrawnKilos,
       unwithdrawnBags,
@@ -185,7 +192,7 @@ export const computeUnwithdrawnByCategoryAge = async (warehouseId, varietyCatego
   for (const a of authorities) {
     const category = varietyCategoryMap?.get(a.varietyId) ?? 'Unknown'
     const { withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
-    const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
+    const unwithdrawnKilos = Math.max(0, resolveKilos(a.totalAllocationKilos, a.totalAllocationBags) - withdrawnKilos)
     if (unwithdrawnKilos <= 0) continue
 
     const label = resolveAuthorityBucketLabel(a, category)
@@ -218,7 +225,7 @@ export const computeUnwithdrawnByVarietyAge = async (warehouseId, varietyCategor
     const category = varietyCategoryMap?.get(a.varietyId) ?? 'Unknown'
     const { withdrawnBags, withdrawnKilos } = await withdrawalsForAuthority(a.aiNumber)
     const unwithdrawnBags = Math.max(0, resolveBags(a.totalAllocationBags ?? 0, a.totalAllocationKilos ?? 0) - withdrawnBags)
-    const unwithdrawnKilos = Math.max(0, (a.totalAllocationKilos ?? 0) - withdrawnKilos)
+    const unwithdrawnKilos = Math.max(0, resolveKilos(a.totalAllocationKilos, a.totalAllocationBags) - withdrawnKilos)
     if (unwithdrawnBags <= 0 && unwithdrawnKilos <= 0) continue
 
     const label = resolveAuthorityBucketLabel(a, category)
