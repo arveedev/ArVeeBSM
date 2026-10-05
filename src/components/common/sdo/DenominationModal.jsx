@@ -20,6 +20,26 @@ import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculati
 const DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.25, 0.1, 0.05, 0.01]
 const BUNDLE_SIZE = 100
 
+// Storage keys WITHOUT a dot. The coin denominations (0.25, 0.1, 0.05, 0.01)
+// used to be saved under keys like "0.25" - Dexie/Dexie Cloud read a dot in a
+// property name as a path separator, so a later save wrote the new value into
+// counts["0"]["25"] while an old counts["0.25"] stayed behind, and the form
+// kept showing the stale old value (a 1 on the 0.25 row that would not clear).
+// Counts are now stored under `countsV2` with dot-free keys.
+const keyFor = (d) => `d${String(d).replace('.', '_')}`
+
+// Reads one denomination from a saved record: the new countsV2 first, then the
+// older `counts` in either of the two shapes a dotted key could end up in
+// (nested path from a later save wins over the stale dotted key).
+const savedEntryFor = (record, d) => {
+  if (record?.countsV2 && keyFor(d) in record.countsV2) return record.countsV2[keyFor(d)]
+  const old = record?.counts
+  if (!old) return undefined
+  if (d >= 1) return old[d]
+  const nested = old['0']?.[String(d).slice(2)]
+  return nested != null && typeof nested === 'object' ? nested : old[String(d)]
+}
+
 // A denomination's saved entry is either the current { bundles, pcs }
 // shape, a bare number left over from before bundles existed (treated
 // as loose pieces, bundles 0), or missing entirely. Returned bundles/
@@ -54,8 +74,8 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   }, [])
 
   useEffect(() => {
-    if (!saved?.counts) return
-    setCounts(Object.fromEntries(DENOMINATIONS.map((d) => [d, normalizeEntry(saved.counts[d])])))
+    if (!saved?.countsV2 && !saved?.counts) return
+    setCounts(Object.fromEntries(DENOMINATIONS.map((d) => [d, normalizeEntry(savedEntryFor(saved, d))])))
     setForEncashment(saved.forEncashment ? liveFormatNumber(String(saved.forEncashment), 2) : '')
   }, [saved])
 
@@ -94,12 +114,14 @@ function DenominationModal({ currentCashOnHand, onClose }) {
     const cleanCounts = Object.fromEntries(
       DENOMINATIONS.map((d) => {
         const { bundles, pcs } = normalizeEntry(counts[d])
-        return [d, { bundles: bundles === '' ? '' : parseFormattedNumber(bundles), pcs: pcs === '' ? '' : parseFormattedNumber(pcs) }]
+        return [keyFor(d), { bundles: bundles === '' ? '' : parseFormattedNumber(bundles), pcs: pcs === '' ? '' : parseFormattedNumber(pcs) }]
       })
     )
     await db.cashDenominationCounts.put({
       sdoUid: user.uid,
-      counts: cleanCounts,
+      // All 13 denominations are saved here, so the old dotted-key `counts` is
+      // no longer carried over (it is only ever read as a fallback).
+      countsV2: cleanCounts,
       forEncashment: forEncashment === '' ? '' : forEncashmentValue,
       countedTotal: total,
       updatedAt: new Date().toISOString(),

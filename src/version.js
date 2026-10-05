@@ -8281,4 +8281,9 @@
 //            bags x 50 kg. Unwithdrawn/Potential behave as they did before.
 //   1.10-277 - Exported CPF logbook: the "Balance brought forward" row now prints
 //            in blue, matching replenishment rows.
-export const APP_VERSION = '1.10-277'
+//   1.10-278 - Denomination Count: a value left on the ₱0.25 row after being set
+//            to 0. Coin keys contained a dot ("0.25"), which Dexie Cloud splits
+//            into a nested path, leaving the old value behind. Counts now save
+//            under dot-free keys (countsV2); the old record is still read as a
+//            fallback, with the later nested value preferred over the stale one.
+export const APP_VERSION = '1.10-278'
