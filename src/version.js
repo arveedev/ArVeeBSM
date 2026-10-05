@@ -8276,4 +8276,7 @@
 //            sack type/condition/variety), and the BIN Card counts both the issued
 //            and received sides of a same-pile transfer (it only counted the receipt,
 //            so its closing balance was 40 bags / 1,087.5 kg instead of 0 / 37.5).
-export const APP_VERSION = '1.10-274'
+//   1.10-276 - Reverted 1.10-275. Bags-only AIs (FILLERS, REBAGGING) deliberately
+//            carry no kilos: they deduct bags only and must NOT be counted as
+//            bags x 50 kg. Unwithdrawn/Potential behave as they did before.
+export const APP_VERSION = '1.10-276'
