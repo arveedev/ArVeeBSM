@@ -8286,4 +8286,6 @@
 //            into a nested path, leaving the old value behind. Counts now save
 //            under dot-free keys (countsV2); the old record is still read as a
 //            fallback, with the later nested value preferred over the stale one.
-export const APP_VERSION = '1.10-278'
+//   1.10-279 - SDO For Payment / Completed lists: each WSR card now shows its date
+//            (bottom-right of the warehouse line).
+export const APP_VERSION = '1.10-279'

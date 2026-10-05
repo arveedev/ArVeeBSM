@@ -25,6 +25,13 @@ import SdoProcurementFilterModal from '../components/common/sdo/SdoProcurementFi
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
 import { queuePrDeletion } from '../services/syncWorker.js'
 
+// "Sep 24, 2026" from a stored YYYY-MM-DD date (parsed as a local date so it never shifts a day).
+const fmtListDate = (iso) => {
+  if (!iso) return ''
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 const LIST_PAGE_SIZE = 50
 
 // Same defensive guard as Reports.jsx's dedupeTransactions - a genuine
@@ -546,7 +553,10 @@ function SdoHome() {
                 </p>
               )}
               <p className="mt-1 text-base font-semibold text-app-text">{t.customerName}</p>
-              {warehouse && <p className="text-sm text-neutral-500">{warehouse.code} — {warehouse.name}</p>}
+              <div className="flex items-center justify-between gap-2 text-sm text-neutral-500">
+                <span>{warehouse ? `${warehouse.code} — ${warehouse.name}` : ''}</span>
+                <span className="shrink-0 font-medium text-neutral-400">{fmtListDate(t.date)}</span>
+              </div>
               <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
                 <span className="text-neutral-400">{fmtBags(t.numberOfBags)} bags · {fmtKilos(t.netKilos)} kg net</span>
                 {pr && <span className="text-base font-bold text-brand-neon">₱{(pr.totalAmount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>}
