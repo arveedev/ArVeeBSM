@@ -18486,3 +18486,7 @@ copies, cancelled-document echoes, July 8 CTD-GID 2 pair). Safety rules are in t
 
 Handoff refreshed 2026-10-05: `handoff.md` now carries a v1.10-271 addendum and an open-items entry for the cleanup and backup work above.
 
+2026-10-05 end of session: Duplicate Cleanup confirmed finished by the owner (scan shows nothing left). Next planned work is the restore rehearsal on a scratch database; ghost entries WSR 11756875 / WSI 26341972 and PR 5798086-0 re-queue remain with the owner.
+
+2026-10-05 restore rehearsal steps 1-4: imported the 2026-10-04 backup into a throwaway Dexie database and exported it back; all 32 tables matched exactly. Browser-side checks and gap recovery still to do. No 2026-10-05 scheduled backup had appeared yet - to be checked in GitHub Actions.
+

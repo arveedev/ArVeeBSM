@@ -889,3 +889,24 @@ so a row whose category does not resolve from the Sheet's variety name is import
 5798086-0 (ALB-VRT A, 2026-10-01) missing from the October sheet, to be re-queued; restore rehearsal and the
 remaining backup phases (Drive copy, monitoring ping, parallel run) as listed above.
 
+---
+
+## 26. Rehearsal, steps 1-4 passed (2026-10-05)
+
+Throwaway database created (separate address from production, own credentials, kept in
+`BSM-Safetyehearsal`, never in the app folder). The daily backup `bsm-2026-10-04.zip` from the backup
+repository was imported into it with `dexie-cloud import`, then exported again and compared with the original.
+
+**Result: 32 of 32 tables identical.** Every table had the same record count, no record was missing, and
+no record differed in any field (4,996 transactions, 1,630 authorities, 156 purchase receipts, 10 users,
+and the rest). Production was not touched.
+
+**Not yet proven (needs a browser, with the owner):** sign-in with a PIN against the throwaway database,
+suggested next serial numbers, pile balances, no duplicates after the caches rebuild, how a device that used
+the old database behaves when switched (Section 9, steps 5-7), the gap-recovery rehearsal (step 8), and
+whether the app's address must be whitelisted on a new database.
+
+**Finding:** no scheduled backup appeared for 2026-10-05 by about 09:00 Philippine time, although the
+02:00 and 06:00 runs were due. Only the manual run of 2026-10-04 exists. GitHub can delay or skip scheduled
+runs; check the Actions tab, and treat a second missed day as a problem to fix before relying on the schedule.
+

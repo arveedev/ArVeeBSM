@@ -2526,3 +2526,5 @@ just the ones already built.
 - docs/activity-log.md - chronological session-by-session log (append-
   only, different purpose from this file - this file is a snapshot of
   CURRENT state only)
+
+(2026-10-05, end of session) Next step: restore rehearsal on a scratch Dexie database before any further production cleanup or backup changes.
