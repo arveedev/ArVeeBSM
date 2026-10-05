@@ -19,7 +19,7 @@ import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import toast from 'react-hot-toast'
 import { db } from '../../db/dexie.js'
 import { fmtBags, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureState } from '../../utils/calculations.js'
-import { computeWsrProcurementCost } from '../../utils/sdoCalculations.js'
+import { computeWsrProcurementCost, buyingPricesForSdo } from '../../utils/sdoCalculations.js'
 import { dedupeWsrTransactions } from '../../pages/SdoHome.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AuthorityReviewModal from '../common/AuthorityReviewModal.jsx'
@@ -414,7 +414,7 @@ function AppHeader({ hidden = false }) {
     ])
     const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
     const totalAmount = unpaid.reduce(
-      (s, t) => s + computeWsrProcurementCost(t, { varietyMap, buyingPrices, enwFactors, getPalayMoistureState }),
+      (s, t) => s + computeWsrProcurementCost(t, { varietyMap, buyingPrices: buyingPricesForSdo(buyingPrices, user?.uid), enwFactors, getPalayMoistureState }),
       0
     )
     return {

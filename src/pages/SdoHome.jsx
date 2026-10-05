@@ -15,7 +15,7 @@ import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureState } from '../utils/calculations.js'
 import { fuzzyMatchesAny, fuzzyMatchesAnyRank } from '../utils/fuzzySearch.js'
 import {
-  computeCashOnHand, resolveBuyingPrice, computeWsrProcurementCost,
+  computeCashOnHand, resolveBuyingPrice, computeWsrProcurementCost, buyingPricesForSdo,
 } from '../utils/sdoCalculations.js'
 import PurchaseReceiptModal from '../components/common/sdo/PurchaseReceiptModal.jsx'
 import CashActionModal from '../components/common/sdo/CashActionModal.jsx'
@@ -195,7 +195,8 @@ function SdoHome() {
   const ledgerEntries = useLiveQuery(() => user ? db.cashLedgerV2.where('sdoUid').equals(user.uid).toArray() : [], [user?.uid]) ?? []
   const cashOnHand = computeCashOnHand(ledgerEntries, myActivePrs)
 
-  const buyingPrices = useLiveQuery(() => db.buyingPrices.toArray(), []) ?? []
+  const allBuyingPrices = useLiveQuery(() => db.buyingPrices.toArray(), []) ?? []
+  const buyingPrices = useMemo(() => buyingPricesForSdo(allBuyingPrices, user?.uid), [allBuyingPrices, user?.uid])
   const currentPriceRow = resolveBuyingPrice(buyingPrices, new Date().toISOString().slice(0, 10))
 
   const unpaid = visibleWsrTransactions.filter((t) => !activePrByWsrId.has(t.id))

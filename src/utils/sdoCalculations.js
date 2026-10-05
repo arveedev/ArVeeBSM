@@ -127,6 +127,17 @@ export const computePricerAmount = (enw, rate) => roundPeso2(enw * (rate || 0))
  * Rows saved before `createdAt` existed fall back to 0, so an old row
  * never outranks a newer one that does carry a real timestamp.
  */
+// Each SDO has their OWN buying price. Rows are tagged with the SDO who set
+// them (setByUid), but until 2026-10-05 every SDO read the one shared list, so
+// a change by one SDO changed everyone's. An SDO now sees: the rows they set
+// themselves, plus the shared history saved before that date (so an SDO who has
+// never set a price keeps working on the price in force until now, and old
+// WSRs still resolve). A row another SDO saves from that date on is never seen
+// by anyone else.
+const SHARED_BUYING_PRICES_BEFORE = new Date('2026-10-05T00:00:00+08:00').getTime()
+export const buyingPricesForSdo = (buyingPrices, sdoUid) =>
+  (buyingPrices ?? []).filter((p) => p.setByUid === sdoUid || (p.createdAt ?? 0) < SHARED_BUYING_PRICES_BEFORE)
+
 export const resolveBuyingPrice = (buyingPrices, asOfDate) => {
   const sorted = [...(buyingPrices ?? [])].sort((a, b) => {
     if (a.effectiveFrom !== b.effectiveFrom) return a.effectiveFrom < b.effectiveFrom ? 1 : -1

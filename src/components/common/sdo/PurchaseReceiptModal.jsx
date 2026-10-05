@@ -20,7 +20,7 @@ import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken } from '../../
 import { queuePrDeletion } from '../../../services/syncWorker.js'
 import {
   lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost, computePricerAmount,
-  resolveBuyingPrice, resolveUnitCost, amountInWords,
+  resolveBuyingPrice, resolveUnitCost, amountInWords, buyingPricesForSdo,
 } from '../../../utils/sdoCalculations.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import { useIdleCountdown } from '../../../hooks/useIdleCountdown.js'
@@ -67,7 +67,9 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
 
   const variety = useLiveQuery(() => wsr.varietyId ? db.varietyTypes.get(wsr.varietyId) : null, [wsr.varietyId])
   const sackType = useLiveQuery(() => wsr.mtsSackTypeId ? db.sackTypes.get(wsr.mtsSackTypeId) : null, [wsr.mtsSackTypeId])
-  const buyingPrices = useLiveQuery(() => db.buyingPrices.toArray(), []) ?? []
+  const allBuyingPrices = useLiveQuery(() => db.buyingPrices.toArray(), []) ?? []
+  // This SDO's own price list (see buyingPricesForSdo) - never another SDO's.
+  const buyingPrices = buyingPricesForSdo(allBuyingPrices, user?.uid)
   const enwFactors = useLiveQuery(() => db.enwFactors.toArray(), []) ?? []
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
   const eligibility = useLiveQuery(() => user ? db.pricerEligibility.get(user.uid) : null, [user?.uid])

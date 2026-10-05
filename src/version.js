@@ -8290,4 +8290,10 @@
 //            (bottom-right of the warehouse line).
 //   1.10-280 - SDO lists: For Payment shows the WSR date, Completed shows the PR
 //            date (each labelled).
-export const APP_VERSION = '1.10-280'
+//   1.10-281 - Buying Price is now per SDO. Every SDO read one shared list, so a
+//            price saved by one changed everyone's. An SDO now uses the rows they
+//            set plus the shared history saved before 2026-10-05; a price another
+//            SDO saves from now on is never seen by them. Applies to the Home
+//            price card, the Unpaid Procurement total, the bell, and Purchase
+//            Receipts. Already-issued PRs keep their own saved unit cost.
+export const APP_VERSION = '1.10-281'
