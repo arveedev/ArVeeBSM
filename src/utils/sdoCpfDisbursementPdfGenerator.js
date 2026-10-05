@@ -278,7 +278,8 @@ export const generateCpfDisbursementRecord = ({
     '', '', '', '', '', '', '', '', '', '', '', '', '', '',
     { content: fmtPeso(running), styles: { fontStyle: 'bolditalic' } },
   ]
-  const rowStyles = { fillColor: [245, 245, 245] }
+  // The brought-forward row prints in the same blue as replenishments.
+  const rowStyles = { fillColor: [245, 245, 245], textColor: REPLENISH_BLUE }
   openingRow.forEach((cell, i) => {
     if (typeof cell === 'string') return
     openingRow[i] = { ...cell, styles: { ...rowStyles, ...cell.styles } }

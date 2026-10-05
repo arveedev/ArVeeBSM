@@ -8279,4 +8279,6 @@
 //   1.10-276 - Reverted 1.10-275. Bags-only AIs (FILLERS, REBAGGING) deliberately
 //            carry no kilos: they deduct bags only and must NOT be counted as
 //            bags x 50 kg. Unwithdrawn/Potential behave as they did before.
-export const APP_VERSION = '1.10-276'
+//   1.10-277 - Exported CPF logbook: the "Balance brought forward" row now prints
+//            in blue, matching replenishment rows.
+export const APP_VERSION = '1.10-277'
