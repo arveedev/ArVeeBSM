@@ -8276,8 +8276,4 @@
 //            sack type/condition/variety), and the BIN Card counts both the issued
 //            and received sides of a same-pile transfer (it only counted the receipt,
 //            so its closing balance was 40 bags / 1,087.5 kg instead of 0 / 37.5).
-//   1.10-275 - Unwithdrawn/Potential: an AI allocated in bags only (no kilos) now
-//            counts bags x 50 as kilos, so a warehouse's unwithdrawn bags and
-//            kilos describe the same authorities (it showed 115 bags but 4,850 kg
-//            because two bags-only AIs counted 0 kg).
-export const APP_VERSION = '1.10-275'
+export const APP_VERSION = '1.10-274'
