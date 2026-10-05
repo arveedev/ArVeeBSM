@@ -514,8 +514,21 @@ export const computePileStockBreakdown = async (pileId, cutoffDate = '9999-12-31
     // WTSForm.jsx doesn't record which sack-weight batch or variety a
     // transfer's bags came from (a real data gap this can't paper over) -
     // matches computePileStockBySackWeight's existing 'unspecified' fallback.
-    if (t.issuedPileId === pileId) add(pile?.varietyId, null, null, 'unspecified', -(t.issuedBags ?? 0), -(t.issuedNetKilos ?? 0), null)
-    if (t.receivedPileId === pileId) add(pile?.varietyId, null, null, 'unspecified', t.receivedBags ?? 0, t.receivedNetKilos ?? 0, t.date)
+    // Newer transfers do record each side's sack type, condition and variety
+    // (issuedSackTypeId/issuedCondition/issuedVarietyId and the received*
+    // equivalents) - used when present so a rebagging inside one pile nets
+    // against that pile's own sack group instead of showing as a separate
+    // 'unspecified' group. Older transfers without them keep the fallback.
+    if (t.issuedPileId === pileId) {
+      const sk = t.issuedSackTypeId ?? null
+      const cd = sk ? (t.issuedCondition ?? null) : null
+      add(t.issuedVarietyId ?? pile?.varietyId, sk, cd, resolveWeight({ mtsSackTypeId: sk, mtsCondition: cd }), -(t.issuedBags ?? 0), -(t.issuedNetKilos ?? 0), null)
+    }
+    if (t.receivedPileId === pileId) {
+      const sk = t.receivedSackTypeId ?? null
+      const cd = sk ? (t.receivedCondition ?? null) : null
+      add(t.receivedVarietyId ?? pile?.varietyId, sk, cd, resolveWeight({ mtsSackTypeId: sk, mtsCondition: cd }), t.receivedBags ?? 0, t.receivedNetKilos ?? 0, t.date)
+    }
   }
 
   // NOT floored per group - see computePileStockBySackWeight's original

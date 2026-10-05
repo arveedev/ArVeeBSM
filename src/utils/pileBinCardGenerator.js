@@ -77,18 +77,21 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
       reference = t.serialNo ?? ''
       issueBags = t.numberOfBags ?? 0
       issueKilos = t.netKilos ?? 0
-    } else if (t.type === 'WTS' && t.receivedPileId === pile.pileId) {
+    } else if (t.type === 'WTS') {
+      // A transfer can touch this pile on both sides at once (rebagging inside
+      // one pile): the same row then shows its receipt AND its issue, so the
+      // running balance reflects both - previously only the receipt counted.
       type = transactionTypeMap?.get(t.transactionTypeId) ?? t.type
       customer = ''
       reference = t.serialNo ?? ''
-      receiptBags = t.receivedBags ?? 0
-      receiptKilos = t.receivedNetKilos ?? 0
-    } else if (t.type === 'WTS' && t.issuedPileId === pile.pileId) {
-      type = transactionTypeMap?.get(t.transactionTypeId) ?? t.type
-      customer = ''
-      reference = t.serialNo ?? ''
-      issueBags = t.issuedBags ?? 0
-      issueKilos = t.issuedNetKilos ?? 0
+      if (t.receivedPileId === pile.pileId) {
+        receiptBags = t.receivedBags ?? 0
+        receiptKilos = t.receivedNetKilos ?? 0
+      }
+      if (t.issuedPileId === pile.pileId) {
+        issueBags = t.issuedBags ?? 0
+        issueKilos = t.issuedNetKilos ?? 0
+      }
     }
 
     runningBags += (receiptBags ?? 0) - (issueBags ?? 0)
@@ -101,7 +104,7 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
       // Sack weight/condition and variety, resolved the same way the
       // on-screen breakdown does (pileStockGroups.js's sackLabelText) -
       // Remarks (every pile) and Variety (By Products only) columns.
-      remarks: sackLabelText(sackTypeMap, t.mtsSackTypeId, t.mtsCondition) ?? '',
+      remarks: sackLabelText(sackTypeMap, t.mtsSackTypeId ?? t.receivedSackTypeId ?? t.issuedSackTypeId, t.mtsSackTypeId ? t.mtsCondition : (t.receivedSackTypeId ? t.receivedCondition : t.issuedCondition)) ?? '',
       varietyName: varietyMap?.get(t.varietyId)?.name ?? '',
     })
   }

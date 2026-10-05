@@ -8271,4 +8271,9 @@
 //            (position/size, optionally names) of one warehouse to another as
 //            vacant boxes. No piles or assignments; existing destination boxes
 //            are never changed, overlapping copies are skipped.
-export const APP_VERSION = '1.10-273'
+//   1.10-274 - Rebagging inside one pile: the pile's stock breakdown no longer shows
+//            a phantom 'Stock -19 bags' group (transfers now use their own recorded
+//            sack type/condition/variety), and the BIN Card counts both the issued
+//            and received sides of a same-pile transfer (it only counted the receipt,
+//            so its closing balance was 40 bags / 1,087.5 kg instead of 0 / 37.5).
+export const APP_VERSION = '1.10-274'
