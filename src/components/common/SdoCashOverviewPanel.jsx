@@ -68,35 +68,38 @@ function SdoCashOverviewPanel() {
 
   return (
     <div className="mt-4">
-      {/* The history icon is deliberately quiet (same muted style as the sack icon beside
-          "Procurement"): small, no box, lit only on hover. It sits in the card's bottom-right
-          corner as a sibling of the expand button, since a button cannot contain a button. */}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="w-full rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-4 py-3 text-left transition-colors hover:border-brand-neon/70"
-        >
-          <div className="flex items-center justify-between gap-3">
+      {/* The card toggles the SDO list; the history icon sits right after the title, quiet like
+          the sack icon beside "Procurement" (small, no box, lit only on hover). The card is a
+          div with button semantics because a real button cannot contain the icon button. */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setExpanded((v) => !v) } }}
+        className="w-full cursor-pointer rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-4 py-3 text-left transition-colors hover:border-brand-neon/70"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-1">
             <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">Total CPF — All SDOs</p>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="text-xs text-neutral-500">
-                {cards.length} {cards.length === 1 ? 'SDO' : 'SDOs'}
-              </span>
-              <ChevronDown size={16} className={`text-neutral-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowHistory(true) }}
+              aria-label="Total CPF history"
+              title="Total CPF history"
+              className="rounded-full p-1 text-neutral-500 transition-colors hover:text-brand-neon"
+            >
+              <History size={14} />
+            </button>
           </div>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">{fmtPeso(totalCpf)}</p>
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowHistory(true)}
-          aria-label="Total CPF history"
-          title="Total CPF history"
-          className="absolute bottom-2.5 right-3 rounded-full p-1 text-neutral-500 transition-colors hover:text-brand-neon"
-        >
-          <History size={16} />
-        </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-xs text-neutral-500">
+              {cards.length} {cards.length === 1 ? 'SDO' : 'SDOs'}
+            </span>
+            <ChevronDown size={16} className={`text-neutral-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </div>
+        </div>
+        <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">{fmtPeso(totalCpf)}</p>
       </div>
 
       {expanded && (

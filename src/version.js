@@ -8321,4 +8321,5 @@
 //            recoverable - only the current value is known).
 //   1.10-286 - Total CPF history icon made quiet: small muted icon in the card's bottom-right
 //            corner (like the sack icon by Procurement) instead of a boxed button.
-export const APP_VERSION = '1.10-286'
+//   1.10-287 - Total CPF history icon moved to sit right after the card title.
+export const APP_VERSION = '1.10-287'
