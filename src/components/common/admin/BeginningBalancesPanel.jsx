@@ -17,7 +17,7 @@ import {
   fmtBags, fmtWeight, liveFormatNumber, parseFormattedNumber,
   normalizeAgeToDays, todayLocalISO,
 } from '../../../utils/calculations.js'
-import { recalculatePileCurrentState, closePile, reopenPile } from '../../../utils/pileLedger.js'
+import { recalculatePileCurrentState, closePile, reopenPile, computePileStartDate } from '../../../utils/pileLedger.js'
 import { generatePileBinCard } from '../../../utils/pileBinCardGenerator.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
@@ -98,6 +98,8 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
   const [dateProcured, setDateProcured] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const formRef = useRef(null)
+  // The start date shown for a pile with no balance line, so Save can tell whether it was actually changed.
+  const loadedStartDateRef = useRef(null)
 
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
@@ -127,7 +129,11 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
         .where('pileId').equals(pile.pileId)
         .and((t) => t.isInitialBalance)
         .toArray()
+      // A pile with no balance line shows its real START (earliest receipt), not
+      // its dateOfReceipt - that one moves to the latest receipt.
+      const startDate = seeds.length ? null : await computePileStartDate(pile.pileId)
       if (cancelled) return
+      loadedStartDateRef.current = startDate
       setOriginalSeedIds(seeds.map((s) => s.id))
       setLines(seeds.length
         ? seeds.map((s, i) => ({
@@ -159,7 +165,7 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
         // A pile with no seed line yet (e.g. created empty) shows its own
         // saved start date, not today's - otherwise a back-dated "As of" looks
         // like it reverted, and the next Save would overwrite it with today.
-        : [{ ...emptyLine(), dateReceived: pile.dateOfReceipt || todayLocalISO() }])
+        : [{ ...emptyLine(), dateReceived: startDate || pile.dateOfReceipt || todayLocalISO() }])
       // The app only stores the normalized days value, not which unit it
       // was originally entered in - previously this always hardcoded
       // 'Days' regardless, meaning a pile entered in Months would show
@@ -225,7 +231,11 @@ function PileBalanceForm({ pile, warehouseId, onDone }) {
     // before - only ever ONE real procurement date for the whole pile.
     await db.piles.update(pile.pileId, {
       initialAgeValue: newAgeDays,
-      dateOfReceipt: first?.dateReceived || todayLocalISO(),
+      // dateOfReceipt is also the pile's AGE anchor. For a pile with no balance line
+      // the date on screen is its start date, so it is only written when the user
+      // actually changed it - otherwise saving would re-anchor the age to the first receipt.
+      ...((originalSeedIds.length > 0 || first?.dateReceived !== loadedStartDateRef.current)
+        ? { dateOfReceipt: first?.dateReceived || todayLocalISO() } : {}),
       dateProcured: editingCategory === 'By Products' ? (first?.dateProcured?.trim() || null) : (dateProcured.trim() || null),
       condition: first?.condition || 'GQ',
       purity: first?.purity?.trim() || null,

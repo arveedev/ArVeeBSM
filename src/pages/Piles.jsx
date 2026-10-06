@@ -31,7 +31,7 @@ import { fmtBags, fmtWeight, fmtMc, fmtDateForFilename, sanitizeForFilename, cal
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
-import { computeHistoricalPileState, computePileStockBreakdown, vacateBoxForPile, closePile } from '../utils/pileLedger.js'
+import { computeHistoricalPileState, computePileStockBreakdown, vacateBoxForPile, closePile, computePileStartDate } from '../utils/pileLedger.js'
 import { formatPileStockGroups, groupHeading, fmtGroupDate } from '../utils/pileStockGroups.js'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
@@ -583,17 +583,15 @@ function Piles() {
   // corrected.
   useEffect(() => {
     if (!currentWarehouseId || boxes.length === 0 || piles.length === 0) return
-    const pileById = new Map(piles.map((p) => [p.pileId, p]))
-    const stale = boxes.filter((b) => {
-      if (!b.pileId || !b.assignedDate) return false
-      const p = pileById.get(b.pileId)
-      return p?.dateOfReceipt && p.dateOfReceipt < b.assignedDate
-    })
-    if (stale.length === 0) return
+    // The pile's real START (earliest receipt) - not its dateOfReceipt, which
+    // moves to the LATEST receipt (see computePileStartDate) and used to hide
+    // a pile from every earlier period it already held stock in.
+    const occupied = boxes.filter((b) => b.pileId && b.assignedDate)
+    if (occupied.length === 0) return
     ;(async () => {
-      for (const box of stale) {
-        const p = pileById.get(box.pileId)
-        await db.pileLayoutBoxes.update(box.id, { assignedDate: p.dateOfReceipt })
+      for (const box of occupied) {
+        const start = await computePileStartDate(box.pileId)
+        if (start && start < box.assignedDate) await db.pileLayoutBoxes.update(box.id, { assignedDate: start })
       }
     })()
   }, [currentWarehouseId, boxes, piles])
@@ -873,8 +871,7 @@ function Piles() {
     // the layout from today onward instead of from its real as-of date.
     const previousBox = editingBoxId ? boxes.find((b) => b.id === editingBoxId) : null
     if (pileId && pileId !== previousBox?.pileId) {
-      const assignedPile = piles.find((p) => p.pileId === pileId)
-      payload.assignedDate = assignedPile?.dateOfReceipt || todayLocalISO()
+      payload.assignedDate = (await computePileStartDate(pileId)) || todayLocalISO()
     }
 
     try {

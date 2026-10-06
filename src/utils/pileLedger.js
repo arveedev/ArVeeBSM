@@ -239,6 +239,31 @@ export const getOrCreateAccountabilityPile = async ({ warehouseId, category, var
 }
 
 /**
+ * The date a pile genuinely STARTED: its earliest real receipt (beginning
+ * balance, WSR, or a transfer into it), never the latest one.
+ *
+ * pile.dateOfReceipt cannot be used for this - every WSR that carries an age
+ * moves it to that receipt's date (it is the AGE anchor, see
+ * applyTransactionToPile), so after a second receipt it names the LATEST
+ * receipt. A layout box stamped with that date vanished from every earlier
+ * period in which the pile already held stock. Falls back to dateOfReceipt
+ * only for a pile with no receipts at all (e.g. one created empty).
+ */
+export const computePileStartDate = async (pileId) => {
+  const pile = await db.piles.get(pileId)
+  if (!pile) return null
+  const dates = []
+  await db.transactions.where('pileId').equals(pileId)
+    .and((t) => t.status !== 'Cancelled' && t.type === 'WSR' && t.date)
+    .each((t) => { dates.push(t.date) })
+  await db.transactions.where('type').equals('WTS')
+    .and((t) => t.status !== 'Cancelled' && t.receivedPileId === pileId && t.date)
+    .each((t) => { dates.push(t.date) })
+  if (dates.length === 0) return pile.dateOfReceipt ?? null
+  return dates.reduce((a, b) => (b < a ? b : a))
+}
+
+/**
  * Creates a pile seeded with a beginning balance, for onboarding a
  * warehouse that already has physical stock into the app. Creates the
  * pile plus a synthetic WSR transaction flagged isInitialBalance: true

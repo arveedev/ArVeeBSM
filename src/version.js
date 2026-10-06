@@ -8306,4 +8306,11 @@
 //   1.10-283 - Monitoring (admin/visitor): the summary box shown when an authority is
 //            picked or searched now has an Authorized box (total volume) beside
 //            Issued and Remaining.
-export const APP_VERSION = '1.10-283'
+//   1.10-284 - Piles: a pile's layout box / start date now follows its FIRST receipt, not
+//            the latest. pile.dateOfReceipt (the age anchor) moves to each new receipt, and
+//            a box stamped with it disappeared from every earlier period the pile already
+//            held stock in. New computePileStartDate (earliest beginning balance / WSR /
+//            transfer-in) is used when assigning a box and in the box self-heal, and shown
+//            as 'As of' for a pile with no balance line; saving that screen no longer
+//            re-anchors the pile's age unless the date was actually changed.
+export const APP_VERSION = '1.10-284'
