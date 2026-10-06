@@ -37,6 +37,15 @@ function CashOnBankModal({ current, onClose }) {
         cashOnBankUpdatedBy: user?.name || 'Unknown',
       }
       const existing = await db.reportConfig.get('global')
+      // Keep a history of every Cash in Bank update (the value itself is saved in
+      // place) so the Total CPF history can show it per update. The first time,
+      // the value being replaced is recorded too, so it is not lost.
+      const history = [...(existing?.cashOnBankHistory ?? [])]
+      if (history.length === 0 && existing?.cashOnBankUpdatedAt) {
+        history.push({ at: existing.cashOnBankUpdatedAt, amount: existing.cashOnBank ?? 0, by: existing.cashOnBankUpdatedBy || 'Unknown' })
+      }
+      history.push({ at: patch.cashOnBankUpdatedAt, amount: patch.cashOnBank, by: patch.cashOnBankUpdatedBy })
+      patch.cashOnBankHistory = history
       if (existing) await db.reportConfig.update('global', patch)
       else await db.reportConfig.put({ id: 'global', ...patch })
       onClose()

@@ -52,6 +52,9 @@ export default defineConfig({
         // once it happens, instead of silently doing nothing until a
         // future unrelated navigation.
         clientsClaim: true,
+        // The main bundle grew past workbox's default 2 MiB precache limit, which makes the
+        // whole build FAIL (and the deploy with it) rather than just skip caching it.
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Every deep route (e.g. /reports) is client-side (BrowserRouter)
         // - there's no server to resolve it while offline, so any
         // navigation not already in the precache falls back to the

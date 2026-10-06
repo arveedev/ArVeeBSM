@@ -8313,4 +8313,10 @@
 //            transfer-in) is used when assigning a box and in the box self-heal, and shown
 //            as 'As of' for a pile with no balance line; saving that screen no longer
 //            re-anchors the pile's age unless the date was actually changed.
-export const APP_VERSION = '1.10-284'
+//   1.10-285 - Monitoring > Procurement (Admin/Visitor): a history icon beside Total CPF opens
+//            a per-update history - each replenishment, liquidation and Cash in Bank update
+//            with the Total CPF right after it: SDOs grouped by province with a subtotal per
+//            province, then Cash in Bank, then the Total. Cash in Bank updates are now kept
+//            in reportConfig.cashOnBankHistory (earlier ones before this version are not
+//            recoverable - only the current value is known).
+export const APP_VERSION = '1.10-285'

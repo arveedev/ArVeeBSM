@@ -10,10 +10,11 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, History } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { computeCashOnHand } from '../../utils/sdoCalculations.js'
 import { byAlpha } from './admin/shared.js'
+import CpfHistoryModal from './CpfHistoryModal.jsx'
 
 const fmtPeso = (n) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -23,6 +24,7 @@ function SdoCashOverviewPanel() {
   // the list below, same summary-row convention as ProcurementMonitor.jsx's
   // own card list.
   const [expanded, setExpanded] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const sdoUsers = useLiveQuery(() => db.users.where('role').equals('SDO').toArray(), []) ?? []
 
   // Both tables are small (one row per cash-ledger entry / currently-
@@ -66,22 +68,35 @@ function SdoCashOverviewPanel() {
 
   return (
     <div className="mt-4">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-4 py-3 text-left transition-colors hover:border-brand-neon/70"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">Total CPF — All SDOs</p>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-xs text-neutral-500">
-              {cards.length} {cards.length === 1 ? 'SDO' : 'SDOs'}
-            </span>
-            <ChevronDown size={16} className={`text-neutral-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      {/* The history icon sits beside (not inside) the expandable card, since a
+          button cannot contain another button. */}
+      <div className="flex items-stretch gap-2">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="min-w-0 flex-1 rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-4 py-3 text-left transition-colors hover:border-brand-neon/70"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">Total CPF — All SDOs</p>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="text-xs text-neutral-500">
+                {cards.length} {cards.length === 1 ? 'SDO' : 'SDOs'}
+              </span>
+              <ChevronDown size={16} className={`text-neutral-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+            </div>
           </div>
-        </div>
-        <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">{fmtPeso(totalCpf)}</p>
-      </button>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">{fmtPeso(totalCpf)}</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowHistory(true)}
+          aria-label="Total CPF history"
+          title="Total CPF history"
+          className="flex shrink-0 items-center rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-3 text-brand-neon transition-colors hover:border-brand-neon/70 active:scale-95"
+        >
+          <History size={20} />
+        </button>
+      </div>
 
       {expanded && (
         <div className="mt-3 space-y-2">
@@ -111,6 +126,7 @@ function SdoCashOverviewPanel() {
           </div>
         </div>
       )}
+      {showHistory && <CpfHistoryModal onClose={() => setShowHistory(false)} />}
     </div>
   )
 }
