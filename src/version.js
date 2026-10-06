@@ -8319,4 +8319,6 @@
 //            province, then Cash in Bank, then the Total. Cash in Bank updates are now kept
 //            in reportConfig.cashOnBankHistory (earlier ones before this version are not
 //            recoverable - only the current value is known).
-export const APP_VERSION = '1.10-285'
+//   1.10-286 - Total CPF history icon made quiet: small muted icon in the card's bottom-right
+//            corner (like the sack icon by Procurement) instead of a boxed button.
+export const APP_VERSION = '1.10-286'

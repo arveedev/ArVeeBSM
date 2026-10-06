@@ -68,13 +68,14 @@ function SdoCashOverviewPanel() {
 
   return (
     <div className="mt-4">
-      {/* The history icon sits beside (not inside) the expandable card, since a
-          button cannot contain another button. */}
-      <div className="flex items-stretch gap-2">
+      {/* The history icon is deliberately quiet (same muted style as the sack icon beside
+          "Procurement"): small, no box, lit only on hover. It sits in the card's bottom-right
+          corner as a sibling of the expand button, since a button cannot contain a button. */}
+      <div className="relative">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="min-w-0 flex-1 rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-4 py-3 text-left transition-colors hover:border-brand-neon/70"
+          className="w-full rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-4 py-3 text-left transition-colors hover:border-brand-neon/70"
         >
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">Total CPF — All SDOs</p>
@@ -92,9 +93,9 @@ function SdoCashOverviewPanel() {
           onClick={() => setShowHistory(true)}
           aria-label="Total CPF history"
           title="Total CPF history"
-          className="flex shrink-0 items-center rounded-xl border border-brand-neon/40 bg-brand-neon/5 px-3 text-brand-neon transition-colors hover:border-brand-neon/70 active:scale-95"
+          className="absolute bottom-2.5 right-3 rounded-full p-1 text-neutral-500 transition-colors hover:text-brand-neon"
         >
-          <History size={20} />
+          <History size={16} />
         </button>
       </div>
 
