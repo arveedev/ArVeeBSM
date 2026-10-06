@@ -371,15 +371,22 @@ function AdminMonitoring() {
             <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">
               {label}
             </p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            {/* Authorized (the total volume the authority/authorities cover) comes first,
+                then what has been issued against it, then what is left. */}
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-brand-neon/30 bg-neutral-950 p-2">
+                <p className="text-[10px] uppercase text-brand-neon/80">Authorized</p>
+                <p className="mt-0.5 text-sm font-bold tabular-nums text-app-text sm:text-base">{fmtBags(totalAllocatedBags)} bags</p>
+                <p className="text-xs tabular-nums text-neutral-500">{fmtWeight(totalAllocatedKilos, weightUnit)}</p>
+              </div>
               <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-2">
                 <p className="text-[10px] uppercase text-neutral-500">Issued</p>
-                <p className="mt-0.5 text-base font-bold tabular-nums text-app-text">{fmtBags(totalIssuedBags)} bags</p>
+                <p className="mt-0.5 text-sm font-bold tabular-nums text-app-text sm:text-base">{fmtBags(totalIssuedBags)} bags</p>
                 <p className="text-xs tabular-nums text-neutral-500">{fmtWeight(totalIssuedKilos, weightUnit)}</p>
               </div>
               <div className="rounded-lg border border-brand-amber/30 bg-brand-amber/5 p-2">
                 <p className="text-[10px] uppercase text-brand-amber/80">Remaining</p>
-                <p className="mt-0.5 text-base font-bold tabular-nums text-brand-amber">{fmtBags(remainingBags)} bags</p>
+                <p className="mt-0.5 text-sm font-bold tabular-nums text-brand-amber sm:text-base">{fmtBags(remainingBags)} bags</p>
                 <p className="text-xs tabular-nums text-brand-amber/70">{fmtWeight(remainingKilos, weightUnit)}</p>
               </div>
             </div>

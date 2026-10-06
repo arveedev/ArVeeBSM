@@ -8303,4 +8303,7 @@
 //            drag the signatories with it). Signatories still move to the next page
 //            only when they do not fit. The closing blank row can no longer spill
 //            onto a page of its own.
-export const APP_VERSION = '1.10-282'
+//   1.10-283 - Monitoring (admin/visitor): the summary box shown when an authority is
+//            picked or searched now has an Authorized box (total volume) beside
+//            Issued and Remaining.
+export const APP_VERSION = '1.10-283'
