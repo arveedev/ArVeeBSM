@@ -8323,4 +8323,8 @@
 //            corner (like the sack icon by Procurement) instead of a boxed button.
 //   1.10-287 - Total CPF history icon moved to sit right after the card title.
 //   1.10-288 - Exported CPF logbook: same 0.5 inch top filing margin as the Abstract, on every page.
-export const APP_VERSION = '1.10-288'
+//   1.10-289 - No more 'Sheet import skipped' notifications in the bell / Error Log. A Sheet row
+//            the app has no record of (after the cutoff) is still never imported; it is only
+//            written to the browser console now, and the entries already in the log are
+//            removed once.
+export const APP_VERSION = '1.10-289'

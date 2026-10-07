@@ -665,6 +665,9 @@ const dedupeDuplicateTransactions = async (type, warehouseIds) => {
   }
 }
 
+// Set after the one-time removal of the old 'Sheet import skipped' Error Log entries.
+let clearedSkippedLiveRowLogs = false
+
 const preloadOneType = async (type, warehouses, warehouseIdByName) => {
   // Split into two groups: warehouses that have never completed a
   // preload for this type (need everything), and warehouses that
@@ -951,25 +954,17 @@ const preloadOneType = async (type, warehouses, warehouseIdByName) => {
       markRowsSeen(type, sourceResult.sourceId, seenSerialsForThisSource)
     }
 
-    // Reported, not imported: one idempotent Error Log entry per row (same id
-    // every time, so repeated cycles never pile up duplicates). Capped per
-    // cycle so a very large leftover set cannot flood the log.
-    for (const row of skippedLiveRows.slice(0, 25)) {
+    // Reported in the console only - NOT in the Error Log / notification bell. These
+    // rows are expected leftovers (old rows of renamed serials, a device that has not
+    // synced yet), and putting each one in the bell was constant noise. The daily
+    // backup audit (bsm-backups sheet_audit.py) is the place that checks the Sheet
+    // against the app. Entries the earlier version already wrote are removed once.
+    if (!clearedSkippedLiveRowLogs) {
+      clearedSkippedLiveRowLogs = true
       try {
-        const warehouseName = warehouseById.get(row.warehouseId)?.name ?? 'a warehouse'
-        await db.errorLogs.put({
-          id: `skip-live-sheet-row:${type}:${row.warehouseId}:${row.serialNo}`,
-          timestamp: new Date().toISOString(),
-          context: 'Sheet import skipped',
-          message: `${type} ${row.serialNo} (${row.date}, ${warehouseName}) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after ${row.cutoff}. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.`,
-          stack: null,
-          userName: null,
-          userRole: null,
-          refId: null,
-          resolved: false,
-        })
+        await db.errorLogs.filter((r) => String(r.id ?? '').startsWith('skip-live-sheet-row:')).delete()
       } catch (err) {
-        console.error('Could not record a skipped live Sheet row:', err)
+        console.error('Could not clear old skipped-Sheet-row entries:', err)
       }
     }
     if (skippedLiveRows.length > 0) console.warn(`preloadOneType(${type}): ${skippedLiveRows.length} Sheet row(s) after the cutoff have no app record and were not imported`)
