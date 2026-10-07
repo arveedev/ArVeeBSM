@@ -8327,4 +8327,7 @@
 //            the app has no record of (after the cutoff) is still never imported; it is only
 //            written to the browser console now, and the entries already in the log are
 //            removed once.
-export const APP_VERSION = '1.10-289'
+//   1.10-290 - MO / TMO picker on the stock form: orders whose recovery already looks complete
+//            (fulfilled, but nobody has tapped Complete yet) are listed last and labelled
+//            '(fulfilled)', so the open orders come first. Nothing is hidden or completed by this.
+export const APP_VERSION = '1.10-290'

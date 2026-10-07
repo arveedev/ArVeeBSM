@@ -3639,6 +3639,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               // the name no longer matches exactly, so an existing
               // selection is never silently hidden.
               .filter((o) => !trimmedCustomerName || o.number === moNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
+              // Orders whose recovery already looks complete (still waiting for someone to
+              // tap Complete) go to the bottom and are labelled, so the open ones come first.
+              .sort((a, b) => (a.fulfilled ? 1 : 0) - (b.fulfilled ? 1 : 0))
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'WSR'
             const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !moNumber
@@ -3687,7 +3690,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                     <option value="">Select…</option>
                     {availableMoOrders.map((o) => (
                       <option key={o.number} value={o.number}>
-                        {stripMoTmoPrefix(o.number)}{o.batchCurrent != null ? ` - Batch ${o.batchCurrent}` : ''}
+                        {stripMoTmoPrefix(o.number)}{o.batchCurrent != null ? ` - Batch ${o.batchCurrent}` : ''}{o.fulfilled ? ' (fulfilled)' : ''}
                       </option>
                     ))}
                     {moNumber.trim() && !availableMoOrders.some((o) => o.number === moNumber) && (
@@ -3726,6 +3729,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               // and silently hid the TMO here).
               .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
               .filter((o) => !trimmedCustomerName || o.number === tmoNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
+              .sort((a, b) => (a.fulfilled ? 1 : 0) - (b.fulfilled ? 1 : 0))
             const isDerived = type !== 'WSR'
             const noneMatchedAtAll = isDerived && linkedAuthority?.aiNumber && !linkedMillingOrder && !tmoNumber
             const likelyAlreadyCompleted = noneMatchedAtAll && isAuthorityComplete(linkedAuthority)
@@ -3763,7 +3767,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   >
                     <option value="">Select…</option>
                     {availableTmoNumbers.map((o) => (
-                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)}</option>
+                      <option key={o.number} value={o.number}>{stripMoTmoPrefix(o.number)}{o.fulfilled ? ' (fulfilled)' : ''}</option>
                     ))}
                     {tmoNumber.trim() && !availableTmoNumbers.some((o) => o.number === tmoNumber) && (
                       <option value={tmoNumber}>{stripMoTmoPrefix(tmoNumber)} (historical)</option>
