@@ -8337,4 +8337,7 @@
 //   1.10-292 - Milling monitor progress bar: an order that has received rice but has no palay issue linked
 //            to it yet (so 0 issued) showed no bar at all. The bar now appears once anything is
 //            received, measuring the receipt against the linked authority's allocation x recovery %.
-export const APP_VERSION = '1.10-292'
+//   1.10-293 - Customer Name suggestions could not be tapped on a phone: the list closed on the input's
+//            blur before the tap registered (a tapped button gets no focus on iOS, so the check that
+//            keeps the list open found nothing). The list now holds itself open for the tap.
+export const APP_VERSION = '1.10-293'

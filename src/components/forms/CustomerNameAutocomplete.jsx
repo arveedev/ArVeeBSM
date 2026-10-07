@@ -59,6 +59,7 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
   const containerRef = useRef(null)
   const dropdownRef = useRef(null)
   const inputRef = useRef(null)
+  const pickingRef = useRef(false)
 
   useImperativeHandle(ref, () => ({
     focus: () => inputRef.current?.focus(),
@@ -257,8 +258,14 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
         // focusable by default), and that transition must NOT close
         // the list before the button's own onClick (which fires after
         // blur, on mouseup) gets a chance to run.
+        // On a phone (iOS Safari especially) a tapped button never takes focus, so
+        // e.relatedTarget is null and the list used to close the instant the finger
+        // touched a suggestion - the tap then landed on nothing. `pickingRef` is set
+        // by the list's own pointer-down (fires before this blur) and holds the list open
+        // for the tap that follows.
         onBlur={(e) => {
           if (dropdownRef.current?.contains(e.relatedTarget)) return
+          if (pickingRef.current) return
           setShowSuggestions(false)
         }}
         className={`${inputClass} ${required && !(value ?? '').trim() ? '!border-brand-amber' : ''}`}
@@ -279,6 +286,10 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
           // silently depending on "focus never leaves the input" if
           // this dropdown's rows ever become directly focusable later.
           data-suppress-form-shortcuts
+          // Keeps the input focused (no blur) while a suggestion is pressed with a mouse,
+          // and flags the touch case for onBlur above.
+          onMouseDown={(e) => e.preventDefault()}
+          onPointerDown={() => { pickingRef.current = true; setTimeout(() => { pickingRef.current = false }, 600) }}
           className="fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
           style={{
             top: dropdownRect.top,
