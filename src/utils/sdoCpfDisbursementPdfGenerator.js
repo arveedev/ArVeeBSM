@@ -114,11 +114,14 @@ const fmtPeso = (n) => (n == null ? '' : Number(n).toLocaleString('en-PH', { min
 // title block to officer block, officer block to the table on page 1,
 // and title/period to the table on every continuation page.
 const ROW_GAP = 5
-const TITLE_END_Y = 23 // page 1's own last title line (cityLabel)
+// Extra blank space above everything on EVERY page, the same 0.5 inch (12.7mm) the Abstract
+// export uses, so the printed logbook can be punched and filed without cutting into content.
+const TOP_FILING_MARGIN = 12.7
+const TITLE_END_Y = 23 + TOP_FILING_MARGIN // page 1's own last title line (cityLabel)
 const BLOCK_Y = TITLE_END_Y + ROW_GAP * 2 // two row gaps (one extra, per request) between the title and officer block's value line
 const BLOCK_LABEL_OFFSET = 6 // label line sits this far below its own value line, inside the block
 const TABLE_START_Y = BLOCK_Y + BLOCK_LABEL_OFFSET + ROW_GAP
-const CONTINUATION_TITLE_END_Y = 15 // continuation page's own last title line (period)
+const CONTINUATION_TITLE_END_Y = 15 + TOP_FILING_MARGIN // continuation page's own last title line (period)
 const CONTINUATION_MARGIN_TOP = CONTINUATION_TITLE_END_Y + ROW_GAP
 
 // isFirstPage - only page 1 carries the full report title/org identity/
@@ -129,19 +132,19 @@ const drawHeader = (doc, { branchLabel, cityLabel, periodLabel, officer, isFirst
   if (!isFirstPage) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(11)
-    doc.text('CPF CASH DISBURSEMENT RECORD', pageW / 2, 10, { align: 'center' })
+    doc.text('CPF CASH DISBURSEMENT RECORD', pageW / 2, 10 + TOP_FILING_MARGIN, { align: 'center' })
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
-    doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 15, { align: 'center' })
+    doc.text(`FOR THE PERIOD ${periodLabel.toUpperCase()}`, pageW / 2, 15 + TOP_FILING_MARGIN, { align: 'center' })
     return
   }
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
-  doc.text('CPF CASH DISBURSEMENT RECORD', pageW / 2, 9, { align: 'center' })
+  doc.text('CPF CASH DISBURSEMENT RECORD', pageW / 2, 9 + TOP_FILING_MARGIN, { align: 'center' })
   doc.setFontSize(11)
-  doc.text('NATIONAL FOOD AUTHORITY', pageW / 2, 14.5, { align: 'center' })
+  doc.text('NATIONAL FOOD AUTHORITY', pageW / 2, 14.5 + TOP_FILING_MARGIN, { align: 'center' })
   doc.setFontSize(9)
-  doc.text((branchLabel ?? '').toUpperCase(), pageW / 2, 19, { align: 'center' })
+  doc.text((branchLabel ?? '').toUpperCase(), pageW / 2, 19 + TOP_FILING_MARGIN, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.text((cityLabel ?? '').toUpperCase(), pageW / 2, TITLE_END_Y, { align: 'center' })
 
