@@ -3632,7 +3632,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               // complete - reported directly (a TMO disappeared from
               // the By Products picker right after its 3rd trial
               // receipt was logged, despite never being marked done).
-              .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === moNumber)
+              .filter((o) => (loadedTransaction && (loadedTransaction.moNumber || loadedTransaction.tmoNumber)) || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === moNumber)
               // Only this miller's own orders - a selection for one
               // miller should never show every other miller's MOs.
               // Always includes the currently-selected order even if
@@ -3727,7 +3727,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
               // (see that filter's own comment for the reported bug this
               // fixes: 3 trials received auto-flipped fulfilled to true
               // and silently hid the TMO here).
-              .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
+              .filter((o) => (loadedTransaction && (loadedTransaction.moNumber || loadedTransaction.tmoNumber)) || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
               .filter((o) => !trimmedCustomerName || o.number === tmoNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
               .sort((a, b) => (a.fulfilled ? 1 : 0) - (b.fulfilled ? 1 : 0))
             const isDerived = type !== 'WSR'

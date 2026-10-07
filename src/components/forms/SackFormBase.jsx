@@ -1484,7 +1484,7 @@ const SackFormBase = forwardRef(function SackFormBase(
               // an MO/TMO whose math happened to compute as "fulfilled"
               // silently vanished from this picker even though nobody
               // had marked it complete - reported directly.
-              .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === moNumber)
+              .filter((o) => (loadedTransaction && (loadedTransaction.moNumber || loadedTransaction.tmoNumber)) || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === moNumber)
               .filter((o) => !trimmedCustomerName || o.number === moNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const selectedOrder = millingOrderOptions.find((o) => o.number === moNumber)
             const isDerived = type !== 'ESR'
@@ -1553,7 +1553,7 @@ const SackFormBase = forwardRef(function SackFormBase(
             const trimmedCustomerName = customerName.trim().toLowerCase()
             const availableTmoNumbers = millingOrderOptions
               // Same manuallyCompleted-only gate as the MO picker above.
-              .filter((o) => loadedTransaction || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
+              .filter((o) => (loadedTransaction && (loadedTransaction.moNumber || loadedTransaction.tmoNumber)) || (!o.manuallyCompleted && o.sheetStatus !== 'DONE') || o.number === tmoNumber)
               .filter((o) => !trimmedCustomerName || o.number === tmoNumber || canonicalName(o.ricemillName) === canonicalName(customerName))
             const isDerived = type !== 'ESR'
             const noneMatchedAtAll = isDerived && linkedSiaAuthority?.siaNumber && !linkedMillingOrder && !tmoNumber

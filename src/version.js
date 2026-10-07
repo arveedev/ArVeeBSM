@@ -8330,4 +8330,8 @@
 //   1.10-290 - MO / TMO picker on the stock form: orders whose recovery already looks complete
 //            (fulfilled, but nobody has tapped Complete yet) are listed last and labelled
 //            '(fulfilled)', so the open orders come first. Nothing is hidden or completed by this.
-export const APP_VERSION = '1.10-290'
+//   1.10-291 - MO / TMO pickers (stock and sack forms): finished orders (DONE on the Sheet or marked
+//            complete) are now hidden for a loaded transaction too unless that transaction already
+//            has an MO/TMO number. A loaded record with none yet (a Sheet-imported or still-to-complete
+//            one) was showing every order, finished or not.
+export const APP_VERSION = '1.10-291'
