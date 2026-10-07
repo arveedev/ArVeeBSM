@@ -8334,4 +8334,7 @@
 //            complete) are now hidden for a loaded transaction too unless that transaction already
 //            has an MO/TMO number. A loaded record with none yet (a Sheet-imported or still-to-complete
 //            one) was showing every order, finished or not.
-export const APP_VERSION = '1.10-291'
+//   1.10-292 - Milling monitor progress bar: an order that has received rice but has no palay issue linked
+//            to it yet (so 0 issued) showed no bar at all. The bar now appears once anything is
+//            received, measuring the receipt against the linked authority's allocation x recovery %.
+export const APP_VERSION = '1.10-292'

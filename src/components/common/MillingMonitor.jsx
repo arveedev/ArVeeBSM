@@ -682,7 +682,14 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
   if (o.type === 'TMO') {
     receiptProgress = roundTo3(Math.min(1, receivedTrialsCount / 3) * 50)
   } else {
-    const expectedKilos = o.recoveryPercent != null ? o.issuedKilos * (o.recoveryPercent / 100) : null
+    // When nothing has been issued under this order yet (the palay issue was not entered, or
+    // not linked to it) but rice has already been received, measure the receipt against what
+    // the linked authority allows (its allocation x the recovery %) instead of showing nothing.
+    const expectedKilos = o.recoveryPercent != null
+      ? (o.issuedKilos > 0
+          ? o.issuedKilos * (o.recoveryPercent / 100)
+          : (o.authorityAllocationKilos ? o.authorityAllocationKilos * (o.recoveryPercent / 100) : 0))
+      : null
     const expectedPieces = o.recoveryPercent != null ? o.issuedPieces * (o.recoveryPercent / 100) : null
     const kilosReceiptRatio = expectedKilos
       ? Math.min(1, o.receivedKilos / expectedKilos)
@@ -695,6 +702,8 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
 
   const progress = roundTo3(issuanceProgress + receiptProgress)
   const hasIssuance = o.issuedKilos > 0 || o.issuedPieces > 0
+  // The bar also shows once anything has been received, even if no issue is linked to the order yet.
+  const hasActivity = hasIssuance || (o.receivedKilos ?? 0) > 0 || (o.receivedPieces ?? 0) > 0
   const isCompleted = o.manuallyCompleted || o.sheetStatus === 'DONE' || o.fulfilled
   // The kg/piece math behind o.fulfilled only ever tracks the primary
   // stock recovery (rice) - By Products receipts are real but entered
@@ -779,7 +788,7 @@ export function MillingOrderRow({ order: o, onSelect, isAdmin = false, isAnimati
             {o.ricemillName}
             {o.type === 'MO' && o.batchCurrent != null && ` · Batch ${o.batchCurrent} of ${o.batchTotal}`}
           </p>
-          {hasIssuance && (
+          {hasActivity && (
             <>
               {o.type === 'TMO' && (
                 <div className="mt-1.5 flex justify-between text-xs tabular-nums text-neutral-500">
