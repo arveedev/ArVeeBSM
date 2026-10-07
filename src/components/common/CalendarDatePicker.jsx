@@ -146,10 +146,16 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
   // genuinely keyboard-navigable (arrow keys move focusedIso, this
   // effect follows it with actual focus, and the browser's own
   // Enter/Space-activates-a-focused-button behavior does the rest).
+  // shouldRenderPopup is a dependency on purpose: the popup's day buttons only exist once it has
+  // mounted, which is a render AFTER isOpen turns true. On the first open focusedIso changes
+  // (null -> a date), which re-runs this once the buttons exist - but every later open seeds
+  // focusedIso with the SAME date it still holds from the last pick, so nothing re-ran, focus
+  // never reached a day button, and the arrow keys fell through to the form's series navigation
+  // ("works for the first transaction, then never again").
   useEffect(() => {
-    if (!isOpen || !focusedIso) return
+    if (!isOpen || !focusedIso || !shouldRenderPopup) return
     dayButtonRefs.current.get(focusedIso)?.focus()
-  }, [isOpen, focusedIso, viewMonth, viewYear])
+  }, [isOpen, focusedIso, viewMonth, viewYear, shouldRenderPopup])
 
   // Arrow keys move focusedIso by day/week; crossing into the previous
   // or next month re-points viewMonth/viewYear so the target cell is
