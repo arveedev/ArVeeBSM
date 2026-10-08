@@ -32,6 +32,7 @@ import DataRepairPanel from '../components/common/admin/DataRepairPanel.jsx'
 import AuthorityLinksPanel from '../components/common/admin/AuthorityLinksPanel.jsx'
 import MoveRecordsPanel from '../components/common/admin/MoveRecordsPanel.jsx'
 import DuplicateCleanupPanel from '../components/common/admin/DuplicateCleanupPanel.jsx'
+import InventoryLotsCheckPanel from '../components/common/admin/InventoryLotsCheckPanel.jsx'
 import CopyLayoutPanel from '../components/common/admin/CopyLayoutPanel.jsx'
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
@@ -92,6 +93,7 @@ const GROUPS = [
       { id: 'dataRepair', label: 'Data Repair', Panel: DataRepairPanel },
       { id: 'moveRecords', label: 'Move Records', Panel: MoveRecordsPanel },
       { id: 'duplicateCleanup', label: 'Duplicate Cleanup', Panel: DuplicateCleanupPanel },
+      { id: 'inventoryLotsCheck', label: 'Inventory Lots Check', Panel: InventoryLotsCheckPanel },
       { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
       { id: 'sessionTimeouts', label: 'Session Timeouts', Panel: SessionTimeoutsPanel },
     ],
