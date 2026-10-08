@@ -12,14 +12,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { ArrowLeft, X, SlidersHorizontal, FileSpreadsheet, ChevronRight } from 'lucide-react'
+import { ArrowLeft, X, SlidersHorizontal, FileSpreadsheet, ChevronRight, Sheet } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { todayLocalISO } from '../../utils/calculations.js'
 import {
   makeContext, buildSummary, buildLedger, summaryModel, ledgerModel, summaryCards, ledgerCards, longDate,
-  buildAgeLists, buildChecks, toUnit,
+  buildAgeLists, buildChecks, checksModel, toUnit,
 } from '../../utils/inventoryReport.js'
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
+import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 import LiquidationReport from './LiquidationReport.jsx'
@@ -386,6 +387,8 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [draft, setDraft] = useState(DEFAULT_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [sheetBusy, setSheetBusy] = useState(false)
+  const [sheetResult, setSheetResult] = useState(null)
   const [windowDays, setWindowDays] = useState(30)
   const [month, setMonth] = useState(today.slice(0, 7))
   const toRef = useRef(null)
@@ -464,6 +467,40 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     }
   }
 
+  // One tap sends the four report tabs: SUMMARY, the month's daily ledger,
+  // WAREHOUSE_AGE_MT and DATA_CHECK. Reads only; the Apps Script writes the sheet.
+  const handleSheet = async () => {
+    const settings = config?.inventorySheet
+    if (!settings?.webAppUrl) { toast.error('Set up Sheet Export first (Admin Dashboard > System > Sheet Export)'); return }
+    if (loading) return
+    setSheetBusy(true)
+    setSheetResult(null)
+    try {
+      const ref = view === 'ledger' ? (to < from ? from : to) : asOf
+      const monthStart = `${ref.slice(0, 8)}01`
+      const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
+      const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
+      const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null }
+      const mk = (ageSet) => makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet })
+      const ctx = mk(filters.ageSet)
+      const sheets = [
+        modelToSheet(summaryModel(buildSummary(ctx, inputs, { asOf: ref, filters: f, sort: filters.sort }), 'b', { asOf: ref, scope }), 'SUMMARY'),
+        modelToSheet(ledgerModel(buildLedger(ctx, inputs, { from: monthStart, to: ref, filters: f }), 'b', { from: monthStart, to: ref, scope }), ref.slice(0, 7)),
+        modelToSheet(summaryModel(buildSummary(mk('fine'), inputs, { asOf: ref, filters: f, sort: filters.sort }), 'mt', { asOf: ref, scope }), 'WAREHOUSE_AGE_MT'),
+        modelToSheet(checksModel(buildChecks(ctx, inputs, { asOf: ref, todayISO: today }), 'b', { asOf: ref }), 'DATA_CHECK'),
+      ]
+      sheets[2].values[0][0] = 'WAREHOUSE AGE (MT)'
+      const res = await postInventorySheet(settings, 'writeInventoryReport', { sheets })
+      if (res.ok) { setSheetResult({ written: res.written, url: res.spreadsheetUrl }); toast.success('Google Sheet updated') }
+      else toast.error(res.message ?? 'Could not reach the Google Sheet. Check Sheet Export in the Admin Dashboard.')
+    } catch (err) {
+      console.error(err)
+      toast.error('Could not send to the Google Sheet')
+    } finally {
+      setSheetBusy(false)
+    }
+  }
+
   const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', milling: 'Milling liquidation', test: 'Test milling liquidation' }[view] ?? 'Inventory reports'
   const back = () => (view === 'hub' ? onClose() : setView('hub'))
   const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
@@ -538,12 +575,24 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                 </button>
               </div>
               <span className="hidden flex-1 sm:block" />
+              {(view === 'ledger' || view === 'summary' || view === 'age') && (
+                <div className={`flex items-center ${CONTROL_H}`}>
+                  <button type="button" onClick={handleSheet} disabled={sheetBusy || loading} className={pillButton}>
+                    <Sheet size={14} /> {sheetBusy ? 'Sending…' : 'Google Sheet'}
+                  </button>
+                </div>
+              )}
               <div className={`flex items-center ${CONTROL_H}`}>
                 <button type="button" onClick={handleExport} disabled={exporting || !model || !!model.empty || view === 'check'} className={pillButton}>
                   <FileSpreadsheet size={14} /> {exporting ? 'Creating…' : 'Excel'}
                 </button>
               </div>
             </div>
+            {sheetResult && (
+              <p className="mb-2 text-xs text-emerald-300">
+                Updated {sheetResult.written.join(', ')}. {sheetResult.url && <a className="underline" href={sheetResult.url} target="_blank" rel="noreferrer">Open the Google Sheet</a>}
+              </p>
+            )}
             {loading || !built ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p> : (
               <>
                 {view === 'check' ? <CheckView checks={built.checks} unit={unit} /> : (

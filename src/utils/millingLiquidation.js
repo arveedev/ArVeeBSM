@@ -207,7 +207,7 @@ const buildSection = ({ kind, batches, whName, varietyById, sackById, prices, co
   totalCells.push(cell('', { cs: recBack.length - 1 }), cell(fmtInt(totals.pcsR), { a: 'r', b: true }))
 
   // ---- summary
-  const price = (p) => Number(prices?.[p] ?? 0)
+  const price = (p) => Number(prices?.[millerStoreKey(p)] ?? prices?.[p] ?? 0)
   const riceLines = rice.map((p) => { const t = totals.prod.get(p); return { product: p, bags: t.bags, price: price(p), amount: t.bags * price(p) } })
   const bypLines = byp.map((p) => { const t = totals.prod.get(p); return { product: p, kilos: t.kilos, price: price(p), amount: t.kilos * price(p) } })
   const summary = {

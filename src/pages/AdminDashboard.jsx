@@ -34,6 +34,7 @@ import MoveRecordsPanel from '../components/common/admin/MoveRecordsPanel.jsx'
 import DuplicateCleanupPanel from '../components/common/admin/DuplicateCleanupPanel.jsx'
 import InventoryLotsCheckPanel from '../components/common/admin/InventoryLotsCheckPanel.jsx'
 import MillingSettingsPanel from '../components/common/admin/MillingSettingsPanel.jsx'
+import InventorySheetExportPanel from '../components/common/admin/InventorySheetExportPanel.jsx'
 import CopyLayoutPanel from '../components/common/admin/CopyLayoutPanel.jsx'
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
@@ -96,6 +97,7 @@ const GROUPS = [
       { id: 'moveRecords', label: 'Move Records', Panel: MoveRecordsPanel },
       { id: 'duplicateCleanup', label: 'Duplicate Cleanup', Panel: DuplicateCleanupPanel },
       { id: 'inventoryLotsCheck', label: 'Inventory Lots Check', Panel: InventoryLotsCheckPanel },
+      { id: 'inventorySheetExport', label: 'Sheet Export', Panel: InventorySheetExportPanel },
       { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
       { id: 'sessionTimeouts', label: 'Session Timeouts', Panel: SessionTimeoutsPanel },
     ],

@@ -22,7 +22,7 @@ export const saveMillingPrice = async (mk, product, value) => {
   const cur = await db.reportConfig.get('global')
   const key = millerStoreKey(mk)
   const mills = { ...(cur?.millingMills ?? {}) }
-  mills[key] = { ...(mills[key] ?? {}), prices: { ...(mills[key]?.prices ?? {}), [product]: value } }
+  mills[key] = { ...(mills[key] ?? {}), prices: { ...(mills[key]?.prices ?? {}), [millerStoreKey(product)]: value } }
   if (cur) await db.reportConfig.update('global', { millingMills: mills })
   else await db.reportConfig.put({ id: 'global', millingMills: mills })
 }

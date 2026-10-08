@@ -383,6 +383,24 @@ export const ledgerCards = (ledger, unit) => {
   }))
 }
 
+export const checksModel = (checks, unit, { asOf }) => {
+  const rows = []
+  const section = (title, items, line) => {
+    rows.push({ kind: 'section', first: title, cells: [] })
+    if (items.length === 0) rows.push({ kind: 'row', first: 'None', cells: [null, null] })
+    for (const it of items) rows.push({ kind: 'row', ...line(it) })
+  }
+  section('Warehouses using a start-date override', checks.overrides, (o) => ({ first: o.warehouse, cells: [`starts after ${longDate(o.date)}`, null] }))
+  section('Issued more than was received', checks.shortages, (o) => ({ first: o.name, cells: ['bags over', Math.round(o.bags * 100) / 100] }))
+  section('Rebuilt stock differs from the pile balance (today)', checks.mismatches, (o) => ({ first: o.name, cells: [`stored ${Math.round(toUnit(o.stored, unit) * 100) / 100}`, Math.round(toUnit(o.rebuilt, unit) * 100) / 100] }))
+  section('Age is approximate (no readable Date Received)', checks.approx, (o) => ({ first: o.name, cells: [`from ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
+  section('Documents not assigned to a pile', checks.unassigned, (o) => ({ first: `${o.type} ${o.serial} · ${o.warehouse}`, cells: [longDate(o.date), o.bags] }))
+  return {
+    title: 'DATA CHECK', subtitle: `As of ${longDate(asOf)}`,
+    head: [[{ t: 'ITEM', span: 1 }, { t: 'DETAIL', span: 1 }, { t: 'VALUE', span: 1 }]], edges: [null, null], tones: [0, 0], rows,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Age monitoring lists and data checks (read-only).
 // ---------------------------------------------------------------------------

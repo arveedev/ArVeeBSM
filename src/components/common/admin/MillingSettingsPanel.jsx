@@ -66,8 +66,8 @@ function MillingSettingsPanel() {
   const priceField = (p, unit) => (
     <label key={p} className={labelClass}>{p} <span className="text-neutral-600">({unit})</span>
       <input
-        type="text" inputMode="decimal" value={prices[p] ?? ''} placeholder="0.00" className={inputClass}
-        onChange={(e) => setPrices({ ...prices, [p]: liveFormatNumber(e.target.value) })}
+        type="text" inputMode="decimal" value={prices[millerStoreKey(p)] ?? ''} placeholder="0.00" className={inputClass}
+        onChange={(e) => setPrices({ ...prices, [millerStoreKey(p)]: liveFormatNumber(e.target.value) })}
       />
     </label>
   )
