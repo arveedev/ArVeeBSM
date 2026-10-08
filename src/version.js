@@ -8343,4 +8343,9 @@
 //   1.10-294 - Date picker arrow keys only worked the first time: when the popup was reopened with
 //            the same date as last time, nothing re-ran the step that moves focus onto a day, so
 //            focus stayed on the trigger and the arrows moved the series instead of the date.
-export const APP_VERSION = '1.10-294'
+//   1.10-295 - Closed piles. (1) Pile Layout for a past date: a pile closed on the 30th shows on the 29th and
+//            is vacant from the 30th (the history stint ends ON the close date; history is now used even
+//            when the box is empty today, and a closed pile is never drawn on/after its close date).
+//            (2) Stock statement: a pile closed before the period starts no longer carries its leftover
+//            kilos into the beginning balance, so it reads 0 for any later period.
+export const APP_VERSION = '1.10-295'

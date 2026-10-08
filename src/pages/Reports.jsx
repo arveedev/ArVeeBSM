@@ -413,8 +413,15 @@ function Reports() {
         .toArray())
         .filter((t) => t.isInitialBalance || !reportingCutoffDate || t.date > reportingCutoffDate)
       const { receipts: priorReceipts, issues: priorIssues } = splitStockTransactions(priorStockRaw)
+      // A pile closed before this period starts holds nothing at the start of it: closing
+      // zeroes whatever was left (see closePile), so its leftover must not carry into the
+      // beginning balance of any later statement.
+      const closedBeforeStatement = new Set(
+        warehousePiles.filter((p) => p.closedDate && p.closedDate < stmtFrom).map((p) => p.pileId)
+      )
       const addToBeginningBal = (t, sign) => {
         if (!existingPileIds.has(resolvePileId(t))) return
+        if (closedBeforeStatement.has(resolvePileId(t))) return
         const variety = varietyMap.get(t.varietyId)
         if (!variety) return
         const cat = variety.category

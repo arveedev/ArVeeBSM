@@ -610,14 +610,31 @@ function Piles() {
     [periodTo, currentWarehouseId]
   ) ?? []
 
+  // Which pile sat in each box on periodTo:
+  //  - the box's CURRENT occupant, once its stint has started (assignedDate <= periodTo);
+  //  - otherwise the recorded history stint covering that day. A stint ends ON its
+  //    occupiedTo date (the day the pile was closed / moved out), so that day itself
+  //    is already vacant: the pile shows on the 29th, is vacant from the 30th. History is
+  //    checked even when the box is empty NOW - a closed pile's box is vacant today, but
+  //    it must still show that pile on the days before it closed;
+  //  - otherwise vacant (the box has nothing for that day, or its current occupant has
+  //    not started yet).
   const effectiveBoxes = !periodTo ? boxes : boxes.map((box) => {
-    if (!box.assignedDate || periodTo >= box.assignedDate) return box
-    const covering = layoutHistory
-      .filter((h) => h.boxId === box.id && h.occupiedTo && periodTo <= h.occupiedTo && (!h.occupiedFrom || periodTo >= h.occupiedFrom))
-      .sort((a, b) => (a.occupiedTo < b.occupiedTo ? 1 : -1))[0]
-    if (!covering) return { ...box, pileId: null, label: null }
-    return { ...box, pileId: covering.pileId, rowStart: covering.rowStart, rowSpan: covering.rowSpan, colStart: covering.colStart, colSpan: covering.colSpan }
+    const resolved = resolveBoxForDate(box)
+    // Safety: a closed pile is never drawn on or after its close date, whichever record still points at it.
+    const occupant = resolved.pileId ? piles.find((p) => p.pileId === resolved.pileId) : null
+    if (occupant?.closedDate && periodTo >= occupant.closedDate) return { ...resolved, pileId: null, label: null }
+    return resolved
   })
+  function resolveBoxForDate(box) {
+    if (box.pileId && (!box.assignedDate || periodTo >= box.assignedDate)) return box
+    const covering = layoutHistory
+      .filter((h) => h.boxId === box.id && h.occupiedTo && periodTo < h.occupiedTo && (!h.occupiedFrom || periodTo >= h.occupiedFrom))
+      .sort((a, b) => ((a.occupiedFrom ?? '') < (b.occupiedFrom ?? '') ? 1 : -1))[0]
+    if (covering) return { ...box, pileId: covering.pileId, rowStart: covering.rowStart, rowSpan: covering.rowSpan, colStart: covering.colStart, colSpan: covering.colSpan }
+    if (!box.pileId) return box
+    return { ...box, pileId: null, label: null }
+  }
 
   // The DISPLAY crops to only the columns/rows actually in use, so unused
   // grid space isn't wasted as blank margin - this directly makes every
