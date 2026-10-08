@@ -88,7 +88,7 @@ const seedAnchor = (tx, pile) => {
  * @param {string} args.asOf             YYYY-MM-DD, inclusive
  * @returns {Map<string, {lots: object[], shortBags: number, shortKilos: number}>} keyed by pileId
  */
-export const buildLots = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf }) => {
+const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf }, movements) => {
   const pileById = new Map(piles.map((p) => [p.pileId, p]))
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const state = new Map(piles.map((p) => [p.pileId, { lots: [], shortBags: 0, shortKilos: 0 }]))
@@ -147,6 +147,19 @@ export const buildLots = ({ piles, transactions, warehouses, globalDataStartDate
     return taken
   }
 
+  // Movement log (only when asked for): what each event added to / took
+  // from a pile, with the original lot dates, for the daily ledger.
+  const note = (kind, tx, pileId, portions, label) => {
+    if (!movements) return
+    for (const l of portions) {
+      if (l.bags === 0 && l.kilos === 0) continue
+      movements.push({
+        date: tx.date, pileId, kind, label: label ?? null, typeId: tx.transactionTypeId ?? null,
+        lotDate: l.date, varietyId: l.varietyId ?? null, bags: l.bags, kilos: l.kilos,
+      })
+    }
+  }
+
   const addLot = (pileId, lot) => {
     const st = state.get(pileId)
     if (!st || !(lot.bags > 0 || lot.kilos > 0)) return
@@ -160,46 +173,57 @@ export const buildLots = ({ piles, transactions, warehouses, globalDataStartDate
     if (tx.type === 'WSR') {
       const pile = pileById.get(tx.pileId)
       const a = tx.isInitialBalance ? seedAnchor(tx, pile) : { date: tx.date, anchor: ANCHOR.TRANSACTION }
-      addLot(tx.pileId, {
+      const lot = {
         lotId: tx.id, date: a.date, anchor: a.anchor, source: tx.isInitialBalance ? 'seed' : 'WSR',
         varietyId: tx.varietyId ?? pile?.varietyId ?? null,
         sackTypeId: tx.mtsSackTypeId ?? null, mtsCondition: tx.mtsCondition ?? null,
         bags: tx.numberOfBags ?? 0, kilos: tx.netKilos ?? 0,
-      })
+      }
+      addLot(tx.pileId, lot)
+      note('add', tx, tx.pileId, [lot], tx.isInitialBalance ? 'BEGINNING BALANCE' : null)
     } else if (tx.type === 'WSI') {
-      take(tx.pileId, tx.numberOfBags ?? 0, tx.netKilos ?? 0)
+      note('less', tx, tx.pileId, take(tx.pileId, tx.numberOfBags ?? 0, tx.netKilos ?? 0))
     } else if (tx.type === 'WTS') {
       const from = tx.issuedPileId
       const to = tx.receivedPileId
       const outCounts = from && counts(tx, from)
       const inCounts = to && counts(tx, to)
       const taken = outCounts ? take(from, tx.issuedBags ?? 0, tx.issuedNetKilos ?? 0) : []
-      if (!inCounts) continue
+      if (!inCounts) { note('less', tx, from, taken, 'TRANSFER'); continue }
       const recBags = tx.receivedBags ?? 0
       const recKilos = tx.receivedNetKilos ?? 0
       if (taken.length === 0) {
         // Nothing to carry (issuing side outside the report window or empty):
         // the received stock is dated at the transfer itself.
-        addLot(to, {
+        const lot = {
           lotId: tx.id, date: tx.date, anchor: ANCHOR.TRANSACTION, source: 'WTS',
           varietyId: tx.receivedVarietyId ?? null, sackTypeId: tx.receivedSackTypeId ?? null,
           mtsCondition: tx.receivedCondition ?? null, bags: recBags, kilos: recKilos,
-        })
+        }
+        addLot(to, lot)
+        note('add', tx, to, [lot], 'TRANSFER')
         continue
       }
       // Carry the original lot dates, scaled to what was actually received
       // (bags can change, e.g. rebagging 40 -> 21).
       const takenBags = taken.reduce((s, l) => s + l.bags, 0)
       const takenKilos = taken.reduce((s, l) => s + l.kilos, 0)
-      for (const l of taken) {
-        addLot(to, {
-          ...l, source: 'WTS',
-          varietyId: tx.receivedVarietyId ?? l.varietyId,
-          sackTypeId: tx.receivedSackTypeId ?? l.sackTypeId,
-          mtsCondition: tx.receivedCondition ?? l.mtsCondition,
-          bags: takenBags > 0 ? (recBags * l.bags) / takenBags : 0,
-          kilos: takenKilos > 0 ? round3((recKilos * l.kilos) / takenKilos) : 0,
-        })
+      const carried = taken.map((l) => ({
+        ...l, source: 'WTS',
+        varietyId: tx.receivedVarietyId ?? l.varietyId,
+        sackTypeId: tx.receivedSackTypeId ?? l.sackTypeId,
+        mtsCondition: tx.receivedCondition ?? l.mtsCondition,
+        bags: takenBags > 0 ? (recBags * l.bags) / takenBags : 0,
+        kilos: takenKilos > 0 ? round3((recKilos * l.kilos) / takenKilos) : 0,
+      }))
+      carried.forEach((l) => addLot(to, l))
+      if (from === to) {
+        // Same pile (repiling / rebagging): only the net change is a movement.
+        note('less', tx, from, taken.map((l, i) => ({ ...l, bags: Math.max(0, l.bags - carried[i].bags), kilos: Math.max(0, round3(l.kilos - carried[i].kilos)) })), 'TRANSFER')
+        note('add', tx, to, carried.map((l, i) => ({ ...l, bags: Math.max(0, l.bags - taken[i].bags), kilos: Math.max(0, round3(l.kilos - taken[i].kilos)) })), 'TRANSFER')
+      } else {
+        note('less', tx, from, taken, 'TRANSFER')
+        note('add', tx, to, carried, 'TRANSFER')
       }
     }
   }
@@ -210,6 +234,15 @@ export const buildLots = ({ piles, transactions, warehouses, globalDataStartDate
     if (closed && asOf >= closed) st.lots = []
   }
   return state
+}
+
+export const buildLots = (args) => run(args, null)
+
+/** Same as buildLots, plus the dated movement log (adds and issues, with lot dates). */
+export const buildLotsDetailed = (args) => {
+  const movements = []
+  const state = run(args, movements)
+  return { state, movements }
 }
 
 /** Total bags / kilos left in a pile's lots. */

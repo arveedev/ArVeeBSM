@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight, ChevronDown } from 'lucide-react'
+import { ChevronRight, ChevronDown, ClipboardList } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtBags, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
@@ -21,6 +21,7 @@ import { computeUnwithdrawnByCategoryAge, UNSPECIFIED_AGE } from '../utils/unwit
 import { computeWarehouseCategoryStock } from '../utils/warehouseCategoryStock.js'
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
+import InventoryReportsModal from '../components/common/InventoryReportsModal.jsx'
 import CountUpNumber from '../components/common/CountUpNumber.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
@@ -78,6 +79,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // to Actual per explicit request, since that's what this page showed
   // before the unwithdrawn feature existed.
   const [topCardShowPotential, setTopCardShowPotential] = useState(false)
+  const [showInventoryReports, setShowInventoryReports] = useState(false)
   const [breakdownShowPotential, setBreakdownShowPotential] = useState(false)
   // Age Grouping used to always show Potential with no toggle of its
   // own - per explicit request, it now gets the same Actual/Potential
@@ -280,7 +282,21 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   return (
     <>
       <Section
-        title={weightUnit === 'mt' ? 'Metric Tons by Province & Category' : 'Net Bags by Province & Category'}
+        title={(
+          <>
+            {weightUnit === 'mt' ? 'Metric Tons by Province & Category' : 'Net Bags by Province & Category'}
+            {/* Deliberately quiet entry to the Inventory Reports (Admin/Visitor only,
+                this page is theirs alone): dim, no circle, brightens only on hover. */}
+            <button
+              type="button"
+              onClick={() => setShowInventoryReports(true)}
+              aria-label="Inventory reports"
+              className="ml-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
+            >
+              <ClipboardList size={14} />
+            </button>
+          </>
+        )}
         headerRight={(
           <PillToggle
             options={[{ value: false, label: 'Actual' }, { value: true, label: 'Potential' }]}
@@ -927,6 +943,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           onClose={() => setDetailContext(null)}
         />
       )}
+      {showInventoryReports && <InventoryReportsModal onClose={() => setShowInventoryReports(false)} />}
     </>
   )
 }
