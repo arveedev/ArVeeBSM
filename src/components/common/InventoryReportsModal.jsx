@@ -19,10 +19,14 @@ import {
   makeContext, buildSummary, buildLedger, summaryModel, ledgerModel, summaryCards, ledgerCards, longDate,
   buildAgeLists, buildChecks, toUnit,
 } from '../../utils/inventoryReport.js'
+import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
+import { buildCpfHistory } from '../../utils/cpfHistory.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 import PillToggle from './PillToggle.jsx'
 
-const DEFAULT_FILTERS = { combine: false, provinceId: '', commodity: '', warehouseIds: null, sort: 'name', ageSet: 'coarse' }
+const BANK_KEY = 'inv.bankProvince'
+const readBank = () => { try { return localStorage.getItem(BANK_KEY) ?? 'Albay' } catch { return 'Albay' } }
+const DEFAULT_FILTERS = { combine: false, provinceId: '', commodity: '', warehouseIds: null, sort: 'name', ageSet: 'coarse', bank: 'Albay' }
 const fmtNum = (n) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const CONTROL_H = 'h-[46px]'
 
@@ -43,6 +47,7 @@ const ROW_STYLE = {
   section: 'bg-neutral-900 text-[11px] font-bold uppercase tracking-wide text-neutral-400',
   sub: 'bg-neutral-900 font-semibold text-app-text',
   total: 'bg-neutral-800 font-bold text-app-text',
+  week: 'bg-neutral-900 font-semibold text-app-text',
   beg: 'bg-amber-500/10 font-semibold text-app-text',
   end: 'font-semibold text-app-text',
   'add-label': 'font-semibold text-blue-400',
@@ -261,6 +266,31 @@ function CheckView({ checks, unit }) {
   )
 }
 
+function ProcurementCardList({ lines }) {
+  const shown = lines.filter((l) => l.kind !== 'row' || l.groups.some((g) => g.total > 0))
+  if (shown.length === 0) return <p className="py-10 text-center text-sm text-neutral-500">No procurement in this month yet.</p>
+  return (
+    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-6">
+      {shown.map((l, i) => (
+        <Card key={i} className={l.kind === 'total' ? 'border-brand-neon/50' : l.kind === 'week' ? 'border-neutral-600' : ''}>
+          <p className={`mb-1 border-b border-neutral-800 pb-1.5 ${l.kind === 'row' ? 'font-semibold text-app-text' : 'font-bold uppercase text-brand-neon'}`}>{l.label}</p>
+          {l.groups.map((g) => (
+            <div key={g.name} className="py-1">
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-medium text-neutral-200">{g.name}</span>
+                <span className="font-semibold tabular-nums text-app-text">{fmtNum(g.total)}</span>
+              </div>
+              <div className="flex flex-wrap gap-x-3 text-[11px] tabular-nums text-neutral-500">
+                <span>PD {fmtNum(g.pd)}</span><span>PW {fmtNum(g.pw)}</span>{g.cpf != null && <span>CPF balance {fmtNum(g.cpf)}</span>}
+              </div>
+            </div>
+          ))}
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, onReset, onClose }) {
   const all = draft.warehouseIds == null
   const toggleWh = (id) => {
@@ -281,6 +311,14 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-950 p-1.5 text-neutral-400"><X size={16} /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+          {view === 'procurement' ? (
+            <label className={labelClass}>Add Cash in Bank to
+              <select className={selectClass} value={draft.bank ?? ''} onChange={(e) => setDraft({ ...draft, bank: e.target.value })}>
+                <option value="">Not added to any province</option>
+                {provinces.map((p) => <option key={p.provinceId} value={p.name}>{p.name}</option>)}
+              </select>
+            </label>
+          ) : (<>
           <label className={labelClass}>Warehouse names
             <select className={selectClass} value={draft.combine ? 'c' : 's'} onChange={(e) => setDraft({ ...draft, combine: e.target.value === 'c' })}>
               <option value="s">Separate</option>
@@ -324,6 +362,7 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
               </label>
             ))}
           </div>
+          </>)}
         </div>
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={onReset} className="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300">Reset</button>
@@ -342,11 +381,12 @@ function InventoryReportsModal({ onClose }) {
   const [to, setTo] = useState(today)
   const [asOf, setAsOf] = useState(today)
   const [unit, setUnit] = useState('b')
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS, bank: readBank() }))
   const [draft, setDraft] = useState(DEFAULT_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [windowDays, setWindowDays] = useState(30)
+  const [month, setMonth] = useState(today.slice(0, 7))
   const toRef = useRef(null)
   const narrow = useIsNarrow()
 
@@ -362,17 +402,30 @@ function InventoryReportsModal({ onClose }) {
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), [])
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
+  const sdoUsers = useLiveQuery(() => db.users.where('role').equals('SDO').toArray(), [])
+  const ledgerRows = useLiveQuery(() => db.cashLedgerV2.toArray(), [])
+  const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), [])
+  const branches = useLiveQuery(() => db.branches.toArray(), [])
   const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes].some((x) => x === undefined)
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
   const built = useMemo(() => {
-    if (loading || !['summary', 'ledger', 'age', 'check'].includes(view)) return null
+    if (loading || !['summary', 'ledger', 'age', 'check', 'procurement'].includes(view)) return null
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet })
     const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null }
     const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
     const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
     const end = to < from ? from : to
     try {
+      if (view === 'procurement') {
+        if (!sdoUsers || !ledgerRows || !activePrs) return null
+        const cpfEvents = buildCpfHistory({ sdoUsers, ledger: ledgerRows, activePrs, config, warehouses, provinces })
+        const r = buildProcurementStatus({
+          transactions, warehouses, provinces, varieties, transactionTypes, globalDataStartDate: config?.dataStartDate ?? null,
+          cpfEvents, month, todayISO: today, bankProvinceName: filters.bank || null, branchName: branches?.[0]?.name ?? 'ALBAY BRANCH',
+        })
+        return { model: r.model, cards: narrow ? r.cards : null }
+      }
       if (view === 'check') return { checks: buildChecks(ctx, inputs, { asOf, todayISO: today }), model: null }
       if (view === 'summary' || view === 'age') {
         const summary = buildSummary(ctx, inputs, { asOf, filters: f, sort: filters.sort })
@@ -389,7 +442,7 @@ function InventoryReportsModal({ onClose }) {
       console.error(err)
       return { model: { title: '', subtitle: '', head: [], rows: [], edges: [], tones: [], empty: 'Could not build this report.' }, cards: null }
     }
-  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today])
+  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, sdoUsers, ledgerRows, activePrs, branches])
   const model = built?.model ?? null
 
   const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse'].filter(Boolean).length
@@ -409,7 +462,7 @@ function InventoryReportsModal({ onClose }) {
     }
   }
 
-  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check' }[view] ?? 'Inventory reports'
+  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status' }[view] ?? 'Inventory reports'
   const back = () => (view === 'hub' ? onClose() : setView('hub'))
   const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
 
@@ -429,6 +482,7 @@ function InventoryReportsModal({ onClose }) {
             {[['ledger', 'Daily inventory', 'Per day: ADD and LESS by type, ending stock, by warehouse and variety'],
               ['summary', 'Summary', 'Stock by warehouse, variety and age bracket with province subtotals'],
               ['age', 'Age monitoring', 'Age brackets per variety, stock moving to the next bracket, oldest stock'],
+              ['procurement', 'Daily procurement status', 'PD and PW bags per day, per province, with the CPF balance'],
               ['check', 'Data check', 'Overrides in use, shortages, approximate ages, unassigned documents']].map(([id, name, desc]) => (
               <button key={id} type="button" onClick={() => setView(id)} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-600">
                 <span className="min-w-0"><span className="block text-sm font-semibold text-app-text">{name}</span><span className="block text-xs text-neutral-500">{desc}</span></span>
@@ -438,10 +492,16 @@ function InventoryReportsModal({ onClose }) {
           </div>
         )}
 
-        {['ledger', 'summary', 'age', 'check'].includes(view) && (
+        {['ledger', 'summary', 'age', 'check', 'procurement'].includes(view) && (
           <>
             <div className="mb-2 flex flex-wrap items-end gap-x-2 gap-y-2">
-              {view === 'ledger' ? (
+              {view === 'procurement' ? (
+                <div className={`flex items-center ${CONTROL_H}`}>
+                  <select value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200">
+                    {monthOptions(config?.dataStartDate, today).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                  </select>
+                </div>
+              ) : view === 'ledger' ? (
                 <>
                   <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">From</p><CalendarDatePicker value={from} label="Start Date" onChange={(iso) => { setFrom(iso); toRef.current?.open() }} /></div>
                   <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">To</p><CalendarDatePicker ref={toRef} value={to} label="End Date" onChange={setTo} /></div>
@@ -456,9 +516,9 @@ function InventoryReportsModal({ onClose }) {
                   </select>
                 </div>
               )}
-              <div className={`flex items-center ${CONTROL_H}`}>
+              {view !== 'procurement' && <div className={`flex items-center ${CONTROL_H}`}>
                 <PillToggle options={[{ value: 'b', label: 'Net bags' }, { value: 'mt', label: 'MT' }]} value={unit} onChange={setUnit} />
-              </div>
+              </div>}
               <div className={`flex items-center ${CONTROL_H}`}>
                 <button type="button" onClick={() => { setDraft(filters); setShowFilters(true) }} className={pillButton}>
                   <SlidersHorizontal size={14} /> Filter and sort{activeFilters > 0 && <span className="rounded-full bg-brand-neon px-1.5 text-[10px] font-bold text-brand-contrast">{activeFilters}</span>}
@@ -482,7 +542,7 @@ function InventoryReportsModal({ onClose }) {
                         {built.lists && <AgeLists lists={built.lists} unit={unit} />}
                       </div>
                     ) : narrow && built.cards
-                      ? (view === 'summary' ? <SummaryCardList cards={built.cards} /> : <LedgerCardList days={built.cards} />)
+                      ? (view === 'summary' ? <SummaryCardList cards={built.cards} /> : view === 'procurement' ? <ProcurementCardList lines={built.cards} /> : <LedgerCardList days={built.cards} />)
                       : <ModelTable model={model} />}
                   </>
                 )}
@@ -491,7 +551,7 @@ function InventoryReportsModal({ onClose }) {
             {showFilters && (
               <FilterSheet
                 draft={draft} setDraft={setDraft} provinces={provinces ?? []} warehouses={warehouses} view={view}
-                onApply={() => { setFilters(draft); setShowFilters(false) }}
+                onApply={() => { setFilters(draft); try { localStorage.setItem(BANK_KEY, draft.bank ?? '') } catch { /* optional */ } setShowFilters(false) }}
                 onReset={() => setDraft(DEFAULT_FILTERS)}
                 onClose={() => setShowFilters(false)}
               />

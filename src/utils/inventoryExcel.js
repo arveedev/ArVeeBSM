@@ -10,7 +10,7 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
   const mod = await import('exceljs')
   const ExcelJS = mod.default ?? mod
   const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet(sheetName.slice(0, 31), { views: [{ state: 'frozen', xSplit: 1, ySplit: 5 }] })
+  const ws = wb.addWorksheet(sheetName.slice(0, 31), { views: [{ state: 'frozen', xSplit: 1, ySplit: 2 + model.head.length }] })
   const width = model.head[0].reduce((s, c) => s + c.span, 0)
 
   // Title block (rows 1-2), then the three header rows (3-5).
@@ -26,7 +26,7 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
   const edgeBorder = (e) => (e === 'wh' ? { style: 'medium' } : e === 'var' ? { style: 'thin' } : { style: 'hair' })
   const thin = { style: 'thin' }
   // The first header cell spans all three header rows.
-  ws.mergeCells(3, 1, 5, 1)
+  ws.mergeCells(3, 1, 2 + model.head.length, 1)
   model.head.forEach((row, i) => {
     let c = 1
     let dataCol = 0
@@ -48,7 +48,7 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
     })
   })
 
-  let r = 6
+  let r = 3 + model.head.length
   for (const row of model.rows) {
     const first = ws.getCell(r, 1)
     first.value = row.first
