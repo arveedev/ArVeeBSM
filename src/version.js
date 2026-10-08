@@ -8356,4 +8356,5 @@
 //            only when the transaction is SALES and the Sheet's OR No. is a number (digits only). Before,
 //            any text in that column filled it for any non-milling transaction type.
 //   1.10-300 - Monitoring > Procurement (Admin/Visitor): the search box also matches the customer name.
-export const APP_VERSION = '1.10-300'
+//   1.10-301 - Procurement monitor: a row shows the customer's name only when the search matched that customer.
+export const APP_VERSION = '1.10-301'

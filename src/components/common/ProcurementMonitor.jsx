@@ -567,6 +567,10 @@ function ProcurementMonitor() {
                                   <span className="rounded-full bg-brand-amber/10 px-2.5 py-1 text-xs font-bold uppercase text-brand-amber">Unpaid</span>
                                 )}
                               </div>
+                              {/* The customer's name appears only on rows where the search matched the customer. */}
+                              {q && t.customerName && fuzzyMatchesAny(q, [t.customerName]) && (
+                                <p className="mt-1 break-words text-sm font-semibold text-app-text">{t.customerName}</p>
+                              )}
                               <p className="mt-1 text-2xl font-bold tabular-nums text-app-text">
                                 {fmtBags(t.numberOfBags)} <span className="text-sm font-normal text-neutral-500">bags</span>
                               </p>
