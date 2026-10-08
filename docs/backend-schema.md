@@ -343,6 +343,9 @@ autocomplete + auto-fill on every Customer Name field.
 | `auditedByName`, `auditedByPosition`, `notedByName`, `notedByPosition` | string | Global across every report |
 | `visitorAccessCode` | string | SHA-256 hash of the shared Visitor PIN |
 | `dataStartDate` | string (ISO date) | Global floor — see `effectiveCutoffDate()`, TDD §2.7-adjacent reporting logic |
+| `millingSignatories` | object `{ millingSupervisor, accountant, bsqao, engineer, actingAsstBranchManager, actingBranchManager }` | Optional. Names printed on every Milling / Test Milling Liquidation, shared by all ricemills. Written only from Admin > Operations > Milling Prices |
+| `millingMills` | object keyed by miller key | Optional. `{ [millerKey]: { contractor, prices: { [product]: number } } }`. Rice prices are per bag of 50 kg, by-product prices per kilo. Keys have dots replaced by `_` (Dexie Cloud reads dots as paths). A price edited on a liquidation (Admin only) writes the same value |
+| `inventorySheet` | object `{ webAppUrl, token, spreadsheetUrl }` | Optional. Where the Inventory Reports' Google Sheet button posts; a separate Apps Script and spreadsheet from the AI/SIA bridge |
 
 ### `transactionTypes`
 | Field | Type | Notes |

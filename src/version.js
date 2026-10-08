@@ -8365,4 +8365,5 @@
 //   1.10-307 - Inventory Reports: Daily procurement status (PD/PW per day, per province and branch, weekly subtotals, CPF balance with a chosen province for Cash in Bank).
 //   1.10-308 - Inventory Reports: Milling and Test Milling Liquidation per ricemill (miller/warehouse/period/batch filters, by-products, summary with remembered unit prices editable inline, Excel and PDF), Admin > Operations > Milling Prices (signatories, contractor, prices).
 //   1.10-309 - Inventory Reports: Google Sheet export (SUMMARY, month ledger, WAREHOUSE_AGE_MT, DATA_CHECK) through a separate Apps Script; Admin > System > Sheet Export; docs and script added.
-export const APP_VERSION = '1.10-309'
+//   1.10-310 - Inventory Reports: liquidation PDF export made robust to both module shapes; planning docs updated.
+export const APP_VERSION = '1.10-310'

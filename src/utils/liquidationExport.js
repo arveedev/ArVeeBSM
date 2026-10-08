@@ -139,8 +139,10 @@ export const exportLiquidationExcel = async (sections, { fileName, config }) => 
 
 // ---------------------------------------------------------------- PDF
 export const exportLiquidationPdf = async (sections, { fileName, config }) => {
-  const { default: jsPDF } = await import('jspdf')
-  const { default: autoTable } = await import('jspdf-autotable')
+  const pdfMod = await import('jspdf')
+  const jsPDF = pdfMod.jsPDF ?? pdfMod.default?.jsPDF ?? pdfMod.default
+  const atMod = await import('jspdf-autotable')
+  const autoTable = atMod.default?.default ?? atMod.default ?? atMod.autoTable
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'legal' })
   const pageW = doc.internal.pageSize.getWidth()
   let first = true

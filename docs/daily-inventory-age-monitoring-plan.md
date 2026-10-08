@@ -270,3 +270,17 @@ Planning and UI previews approved: Daily ledger, Summary (province subtotals, co
 - Every receipt entered in the app from September 1 (WSR, transfer in) ages from its own receipt date, one lot per receipt.
 - Typed override balances behave like beginning-balance lines; receipts entered after the override date use their own dates.
 - Months are 30.44 days, as in the existing Sheet script.
+
+## 18. Build status (v1.10-302 to v1.10-309)
+
+Built and live: Inventory Lots Check (Admin > System), Daily inventory ledger,
+Summary, Age monitoring (monthly / coarse / fine brackets, moving-to-next-bracket
+and oldest-stock lists), Data check, Daily procurement status, Milling and Test
+Milling Liquidation per ricemill (Excel and PDF), Milling Prices settings,
+Excel export for the table reports, Google Sheet export (Apps Script in
+docs/inventory-sheet-export-script.js, setup in docs/inventory-sheet-export-setup.md).
+
+Not built (by decision): daily snapshots (reports stay derived, so a corrected
+old record corrects the report); a PDF for the stock tables (Excel and the
+Google Sheet cover them); the optional per-seed-line receipt-date field (the
+existing Date Received text plus the pile date is enough).

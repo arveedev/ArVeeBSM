@@ -376,3 +376,27 @@ the step-by-step journey.*
    of orphaned linked documents (a stale AI/SIA number with no authority
    at all) and of flagged authorities with unreviewed transactions.
    A renumber is only noticed after a full Sheet pull (Force Resync).
+
+## 12. Inventory Reports Flow (Admin and Visitor)
+
+1. On Home > Stocks, a very dim clipboard icon after the "Net Bags by
+   Province & Category" title opens the full-screen Inventory Reports list.
+   No other role sees it; there is no navigation tab for it.
+2. The list offers: Daily inventory, Summary, Age monitoring, Daily
+   procurement status, Milling liquidation, Test milling liquidation and Data
+   check. Every report is read-only.
+3. Daily inventory takes a Start Date then an End Date (choosing the start
+   opens the end picker). Summary, Age monitoring and Data check take one
+   "as of" date. Net bags / MT is one switch; everything else (warehouse names
+   Separate or Combined, province, commodity, age brackets, sort, which
+   warehouses, and for procurement the province that receives Cash in Bank) is
+   behind a single Filter and sort button.
+4. Wide screens show a table with warehouse and variety separators; phones
+   show cards.
+5. Excel downloads exactly the table shown. Google Sheet (Daily inventory,
+   Summary, Age monitoring) rewrites the SUMMARY, current month, WAREHOUSE_AGE_MT
+   and DATA_CHECK tabs of the separate reporting spreadsheet. The liquidations
+   also export to PDF.
+6. In a liquidation, an Admin can edit a unit price in the SUMMARY; the value
+   is saved for that ricemill and is the same one Admin > Operations > Milling
+   Prices shows. A Visitor sees the prices read-only.

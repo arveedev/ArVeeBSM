@@ -516,6 +516,40 @@ Sheet (the admin must keep editing the Sheet), and automatic migration on
 renumber (silent integrity risk in production). Open question: a stable ID
 issued at the Sheet root would remove the need for any of this.
 
+### 2.31 Inventory lots are computed, never stored (Daily Inventory and Age Monitoring)
+
+**Decision**: stock by age is derived on demand by rebuilding every pile's
+receipts as lots (one lot per WSR, beginning-balance line or transfer-in, each
+with its own receipt date) and issuing the oldest lot of the pile first
+(`src/utils/inventoryLots.js`). Transfers carry the original lot dates. A
+beginning balance is the pile's opening stock and is applied first. Age is
+counted in 30.44-day months, the same as the Google Sheet script it replaces.
+Beginning-balance lots age from the readable date in "Date Received" (the first
+date of a range, the 1st of a month-only text), else from the pile date, and
+that fallback is listed as approximate.
+
+**Rationale**: a stored snapshot table would need a schema version on a synced
+database and would go stale whenever an old record is corrected. Computing from
+the same records and the same inclusion rules as `computeHistoricalPileState`
+(start dates, closed piles) means the reports agree with the pile balances by
+construction; on the 2026-10-08 backup the rebuilt balance matched the stored
+balance on 75 of 77 piles (the two exceptions are empty piles that keep leftover
+kilos in the app). One pass over about 3,400 transactions takes milliseconds.
+Rejected: replaying the Sheet logs (the old approach: duplicates, guessed ages,
+manual QA re-entry).
+
+### 2.32 One table model for screen, Excel, PDF and Google Sheet
+
+**Decision**: each report builds a neutral table model (`inventoryReport.js`,
+`procurementStatus.js`, `millingLiquidation.js`); the screen, the Excel file, the
+PDF and the Apps Script payload all render that model.
+
+**Rationale**: the screen and the exports cannot disagree. The Google Sheet export
+uses its own Apps Script and its own spreadsheet and posts only finished numbers;
+it is separate from the AI/SIA bridge so the bridge's write allowlist stays intact.
+The only data writes in the whole feature are explicit saves of the optional
+`reportConfig` fields (milling prices, signatories, sheet export URL).
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability
