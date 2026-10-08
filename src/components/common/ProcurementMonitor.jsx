@@ -337,7 +337,7 @@ function ProcurementMonitor() {
     ? paymentFilteredTx.filter((t) => {
         const w = warehouseMap.get(t.warehouseId)
         const varietyName = varietyMap.get(t.varietyId)?.name ?? ''
-        return fuzzyMatchesAny(q, [w?.code, w?.name, varietyName])
+        return fuzzyMatchesAny(q, [w?.code, w?.name, varietyName, t.customerName])
       })
     : paymentFilteredTx
 
@@ -470,7 +470,7 @@ function ProcurementMonitor() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search warehouse or variety"
+            placeholder="Search customer, warehouse, variety"
             className="w-full rounded-xl border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-9 text-sm text-app-text outline-none focus:border-brand-neon"
           />
           {searchQuery && (
