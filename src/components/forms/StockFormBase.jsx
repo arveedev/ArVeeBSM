@@ -1219,7 +1219,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   useEffect(() => {
     const prefillOrNumber = prefill?.orNumber != null ? String(prefill.orNumber).trim() : ''
     if (!prefillOrNumber) return
-    if (isMillingTypeName(prefill?.transactionTypeName) || isTestMillingTypeName(prefill?.transactionTypeName)) return
+    // Only a SALES authority whose OR column is a plain number (digits only) fills the OR # box.
+    if (!isSalesTypeName(prefill?.transactionTypeName) || !/^\d+$/.test(prefillOrNumber)) return
     if (appliedOrNumberRef.current === prefillOrNumber) return
     setOrNumber(prefillOrNumber)
     appliedOrNumberRef.current = prefillOrNumber
@@ -1603,7 +1604,9 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         setPileId(matchedPile.pileId)
         applyPileDefaults(matchedPile.pileId)
       }
-    } else if (authorityOrNumber) {
+    } else if (isSalesTypeName(authority.transactionTypeName) && /^\d+$/.test(authorityOrNumber)) {
+      // Only a SALES authority, and only when the Sheet's OR column holds a number (digits only).
+      // Any other text there (a pile name, a note) or any other transaction type is left alone.
       setOrNumber(authorityOrNumber)
     }
 

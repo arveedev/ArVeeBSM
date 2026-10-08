@@ -8352,4 +8352,7 @@
 //   1.10-298 - Reverted 1.10-297 (background-sync pausing/slow-down on low-spec PCs, milling-order rewrite
 //            skip, 'This device' card). It was an unrequested performance change; the app behaves exactly
 //            as it did at 1.10-296 again.
-export const APP_VERSION = '1.10-298'
+//   1.10-299 - OR # auto-fill from an authority (tapped in the Monitor/Activity or picked inside the form):
+//            only when the transaction is SALES and the Sheet's OR No. is a number (digits only). Before,
+//            any text in that column filled it for any non-milling transaction type.
+export const APP_VERSION = '1.10-299'
