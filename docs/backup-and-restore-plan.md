@@ -910,3 +910,27 @@ whether the app's address must be whitelisted on a new database.
 02:00 and 06:00 runs were due. Only the manual run of 2026-10-04 exists. GitHub can delay or skip scheduled
 runs; check the Actions tab, and treat a second missed day as a problem to fix before relying on the schedule.
 
+---
+
+## 27. Rehearsal, app-side checks passed (2026-10-08)
+
+A copy of the app (production build, Google Sheets calls blocked) was pointed at the throwaway database
+holding the restored 2026-10-04 backup, and a fresh browser profile synced it. Using the app's own code on
+that restored data:
+
+- **Users:** all 10 users came back with their access codes and roles (Admin, SDO, Warehouse Supervisor,
+  MPO III), so PIN sign-in is possible.
+- **Pile balances:** the app recomputed every pile from its transactions; all 76 matched the stored totals.
+- **Cash on hand:** the three SDOs' figures were computed from the restored ledger and purchase receipts; one
+  (Josephine M. Etcoy, 303,631.36) equals the figure the live app was showing.
+- **Serial suggestions:** 26 warehouse/type combinations checked; none suggested a serial already in use.
+- **Duplicates:** 1,685 repeated serial groups, exactly the known pre-cleanup duplicates in that backup, so
+  the restore reproduces the data (including its known faults) without adding or losing anything.
+
+**Still to rehearse:** an actual PIN sign-in in the browser, the gap-recovery step, and how a device that
+used the old database behaves when switched (a one-off test needing the owner's browser).
+
+**Finding (not caused by the restore):** `suggestNextSerial` can suggest an `INIT-…` seed serial for a
+warehouse whose newest WSR is older than its beginning-balance seed (seen for ALB-LEGAZPI GID A, ALB-VRT). Called
+without a cereal category as in this check; to be confirmed in the form before any change.
+

@@ -18490,3 +18490,5 @@ Handoff refreshed 2026-10-05: `handoff.md` now carries a v1.10-271 addendum and 
 
 2026-10-05 restore rehearsal steps 1-4: imported the 2026-10-04 backup into a throwaway Dexie database and exported it back; all 32 tables matched exactly. Browser-side checks and gap recovery still to do. No 2026-10-05 scheduled backup had appeared yet - to be checked in GitHub Actions.
 
+2026-10-08 restore rehearsal, app-side checks: on the restored 2026-10-04 data the app's own calculations reproduced all 76 pile balances, the SDO cash on hand (one equals the live figure), and valid serial suggestions; duplicates equal the known pre-cleanup count. PIN sign-in, gap recovery and device-switch still to do. Noted: suggestNextSerial may suggest an INIT- seed serial in some warehouses (to confirm).
+
