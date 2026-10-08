@@ -22,6 +22,7 @@ import {
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
+import LiquidationReport from './LiquidationReport.jsx'
 import PillToggle from './PillToggle.jsx'
 
 const BANK_KEY = 'inv.bankProvince'
@@ -373,7 +374,7 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
   )
 }
 
-function InventoryReportsModal({ onClose }) {
+function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [entered, setEntered] = useState(false)
   const [view, setView] = useState('hub')
   const today = todayLocalISO()
@@ -406,6 +407,7 @@ function InventoryReportsModal({ onClose }) {
   const ledgerRows = useLiveQuery(() => db.cashLedgerV2.toArray(), [])
   const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), [])
   const branches = useLiveQuery(() => db.branches.toArray(), [])
+  const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
   const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes].some((x) => x === undefined)
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
@@ -462,7 +464,7 @@ function InventoryReportsModal({ onClose }) {
     }
   }
 
-  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status' }[view] ?? 'Inventory reports'
+  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', milling: 'Milling liquidation', test: 'Test milling liquidation' }[view] ?? 'Inventory reports'
   const back = () => (view === 'hub' ? onClose() : setView('hub'))
   const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
 
@@ -483,6 +485,8 @@ function InventoryReportsModal({ onClose }) {
               ['summary', 'Summary', 'Stock by warehouse, variety and age bracket with province subtotals'],
               ['age', 'Age monitoring', 'Age brackets per variety, stock moving to the next bracket, oldest stock'],
               ['procurement', 'Daily procurement status', 'PD and PW bags per day, per province, with the CPF balance'],
+              ['milling', 'Milling liquidation', 'Regular milling per ricemill: issues, receipts, by-products, summary'],
+              ['test', 'Test milling liquidation', 'Test milling per ricemill: TMO and trials, by-products, summary'],
               ['check', 'Data check', 'Overrides in use, shortages, approximate ages, unassigned documents']].map(([id, name, desc]) => (
               <button key={id} type="button" onClick={() => setView(id)} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-600">
                 <span className="min-w-0"><span className="block text-sm font-semibold text-app-text">{name}</span><span className="block text-xs text-neutral-500">{desc}</span></span>
@@ -491,6 +495,15 @@ function InventoryReportsModal({ onClose }) {
             ))}
           </div>
         )}
+
+        {(view === 'milling' || view === 'test') && (loading || !sackTypes
+          ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>
+          : (
+            <LiquidationReport
+              key={view} kind={view === 'test' ? 'TMO' : 'MO'} transactions={transactions} warehouses={warehouses} varieties={varieties}
+              sackTypes={sackTypes} config={config} branch={branches?.[0] ?? null} isAdmin={isAdmin} narrow={narrow} today={today}
+            />
+          ))}
 
         {['ledger', 'summary', 'age', 'check', 'procurement'].includes(view) && (
           <>

@@ -33,6 +33,7 @@ import AuthorityLinksPanel from '../components/common/admin/AuthorityLinksPanel.
 import MoveRecordsPanel from '../components/common/admin/MoveRecordsPanel.jsx'
 import DuplicateCleanupPanel from '../components/common/admin/DuplicateCleanupPanel.jsx'
 import InventoryLotsCheckPanel from '../components/common/admin/InventoryLotsCheckPanel.jsx'
+import MillingSettingsPanel from '../components/common/admin/MillingSettingsPanel.jsx'
 import CopyLayoutPanel from '../components/common/admin/CopyLayoutPanel.jsx'
 import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
@@ -66,6 +67,7 @@ const GROUPS = [
     tabs: [
       { id: 'customers', label: 'Customers', Panel: CustomersPanel },
       { id: 'ricemillAllocations', label: 'Miller Allocations', Panel: RicemillAllocationsPanel },
+      { id: 'millingSettings', label: 'Milling Prices', Panel: MillingSettingsPanel },
       { id: 'txtypes', label: 'Transaction Types', Panel: TransactionTypesPanel },
       { id: 'authorities', label: 'AI / SIA', Panel: AuthoritiesInfoPanel },
       { id: 'authorityLinks', label: 'Authority Links', Panel: AuthorityLinksPanel },

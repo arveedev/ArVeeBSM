@@ -22,6 +22,7 @@ import { computeWarehouseCategoryStock } from '../utils/warehouseCategoryStock.j
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
 import InventoryReportsModal from '../components/common/InventoryReportsModal.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import CountUpNumber from '../components/common/CountUpNumber.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
@@ -80,6 +81,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // before the unwithdrawn feature existed.
   const [topCardShowPotential, setTopCardShowPotential] = useState(false)
   const [showInventoryReports, setShowInventoryReports] = useState(false)
+  const { user: authUser } = useAuth() ?? {}
   const [breakdownShowPotential, setBreakdownShowPotential] = useState(false)
   // Age Grouping used to always show Potential with no toggle of its
   // own - per explicit request, it now gets the same Actual/Potential
@@ -943,7 +945,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
           onClose={() => setDetailContext(null)}
         />
       )}
-      {showInventoryReports && <InventoryReportsModal onClose={() => setShowInventoryReports(false)} />}
+      {showInventoryReports && <InventoryReportsModal isAdmin={authUser?.role === 'Admin'} onClose={() => setShowInventoryReports(false)} />}
     </>
   )
 }

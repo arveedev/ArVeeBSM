@@ -8363,4 +8363,5 @@
 //   1.10-305 - Inventory Reports: by-products show age in months, warehouse/variety separators, fixed header alignment, card layout on phones, Combined/Separate names.
 //   1.10-306 - Inventory Reports: Age monitoring (per variety, moving-to-next-bracket and oldest-stock lists, monthly brackets), Data check view, combined warehouse names merge every trailing letter, age-shift rows removed.
 //   1.10-307 - Inventory Reports: Daily procurement status (PD/PW per day, per province and branch, weekly subtotals, CPF balance with a chosen province for Cash in Bank).
-export const APP_VERSION = '1.10-307'
+//   1.10-308 - Inventory Reports: Milling and Test Milling Liquidation per ricemill (miller/warehouse/period/batch filters, by-products, summary with remembered unit prices editable inline, Excel and PDF), Admin > Operations > Milling Prices (signatories, contractor, prices).
+export const APP_VERSION = '1.10-308'
