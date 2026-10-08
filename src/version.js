@@ -8358,4 +8358,5 @@
 //   1.10-300 - Monitoring > Procurement (Admin/Visitor): the search box also matches the customer name.
 //   1.10-301 - Procurement monitor: a row shows the customer's name only when the search matched that customer.
 //   1.10-302 - Admin > System > Inventory Lots Check (read-only): rebuilds each pile lot by lot and compares it with the pile balances. First step of the daily inventory / age monitoring reports; no data is written.
-export const APP_VERSION = '1.10-302'
+//   1.10-303 - Inventory Lots Check: a beginning balance is always counted first, so issues dated before a late-entered balance no longer show as shortages.
+export const APP_VERSION = '1.10-303'

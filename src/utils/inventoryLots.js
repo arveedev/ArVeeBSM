@@ -104,15 +104,20 @@ export const buildLots = ({ piles, transactions, warehouses, globalDataStartDate
   }
 
   // One event per transaction, ordered by date; on the same date receipts
-  // come before issues, then by creation order.
+  // come before issues, then by creation order. A beginning-balance seed is
+  // the pile's OPENING stock, so it always goes first: a pile whose balance
+  // was typed in after some of its issues were already dated (e.g. balance
+  // entered Sep 22, issues dated Sep 3-9) must not report those issues as
+  // shortages.
   const events = []
   for (const tx of transactions) {
     if (tx.status !== 'Active') continue
-    if (tx.type === 'WSR' && tx.pileId && counts(tx, tx.pileId)) events.push({ rank: 0, tx })
+    if (tx.type === 'WSR' && tx.pileId && counts(tx, tx.pileId)) events.push({ rank: tx.isInitialBalance ? -1 : 0, tx })
     else if (tx.type === 'WSI' && tx.pileId && counts(tx, tx.pileId)) events.push({ rank: 1, tx })
     else if (tx.type === 'WTS' && tx.date <= asOf) events.push({ rank: 1, tx })
   }
-  events.sort((a, b) => (a.tx.date < b.tx.date ? -1 : a.tx.date > b.tx.date ? 1 : a.rank - b.rank || (a.tx.createdAt ?? 0) - (b.tx.createdAt ?? 0)))
+  const when = (e) => (e.rank === -1 ? '' : e.tx.date)
+  events.sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : a.rank - b.rank || (a.tx.createdAt ?? 0) - (b.tx.createdAt ?? 0)))
 
   // Takes `bags` from the oldest lots of a pile. Returns the lots taken
   // (portions, original dates kept) and records any shortfall.
