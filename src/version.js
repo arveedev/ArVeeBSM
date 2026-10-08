@@ -8361,4 +8361,5 @@
 //   1.10-303 - Inventory Lots Check: a beginning balance is always counted first, so issues dated before a late-entered balance no longer show as shortages.
 //   1.10-304 - Inventory Reports (Admin/Visitor, quiet icon on the Home Stocks title row): Daily inventory ledger and Summary by warehouse, variety and age bracket, with date range, filters, MT/net bags and Excel export. Read-only.
 //   1.10-305 - Inventory Reports: by-products show age in months, warehouse/variety separators, fixed header alignment, card layout on phones, Combined/Separate names.
-export const APP_VERSION = '1.10-305'
+//   1.10-306 - Inventory Reports: Age monitoring (per variety, moving-to-next-bracket and oldest-stock lists, monthly brackets), Data check view, combined warehouse names merge every trailing letter, age-shift rows removed.
+export const APP_VERSION = '1.10-306'

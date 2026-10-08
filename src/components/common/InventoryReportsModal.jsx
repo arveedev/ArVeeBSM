@@ -17,6 +17,7 @@ import { db } from '../../db/dexie.js'
 import { todayLocalISO } from '../../utils/calculations.js'
 import {
   makeContext, buildSummary, buildLedger, summaryModel, ledgerModel, summaryCards, ledgerCards, longDate,
+  buildAgeLists, buildChecks, toUnit,
 } from '../../utils/inventoryReport.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 import PillToggle from './PillToggle.jsx'
@@ -57,10 +58,10 @@ const ROW_BORDER = { total: 'border-t-2 border-neutral-500', end: 'border-y bord
 const edgeClass = (e) => (e === 'wh' ? 'border-l-2 border-l-emerald-500/70' : e === 'var' ? 'border-l border-l-neutral-500' : '')
 const headTone = (t) => (t === 1 ? 'bg-sky-950 text-sky-300' : 'bg-emerald-950 text-emerald-300')
 
-function ModelTable({ model }) {
+function ModelTable({ model, short = false }) {
   if (model.empty) return <p className="py-10 text-center text-sm text-neutral-500">{model.empty}</p>
   return (
-    <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-neutral-800">
+    <div className={`overflow-auto rounded-xl border border-neutral-800 ${short ? "max-h-[60vh]" : "min-h-0 flex-1"}`}>
       <table className="min-w-full border-separate border-spacing-0 text-xs tabular-nums">
         <thead>
           {model.head.map((row, ri) => {
@@ -185,7 +186,6 @@ function LedgerCardList({ days }) {
                   </div>
                   <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] tabular-nums text-neutral-500">
                     {l.beg != null && <span>Beginning {fmtNum(l.beg)}</span>}
-                    {l.shift != null && <span>Age shift {l.shift < 0 ? '-' : '+'}{fmtNum(Math.abs(l.shift))}</span>}
                     {l.adj != null && <span>Adjustment {l.adj < 0 ? '-' : '+'}{fmtNum(Math.abs(l.adj))}</span>}
                   </div>
                   {(l.adds.length > 0 || l.lesses.length > 0) && (
@@ -200,6 +200,63 @@ function LedgerCardList({ days }) {
           ))}
         </div>
       ))}
+    </div>
+  )
+}
+
+const fmtDay = (iso) => longDate(iso)
+
+function AgeLists({ lists, unit }) {
+  const row = (l, i, extra) => (
+    <div key={i} className="flex items-start justify-between gap-3 border-b border-neutral-800 py-1.5 last:border-0">
+      <div className="min-w-0 text-sm">
+        <p className="break-words text-neutral-200">{l.warehouse} · {l.variety} · {l.pile}</p>
+        <p className="text-[11px] text-neutral-500">Received {fmtDay(l.lotDate)}{l.approx ? ' (approximate)' : ''} · {l.months.toFixed(1)} months{extra}</p>
+      </div>
+      <span className="shrink-0 text-sm font-semibold tabular-nums text-app-text">{fmtNum(toUnit(l.kilos, unit))}</span>
+    </div>
+  )
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <Card>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-brand-neon">Moving to the next bracket soon</p>
+        {lists.crossing.length === 0 && <p className="py-3 text-sm text-neutral-500">Nothing moves to the next bracket in this window.</p>}
+        {lists.crossing.map((l, i) => row(l, i, ` · ${l.bucket} to ${l.nextLabel} on ${fmtDay(l.crossDate)}`))}
+      </Card>
+      <Card>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-neutral-400">Oldest stock on hand</p>
+        {lists.oldest.length === 0 && <p className="py-3 text-sm text-neutral-500">No stock found.</p>}
+        {lists.oldest.map((l, i) => row(l, i, ''))}
+      </Card>
+    </div>
+  )
+}
+
+const CheckSection = ({ title, tone, items, render, ok }) => (
+  <Card>
+    <p className={`mb-1 text-xs font-bold uppercase tracking-wide ${items.length ? tone : 'text-brand-neon'}`}>{title}</p>
+    {items.length === 0 ? <p className="py-1 text-sm text-neutral-400">{ok}</p> : items.map(render)}
+  </Card>
+)
+const checkLine = (left, right, key) => (
+  <div key={key} className="flex items-baseline justify-between gap-3 py-0.5 text-sm">
+    <span className="min-w-0 break-words text-neutral-300">{left}</span><span className="shrink-0 tabular-nums text-app-text">{right}</span>
+  </div>
+)
+
+function CheckView({ checks, unit }) {
+  return (
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
+      <CheckSection title="Warehouses using a start-date override" tone="text-amber-400" items={checks.overrides} ok="None. Every warehouse follows the Data Start Date."
+        render={(o, i) => checkLine(o.warehouse, `starts after ${fmtDay(o.date)}`, i)} />
+      <CheckSection title="Issued more than was received" tone="text-brand-crimson" items={checks.shortages} ok="No pile has issued more than it received."
+        render={(o, i) => checkLine(o.name, `${fmtNum(o.bags)} bags over`, i)} />
+      <CheckSection title="Rebuilt stock differs from the pile balance (today)" tone="text-brand-crimson" items={checks.mismatches} ok="Every open pile matches its stored balance."
+        render={(o, i) => checkLine(o.name, `${fmtNum(toUnit(o.rebuilt, unit))} vs ${fmtNum(toUnit(o.stored, unit))}`, i)} />
+      <CheckSection title="Age is approximate (no readable Date Received)" tone="text-amber-400" items={checks.approx} ok="Every lot has a readable receipt date."
+        render={(o, i) => checkLine(`${o.name} · from ${fmtDay(o.date)}`, fmtNum(toUnit(o.kilos, unit)), i)} />
+      <CheckSection title="Documents not assigned to a pile" tone="text-amber-400" items={checks.unassigned} ok="No receipt or issue is waiting for a pile."
+        render={(o, i) => checkLine(`${o.type} ${o.serial} · ${o.warehouse} · ${fmtDay(o.date)}`, `${fmtNum(o.bags)} bags`, i)} />
     </div>
   )
 }
@@ -241,10 +298,11 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
               <option value="">All</option><option value="Palay">Palay</option><option value="Rice">Rice</option><option value="By Products">By-products</option>
             </select>
           </label>
-          <label className={labelClass}>Rice age brackets
+          <label className={labelClass}>Age brackets
             <select className={selectClass} value={draft.ageSet} onChange={(e) => setDraft({ ...draft, ageSet: e.target.value })}>
-              <option value="coarse">0-3 and over 3 months</option>
-              <option value="fine">0-3, 3.1-6, 6.1-9, 9.1-12, over 12</option>
+              <option value="coarse">Rice 0-3 and over 3; palay 0-6, 6.1-12, over 12</option>
+              <option value="fine">Rice 0-3, 3.1-6, 6.1-9, 9.1-12, over 12</option>
+              <option value="monthly">Monthly (0.1-1.0, 1.1-2.0, ...)</option>
             </select>
           </label>
           {view === 'summary' && (
@@ -288,6 +346,7 @@ function InventoryReportsModal({ onClose }) {
   const [draft, setDraft] = useState(DEFAULT_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [windowDays, setWindowDays] = useState(30)
   const toRef = useRef(null)
   const narrow = useIsNarrow()
 
@@ -307,16 +366,22 @@ function InventoryReportsModal({ onClose }) {
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
   const built = useMemo(() => {
-    if (loading || (view !== 'summary' && view !== 'ledger')) return null
+    if (loading || !['summary', 'ledger', 'age', 'check'].includes(view)) return null
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet })
     const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null }
     const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
     const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
     const end = to < from ? from : to
     try {
-      if (view === 'summary') {
+      if (view === 'check') return { checks: buildChecks(ctx, inputs, { asOf, todayISO: today }), model: null }
+      if (view === 'summary' || view === 'age') {
         const summary = buildSummary(ctx, inputs, { asOf, filters: f, sort: filters.sort })
-        return { model: summaryModel(summary, unit, { asOf, scope }), cards: narrow ? summaryCards(summary, unit) : null }
+        const model = summaryModel(summary, unit, { asOf, scope })
+        if (view === 'age') model.title = 'AGE MONITORING'
+        return {
+          model, cards: narrow ? summaryCards(summary, unit) : null,
+          lists: view === 'age' ? buildAgeLists(ctx, inputs, { asOf, filters: f, windowDays }) : null,
+        }
       }
       const ledger = buildLedger(ctx, inputs, { from, to: end, filters: f })
       return { model: ledgerModel(ledger, unit, { from, to: end, scope }), cards: narrow ? ledgerCards(ledger, unit) : null }
@@ -324,7 +389,7 @@ function InventoryReportsModal({ onClose }) {
       console.error(err)
       return { model: { title: '', subtitle: '', head: [], rows: [], edges: [], tones: [], empty: 'Could not build this report.' }, cards: null }
     }
-  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow])
+  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today])
   const model = built?.model ?? null
 
   const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse'].filter(Boolean).length
@@ -334,8 +399,8 @@ function InventoryReportsModal({ onClose }) {
     setExporting(true)
     try {
       const { exportModelToExcel } = await import('../../utils/inventoryExcel.js')
-      const stamp = view === 'summary' ? asOf : `${from}_to_${to}`
-      await exportModelToExcel(model, { fileName: `${view === 'summary' ? 'inventory-summary' : 'daily-inventory'}-${stamp}`, sheetName: view === 'summary' ? 'Summary' : 'Daily inventory' })
+      const stamp = view === 'ledger' ? `${from}_to_${to}` : asOf
+      await exportModelToExcel(model, { fileName: `${{ summary: 'inventory-summary', age: 'age-monitoring', ledger: 'daily-inventory' }[view]}-${stamp}`, sheetName: { summary: 'Summary', age: 'Age monitoring', ledger: 'Daily inventory' }[view] })
     } catch (err) {
       console.error(err)
       toast.error('Could not create the Excel file')
@@ -344,7 +409,7 @@ function InventoryReportsModal({ onClose }) {
     }
   }
 
-  const title = view === 'ledger' ? 'Daily inventory' : view === 'summary' ? 'Summary' : 'Inventory reports'
+  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check' }[view] ?? 'Inventory reports'
   const back = () => (view === 'hub' ? onClose() : setView('hub'))
   const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
 
@@ -362,7 +427,9 @@ function InventoryReportsModal({ onClose }) {
         {view === 'hub' && (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {[['ledger', 'Daily inventory', 'Per day: ADD and LESS by type, ending stock, by warehouse and variety'],
-              ['summary', 'Summary', 'Stock by warehouse, variety and age bracket with province subtotals']].map(([id, name, desc]) => (
+              ['summary', 'Summary', 'Stock by warehouse, variety and age bracket with province subtotals'],
+              ['age', 'Age monitoring', 'Age brackets per variety, stock moving to the next bracket, oldest stock'],
+              ['check', 'Data check', 'Overrides in use, shortages, approximate ages, unassigned documents']].map(([id, name, desc]) => (
               <button key={id} type="button" onClick={() => setView(id)} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-600">
                 <span className="min-w-0"><span className="block text-sm font-semibold text-app-text">{name}</span><span className="block text-xs text-neutral-500">{desc}</span></span>
                 <ChevronRight size={16} className="shrink-0 text-neutral-500" />
@@ -371,7 +438,7 @@ function InventoryReportsModal({ onClose }) {
           </div>
         )}
 
-        {(view === 'ledger' || view === 'summary') && (
+        {['ledger', 'summary', 'age', 'check'].includes(view) && (
           <>
             <div className="mb-2 flex flex-wrap items-end gap-x-2 gap-y-2">
               {view === 'ledger' ? (
@@ -381,6 +448,13 @@ function InventoryReportsModal({ onClose }) {
                 </>
               ) : (
                 <div className="w-full sm:w-44"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">As of</p><CalendarDatePicker value={asOf} label="As of" onChange={setAsOf} /></div>
+              )}
+              {view === 'age' && (
+                <div className={`flex items-center ${CONTROL_H}`}>
+                  <select value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} className="rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200">
+                    {[14, 30, 60, 90].map((d) => <option key={d} value={d}>Next {d} days</option>)}
+                  </select>
+                </div>
               )}
               <div className={`flex items-center ${CONTROL_H}`}>
                 <PillToggle options={[{ value: 'b', label: 'Net bags' }, { value: 'mt', label: 'MT' }]} value={unit} onChange={setUnit} />
@@ -392,17 +466,26 @@ function InventoryReportsModal({ onClose }) {
               </div>
               <span className="hidden flex-1 sm:block" />
               <div className={`flex items-center ${CONTROL_H}`}>
-                <button type="button" onClick={handleExport} disabled={exporting || !model || !!model.empty} className={pillButton}>
+                <button type="button" onClick={handleExport} disabled={exporting || !model || !!model.empty || view === 'check'} className={pillButton}>
                   <FileSpreadsheet size={14} /> {exporting ? 'Creating…' : 'Excel'}
                 </button>
               </div>
             </div>
             {loading || !built ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p> : (
               <>
-                <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>
-                {narrow && built.cards
-                  ? (view === 'summary' ? <SummaryCardList cards={built.cards} /> : <LedgerCardList days={built.cards} />)
-                  : <ModelTable model={model} />}
+                {view === 'check' ? <CheckView checks={built.checks} unit={unit} /> : (
+                  <>
+                    <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>
+                    {view === 'age' ? (
+                      <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+                        {narrow && built.cards ? <SummaryCardList cards={built.cards} /> : <ModelTable model={model} short />}
+                        {built.lists && <AgeLists lists={built.lists} unit={unit} />}
+                      </div>
+                    ) : narrow && built.cards
+                      ? (view === 'summary' ? <SummaryCardList cards={built.cards} /> : <LedgerCardList days={built.cards} />)
+                      : <ModelTable model={model} />}
+                  </>
+                )}
               </>
             )}
             {showFilters && (

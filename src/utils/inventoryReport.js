@@ -5,7 +5,7 @@
 // Units: everything is carried in KILOS. Net bags = kilos / 50 (the same as
 // Home > Stocks), MT = kilos / 1000.
 
-import { buildLots, buildLotsDetailed, lotAgeMonths } from './inventoryLots.js'
+import { buildLots, buildLotsDetailed, lotAgeMonths, DAYS_PER_MONTH } from './inventoryLots.js'
 
 export const NET_BAG_KG = 50
 export const toUnit = (kilos, unit) => (unit === 'mt' ? kilos / 1000 : kilos / NET_BAG_KG)
@@ -27,14 +27,20 @@ export const AGE_SETS = {
   },
 }
 
+// Monthly brackets for every month up to 3 years (0.1-1.0, 1.1-2.0, ...).
+const monthlySet = [
+  ...Array.from({ length: 36 }, (_, i) => ({ label: i === 0 ? '0.1-1.0' : `${i}.1-${i + 1}.0`, max: i + 1 })),
+  { label: '>36', max: Infinity },
+]
+AGE_SETS.monthly = { Rice: monthlySet, Palay: monthlySet }
+
 const COMMODITY_ORDER = { Palay: 0, Rice: 1, 'By Products': 2 }
 const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
 
-/** "ALB-BSI B" -> "BSI B"; combined -> "BSI" (GID names keep their letter). */
+/** "ALB-BSI B" -> "BSI B"; combined -> "BSI" (a trailing single letter is dropped, e.g. GID 2 A -> GID 2, TABACO GID B -> TABACO GID). */
 export const warehouseLabel = (name, combine) => {
   const base = (name ?? '').replace(/^[A-Z]{2,6}[\s-]+/, '').trim()
-  if (!combine || /GID/i.test(base)) return base
-  return base.replace(/\s[A-Z]$/, '')
+  return combine ? base.replace(/\s[A-Z]$/, '') : base
 }
 
 const commodityOf = (pile) => (pile?.cerealType === 'Rice' || pile?.cerealType === 'Palay' ? pile.cerealType : 'By Products')
@@ -319,7 +325,6 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
   for (const d of day) {
     const [, m, dd] = d.date.split('-').map(Number)
     const stamp = `${MONTHS[m - 1]} ${dd}`
-    if (d.shift) rows.push(line(`${stamp} · AGE SHIFT (moving to next bracket)`, d.shift, 'row'))
     if (d.adds.length > 0) {
       rows.push({ kind: 'add-label', first: `${stamp} · ADD:`, cells: [] })
       for (const a of d.adds) rows.push(line(a.label, a.grid, 'add'))
@@ -370,10 +375,104 @@ export const ledgerCards = (ledger, unit) => {
         const lesses = d.lesses.map((a) => ({ label: a.label, v: num(v(a.grid), unit) })).filter((x) => x.v != null)
         return {
           label: lineLabel(c), beg: num(v(d.beginning), unit), end: num(v(d.ending), unit),
-          shift: d.shift ? num(v(d.shift), unit) : null, adj: d.adjustment ? num(v(d.adjustment), unit) : null, adds, lesses,
+          shift: null, adj: d.adjustment ? num(v(d.adjustment), unit) : null, adds, lesses,
         }
-      }).filter((l) => l.beg != null || l.end != null || l.shift != null || l.adj != null || l.adds.length || l.lesses.length)
+      }).filter((l) => l.beg != null || l.end != null || l.adj != null || l.adds.length || l.lesses.length)
       return { label: cols[0].label, lines }
     }).filter((w) => w.lines.length > 0),
   }))
+}
+
+// ---------------------------------------------------------------------------
+// Age monitoring lists and data checks (read-only).
+// ---------------------------------------------------------------------------
+
+const addDaysISO = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10)
+
+/**
+ * Lots about to move into the next age bracket (within `windowDays`) and the
+ * oldest lots on hand. Each line is ONE lot, so only that lot moves, never the
+ * whole pile. Quantities are kilos (convert with toUnit).
+ */
+export const buildAgeLists = (ctx, inputs, { asOf, filters = {}, windowDays = 30, topOld = 15 }) => {
+  const state = buildLots({ ...inputs, asOf })
+  const limit = addDaysISO(asOf, windowDays)
+  const crossing = []
+  const lots = []
+  for (const [pileId, st] of state) {
+    const pile = ctx.pileById.get(pileId)
+    if (!accept(filters, pile, ctx)) continue
+    const row = rowOf(ctx, pile)
+    for (const lot of st.lots) {
+      if (lot.kilos < EPS_KG) continue
+      const c = lotCol(ctx, pile, lot.varietyId, lot.date, asOf)
+      const months = lotAgeMonths(lot.date, asOf) ?? 0
+      const base = {
+        province: row.province, warehouse: row.label, variety: c.variety, commodity: c.commodity,
+        pile: pile.pileName, lotDate: lot.date, months, kilos: lot.kilos, bucket: c.bucket,
+        approx: lot.anchor === 'pile-date',
+      }
+      lots.push(base)
+      // next boundary above the current age
+      let boundary = null
+      let nextLabel = null
+      if (c.commodity === 'By Products') {
+        boundary = Math.max(1, Math.ceil(months - 1e-9))
+        nextLabel = `${boundary + 1} mo`
+      } else {
+        const set = AGE_SETS[ctx.ageSet]?.[c.commodity]
+        const i = set ? set.findIndex((b) => b.label === c.bucket) : -1
+        if (i >= 0 && Number.isFinite(set[i].max)) { boundary = set[i].max; nextLabel = set[i + 1].label }
+      }
+      if (boundary == null) continue
+      const crossDate = addDaysISO(lot.date, Math.floor(boundary * DAYS_PER_MONTH) + 1)
+      if (crossDate >= asOf && crossDate <= limit) crossing.push({ ...base, nextLabel, crossDate })
+    }
+  }
+  crossing.sort((a, b) => (a.crossDate < b.crossDate ? -1 : a.crossDate > b.crossDate ? 1 : natural(a.warehouse, b.warehouse)))
+  lots.sort((a, b) => b.months - a.months)
+  return { crossing, oldest: lots.slice(0, topOld) }
+}
+
+/**
+ * Data checks for the report: warehouses running on a start-date override,
+ * piles issued more than received, lots with an approximate age, documents
+ * not assigned to a pile after the start date, and piles whose rebuilt stock
+ * differs from the pile's stored balance (as of today only).
+ */
+export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
+  const state = buildLots({ ...inputs, asOf })
+  const global = inputs.globalDataStartDate ?? null
+  const overrides = []
+  for (const w of inputs.warehouses) {
+    if (w.reportingCutoffDate && global && w.reportingCutoffDate > global) overrides.push({ warehouse: warehouseLabel(w.name, false), date: w.reportingCutoffDate })
+  }
+  overrides.sort((a, b) => natural(a.warehouse, b.warehouse))
+
+  const shortages = []
+  const approx = []
+  const mismatches = []
+  for (const [pileId, st] of state) {
+    const pile = ctx.pileById.get(pileId)
+    const row = rowOf(ctx, pile)
+    const name = `${row.label} · ${pile.pileName}`
+    if (st.shortBags > 0) shortages.push({ name, bags: st.shortBags, kilos: st.shortKilos })
+    for (const lot of st.lots) if (lot.anchor === 'pile-date' && lot.kilos >= EPS_KG) approx.push({ name, kilos: lot.kilos, date: lot.date })
+    if (asOf === todayISO && !pile.closedDate) {
+      const kilos = st.lots.reduce((s, l) => s + l.kilos, 0)
+      if (Math.abs(kilos - (pile.currentKilos ?? 0)) >= 1) mismatches.push({ name, rebuilt: kilos, stored: pile.currentKilos ?? 0 })
+    }
+  }
+  const whById = ctx.whById
+  const unassigned = inputs.transactions.filter((t) => {
+    if (t.status !== 'Active' || (t.type !== 'WSR' && t.type !== 'WSI') || t.pileId || t.date > asOf) return false
+    const w = whById.get(t.warehouseId)
+    const cut = [w?.reportingCutoffDate, global].filter(Boolean).sort().pop()
+    return !cut || t.date > cut
+  }).map((t) => ({
+    type: t.type, serial: t.serialNo, date: t.date, kilos: t.netKilos ?? 0, bags: t.numberOfBags ?? 0,
+    warehouse: warehouseLabel(whById.get(t.warehouseId)?.name, false),
+  }))
+  const byName = (a, b) => natural(a.name, b.name)
+  return { overrides, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
 }
