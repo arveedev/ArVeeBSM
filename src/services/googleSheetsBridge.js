@@ -733,6 +733,7 @@ const runMillingOrdersSync = async () => {
     // correctly picked up) or is queued to run after it commits (and
     // lands on top of the freshly-synced data) - never in between.
     let records = []
+    let rewritten = false
     await db.transaction('rw', db.millingOrders, async () => {
       const existingManuallyCompletedByOrderId = new Map(
         (await db.millingOrders.toArray()).map((o) => [o.orderId, o.manuallyCompleted ?? false])
@@ -764,6 +765,15 @@ const runMillingOrdersSync = async () => {
         }
       })
 
+      // Rewrite the table only when something actually differs. It used to be cleared and
+      // refilled on every cycle (every 20 s) even when nothing had changed, which made every
+      // screen watching it recompute each time.
+      const stable = (rows) => JSON.stringify(
+        [...rows].sort((a, b) => (a.orderId < b.orderId ? -1 : 1)).map((r) => Object.keys(r).sort().map((k) => [k, r[k] ?? null]))
+      )
+      const existingRows = await db.millingOrders.toArray()
+      if (stable(existingRows) === stable(records)) return
+      rewritten = true
       await db.millingOrders.clear()
       if (records.length > 0) await db.millingOrders.bulkPut(records)
     })
@@ -774,7 +784,7 @@ const runMillingOrdersSync = async () => {
     // looking "number" (e.g. containing header text) shows up here,
     // the fix has not actually been redeployed - this is a client
     // syncing exactly what the server sent, not a caching bug.
-    console.log(`[syncMillingOrdersFromSheets] synced ${records.length} record(s):`, records.map((r) => r.orderId))
+    if (rewritten) console.log(`[syncMillingOrdersFromSheets] updated ${records.length} record(s)`)
 
     return { ok: true, count: records.length }
   } catch (error) {
