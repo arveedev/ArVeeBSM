@@ -8348,4 +8348,5 @@
 //            when the box is empty today, and a closed pile is never drawn on/after its close date).
 //            (2) Stock statement: a pile closed before the period starts no longer carries its leftover
 //            kilos into the beginning balance, so it reads 0 for any later period.
-export const APP_VERSION = '1.10-295'
+//   1.10-296 - Pile List no longer lists a closed pile (it is empty and finished).
+export const APP_VERSION = '1.10-296'

@@ -100,7 +100,8 @@ function HomePiles() {
     return new Map(entries)
   }, [pileIdsKey, sackTypes]) ?? new Map()
 
-  const pileList = [...piles].sort((a, b) => byAlpha(a.pileName, b.pileName))
+  // A closed pile is empty and finished - it no longer belongs in the list (its history stays in reports and BIN cards).
+  const pileList = [...piles].filter((p) => !p.closedDate).sort((a, b) => byAlpha(a.pileName, b.pileName))
   const enrichedPiles = pileList.map((p) => {
     const raw = breakdownMap.get(p.pileId) ?? []
     const groupRows = raw.length > 1 ? formatPileStockGroups(raw, { varietyMap, sackTypeMap, cerealType: p.cerealType }) : []
