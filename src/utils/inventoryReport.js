@@ -40,6 +40,8 @@ export const warehouseLabel = (name, combine) => {
 const commodityOf = (pile) => (pile?.cerealType === 'Rice' || pile?.cerealType === 'Palay' ? pile.cerealType : 'By Products')
 
 const bucketOf = (commodity, months, setName) => {
+  // By-products: just the number of months (0.1-1.0 -> "1 mo", 1.1-2.0 -> "2 mo" ...).
+  if (commodity === 'By Products') return `${Math.max(1, Math.ceil(months - 1e-9))} mo`
   const set = AGE_SETS[setName]?.[commodity]
   if (!set) return ''
   return set.find((b) => months <= b.max).label
@@ -107,6 +109,7 @@ const parseCol = (id) => {
   return { id, commodity, variety, bucket }
 }
 const bucketRank = (c, setName) => {
+  if (c.commodity === 'By Products') return parseInt(c.bucket, 10) || 0
   const set = AGE_SETS[setName]?.[c.commodity]
   return set ? set.findIndex((b) => b.label === c.bucket) : 0
 }
@@ -230,36 +233,57 @@ export const cell = (grid, rk, cid) => grid?.get(rk)?.get(cid) ?? 0
 // ---------------------------------------------------------------------------
 // Table models: one neutral shape that the screen, the Excel export (and later
 // the PDF / Google Sheet) all render, so they can never disagree.
-//   { title, subtitle, head: [[{ t, span }]], rows: [{ kind, first, cells, dash }], empty? }
+//   { title, subtitle, head: [[{ t, span, tone }]], edges, tones, rows: [...], empty? }
 // `cells` hold numbers already converted to the chosen unit (null = blank).
+// `edges[i]` marks where data column i starts a new warehouse/commodity ('wh')
+// or a new variety ('var'); `tones[i]` (0/1) alternates per warehouse/commodity
+// so neighbouring groups are visibly different.
 // ---------------------------------------------------------------------------
 
-const groupHead = (cols, pick) => {
-  const out = []
-  for (const c of cols) {
-    const t = pick(c)
-    const last = out[out.length - 1]
-    if (last && last.key === `${t}` && last.group === c.__group) last.span += 1
-    else out.push({ t, span: 1, key: `${t}`, group: c.__group })
-  }
-  return out.map(({ t, span }) => ({ t, span }))
-}
-
 const COMMODITY_LABEL = { Palay: 'PALAY', Rice: 'RICE', 'By Products': 'BY-PRODUCTS' }
-const num = (kilos, unit) => (Math.abs(kilos) < EPS_KG ? null : toUnit(kilos, unit))
+const num = (kilos, unit) => (Math.abs(kilos) < EPS_KG ? null : Math.round(toUnit(kilos, unit) * 10000) / 10000)
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 export const longDate = (iso) => { const [y, m, d] = iso.split('-').map(Number); return `${MONTHS[m - 1]} ${d}, ${y}` }
 export const unitLabel = (unit) => (unit === 'mt' ? 'in metric tons (net kg / 1,000)' : 'in net bags of 50 kg')
 
+// Header row from a per-column key: consecutive equal keys merge into one cell.
+const headRow = (cols, keyOf, textOf, tones) => {
+  const out = []
+  cols.forEach((c, i) => {
+    const k = keyOf(c)
+    const last = out[out.length - 1]
+    if (last && last.k === k) last.span += 1
+    else out.push({ k, t: textOf(c), span: 1, tone: tones[i] })
+  })
+  return out.map(({ t, span, tone }) => ({ t, span, tone }))
+}
+
+// Where each column starts a new top group ('wh') or a new variety ('var'), and
+// an alternating tone per top group.
+const edgesAndTones = (cols, topKey) => {
+  const edges = []
+  const tones = []
+  let tone = 0
+  cols.forEach((c, i) => {
+    const prev = cols[i - 1]
+    if (!prev || topKey(prev) !== topKey(c)) { edges.push(i === 0 ? null : 'wh'); if (i > 0) tone = 1 - tone }
+    else if (prev.variety !== c.variety) edges.push('var')
+    else edges.push(null)
+    tones.push(tone)
+  })
+  return { edges, tones }
+}
+
 export const summaryModel = (summary, unit, { asOf, scope = 'ALBAY BRANCH' }) => {
-  const cols = summary.cols.map((c) => ({ ...c, __group: c.commodity }))
+  const cols = summary.cols
+  const { edges, tones } = edgesAndTones(cols, (c) => c.commodity)
   const head = [
-    [{ t: 'WAREHOUSE', span: 1 }, ...groupHead(cols, (c) => COMMODITY_LABEL[c.commodity]), { t: 'TOTAL', span: 1 }],
-    [{ t: '', span: 1 }, ...groupHead(cols.map((c) => ({ ...c, __group: `${c.commodity}|${c.variety}` })), (c) => c.variety), { t: '', span: 1 }],
-    [{ t: '', span: 1 }, ...cols.map((c) => ({ t: c.bucket || 'no age', span: 1 })), { t: '', span: 1 }],
+    [{ t: 'WAREHOUSE', span: 1 }, ...headRow(cols, (c) => c.commodity, (c) => COMMODITY_LABEL[c.commodity], tones), { t: 'TOTAL', span: 1, tone: 0 }],
+    [{ t: '', span: 1 }, ...headRow(cols, (c) => `${c.commodity}|${c.variety}`, (c) => c.variety, tones), { t: '', span: 1, tone: 0 }],
+    [{ t: '', span: 1 }, ...cols.map((c, i) => ({ t: c.bucket, span: 1, tone: tones[i] })), { t: '', span: 1, tone: 0 }],
   ]
   const line = (first, values, kind) => {
-    const cells = summary.cols.map((c) => num(values.get(c.id) ?? 0, unit))
+    const cells = cols.map((c) => num(values.get(c.id) ?? 0, unit))
     const total = [...values.values()].reduce((s, v) => s + v, 0)
     return { kind, first, cells: [...cells, num(total, unit)], dash: true }
   }
@@ -272,20 +296,22 @@ export const summaryModel = (summary, unit, { asOf, scope = 'ALBAY BRANCH' }) =>
   if (summary.provinces.length > 0) rows.push(line('TOTAL BRANCH', summary.total, 'total'))
   return {
     title: 'DAILY INVENTORY SUMMARY', subtitle: `${scope} · stock as of ${longDate(asOf)} · ${unitLabel(unit)}`,
-    head, rows, empty: summary.provinces.length === 0 ? 'No stock found for these filters.' : null,
+    head, edges: [...edges, 'wh'], tones: [...tones, 0], rows,
+    empty: summary.provinces.length === 0 ? 'No stock found for these filters.' : null,
   }
 }
 
 export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) => {
-  const cols = ledger.cols.map((c) => ({ ...c, __group: c.rowKey }))
+  const cols = ledger.cols
+  const { edges, tones } = edgesAndTones(cols, (c) => c.rowKey)
   const head = [
-    [{ t: 'DATE / PARTICULARS', span: 1 }, ...groupHead(cols, (c) => c.label)],
-    [{ t: '', span: 1 }, ...groupHead(cols.map((c) => ({ ...c, __group: `${c.rowKey}|${c.commodity}|${c.variety}` })), (c) => c.variety)],
-    [{ t: '', span: 1 }, ...cols.map((c) => ({ t: c.bucket || 'no age', span: 1 }))],
+    [{ t: 'DATE / PARTICULARS', span: 1 }, ...headRow(cols, (c) => c.rowKey, (c) => c.label, tones)],
+    [{ t: '', span: 1 }, ...headRow(cols, (c) => `${c.rowKey}|${c.commodity}|${c.variety}`, (c) => c.variety, tones)],
+    [{ t: '', span: 1 }, ...cols.map((c, i) => ({ t: c.bucket, span: 1, tone: tones[i] }))],
   ]
   const line = (first, grid, kind, dash = false) => ({
     kind, first, dash,
-    cells: ledger.cols.map((c) => num(cell(grid, c.rowKey, c.id), unit)),
+    cells: cols.map((c) => num(cell(grid, c.rowKey, c.id), unit)),
   })
   const rows = []
   const day = ledger.days
@@ -293,7 +319,7 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
   for (const d of day) {
     const [, m, dd] = d.date.split('-').map(Number)
     const stamp = `${MONTHS[m - 1]} ${dd}`
-    if (d.shift) rows.push(line(`${stamp} · AGE SHIFT (stock moving to the next bracket)`, d.shift, 'row'))
+    if (d.shift) rows.push(line(`${stamp} · AGE SHIFT (moving to next bracket)`, d.shift, 'row'))
     if (d.adds.length > 0) {
       rows.push({ kind: 'add-label', first: `${stamp} · ADD:`, cells: [] })
       for (const a of d.adds) rows.push(line(a.label, a.grid, 'add'))
@@ -307,6 +333,47 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
   }
   return {
     title: 'DAILY INVENTORY', subtitle: `${scope} · ${longDate(from)} to ${longDate(to)} · ${unitLabel(unit)}`,
-    head, rows, empty: day.length === 0 ? 'No movement in this period for these filters.' : null,
+    head, edges, tones, rows, empty: day.length === 0 ? 'No movement in this period for these filters.' : null,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Card models for small screens (same numbers, stacked instead of a wide table).
+// ---------------------------------------------------------------------------
+
+const lineLabel = (c) => `${c.variety} · ${c.bucket}`
+
+export const summaryCards = (summary, unit) => {
+  const mk = (values) => summary.cols
+    .map((c) => ({ label: lineLabel(c), commodity: c.commodity, value: num(values.get(c.id) ?? 0, unit) }))
+    .filter((l) => l.value != null)
+  const total = (values) => num([...values.values()].reduce((s, v) => s + v, 0), unit) ?? 0
+  return {
+    provinces: summary.provinces.map((p) => ({
+      name: p.name,
+      warehouses: p.rows.map((r) => ({ label: r.label, total: total(r.values), lines: mk(r.values) })),
+      subtotal: { total: total(p.subtotal), lines: mk(p.subtotal) },
+    })),
+    total: { total: total(summary.total), lines: mk(summary.total) },
+  }
+}
+
+export const ledgerCards = (ledger, unit) => {
+  const byWh = new Map()
+  for (const c of ledger.cols) { if (!byWh.has(c.rowKey)) byWh.set(c.rowKey, []); byWh.get(c.rowKey).push(c) }
+  return ledger.days.map((d) => ({
+    date: d.date,
+    warehouses: [...byWh].map(([rk, cols]) => {
+      const lines = cols.map((c) => {
+        const v = (g) => cell(g, rk, c.id)
+        const adds = d.adds.map((a) => ({ label: a.label, v: num(v(a.grid), unit) })).filter((x) => x.v != null)
+        const lesses = d.lesses.map((a) => ({ label: a.label, v: num(v(a.grid), unit) })).filter((x) => x.v != null)
+        return {
+          label: lineLabel(c), beg: num(v(d.beginning), unit), end: num(v(d.ending), unit),
+          shift: d.shift ? num(v(d.shift), unit) : null, adj: d.adjustment ? num(v(d.adjustment), unit) : null, adds, lesses,
+        }
+      }).filter((l) => l.beg != null || l.end != null || l.shift != null || l.adj != null || l.adds.length || l.lesses.length)
+      return { label: cols[0].label, lines }
+    }).filter((w) => w.lines.length > 0),
+  }))
 }

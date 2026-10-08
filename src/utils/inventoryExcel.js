@@ -22,21 +22,30 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
   ws.getCell(2, 1).value = model.subtitle
   ws.getCell(2, 1).alignment = { horizontal: 'center' }
 
+  const HEAD_TONE = ['FFD9EAD3', 'FFCFE2F3']
+  const edgeBorder = (e) => (e === 'wh' ? { style: 'medium' } : e === 'var' ? { style: 'thin' } : { style: 'hair' })
+  const thin = { style: 'thin' }
+  // The first header cell spans all three header rows.
+  ws.mergeCells(3, 1, 5, 1)
   model.head.forEach((row, i) => {
     let c = 1
-    for (const h of row) {
+    let dataCol = 0
+    row.forEach((h, ci) => {
+      if (ci === 0 && i > 0) { c += 1; return }
       const r = 3 + i
+      const idx = dataCol
+      if (ci > 0) dataCol += h.span
       if (h.span > 1) ws.mergeCells(r, c, r, c + h.span - 1)
       const cell = ws.getCell(r, c)
       cell.value = h.t
       cell.font = { bold: true }
-      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+      cell.alignment = { horizontal: ci === 0 ? 'left' : 'center', vertical: 'middle' }
       for (let k = c; k < c + h.span; k++) {
-        ws.getCell(r, k).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL.head } }
-        ws.getCell(r, k).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        ws.getCell(r, k).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEAD_TONE[ci === 0 ? 0 : (h.tone ?? 0)] } }
+        ws.getCell(r, k).border = { top: thin, bottom: thin, right: thin, left: ci === 0 || k !== c ? thin : edgeBorder(model.edges[idx]) }
       }
       c += h.span
-    }
+    })
   })
 
   let r = 6
@@ -52,13 +61,14 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
       const cell = ws.getCell(r, 2 + i)
       if (v == null) { if (row.dash) cell.value = '-'; cell.alignment = { horizontal: 'right' } } else cell.value = v
       cell.numFmt = '#,##0.00'
+      cell.border = { left: edgeBorder(model.edges[i]), right: { style: 'hair' }, bottom: { style: 'hair' } }
       if (bold) cell.font = { bold: true }
       if (row.kind === 'add') cell.font = { color: { argb: 'FF1F5FBF' } }
       if (row.kind === 'less') cell.font = { color: { argb: 'FFB3261E' } }
     })
     if (fill) for (let k = 1; k <= width; k++) ws.getCell(r, k).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } }
     if (row.kind === 'end' || row.kind === 'total') {
-      for (let k = 1; k <= width; k++) ws.getCell(r, k).border = { top: { style: 'thin' }, bottom: { style: 'thin' } }
+      for (let k = 1; k <= width; k++) ws.getCell(r, k).border = { ...ws.getCell(r, k).border, top: { style: 'thin' }, bottom: { style: 'thin' } }
     }
     r += 1
   }

@@ -8360,4 +8360,5 @@
 //   1.10-302 - Admin > System > Inventory Lots Check (read-only): rebuilds each pile lot by lot and compares it with the pile balances. First step of the daily inventory / age monitoring reports; no data is written.
 //   1.10-303 - Inventory Lots Check: a beginning balance is always counted first, so issues dated before a late-entered balance no longer show as shortages.
 //   1.10-304 - Inventory Reports (Admin/Visitor, quiet icon on the Home Stocks title row): Daily inventory ledger and Summary by warehouse, variety and age bracket, with date range, filters, MT/net bags and Excel export. Read-only.
-export const APP_VERSION = '1.10-304'
+//   1.10-305 - Inventory Reports: by-products show age in months, warehouse/variety separators, fixed header alignment, card layout on phones, Combined/Separate names.
+export const APP_VERSION = '1.10-305'
