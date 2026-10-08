@@ -1,7 +1,6 @@
 // Settings — client configuration toggles, session profile, logout, and
 // per-warehouse sack beginning balance entry.
 
-import DeviceInfoCard from '../components/common/DeviceInfoCard.jsx'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
@@ -1156,8 +1155,6 @@ function Settings() {
       />
         </>
       )}
-
-      <DeviceInfoCard />
 
       <ConfirmDialog
         open={confirmClearBacklog}

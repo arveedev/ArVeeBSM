@@ -56,21 +56,6 @@ const scheduleJittered = (fn, baseIntervalMs, jitterRatio = 0.2) => {
   }
 }
 
-// Low-spec devices (4 GB of memory or less, or 2 cores or fewer, as the browser reports them)
-// poll the Sheet less often: each cycle is a few network calls plus a pass over the local
-// tables, which an old PC feels. The numbers are only a floor - saving, the push of the
-// user's own entries and a manual sync are never slowed.
-export const isLowSpecDevice = () =>
-  typeof navigator !== 'undefined' &&
-  ((navigator.deviceMemory != null && navigator.deviceMemory <= 4) ||
-   (navigator.hardwareConcurrency != null && navigator.hardwareConcurrency <= 2))
-const pollFactor = () => (isLowSpecDevice() ? 3 : 1)
-
-// Background PULLS (authorities, milling orders, transactions from the Sheet) are pointless while
-// the window is hidden or minimised, and on an old PC they are exactly what keeps it busy.
-// They pause while hidden and catch up once the window is visible again.
-const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden'
-
 let isSyncing = false
 
 // Real bug found: a single transient failure (a dropped connection, an
@@ -670,12 +655,10 @@ export const startAuthoritySyncWorker = () => {
   let cancelled = false
 
   const runSync = async () => {
-    if (cancelled || isHidden()) return
+    if (cancelled) return
     await syncAuthoritiesFromSheets()
     await syncMillingOrdersFromSheets()
   }
-  const onVisible = () => { if (!isHidden()) runSync() }
-  document.addEventListener('visibilitychange', onVisible)
 
   // Staggered a few seconds behind the transaction worker's own
   // immediate first call (App.jsx mounts both effects in the same
@@ -689,7 +672,7 @@ export const startAuthoritySyncWorker = () => {
   // scheduleJittered instead of a fixed setInterval - this worker's 60s
   // cadence is an exact 2x multiple of the transaction worker's 30s one,
   // which would otherwise stay permanently phase-locked.
-  const stopSchedule = scheduleJittered(runSync, AUTHORITY_SYNC_INTERVAL_MS * pollFactor())
+  const stopSchedule = scheduleJittered(runSync, AUTHORITY_SYNC_INTERVAL_MS)
   window.addEventListener('online', runSync)
 
   return () => {
@@ -697,7 +680,6 @@ export const startAuthoritySyncWorker = () => {
     clearTimeout(initialTimer)
     stopSchedule()
     window.removeEventListener('online', runSync)
-    document.removeEventListener('visibilitychange', onVisible)
   }
 }
 
@@ -735,11 +717,9 @@ export const startTransactionSyncWorker = (user) => {
   let cancelled = false
 
   const runSync = async () => {
-    if (cancelled || !user || isTransactionSyncPaused() || isHidden()) return
+    if (cancelled || !user || isTransactionSyncPaused()) return
     await preloadTransactionsForUser(user)
   }
-  const onVisible = () => { if (!isHidden()) runSync() }
-  document.addEventListener('visibilitychange', onVisible)
 
   runSync()
 
@@ -748,13 +728,12 @@ export const startTransactionSyncWorker = (user) => {
   // divisor of the authority worker's 60s one, and both fire their first
   // run in the same tick at login, so a plain setInterval would keep
   // them permanently phase-locked into synchronized request bursts.
-  const stopSchedule = scheduleJittered(runSync, TRANSACTION_SYNC_INTERVAL_MS * pollFactor())
+  const stopSchedule = scheduleJittered(runSync, TRANSACTION_SYNC_INTERVAL_MS)
   window.addEventListener('online', runSync)
 
   return () => {
     cancelled = true
     stopSchedule()
     window.removeEventListener('online', runSync)
-    document.removeEventListener('visibilitychange', onVisible)
   }
 }

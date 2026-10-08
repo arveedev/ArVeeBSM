@@ -8349,10 +8349,7 @@
 //            (2) Stock statement: a pile closed before the period starts no longer carries its leftover
 //            kilos into the beginning balance, so it reads 0 for any later period.
 //   1.10-296 - Pile List no longer lists a closed pile (it is empty and finished).
-//   1.10-297 - Lighter on old PCs. Background pulls (authorities, milling orders, transactions from the
-//            Sheet) pause while the window is hidden/minimised and catch up on return; on a low-spec
-//            PC (<= 4 GB or <= 2 cores as reported) they run 3x less often; the milling-order table is
-//            no longer cleared and refilled every 20 s when nothing changed (it made every screen
-//            watching it recompute); that sync's per-cycle console dump of every order is gone. New
-//            'This device' card at the bottom of Settings shows version, memory, cores, memory in use.
-export const APP_VERSION = '1.10-297'
+//   1.10-298 - Reverted 1.10-297 (background-sync pausing/slow-down on low-spec PCs, milling-order rewrite
+//            skip, 'This device' card). It was an unrequested performance change; the app behaves exactly
+//            as it did at 1.10-296 again.
+export const APP_VERSION = '1.10-298'
