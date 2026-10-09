@@ -18,20 +18,6 @@ const { fmt2, fmt3, fmtInt } = summaryLineText
 const CONTROL_H = 'h-[46px]'
 const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
 
-// The wide printed layout only fits comfortably on large screens; below this the
-// same figures are shown as cards, so nothing ever needs a horizontal scroll.
-const useIsCompact = () => {
-  const query = '(max-width: 1279px)'
-  const [compact, setCompact] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
-  useEffect(() => {
-    const mq = window.matchMedia(query)
-    const on = () => setCompact(mq.matches)
-    mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
-  }, [])
-  return compact
-}
-
 /** Saves one price for one ricemill on the shared settings record. */
 export const saveMillingPrice = async (mk, product, value) => {
   const cur = await db.reportConfig.get('global')
@@ -70,31 +56,60 @@ function PriceCell({ value, isAdmin, onCommit }) {
   )
 }
 
-const cellClass = (c) => `border border-neutral-700 px-1 py-0.5 align-middle ${c.a === 'r' ? 'whitespace-nowrap text-right tabular-nums' : c.a === 'c' ? 'text-center' : 'text-left'} ${c.b ? 'font-semibold' : ''}`
+const cellClass = (c) => `border border-neutral-700 px-1.5 py-0.5 align-middle ${c.a === 'r' ? 'whitespace-nowrap text-right tabular-nums' : c.a === 'c' ? 'text-center' : 'text-left'} ${c.b ? 'font-semibold' : ''}`
 
-/** The printed layout; wraps its text so it fits the width without scrolling. */
-function GridTable({ section, boxRef }) {
+/**
+ * The printed layout, always as a table. It is drawn at its natural width and then
+ * scaled down to fit the window, so the whole form is visible without sideways
+ * scrolling (it only scrolls if the window is far narrower than the form).
+ */
+function GridTable({ section }) {
+  const boxRef = useRef(null)
+  const innerRef = useRef(null)
+  const [zoom, setZoom] = useState(1)
+  const [width, setWidth] = useState('100%')
+  useLayoutEffect(() => {
+    const fit = () => {
+      const box = boxRef.current
+      const inner = innerRef.current
+      if (!box || !inner) return
+      // the narrowest the form can be (text wrapped, numbers whole); scale only if the room is less
+      inner.style.zoom = '1'
+      inner.style.width = 'min-content'
+      const natural = inner.scrollWidth
+      inner.style.width = ''
+      const room = box.clientWidth
+      const z = natural > room ? Math.max(0.4, (room / natural) * 0.98) : 1
+      setZoom(z)
+      setWidth(z < 1 ? `${Math.floor(room / z)}px` : '100%')
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [section])
   return (
-    <div ref={boxRef} className="overflow-hidden rounded-xl border border-neutral-800">
-      <table className="w-full border-collapse text-[10px] leading-tight">
-        <thead>
-          {section.head.map((row, ri) => (
-            <tr key={ri} className="bg-emerald-950 text-emerald-300">
-              {row.map((c, ci) => <th key={ci} colSpan={c.cs ?? 1} rowSpan={c.rs ?? 1} className="break-words border border-neutral-700 px-1 py-0.5 text-center font-semibold">{c.t}</th>)}
+    <div ref={boxRef} className="max-h-[70vh] overflow-auto rounded-xl border border-neutral-800">
+      <div ref={innerRef} style={{ zoom, width }}>
+        <table className="w-full border-collapse text-[11px] leading-tight">
+          <thead className="sticky top-0 z-10">
+            {section.head.map((row, ri) => (
+              <tr key={ri} className="bg-emerald-950 text-emerald-300">
+                {row.map((c, ci) => <th key={ci} colSpan={c.cs ?? 1} rowSpan={c.rs ?? 1} className="border border-neutral-700 bg-emerald-950 px-1.5 py-0.5 text-center font-semibold">{c.t}</th>)}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {section.rows.map((r, ri) => (
+              <tr key={ri} className={r.batchStart ? 'border-t-2 border-t-neutral-500' : ''}>
+                {r.cells.map((c, ci) => <td key={ci} colSpan={c.cs ?? 1} rowSpan={c.rs ?? 1} className={`${cellClass(c)} whitespace-pre-line text-neutral-200`}>{c.t}</td>)}
+              </tr>
+            ))}
+            <tr className="border-t-2 border-t-neutral-500 bg-neutral-900">
+              {section.totalCells.map((c, ci) => <td key={ci} colSpan={c.cs ?? 1} className={`${cellClass(c)} text-app-text`}>{c.t}</td>)}
             </tr>
-          ))}
-        </thead>
-        <tbody>
-          {section.rows.map((r, ri) => (
-            <tr key={ri} className={r.batchStart ? 'border-t-2 border-t-neutral-500' : ''}>
-              {r.cells.map((c, ci) => <td key={ci} colSpan={c.cs ?? 1} rowSpan={c.rs ?? 1} className={`${cellClass(c)} whitespace-pre-line break-words text-neutral-200`}>{c.t}</td>)}
-            </tr>
-          ))}
-          <tr className="border-t-2 border-t-neutral-500 bg-neutral-900">
-            {section.totalCells.map((c, ci) => <td key={ci} colSpan={c.cs ?? 1} className={`${cellClass(c)} text-app-text`}>{c.t}</td>)}
-          </tr>
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -109,53 +124,48 @@ function Summary({ section, isAdmin, onPrice, savedKey }) {
       <td className="py-0.5 text-right tabular-nums text-app-text">{fmt3(l.amount)}</td>
     </tr>
   )
+  const Head = ({ first, qty, price, top }) => (
+    <thead><tr className="text-[11px] uppercase text-neutral-500">
+      <th className={`pr-4 text-left ${top ? 'pt-3' : ''}`}>{first}</th><th className={`pr-4 text-right ${top ? 'pt-3' : ''}`}>{qty}</th>
+      <th className={`pr-4 text-right ${top ? 'pt-3' : ''}`}>{price}</th><th className={`text-right ${top ? 'pt-3' : ''}`}>Amount</th>
+    </tr></thead>
+  )
+  const Total = ({ label, value }) => (
+    <tr className="border-t border-neutral-700"><td className="pt-1 font-bold text-app-text" colSpan={3}>{label}</td><td className="pt-1 text-right font-bold tabular-nums text-app-text">{fmt3(value)}</td></tr>
+  )
+  const sm = section.summary
   return (
     <div className="mt-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
       <div className="mb-1 flex items-center justify-between">
         <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">Summary</p>
         {savedKey === mk && <span className="rounded-full bg-emerald-900/60 px-2 py-0.5 text-[10px] text-emerald-300">Price updated, saved for this ricemill</span>}
       </div>
-      <table className="text-sm">
-        <thead><tr className="text-[11px] uppercase text-neutral-500"><th className="pr-4 text-left">Local rice</th><th className="pr-4 text-right">Bags @ 50 kg</th><th className="pr-4 text-right">U.P.</th><th className="text-right">Amount</th></tr></thead>
-        <tbody>{section.summary.rice.map((l) => <Row key={l.product} l={l} qty={l.bags} />)}
-          {section.summary.rice.length === 0 && <tr><td colSpan={4} className="py-1 text-neutral-500">No local rice received.</td></tr>}</tbody>
-        {section.summary.byProducts.length > 0 && (
-          <>
-            <thead><tr className="text-[11px] uppercase text-neutral-500"><th className="pr-4 pt-3 text-left">Less: by-products</th><th className="pr-4 pt-3 text-right">Net kg</th><th className="pr-4 pt-3 text-right">U.P.</th><th className="pt-3 text-right">Amount</th></tr></thead>
-            <tbody>
-              {section.summary.byProducts.map((l) => <Row key={l.product} l={l} qty={l.kilos} isKilos />)}
-              <tr className="border-t border-neutral-700"><td className="pt-1 font-bold text-app-text" colSpan={3}>TOTAL</td><td className="pt-1 text-right font-bold tabular-nums text-app-text">{fmt3(section.summary.byTotal)}</td></tr>
-            </tbody>
-          </>
-        )}
-      </table>
-      {!isAdmin && <p className="mt-2 text-[11px] text-neutral-500">Prices are set by the Admin (Admin Dashboard, Milling Prices).</p>}
-    </div>
-  )
-}
-
-function BatchCards({ section }) {
-  const Row = ({ left, right }) => (
-    <div className="flex items-baseline justify-between gap-3 py-0.5 text-sm"><span className="min-w-0 break-words text-neutral-300">{left}</span><span className="shrink-0 tabular-nums text-app-text">{right}</span></div>
-  )
-  return (
-    <div className="space-y-2">
-      {section.cards.map((c, i) => (
-        <div key={i} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-          <p className="border-b border-neutral-800 pb-1.5 font-semibold text-app-text">{c.no} · {section.kind === 'TMO' ? 'Trial' : 'Batch'} {c.batch || '-'} <span className="font-normal text-neutral-500">· {c.date}</span></p>
-          <p className="mt-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Issued (palay)</p>
-          {c.issues.map((x, k) => <Row key={k} left={`WSI ${x.serial} · ${x.whse} · ${x.variety}`} right={`${fmtInt(x.bags)} bags · ${fmt3(x.kilos)} kg`} />)}
-          {(c.esi.no || c.esi.pcs > 0) && <p className="text-[11px] text-neutral-500">ESI {c.esi.no || '-'}{c.esi.sia ? ` · SIA ${c.esi.sia}` : ''} · {fmtInt(c.esi.pcs)} pcs</p>}
-          <p className="mt-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">Received</p>
-          {c.receipts.map((x, k) => <Row key={k} left={`WSR ${x.serial} · ${x.product} · ${x.date}`} right={`${fmtInt(x.bags)} bags · ${fmt3(x.kilos)} kg`} />)}
-          {(c.esr.no || c.esr.pcs > 0) && <p className="text-[11px] text-neutral-500">ESR {c.esr.no || '-'} · {fmtInt(c.esr.pcs)} pcs</p>}
-        </div>
-      ))}
-      <div className="rounded-xl border border-neutral-600 bg-neutral-900 p-3">
-        <p className="font-bold uppercase text-app-text">Total</p>
-        <Row left="Palay issued" right={`${fmtInt(section.totals.bags)} bags · ${fmt3(section.totals.kilos)} kg`} />
-        {Object.entries(section.totals.prod).map(([p, t]) => <Row key={p} left={p} right={`${fmtInt(t.bags)} bags · ${fmt3(t.kilos)} kg`} />)}
+      <div className="overflow-x-auto">
+        <table className="text-sm">
+          {sm.palay.length > 0 && (
+            <>
+              <Head first="Palay issued · milling fee" qty="Bags" price="Milling fee" />
+              <tbody>{sm.palay.map((l) => <Row key={l.product} l={l} qty={l.bags} />)}<Total label="TOTAL MILLING FEE" value={sm.palayTotal} /></tbody>
+            </>
+          )}
+          <Head first="Local rice · trucking fee" qty="Bags @ 50 kg" price="Trucking fee" top={sm.palay.length > 0} />
+          <tbody>
+            {sm.rice.map((l) => <Row key={l.product} l={l} qty={l.bags} />)}
+            {sm.rice.length === 0 && <tr><td colSpan={4} className="py-1 text-neutral-500">No local rice received.</td></tr>}
+            {sm.rice.length > 0 && <Total label="TOTAL TRUCKING FEE" value={sm.riceTotal} />}
+          </tbody>
+          {sm.byProducts.length > 0 && (
+            <>
+              <Head first="Less: by-products" qty="Net kg" price="U.P." top />
+              <tbody>
+                {sm.byProducts.map((l) => <Row key={l.product} l={l} qty={l.kilos} isKilos />)}
+                <Total label="TOTAL BY-PRODUCTS" value={sm.byTotal} />
+              </tbody>
+            </>
+          )}
+        </table>
       </div>
+      {!isAdmin && <p className="mt-2 text-[11px] text-neutral-500">Prices are set by the Admin (Admin Dashboard, Milling Prices).</p>}
     </div>
   )
 }
@@ -210,18 +220,6 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
   const [busy, setBusy] = useState('')
   const [savedKey, setSavedKey] = useState('')
   const toRef = useRef(null)
-  const compact = useIsCompact()
-  // Even on a large screen, a layout with many product columns can be wider than the
-  // window. Measure it; if it does not fit, show the cards instead of ever scrolling.
-  const boxRef = useRef(null)
-  const [overflow, setOverflow] = useState(false)
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    const on = () => { setOverflow(false); setTick((t) => t + 1) }
-    window.addEventListener('resize', on)
-    return () => window.removeEventListener('resize', on)
-  }, [])
-
   const all = useMemo(() => buildMillingBatches({ transactions }), [transactions])
   const ofKind = useMemo(() => all.filter((b) => b.kind === kind), [all, kind])
   const batchValues = useMemo(() => [...new Set(ofKind.map((b) => b.batch))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), [ofKind])
@@ -240,12 +238,6 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
     [periodBatches, activeKey, kind, warehouses, varieties, sackTypes, config, branch, from, end],
   )
   const section = sections[0] ?? null
-  useLayoutEffect(() => {
-    const t = boxRef.current?.querySelector('table')
-    if (!compact && t && t.scrollWidth > boxRef.current.clientWidth + 1) setOverflow(true)
-  }, [section, compact, tick, overflow])
-  // a different ricemill or filter gets a fresh chance to fit
-  useEffect(() => { setOverflow(false) }, [activeKey, from, end, filters])
 
   const activeFilters = [filters.warehouseId, filters.batchFrom, filters.batchTo].filter(Boolean).length
   const slug = (tabs.find((t) => t.key === activeKey)?.name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -316,7 +308,7 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
               <h3 className="text-sm font-bold text-app-text">{section.title}</h3>
               <p className="text-xs text-neutral-400">{section.subtitle}</p>
             </div>
-            {compact || overflow ? <BatchCards section={section} /> : <GridTable section={section} boxRef={boxRef} />}
+            <GridTable section={section} />
             <Summary section={section} isAdmin={isAdmin} onPrice={onPrice} savedKey={savedKey} />
           </section>
         )}

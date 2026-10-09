@@ -293,4 +293,5 @@ existing Date Received text plus the pile date is enough).
 - Age monitoring lists are split into palay and rice, and by-products, and each moving lot shows the bracket it moves to and the date.
 - Data check: issued-more-than-received lists the document and its transaction type; a rebuilt-versus-stored difference on a closed or empty pile carries a note.
 - Liquidations: one tab per ricemill, prices are labels (an Admin sees a pencil), no signatory box on screen (exports only), batch/trial range, and the printed layout shows only when it fits the width (otherwise cards), so it never scrolls sideways.
+- (v1.10-312) Liquidations are always the printed table, scaled down to fit the window (it only scrolls if the window is far narrower than the form). Regular milling shows the date of every WSI. The summary lists palay issued by variety with a **milling fee** per bag, local rice received with a **trucking fee** per bag, and by-products per kilo; the fees are stored per ricemill under the variety name, the same values Admin > Milling Prices shows. Every report table keeps its header visible while scrolling.
 

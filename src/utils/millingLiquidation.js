@@ -183,10 +183,13 @@ const buildSection = ({ kind, batches, whName, varietyById, sackById, prices, co
       const lead = i === 0
         ? [cell(b.firstDate ? shortDate(b.firstDate) : '', { rs: n, a: 'c' }), cell(b.display, { rs: n, a: 'c' }), cell(b.batch, { rs: n, a: 'c' })]
         : []
+      // regular milling: every WSI shows its own date; MO and batch span the batch
+      const wsiDate = cell(w ? shortDate(w.date) : '', { a: 'c' })
+      const leadRegular = i === 0 ? [cell(b.display, { rs: n, a: 'c' }), cell(b.batch, { rs: n, a: 'c' })] : []
       const variety = w ? (varietyById.get(w.varietyId)?.name ?? '') : ''
       const wsiTail = [cell(w?.serialNo ?? '', { a: 'c' }), cell(w ? fmtInt(w.numberOfBags ?? 0) : '', { a: 'r' }), cell(w ? fmt3(w.netKilos ?? 0) : '', { a: 'r' })]
       if (!isTest) {
-        row.push(...lead, cell(w ? whName(w.warehouseId) : '', { a: 'c' }), cell(w?.aiNumber ?? '', { a: 'c' }), cell(variety, { a: 'c' }), ...wsiTail)
+        row.push(wsiDate, ...leadRegular, cell(w ? whName(w.warehouseId) : '', { a: 'c' }), cell(w?.aiNumber ?? '', { a: 'c' }), cell(variety, { a: 'c' }), ...wsiTail)
         if (i === 0) row.push(cell(siaNo, { rs: n, a: 'c' }), cell(esiNo, { rs: n, a: 'c' }), cell(esiT.type, { rs: n, a: 'c' }), cell(esiT.cond, { rs: n, a: 'c' }), cell(esiT.pcs, { rs: n, a: 'c' }))
       } else {
         row.push(...lead, cell(w?.aiNumber ?? '', { a: 'c' }), cell(variety, { a: 'c' }), cell(w ? shortDate(w.date) : '', { a: 'c' }), ...wsiTail)
@@ -222,7 +225,12 @@ const buildSection = ({ kind, batches, whName, varietyById, sackById, prices, co
   const price = (p) => Number(prices?.[millerStoreKey(p)] ?? prices?.[p] ?? 0)
   const riceLines = rice.map((p) => { const t = totals.prod.get(p); return { product: p, bags: t.bags, price: price(p), amount: t.bags * price(p) } })
   const bypLines = byp.map((p) => { const t = totals.prod.get(p); return { product: p, kilos: t.kilos, price: price(p), amount: t.kilos * price(p) } })
+  // palay issued, by variety (milling fee per bag)
+  const palayBags = new Map()
+  for (const b of batches) for (const w of b.wsi) { const n = varietyById.get(w.varietyId)?.name ?? '?'; palayBags.set(n, (palayBags.get(n) ?? 0) + (w.numberOfBags ?? 0)) }
+  const palayLines = [...palayBags].sort((a, b) => natural(a[0], b[0])).map(([product, bags]) => ({ product, bags, price: price(product), amount: bags * price(product) }))
   const summary = {
+    palay: palayLines, palayTotal: palayLines.reduce((s, l) => s + l.amount, 0),
     rice: riceLines, byProducts: bypLines,
     riceTotal: riceLines.reduce((s, l) => s + l.amount, 0), byTotal: bypLines.reduce((s, l) => s + l.amount, 0),
   }

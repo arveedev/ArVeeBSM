@@ -28,6 +28,7 @@ function MillingSettingsPanel() {
 
   const millers = useMemo(() => (transactions ? listMillers(buildMillingBatches({ transactions })) : []), [transactions])
   const products = useMemo(() => ({
+    palay: varieties.filter((v) => v.category === 'Palay').map((v) => v.name).sort(byAlpha),
     rice: varieties.filter((v) => v.category === 'Rice').map((v) => v.name).sort(byAlpha),
     byp: varieties.filter((v) => v.category === 'By Products').map((v) => v.name).sort(byAlpha),
   }), [varieties])
@@ -91,7 +92,7 @@ function MillingSettingsPanel() {
         <h2 className="text-base font-semibold text-app-text">Ricemill prices</h2>
         <p className="mt-1 text-xs text-neutral-400">
           Set once per ricemill; every liquidation for that ricemill uses these until you change them. A price edited on a liquidation
-          updates the same value. Local rice is priced per bag of 50 kg, by-products per kilo.
+          updates the same value. Palay issued carries a milling fee per bag, local rice received a trucking fee per bag, by-products a price per kilo.
         </p>
         <label className={`mt-3 block ${labelClass}`}>Ricemill
           <select value={millerKey} onChange={(e) => setMillerKey(e.target.value)} className={inputClass}>
@@ -104,8 +105,10 @@ function MillingSettingsPanel() {
             <label className={`mt-3 block ${labelClass}`}>Miller contractor
               <input type="text" value={contractor} onChange={(e) => setContractor(e.target.value)} className={inputClass} placeholder="Full name" />
             </label>
-            <p className="mt-3 text-xs font-bold uppercase tracking-wide text-neutral-400">Local rice, per bag</p>
-            <div className="grid gap-3 sm:grid-cols-3">{products.rice.map((p) => priceField(p, 'per bag'))}</div>
+            <p className="mt-3 text-xs font-bold uppercase tracking-wide text-neutral-400">Palay issued, milling fee per bag</p>
+            <div className="grid gap-3 sm:grid-cols-3">{products.palay.map((p) => priceField(p, 'milling fee per bag'))}</div>
+            <p className="mt-3 text-xs font-bold uppercase tracking-wide text-neutral-400">Local rice received, trucking fee per bag</p>
+            <div className="grid gap-3 sm:grid-cols-3">{products.rice.map((p) => priceField(p, 'trucking fee per bag'))}</div>
             <p className="mt-3 text-xs font-bold uppercase tracking-wide text-neutral-400">By-products, per kilo</p>
             <div className="grid gap-3 sm:grid-cols-3">{products.byp.map((p) => priceField(p, 'per kg'))}</div>
             <button type="button" onClick={saveMill} disabled={savingMill} className={`mt-3 w-full ${primaryButtonClass} disabled:opacity-40`}>{savingMill ? 'Saving…' : 'Save ricemill prices'}</button>

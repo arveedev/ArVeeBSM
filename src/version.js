@@ -8367,4 +8367,5 @@
 //   1.10-309 - Inventory Reports: Google Sheet export (SUMMARY, month ledger, WAREHOUSE_AGE_MT, DATA_CHECK) through a separate Apps Script; Admin > System > Sheet Export; docs and script added.
 //   1.10-310 - Inventory Reports: liquidation PDF export made robust to both module shapes; planning docs updated.
 //   1.10-311 - Inventory Reports: transactions behind ADD/LESS values (tap a value; cell notes in Excel and the Google Sheet), Daily inventory opening-balance override (Admin, reports only), one ending per day, age monitoring lists split palay/rice from by-products with the bracket each lot moves to, data check shows transaction types and closed/empty piles, liquidations: one tab per ricemill, price labels, batch range, no signatory box on screen, never scrolls sideways.
-export const APP_VERSION = '1.10-311'
+//   1.10-312 - Milling liquidations are always the printed table (scaled to fit the window, no cards); a date on every WSI row; summary adds palay with milling fee and local rice with trucking fee; sticky headers on all report tables.
+export const APP_VERSION = '1.10-312'

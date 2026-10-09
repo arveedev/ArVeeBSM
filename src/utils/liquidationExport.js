@@ -82,9 +82,33 @@ export const exportLiquidationExcel = async (sections, { fileName, config }) => 
     const t = (row, labels) => {
       labels.forEach((v, i) => { const c = ws.getCell(row, 1 + i * 2); c.value = v })
     }
-    ws.getCell(r, 1).value = 'Local Rice'
+    if (sec.summary.palay.length) {
+      ws.getCell(r, 1).value = 'Palay issued - milling fee'
+      ws.getCell(r, 3).value = 'BAGS'
+      ws.getCell(r, 5).value = 'MILLING FEE'
+      ws.getCell(r, 7).value = 'AMOUNT'
+      for (const c of [1, 3, 5, 7]) ws.getCell(r, c).font = { bold: true }
+      r += 1
+      for (const l of sec.summary.palay) {
+        ws.getCell(r, 1).value = l.product
+        ws.getCell(r, 3).value = l.bags
+        ws.getCell(r, 5).value = l.price
+        ws.getCell(r, 7).value = l.amount
+        ws.getCell(r, 3).numFmt = '#,##0.00'
+        ws.getCell(r, 5).numFmt = '#,##0.00'
+        ws.getCell(r, 7).numFmt = '#,##0.000'
+        r += 1
+      }
+      ws.getCell(r, 1).value = 'TOTAL MILLING FEE'
+      ws.getCell(r, 1).font = { bold: true }
+      ws.getCell(r, 7).value = sec.summary.palayTotal
+      ws.getCell(r, 7).numFmt = '#,##0.000'
+      ws.getCell(r, 7).font = { bold: true }
+      r += 2
+    }
+    ws.getCell(r, 1).value = 'Local rice - trucking fee'
     ws.getCell(r, 3).value = 'BAGS @ 50 kgs'
-    ws.getCell(r, 5).value = 'U.P.'
+    ws.getCell(r, 5).value = 'TRUCKING FEE'
     ws.getCell(r, 7).value = 'AMOUNT'
     for (const c of [1, 3, 5, 7]) ws.getCell(r, c).font = { bold: true }
     r += 1
@@ -96,6 +120,14 @@ export const exportLiquidationExcel = async (sections, { fileName, config }) => 
       ws.getCell(r, 3).numFmt = '#,##0.00'
       ws.getCell(r, 5).numFmt = '#,##0.00'
       ws.getCell(r, 7).numFmt = '#,##0.000'
+      r += 1
+    }
+    if (sec.summary.rice.length) {
+      ws.getCell(r, 1).value = 'TOTAL TRUCKING FEE'
+      ws.getCell(r, 1).font = { bold: true }
+      ws.getCell(r, 7).value = sec.summary.riceTotal
+      ws.getCell(r, 7).numFmt = '#,##0.000'
+      ws.getCell(r, 7).font = { bold: true }
       r += 1
     }
     if (sec.summary.byProducts.length) {
@@ -184,10 +216,20 @@ export const exportLiquidationPdf = async (sections, { fileName, config }) => {
     doc.setFontSize(8)
     doc.text('SUMMARY:', 8, yy)
     yy += 2
+    if (sec.summary.palay.length) {
+      autoTable(doc, {
+        startY: yy,
+        head: [['Palay issued - milling fee', 'BAGS', 'MILLING FEE', 'AMOUNT']],
+        body: [...sec.summary.palay.map((l) => [l.product, fmt2(l.bags), fmt2(l.price), fmt3(l.amount)]), ['TOTAL MILLING FEE', '', '', fmt3(sec.summary.palayTotal)]],
+        theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 }, headStyles: { fontStyle: 'bold' },
+        tableWidth: 110, margin: { left: 8 }, columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      })
+      yy = doc.lastAutoTable.finalY + 2
+    }
     autoTable(doc, {
       startY: yy,
-      head: [['Local Rice', 'BAGS @ 50 kgs', 'U.P.', 'AMOUNT']],
-      body: sec.summary.rice.map((l) => [l.product, fmt2(l.bags), fmt2(l.price), fmt3(l.amount)]),
+      head: [['Local rice - trucking fee', 'BAGS @ 50 kgs', 'TRUCKING FEE', 'AMOUNT']],
+      body: [...sec.summary.rice.map((l) => [l.product, fmt2(l.bags), fmt2(l.price), fmt3(l.amount)]), ...(sec.summary.rice.length ? [['TOTAL TRUCKING FEE', '', '', fmt3(sec.summary.riceTotal)]] : [])],
       theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 }, headStyles: { fontStyle: 'bold' },
       tableWidth: 110, margin: { left: 8 }, columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
     })
