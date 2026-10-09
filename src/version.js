@@ -8387,4 +8387,5 @@
 //   1.10-329 - Slim scrollbars everywhere, hidden until the mouse is over them or the area scrolls, green on hover.
 //   1.10-330 - Stock Desk tables animate on a date, month or range change and the width change is smooth (transform only); Escape on any idle page asks to log out (Enter confirms, Escape cancels).
 //   1.10-331 - Milling liquidation: switching ricemill tabs slides the liquidation out and in the way the tabs run.
-export const APP_VERSION = '1.10-331'
+//   1.10-332 - Phones: the Stock Desk menu scrolls and its tiles fit, milling liquidations say they need a larger screen, the Stock Desk icon leads the Home stocks title, and the header gives the title its own row for Admin and signed-in users.
+export const APP_VERSION = '1.10-332'

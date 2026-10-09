@@ -290,19 +290,19 @@ function AdminHomeStocks({ onWarehouseSelect }) {
       <Section
         title={(
           <>
-            {weightUnit === 'mt' ? 'Metric Tons by Province & Category' : 'Net Bags by Province & Category'}
-            {/* Deliberately quiet entry to the Inventory Reports (Admin/Visitor only,
-                this page is theirs alone): dim, no circle, brightens only on hover. */}
+            {/* Deliberately quiet entry to the Stock Desk (Admin/Visitor only, this page is theirs alone): dim,
+                no circle, brightens only on hover. It leads the title so it can never be pushed onto a line of its own. */}
             {canOpenReports && (
               <button
                 type="button"
                 onClick={() => setShowInventoryReports(true)}
                 aria-label="Stock Desk"
-                className="ml-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
+                className="-ml-1 mr-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
               >
                 <ClipboardList size={14} />
               </button>
             )}
+            {weightUnit === 'mt' ? 'Metric Tons by Province & Category' : 'Net Bags by Province & Category'}
           </>
         )}
         headerRight={(

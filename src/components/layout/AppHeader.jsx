@@ -745,24 +745,29 @@ function AppHeader({ hidden = false }) {
         }}
         className="sticky top-0 z-50 border-b border-neutral-800 bg-neutral-950"
       >
-        <div className="flex items-start justify-between gap-2 px-4 py-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <div className={`gap-2 px-4 py-2 ${isVisitor ? 'flex items-start justify-between' : 'flex flex-wrap items-center justify-between sm:flex-nowrap sm:items-start'}`}>
+          {/* On a phone the title no longer shares a row with the whole control pill: the avatar and the pill
+              take the first row and the title and greeting get the full width below. A Visitor (no avatar,
+              fewer controls) keeps the single row. From the sm breakpoint everyone has the single row. */}
+          <div className={`min-w-0 flex-1 items-center gap-2.5 ${isVisitor ? 'flex' : 'contents sm:flex'}`}>
             {/* Visitor sessions have no uid (synthetic, not a real
                 db.users row) - previously still showed the default,
                 non-editable avatar anyway; per explicit request,
                 visitors have no use for it at all, so it's skipped
                 entirely rather than shown disabled. */}
             {!isVisitor && (
-              <Avatar
-                avatarBg={userRecord?.avatarBg}
-                avatarFace={userRecord?.avatarFace}
-                avatarAnim={userRecord?.avatarAnim}
-                name={user?.name}
-                size={40}
-                onClick={canEditAvatar ? () => setAvatarPickerOpen(true) : undefined}
-              />
+              <div className="order-1 shrink-0 sm:order-none">
+                <Avatar
+                  avatarBg={userRecord?.avatarBg}
+                  avatarFace={userRecord?.avatarFace}
+                  avatarAnim={userRecord?.avatarAnim}
+                  name={user?.name}
+                  size={40}
+                  onClick={canEditAvatar ? () => setAvatarPickerOpen(true) : undefined}
+                />
+              </div>
             )}
-            <div className="min-w-0 overflow-hidden">
+            <div className={`min-w-0 overflow-hidden ${isVisitor ? '' : 'order-3 basis-full sm:order-none sm:basis-auto'}`}>
               <div style={textMotion}>
                 {/* Reported, real bug: on a narrow phone the pill (below)
                     left so little room for the title that a single long
@@ -797,7 +802,7 @@ function AppHeader({ hidden = false }) {
               target, just tighter) specifically to free up room for
               the title next to it - see the title's own comment for
               the actual reported breakage this fixes on a narrow phone. */}
-          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-neutral-900 p-1">
+          <div className={`flex shrink-0 items-center gap-0.5 rounded-full bg-neutral-900 p-1 ${isVisitor ? '' : 'order-2 ml-auto sm:order-none sm:ml-0'}`}>
             {/* Sync status - tap for a plain-language explanation. The
                 icon itself stays solid/static (scaling or fading it in
                 place reads as a dropped connection, not activity) - a

@@ -803,7 +803,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {view === 'hub' && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto pb-6 sm:grid-cols-2 lg:grid-cols-3">
             {!isAdmin && !['ledger', 'summary', 'age', 'ending', 'procurement', 'milling', 'test', 'check'].some(mayOpen) && <p className="col-span-full py-6 text-center text-sm text-neutral-500">No reports are shared with you yet.</p>}
             {[
               { id: 'ledger', name: 'Daily inventory', desc: 'Per day: ADD and LESS by type, ending stock, by warehouse and variety', Icon: ClipboardList },
@@ -817,10 +817,10 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             ].filter((t) => canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }, n) => (
               <button
                 key={id} type="button" onClick={() => navigate(id)} style={{ animationDelay: leaving ? `${n * 15}ms` : `${n * 50}ms` }}
-                className={`flex min-h-[116px] items-center gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-5 text-left transition-colors hover:border-brand-neon/60 hover:bg-neutral-800/60 ${leaving ? 'sd-tile-out' : 'sd-tile-in'}`}
+                className={`flex min-h-[84px] items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-left sm:min-h-[116px] sm:gap-4 sm:p-5 transition-colors hover:border-brand-neon/60 hover:bg-neutral-800/60 ${leaving ? 'sd-tile-out' : 'sd-tile-in'}`}
               >
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-brand-neon"><Icon size={26} /></span>
-                <span className="min-w-0 flex-1"><span className="block text-lg font-semibold text-app-text">{name}</span><span className="mt-0.5 block text-sm leading-snug text-neutral-400">{desc}</span></span>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-brand-neon sm:h-14 sm:w-14"><Icon size={24} /></span>
+                <span className="min-w-0 flex-1"><span className="block text-base font-semibold text-app-text sm:text-lg">{name}</span><span className="mt-0.5 block text-sm leading-snug text-neutral-400">{narrow && (id === 'milling' || id === 'test') ? 'Needs a larger screen (tablet or computer)' : desc}</span></span>
                 <ChevronRight size={20} className="shrink-0 text-neutral-500" />
               </button>
             ))}
@@ -832,7 +832,14 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
           ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>
           : <EndingStockView data={built.ending} setMonth={setEndingMonth} unit={unit} setUnit={setUnit} narrow={narrow} />)}
 
-        {(view === 'milling' || view === 'test') && (loading || !sackTypes
+        {(view === 'milling' || view === 'test') && narrow && (
+          <div className="sd-fade-in mx-auto mt-6 flex max-w-md flex-col items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-950 text-brand-neon"><Factory size={24} /></span>
+            <p className="text-base font-semibold text-app-text">{view === 'test' ? 'Test milling liquidation' : 'Milling liquidation'} needs a larger screen</p>
+            <p className="text-sm leading-snug text-neutral-400">The liquidation is a wide form with many columns and cannot be read on a phone. Open it on a tablet or a computer.</p>
+          </div>
+        )}
+        {(view === 'milling' || view === 'test') && !narrow && (loading || !sackTypes
           ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>
           : (
             <LiquidationReport
