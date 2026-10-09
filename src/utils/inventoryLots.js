@@ -128,7 +128,12 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
     return effectiveCutoffDate(wh?.reportingCutoffDate, globalDataStartDate)
   }
   const counts = (tx, pileId) => {
-    if (!pileById.has(pileId) || tx.date > asOf) return false
+    if (!pileById.has(pileId)) return false
+    // Reports: a beginning balance is OPENING stock, whatever date it was typed. One entered
+    // late (e.g. Sep 22 for stock that was already there on Sep 3) must exist from the start,
+    // or the documents that took stock out before it would drive the balance negative.
+    if (tx.isInitialBalance && reserve) return true
+    if (tx.date > asOf) return false
     const cut = cutoffFor(pileId)
     return tx.isInitialBalance || !cut || tx.date > cut
   }
