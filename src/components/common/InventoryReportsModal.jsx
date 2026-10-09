@@ -204,7 +204,7 @@ function LedgerCardList({ days, onNote }) {
                   </div>
                   <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] tabular-nums text-neutral-500">
                     {l.beg != null && <span>Beginning {fmtNum(l.beg)}</span>}
-                    {l.adj != null && <span>Adjustment {l.adj < 0 ? '-' : '+'}{fmtNum(Math.abs(l.adj))}</span>}
+                    {l.adj != null && <span>Pile closed {l.adj < 0 ? '-' : '+'}{fmtNum(Math.abs(l.adj))}</span>}
                   </div>
                   {(l.adds.length > 0 || l.lesses.length > 0) && (
                     <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] tabular-nums">

@@ -118,7 +118,7 @@ const seedAnchor = (tx, pile) => {
  * bracket named in its Age Group column. Without `reserve` the stock is physical:
  * only WSI and WTS deduct (used by the lots check, which must match the pile balances).
  */
-const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf, authorities = [], reserve = false }, movements) => {
+const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf, authorities = [], reserve = false, clearClosed = true }, movements) => {
   const pileById = new Map(piles.map((p) => [p.pileId, p]))
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const state = new Map(piles.map((p) => [p.pileId, { lots: [], shortBags: 0, shortKilos: 0, shortEvents: [] }]))
@@ -373,7 +373,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
   // A pile closed on or before asOf holds nothing (closePile zeroes it).
   for (const [pileId, st] of state) {
     const closed = pileById.get(pileId)?.closedDate
-    if (closed && asOf >= closed) st.lots = []
+    if (clearClosed && closed && asOf >= closed) st.lots = []
   }
   state.authShort = authShort
   state.authNoAge = authNoAge

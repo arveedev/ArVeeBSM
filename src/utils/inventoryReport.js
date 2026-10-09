@@ -143,13 +143,125 @@ const gridCols = (grids) => {
   return ids
 }
 
+const addDaysISO = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10)
+const gridDiff = (a, b) => {
+  const out = new Map()
+  for (const [g, sign] of [[a, 1], [b, -1]]) for (const [rk, row] of g) for (const [id, v] of row) put(out, rk, id, sign * v)
+  return out
+}
+const gridAdd = (a, b) => gridDiff(a, gridDiff(new Map(), b))
+const gridNonEmpty = (g) => [...g.values()].some((row) => [...row.values()].some((v) => Math.abs(v) >= EPS_KG))
+
+/**
+ * Day-by-day analysis shared by the Daily inventory and the Summary, so both always show
+ * the same balances.
+ *
+ * Each day the stock should change only by its ADD and LESS documents. When it changes for
+ * any other reason (a beginning balance entered late, activity on a closed pile, ...) the
+ * report does NOT let that move the inventory: the difference is a "gap", added up from
+ * the data start date and taken out of every later balance. The only change allowed
+ * without a document is a CLOSED PILE: closing zeroes the stock it still held, and that
+ * is shown as an adjustment naming the pile. An Admin's opening-balance override is shown
+ * as its own row. `gapAt(date)` is the running total of gaps up to that date.
+ */
+const analyzeDays = (ctx, inputs, filters, from, to) => {
+  const warmStart = inputs.globalDataStartDate ? addDaysISO(inputs.globalDataStartDate, 1) : from
+  const first = warmStart < from ? warmStart : from
+  const days = []
+  for (let d = first; d <= to && days.length < 200; d = addDaysISO(d, 1)) days.push(d)
+
+  const { movements } = buildLotsDetailed({ ...inputs, asOf: to })
+  const stateAt = new Map()
+  const getState = (d) => { if (!stateAt.has(d)) stateAt.set(d, buildLots({ ...inputs, asOf: d })); return stateAt.get(d) }
+  const typeLabel = (m) => m.label ?? ctx.typeName.get(m.typeId) ?? 'OTHER'
+  const opening = ctx.opening && ctx.opening.ageSet === ctx.ageSet ? ctx.opening : null
+
+  const recs = []
+  const gapAt = new Map()
+  let gap = new Map()
+  for (const d of days) {
+    const prev = addDaysISO(d, -1)
+    const stPrev = getState(prev)
+    const beg0 = stockGrid(ctx, stPrev, prev, filters, prev)
+    const aged0 = stockGrid(ctx, stPrev, d, filters, prev)
+    const end0 = stockGrid(ctx, getState(d), d, filters, d)
+
+    const adds = new Map()
+    const lesses = new Map()
+    const moves = []
+    for (const m of movements) {
+      if (m.date !== d) continue
+      const pile = ctx.pileById.get(m.pileId)
+      if (!accept(filters, pile, ctx)) continue
+      const c = lotCol(ctx, pile, m.varietyId, m.lotDate, d)
+      const target = m.kind === 'add' ? adds : lesses
+      const label = typeLabel(m)
+      if (!target.has(label)) target.set(label, new Map())
+      const rk = rowKey(rowOf(ctx, pile))
+      const cid = colId(c.commodity, c.variety, c.bucket)
+      put(target.get(label), rk, cid, m.kilos)
+      moves.push({ kind: m.kind, label, rowKey: rk, colId: cid, docType: m.docType, serial: m.serial, customer: m.customer, pile: pile.pileName, kilos: m.kilos })
+    }
+    const net = new Map()
+    for (const [rk, row] of aged0) for (const [id, v] of row) put(net, rk, id, v)
+    for (const g of adds.values()) for (const [rk, row] of g) for (const [id, v] of row) put(net, rk, id, v)
+    for (const g of lesses.values()) for (const [rk, row] of g) for (const [id, v] of row) put(net, rk, id, -v)
+    const adjustment = gridDiff(end0, net)
+
+    // closing a pile zeroes what it still held: the one adjustment that is allowed
+    const closed = [...ctx.pileById.values()].filter((p) => p.closedDate === d && accept(filters, p, ctx))
+    const closure = new Map()
+    const closureLines = new Map()
+    if (closed.length > 0) {
+      const pre = buildLots({ ...inputs, asOf: d, clearClosed: false })
+      for (const p of closed) {
+        const rk = rowKey(rowOf(ctx, p))
+        for (const lot of pre.get(p.pileId)?.lots ?? []) {
+          const c = lotCol(ctx, p, lot.varietyId, lot.date, d)
+          const cid = colId(c.commodity, c.variety, c.bucket)
+          put(closure, rk, cid, -lot.kilos)
+          const k = `${rk}|${cid}`
+          const list = closureLines.get(k) ?? []
+          list.push({ doc: 'Pile closed', customer: '', pile: `${rowOf(ctx, p).label} ${p.pileName}`, kilos: lot.kilos })
+          closureLines.set(k, list)
+        }
+      }
+    }
+    // an Admin's opening-balance override is a deliberate change
+    const openingAdj = new Map()
+    if (opening && d === opening.date) {
+      for (const c of opening.cells) {
+        const like = { warehouseId: c.w, cerealType: c.c }
+        if (accept(filters, like, ctx)) put(openingAdj, rowKey(rowOf(ctx, like)), colId(c.c, c.v, c.b), c.k)
+      }
+    }
+    // everything else that moved the stock without a document is a gap and is ignored
+    const dayGap = gridDiff(gridDiff(adjustment, closure), openingAdj)
+    const gapBefore = gap
+    gap = gridAdd(gap, dayGap)
+    gapAt.set(d, gap)
+    recs.push({
+      date: d, moves, adds, lesses, beg0, end0, closure, closureLines, openingAdj, gapBefore, gapNow: gap,
+      closedNames: closed.map((p) => `${rowOf(ctx, p).label} ${p.pileName}`),
+    })
+  }
+  return { recs, gapAt, prevOf: (d) => addDaysISO(d, -1) }
+}
+
 /**
  * Summary: stock per warehouse x variety x age bracket as of one date, with a
- * subtotal per province and a branch total. Empty rows/columns are dropped.
+ * subtotal per province and a branch total. Empty rows/columns are dropped. It equals the
+ * Daily inventory's ending balance for that date.
  */
 export const buildSummary = (ctx, inputs, { asOf, filters = {}, sort = 'name' }) => {
   const state = buildLots({ ...inputs, asOf })
-  const grid = stockGrid(ctx, state, asOf, filters, asOf)
+  let grid = stockGrid(ctx, state, asOf, filters, asOf)
+  const warm = inputs.globalDataStartDate ? addDaysISO(inputs.globalDataStartDate, 1) : null
+  if (warm && asOf >= warm) {
+    const { gapAt } = analyzeDays(ctx, inputs, filters, asOf, asOf)
+    const gap = gapAt.get(asOf)
+    if (gap && gridNonEmpty(gap)) grid = gridDiff(grid, gap)
+  }
   const cols = sortCols([...gridCols([grid])].map(parseCol), ctx.ageSet)
 
   const byProvince = new Map()
@@ -172,75 +284,34 @@ export const buildSummary = (ctx, inputs, { asOf, filters = {}, sort = 'name' })
 }
 
 /**
- * Daily ledger for [from, to]: per day the beginning stock, age shift, ADD and
- * LESS by transaction type, and ending stock, for every warehouse x variety x
- * age bracket that has anything in the period. A day with no movement and no
- * age shift is omitted; an "ADJUSTMENT" row appears only if the figures do not
- * balance (a late-entered beginning balance, for example).
+ * Daily ledger for [from, to]: per day the beginning stock, ADD and LESS by transaction
+ * type, and the ending stock, for every warehouse x variety x age bracket that has anything
+ * in the period. A day appears only if it has an ADD, a LESS, a closed pile or an override.
+ * Balances follow the documents; only a closed pile adjusts them (see analyzeDays).
  */
 export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
-  const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10)
-  const days = []
-  for (let d = from; d <= to && days.length < 93; d = addDays(d, 1)) days.push(d)
-
-  const { movements } = buildLotsDetailed({ ...inputs, asOf: to })
-  const stateAt = new Map()
-  const getState = (d) => { if (!stateAt.has(d)) stateAt.set(d, buildLots({ ...inputs, asOf: d })); return stateAt.get(d) }
-
-  const typeLabel = (m) => m.label ?? ctx.typeName.get(m.typeId) ?? 'OTHER'
-  const diff = (a, b, sign = 1) => {
-    const out = new Map()
-    for (const g of [[a, 1], [b, -sign]]) for (const [rk, row] of g[0]) for (const [id, v] of row) put(out, rk, id, g[1] * v)
-    return out
-  }
-  const nonEmpty = (g) => [...g.values()].some((row) => [...row.values()].some((v) => Math.abs(v) >= EPS_KG))
-
+  const { recs, gapAt } = analyzeDays(ctx, inputs, filters, from, to)
+  const typeOrder = (a, b) => (a === 'BEGINNING BALANCE' ? -1 : b === 'BEGINNING BALANCE' ? 1 : a === 'TRANSFER' ? 1 : b === 'TRANSFER' ? -1 : natural(a, b))
+  const zero = new Map()
   const out = []
   const allGrids = []
-  for (const d of days) {
-    const prev = addDays(d, -1)
-    const beg = stockGrid(ctx, getState(prev), prev, filters, prev)
-    const aged = stockGrid(ctx, getState(prev), d, filters, prev)
-    const end = stockGrid(ctx, getState(d), d, filters, d)
-    const shift = diff(aged, beg)
-
-    const adds = new Map()
-    const lesses = new Map()
-    const moves = []
-    for (const m of movements) {
-      if (m.date !== d) continue
-      const pile = ctx.pileById.get(m.pileId)
-      if (!accept(filters, pile, ctx)) continue
-      const c = lotCol(ctx, pile, m.varietyId, m.lotDate, d)
-      const target = m.kind === 'add' ? adds : lesses
-      const label = typeLabel(m)
-      if (!target.has(label)) target.set(label, new Map())
-      const rk = rowKey(rowOf(ctx, pile))
-      const cid = colId(c.commodity, c.variety, c.bucket)
-      put(target.get(label), rk, cid, m.kilos)
-      moves.push({ kind: m.kind, label, rowKey: rk, colId: cid, docType: m.docType, serial: m.serial, customer: m.customer, pile: pile.pileName, kilos: m.kilos })
-    }
-    const net = new Map()
-    for (const g of [aged]) for (const [rk, row] of g) for (const [id, v] of row) put(net, rk, id, v)
-    for (const g of adds.values()) for (const [rk, row] of g) for (const [id, v] of row) put(net, rk, id, v)
-    for (const g of lesses.values()) for (const [rk, row] of g) for (const [id, v] of row) put(net, rk, id, -v)
-    const adjustment = diff(end, net)
-
-    const hasMove = adds.size > 0 || lesses.size > 0 || nonEmpty(adjustment)
-    if (!hasMove) continue
-    const order = (a, b) => (a === 'BEGINNING BALANCE' ? -1 : b === 'BEGINNING BALANCE' ? 1 : a === 'TRANSFER' ? 1 : b === 'TRANSFER' ? -1 : natural(a, b))
+  for (const r of recs) {
+    if (r.date < from) continue
+    const hasClosure = gridNonEmpty(r.closure)
+    const hasOpening = gridNonEmpty(r.openingAdj)
+    if (r.adds.size === 0 && r.lesses.size === 0 && !hasClosure && !hasOpening) continue
+    const gPrev = gapAt.get(addDaysISO(r.date, -1)) ?? zero
+    const beginning = gridDiff(r.beg0, gPrev)
+    const ending = gridDiff(r.end0, r.gapNow)
     const rec = {
-      date: d, moves, beginning: beg, shift: nonEmpty(shift) ? shift : null,
-      adds: [...adds].sort((a, b) => order(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
-      lesses: [...lesses].sort((a, b) => order(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
-      adjustment: nonEmpty(adjustment) ? adjustment : null, ending: end,
-      // piles closed on this day (closing zeroes whatever stock was left)
-      closedPiles: nonEmpty(adjustment)
-        ? [...ctx.pileById.values()].filter((p) => p.closedDate === d && accept(filters, p, ctx)).map((p) => `${rowOf(ctx, p).label} ${p.pileName}`)
-        : [],
+      date: r.date, moves: r.moves, beginning, shift: null,
+      adds: [...r.adds].sort((a, b) => typeOrder(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
+      lesses: [...r.lesses].sort((a, b) => typeOrder(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
+      adjustment: hasClosure ? r.closure : null, closureLines: r.closureLines, closedPiles: r.closedNames,
+      openingAdj: hasOpening ? r.openingAdj : null, ending,
     }
     out.push(rec)
-    allGrids.push(beg, end, ...(rec.shift ? [rec.shift] : []), ...rec.adds.map((x) => x.grid), ...rec.lesses.map((x) => x.grid))
+    allGrids.push(beginning, ending, ...rec.adds.map((x) => x.grid), ...rec.lesses.map((x) => x.grid), ...(rec.adjustment ? [rec.adjustment] : []), ...(rec.openingAdj ? [rec.openingAdj] : []))
   }
 
   // Columns: only warehouse x variety x bracket combinations with something in them.
@@ -253,8 +324,7 @@ export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
   cols.sort((a, b) => natural(a.province, b.province) || natural(a.label, b.label)
     || (COMMODITY_ORDER[a.commodity] - COMMODITY_ORDER[b.commodity]) || natural(a.variety, b.variety)
     || (bucketRank(a, ctx.ageSet) - bucketRank(b, ctx.ageSet)))
-  const openingDate = ctx.opening && ctx.opening.ageSet === ctx.ageSet ? ctx.opening.date : null
-  return { cols, days: out, openingDate }
+  return { cols, days: out }
 }
 
 /** Value of a ledger/summary grid cell in kilos (0 when absent). */
@@ -365,7 +435,14 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
       rows.push({ kind: 'less-label', first: d.adds.length > 0 ? 'LESS:' : `${stamp} · LESS:`, cells: [] })
       for (const l of d.lesses) rows.push({ ...line(l.label, l.grid, 'less'), notes: cols.map((c) => notesFor(d.moves, 'less', l.label, c, unit)), day: d.date })
     }
-    if (d.adjustment) rows.push(line(d.date === ledger.openingDate ? 'OPENING BALANCE OVERRIDE' : d.closedPiles?.length ? `ADJUSTMENT: pile closed (${d.closedPiles.join(', ')})` : 'ADJUSTMENT: stock changed with no ADD or LESS document', d.adjustment, 'row'))
+    if (d.adjustment) {
+      rows.push({
+        ...line(`PILE CLOSED: ${d.closedPiles.join(', ')}`, d.adjustment, 'row'),
+        notes: cols.map((c) => { const l = d.closureLines.get(`${c.rowKey}|${c.id}`); return l ? l.map((x) => ({ doc: x.doc, customer: '', pile: x.pile, value: num(x.kilos, unit) ?? 0 })) : null }),
+        day: d.date,
+      })
+    }
+    if (d.openingAdj) rows.push(line('OPENING BALANCE OVERRIDE', d.openingAdj, 'row'))
     rows.push(line('ENDING INVENTORY', d.ending, 'end', true))
   }
   return {
@@ -441,7 +518,6 @@ export const checksModel = (checks, unit, { asOf }) => {
 // Age monitoring lists and data checks (read-only).
 // ---------------------------------------------------------------------------
 
-const addDaysISO = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10)
 
 /**
  * Lots about to move into the next age bracket (within `windowDays`) and the
