@@ -269,3 +269,8 @@ Icons are chosen for immediate real-world legibility over cleverness
 (e.g. `Radar` for the cross-warehouse Monitor tab, `LayoutGrid` for
 Piles, a `Plus` in a filled circle for the FAB) since the primary users
 are not expected to have prior exposure to app-design icon conventions.
+
+
+## Scrollbars
+
+Every scrollbar in the app is slim (8px), hidden until the mouse is over the scrolling area or it is scrolling, grey, and green when pointed at (`src/index.css`, `src/utils/scrollReveal.js`). Firefox gets the same through the standard scrollbar properties.

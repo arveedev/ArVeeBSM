@@ -11,6 +11,9 @@ import { initAppUpdate, checkForUpdate } from './services/appUpdate.js'
 import DbOpenErrorScreen from './components/common/DbOpenErrorScreen.jsx'
 import BootScreen from './components/common/BootScreen.jsx'
 import './index.css'
+import { initScrollReveal } from './utils/scrollReveal.js'
+
+initScrollReveal()
 
 // Registers the service worker (installs a new one in the background
 // when a deploy ships, but never reloads on its own - see

@@ -8384,4 +8384,5 @@
 //   1.10-326 - Named the Stock Desk; the Google Sheet button is Admin only (Excel stays for Visitors).
 //   1.10-327 - WTS can be issued from several piles of the same warehouse into one receiving pile (extra piles saved as -A, -B records, like a multi-pile WSI).
 //   1.10-328 - Stock Desk polish: Esc / back navigation, enter and exit animations, Combined switch, animated columns and running numbers, Excel confirmation, Montserrat tables, expandable Data check, one scrollbar, liquidation sticky header and pencil fixes; override is the truth from its date.
-export const APP_VERSION = '1.10-328'
+//   1.10-329 - Slim scrollbars everywhere, hidden until the mouse is over them or the area scrolls, green on hover.
+export const APP_VERSION = '1.10-329'

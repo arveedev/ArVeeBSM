@@ -1102,3 +1102,34 @@ select {
 }
 .sd-col-grow { animation: sd-col-grow 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .sd-col-grow { animation-duration: 1ms !important; } }
+
+/* ---------------------------------------------------------------------------
+   Scrollbars everywhere: slim (8px) and hidden until the mouse is over the
+   scrolling area or it is scrolling (wheel, drag, keys). The thumb is grey and
+   turns green when pointed at. scrollReveal.js marks a scrolling element with
+   data-scrolling for a moment. Chromium and Safari use the -webkit- pieces;
+   Firefox gets the standard properties (the two are kept apart because
+   Chromium ignores the -webkit- pieces once the standard ones are set).
+   --------------------------------------------------------------------------- */
+:root { --sb-thumb: #404040; --sb-hover: #00ffa3; }
+:root.light { --sb-thumb: #b4b4b4; --sb-hover: #00a86b; }
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  transition: background-color 0.25s ease;
+}
+*:hover::-webkit-scrollbar-thumb,
+*[data-scrolling]::-webkit-scrollbar-thumb { background-color: var(--sb-thumb); }
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active { background-color: var(--sb-hover); }
+
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  *:hover, *[data-scrolling] { scrollbar-color: var(--sb-thumb) transparent; }
+}
