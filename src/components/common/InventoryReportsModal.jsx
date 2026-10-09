@@ -817,10 +817,10 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             ].filter((t) => canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }, n) => (
               <button
                 key={id} type="button" onClick={() => navigate(id)} style={{ animationDelay: leaving ? `${n * 15}ms` : `${n * 50}ms` }}
-                className={`flex min-h-[84px] items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-left sm:min-h-[116px] sm:gap-4 sm:p-5 transition-colors hover:border-brand-neon/60 hover:bg-neutral-800/60 ${leaving ? 'sd-tile-out' : 'sd-tile-in'}`}
+                className={`flex min-h-[68px] items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-left sm:min-h-[116px] sm:gap-4 sm:p-5 transition-colors hover:border-brand-neon/60 hover:bg-neutral-800/60 ${leaving ? 'sd-tile-out' : 'sd-tile-in'}`}
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-brand-neon sm:h-14 sm:w-14"><Icon size={24} /></span>
-                <span className="min-w-0 flex-1"><span className="block text-base font-semibold text-app-text sm:text-lg">{name}</span><span className="mt-0.5 block text-sm leading-snug text-neutral-400">{narrow && (id === 'milling' || id === 'test') ? 'Needs a larger screen (tablet or computer)' : desc}</span></span>
+                <span className="min-w-0 flex-1"><span className="block text-base font-semibold text-app-text sm:text-lg">{name}</span><span className="mt-0.5 hidden text-sm leading-snug text-neutral-400 sm:block">{desc}</span></span>
                 <ChevronRight size={20} className="shrink-0 text-neutral-500" />
               </button>
             ))}
