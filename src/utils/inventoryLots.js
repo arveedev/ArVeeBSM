@@ -283,7 +283,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       const { a, amount } = ev.auth
       const range = ageGroupRange(a.ageGroup)
       if (!range) authNoAge.push({ aiNumber: a.aiNumber, ageGroup: a.ageGroup ?? '', warehouseId: a.assignedWarehouse, varietyId: a.varietyId, date: ev.when, kilos: amount, customer: a.customerName ?? null })
-      const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount, range, ev.when)
+      const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount, range, `${ev.when.slice(0, 8)}01`)
       pools.set(a.aiNumber, { left: amount - short, portions: portions.map((x) => ({ ...x })) })
       const byPile = new Map()
       for (const x of portions) { const l = byPile.get(x.pileId) ?? []; l.push(x); byPile.set(x.pileId, l) }

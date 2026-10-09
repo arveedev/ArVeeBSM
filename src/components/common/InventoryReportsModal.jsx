@@ -140,8 +140,8 @@ function Lines({ lines }) {
       <div key={i}>
         {head && <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-neutral-500 first:mt-0">{head === 'By Products' ? 'By-products' : head}</p>}
         <div className="flex items-baseline justify-between gap-3 py-0.5 text-sm">
-          <span className="min-w-0 break-words text-neutral-300">{l.label}</span>
-          <span className="shrink-0 tabular-nums text-app-text">{fmtNum(l.value)}</span>
+          <span className={`min-w-0 break-words ${l.total ? 'font-bold uppercase text-app-text' : 'text-neutral-300'}`}>{l.label}</span>
+          <span className={`shrink-0 tabular-nums text-app-text ${l.total ? 'font-bold' : ''}`}>{fmtNum(l.value)}</span>
         </div>
       </div>
     )
@@ -508,7 +508,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
 
   const built = useMemo(() => {
     if (loading || !['summary', 'ledger', 'age', 'check', 'procurement'].includes(view) || (view === 'check' && !isAdmin)) return null
-    const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet, opening: config?.inventoryOpening ?? null })
+    const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet, opening: config?.inventoryOpening ?? null, ageBasis: view === 'age' ? 'exact' : 'month' })
     const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
     const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null, byProducts: filters.showByProducts || filters.commodity === 'By Products' }
     const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
@@ -580,12 +580,12 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null, byProducts: filters.showByProducts || filters.commodity === 'By Products' }
       const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
       const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
-      const mk = (ageSet) => makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet, opening: config?.inventoryOpening ?? null })
+      const mk = (ageSet, ageBasis = 'month') => makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet, opening: config?.inventoryOpening ?? null, ageBasis })
       const ctx = mk(filters.ageSet)
       const sheets = [
         modelToSheet(summaryModel(buildSummary(ctx, inputs, { asOf: ref, filters: f, sort: filters.sort }), 'b', { asOf: ref, scope }), 'SUMMARY'),
         modelToSheet(ledgerModel(buildLedger(ctx, inputs, { from: monthStart, to: ref, filters: f }), 'b', { from: monthStart, to: ref, scope }), ref.slice(0, 7)),
-        modelToSheet(summaryModel(buildSummary(mk('fine'), inputs, { asOf: ref, filters: f, sort: filters.sort }), 'mt', { asOf: ref, scope }), 'WAREHOUSE_AGE_MT'),
+        modelToSheet(summaryModel(buildSummary(mk('fine', 'exact'), inputs, { asOf: ref, filters: f, sort: filters.sort }), 'mt', { asOf: ref, scope }), 'WAREHOUSE_AGE_MT'),
         ...(isAdmin ? [modelToSheet(checksModel(buildChecks(ctx, inputs, { asOf: ref, todayISO: today }), 'b', { asOf: ref }), 'DATA_CHECK')] : []),
       ]
       sheets[2].values[0][0] = 'WAREHOUSE AGE (MT)'

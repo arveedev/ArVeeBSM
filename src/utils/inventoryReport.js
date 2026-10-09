@@ -54,8 +54,8 @@ const bucketOf = (commodity, months, setName) => {
 }
 
 /** Lookups shared by every builder. */
-export const makeContext = ({ piles, warehouses, provinces, varieties, transactionTypes, combine = false, ageSet = 'coarse', opening = null }) => ({
-  opening,
+export const makeContext = ({ piles, warehouses, provinces, varieties, transactionTypes, combine = false, ageSet = 'coarse', opening = null, ageBasis = 'month' }) => ({
+  opening, ageBasis,
   pileById: new Map(piles.map((p) => [p.pileId, p])),
   whById: new Map(warehouses.map((w) => [w.warehouseId, w])),
   provById: new Map(provinces.map((p) => [p.provinceId ?? p.id, p])),
@@ -93,9 +93,12 @@ const put = (grid, rk, cid, kilos) => {
 const lotCol = (ctx, pile, varietyId, lotDate, asOf) => {
   const commodity = commodityOf(pile)
   let variety = ctx.varietyName.get(varietyId ?? pile?.varietyId) ?? (commodity === 'By Products' ? 'BY-PRODUCTS' : '?')
-  // Combined names also merge dry palay: ignore the m and s (PD1m-A, PD1s-A -> PD1-A, PDm, PDs -> PD); PW stays as is
-  if (ctx.combine && commodity === 'Palay') variety = variety.replace(/^(PD\d*)[ms](?=-|$)/i, '$1')
-  const months = lotAgeMonths(lotDate, asOf) ?? 0
+  // Combined names also merge dry palay with a number: ignore the m and s (PD1m-A, PD1s-A -> PD1-A); PDm, PDs and PW stay as they are
+  if (ctx.combine && commodity === 'Palay') variety = variety.replace(/^(PD\d+)[ms](?=-|$)/i, '$1')
+  // Daily inventory and Summary: a lot's bracket is fixed for the month (its age at the 1st), so a move
+  // to the next bracket shows in the next month; Age monitoring uses the exact day.
+  const ageDate = ctx.ageBasis === 'exact' ? asOf : `${asOf.slice(0, 8)}01`
+  const months = lotAgeMonths(lotDate, ageDate) ?? 0
   return { commodity, variety, bucket: bucketOf(commodity, months, ctx.ageSet) }
 }
 
@@ -185,8 +188,9 @@ const analyzeDays = (ctx, inputs, filters, from, to) => {
   for (const d of days) {
     const prev = addDaysISO(d, -1)
     const stPrev = getState(prev)
-    const beg0 = stockGrid(ctx, stPrev, prev, filters, prev)
-    const aged0 = stockGrid(ctx, stPrev, d, filters, prev)
+    // the day's brackets (fixed for the month), so a month opens with its stock in the new brackets
+    const beg0 = stockGrid(ctx, stPrev, d, filters, prev)
+    const aged0 = beg0
     const end0 = stockGrid(ctx, getState(d), d, filters, d)
 
     const adds = new Map()
@@ -203,7 +207,7 @@ const analyzeDays = (ctx, inputs, filters, from, to) => {
       const rk = rowKey(rowOf(ctx, pile))
       const cid = colId(c.commodity, c.variety, c.bucket)
       put(target.get(label), rk, cid, m.kilos)
-      moves.push({ kind: m.kind, label, rowKey: rk, colId: cid, docType: m.docType, serial: m.serial, customer: m.customer, pile: pile.pileName, kilos: m.kilos })
+      moves.push({ kind: m.kind, label, rowKey: rk, colId: cid, docType: m.docType, serial: m.serial, customer: m.customer, pile: m.docType === 'AI' ? '' : pile.pileName, kilos: m.kilos })
     }
     const net = new Map()
     for (const [rk, row] of aged0) for (const [id, v] of row) put(net, rk, id, v)
@@ -378,16 +382,28 @@ const edgesAndTones = (cols, topKey) => {
 }
 
 export const summaryModel = (summary, unit, { asOf, scope = 'ALBAY BRANCH' }) => {
-  const cols = summary.cols
-  const { edges, tones } = edgesAndTones(cols, (c) => c.commodity)
+  // columns, with a TOTAL column closing each cereal type (palay, rice, by-products)
+  const groups = []
+  for (const c of summary.cols) {
+    const g = groups[groups.length - 1]
+    if (g && g.commodity === c.commodity) g.cols.push(c)
+    else groups.push({ commodity: c.commodity, cols: [c] })
+  }
+  const items = groups.flatMap((g) => [
+    ...g.cols.map((c) => ({ ...c, kind: 'col' })),
+    { kind: 'total', commodity: g.commodity, variety: 'TOTAL', bucket: '', ids: g.cols.map((c) => c.id) },
+  ])
+  const { edges, tones } = edgesAndTones(items, (c) => c.commodity)
   const head = [
-    [{ t: 'WAREHOUSE', span: 1 }, ...headRow(cols, (c) => c.commodity, (c) => COMMODITY_LABEL[c.commodity], tones), { t: 'TOTAL', span: 1, tone: 0 }],
-    [{ t: '', span: 1 }, ...headRow(cols, (c) => `${c.commodity}|${c.variety}`, (c) => c.variety, tones), { t: '', span: 1, tone: 0 }],
-    [{ t: '', span: 1 }, ...cols.map((c, i) => ({ t: c.bucket, span: 1, tone: tones[i] })), { t: '', span: 1, tone: 0 }],
+    [{ t: 'WAREHOUSE', span: 1 }, ...headRow(items, (c) => c.commodity, (c) => COMMODITY_LABEL[c.commodity], tones), { t: 'ALL', span: 1, tone: 0 }],
+    [{ t: '', span: 1 }, ...headRow(items, (c) => `${c.commodity}|${c.variety}`, (c) => c.variety, tones), { t: 'TOTAL', span: 1, tone: 0 }],
+    [{ t: '', span: 1 }, ...items.map((c, i) => ({ t: c.bucket, span: 1, tone: tones[i] })), { t: '', span: 1, tone: 0 }],
   ]
   const line = (first, values, kind) => {
-    const cells = cols.map((c) => num(values.get(c.id) ?? 0, unit))
-    const total = [...values.values()].reduce((s, v) => s + v, 0)
+    const cells = items.map((it) => (it.kind === 'col'
+      ? num(values.get(it.id) ?? 0, unit)
+      : num(it.ids.reduce((sum, id) => sum + (values.get(id) ?? 0), 0), unit)))
+    const total = [...values.values()].reduce((sum, v) => sum + v, 0)
     return { kind, first, cells: [...cells, num(total, unit)], dash: true }
   }
   const rows = []
@@ -469,9 +485,17 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
 const lineLabel = (c) => `${c.variety} · ${c.bucket}`
 
 export const summaryCards = (summary, unit) => {
-  const mk = (values) => summary.cols
-    .map((c) => ({ label: lineLabel(c), commodity: c.commodity, value: num(values.get(c.id) ?? 0, unit) }))
-    .filter((l) => l.value != null)
+  const mk = (values) => {
+    const out = []
+    const order = [...new Set(summary.cols.map((c) => c.commodity))]
+    for (const commodity of order) {
+      const cols = summary.cols.filter((c) => c.commodity === commodity)
+      for (const c of cols) { const v = num(values.get(c.id) ?? 0, unit); if (v != null) out.push({ label: lineLabel(c), commodity, value: v }) }
+      const t = num(cols.reduce((sum, c) => sum + (values.get(c.id) ?? 0), 0), unit)
+      if (t != null) out.push({ label: `Total ${COMMODITY_LABEL[commodity].toLowerCase()}`, commodity, value: t, total: true })
+    }
+    return out
+  }
   const total = (values) => num([...values.values()].reduce((s, v) => s + v, 0), unit) ?? 0
   return {
     provinces: summary.provinces.map((p) => ({
