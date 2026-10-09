@@ -22,6 +22,7 @@ import { fmtBags, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureSt
 import { computeWsrProcurementCost, buyingPricesForSdo } from '../../utils/sdoCalculations.js'
 import { dedupeWsrTransactions } from '../../pages/SdoHome.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
+import { isTextEditable } from '../../hooks/useEntryFormShortcuts.js'
 import AuthorityReviewModal from '../common/AuthorityReviewModal.jsx'
 import { computeReviewGroups } from '../../utils/authorityReview.js'
 import Avatar from '../common/Avatar.jsx'
@@ -75,6 +76,28 @@ function AppHeader({ hidden = false }) {
   const [hasEntered, setHasEntered] = useState(false)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const headerRef = useRef(null)
+
+  // Escape on any page that has nothing else open asks to log out: Enter confirms, Escape cancels. It is
+  // checked in the capture phase, before any other handler of this keypress runs, so the Escape that
+  // closes a form, sheet, dialog or picker never also opens this. Typing in a field is left alone.
+  useEffect(() => {
+    if (!user || pathname === '/login') return undefined
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.repeat || confirmingLogout || isLoggingOut) return
+      if (isTextEditable(document.activeElement)) return
+      if (document.querySelector('[data-suppress-form-shortcuts]')) return
+      const covering = [...document.querySelectorAll('.fixed.inset-0')].some((el) => {
+        const st = getComputedStyle(el)
+        return st.pointerEvents !== 'none' && st.visibility !== 'hidden' && Number(st.opacity) > 0.01
+      })
+      if (covering) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      setConfirmingLogout(true)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [user, pathname, confirmingLogout, isLoggingOut])
 
   // Title/subtitle change animation - direction follows where the new
   // page actually sits relative to the old one (same left-to-right

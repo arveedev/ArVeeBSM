@@ -85,12 +85,17 @@ function ModelTable({ model, short = false, onNote }) {
   const widthRef = useRef(0)
   const rafRef = useRef(0)
   const runningRef = useRef(null)
+  const bodyRef = useRef(null)
   const [entering, setEntering] = useState(null)
   useCrosshair(boxRef)
 
-  // When the columns change (Combined, By-products, a bracket set) the table eases to its new width and the
-  // new columns grow in; when only the unit changes the numbers run from the old value to the new one,
-  // the same way the Home totals do.
+  // What happens when the model changes, using only transform, opacity and text changes (nothing that makes
+  // the browser lay the table out again on every frame, which is what made it stutter):
+  //  - columns appear or disappear (Combined, By-products, a bracket set): the table eases from its old width
+  //    to the new one and the new columns fade in;
+  //  - same rows and columns with other numbers (another as-of date, another month, net bags to MT): the
+  //    numbers that changed run from the old value to the new one, like the Home totals;
+  //  - other rows (another date range, another month's weeks): the rows rise in.
   useLayoutEffect(() => {
     const prev = prevRef.current
     prevRef.current = model
@@ -100,40 +105,48 @@ function ModelTable({ model, short = false, onNote }) {
     widthRef.current = width
     // a running count is finished first, so no number is ever left half way
     cancelAnimationFrame(rafRef.current)
-    if (runningRef.current) { for (const it of runningRef.current) it.node.nodeValue = fmtNum(it.to); runningRef.current = null }
-    if (!prev || !wrap || model.empty || prev.empty || !model.colKeys || !prev.colKeys) return undefined
-    const same = prev.colKeys.length === model.colKeys.length && prev.colKeys.every((k, i) => k === model.colKeys[i])
-    if (!same) {
+    if (runningRef.current) {
+      for (const it of runningRef.current.items) { it.node.nodeValue = fmtNum(it.to); it.td.style.minWidth = '' }
+      runningRef.current = null
+    }
+    if (!prev || !wrap || model.empty || prev.empty) return undefined
+    const colsSame = Boolean(model.colKeys && prev.colKeys) && prev.colKeys.length === model.colKeys.length && prev.colKeys.every((k, i) => k === model.colKeys[i])
+    if (model.colKeys && prev.colKeys && !colsSame) {
       const added = new Set(model.colKeys.filter((k) => !prev.colKeys.includes(k)))
       if (added.size > 0) { setEntering(added); setTimeout(() => setEntering(null), 800) }
-      if (before && width && before !== width) {
-        wrap.style.width = `${before}px`
-        wrap.style.overflow = 'hidden'
-        void wrap.offsetWidth
-        wrap.style.transition = 'width 0.4s cubic-bezier(0.22, 1, 0.36, 1)'
-        wrap.style.width = `${width}px`
-        setTimeout(() => { wrap.style.transition = ''; wrap.style.width = ''; wrap.style.overflow = '' }, 440)
+      if (before && width && before !== width && wrap.animate) {
+        wrap.animate(
+          [{ transform: `scaleX(${Math.max(0.5, Math.min(2, before / width))})`, opacity: 0.55 }, { transform: 'scaleX(1)', opacity: 1 }],
+          { duration: 380, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+        )
       }
       return undefined
     }
-    if (prev.unit && model.unit && prev.unit !== model.unit && prev.rows.length === model.rows.length) {
+    const sameRows = prev.rows.length === model.rows.length && prev.rows.every((r, i) => r.first === model.rows[i].first)
+    if (colsSame && sameRows) {
       const items = [...(boxRef.current?.querySelectorAll('td[data-r]') ?? [])].map((td) => {
         const from = prev.rows[Number(td.dataset.r)]?.cells[Number(td.dataset.c)]
         const to = model.rows[Number(td.dataset.r)]?.cells[Number(td.dataset.c)]
-        return from != null && to != null && td.firstChild ? { node: td.firstChild, from, to } : null
+        return from != null && to != null && from !== to && td.firstChild ? { td, node: td.firstChild, from, to } : null
       }).filter(Boolean)
+      if (items.length === 0) return undefined
+      // each cell keeps the room its widest figure needs while the numbers run, so the columns do not move
+      for (const it of items) it.td.style.minWidth = `${Math.max(fmtNum(it.from).length, fmtNum(it.to).length) + 1.5}ch`
       const start = performance.now()
       const tick = (now) => {
         const t = Math.min(1, (now - start) / COUNT_MS)
         const eased = 1 - Math.pow(1 - t, 3)
         for (const it of items) it.node.nodeValue = fmtNum(t < 1 ? it.from + (it.to - it.from) * eased : it.to)
         if (t < 1) rafRef.current = requestAnimationFrame(tick)
-        else runningRef.current = null
+        else { for (const it of items) it.td.style.minWidth = ''; runningRef.current = null }
       }
-      runningRef.current = items
+      runningRef.current = { items }
       for (const it of items) it.node.nodeValue = fmtNum(it.from)
       rafRef.current = requestAnimationFrame(tick)
+      return undefined
     }
+    const body = bodyRef.current
+    if (body?.animate) body.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
     return undefined
   }, [model])
   useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
@@ -161,7 +174,7 @@ function ModelTable({ model, short = false, onNote }) {
                         key={ci}
                         colSpan={h.span}
                         rowSpan={first ? model.head.length : 1}
-                        className={`sticky h-7 whitespace-nowrap border-b border-r border-neutral-800 px-2 font-semibold ${first ? 'left-0 z-30 min-w-[11rem] bg-emerald-950 text-left text-emerald-300' : `z-20 text-center ${grows ? 'sd-col-grow' : 'min-w-[4.75rem]'} ${fades ? 'sd-col-in' : ''} ${headTone(h.tone)} ${edgeClass(model.edges[idx])}`}`}
+                        className={`sticky h-7 whitespace-nowrap border-b border-r border-neutral-800 px-2 font-semibold ${first ? 'left-0 z-30 min-w-[11rem] bg-emerald-950 text-left text-emerald-300' : `z-20 text-center min-w-[4.75rem] ${grows || fades ? 'sd-col-in' : ''} ${headTone(h.tone)} ${edgeClass(model.edges[idx])}`}`}
                         style={{ top: `${ri * 1.75}rem` }}
                       >
                         {h.t}
@@ -172,7 +185,7 @@ function ModelTable({ model, short = false, onNote }) {
               )
             })}
           </thead>
-          <tbody>
+          <tbody ref={bodyRef}>
             {model.rows.map((r, i) => (
               <tr key={i} className={`${ROW_STYLE[r.kind] ?? ''} ${ROW_BORDER[r.kind] ?? ''}`}>
                 <td className={`sticky left-0 z-[5] min-w-[11rem] max-w-[18rem] whitespace-normal break-words border-b border-r border-neutral-800 bg-neutral-950 px-2 py-1 text-left ${r.kind === 'add' || r.kind === 'less' ? 'pl-5' : ''}`}>
@@ -185,7 +198,7 @@ function ModelTable({ model, short = false, onNote }) {
                       key={ci}
                       {...(v != null ? { 'data-r': i, 'data-c': ci } : {})}
                       onClick={r.notes?.[ci] ? () => onNote?.({ title: `${r.first} · ${model.colTitles?.[ci] ?? ''}`, sub: r.day ? longDate(r.day) : '', lines: r.notes[ci] }) : undefined}
-                      className={`whitespace-nowrap border-b border-r border-neutral-800 px-2 py-1 text-right ${isNew(model.colKeys?.[ci]) ? 'sd-col-grow' : ''} ${model.tones[ci] === 1 ? 'bg-white/[0.04]' : ''} ${edgeClass(model.edges[ci])} ${r.notes?.[ci] ? 'cursor-pointer underline decoration-dotted underline-offset-2 hover:bg-white/10' : ''}`}
+                      className={`whitespace-nowrap border-b border-r border-neutral-800 px-2 py-1 text-right ${isNew(model.colKeys?.[ci]) ? 'sd-col-in' : ''} ${model.tones[ci] === 1 ? 'bg-white/[0.04]' : ''} ${edgeClass(model.edges[ci])} ${r.notes?.[ci] ? 'cursor-pointer underline decoration-dotted underline-offset-2 hover:bg-white/10' : ''}`}
                       title={r.notes?.[ci] ? 'Tap to see the transactions' : undefined}
                     >
                       {v == null ? (r.dash ? '-' : '') : fmtNum(v)}
@@ -224,7 +237,7 @@ function Lines({ lines }) {
 function SummaryCardList({ cards }) {
   if (cards.provinces.length === 0) return <p className="py-10 text-center text-sm text-neutral-500">No stock found for these filters.</p>
   return (
-    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
+    <div className="sd-fade-in min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
       {cards.provinces.map((p) => (
         <div key={p.name} className="space-y-2">
           <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">{p.name}</p>
@@ -263,7 +276,7 @@ function LedgerCardList({ days, onNote }) {
     ? <button key={label} type="button" onClick={() => onNote?.({ title, sub: longDate(day), lines })} className={`${tone} underline decoration-dotted underline-offset-2`}>{label} {fmtNum(Math.abs(v))}</button>
     : <span key={label} className={tone}>{label} {fmtNum(Math.abs(v))}</span>)
   return (
-    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
+    <div className="sd-fade-in min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
       {days.map((d) => (
         <div key={d.date} className="space-y-2">
           <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">{longDate(d.date)}</p>
@@ -494,7 +507,7 @@ function ProcurementCardList({ lines }) {
   const shown = lines.filter((l) => l.kind !== 'row' || l.groups.some((g) => g.total > 0))
   if (shown.length === 0) return <p className="py-10 text-center text-sm text-neutral-500">No procurement in this month yet.</p>
   return (
-    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-6">
+    <div className="sd-fade-in min-h-0 flex-1 space-y-2 overflow-y-auto pb-6">
       {shown.map((l, i) => (
         <Card key={i} className={l.kind === 'total' ? 'border-brand-neon/50' : l.kind === 'week' ? 'border-neutral-600' : ''}>
           <p className={`mb-1 border-b border-neutral-800 pb-1.5 ${l.kind === 'row' ? 'font-semibold text-app-text' : 'font-bold uppercase text-brand-neon'}`}>{l.label}</p>
@@ -910,11 +923,11 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                     {view === 'procurement' && <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>}
                     {view === 'age' ? (
                       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-                        {narrow && built.cards ? <SummaryCardList cards={built.cards} /> : <ModelTable model={model} short onNote={openNote} />}
+                        {narrow && built.cards ? <SummaryCardList key={asOf} cards={built.cards} /> : <ModelTable model={model} short onNote={openNote} />}
                         {built.lists && <AgeLists lists={built.lists} unit={unit} />}
                       </div>
                     ) : narrow && built.cards
-                      ? (view === 'summary' ? <SummaryCardList cards={built.cards} /> : view === 'procurement' ? <ProcurementCardList lines={built.cards} /> : <LedgerCardList days={built.cards} onNote={openNote} />)
+                      ? (view === 'summary' ? <SummaryCardList key={asOf} cards={built.cards} /> : view === 'procurement' ? <ProcurementCardList key={month} lines={built.cards} /> : <LedgerCardList key={`${from}|${to}`} days={built.cards} onNote={openNote} />)
                       : <ModelTable model={model} onNote={openNote} />}
                   </>
                 )}
