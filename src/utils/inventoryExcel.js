@@ -6,10 +6,7 @@ const FILL = {
   head: 'FFD9EAD3', day: 'FFB6D7A8', section: 'FFEFEFEF', sub: 'FFF3F3F3', total: 'FFE6E6E6', beg: 'FFFFF2CC',
 }
 
-export const exportModelToExcel = async (model, { fileName, sheetName = 'Report' }) => {
-  const mod = await import('exceljs')
-  const ExcelJS = mod.default ?? mod
-  const wb = new ExcelJS.Workbook()
+const addSheet = (wb, model, sheetName) => {
   const ws = wb.addWorksheet(sheetName.slice(0, 31), { views: [{ state: 'frozen', xSplit: 1, ySplit: 2 + model.head.length }] })
   const width = model.head[0].reduce((s, c) => s + c.span, 0)
 
@@ -77,7 +74,9 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
 
   ws.getColumn(1).width = 46
   for (let k = 2; k <= width; k++) ws.getColumn(k).width = 13
+}
 
+const download = async (wb, fileName) => {
   const buf = await wb.xlsx.writeBuffer()
   const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
   const a = document.createElement('a')
@@ -87,4 +86,23 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+const newWorkbook = async () => {
+  const mod = await import('exceljs')
+  const ExcelJS = mod.default ?? mod
+  return new ExcelJS.Workbook()
+}
+
+export const exportModelToExcel = async (model, { fileName, sheetName = 'Report' }) => {
+  const wb = await newWorkbook()
+  addSheet(wb, model, sheetName)
+  await download(wb, fileName)
+}
+
+/** Several tables in one workbook, one sheet each: [{ model, sheetName }]. */
+export const exportModelsToExcel = async (sheets, { fileName }) => {
+  const wb = await newWorkbook()
+  for (const { model, sheetName } of sheets) addSheet(wb, model, sheetName)
+  await download(wb, fileName)
 }

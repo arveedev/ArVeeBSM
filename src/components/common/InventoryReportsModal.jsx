@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { ArrowLeft, X, SlidersHorizontal, FileSpreadsheet, ChevronRight, Sheet, ClipboardList, Table, Hourglass, Wheat, Factory, FlaskConical, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, X, SlidersHorizontal, FileSpreadsheet, ChevronRight, Sheet, ClipboardList, Table, Hourglass, Wheat, Factory, FlaskConical, ShieldCheck, Boxes } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { todayLocalISO } from '../../utils/calculations.js'
 import {
@@ -20,6 +20,7 @@ import {
   buildAgeLists, buildChecks, checksModel, computeOpeningBase, toUnit,
 } from '../../utils/inventoryReport.js'
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
+import { buildEndingStock } from '../../utils/endingStockReport.js'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
@@ -333,6 +334,53 @@ function SelfCheckCard({ results }) {
   )
 }
 
+// Month-end stock per province from the Stock Book (so an opening-balance override shows here too).
+function EndingStockView({ data, setMonth, unit, setUnit }) {
+  const [exporting, setExporting] = useState(false)
+  const exportExcel = async () => {
+    setExporting(true)
+    try {
+      const { exportModelsToExcel } = await import('../../utils/inventoryExcel.js')
+      await exportModelsToExcel(data.tables.map((model, i) => ({ model, sheetName: i === 0 ? 'Paddy' : 'Local rice' })), { fileName: `ending-stock-per-variety-${data.month}` })
+    } catch (err) {
+      console.error(err)
+      toast.error('Could not create the Excel file')
+    } finally {
+      setExporting(false)
+    }
+  }
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+      <div className="mb-2 flex flex-wrap items-end gap-x-2 gap-y-2">
+        <div className={`flex items-center ${CONTROL_H}`}>
+          <select value={data.month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" className="rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200">
+            {data.options.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+          </select>
+        </div>
+        <div className={`flex items-center ${CONTROL_H}`}>
+          <PillToggle options={[{ value: 'b', label: 'Net bags' }, { value: 'mt', label: 'MT' }]} value={unit} onChange={setUnit} />
+        </div>
+        <span className="hidden flex-1 sm:block" />
+        <div className={`flex items-center ${CONTROL_H}`}>
+          <button type="button" onClick={exportExcel} disabled={exporting} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
+            <FileSpreadsheet size={14} /> {exporting ? 'Creating…' : 'Excel'}
+          </button>
+        </div>
+      </div>
+      <h3 className="text-sm font-bold text-app-text">{data.heading}</h3>
+      <p className="mb-3 text-xs text-neutral-500">
+        Stock as of {longDate(data.asOf)}, from the Stock Book (an opening balance an Admin saved is included). By-products are not part of this form.
+      </p>
+      {data.tables.map((model) => (
+        <div key={model.title} className="mb-4">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wide text-neutral-300">{model.title}</p>
+          <ModelTable model={model} short />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function CheckView({ checks, unit }) {
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
@@ -495,6 +543,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [sheetResult, setSheetResult] = useState(null)
   const [windowDays, setWindowDays] = useState(30)
   const [month, setMonth] = useState(today.slice(0, 7))
+  const [endingMonth, setEndingMonth] = useState(null)
   const toRef = useRef(null)
   const narrow = useIsNarrow()
 
@@ -532,13 +581,18 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
   const built = useMemo(() => {
-    if (loading || !['summary', 'ledger', 'age', 'check', 'procurement'].includes(view) || (view === 'check' && !isAdmin)) return null
+    if (loading || !['summary', 'ledger', 'age', 'check', 'procurement', 'ending'].includes(view) || (view === 'check' && !isAdmin)) return null
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet, opening: config?.inventoryOpening ?? null, ageBasis: view === 'age' ? 'exact' : 'month' })
     const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
     const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null, byProducts: filters.showByProducts || filters.commodity === 'By Products' }
     const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
     const end = to < from ? from : to
     try {
+      if (view === 'ending') {
+        const options = monthOptions(startISO ?? config?.dataStartDate, today)
+        const chosen = endingMonth && options.includes(endingMonth) ? endingMonth : (options[1] ?? options[0])
+        return { ending: { ...buildEndingStock(ctx, inputs, { month: chosen, todayISO: today, provinceNames: provinces.map((p) => p.name), unit }), month: chosen, options } }
+      }
       if (view === 'procurement') {
         if (!sdoUsers || !ledgerRows || !activePrs) return null
         const cpfEvents = buildCpfHistory({ sdoUsers, ledger: ledgerRows, activePrs, config, warehouses, provinces })
@@ -564,7 +618,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       console.error(err)
       return { model: { title: '', subtitle: '', head: [], rows: [], edges: [], tones: [], empty: 'Could not build this report.' }, cards: null }
     }
-  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, startISO, authorities, isAdmin, sdoUsers, ledgerRows, activePrs, branches])
+  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, endingMonth, startISO, authorities, isAdmin, sdoUsers, ledgerRows, activePrs, branches])
   const model = built?.model ?? null
 
   const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse'].filter(Boolean).length
@@ -625,7 +679,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     }
   }
 
-  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', milling: 'Milling liquidation', test: 'Test milling liquidation' }[view] ?? 'Inventory reports'
+  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', ending: 'Ending stock per variety', milling: 'Milling liquidation', test: 'Test milling liquidation' }[view] ?? 'Inventory reports'
   const back = () => (view === 'hub' ? onClose() : setView('hub'))
   const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
 
@@ -646,6 +700,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               { id: 'ledger', name: 'Daily inventory', desc: 'Per day: ADD and LESS by type, ending stock, by warehouse and variety', Icon: ClipboardList },
               { id: 'summary', name: 'Summary', desc: 'Stock by warehouse, variety and age bracket with province subtotals', Icon: Table },
               { id: 'age', name: 'Age monitoring', desc: 'Age brackets per variety, stock moving to the next bracket, oldest stock', Icon: Hourglass },
+              { id: 'ending', name: 'Ending stock per variety', desc: 'Month-end stock per province: paddy by variety and local rice (the NFA ending stock balance form)', Icon: Boxes },
               { id: 'procurement', name: 'Daily procurement status', desc: 'PD and PW bags per day, per province, with the CPF balance', Icon: Wheat },
               { id: 'milling', name: 'Milling liquidation', desc: 'Regular milling per ricemill: issues, receipts, by-products, summary', Icon: Factory },
               { id: 'test', name: 'Test milling liquidation', desc: 'Test milling per ricemill: TMO and trials, by-products, summary', Icon: FlaskConical },
@@ -659,6 +714,10 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             ))}
           </div>
         )}
+
+        {view === 'ending' && (loading || !built?.ending
+          ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>
+          : <EndingStockView data={built.ending} setMonth={setEndingMonth} unit={unit} setUnit={setUnit} narrow={narrow} />)}
 
         {(view === 'milling' || view === 'test') && (loading || !sackTypes
           ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>

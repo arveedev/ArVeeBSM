@@ -382,7 +382,10 @@ the step-by-step journey.*
 1. On Home > Stocks, a very dim clipboard icon after the "Net Bags by
    Province & Category" title opens the full-screen Inventory Reports list.
    No other role sees it; there is no navigation tab for it.
-2. The list offers: Daily inventory, Summary, Age monitoring, Daily
+2. The list offers: Daily inventory, Summary, Age monitoring, Ending stock
+   per variety (the monthly NFA ending stock balance form: month-end net bags
+   per province, paddy by variety PDs / PDm / PD1 / PD2 and local rice by
+   variety WD1 / WD0 / RWD1, defaulting to the previous month, with Excel), Daily
    procurement status, Milling liquidation, Test milling liquidation and Data
    check. Every report is read-only.
 3. Daily inventory takes a Start Date then an End Date (choosing the start

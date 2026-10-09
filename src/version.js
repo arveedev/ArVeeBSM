@@ -8379,4 +8379,5 @@
 //   1.10-321 - Reports: PDm and PDs are never combined; Summary has a total per cereal type (palay, rice, by-products); an authority shows as one line with no piles; Daily inventory and Summary keep a lot's age bracket for the whole month (the move shows next month), Age monitoring shows the exact day.
 //   1.10-322 - Opening-balance override keeps the balance exactly as typed (no longer a correction that drifts), in Combined names, every bracket set and Age monitoring; the override notice always shows.
 //   1.10-323 - Stock book accuracy: calendar-month ages, opening-balance override worked into the lots (ages like real stock), month-start age moves explained on the cells, no silent 200-day cut-off, Data check self-check.
-export const APP_VERSION = '1.10-323'
+//   1.10-324 - Opening balance dated month-end holds its brackets through the next month (no age move until the month after); new Ending stock per variety screen (monthly NFA ending stock form).
+export const APP_VERSION = '1.10-324'

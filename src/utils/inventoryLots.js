@@ -148,7 +148,8 @@ const seedAnchor = (tx, pile) => {
  * bracket named in its Age Group column. Without `reserve` the stock is physical:
  * only WSI and WTS deduct (used by the lots check, which must match the pile balances).
  */
-const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf, authorities = [], reserve = false, clearClosed = true, opening = null }, movements) => {
+const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf, authorities = [], reserve = false, clearClosed = true, opening = null, monthBasis = null }, movements) => {
+  const basisOf = (d) => (monthBasis ? monthBasis(d) : `${d.slice(0, 8)}01`)
   const pileById = new Map(piles.map((p) => [p.pileId, p]))
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const state = new Map(piles.map((p) => [p.pileId, { lots: [], shortBags: 0, shortKilos: 0, shortEvents: [] }]))
@@ -317,7 +318,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
 
   for (const ev of events) {
     if (ev.override) {
-      const first = `${ev.override.date.slice(0, 8)}01`
+      const first = basisOf(ev.override.date)
       let n = 0
       for (const c of ev.override.cells) {
         if (c.k < 0) {
@@ -339,7 +340,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       const { a, amount } = ev.auth
       const range = ageGroupRange(a.ageGroup)
       if (!range) authNoAge.push({ aiNumber: a.aiNumber, ageGroup: a.ageGroup ?? '', warehouseId: a.assignedWarehouse, varietyId: a.varietyId, date: ev.when, kilos: amount, customer: a.customerName ?? null })
-      const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount, range, `${ev.when.slice(0, 8)}01`)
+      const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount, range, basisOf(ev.when))
       pools.set(a.aiNumber, { left: amount - short, portions: portions.map((x) => ({ ...x })) })
       const byPile = new Map()
       for (const x of portions) { const l = byPile.get(x.pileId) ?? []; l.push(x); byPile.set(x.pileId, l) }

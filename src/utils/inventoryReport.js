@@ -90,6 +90,20 @@ const put = (grid, rk, cid, kilos) => {
   row.set(cid, (row.get(cid) ?? 0) + kilos)
 }
 
+// The date a month's age brackets are worked out on: the 1st of the month, so stock stays in
+// one bracket all month and its move shows in the next month. The one exception is an opening
+// balance dated the last day of a month: it is the truth for the month it opens, so that month
+// keeps the brackets it was typed in and the move shows the month after.
+const monthBasis = (opening, asOf) => {
+  const month = asOf.slice(0, 7)
+  if (opening?.date) {
+    const m = opening.date.slice(0, 7)
+    const next = new Date(Date.parse(`${opening.date}T00:00:00Z`) + 86400000).toISOString().slice(0, 7)
+    if (next !== m && month === next) return `${m}-01`
+  }
+  return `${month}-01`
+}
+
 const lotCol = (ctx, pile, varietyId, lotDate, asOf) => {
   const commodity = commodityOf(pile)
   let variety = ctx.varietyName.get(varietyId ?? pile?.varietyId) ?? (commodity === 'By Products' ? 'BY-PRODUCTS' : '?')
@@ -97,7 +111,7 @@ const lotCol = (ctx, pile, varietyId, lotDate, asOf) => {
   if (ctx.combine && commodity === 'Palay') variety = variety.replace(/^(PD\d+)[ms](?=-|$)/i, '$1')
   // Daily inventory and Summary: a lot's bracket is fixed for the month (its age at the 1st), so a move
   // to the next bracket shows in the next month; Age monitoring uses the exact day.
-  const ageDate = ctx.ageBasis === 'exact' ? asOf : `${asOf.slice(0, 8)}01`
+  const ageDate = ctx.ageBasis === 'exact' ? asOf : monthBasis(ctx.opening, asOf)
   const months = lotAgeMonths(lotDate, ageDate) ?? 0
   return { commodity, variety, bucket: bucketOf(commodity, months, ctx.ageSet) }
 }
@@ -182,7 +196,7 @@ const withOpening = (ctx, inputs) => {
 }
 
 // The inputs the lot engine needs for the reports: the override cells ride along.
-const withEngine = (ctx, inputs) => (ctx.openingEngine ? { ...inputs, opening: ctx.openingEngine } : inputs)
+const withEngine = (ctx, inputs) => ({ ...inputs, monthBasis: (d) => monthBasis(ctx.opening, d), ...(ctx.openingEngine ? { opening: ctx.openingEngine } : {}) })
 
 const stockGrid = (ctx, state, ageDate, filters, stateDate = null) => {
   const grid = new Map()
