@@ -32,7 +32,7 @@ function InventoryReportsAccessPanel() {
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <h2 className="text-base font-semibold text-app-text">Report Access</h2>
       <p className="mt-1 text-xs text-neutral-400">
-        Choose which Inventory Reports screens a Visitor can open. Admin always sees everything. This only shows or hides a
+        Choose which Stock Desk screens a Visitor can open. Admin always sees everything. This only shows or hides a
         screen; no figure changes. Editing prices, opening balances and these settings stays with Admin.
       </p>
       <div className="mt-3 space-y-2">

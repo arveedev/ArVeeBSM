@@ -8381,4 +8381,5 @@
 //   1.10-323 - Stock book accuracy: calendar-month ages, opening-balance override worked into the lots (ages like real stock), month-start age moves explained on the cells, no silent 200-day cut-off, Data check self-check.
 //   1.10-324 - Opening balance dated month-end holds its brackets through the next month (no age move until the month after); new Ending stock per variety screen (monthly NFA ending stock form).
 //   1.10-325 - Report Access: an Admin chooses per Inventory Reports screen whether a Visitor sees it or it is Admin only.
-export const APP_VERSION = '1.10-325'
+//   1.10-326 - Named the Stock Desk; the Google Sheet button is Admin only (Excel stays for Visitors).
+export const APP_VERSION = '1.10-326'

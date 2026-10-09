@@ -377,7 +377,7 @@ the step-by-step journey.*
    at all) and of flagged authorities with unreviewed transactions.
    A renumber is only noticed after a full Sheet pull (Force Resync).
 
-## 12. Inventory Reports Flow (Admin and Visitor)
+## 12. Stock Desk Flow (Admin and Visitor; formerly "Inventory Reports")
 
 1. On Home > Stocks, a very dim clipboard icon after the "Net Bags by
    Province & Category" title opens the full-screen Inventory Reports list.

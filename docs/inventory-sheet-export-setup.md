@@ -1,6 +1,6 @@
-# Inventory Reports: Google Sheet export setup
+# Stock Desk: Google Sheet export setup
 
-The Inventory Reports screen can send its tables to a Google Sheet. It uses its
+The Stock Desk (formerly Inventory Reports) can send its tables to a Google Sheet. It uses its
 own Apps Script web app and its own spreadsheet, so it can never touch the AI/SIA
 sheets, the transaction backup sheets, or your existing Daily Inventory sheet.
 
@@ -18,8 +18,8 @@ sheets, the transaction backup sheets, or your existing Daily Inventory sheet.
    - Copy the **Web app URL** it gives you.
 5. In the BSM App: **Admin Dashboard > System > Sheet Export**. Paste the URL (and the
    token if you set one), tap **Test connection**. You should see the spreadsheet name.
-6. Open **Inventory Reports** (the quiet icon on Home > Stocks). On Daily inventory,
-   Summary or Age monitoring, tap **Google Sheet**.
+6. Open the **Stock Desk** (the quiet icon on Home > Stocks) as an Admin. On Daily inventory,
+   Summary or Age monitoring, tap **Google Sheet**. The button is Admin only; Visitors keep Excel.
 
 ## What gets written
 

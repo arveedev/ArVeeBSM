@@ -1,4 +1,4 @@
-// Inventory Reports (Admin and Visitor). Opened from the quiet icon on the
+// Stock Desk (Admin and Visitor; Admin decides which screens a Visitor sees). Google Sheet export is Admin only. Opened from the quiet icon on the
 // Home > Stocks title row. READ-ONLY: every figure is computed from the pile
 // and transaction records already in the app (see utils/inventoryLots.js and
 // utils/inventoryReport.js); nothing here adds, changes or deletes data.
@@ -655,7 +655,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const handleSheet = async () => {
     const settings = config?.inventorySheet
     if (!settings?.webAppUrl) { toast.error('Set up Sheet Export first (Admin Dashboard > System > Sheet Export)'); return }
-    if (loading) return
+    if (loading || !isAdmin) return
     setSheetBusy(true)
     setSheetResult(null)
     try {
@@ -684,7 +684,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     }
   }
 
-  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', ending: 'Ending stock per variety', milling: 'Milling liquidation', test: 'Test milling liquidation' }[view] ?? 'Inventory reports'
+  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', ending: 'Ending stock per variety', milling: 'Milling liquidation', test: 'Test milling liquidation' }[view] ?? 'Stock Desk'
   const back = () => (view === 'hub' ? onClose() : setView('hub'))
   const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
 
@@ -786,7 +786,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                   </button>
                 </div>
               )}
-              {(view === 'ledger' || view === 'summary' || view === 'age') && (
+              {isAdmin && (view === 'ledger' || view === 'summary' || view === 'age') && (
                 <div className={`flex items-center ${CONTROL_H}`}>
                   <button type="button" onClick={handleSheet} disabled={sheetBusy || loading} className={pillButton}>
                     <Sheet size={14} /> {sheetBusy ? 'Sending…' : 'Google Sheet'}

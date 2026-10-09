@@ -297,7 +297,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
               <button
                 type="button"
                 onClick={() => setShowInventoryReports(true)}
-                aria-label="Inventory reports"
+                aria-label="Stock Desk"
                 className="ml-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
               >
                 <ClipboardList size={14} />

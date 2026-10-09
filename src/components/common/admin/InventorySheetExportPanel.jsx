@@ -51,7 +51,7 @@ function InventorySheetExportPanel() {
     <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
       <h2 className="text-base font-semibold text-app-text">Sheet Export</h2>
       <p className="mt-1 text-xs text-neutral-400">
-        The Inventory Reports "Google Sheet" button sends its tables to a separate reporting spreadsheet through its own Apps Script.
+        The Stock Desk "Google Sheet" button (Admin only) sends its tables to a separate reporting spreadsheet through its own Apps Script.
         Setup steps are in docs/inventory-sheet-export-setup.md. Try it on a copy of the spreadsheet first.
       </p>
       <label className={`mt-3 block ${labelClass}`}>Web app URL
