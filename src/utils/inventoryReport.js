@@ -108,12 +108,40 @@ const lotCol = (ctx, pile, varietyId, lotDate, asOf) => {
 // report settings and never touches a pile, a transaction or any other screen.
 const applyOpening = (ctx, grid, stateDate, filters) => {
   const o = ctx.opening
-  if (!o || !stateDate || stateDate < o.date || o.ageSet !== ctx.ageSet) return
-  for (const c of o.cells) {
+  if (!o || !stateDate || stateDate < o.date) return
+  for (const c of ctx.openingCells ?? []) {
     const like = { warehouseId: c.w, cerealType: c.c }
     if (!accept(filters, like, ctx)) continue
     put(grid, rowKey(rowOf(ctx, like)), colId(c.c, c.v, c.b), c.k)
   }
+}
+
+// The typed balances of the override are kept as absolute values, so what an Admin typed is
+// what shows at the override date, whatever the report logic computes underneath. The
+// correction of each cell is worked out here (typed minus computed, both as of the override
+// date) and placed in the column the current view uses: Combined names merge the dry-palay
+// letters, and another bracket set gets the nearest bracket. Older saves that only kept the
+// correction itself (`k`) are used as they were.
+const withOpening = (ctx, inputs) => {
+  if (ctx.openingCells) return ctx
+  const o = ctx.opening
+  if (!o || !Array.isArray(o.cells) || o.cells.length === 0) return { ...ctx, openingCells: [] }
+  const needBase = o.cells.some((c) => c.t != null)
+  const base = needBase ? computeOpeningBase({ ...ctx, combine: false, ageBasis: 'month', ageSet: o.ageSet }, inputs, o.date) : new Map()
+  const cells = o.cells.map((c) => {
+    const baseKilos = base.get(`${c.w}|${c.c}|${c.v}|${c.b}`)?.kilos ?? 0
+    const k = c.t != null ? c.t - baseKilos : c.k
+    let v = c.v
+    if (ctx.combine && c.c === 'Palay') v = v.replace(/^(PD\d+)[ms](?=-|$)/i, '$1')
+    let b = c.b
+    if (o.ageSet !== ctx.ageSet && c.c !== 'By Products') {
+      const set = AGE_SETS[o.ageSet]?.[c.c] ?? []
+      const i = set.findIndex((x) => x.label === c.b)
+      if (i >= 0) b = bucketOf(c.c, (i > 0 ? set[i - 1].max : 0) + 0.05, ctx.ageSet) || c.b
+    }
+    return { w: c.w, c: c.c, v, b, k }
+  })
+  return { ...ctx, openingCells: cells }
 }
 
 const stockGrid = (ctx, state, ageDate, filters, stateDate = null) => {
@@ -170,7 +198,8 @@ const gridNonEmpty = (g) => [...g.values()].some((row) => [...row.values()].some
  * is shown as an adjustment naming the pile. An Admin's opening-balance override is shown
  * as its own row. `gapAt(date)` is the running total of gaps up to that date.
  */
-const analyzeDays = (ctx, inputs, filters, from, to) => {
+const analyzeDays = (ctx0, inputs, filters, from, to) => {
+  const ctx = withOpening(ctx0, inputs)
   const warmStart = inputs.globalDataStartDate ? addDaysISO(inputs.globalDataStartDate, 1) : from
   const first = warmStart < from ? warmStart : from
   const days = []
@@ -180,7 +209,7 @@ const analyzeDays = (ctx, inputs, filters, from, to) => {
   const stateAt = new Map()
   const getState = (d) => { if (!stateAt.has(d)) stateAt.set(d, buildLots({ ...inputs, asOf: d })); return stateAt.get(d) }
   const typeLabel = (m) => m.label ?? ctx.typeName.get(m.typeId) ?? 'OTHER'
-  const opening = ctx.opening && ctx.opening.ageSet === ctx.ageSet ? ctx.opening : null
+  const opening = ctx.opening ? { date: ctx.opening.date, cells: ctx.openingCells } : null
 
   const recs = []
   const gapAt = new Map()
@@ -260,7 +289,8 @@ const analyzeDays = (ctx, inputs, filters, from, to) => {
  * subtotal per province and a branch total. Empty rows/columns are dropped. It equals the
  * Daily inventory's ending balance for that date.
  */
-export const buildSummary = (ctx, inputs, { asOf, filters = {}, sort = 'name' }) => {
+export const buildSummary = (ctx0, inputs, { asOf, filters = {}, sort = 'name' }) => {
+  const ctx = withOpening(ctx0, inputs)
   const state = buildLots({ ...inputs, asOf })
   let grid = stockGrid(ctx, state, asOf, filters, asOf)
   const warm = inputs.globalDataStartDate ? addDaysISO(inputs.globalDataStartDate, 1) : null

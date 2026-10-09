@@ -8,7 +8,7 @@
 // It changes ONLY what Daily inventory, Summary and Age monitoring show from that
 // date onward. No pile, transaction, authority or any other screen is touched,
 // and "Clear" removes it again. A correction does not age: it stays in the
-// bracket it was typed in.
+// bracket it was typed in. The balance typed is saved as typed, so it always shows.
 
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -43,8 +43,8 @@ function InventoryOpeningEditor({ date, ageSet, baseCells, existing, warehouses,
   const [values, setValues] = useState(() => {
     const out = {}
     for (const [k, c] of initial) {
-      const delta = sameDate ? (existing.cells.find((e) => key(e) === k)?.k ?? 0) : 0
-      out[k] = bags(c.base + delta)
+      const e = sameDate ? existing.cells.find((x) => key(x) === k) : null
+      out[k] = bags(e ? (e.t ?? c.base + (e.k ?? 0)) : c.base)
     }
     return out
   })
@@ -84,7 +84,9 @@ function InventoryOpeningEditor({ date, ageSet, baseCells, existing, warehouses,
       for (const [k, c] of cells) {
         const entered = parseFormattedNumber(values[k] ?? '')
         const delta = Math.round((entered * KG - c.base) * 1000) / 1000
-        if (Math.abs(delta) >= 0.5) out.push({ w: c.w, c: c.c, v: c.v, b: c.b, k: delta })
+        // `t` is the balance typed; the report works out the correction from it, so the typed
+        // value is what shows. `k` (the correction when saved) is kept for reference only.
+        if (Math.abs(delta) >= 0.5) out.push({ w: c.w, c: c.c, v: c.v, b: c.b, t: Math.round(entered * KG * 1000) / 1000, k: delta })
       }
       await persist(out.length ? { date, ageSet, cells: out, updatedAt: new Date().toISOString() } : null)
       toast.success(out.length ? `Opening balance saved (${out.length} change${out.length === 1 ? '' : 's'})` : 'No changes to save')

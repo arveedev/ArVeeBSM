@@ -724,8 +724,11 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                         LESS shows authorized stock (AI), from the day it is authorized and from the age bracket named on the authority. That stock is reserved, so it is no longer available. WSIs are not used.
                       </p>
                     )}
-                    {config?.inventoryOpening && config.inventoryOpening.ageSet === filters.ageSet && ['ledger', 'summary', 'age'].includes(view) && (
-                      <p className="mb-2 text-xs text-amber-400">Opening balance override applied from {longDate(config.inventoryOpening.date)} (Daily inventory, Summary and Age monitoring only).</p>
+                    {config?.inventoryOpening && ['ledger', 'summary', 'age'].includes(view) && (
+                      <p className="mb-2 text-xs text-amber-400">
+                        Opening balance override applied from {longDate(config.inventoryOpening.date)} (Daily inventory, Summary and Age monitoring only).
+                        {config.inventoryOpening.ageSet !== filters.ageSet && ' It was typed in another bracket set, so its cells sit in the nearest bracket here.'}
+                      </p>
                     )}
                     {view === 'age' ? (
                       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
