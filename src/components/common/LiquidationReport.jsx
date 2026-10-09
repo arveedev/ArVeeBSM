@@ -244,6 +244,8 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
   const [draft, setDraft] = useState(DEFAULTS)
   const [showFilters, setShowFilters] = useState(false)
   const [tab, setTab] = useState('')
+  const [tabLeaving, setTabLeaving] = useState(false)
+  const [tabDir, setTabDir] = useState(1)
   const [busy, setBusy] = useState('')
   const [confirmXlsx, setConfirmXlsx] = useState(false)
   const [savedKey, setSavedKey] = useState('')
@@ -260,6 +262,13 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
   )
   const tabs = useMemo(() => listMillers(periodBatches), [periodBatches])
   const activeKey = tabs.some((t) => t.key === tab) ? tab : tabs[0]?.key ?? ''
+  // The ricemill's liquidation slides out the way the tab pills run and the next one slides in.
+  const goTab = (key) => {
+    if (key === activeKey || tabLeaving) return
+    setTabDir(tabs.findIndex((t) => t.key === key) > tabs.findIndex((t) => t.key === activeKey) ? 1 : -1)
+    setTabLeaving(true)
+    setTimeout(() => { setTab(key); setTabLeaving(false) }, 170)
+  }
 
   const sections = useMemo(
     () => buildLiquidationSections({ batches: periodBatches.filter((b) => b.millerKey === activeKey), kind, warehouses, varieties, sackTypes, config, branch, from, to: end }),
@@ -319,7 +328,7 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
         <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Ricemills">
           {tabs.map((t) => (
             <button
-              key={t.key} type="button" role="tab" aria-selected={t.key === activeKey} onClick={() => setTab(t.key)}
+              key={t.key} type="button" role="tab" aria-selected={t.key === activeKey} onClick={() => goTab(t.key)}
               className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${t.key === activeKey ? 'border-brand-neon bg-brand-neon text-brand-contrast' : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500'}`}
             >
               {t.name} <span className={t.key === activeKey ? 'text-brand-contrast/70' : 'text-neutral-500'}>{t.batches}</span>
@@ -331,7 +340,7 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-6">
         {!section && <p className="py-10 text-center text-sm text-neutral-500">No {kind === 'TMO' ? 'test milling trials' : 'milling batches'} in this period for these filters.</p>}
         {section && (
-          <section>
+          <section key={activeKey} className={tabLeaving ? (tabDir > 0 ? 'sd-slide-out-left' : 'sd-slide-out') : (tabDir > 0 ? 'sd-slide-in' : 'sd-slide-in-left')}>
             <div className="mb-2 text-center">
               {section.heading.map((h) => <p key={h} className="text-[11px] text-neutral-400">{h}</p>)}
               <h3 className="text-sm font-bold text-app-text">{section.title}</h3>
