@@ -8370,4 +8370,5 @@
 //   1.10-312 - Milling liquidations are always the printed table (scaled to fit the window, no cards); a date on every WSI row; summary adds palay with milling fee and local rice with trucking fee; sticky headers on all report tables.
 //   1.10-313 - Liquidation summary: palay issued is counted in net bags (net kilos / 50).
 //   1.10-314 - Report tables: row and column highlight under the mouse; every report starts at the Data Start Date (September 1): date pickers, default periods and the month list cannot go earlier.
-export const APP_VERSION = '1.10-314'
+//   1.10-315 - Liquidation unit price: the pencil is clearer, shown to the Admin only, and the save is refused for any other role.
+export const APP_VERSION = '1.10-315'

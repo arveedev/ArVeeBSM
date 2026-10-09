@@ -52,7 +52,7 @@ function PriceCell({ value, isAdmin, onCommit }) {
   return (
     <span className="inline-flex items-center justify-end gap-1.5 tabular-nums text-neutral-300">
       {fmt2(Number(value ?? 0))}
-      {isAdmin && <button type="button" onClick={start} aria-label="Change unit price" className="rounded p-0.5 text-neutral-600 hover:text-neutral-300"><Pencil size={12} /></button>}
+      {isAdmin && <button type="button" onClick={start} aria-label="Change unit price" title="Change unit price" className="rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-brand-neon"><Pencil size={14} /></button>}
     </span>
   )
 }
@@ -270,6 +270,7 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
   }
 
   const onPrice = async (mk, product, value) => {
+    if (!isAdmin) return
     try {
       await saveMillingPrice(mk, product, value)
       setSavedKey(mk)
