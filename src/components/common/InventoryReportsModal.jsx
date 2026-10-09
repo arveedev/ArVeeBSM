@@ -30,7 +30,7 @@ import useCrosshair from '../../hooks/useCrosshair.js'
 
 const BANK_KEY = 'inv.bankProvince'
 const readBank = () => { try { return localStorage.getItem(BANK_KEY) ?? 'Albay' } catch { return 'Albay' } }
-const DEFAULT_FILTERS = { combine: false, provinceId: '', commodity: '', warehouseIds: null, sort: 'name', ageSet: 'coarse', bank: 'Albay', lessSource: 'authority' }
+const DEFAULT_FILTERS = { combine: false, provinceId: '', commodity: '', warehouseIds: null, sort: 'name', ageSet: 'coarse', bank: 'Albay' }
 const fmtNum = (n) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const CONTROL_H = 'h-[46px]'
 
@@ -314,7 +314,12 @@ function CheckView({ checks, unit }) {
       <CheckSection title="Warehouses using a start-date override" tone="text-amber-400" items={checks.overrides} ok="None. Every warehouse follows the Data Start Date."
         render={(o, i) => checkLine(o.warehouse, `starts after ${fmtDay(o.date)}`, i)} />
       <CheckSection title="Authorized more than the stock available" tone="text-brand-crimson" items={checks.overAuthorized ?? []} ok="No authority reserves more than the warehouse had."
-        render={(o, i) => checkLine(`AI ${o.aiNumber} · ${o.warehouse} · ${o.variety} · ${fmtDay(o.date)}`, `${fmtNum(toUnit(o.kilos, unit))} short`, i)} />
+        render={(o, i) => checkLine(`AI ${o.aiNumber} · ${o.warehouse} · ${o.variety} · ${fmtDay(o.date)}${o.ageGroup ? ` · age ${o.ageGroup}` : ''}`, `${fmtNum(toUnit(o.kilos, unit))} short`, i)} />
+      <CheckSection title="Authority age group blank or unreadable (deducted from the oldest stock)" tone="text-amber-400" items={checks.noAgeGroup ?? []} ok="Every authority names a readable age group."
+        render={(o, i) => checkLine(`AI ${o.aiNumber} · ${o.warehouse} · ${o.variety} · ${fmtDay(o.date)}${o.ageGroup ? ` · "${o.ageGroup}"` : ''}`, fmtNum(toUnit(o.kilos, unit)), i)} />
+      <CheckSection title="WSI not covered by an authority (not deducted from the inventory)" tone="text-amber-400" items={(checks.uncoveredWsi ?? []).slice(0, 80)} ok="Every WSI belongs to an authority that reserves stock."
+        render={(o, i) => checkLine(`WSI ${o.serial} · ${o.warehouse}${o.aiNumber ? ` · AI ${o.aiNumber}` : ' · no AI'} · ${fmtDay(o.date)}`, fmtNum(toUnit(o.kilos, unit)), i)} />
+      {(checks.uncoveredWsi ?? []).length > 80 && <p className="text-xs text-neutral-500">and {(checks.uncoveredWsi ?? []).length - 80} more.</p>}
       <CheckSection title="Issued more than was received" tone="text-brand-crimson" items={checks.shortages} ok="No pile has issued more than it received."
         render={(o, i) => (
           <div key={i} className="border-b border-neutral-800 py-1 last:border-0">
@@ -416,14 +421,6 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
               <option value="monthly">Monthly (0.1-1.0, 1.1-2.0, ...)</option>
             </select>
           </label>
-          {['ledger', 'summary', 'age'].includes(view) && (
-            <label className={labelClass}>LESS is taken from
-              <select className={selectClass} value={draft.lessSource} onChange={(e) => setDraft({ ...draft, lessSource: e.target.value })}>
-                <option value="authority">Authorities (reserved stock)</option>
-                <option value="wsi">WSI (stock actually issued)</option>
-              </select>
-            </label>
-          )}
           {view === 'summary' && (
             <label className={labelClass}>Sort warehouses
               <select className={selectClass} value={draft.sort} onChange={(e) => setDraft({ ...draft, sort: e.target.value })}>
@@ -511,7 +508,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const built = useMemo(() => {
     if (loading || !['summary', 'ledger', 'age', 'check', 'procurement'].includes(view) || (view === 'check' && !isAdmin)) return null
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet, opening: config?.inventoryOpening ?? null })
-    const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: filters.lessSource !== 'wsi' }
+    const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
     const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
     const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
     const end = to < from ? from : to
@@ -544,7 +541,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, startISO, authorities, isAdmin, sdoUsers, ledgerRows, activePrs, branches])
   const model = built?.model ?? null
 
-  const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse', filters.lessSource === 'wsi'].filter(Boolean).length
+  const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse'].filter(Boolean).length
 
   const handleExport = async () => {
     if (!model || model.empty) return
@@ -566,7 +563,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const openOpeningEditor = () => {
     const date = new Date(Date.parse(`${from}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: false, ageSet: filters.ageSet })
-    const baseCells = computeOpeningBase(ctx, { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: filters.lessSource !== 'wsi' }, date)
+    const baseCells = computeOpeningBase(ctx, { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }, date)
     setOpeningEditor({ date, baseCells })
   }
 
@@ -581,7 +578,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       const monthStart = clampStart(`${ref.slice(0, 8)}01`)
       const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
       const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
-      const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: filters.lessSource !== 'wsi' }
+      const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
       const mk = (ageSet) => makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet, opening: config?.inventoryOpening ?? null })
       const ctx = mk(filters.ageSet)
       const sheets = [
@@ -711,9 +708,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                     <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>
                     {['ledger', 'summary', 'age'].includes(view) && (
                       <p className="mb-2 text-xs text-neutral-500">
-                        {filters.lessSource === 'wsi'
-                          ? 'LESS shows stock actually issued (WSI).'
-                          : 'LESS shows authorized stock (AI) from the day it is authorized: that stock is reserved, so it is no longer available.'}
+                        LESS shows authorized stock (AI), from the day it is authorized and from the age bracket named on the authority. That stock is reserved, so it is no longer available. WSIs are not used.
                       </p>
                     )}
                     {config?.inventoryOpening && config.inventoryOpening.ageSet === filters.ageSet && ['ledger', 'summary', 'age'].includes(view) && (

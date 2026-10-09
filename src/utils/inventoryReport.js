@@ -234,6 +234,10 @@ export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
       adds: [...adds].sort((a, b) => order(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
       lesses: [...lesses].sort((a, b) => order(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
       adjustment: nonEmpty(adjustment) ? adjustment : null, ending: end,
+      // piles closed on this day (closing zeroes whatever stock was left)
+      closedPiles: nonEmpty(adjustment)
+        ? [...ctx.pileById.values()].filter((p) => p.closedDate === d && accept(filters, p, ctx)).map((p) => `${rowOf(ctx, p).label} ${p.pileName}`)
+        : [],
     }
     out.push(rec)
     allGrids.push(beg, end, ...(rec.shift ? [rec.shift] : []), ...rec.adds.map((x) => x.grid), ...rec.lesses.map((x) => x.grid))
@@ -361,7 +365,7 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
       rows.push({ kind: 'less-label', first: d.adds.length > 0 ? 'LESS:' : `${stamp} · LESS:`, cells: [] })
       for (const l of d.lesses) rows.push({ ...line(l.label, l.grid, 'less'), notes: cols.map((c) => notesFor(d.moves, 'less', l.label, c, unit)), day: d.date })
     }
-    if (d.adjustment) rows.push(line(d.date === ledger.openingDate ? 'OPENING BALANCE OVERRIDE' : 'ADJUSTMENT (pile closed or data gap)', d.adjustment, 'row'))
+    if (d.adjustment) rows.push(line(d.date === ledger.openingDate ? 'OPENING BALANCE OVERRIDE' : d.closedPiles?.length ? `ADJUSTMENT: pile closed (${d.closedPiles.join(', ')})` : 'ADJUSTMENT: stock changed with no ADD or LESS document', d.adjustment, 'row'))
     rows.push(line('ENDING INVENTORY', d.ending, 'end', true))
   }
   return {
@@ -421,6 +425,8 @@ export const checksModel = (checks, unit, { asOf }) => {
   }
   section('Warehouses using a start-date override', checks.overrides, (o) => ({ first: o.warehouse, cells: [`starts after ${longDate(o.date)}`, null] }))
   section('Authorized more than the stock available', checks.overAuthorized ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
+  section('Authority age group blank or unreadable (deducted from the oldest stock)', checks.noAgeGroup ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}${o.ageGroup ? ` · "${o.ageGroup}"` : ''}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
+  section('WSI not covered by an authority (not deducted)', checks.uncoveredWsi ?? [], (o) => ({ first: `WSI ${o.serial} · ${o.warehouse}${o.aiNumber ? ` · AI ${o.aiNumber}` : ''}`, cells: [`${o.customer} · ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Issued more than was received', checks.shortages, (o) => ({ first: o.name, cells: [o.events.map((e) => `${e.kind} ${e.serial} ${e.type}`).join('; ') || 'bags over', Math.round(o.bags * 100) / 100] }))
   section('Rebuilt stock differs from the pile balance (today)', checks.mismatches, (o) => ({ first: o.name, cells: [`stored ${Math.round(toUnit(o.stored, unit) * 100) / 100}${o.note ? ` - ${o.note}` : ''}`, Math.round(toUnit(o.rebuilt, unit) * 100) / 100] }))
   section('Age is approximate (no readable Date Received)', checks.approx, (o) => ({ first: o.name, cells: [`from ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
@@ -495,7 +501,15 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
   const overAuthorized = (reservedState.authShort ?? []).map((x) => ({
     aiNumber: x.aiNumber, date: x.date, kilos: x.kilos, customer: x.customer ?? '',
     warehouse: warehouseLabel(ctx.whById.get(x.warehouseId)?.name, false), variety: ctx.varietyName.get(x.varietyId) ?? '?',
+    ageGroup: x.ageGroup ?? '',
   })).sort((a, b) => natural(a.warehouse, b.warehouse) || (a.date < b.date ? -1 : 1))
+  const label = (id) => warehouseLabel(ctx.whById.get(id)?.name, false)
+  const noAgeGroup = (reservedState.authNoAge ?? []).map((x) => ({
+    aiNumber: x.aiNumber, date: x.date, kilos: x.kilos, customer: x.customer ?? '', ageGroup: x.ageGroup, warehouse: label(x.warehouseId), variety: ctx.varietyName.get(x.varietyId) ?? '?',
+  })).sort((a, b) => natural(a.warehouse, b.warehouse) || (a.date < b.date ? -1 : 1))
+  const uncoveredWsi = (reservedState.uncovered ?? []).map((x) => ({
+    serial: x.serial, date: x.date, aiNumber: x.aiNumber, kilos: x.kilos, customer: x.customer ?? '', warehouse: label(x.warehouseId),
+  })).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const global = inputs.globalDataStartDate ?? null
   const overrides = []
   for (const w of inputs.warehouses) {
@@ -536,7 +550,7 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
     warehouse: warehouseLabel(whById.get(t.warehouseId)?.name, false),
   }))
   const byName = (a, b) => natural(a.name, b.name)
-  return { overrides, overAuthorized, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
+  return { overrides, overAuthorized, noAgeGroup, uncoveredWsi, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
 }
 
 /**
