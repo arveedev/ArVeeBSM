@@ -21,6 +21,7 @@ import {
 } from '../../utils/inventoryReport.js'
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
 import { buildEndingStock } from '../../utils/endingStockReport.js'
+import { canViewReport } from '../../utils/inventoryReportsAccess.js'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
@@ -580,8 +581,12 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes, authorities].some((x) => x === undefined)
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
+  // a screen an Admin has made Admin only is closed for a Visitor even if it was open when the setting changed
+  const mayOpen = (id) => canViewReport(id, isAdmin, config?.inventoryReportsAccess)
+  useEffect(() => { if (view !== 'hub' && !mayOpen(view)) setView('hub') }, [view, isAdmin, config?.inventoryReportsAccess])
+
   const built = useMemo(() => {
-    if (loading || !['summary', 'ledger', 'age', 'check', 'procurement', 'ending'].includes(view) || (view === 'check' && !isAdmin)) return null
+    if (loading || !['summary', 'ledger', 'age', 'check', 'procurement', 'ending'].includes(view) || (view === 'check' && !canViewReport('check', isAdmin, config?.inventoryReportsAccess))) return null
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet, opening: config?.inventoryOpening ?? null, ageBasis: view === 'age' ? 'exact' : 'month' })
     const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
     const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null, byProducts: filters.showByProducts || filters.commodity === 'By Products' }
@@ -696,6 +701,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       <div className="relative mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {view === 'hub' && (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {!isAdmin && !['ledger', 'summary', 'age', 'ending', 'procurement', 'milling', 'test', 'check'].some(mayOpen) && <p className="col-span-full py-6 text-center text-sm text-neutral-500">No reports are shared with you yet.</p>}
             {[
               { id: 'ledger', name: 'Daily inventory', desc: 'Per day: ADD and LESS by type, ending stock, by warehouse and variety', Icon: ClipboardList },
               { id: 'summary', name: 'Summary', desc: 'Stock by warehouse, variety and age bracket with province subtotals', Icon: Table },
@@ -704,8 +710,8 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               { id: 'procurement', name: 'Daily procurement status', desc: 'PD and PW bags per day, per province, with the CPF balance', Icon: Wheat },
               { id: 'milling', name: 'Milling liquidation', desc: 'Regular milling per ricemill: issues, receipts, by-products, summary', Icon: Factory },
               { id: 'test', name: 'Test milling liquidation', desc: 'Test milling per ricemill: TMO and trials, by-products, summary', Icon: FlaskConical },
-              ...(isAdmin ? [{ id: 'check', name: 'Data check', desc: 'Overrides in use, shortages, over-authorized stock, approximate ages, unassigned documents', Icon: ShieldCheck }] : []),
-            ].map(({ id, name, desc, Icon }) => (
+              { id: 'check', name: 'Data check', desc: 'Overrides in use, shortages, over-authorized stock, approximate ages, unassigned documents', Icon: ShieldCheck },
+            ].filter((t) => canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }) => (
               <button key={id} type="button" onClick={() => setView(id)} className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-600">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-950 text-brand-neon"><Icon size={18} /></span>
                 <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-app-text">{name}</span><span className="block text-xs text-neutral-500">{desc}</span></span>

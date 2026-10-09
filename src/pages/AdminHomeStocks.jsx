@@ -22,6 +22,7 @@ import { computeWarehouseCategoryStock } from '../utils/warehouseCategoryStock.j
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
 import InventoryReportsModal from '../components/common/InventoryReportsModal.jsx'
+import { REPORT_SCREENS, canViewReport } from '../utils/inventoryReportsAccess.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import CountUpNumber from '../components/common/CountUpNumber.jsx'
 
@@ -82,6 +83,9 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   const [topCardShowPotential, setTopCardShowPotential] = useState(false)
   const [showInventoryReports, setShowInventoryReports] = useState(false)
   const { user: authUser } = useAuth() ?? {}
+  // the quiet reports icon shows for a Visitor only when at least one screen is shared with them
+  const reportAccess = useLiveQuery(() => db.reportConfig.get('global').then((c) => c?.inventoryReportsAccess ?? null), [])
+  const canOpenReports = authUser?.role === 'Admin' || REPORT_SCREENS.some((s) => canViewReport(s.id, false, reportAccess))
   const [breakdownShowPotential, setBreakdownShowPotential] = useState(false)
   // Age Grouping used to always show Potential with no toggle of its
   // own - per explicit request, it now gets the same Actual/Potential
@@ -289,14 +293,16 @@ function AdminHomeStocks({ onWarehouseSelect }) {
             {weightUnit === 'mt' ? 'Metric Tons by Province & Category' : 'Net Bags by Province & Category'}
             {/* Deliberately quiet entry to the Inventory Reports (Admin/Visitor only,
                 this page is theirs alone): dim, no circle, brightens only on hover. */}
-            <button
-              type="button"
-              onClick={() => setShowInventoryReports(true)}
-              aria-label="Inventory reports"
-              className="ml-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
-            >
-              <ClipboardList size={14} />
-            </button>
+            {canOpenReports && (
+              <button
+                type="button"
+                onClick={() => setShowInventoryReports(true)}
+                aria-label="Inventory reports"
+                className="ml-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
+              >
+                <ClipboardList size={14} />
+              </button>
+            )}
           </>
         )}
         headerRight={(

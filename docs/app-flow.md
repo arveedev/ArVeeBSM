@@ -387,7 +387,10 @@ the step-by-step journey.*
    per province, paddy by variety PDs / PDm / PD1 / PD2 and local rice by
    variety WD1 / WD0 / RWD1, defaulting to the previous month, with Excel), Daily
    procurement status, Milling liquidation, Test milling liquidation and Data
-   check. Every report is read-only.
+   check. Every report is read-only. An Admin decides in Admin Dashboard >
+   Report Access which of these screens a Visitor sees and which are Admin
+   only (Data check starts Admin only); the Home icon is hidden from a Visitor
+   when nothing is shared with them.
 3. Daily inventory takes a Start Date then an End Date (choosing the start
    opens the end picker). Summary, Age monitoring and Data check take one
    "as of" date. Net bags / MT is one switch; everything else (warehouse names
