@@ -284,3 +284,13 @@ Not built (by decision): daily snapshots (reports stay derived, so a corrected
 old record corrects the report); a PDF for the stock tables (Excel and the
 Google Sheet cover them); the optional per-seed-line receipt-date field (the
 existing Date Received text plus the pile date is enough).
+
+## 19. Changes after first use (v1.10-311)
+
+- Tapping an ADD or LESS value on Daily inventory shows the documents behind it (document, customer, pile, amount); the same lines are cell notes in the Excel file and the Google Sheet.
+- Daily inventory has an Admin-only **Opening balance** override: type the balance a warehouse, variety and bracket should start from at the end of the day before the first day. Only the differences are saved (`reportConfig.inventoryOpening`), they apply from that date to Daily inventory, Summary and Age monitoring only, they do not age, and Clear removes them. Piles, transactions and every other screen are unchanged.
+- A day with only an age change is no longer listed, so the ledger ends with one ENDING INVENTORY.
+- Age monitoring lists are split into palay and rice, and by-products, and each moving lot shows the bracket it moves to and the date.
+- Data check: issued-more-than-received lists the document and its transaction type; a rebuilt-versus-stored difference on a closed or empty pile carries a note.
+- Liquidations: one tab per ricemill, prices are labels (an Admin sees a pencil), no signatory box on screen (exports only), batch/trial range, and the printed layout shows only when it fits the width (otherwise cards), so it never scrolls sideways.
+

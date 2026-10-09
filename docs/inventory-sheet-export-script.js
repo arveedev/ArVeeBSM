@@ -83,6 +83,9 @@ function writeReport_(req) {
         });
       }
 
+      // cell notes: the documents behind an ADD / LESS value
+      (s.notes || []).forEach(function (n) { sh.getRange(n.r, n.c).setNote(n.t); });
+
       sh.setFrozenRows(s.headStart + s.headRows - 1);
       sh.setFrozenColumns(1);
       sh.setColumnWidth(1, 300);

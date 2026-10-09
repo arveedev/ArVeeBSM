@@ -60,6 +60,8 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
     row.cells.forEach((v, i) => {
       const cell = ws.getCell(r, 2 + i)
       if (v == null) { if (row.dash) cell.value = '-'; cell.alignment = { horizontal: 'right' } } else cell.value = v
+      const note = row.notes?.[i]
+      if (note) cell.note = { texts: [{ text: note.map((l) => `${l.doc}${l.customer ? ` - ${l.customer}` : ''}${l.pile ? ` - ${l.pile}` : ''}: ${l.value.toFixed(2)}`).join('\n') }] }
       cell.numFmt = '#,##0.00'
       cell.border = { left: edgeBorder(model.edges[i]), right: { style: 'hair' }, bottom: { style: 'hair' } }
       if (bold) cell.font = { bold: true }

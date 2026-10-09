@@ -32,6 +32,8 @@ Each tap rewrites these tabs (and only these):
 | `WAREHOUSE_AGE_MT` | Stock as of the chosen date in MT with the fine rice brackets (0-3, 3.1-6, 6.1-9, 9.1-12, over 12) |
 | `DATA_CHECK` | Overrides in use, shortages, approximate ages, unassigned documents |
 
+The ADD and LESS values in the month tab carry a cell note listing the documents behind them (document, customer, pile, amount).
+
 The script refuses any other tab name, so a bad request cannot overwrite your other tabs.
 
 ## Test it safely first

@@ -54,7 +54,8 @@ const bucketOf = (commodity, months, setName) => {
 }
 
 /** Lookups shared by every builder. */
-export const makeContext = ({ piles, warehouses, provinces, varieties, transactionTypes, combine = false, ageSet = 'coarse' }) => ({
+export const makeContext = ({ piles, warehouses, provinces, varieties, transactionTypes, combine = false, ageSet = 'coarse', opening = null }) => ({
+  opening,
   pileById: new Map(piles.map((p) => [p.pileId, p])),
   whById: new Map(warehouses.map((w) => [w.warehouseId, w])),
   provById: new Map(provinces.map((p) => [p.provinceId ?? p.id, p])),
@@ -96,7 +97,20 @@ const lotCol = (ctx, pile, varietyId, lotDate, asOf) => {
 }
 
 /** Stock grid (rowKey -> colId -> kilos) of a lot state, aged as of `ageDate`. */
-const stockGrid = (ctx, state, ageDate, filters) => {
+// Opening-balance override (Daily inventory only): a per-cell correction, saved by an
+// Admin, added to the stock of every date from its date onward. It lives in the
+// report settings and never touches a pile, a transaction or any other screen.
+const applyOpening = (ctx, grid, stateDate, filters) => {
+  const o = ctx.opening
+  if (!o || !stateDate || stateDate < o.date || o.ageSet !== ctx.ageSet) return
+  for (const c of o.cells) {
+    const like = { warehouseId: c.w, cerealType: c.c }
+    if (!accept(filters, like, ctx)) continue
+    put(grid, rowKey(rowOf(ctx, like)), colId(c.c, c.v, c.b), c.k)
+  }
+}
+
+const stockGrid = (ctx, state, ageDate, filters, stateDate = null) => {
   const grid = new Map()
   for (const [pileId, st] of state) {
     const pile = ctx.pileById.get(pileId)
@@ -107,6 +121,7 @@ const stockGrid = (ctx, state, ageDate, filters) => {
       put(grid, rk, colId(c.commodity, c.variety, c.bucket), lot.kilos)
     }
   }
+  applyOpening(ctx, grid, stateDate, filters)
   return grid
 }
 
@@ -134,7 +149,7 @@ const gridCols = (grids) => {
  */
 export const buildSummary = (ctx, inputs, { asOf, filters = {}, sort = 'name' }) => {
   const state = buildLots({ ...inputs, asOf })
-  const grid = stockGrid(ctx, state, asOf, filters)
+  const grid = stockGrid(ctx, state, asOf, filters, asOf)
   const cols = sortCols([...gridCols([grid])].map(parseCol), ctx.ageSet)
 
   const byProvince = new Map()
@@ -184,13 +199,14 @@ export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
   const allGrids = []
   for (const d of days) {
     const prev = addDays(d, -1)
-    const beg = stockGrid(ctx, getState(prev), prev, filters)
-    const aged = stockGrid(ctx, getState(prev), d, filters)
-    const end = stockGrid(ctx, getState(d), d, filters)
+    const beg = stockGrid(ctx, getState(prev), prev, filters, prev)
+    const aged = stockGrid(ctx, getState(prev), d, filters, prev)
+    const end = stockGrid(ctx, getState(d), d, filters, d)
     const shift = diff(aged, beg)
 
     const adds = new Map()
     const lesses = new Map()
+    const moves = []
     for (const m of movements) {
       if (m.date !== d) continue
       const pile = ctx.pileById.get(m.pileId)
@@ -199,7 +215,10 @@ export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
       const target = m.kind === 'add' ? adds : lesses
       const label = typeLabel(m)
       if (!target.has(label)) target.set(label, new Map())
-      put(target.get(label), rowKey(rowOf(ctx, pile)), colId(c.commodity, c.variety, c.bucket), m.kilos)
+      const rk = rowKey(rowOf(ctx, pile))
+      const cid = colId(c.commodity, c.variety, c.bucket)
+      put(target.get(label), rk, cid, m.kilos)
+      moves.push({ kind: m.kind, label, rowKey: rk, colId: cid, docType: m.docType, serial: m.serial, customer: m.customer, pile: pile.pileName, kilos: m.kilos })
     }
     const net = new Map()
     for (const g of [aged]) for (const [rk, row] of g) for (const [id, v] of row) put(net, rk, id, v)
@@ -207,11 +226,11 @@ export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
     for (const g of lesses.values()) for (const [rk, row] of g) for (const [id, v] of row) put(net, rk, id, -v)
     const adjustment = diff(end, net)
 
-    const hasMove = adds.size > 0 || lesses.size > 0 || nonEmpty(shift) || nonEmpty(adjustment)
+    const hasMove = adds.size > 0 || lesses.size > 0 || nonEmpty(adjustment)
     if (!hasMove) continue
     const order = (a, b) => (a === 'BEGINNING BALANCE' ? -1 : b === 'BEGINNING BALANCE' ? 1 : a === 'TRANSFER' ? 1 : b === 'TRANSFER' ? -1 : natural(a, b))
     const rec = {
-      date: d, beginning: beg, shift: nonEmpty(shift) ? shift : null,
+      date: d, moves, beginning: beg, shift: nonEmpty(shift) ? shift : null,
       adds: [...adds].sort((a, b) => order(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
       lesses: [...lesses].sort((a, b) => order(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
       adjustment: nonEmpty(adjustment) ? adjustment : null, ending: end,
@@ -230,7 +249,8 @@ export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
   cols.sort((a, b) => natural(a.province, b.province) || natural(a.label, b.label)
     || (COMMODITY_ORDER[a.commodity] - COMMODITY_ORDER[b.commodity]) || natural(a.variety, b.variety)
     || (bucketRank(a, ctx.ageSet) - bucketRank(b, ctx.ageSet)))
-  return { cols, days: out }
+  const openingDate = ctx.opening && ctx.opening.ageSet === ctx.ageSet ? ctx.opening.date : null
+  return { cols, days: out, openingDate }
 }
 
 /** Value of a ledger/summary grid cell in kilos (0 when absent). */
@@ -307,6 +327,14 @@ export const summaryModel = (summary, unit, { asOf, scope = 'ALBAY BRANCH' }) =>
   }
 }
 
+// The documents behind one ADD / LESS value (the old sheet showed them as a cell note).
+const notesFor = (moves, kind, label, c, unit) => {
+  const lines = moves
+    .filter((m) => m.kind === kind && m.label === label && m.rowKey === c.rowKey && m.colId === c.id)
+    .map((m) => ({ doc: `${m.docType ?? ''} ${m.serial ?? ''}`.trim(), customer: m.customer ?? '', pile: m.pile ?? '', value: num(m.kilos, unit) ?? 0 }))
+  return lines.length ? lines : null
+}
+
 export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) => {
   const cols = ledger.cols
   const { edges, tones } = edgesAndTones(cols, (c) => c.rowKey)
@@ -327,18 +355,19 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
     const stamp = `${MONTHS[m - 1]} ${dd}`
     if (d.adds.length > 0) {
       rows.push({ kind: 'add-label', first: `${stamp} · ADD:`, cells: [] })
-      for (const a of d.adds) rows.push(line(a.label, a.grid, 'add'))
+      for (const a of d.adds) rows.push({ ...line(a.label, a.grid, 'add'), notes: cols.map((c) => notesFor(d.moves, 'add', a.label, c, unit)), day: d.date })
     }
     if (d.lesses.length > 0) {
       rows.push({ kind: 'less-label', first: d.adds.length > 0 ? 'LESS:' : `${stamp} · LESS:`, cells: [] })
-      for (const l of d.lesses) rows.push(line(l.label, l.grid, 'less'))
+      for (const l of d.lesses) rows.push({ ...line(l.label, l.grid, 'less'), notes: cols.map((c) => notesFor(d.moves, 'less', l.label, c, unit)), day: d.date })
     }
-    if (d.adjustment) rows.push(line('ADJUSTMENT (pile closed or data gap)', d.adjustment, 'row'))
+    if (d.adjustment) rows.push(line(d.date === ledger.openingDate ? 'OPENING BALANCE OVERRIDE' : 'ADJUSTMENT (pile closed or data gap)', d.adjustment, 'row'))
     rows.push(line('ENDING INVENTORY', d.ending, 'end', true))
   }
   return {
     title: 'DAILY INVENTORY', subtitle: `${scope} · ${longDate(from)} to ${longDate(to)} · ${unitLabel(unit)}`,
-    head, edges, tones, rows, empty: day.length === 0 ? 'No movement in this period for these filters.' : null,
+    head, edges, tones, rows, colTitles: cols.map((c) => `${c.label} · ${c.variety} · ${c.bucket}`),
+    empty: day.length === 0 ? 'No movement in this period for these filters.' : null,
   }
 }
 
@@ -371,8 +400,8 @@ export const ledgerCards = (ledger, unit) => {
     warehouses: [...byWh].map(([rk, cols]) => {
       const lines = cols.map((c) => {
         const v = (g) => cell(g, rk, c.id)
-        const adds = d.adds.map((a) => ({ label: a.label, v: num(v(a.grid), unit) })).filter((x) => x.v != null)
-        const lesses = d.lesses.map((a) => ({ label: a.label, v: num(v(a.grid), unit) })).filter((x) => x.v != null)
+        const adds = d.adds.map((a) => ({ label: a.label, v: num(v(a.grid), unit), lines: notesFor(d.moves, 'add', a.label, { rowKey: rk, id: c.id }, unit) })).filter((x) => x.v != null)
+        const lesses = d.lesses.map((a) => ({ label: a.label, v: num(v(a.grid), unit), lines: notesFor(d.moves, 'less', a.label, { rowKey: rk, id: c.id }, unit) })).filter((x) => x.v != null)
         return {
           label: lineLabel(c), beg: num(v(d.beginning), unit), end: num(v(d.ending), unit),
           shift: null, adj: d.adjustment ? num(v(d.adjustment), unit) : null, adds, lesses,
@@ -391,8 +420,8 @@ export const checksModel = (checks, unit, { asOf }) => {
     for (const it of items) rows.push({ kind: 'row', ...line(it) })
   }
   section('Warehouses using a start-date override', checks.overrides, (o) => ({ first: o.warehouse, cells: [`starts after ${longDate(o.date)}`, null] }))
-  section('Issued more than was received', checks.shortages, (o) => ({ first: o.name, cells: ['bags over', Math.round(o.bags * 100) / 100] }))
-  section('Rebuilt stock differs from the pile balance (today)', checks.mismatches, (o) => ({ first: o.name, cells: [`stored ${Math.round(toUnit(o.stored, unit) * 100) / 100}`, Math.round(toUnit(o.rebuilt, unit) * 100) / 100] }))
+  section('Issued more than was received', checks.shortages, (o) => ({ first: o.name, cells: [o.events.map((e) => `${e.kind} ${e.serial} ${e.type}`).join('; ') || 'bags over', Math.round(o.bags * 100) / 100] }))
+  section('Rebuilt stock differs from the pile balance (today)', checks.mismatches, (o) => ({ first: o.name, cells: [`stored ${Math.round(toUnit(o.stored, unit) * 100) / 100}${o.note ? ` - ${o.note}` : ''}`, Math.round(toUnit(o.rebuilt, unit) * 100) / 100] }))
   section('Age is approximate (no readable Date Received)', checks.approx, (o) => ({ first: o.name, cells: [`from ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Documents not assigned to a pile', checks.unassigned, (o) => ({ first: `${o.type} ${o.serial} · ${o.warehouse}`, cells: [longDate(o.date), o.bags] }))
   return {
@@ -474,11 +503,19 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
     const pile = ctx.pileById.get(pileId)
     const row = rowOf(ctx, pile)
     const name = `${row.label} · ${pile.pileName}`
-    if (st.shortBags > 0) shortages.push({ name, bags: st.shortBags, kilos: st.shortKilos })
+    if (st.shortBags > 0) {
+      shortages.push({
+        name, bags: st.shortBags, kilos: st.shortKilos,
+        events: st.shortEvents.map((e) => ({ serial: e.serial, date: e.date, kind: e.kind, type: ctx.typeName.get(e.typeId) ?? (e.kind === 'WTS' ? 'TRANSFER' : 'OTHER'), bags: e.bags })),
+      })
+    }
     for (const lot of st.lots) if (lot.anchor === 'pile-date' && lot.kilos >= EPS_KG) approx.push({ name, kilos: lot.kilos, date: lot.date })
-    if (asOf === todayISO && !pile.closedDate) {
+    if (asOf === todayISO) {
       const kilos = st.lots.reduce((s, l) => s + l.kilos, 0)
-      if (Math.abs(kilos - (pile.currentKilos ?? 0)) >= 1) mismatches.push({ name, rebuilt: kilos, stored: pile.currentKilos ?? 0 })
+      if (Math.abs(kilos - (pile.currentKilos ?? 0)) >= 1) {
+        const note = pile.closedDate ? `Closed pile (closed ${longDate(pile.closedDate)})` : ((pile.currentBags ?? 0) === 0 ? `Empty pile (0 bags${pile.zeroedDate ? `, emptied ${longDate(pile.zeroedDate)}` : ''}), kilos left over` : '')
+        mismatches.push({ name, rebuilt: kilos, stored: pile.currentKilos ?? 0, note })
+      }
     }
   }
   const whById = ctx.whById
@@ -493,4 +530,33 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
   }))
   const byName = (a, b) => natural(a.name, b.name)
   return { overrides, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
+}
+
+/**
+ * The computed stock at the end of `dateISO`, per warehouse x commodity x variety x bracket,
+ * WITHOUT any override. This is what the opening-balance editor shows and compares with.
+ * Keys use the warehouse id so a saved override survives renaming and the Combined view.
+ */
+export const computeOpeningBase = (ctx, inputs, dateISO) => {
+  const bare = { ...ctx, opening: null }
+  const state = buildLots({ ...inputs, asOf: dateISO })
+  const out = new Map()
+  for (const [pileId, st] of state) {
+    const pile = ctx.pileById.get(pileId)
+    if (!pile) continue
+    for (const lot of st.lots) {
+      const c = lotCol(bare, pile, lot.varietyId, lot.date, dateISO)
+      const key = `${pile.warehouseId}|${c.commodity}|${c.variety}|${c.bucket}`
+      const cur = out.get(key) ?? { w: pile.warehouseId, c: c.commodity, v: c.variety, b: c.bucket, kilos: 0 }
+      cur.kilos += lot.kilos
+      out.set(key, cur)
+    }
+  }
+  return out
+}
+
+/** Bracket labels for a commodity under an age set (By-products use whole months). */
+export const bracketLabels = (commodity, ageSet) => {
+  if (commodity === 'By Products') return Array.from({ length: 24 }, (_, i) => `${i + 1} mo`)
+  return (AGE_SETS[ageSet]?.[commodity] ?? []).map((b) => b.label)
 }

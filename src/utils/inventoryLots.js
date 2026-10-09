@@ -91,7 +91,7 @@ const seedAnchor = (tx, pile) => {
 const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf }, movements) => {
   const pileById = new Map(piles.map((p) => [p.pileId, p]))
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
-  const state = new Map(piles.map((p) => [p.pileId, { lots: [], shortBags: 0, shortKilos: 0 }]))
+  const state = new Map(piles.map((p) => [p.pileId, { lots: [], shortBags: 0, shortKilos: 0, shortEvents: [] }]))
 
   const cutoffFor = (pileId) => {
     const wh = whById.get(pileById.get(pileId)?.warehouseId)
@@ -121,7 +121,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
 
   // Takes `bags` from the oldest lots of a pile. Returns the lots taken
   // (portions, original dates kept) and records any shortfall.
-  const take = (pileId, bags, kilos) => {
+  const take = (pileId, bags, kilos, tx = null) => {
     const st = state.get(pileId)
     const taken = []
     let needBags = bags
@@ -143,7 +143,12 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
         if (st.lots.length > 0) st.lots[0].kilos = round3(st.lots[0].kilos + lot.kilos)
       }
     }
-    if (needBags > 1e-9) { st.shortBags += needBags; st.shortKilos += bags > 0 ? kilos * (needBags / bags) : 0 }
+    if (needBags > 1e-9) {
+      st.shortBags += needBags
+      st.shortKilos += bags > 0 ? kilos * (needBags / bags) : 0
+      // which document was issued beyond what the pile had received
+      st.shortEvents.push({ serial: tx?.serialNo ?? null, date: tx?.date ?? null, kind: tx?.type ?? null, typeId: tx?.transactionTypeId ?? null, bags: needBags })
+    }
     return taken
   }
 
@@ -156,6 +161,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       movements.push({
         date: tx.date, pileId, kind, label: label ?? null, typeId: tx.transactionTypeId ?? null,
         lotDate: l.date, varietyId: l.varietyId ?? null, bags: l.bags, kilos: l.kilos,
+        docType: tx.type, serial: tx.serialNo ?? null, customer: tx.customerName ?? null,
       })
     }
   }
@@ -182,13 +188,13 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       addLot(tx.pileId, lot)
       note('add', tx, tx.pileId, [lot], tx.isInitialBalance ? 'BEGINNING BALANCE' : null)
     } else if (tx.type === 'WSI') {
-      note('less', tx, tx.pileId, take(tx.pileId, tx.numberOfBags ?? 0, tx.netKilos ?? 0))
+      note('less', tx, tx.pileId, take(tx.pileId, tx.numberOfBags ?? 0, tx.netKilos ?? 0, tx))
     } else if (tx.type === 'WTS') {
       const from = tx.issuedPileId
       const to = tx.receivedPileId
       const outCounts = from && counts(tx, from)
       const inCounts = to && counts(tx, to)
-      const taken = outCounts ? take(from, tx.issuedBags ?? 0, tx.issuedNetKilos ?? 0) : []
+      const taken = outCounts ? take(from, tx.issuedBags ?? 0, tx.issuedNetKilos ?? 0, tx) : []
       if (!inCounts) { note('less', tx, from, taken, 'TRANSFER'); continue }
       const recBags = tx.receivedBags ?? 0
       const recKilos = tx.receivedNetKilos ?? 0

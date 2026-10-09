@@ -86,15 +86,27 @@ export const listMillers = (batches) => {
   return [...m.values()].sort((a, b) => natural(a.name, b.name))
 }
 
-export const filterBatches = (batches, { kind, millerKey: mk = '', warehouseId = '', from, to, batch = '' }) => batches.filter((b) => {
-  if (b.kind !== kind) return false
-  if (mk && b.millerKey !== mk) return false
-  if (from && b.firstDate < from) return false
-  if (to && b.firstDate > to) return false
-  if (batch && b.batch !== batch) return false
-  if (warehouseId && ![...b.wsi, ...b.wsr].some((t) => t.warehouseId === warehouseId)) return false
-  return true
-})
+// Batch / trial numbers are usually plain numbers; a range (From..To, either side
+// optional) keeps the numeric ones inside it. A batch that is not a number is only
+// kept when no range is asked for.
+const batchNumber = (b) => { const n = parseFloat(String(b)); return Number.isNaN(n) ? null : n }
+
+export const filterBatches = (batches, { kind, millerKey: mk = '', warehouseId = '', from, to, batchFrom = '', batchTo = '' }) => {
+  const lo = batchFrom === '' ? null : batchNumber(batchFrom)
+  const hi = batchTo === '' ? null : batchNumber(batchTo)
+  return batches.filter((b) => {
+    if (b.kind !== kind) return false
+    if (mk && b.millerKey !== mk) return false
+    if (from && b.firstDate < from) return false
+    if (to && b.firstDate > to) return false
+    if (lo != null || hi != null) {
+      const n = batchNumber(b.batch)
+      if (n == null || (lo != null && n < lo) || (hi != null && n > hi)) return false
+    }
+    if (warehouseId && ![...b.wsi, ...b.wsr].some((t) => t.warehouseId === warehouseId)) return false
+    return true
+  })
+}
 
 const cell = (t, o = {}) => ({ t: t == null ? '' : String(t), ...o })
 

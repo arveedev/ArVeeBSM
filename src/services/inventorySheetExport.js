@@ -36,11 +36,15 @@ export const modelToSheet = (model, name) => {
   merges.push([headStart, 1, headStart + model.head.length - 1, 1])
   const bodyStart = values.length + 1
   const kinds = []
+  const notes = []
   for (const r of model.rows) {
     values.push(pad([r.first, ...r.cells.map((v) => (v == null ? (r.dash ? '-' : '') : v))]))
     kinds.push(r.kind)
+    r.notes?.forEach((n, i) => {
+      if (n) notes.push({ r: values.length, c: 2 + i, t: n.map((l) => `${l.doc}${l.customer ? ` - ${l.customer}` : ''}${l.pile ? ` - ${l.pile}` : ''}: ${l.value.toFixed(2)}`).join('\n') })
+    })
   }
-  return { name, values, merges, headStart, headRows: model.head.length, bodyStart, kinds, width }
+  return { name, values, merges, headStart, headRows: model.head.length, bodyStart, kinds, width, notes }
 }
 
 const fetchWithTimeout = (url, options) => {
