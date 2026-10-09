@@ -30,7 +30,7 @@ import useCrosshair from '../../hooks/useCrosshair.js'
 
 const BANK_KEY = 'inv.bankProvince'
 const readBank = () => { try { return localStorage.getItem(BANK_KEY) ?? 'Albay' } catch { return 'Albay' } }
-const DEFAULT_FILTERS = { combine: false, provinceId: '', commodity: '', warehouseIds: null, sort: 'name', ageSet: 'coarse', bank: 'Albay' }
+const DEFAULT_FILTERS = { combine: false, provinceId: '', commodity: '', warehouseIds: null, sort: 'name', ageSet: 'coarse', bank: 'Albay', showByProducts: false }
 const fmtNum = (n) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const CONTROL_H = 'h-[46px]'
 
@@ -49,6 +49,7 @@ const useIsNarrow = () => {
 
 const ROW_STYLE = {
   section: 'bg-neutral-900 text-[11px] font-bold uppercase tracking-wide text-neutral-400',
+  day: 'bg-emerald-950/70 text-sm font-bold text-emerald-300',
   sub: 'bg-neutral-900 font-semibold text-app-text',
   total: 'bg-neutral-800 font-bold text-app-text',
   week: 'bg-neutral-900 font-semibold text-app-text',
@@ -60,7 +61,7 @@ const ROW_STYLE = {
   less: 'text-brand-crimson',
   row: 'text-neutral-200',
 }
-const ROW_BORDER = { total: 'border-t-2 border-neutral-500', end: 'border-y border-neutral-500' }
+const ROW_BORDER = { total: 'border-t-2 border-neutral-500', end: 'border-y border-neutral-500', day: 'border-t-[6px] border-emerald-700' }
 
 // Left edge of a column: a strong line where a new warehouse/commodity starts,
 // a lighter one where a new variety starts.
@@ -106,7 +107,7 @@ function ModelTable({ model, short = false, onNote }) {
               <td className={`sticky left-0 z-[5] min-w-[11rem] max-w-[18rem] whitespace-normal break-words border-b border-r border-neutral-800 bg-neutral-950 px-2 py-1 text-left ${r.kind === 'add' || r.kind === 'less' ? 'pl-5' : ''}`}>
                 {r.first}
               </td>
-              {r.kind === 'section' || r.kind === 'add-label' || r.kind === 'less-label'
+              {r.kind === 'section' || r.kind === 'day' || r.kind === 'add-label' || r.kind === 'less-label'
                 ? <td colSpan={model.edges.length} className="border-b border-neutral-800" />
                 : r.cells.map((v, ci) => (
                   <td
@@ -509,7 +510,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     if (loading || !['summary', 'ledger', 'age', 'check', 'procurement'].includes(view) || (view === 'check' && !isAdmin)) return null
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet, opening: config?.inventoryOpening ?? null })
     const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
-    const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
+    const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null, byProducts: filters.showByProducts || filters.commodity === 'By Products' }
     const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
     const end = to < from ? from : to
     try {
@@ -576,7 +577,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     try {
       const ref = view === 'ledger' ? (to < from ? from : to) : asOf
       const monthStart = clampStart(`${ref.slice(0, 8)}01`)
-      const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
+      const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null, byProducts: filters.showByProducts || filters.commodity === 'By Products' }
       const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
       const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
       const mk = (ageSet) => makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet, opening: config?.inventoryOpening ?? null })
@@ -676,6 +677,18 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                 </button>
               </div>
               <span className="hidden flex-1 sm:block" />
+              {['ledger', 'summary', 'age'].includes(view) && (
+                <div className={`flex items-center ${CONTROL_H}`}>
+                  <button
+                    type="button" role="switch" aria-checked={filters.showByProducts}
+                    onClick={() => setFilters({ ...filters, showByProducts: !filters.showByProducts })}
+                    className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${filters.showByProducts ? 'border-brand-neon text-brand-neon' : 'border-neutral-700 bg-neutral-900 text-neutral-400'}`}
+                  >
+                    <span className={`relative h-3.5 w-6 rounded-full ${filters.showByProducts ? 'bg-brand-neon' : 'bg-neutral-700'}`}><span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-neutral-950 transition-all ${filters.showByProducts ? 'left-3' : 'left-0.5'}`} /></span>
+                    By-products
+                  </button>
+                </div>
+              )}
               {view === 'ledger' && isAdmin && (
                 <div className={`flex items-center ${CONTROL_H}`}>
                   <button type="button" onClick={openOpeningEditor} disabled={loading} className={pillButton}>

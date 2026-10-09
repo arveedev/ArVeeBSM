@@ -80,6 +80,7 @@ const accept = (filters, pile, ctx) => {
     if (wh?.provinceId !== filters.provinceId) return false
   }
   if (filters.commodity && commodityOf(pile) !== filters.commodity) return false
+  if (filters.byProducts === false && commodityOf(pile) === 'By Products') return false
   return true
 }
 
@@ -91,7 +92,9 @@ const put = (grid, rk, cid, kilos) => {
 
 const lotCol = (ctx, pile, varietyId, lotDate, asOf) => {
   const commodity = commodityOf(pile)
-  const variety = ctx.varietyName.get(varietyId ?? pile?.varietyId) ?? (commodity === 'By Products' ? 'BY-PRODUCTS' : '?')
+  let variety = ctx.varietyName.get(varietyId ?? pile?.varietyId) ?? (commodity === 'By Products' ? 'BY-PRODUCTS' : '?')
+  // Combined names also merge dry palay: ignore the m and s (PD1m-A, PD1s-A -> PD1-A, PDm, PDs -> PD); PW stays as is
+  if (ctx.combine && commodity === 'Palay') variety = variety.replace(/^(PD\d*)[ms](?=-|$)/i, '$1')
   const months = lotAgeMonths(lotDate, asOf) ?? 0
   return { commodity, variety, bucket: bucketOf(commodity, months, ctx.ageSet) }
 }
@@ -403,9 +406,17 @@ export const summaryModel = (summary, unit, { asOf, scope = 'ALBAY BRANCH' }) =>
 
 // The documents behind one ADD / LESS value (the old sheet showed them as a cell note).
 const notesFor = (moves, kind, label, c, unit) => {
-  const lines = moves
-    .filter((m) => m.kind === kind && m.label === label && m.rowKey === c.rowKey && m.colId === c.id)
-    .map((m) => ({ doc: `${m.docType ?? ''} ${m.serial ?? ''}`.trim(), customer: m.customer ?? '', pile: m.pile ?? '', value: num(m.kilos, unit) ?? 0 }))
+  const byDoc = new Map()
+  for (const m of moves) {
+    if (m.kind !== kind || m.label !== label || m.rowKey !== c.rowKey || m.colId !== c.id) continue
+    const doc = `${m.docType ?? ''} ${m.serial ?? ''}`.trim()
+    const key = `${doc}|${m.customer ?? ''}`
+    const cur = byDoc.get(key) ?? { doc, customer: m.customer ?? '', piles: [], kilos: 0 }
+    cur.kilos += m.kilos
+    if (m.pile && !cur.piles.includes(m.pile)) cur.piles.push(m.pile)
+    byDoc.set(key, cur)
+  }
+  const lines = [...byDoc.values()].map((x) => ({ doc: x.doc, customer: x.customer, pile: x.piles.join(', '), value: num(x.kilos, unit) ?? 0 }))
   return lines.length ? lines : null
 }
 
@@ -425,14 +436,13 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
   const day = ledger.days
   if (day.length > 0) rows.push(line(`${longDate(day[0].date)} · BEGINNING INVENTORY`, day[0].beginning, 'beg', true))
   for (const d of day) {
-    const [, m, dd] = d.date.split('-').map(Number)
-    const stamp = `${MONTHS[m - 1]} ${dd}`
+    rows.push({ kind: 'day', first: longDate(d.date), cells: [] })
     if (d.adds.length > 0) {
-      rows.push({ kind: 'add-label', first: `${stamp} · ADD:`, cells: [] })
+      rows.push({ kind: 'add-label', first: 'ADD:', cells: [] })
       for (const a of d.adds) rows.push({ ...line(a.label, a.grid, 'add'), notes: cols.map((c) => notesFor(d.moves, 'add', a.label, c, unit)), day: d.date })
     }
     if (d.lesses.length > 0) {
-      rows.push({ kind: 'less-label', first: d.adds.length > 0 ? 'LESS:' : `${stamp} · LESS:`, cells: [] })
+      rows.push({ kind: 'less-label', first: 'LESS:', cells: [] })
       for (const l of d.lesses) rows.push({ ...line(l.label, l.grid, 'less'), notes: cols.map((c) => notesFor(d.moves, 'less', l.label, c, unit)), day: d.date })
     }
     if (d.adjustment) {

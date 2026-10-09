@@ -8375,4 +8375,5 @@
 //   1.10-317 - Reports: WSI never deducts, LESS comes only from authorities and from the age bracket named in their Age Group column; Data check lists authorities with no readable age group and WSIs no authority covers; the adjustment row says whether a pile was closed.
 //   1.10-318 - Daily inventory and Summary: only a closed pile can adjust the balances (the row names the pile and its values carry a note); any other change without an ADD or LESS document is ignored, so Summary always equals the Daily inventory ending.
 //   1.10-319 - Reports: a beginning balance entered late counts as opening stock from the start, so authorities and other documents that took stock out before its date no longer make a balance negative.
-export const APP_VERSION = '1.10-319'
+//   1.10-320 - Daily inventory: Combined also merges dry palay (PD1m-A + PD1s-A = PD1-A, PDm + PDs = PD; PW unchanged); by-products hidden by default with a visible toggle; each day is its own block (date band, then ADD and LESS on their own rows); an authority is one line in a value's note, listing its piles.
+export const APP_VERSION = '1.10-320'

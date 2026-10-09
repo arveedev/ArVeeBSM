@@ -72,8 +72,8 @@ function writeReport_(req) {
         var body = sh.getRange(s.bodyStart, 2, s.kinds.length, Math.max(width - 1, 1));
         body.setNumberFormat('#,##0.00').setHorizontalAlignment('right');
         sh.getRange(s.bodyStart, 1, s.kinds.length, width).setBorder(true, true, true, true, true, true, '#cccccc', SpreadsheetApp.BorderStyle.SOLID);
-        var bold = { section: 1, sub: 1, total: 1, end: 1, beg: 1, week: 1, 'add-label': 1, 'less-label': 1 };
-        var fill = { sub: '#f3f3f3', total: '#e6e6e6', section: '#efefef', beg: '#fff2cc', week: '#f3f3f3' };
+        var bold = { day: 1, section: 1, sub: 1, total: 1, end: 1, beg: 1, week: 1, 'add-label': 1, 'less-label': 1 };
+        var fill = { day: '#b6d7a8', sub: '#f3f3f3', total: '#e6e6e6', section: '#efefef', beg: '#fff2cc', week: '#f3f3f3' };
         s.kinds.forEach(function (k, i) {
           var r = sh.getRange(s.bodyStart + i, 1, 1, width);
           if (bold[k]) r.setFontWeight('bold');

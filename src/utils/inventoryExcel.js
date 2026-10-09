@@ -3,7 +3,7 @@
 // normal use. Read-only: builds a file in memory and downloads it.
 
 const FILL = {
-  head: 'FFD9EAD3', section: 'FFEFEFEF', sub: 'FFF3F3F3', total: 'FFE6E6E6', beg: 'FFFFF2CC',
+  head: 'FFD9EAD3', day: 'FFB6D7A8', section: 'FFEFEFEF', sub: 'FFF3F3F3', total: 'FFE6E6E6', beg: 'FFFFF2CC',
 }
 
 export const exportModelToExcel = async (model, { fileName, sheetName = 'Report' }) => {
@@ -52,11 +52,11 @@ export const exportModelToExcel = async (model, { fileName, sheetName = 'Report'
   for (const row of model.rows) {
     const first = ws.getCell(r, 1)
     first.value = row.first
-    const bold = ['section', 'sub', 'total', 'end', 'beg', 'add-label', 'less-label'].includes(row.kind)
+    const bold = ['section', 'day', 'sub', 'total', 'end', 'beg', 'add-label', 'less-label'].includes(row.kind)
     if (bold) first.font = { bold: true }
     if (row.kind === 'add-label') first.font = { bold: true, color: { argb: 'FF1F5FBF' } }
     if (row.kind === 'less-label') first.font = { bold: true, color: { argb: 'FFB3261E' } }
-    const fill = row.kind === 'section' ? FILL.section : row.kind === 'sub' ? FILL.sub : row.kind === 'total' ? FILL.total : row.kind === 'beg' ? FILL.beg : null
+    const fill = row.kind === 'day' ? FILL.day : row.kind === 'section' ? FILL.section : row.kind === 'sub' ? FILL.sub : row.kind === 'total' ? FILL.total : row.kind === 'beg' ? FILL.beg : null
     row.cells.forEach((v, i) => {
       const cell = ws.getCell(r, 2 + i)
       if (v == null) { if (row.dash) cell.value = '-'; cell.alignment = { horizontal: 'right' } } else cell.value = v
