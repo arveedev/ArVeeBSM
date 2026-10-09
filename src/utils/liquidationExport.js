@@ -84,7 +84,7 @@ export const exportLiquidationExcel = async (sections, { fileName, config }) => 
     }
     if (sec.summary.palay.length) {
       ws.getCell(r, 1).value = 'Palay issued - milling fee'
-      ws.getCell(r, 3).value = 'BAGS'
+      ws.getCell(r, 3).value = 'NET BAGS'
       ws.getCell(r, 5).value = 'MILLING FEE'
       ws.getCell(r, 7).value = 'AMOUNT'
       for (const c of [1, 3, 5, 7]) ws.getCell(r, c).font = { bold: true }
@@ -219,7 +219,7 @@ export const exportLiquidationPdf = async (sections, { fileName, config }) => {
     if (sec.summary.palay.length) {
       autoTable(doc, {
         startY: yy,
-        head: [['Palay issued - milling fee', 'BAGS', 'MILLING FEE', 'AMOUNT']],
+        head: [['Palay issued - milling fee', 'NET BAGS', 'MILLING FEE', 'AMOUNT']],
         body: [...sec.summary.palay.map((l) => [l.product, fmt2(l.bags), fmt2(l.price), fmt3(l.amount)]), ['TOTAL MILLING FEE', '', '', fmt3(sec.summary.palayTotal)]],
         theme: 'plain', styles: { fontSize: 7, cellPadding: 0.8 }, headStyles: { fontStyle: 'bold' },
         tableWidth: 110, margin: { left: 8 }, columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },

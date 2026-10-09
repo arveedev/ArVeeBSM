@@ -144,7 +144,7 @@ function Summary({ section, isAdmin, onPrice, savedKey }) {
         <table className="text-sm">
           {sm.palay.length > 0 && (
             <>
-              <Head first="Palay issued · milling fee" qty="Bags" price="Milling fee" />
+              <Head first="Palay issued · milling fee" qty="Net bags" price="Milling fee" />
               <tbody>{sm.palay.map((l) => <Row key={l.product} l={l} qty={l.bags} />)}<Total label="TOTAL MILLING FEE" value={sm.palayTotal} /></tbody>
             </>
           )}
