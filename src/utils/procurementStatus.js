@@ -47,7 +47,7 @@ const snapshotAt = (cpfEvents, day) => cpfEvents.find((e) => (e.date ?? '') <= d
 
 export const buildProcurementStatus = ({
   transactions, warehouses, provinces, varieties, transactionTypes, globalDataStartDate = null,
-  cpfEvents = [], month, todayISO, bankProvinceName = null, branchName = 'ALBAY BRANCH',
+  cpfEvents = [], month, todayISO, bankProvinceName = null, branchName = 'ALBAY BRANCH', startISO = null,
 }) => {
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const provById = new Map(provinces.map((p) => [p.provinceId, p]))
@@ -56,7 +56,9 @@ export const buildProcurementStatus = ({
   const typeName = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
   const provNames = [...provinces].map((p) => p.name).sort((a, b) => a.localeCompare(b))
 
-  const first = `${month}-01`
+  // the first day shown is never before the data start date (the day after it)
+  const monthFirst = `${month}-01`
+  const first = startISO && startISO > monthFirst ? startISO : monthFirst
   const [y, m] = month.split('-').map(Number)
   const lastOfMonth = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`
   const last = lastOfMonth < todayISO ? lastOfMonth : todayISO

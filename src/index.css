@@ -1049,3 +1049,8 @@ select {
   100% { box-shadow: 0 0 0 10px rgba(0, 255, 163, 0); }
 }
 .animate-save-enable-pulse { animation: save-enable-pulse 0.5s ease-out; }
+
+/* Report tables: row and column highlight under the mouse (see hooks/useCrosshair.js).
+   A background-image overlay, so it sits on top of any row or column background. */
+.hl-line { background-image: linear-gradient(rgba(125, 211, 252, 0.12), rgba(125, 211, 252, 0.12)); }
+.hl-cross { background-image: linear-gradient(rgba(125, 211, 252, 0.32), rgba(125, 211, 252, 0.32)); }

@@ -26,6 +26,7 @@ import CalendarDatePicker from './CalendarDatePicker.jsx'
 import LiquidationReport from './LiquidationReport.jsx'
 import InventoryOpeningEditor from './InventoryOpeningEditor.jsx'
 import PillToggle from './PillToggle.jsx'
+import useCrosshair from '../../hooks/useCrosshair.js'
 
 const BANK_KEY = 'inv.bankProvince'
 const readBank = () => { try { return localStorage.getItem(BANK_KEY) ?? 'Albay' } catch { return 'Albay' } }
@@ -67,9 +68,11 @@ const edgeClass = (e) => (e === 'wh' ? 'border-l-2 border-l-emerald-500/70' : e 
 const headTone = (t) => (t === 1 ? 'bg-sky-950 text-sky-300' : 'bg-emerald-950 text-emerald-300')
 
 function ModelTable({ model, short = false, onNote }) {
+  const boxRef = useRef(null)
+  useCrosshair(boxRef)
   if (model.empty) return <p className="py-10 text-center text-sm text-neutral-500">{model.empty}</p>
   return (
-    <div className={`overflow-auto rounded-xl border border-neutral-800 ${short ? "max-h-[60vh]" : "min-h-0 flex-1"}`}>
+    <div ref={boxRef} className={`overflow-auto rounded-xl border border-neutral-800 ${short ? "max-h-[60vh]" : "min-h-0 flex-1"}`}>
       <table className="min-w-full border-separate border-spacing-0 text-xs tabular-nums">
         <thead>
           {model.head.map((row, ri) => {
@@ -445,9 +448,9 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [entered, setEntered] = useState(false)
   const [view, setView] = useState('hub')
   const today = todayLocalISO()
-  const [from, setFrom] = useState(`${today.slice(0, 8)}01`)
-  const [to, setTo] = useState(today)
-  const [asOf, setAsOf] = useState(today)
+  const [from, setFromRaw] = useState(`${today.slice(0, 8)}01`)
+  const [to, setToRaw] = useState(today)
+  const [asOf, setAsOfRaw] = useState(today)
   const [unit, setUnit] = useState('b')
   const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS, bank: readBank() }))
   const [draft, setDraft] = useState(DEFAULT_FILTERS)
@@ -474,6 +477,18 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), [])
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
+  // Reports start the day after the Data Start Date (September 1, 2026): no earlier date can be chosen.
+  const startISO = config?.dataStartDate ? new Date(Date.parse(`${config.dataStartDate}T00:00:00Z`) + 86400000).toISOString().slice(0, 10) : null
+  const clampStart = (iso) => (startISO && iso < startISO ? startISO : iso)
+  const setFrom = (iso) => { if (startISO && iso < startISO) toast(`Reports start on ${longDate(startISO)}`); setFromRaw(clampStart(iso)) }
+  const setTo = (iso) => { if (startISO && iso < startISO) toast(`Reports start on ${longDate(startISO)}`); setToRaw(clampStart(iso)) }
+  const setAsOf = (iso) => { if (startISO && iso < startISO) toast(`Reports start on ${longDate(startISO)}`); setAsOfRaw(clampStart(iso)) }
+  useEffect(() => {
+    if (!startISO) return
+    setFromRaw((v) => (v < startISO ? startISO : v))
+    setToRaw((v) => (v < startISO ? startISO : v))
+    setAsOfRaw((v) => (v < startISO ? startISO : v))
+  }, [startISO])
   const sdoUsers = useLiveQuery(() => db.users.where('role').equals('SDO').toArray(), [])
   const ledgerRows = useLiveQuery(() => db.cashLedgerV2.toArray(), [])
   const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), [])
@@ -495,7 +510,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
         const cpfEvents = buildCpfHistory({ sdoUsers, ledger: ledgerRows, activePrs, config, warehouses, provinces })
         const r = buildProcurementStatus({
           transactions, warehouses, provinces, varieties, transactionTypes, globalDataStartDate: config?.dataStartDate ?? null,
-          cpfEvents, month, todayISO: today, bankProvinceName: filters.bank || null, branchName: branches?.[0]?.name ?? 'ALBAY BRANCH',
+          cpfEvents, month, todayISO: today, startISO, bankProvinceName: filters.bank || null, branchName: branches?.[0]?.name ?? 'ALBAY BRANCH',
         })
         return { model: r.model, cards: narrow ? r.cards : null }
       }
@@ -515,7 +530,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       console.error(err)
       return { model: { title: '', subtitle: '', head: [], rows: [], edges: [], tones: [], empty: 'Could not build this report.' }, cards: null }
     }
-  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, sdoUsers, ledgerRows, activePrs, branches])
+  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, startISO, sdoUsers, ledgerRows, activePrs, branches])
   const model = built?.model ?? null
 
   const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse'].filter(Boolean).length
@@ -552,7 +567,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     setSheetResult(null)
     try {
       const ref = view === 'ledger' ? (to < from ? from : to) : asOf
-      const monthStart = `${ref.slice(0, 8)}01`
+      const monthStart = clampStart(`${ref.slice(0, 8)}01`)
       const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
       const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
       const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null }
@@ -623,7 +638,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               {view === 'procurement' ? (
                 <div className={`flex items-center ${CONTROL_H}`}>
                   <select value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200">
-                    {monthOptions(config?.dataStartDate, today).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                    {monthOptions(startISO ?? config?.dataStartDate, today).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
                   </select>
                 </div>
               ) : view === 'ledger' ? (

@@ -13,6 +13,7 @@ import {
   buildMillingBatches, filterBatches, listMillers, buildLiquidationSections, millerStoreKey, summaryLineText,
 } from '../../utils/millingLiquidation.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
+import useCrosshair from '../../hooks/useCrosshair.js'
 
 const { fmt2, fmt3, fmtInt } = summaryLineText
 const CONTROL_H = 'h-[46px]'
@@ -68,6 +69,7 @@ function GridTable({ section }) {
   const innerRef = useRef(null)
   const [zoom, setZoom] = useState(1)
   const [width, setWidth] = useState('100%')
+  useCrosshair(boxRef)
   useLayoutEffect(() => {
     const fit = () => {
       const box = boxRef.current
@@ -211,8 +213,17 @@ function FilterSheet({ draft, setDraft, warehouses, batchValues, kind, onApply, 
 const DEFAULTS = { warehouseId: '', batchFrom: '', batchTo: '' }
 
 function LiquidationReport({ kind, transactions, warehouses, varieties, sackTypes, config, branch, isAdmin, today }) {
-  const [from, setFrom] = useState(config?.dataStartDate ?? `${today.slice(0, 4)}-01-01`)
-  const [to, setTo] = useState(today)
+  // the earliest day is the day after the Data Start Date
+  const startISO = config?.dataStartDate ? new Date(Date.parse(`${config.dataStartDate}T00:00:00Z`) + 86400000).toISOString().slice(0, 10) : null
+  const [from, setFromRaw] = useState(startISO ?? `${today.slice(0, 4)}-01-01`)
+  const [to, setToRaw] = useState(today)
+  const setFrom = (iso) => setFromRaw(startISO && iso < startISO ? startISO : iso)
+  const setTo = (iso) => setToRaw(startISO && iso < startISO ? startISO : iso)
+  useEffect(() => {
+    if (!startISO) return
+    setFromRaw((v) => (v < startISO ? startISO : v))
+    setToRaw((v) => (v < startISO ? startISO : v))
+  }, [startISO])
   const [filters, setFilters] = useState(DEFAULTS)
   const [draft, setDraft] = useState(DEFAULTS)
   const [showFilters, setShowFilters] = useState(false)
