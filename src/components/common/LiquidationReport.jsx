@@ -13,6 +13,8 @@ import {
   buildMillingBatches, filterBatches, listMillers, buildLiquidationSections, millerStoreKey, summaryLineText,
 } from '../../utils/millingLiquidation.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
+import ConfirmDialog from './ConfirmDialog.jsx'
+import { SdOverlay } from './StockDeskUi.jsx'
 import useCrosshair from '../../hooks/useCrosshair.js'
 
 const { fmt2, fmt3, fmtInt } = summaryLineText
@@ -33,18 +35,24 @@ export const saveMillingPrice = async (mk, product, value) => {
 function PriceCell({ value, isAdmin, onCommit }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState('')
-  const start = () => { setText(liveFormatNumber(Number(value ?? 0).toFixed(2))); setEditing(true) }
-  const finish = () => {
-    const n = parseFormattedNumber(text)
+  const doneRef = useRef(false)
+  const start = () => { doneRef.current = false; setText(liveFormatNumber(Number(value ?? 0).toFixed(2))); setEditing(true) }
+  const finish = (commit) => {
+    if (doneRef.current) return
+    doneRef.current = true
     setEditing(false)
-    if (n !== Number(value ?? 0)) onCommit(n)
+    const n = parseFormattedNumber(text)
+    if (commit && n !== Number(value ?? 0)) onCommit(n)
   }
   if (editing) {
     return (
       <input
         autoFocus type="text" inputMode="decimal" value={text} aria-label="Unit price"
-        onChange={(e) => setText(liveFormatNumber(e.target.value))} onBlur={finish}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditing(false) }}
+        onChange={(e) => setText(liveFormatNumber(e.target.value))} onBlur={() => finish(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); finish(true) }
+          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false) }
+        }}
         className="w-24 rounded-lg border border-brand-neon bg-neutral-950 px-2 py-0.5 text-right text-sm tabular-nums text-app-text outline-none"
       />
     )
@@ -90,7 +98,7 @@ function GridTable({ section }) {
     return () => window.removeEventListener('resize', fit)
   }, [section])
   return (
-    <div ref={boxRef} className="max-h-[70vh] overflow-auto rounded-xl border border-neutral-800">
+    <div ref={boxRef} className="sd-table overflow-clip rounded-xl border border-neutral-800">
       <div ref={innerRef} style={{ zoom, width }}>
         <table className="w-full border-collapse text-[11px] leading-tight">
           <thead className="sticky top-0 z-10">
@@ -116,28 +124,36 @@ function GridTable({ section }) {
   )
 }
 
-function Summary({ section, isAdmin, onPrice, savedKey }) {
-  const mk = section.millerKey
-  const Row = ({ l, qty, isKilos }) => (
+// These pieces live at module level on purpose: defined inside Summary they were a new component type on
+// every render, so a price being edited was torn down and rebuilt (the field flashed and vanished).
+function PriceRow({ l, qty, isKilos, mk, isAdmin, onPrice }) {
+  return (
     <tr>
       <td className="py-0.5 pr-4 font-semibold text-app-text">{l.product}</td>
       <td className="py-0.5 pr-4 text-right tabular-nums text-neutral-300">{isKilos ? fmt3(qty) : fmt2(qty)}</td>
-      <td className="py-0.5 pr-4 text-right"><PriceCell value={l.price} isAdmin={isAdmin} onCommit={(n) => onPrice(mk, l.product, n)} /></td>
+      <td className="py-0.5 pr-4 text-right"><PriceCell key={`${mk}|${l.product}`} value={l.price} isAdmin={isAdmin} onCommit={(n) => onPrice(mk, l.product, n)} /></td>
       <td className="py-0.5 text-right tabular-nums text-app-text">{fmt3(l.amount)}</td>
     </tr>
   )
-  const Head = ({ first, qty, price, top }) => (
+}
+function SummaryHead({ first, qty, price, top }) {
+  return (
     <thead><tr className="text-[11px] uppercase text-neutral-500">
       <th className={`pr-4 text-left ${top ? 'pt-3' : ''}`}>{first}</th><th className={`pr-4 text-right ${top ? 'pt-3' : ''}`}>{qty}</th>
       <th className={`pr-4 text-right ${top ? 'pt-3' : ''}`}>{price}</th><th className={`text-right ${top ? 'pt-3' : ''}`}>Amount</th>
     </tr></thead>
   )
-  const Total = ({ label, value }) => (
-    <tr className="border-t border-neutral-700"><td className="pt-1 font-bold text-app-text" colSpan={3}>{label}</td><td className="pt-1 text-right font-bold tabular-nums text-app-text">{fmt3(value)}</td></tr>
-  )
+}
+function SummaryTotal({ label, value }) {
+  return <tr className="border-t border-neutral-700"><td className="pt-1 font-bold text-app-text" colSpan={3}>{label}</td><td className="pt-1 text-right font-bold tabular-nums text-app-text">{fmt3(value)}</td></tr>
+}
+
+function Summary({ section, isAdmin, onPrice, savedKey }) {
+  const mk = section.millerKey
+  const row = (l, qty, isKilos) => <PriceRow key={l.product} l={l} qty={qty} isKilos={isKilos} mk={mk} isAdmin={isAdmin} onPrice={onPrice} />
   const sm = section.summary
   return (
-    <div className="mt-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+    <div className="sd-table mt-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
       <div className="mb-1 flex items-center justify-between">
         <p className="text-xs font-bold uppercase tracking-wide text-brand-neon">Summary</p>
         {savedKey === mk && <span className="rounded-full bg-emerald-900/60 px-2 py-0.5 text-[10px] text-emerald-300">Price updated, saved for this ricemill</span>}
@@ -146,22 +162,22 @@ function Summary({ section, isAdmin, onPrice, savedKey }) {
         <table className="text-sm">
           {sm.palay.length > 0 && (
             <>
-              <Head first="Palay issued · milling fee" qty="Net bags" price="Milling fee" />
-              <tbody>{sm.palay.map((l) => <Row key={l.product} l={l} qty={l.bags} />)}<Total label="TOTAL MILLING FEE" value={sm.palayTotal} /></tbody>
+              <SummaryHead first="Palay issued · milling fee" qty="Net bags" price="Milling fee" />
+              <tbody>{sm.palay.map((l) => row(l, l.bags))}<SummaryTotal label="TOTAL MILLING FEE" value={sm.palayTotal} /></tbody>
             </>
           )}
-          <Head first="Local rice · trucking fee" qty="Bags @ 50 kg" price="Trucking fee" top={sm.palay.length > 0} />
+          <SummaryHead first="Local rice · trucking fee" qty="Bags @ 50 kg" price="Trucking fee" top={sm.palay.length > 0} />
           <tbody>
-            {sm.rice.map((l) => <Row key={l.product} l={l} qty={l.bags} />)}
+            {sm.rice.map((l) => row(l, l.bags))}
             {sm.rice.length === 0 && <tr><td colSpan={4} className="py-1 text-neutral-500">No local rice received.</td></tr>}
-            {sm.rice.length > 0 && <Total label="TOTAL TRUCKING FEE" value={sm.riceTotal} />}
+            {sm.rice.length > 0 && <SummaryTotal label="TOTAL TRUCKING FEE" value={sm.riceTotal} />}
           </tbody>
           {sm.byProducts.length > 0 && (
             <>
-              <Head first="Less: by-products" qty="Net kg" price="U.P." top />
+              <SummaryHead first="Less: by-products" qty="Net kg" price="U.P." top />
               <tbody>
-                {sm.byProducts.map((l) => <Row key={l.product} l={l} qty={l.kilos} isKilos />)}
-                <Total label="TOTAL BY-PRODUCTS" value={sm.byTotal} />
+                {sm.byProducts.map((l) => row(l, l.kilos, true))}
+                <SummaryTotal label="TOTAL BY-PRODUCTS" value={sm.byTotal} />
               </tbody>
             </>
           )}
@@ -172,17 +188,17 @@ function Summary({ section, isAdmin, onPrice, savedKey }) {
   )
 }
 
-function FilterSheet({ draft, setDraft, warehouses, batchValues, kind, onApply, onReset, onClose }) {
+function FilterSheet({ open, draft, setDraft, warehouses, batchValues, kind, onApply, onReset, onClose }) {
   const selectClass = 'mt-1 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-app-text outline-none focus:border-brand-neon'
   const labelClass = 'mt-3 block text-xs text-neutral-400'
   const word = kind === 'TMO' ? 'trial' : 'batch'
   const opts = batchValues.map((b) => <option key={b} value={b}>{b === '' ? '(none)' : b}</option>)
   return (
-    <div className="fixed inset-0 z-[90] flex items-end bg-black/60 sm:items-start sm:justify-end sm:p-4" onClick={onClose}>
-      <div className="flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:mt-14 sm:w-80 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+    <SdOverlay open={open} onClose={onClose} align="sheet" z="z-[90]" panelClassName="sd-table flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:mt-14 sm:w-80 sm:rounded-2xl">
+      <>
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-app-text">Filter and sort</h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-950 p-1.5 text-neutral-400"><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg border border-brand-crimson/40 bg-neutral-900 p-1.5 text-brand-crimson transition-colors hover:bg-brand-crimson/10"><X size={16} /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pb-2">
           <label className={labelClass}>Warehouse
@@ -205,8 +221,8 @@ function FilterSheet({ draft, setDraft, warehouses, batchValues, kind, onApply, 
           <button type="button" onClick={onReset} className="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300">Reset</button>
           <button type="button" onClick={onApply} className="flex-1 rounded-xl bg-brand-neon px-3 py-2 text-sm font-semibold text-brand-contrast">Apply</button>
         </div>
-      </div>
-    </div>
+      </>
+    </SdOverlay>
   )
 }
 
@@ -229,6 +245,7 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
   const [showFilters, setShowFilters] = useState(false)
   const [tab, setTab] = useState('')
   const [busy, setBusy] = useState('')
+  const [confirmXlsx, setConfirmXlsx] = useState(false)
   const [savedKey, setSavedKey] = useState('')
   const toRef = useRef(null)
   const all = useMemo(() => buildMillingBatches({ transactions }), [transactions])
@@ -293,7 +310,7 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
         </div>
         <span className="hidden flex-1 sm:block" />
         <div className={`flex items-center gap-2 ${CONTROL_H}`}>
-          <button type="button" onClick={() => run('xlsx')} disabled={!!busy || !section} className={pillButton}><FileSpreadsheet size={14} /> {busy === 'xlsx' ? 'Creating…' : 'Excel'}</button>
+          <button type="button" onClick={() => setConfirmXlsx(true)} disabled={!!busy || !section} className={pillButton}><FileSpreadsheet size={14} /> {busy === 'xlsx' ? 'Creating…' : 'Excel'}</button>
           <button type="button" onClick={() => run('pdf')} disabled={!!busy || !section} className={pillButton}><FileText size={14} /> {busy === 'pdf' ? 'Creating…' : 'PDF'}</button>
         </div>
       </div>
@@ -326,12 +343,16 @@ function LiquidationReport({ kind, transactions, warehouses, varieties, sackType
         )}
       </div>
 
-      {showFilters && (
-        <FilterSheet
-          draft={draft} setDraft={setDraft} warehouses={warehouses} batchValues={batchValues} kind={kind}
-          onApply={() => { setFilters(draft); setShowFilters(false) }} onReset={() => setDraft(DEFAULTS)} onClose={() => setShowFilters(false)}
-        />
-      )}
+      <FilterSheet
+        open={showFilters}
+        draft={draft} setDraft={setDraft} warehouses={warehouses} batchValues={batchValues} kind={kind}
+        onApply={() => { setFilters(draft); setShowFilters(false) }} onReset={() => setDraft(DEFAULTS)} onClose={() => setShowFilters(false)}
+      />
+      <ConfirmDialog
+        open={confirmXlsx} title="Export to Excel?" description="This liquidation is saved as an Excel file."
+        confirmLabel="Export" icon={FileSpreadsheet} destructive={false}
+        onConfirm={() => { setConfirmXlsx(false); run('xlsx') }} onCancel={() => setConfirmXlsx(false)}
+      />
     </>
   )
 }

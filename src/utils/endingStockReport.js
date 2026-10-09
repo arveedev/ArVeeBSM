@@ -43,7 +43,7 @@ const table = ({ title, subtitle, groupLabel, columns, provinces, values, unit }
     ],
     edges: [...columns.map((_, i) => (i === 0 ? null : 'var')), 'wh'],
     tones: Array.from({ length: width }, () => 0),
-    rows,
+    rows, unit, colKeys: [...columns, 'total'],
   }
 }
 
@@ -51,7 +51,7 @@ const table = ({ title, subtitle, groupLabel, columns, provinces, values, unit }
  * @param ctx the report context (makeContext), inputs the lot-engine inputs, month 'YYYY-MM'
  * @returns { heading, asOf, tables: [paddy, localRice] }
  */
-export const buildEndingStock = (ctx, inputs, { month, todayISO, provinceNames = [], unit = 'b' }) => {
+export const buildEndingStockData = (ctx, inputs, { month, todayISO, provinceNames = [] }) => {
   const end = monthEnd(month)
   const asOf = end > todayISO ? todayISO : end
   const summary = buildSummary(ctx, inputs, { asOf, filters: { byProducts: false } })
@@ -74,13 +74,18 @@ export const buildEndingStock = (ctx, inputs, { month, todayISO, provinceNames =
       }
     }
   }
-  const provinceList = [...provinces].sort(natural)
+  return { month, asOf, values, seen, provinceList: [...provinces].sort(natural) }
+}
+
+/** The two tables in the chosen unit (cheap: no stock is recomputed). */
+export const endingStockModels = (data, unit = 'b') => {
+  const { month, asOf, values, seen, provinceList } = data
   // the form's own columns always show; any other variety with stock is added after them
   const columnsFor = (commodity, fixed) => [...fixed, ...[...seen[commodity]].filter((c) => !fixed.includes(c)).sort(natural)]
   const unitText = unit === 'mt' ? 'MT' : 'net bags'
   const subtitle = `As of ${longDate(asOf)} · ${unitText}`
   return {
-    heading: `V. NFA ENDING STOCK BALANCE PER VARIETY AS OF ${monthTitle(month)}`,
+    heading: `NFA ENDING STOCK BALANCE PER VARIETY AS OF ${monthTitle(month)}`,
     asOf,
     tables: [
       table({ title: `TABLE I - NFA ENDING INVENTORY OF PADDY (${unitText} per stock report)`, subtitle, groupLabel: 'PALAY', columns: columnsFor('Palay', PALAY_COLUMNS), provinces: provinceList, values: values.Palay, unit }),
@@ -88,3 +93,6 @@ export const buildEndingStock = (ctx, inputs, { month, todayISO, provinceNames =
     ],
   }
 }
+
+export const buildEndingStock = (ctx, inputs, { month, todayISO, provinceNames = [], unit = 'b' }) =>
+  endingStockModels(buildEndingStockData(ctx, inputs, { month, todayISO, provinceNames }), unit)

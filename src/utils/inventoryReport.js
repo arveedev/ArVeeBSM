@@ -343,24 +343,19 @@ const analyzeDays = (ctx0, inputs0, filters, from, to) => {
         }
       }
     }
-    // an Admin's opening-balance override is a deliberate change
+    // An Admin's opening-balance override is the truth from its date: the balance shown at the end of that
+    // day is exactly what the editor showed plus what was typed, so any gap built up before that day no
+    // longer applies. The override row is the reconciling item of that day (the typed corrections, and
+    // the earlier gap that is now released) and the gap starts again from nothing.
     const openingAdj = new Map()
-    if (opening && d === opening.date) {
-      // the part worked into the lots: the day's stock with the override minus without it
-      if (ctx.openingEngine) {
-        const plain = buildLots({ ...inputs0, asOf: d })
-        const effect = gridDiff(stockGrid({ ...ctx, openingCells: [] }, getState(d), d, filters), stockGrid({ ...ctx, openingCells: [] }, plain, d, filters))
-        for (const [rk, row] of effect) for (const [id, v] of row) put(openingAdj, rk, id, v)
-      }
-      for (const c of opening.cells) {
-        const like = { warehouseId: c.w, cerealType: c.c }
-        if (accept(filters, like, ctx)) put(openingAdj, rowKey(rowOf(ctx, like)), colId(c.c, c.v, c.b), c.k)
-      }
+    const isOpeningDay = Boolean(opening) && d === opening.date
+    if (isOpeningDay) {
+      for (const [rk, row] of gridAdd(gridDiff(adjustment, closure), gap)) for (const [id, v] of row) put(openingAdj, rk, id, v)
     }
     // everything else that moved the stock without a document is a gap and is ignored
-    const dayGap = gridDiff(gridDiff(adjustment, closure), openingAdj)
+    const dayGap = gridDiff(adjustment, closure)
     const gapBefore = gap
-    gap = gridAdd(gap, dayGap)
+    gap = isOpeningDay ? new Map() : gridAdd(gap, dayGap)
     gapAt.set(d, gap)
     recs.push({
       date: d, moves, adds, lesses, beg0, end0, closure, closureLines, openingAdj, gapBefore, gapNow: gap, stPrev,
@@ -571,7 +566,8 @@ export const summaryModel = (summary, unit, { asOf, scope = 'ALBAY BRANCH' }) =>
   if (summary.provinces.length > 0) rows.push(line('TOTAL BRANCH', summary.total, 'total'))
   return {
     title: 'DAILY INVENTORY SUMMARY', subtitle: `${scope} · stock as of ${longDate(asOf)} · ${unitLabel(unit)}`,
-    head, edges: [...edges, 'wh'], tones: [...tones, 0], rows,
+    head, edges: [...edges, 'wh'], tones: [...tones, 0], rows, unit,
+    colKeys: [...items.map((it) => (it.kind === 'col' ? it.id : `total|${it.commodity}`)), 'all'],
     empty: summary.provinces.length === 0 ? 'No stock found for these filters.' : null,
   }
 }
@@ -634,7 +630,7 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
   }
   return {
     title: 'DAILY INVENTORY', subtitle: `${scope} · ${longDate(from)} to ${longDate(to)} · ${unitLabel(unit)}`,
-    head, edges, tones, rows, colTitles: cols.map((c) => `${c.label} · ${c.variety} · ${c.bucket}`),
+    head, edges, tones, rows, unit, colKeys: cols.map((c) => c.key), colTitles: cols.map((c) => `${c.label} · ${c.variety} · ${c.bucket}`),
     empty: day.length === 0 ? 'No movement in this period for these filters.' : null,
   }
 }

@@ -1033,6 +1033,7 @@ function AppHeader({ hidden = false }) {
         title="Are you sure you want to log out?"
         confirmLabel="Logout"
         icon={AlertTriangle}
+        destructive={false}
         onConfirm={handleLogoutConfirmed}
         onCancel={() => setConfirmingLogout(false)}
       />

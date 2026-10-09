@@ -261,11 +261,14 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
   }
 
   // Reserve `kilos` of one variety in one warehouse, oldest lot first across its piles.
-  const reserveKilos = (warehouseId, varietyId, kilos, range = null, atDate = null) => {
+  const reserveKilos = (warehouseId, varietyId, kilos, range = null, atDate = null, onDate = null) => {
     const cand = []
     for (const [pid, st] of state) {
       const pile = pileById.get(pid)
       if (pile?.warehouseId !== warehouseId) continue
+      // a pile closed before the day holds nothing any more (closing it wrote its stock off), so an
+      // authority dated later cannot reserve from it
+      if (onDate && pile.closedDate && pile.closedDate < onDate) continue
       for (const lot of st.lots) {
         if ((lot.varietyId ?? pile.varietyId) !== varietyId || !(lot.kilos > 0)) continue
         if (range) { const m = lotAgeMonths(lot.date, atDate) ?? 0; if (!(m > range.lo && m <= range.hi)) continue }
@@ -340,7 +343,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       const { a, amount } = ev.auth
       const range = ageGroupRange(a.ageGroup)
       if (!range) authNoAge.push({ aiNumber: a.aiNumber, ageGroup: a.ageGroup ?? '', warehouseId: a.assignedWarehouse, varietyId: a.varietyId, date: ev.when, kilos: amount, customer: a.customerName ?? null })
-      const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount, range, basisOf(ev.when))
+      const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount, range, basisOf(ev.when), ev.when)
       pools.set(a.aiNumber, { left: amount - short, portions: portions.map((x) => ({ ...x })) })
       const byPile = new Map()
       for (const x of portions) { const l = byPile.get(x.pileId) ?? []; l.push(x); byPile.set(x.pileId, l) }

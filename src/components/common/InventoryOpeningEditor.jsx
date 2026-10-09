@@ -11,18 +11,18 @@
 // ages and is used up like the rest. The balance typed is saved as typed, so it always shows.
 
 import { useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
 import { bracketLabels, warehouseLabel, longDate } from '../../utils/inventoryReport.js'
+import { SdOverlay } from './StockDeskUi.jsx'
 
 const KG = 50
 const key = (c) => `${c.w}|${c.c}|${c.v}|${c.b}`
 const bags = (kilos) => liveFormatNumber((kilos / KG).toFixed(2))
 
-function InventoryOpeningEditor({ date, ageSet, baseCells, existing, warehouses, provinces, varieties, onClose }) {
+function InventoryOpeningEditor({ open = true, date, ageSet, baseCells, existing, warehouses, provinces, varieties, onClose }) {
   const sameDate = existing && existing.date === date && existing.ageSet === ageSet
   const provName = useMemo(() => new Map(provinces.map((p) => [p.provinceId, p.name])), [provinces])
   const whById = useMemo(() => new Map(warehouses.map((w) => [w.warehouseId, w])), [warehouses])
@@ -106,15 +106,15 @@ function InventoryOpeningEditor({ date, ageSet, baseCells, existing, warehouses,
 
   const selectClass = 'rounded-xl border border-neutral-800 bg-neutral-950 px-2 py-2 text-sm text-app-text outline-none focus:border-brand-neon'
   let lastWh = null
-  return createPortal(
-    <div className="fixed inset-0 z-[95] flex items-end bg-black/70 sm:items-center sm:justify-center sm:p-4" onClick={onClose}>
-      <div className="flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+  return (
+    <SdOverlay open={open} onClose={onClose} z="z-[95]" panelClassName="sd-table flex max-h-[92vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-2xl sm:rounded-2xl">
+      <>
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-app-text">Opening balance</h3>
             <p className="text-xs text-neutral-400">End of {longDate(date)} · net bags</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-950 p-1.5 text-neutral-400"><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg border border-brand-crimson/40 bg-neutral-900 p-1.5 text-brand-crimson transition-colors hover:bg-brand-crimson/10"><X size={16} /></button>
         </div>
         <p className="mt-2 text-xs text-neutral-500">
           Type the balance that Daily inventory should start from. This changes only Daily inventory, Summary and Age monitoring from this
@@ -184,9 +184,8 @@ function InventoryOpeningEditor({ date, ageSet, baseCells, existing, warehouses,
           <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300">Cancel</button>
           <button type="button" onClick={save} disabled={busy} className="flex-1 rounded-xl bg-brand-neon px-3 py-2 text-sm font-semibold text-brand-contrast disabled:opacity-40">{busy ? 'Saving…' : 'Save'}</button>
         </div>
-      </div>
-    </div>,
-    document.body
+      </>
+    </SdOverlay>
   )
 }
 

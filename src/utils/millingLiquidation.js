@@ -76,7 +76,10 @@ export const buildMillingBatches = ({ transactions }) => {
     trials[0].esr.push(...o.esr)
     dropped.add(o)
   }
-  return out.filter((b) => !dropped.has(b))
+  // A document set with no palay issued and no product received (only empty sacks under some MO number)
+  // is not a batch to liquidate; it would show as a row with nothing but a sack return. A TMO's own
+  // sack documents (no trial number) are kept, as before.
+  return out.filter((b) => !dropped.has(b) && (b.wsi.length > 0 || b.wsr.length > 0 || (b.kind === 'TMO' && b.batch === '')))
 }
 
 /** Distinct millers for the filter, with the number of batches. */

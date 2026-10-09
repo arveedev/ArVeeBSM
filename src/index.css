@@ -10,6 +10,10 @@
 @import '@fontsource/inter/600.css';
 @import '@fontsource/inter/700.css';
 @import '@fontsource/inter/800.css';
+@import '@fontsource/montserrat/latin-400.css';
+@import '@fontsource/montserrat/latin-500.css';
+@import '@fontsource/montserrat/latin-600.css';
+@import '@fontsource/montserrat/latin-700.css';
 
 @tailwind base;
 @tailwind components;
@@ -1054,3 +1058,47 @@ select {
    A background-image overlay, so it sits on top of any row or column background. */
 .hl-line { background-image: linear-gradient(rgba(125, 211, 252, 0.12), rgba(125, 211, 252, 0.12)); }
 .hl-cross { background-image: linear-gradient(rgba(125, 211, 252, 0.32), rgba(125, 211, 252, 0.32)); }
+
+/* ---------------------------------------------------------------------------
+   Stock Desk: table font, entrance and exit animations
+   --------------------------------------------------------------------------- */
+
+.sd-table,
+.sd-table table,
+.sd-table th,
+.sd-table td {
+  font-family: 'Montserrat', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes sd-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sd-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sd-pop-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes sd-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(14px) scale(0.97); } }
+@keyframes sd-slide-in { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: none; } }
+@keyframes sd-slide-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(32px); } }
+@keyframes sd-tile-in { from { opacity: 0; transform: translateY(18px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes sd-tile-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(12px) scale(0.96); } }
+@keyframes sd-col-in { from { opacity: 0; background-color: rgb(16 185 129 / 0.25); } to { opacity: 1; } }
+
+.sd-fade-in { animation: sd-fade-in 0.2s ease-out both; }
+.sd-fade-out { animation: sd-fade-out 0.2s ease-in both; }
+.sd-pop-in { animation: sd-pop-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.sd-pop-out { animation: sd-pop-out 0.2s ease-in both; }
+.sd-slide-in { animation: sd-slide-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.sd-slide-out { animation: sd-slide-out 0.2s ease-in both; }
+.sd-tile-in { animation: sd-tile-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.sd-tile-out { animation: sd-tile-out 0.2s ease-in both; }
+.sd-col-in { animation: sd-col-in 0.7s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-fade-in, .sd-fade-out, .sd-pop-in, .sd-pop-out, .sd-slide-in, .sd-slide-out, .sd-tile-in, .sd-tile-out, .sd-col-in { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+}
+
+/* a column that appears (Combined, By-products, another bracket set) grows in instead of snapping in */
+@keyframes sd-col-grow {
+  from { min-width: 0; max-width: 0; padding-left: 0; padding-right: 0; opacity: 0; }
+  to { min-width: 4.75rem; max-width: 16rem; padding-left: 0.5rem; padding-right: 0.5rem; opacity: 1; }
+}
+.sd-col-grow { animation: sd-col-grow 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .sd-col-grow { animation-duration: 1ms !important; } }

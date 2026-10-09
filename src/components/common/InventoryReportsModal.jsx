@@ -8,7 +8,7 @@
 // Wide screens get the table; phones get cards. Filters and sort live behind
 // one "Filter and sort" button to keep the screen clean.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
@@ -20,7 +20,7 @@ import {
   buildAgeLists, buildChecks, checksModel, computeOpeningBase, toUnit,
 } from '../../utils/inventoryReport.js'
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
-import { buildEndingStock } from '../../utils/endingStockReport.js'
+import { buildEndingStockData, endingStockModels } from '../../utils/endingStockReport.js'
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
@@ -29,6 +29,10 @@ import LiquidationReport from './LiquidationReport.jsx'
 import InventoryOpeningEditor from './InventoryOpeningEditor.jsx'
 import PillToggle from './PillToggle.jsx'
 import useCrosshair from '../../hooks/useCrosshair.js'
+import useEscapeKey from '../../hooks/useEscapeKey.js'
+import useBodyScrollLock from '../../hooks/useBodyScrollLock.js'
+import ConfirmDialog from './ConfirmDialog.jsx'
+import { SdOverlay, ExpandCard } from './StockDeskUi.jsx'
 
 const BANK_KEY = 'inv.bankProvince'
 const readBank = () => { try { return localStorage.getItem(BANK_KEY) ?? 'Albay' } catch { return 'Albay' } }
@@ -70,61 +74,128 @@ const ROW_BORDER = { total: 'border-t-2 border-neutral-500', end: 'border-y bord
 const edgeClass = (e) => (e === 'wh' ? 'border-l-2 border-l-emerald-500/70' : e === 'var' ? 'border-l border-l-neutral-500' : '')
 const headTone = (t) => (t === 1 ? 'bg-sky-950 text-sky-300' : 'bg-emerald-950 text-emerald-300')
 
+const COUNT_MS = 550
+const closeButtonClass = 'rounded-lg border border-brand-crimson/40 bg-neutral-900 p-1.5 text-brand-crimson transition-colors hover:bg-brand-crimson/10'
+const backButtonClass = 'rounded-lg border border-brand-amber/40 bg-neutral-900 p-1.5 text-brand-amber transition-colors hover:bg-brand-amber/10'
+
 function ModelTable({ model, short = false, onNote }) {
   const boxRef = useRef(null)
+  const wrapRef = useRef(null)
+  const prevRef = useRef(null)
+  const widthRef = useRef(0)
+  const rafRef = useRef(0)
+  const runningRef = useRef(null)
+  const [entering, setEntering] = useState(null)
   useCrosshair(boxRef)
+
+  // When the columns change (Combined, By-products, a bracket set) the table eases to its new width and the
+  // new columns grow in; when only the unit changes the numbers run from the old value to the new one,
+  // the same way the Home totals do.
+  useLayoutEffect(() => {
+    const prev = prevRef.current
+    prevRef.current = model
+    const wrap = wrapRef.current
+    const width = wrap ? wrap.offsetWidth : 0
+    const before = widthRef.current
+    widthRef.current = width
+    // a running count is finished first, so no number is ever left half way
+    cancelAnimationFrame(rafRef.current)
+    if (runningRef.current) { for (const it of runningRef.current) it.node.nodeValue = fmtNum(it.to); runningRef.current = null }
+    if (!prev || !wrap || model.empty || prev.empty || !model.colKeys || !prev.colKeys) return undefined
+    const same = prev.colKeys.length === model.colKeys.length && prev.colKeys.every((k, i) => k === model.colKeys[i])
+    if (!same) {
+      const added = new Set(model.colKeys.filter((k) => !prev.colKeys.includes(k)))
+      if (added.size > 0) { setEntering(added); setTimeout(() => setEntering(null), 800) }
+      if (before && width && before !== width) {
+        wrap.style.width = `${before}px`
+        wrap.style.overflow = 'hidden'
+        void wrap.offsetWidth
+        wrap.style.transition = 'width 0.4s cubic-bezier(0.22, 1, 0.36, 1)'
+        wrap.style.width = `${width}px`
+        setTimeout(() => { wrap.style.transition = ''; wrap.style.width = ''; wrap.style.overflow = '' }, 440)
+      }
+      return undefined
+    }
+    if (prev.unit && model.unit && prev.unit !== model.unit && prev.rows.length === model.rows.length) {
+      const items = [...(boxRef.current?.querySelectorAll('td[data-r]') ?? [])].map((td) => {
+        const from = prev.rows[Number(td.dataset.r)]?.cells[Number(td.dataset.c)]
+        const to = model.rows[Number(td.dataset.r)]?.cells[Number(td.dataset.c)]
+        return from != null && to != null && td.firstChild ? { node: td.firstChild, from, to } : null
+      }).filter(Boolean)
+      const start = performance.now()
+      const tick = (now) => {
+        const t = Math.min(1, (now - start) / COUNT_MS)
+        const eased = 1 - Math.pow(1 - t, 3)
+        for (const it of items) it.node.nodeValue = fmtNum(t < 1 ? it.from + (it.to - it.from) * eased : it.to)
+        if (t < 1) rafRef.current = requestAnimationFrame(tick)
+        else runningRef.current = null
+      }
+      runningRef.current = items
+      for (const it of items) it.node.nodeValue = fmtNum(it.from)
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    return undefined
+  }, [model])
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
+
   if (model.empty) return <p className="py-10 text-center text-sm text-neutral-500">{model.empty}</p>
+  const isNew = (key) => Boolean(entering && key != null && entering.has(key))
   return (
-    <div ref={boxRef} className={`overflow-auto rounded-xl border border-neutral-800 ${short ? "max-h-[60vh]" : "min-h-0 flex-1"}`}>
-      <table className="min-w-full border-separate border-spacing-0 text-xs tabular-nums">
-        <thead>
-          {model.head.map((row, ri) => {
-            let col = 0
-            return (
-              <tr key={ri}>
-                {row.map((h, ci) => {
-                  if (ci === 0 && ri > 0) return null
-                  const idx = col
-                  if (ci > 0) col += h.span
-                  const first = ci === 0
-                  return (
-                    <th
+    <div ref={boxRef} className={`sd-table overflow-auto rounded-xl border border-neutral-800 ${short ? 'max-h-[60vh]' : 'min-h-0 flex-1'}`}>
+      <div ref={wrapRef} className="w-max min-w-full">
+        <table className="min-w-full border-separate border-spacing-0 text-xs tabular-nums">
+          <thead>
+            {model.head.map((row, ri) => {
+              let col = 0
+              return (
+                <tr key={ri}>
+                  {row.map((h, ci) => {
+                    if (ci === 0 && ri > 0) return null
+                    const idx = col
+                    if (ci > 0) col += h.span
+                    const first = ci === 0
+                    const grows = !first && h.span === 1 && isNew(model.colKeys?.[idx])
+                    const fades = !first && h.span > 1 && model.colKeys?.slice(idx, idx + h.span).some(isNew)
+                    return (
+                      <th
+                        key={ci}
+                        colSpan={h.span}
+                        rowSpan={first ? model.head.length : 1}
+                        className={`sticky h-7 whitespace-nowrap border-b border-r border-neutral-800 px-2 font-semibold ${first ? 'left-0 z-30 min-w-[11rem] bg-emerald-950 text-left text-emerald-300' : `z-20 text-center ${grows ? 'sd-col-grow' : 'min-w-[4.75rem]'} ${fades ? 'sd-col-in' : ''} ${headTone(h.tone)} ${edgeClass(model.edges[idx])}`}`}
+                        style={{ top: `${ri * 1.75}rem` }}
+                      >
+                        {h.t}
+                      </th>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </thead>
+          <tbody>
+            {model.rows.map((r, i) => (
+              <tr key={i} className={`${ROW_STYLE[r.kind] ?? ''} ${ROW_BORDER[r.kind] ?? ''}`}>
+                <td className={`sticky left-0 z-[5] min-w-[11rem] max-w-[18rem] whitespace-normal break-words border-b border-r border-neutral-800 bg-neutral-950 px-2 py-1 text-left ${r.kind === 'add' || r.kind === 'less' ? 'pl-5' : ''}`}>
+                  {r.first}
+                </td>
+                {r.kind === 'section' || r.kind === 'day' || r.kind === 'add-label' || r.kind === 'less-label'
+                  ? <td colSpan={model.edges.length} className="border-b border-neutral-800" />
+                  : r.cells.map((v, ci) => (
+                    <td
                       key={ci}
-                      colSpan={h.span}
-                      rowSpan={first ? model.head.length : 1}
-                      className={`sticky h-7 whitespace-nowrap border-b border-r border-neutral-800 px-2 font-semibold ${first ? 'left-0 z-30 min-w-[11rem] bg-emerald-950 text-left text-emerald-300' : `z-20 min-w-[4.75rem] text-center ${headTone(h.tone)} ${edgeClass(model.edges[idx])}`}`}
-                      style={{ top: `${ri * 1.75}rem` }}
+                      {...(v != null ? { 'data-r': i, 'data-c': ci } : {})}
+                      onClick={r.notes?.[ci] ? () => onNote?.({ title: `${r.first} · ${model.colTitles?.[ci] ?? ''}`, sub: r.day ? longDate(r.day) : '', lines: r.notes[ci] }) : undefined}
+                      className={`whitespace-nowrap border-b border-r border-neutral-800 px-2 py-1 text-right ${isNew(model.colKeys?.[ci]) ? 'sd-col-grow' : ''} ${model.tones[ci] === 1 ? 'bg-white/[0.04]' : ''} ${edgeClass(model.edges[ci])} ${r.notes?.[ci] ? 'cursor-pointer underline decoration-dotted underline-offset-2 hover:bg-white/10' : ''}`}
+                      title={r.notes?.[ci] ? 'Tap to see the transactions' : undefined}
                     >
-                      {h.t}
-                    </th>
-                  )
-                })}
+                      {v == null ? (r.dash ? '-' : '') : fmtNum(v)}
+                    </td>
+                  ))}
               </tr>
-            )
-          })}
-        </thead>
-        <tbody>
-          {model.rows.map((r, i) => (
-            <tr key={i} className={`${ROW_STYLE[r.kind] ?? ''} ${ROW_BORDER[r.kind] ?? ''}`}>
-              <td className={`sticky left-0 z-[5] min-w-[11rem] max-w-[18rem] whitespace-normal break-words border-b border-r border-neutral-800 bg-neutral-950 px-2 py-1 text-left ${r.kind === 'add' || r.kind === 'less' ? 'pl-5' : ''}`}>
-                {r.first}
-              </td>
-              {r.kind === 'section' || r.kind === 'day' || r.kind === 'add-label' || r.kind === 'less-label'
-                ? <td colSpan={model.edges.length} className="border-b border-neutral-800" />
-                : r.cells.map((v, ci) => (
-                  <td
-                    key={ci}
-                    onClick={r.notes?.[ci] ? () => onNote?.({ title: `${r.first} · ${model.colTitles?.[ci] ?? ''}`, sub: r.day ? longDate(r.day) : '', lines: r.notes[ci] }) : undefined}
-                    className={`whitespace-nowrap border-b border-r border-neutral-800 px-2 py-1 text-right ${model.tones[ci] === 1 ? 'bg-white/[0.04]' : ''} ${edgeClass(model.edges[ci])} ${r.notes?.[ci] ? 'cursor-pointer underline decoration-dotted underline-offset-2 hover:bg-white/10' : ''}`}
-                    title={r.notes?.[ci] ? 'Tap to see the transactions' : undefined}
-                  >
-                    {v == null ? (r.dash ? '-' : '') : fmtNum(v)}
-                  </td>
-                ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -229,35 +300,32 @@ function LedgerCardList({ days, onNote }) {
 const fmtDay = (iso) => longDate(iso)
 
 // The documents behind one ADD / LESS value (what the old sheet showed as a cell note).
-function NoteModal({ note, unit, onClose }) {
-  const total = note.lines.reduce((s, l) => s + l.value, 0)
-  return createPortal(
-    <div className="fixed inset-0 z-[95] flex items-end bg-black/70 sm:items-center sm:justify-center sm:p-4" onClick={onClose}>
-      <div className="flex max-h-[80vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="break-words text-sm font-semibold text-app-text">{note.title}</h3>
-            {note.sub && <p className="text-xs text-neutral-500">{note.sub}</p>}
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-950 p-1.5 text-neutral-400"><X size={16} /></button>
+function NoteModal({ note, open, unit, onClose }) {
+  const total = note.lines.reduce((sum, l) => sum + l.value, 0)
+  return (
+    <SdOverlay open={open} onClose={onClose} z="z-[95]" panelClassName="sd-table flex max-h-[80vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-xl sm:rounded-2xl">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="break-words text-base font-semibold text-app-text">{note.title}</h3>
+          {note.sub && <p className="text-sm text-neutral-400">{note.sub}</p>}
         </div>
-        <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
-          {note.lines.map((l, i) => (
-            <div key={i} className="flex items-start justify-between gap-3 border-b border-neutral-800 py-1.5 text-sm last:border-0">
-              <div className="min-w-0">
-                <p className="break-words font-medium text-neutral-200">{l.doc}</p>
-                <p className="break-words text-[11px] text-neutral-500">{[l.customer, l.pile].filter(Boolean).join(' · ')}</p>
-              </div>
-              <span className="shrink-0 tabular-nums text-app-text">{fmtNum(l.value)}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-2 flex items-baseline justify-between border-t border-neutral-700 pt-2 text-sm font-semibold text-app-text">
-          <span>Total {unit === 'mt' ? '(MT)' : '(net bags)'}</span><span className="tabular-nums">{fmtNum(total)}</span>
-        </div>
+        <button type="button" onClick={onClose} aria-label="Close" className={closeButtonClass}><X size={16} /></button>
       </div>
-    </div>,
-    document.body
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
+        {note.lines.map((l, i) => (
+          <div key={i} className="flex items-start justify-between gap-3 border-b border-neutral-800 py-2 last:border-0">
+            <div className="min-w-0">
+              <p className="break-words text-base font-semibold text-neutral-100">{l.doc}</p>
+              <p className="break-words text-sm leading-snug text-neutral-300">{[l.customer, l.pile].filter(Boolean).join(' · ')}</p>
+            </div>
+            <span className="shrink-0 text-base tabular-nums text-app-text">{fmtNum(l.value)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-baseline justify-between border-t border-neutral-700 pt-2 text-base font-semibold text-app-text">
+        <span>Total {unit === 'mt' ? '(MT)' : '(net bags)'}</span><span className="tabular-nums">{fmtNum(total)}</span>
+      </div>
+    </SdOverlay>
   )
 }
 
@@ -301,10 +369,9 @@ function AgeLists({ lists, unit }) {
 }
 
 const CheckSection = ({ title, tone, items, render, ok }) => (
-  <Card>
-    <p className={`mb-1 text-xs font-bold uppercase tracking-wide ${items.length ? tone : 'text-brand-neon'}`}>{title}</p>
+  <ExpandCard title={title} tone={tone} count={items.length}>
     {items.length === 0 ? <p className="py-1 text-sm text-neutral-400">{ok}</p> : items.map(render)}
-  </Card>
+  </ExpandCard>
 )
 const checkLine = (left, right, key) => (
   <div key={key} className="flex items-baseline justify-between gap-3 py-0.5 text-sm">
@@ -315,12 +382,9 @@ const checkLine = (left, right, key) => (
 // The stock book proves itself against itself each time Data check opens (see buildSelfCheck).
 function SelfCheckCard({ results }) {
   if (results.length === 0) return null
-  const allOk = results.every((r) => r.ok)
+  const failing = results.filter((r) => !r.ok).length
   return (
-    <Card>
-      <p className={`mb-1 text-xs font-bold uppercase tracking-wide ${allOk ? 'text-brand-neon' : 'text-brand-crimson'}`}>
-        Stock book self-check · {allOk ? 'every check passed' : 'something does not add up'}
-      </p>
+    <ExpandCard title={`Stock book self-check · ${failing === 0 ? 'every check passed' : 'something does not add up'}`} tone="text-brand-crimson" count={failing}>
       {results.map((r, i) => (
         <div key={i} className="border-b border-neutral-800 py-1 last:border-0">
           <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -331,13 +395,14 @@ function SelfCheckCard({ results }) {
           {!r.ok && r.more > 0 && <p className="text-[11px] text-neutral-500">and {r.more} more.</p>}
         </div>
       ))}
-    </Card>
+    </ExpandCard>
   )
 }
 
 // Month-end stock per province from the Stock Book (so an opening-balance override shows here too).
 function EndingStockView({ data, setMonth, unit, setUnit }) {
   const [exporting, setExporting] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const exportExcel = async () => {
     setExporting(true)
     try {
@@ -363,11 +428,16 @@ function EndingStockView({ data, setMonth, unit, setUnit }) {
         </div>
         <span className="hidden flex-1 sm:block" />
         <div className={`flex items-center ${CONTROL_H}`}>
-          <button type="button" onClick={exportExcel} disabled={exporting} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
+          <button type="button" onClick={() => setConfirming(true)} disabled={exporting} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
             <FileSpreadsheet size={14} /> {exporting ? 'Creating…' : 'Excel'}
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirming} title="Export to Excel?" description="The two ending stock tables are saved as one Excel file with a sheet each."
+        confirmLabel="Export" icon={FileSpreadsheet} destructive={false}
+        onConfirm={() => { setConfirming(false); exportExcel() }} onCancel={() => setConfirming(false)}
+      />
       <h3 className="text-sm font-bold text-app-text">{data.heading}</h3>
       <p className="mb-3 text-xs text-neutral-500">
         Stock as of {longDate(data.asOf)}, from the Stock Book (an opening balance an Admin saved is included). By-products are not part of this form.
@@ -392,9 +462,10 @@ function CheckView({ checks, unit }) {
         render={(o, i) => checkLine(`AI ${o.aiNumber} · ${o.warehouse} · ${o.variety} · ${fmtDay(o.date)}${o.ageGroup ? ` · age ${o.ageGroup}` : ''}`, `${fmtNum(toUnit(o.kilos, unit))} short`, i)} />
       <CheckSection title="Authority age group blank or unreadable (deducted from the oldest stock)" tone="text-amber-400" items={checks.noAgeGroup ?? []} ok="Every authority names a readable age group."
         render={(o, i) => checkLine(`AI ${o.aiNumber} · ${o.warehouse} · ${o.variety} · ${fmtDay(o.date)}${o.ageGroup ? ` · "${o.ageGroup}"` : ''}`, fmtNum(toUnit(o.kilos, unit)), i)} />
-      <CheckSection title="WSI not covered by an authority (not deducted from the inventory)" tone="text-amber-400" items={(checks.uncoveredWsi ?? []).slice(0, 80)} ok="Every WSI belongs to an authority that reserves stock."
-        render={(o, i) => checkLine(`WSI ${o.serial} · ${o.warehouse}${o.aiNumber ? ` · AI ${o.aiNumber}` : ' · no AI'} · ${fmtDay(o.date)}`, fmtNum(toUnit(o.kilos, unit)), i)} />
-      {(checks.uncoveredWsi ?? []).length > 80 && <p className="text-xs text-neutral-500">and {(checks.uncoveredWsi ?? []).length - 80} more.</p>}
+      <ExpandCard title="WSI not covered by an authority (not deducted from the inventory)" tone="text-amber-400" count={(checks.uncoveredWsi ?? []).length}>
+        {(checks.uncoveredWsi ?? []).length === 0 ? <p className="py-1 text-sm text-neutral-400">Every WSI belongs to an authority that reserves stock.</p> : (checks.uncoveredWsi ?? []).slice(0, 80).map((o, i) => checkLine(`WSI ${o.serial} · ${o.warehouse}${o.aiNumber ? ` · AI ${o.aiNumber}` : ' · no AI'} · ${fmtDay(o.date)}`, fmtNum(toUnit(o.kilos, unit)), i))}
+        {(checks.uncoveredWsi ?? []).length > 80 && <p className="pt-1 text-xs text-neutral-500">and {(checks.uncoveredWsi ?? []).length - 80} more.</p>}
+      </ExpandCard>
       <CheckSection title="Issued more than was received" tone="text-brand-crimson" items={checks.shortages} ok="No pile has issued more than it received."
         render={(o, i) => (
           <div key={i} className="border-b border-neutral-800 py-1 last:border-0">
@@ -444,7 +515,7 @@ function ProcurementCardList({ lines }) {
   )
 }
 
-function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, onReset, onClose }) {
+function FilterSheet({ open, draft, setDraft, provinces, warehouses, view, onApply, onReset, onClose }) {
   const all = draft.warehouseIds == null
   const toggleWh = (id) => {
     const set = new Set(all ? warehouses.map((w) => w.warehouseId) : draft.warehouseIds)
@@ -454,14 +525,11 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
   const selectClass = 'mt-1 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-app-text outline-none focus:border-brand-neon'
   const labelClass = 'mt-3 block text-xs text-neutral-400'
   return (
-    <div className="fixed inset-0 z-[90] flex items-end bg-black/60 sm:items-start sm:justify-end sm:p-4" onClick={onClose}>
-      <div
-        className="flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:mt-14 sm:w-80 sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <SdOverlay open={open} onClose={onClose} align="sheet" z="z-[90]" panelClassName="sd-table flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:mt-14 sm:w-80 sm:rounded-2xl">
+      <>
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-app-text">Filter and sort</h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-950 p-1.5 text-neutral-400"><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label="Close" className={closeButtonClass}><X size={16} /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto pb-2">
           {view === 'procurement' ? (
@@ -472,12 +540,6 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
               </select>
             </label>
           ) : (<>
-          <label className={labelClass}>Warehouse names
-            <select className={selectClass} value={draft.combine ? 'c' : 's'} onChange={(e) => setDraft({ ...draft, combine: e.target.value === 'c' })}>
-              <option value="s">Separate</option>
-              <option value="c">Combined</option>
-            </select>
-          </label>
           <label className={labelClass}>Province
             <select className={selectClass} value={draft.provinceId} onChange={(e) => setDraft({ ...draft, provinceId: e.target.value })}>
               <option value="">All provinces</option>
@@ -521,13 +583,12 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
           <button type="button" onClick={onReset} className="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300">Reset</button>
           <button type="button" onClick={onApply} className="flex-1 rounded-xl bg-brand-neon px-3 py-2 text-sm font-semibold text-brand-contrast">Apply</button>
         </div>
-      </div>
-    </div>
+      </>
+    </SdOverlay>
   )
 }
 
 function InventoryReportsModal({ onClose, isAdmin = false }) {
-  const [entered, setEntered] = useState(false)
   const [view, setView] = useState('hub')
   const today = todayLocalISO()
   const [from, setFromRaw] = useState(`${today.slice(0, 8)}01`)
@@ -545,13 +606,15 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [windowDays, setWindowDays] = useState(30)
   const [month, setMonth] = useState(today.slice(0, 7))
   const [endingMonth, setEndingMonth] = useState(null)
+  const [closing, setClosing] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [noteOpen, setNoteOpen] = useState(false)
+  const [openingOpen, setOpeningOpen] = useState(false)
+  const [confirmExport, setConfirmExport] = useState(null)
   const toRef = useRef(null)
   const narrow = useIsNarrow()
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setEntered(true))
-    return () => cancelAnimationFrame(frame)
-  }, [])
+  useBodyScrollLock(true)
 
   const piles = useLiveQuery(() => db.piles.toArray(), [])
   const transactions = useLiveQuery(() => db.transactions.toArray(), [])
@@ -585,7 +648,9 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const mayOpen = (id) => canViewReport(id, isAdmin, config?.inventoryReportsAccess)
   useEffect(() => { if (view !== 'hub' && !mayOpen(view)) setView('hub') }, [view, isAdmin, config?.inventoryReportsAccess])
 
-  const built = useMemo(() => {
+  // The heavy part (stock, ledger, checks) does not depend on the unit, so changing net bags / MT only
+  // re-lays the tables out and never recomputes any stock.
+  const data = useMemo(() => {
     if (loading || !['summary', 'ledger', 'age', 'check', 'procurement', 'ending'].includes(view) || (view === 'check' && !canViewReport('check', isAdmin, config?.inventoryReportsAccess))) return null
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet, opening: config?.inventoryOpening ?? null, ageBasis: view === 'age' ? 'exact' : 'month' })
     const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }
@@ -596,7 +661,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       if (view === 'ending') {
         const options = monthOptions(startISO ?? config?.dataStartDate, today)
         const chosen = endingMonth && options.includes(endingMonth) ? endingMonth : (options[1] ?? options[0])
-        return { ending: { ...buildEndingStock(ctx, inputs, { month: chosen, todayISO: today, provinceNames: provinces.map((p) => p.name), unit }), month: chosen, options } }
+        return { kind: 'ending', ending: buildEndingStockData(ctx, inputs, { month: chosen, todayISO: today, provinceNames: provinces.map((p) => p.name) }), month: chosen, options }
       }
       if (view === 'procurement') {
         if (!sdoUsers || !ledgerRows || !activePrs) return null
@@ -605,28 +670,38 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
           transactions, warehouses, provinces, varieties, transactionTypes, globalDataStartDate: config?.dataStartDate ?? null,
           cpfEvents, month, todayISO: today, startISO, bankProvinceName: filters.bank || null, branchName: branches?.[0]?.name ?? 'ALBAY BRANCH',
         })
-        return { model: r.model, cards: narrow ? r.cards : null }
+        return { kind: 'procurement', model: r.model, cards: narrow ? r.cards : null }
       }
-      if (view === 'check') return { checks: buildChecks(ctx, inputs, { asOf, todayISO: today }), model: null }
+      if (view === 'check') return { kind: 'check', checks: buildChecks(ctx, inputs, { asOf, todayISO: today }) }
       if (view === 'summary' || view === 'age') {
-        const summary = buildSummary(ctx, inputs, { asOf, filters: f, sort: filters.sort })
-        const model = summaryModel(summary, unit, { asOf, scope })
-        if (view === 'age') model.title = 'AGE MONITORING'
         return {
-          model, cards: narrow ? summaryCards(summary, unit) : null,
+          kind: 'summary', summary: buildSummary(ctx, inputs, { asOf, filters: f, sort: filters.sort }), scope,
           lists: view === 'age' ? buildAgeLists(ctx, inputs, { asOf, filters: f, windowDays }) : null,
         }
       }
-      const ledger = buildLedger(ctx, inputs, { from, to: end, filters: f })
-      return { model: ledgerModel(ledger, unit, { from, to: end, scope }), cards: narrow ? ledgerCards(ledger, unit) : null }
+      return { kind: 'ledger', ledger: buildLedger(ctx, inputs, { from, to: end, filters: f }), scope, end }
     } catch (err) {
       console.error(err)
-      return { model: { title: '', subtitle: '', head: [], rows: [], edges: [], tones: [], empty: 'Could not build this report.' }, cards: null }
+      return { kind: 'error' }
     }
-  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, endingMonth, startISO, authorities, isAdmin, sdoUsers, ledgerRows, activePrs, branches])
+  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, narrow, windowDays, today, month, endingMonth, startISO, authorities, isAdmin, sdoUsers, ledgerRows, activePrs, branches])
+
+  const built = useMemo(() => {
+    if (!data) return null
+    if (data.kind === 'ending') return { ending: { ...endingStockModels(data.ending, unit), month: data.month, options: data.options } }
+    if (data.kind === 'procurement') return { model: data.model, cards: data.cards }
+    if (data.kind === 'check') return { checks: data.checks, model: null }
+    if (data.kind === 'summary') {
+      const model = summaryModel(data.summary, unit, { asOf, scope: data.scope })
+      if (view === 'age') model.title = 'AGE MONITORING'
+      return { model, cards: narrow ? summaryCards(data.summary, unit) : null, lists: data.lists }
+    }
+    if (data.kind === 'ledger') return { model: ledgerModel(data.ledger, unit, { from, to: data.end, scope: data.scope }), cards: narrow ? ledgerCards(data.ledger, unit) : null }
+    return { model: { title: '', subtitle: '', head: [], rows: [], edges: [], tones: [], empty: 'Could not build this report.' }, cards: null }
+  }, [data, unit, narrow, asOf, from, view])
   const model = built?.model ?? null
 
-  const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse'].filter(Boolean).length
+  const activeFilters = [filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse'].filter(Boolean).length
 
   const handleExport = async () => {
     if (!model || model.empty) return
@@ -650,7 +725,11 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: false, ageSet: filters.ageSet })
     const baseCells = computeOpeningBase(ctx, { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: true }, date)
     setOpeningEditor({ date, baseCells })
+    setOpeningOpen(true)
   }
+  const closeOpeningEditor = () => { setOpeningOpen(false); setTimeout(() => setOpeningEditor(null), 220) }
+  const openNote = (n) => { setNoteView(n); setNoteOpen(true) }
+  const closeNote = () => { setNoteOpen(false); setTimeout(() => setNoteView(null), 220) }
 
   const handleSheet = async () => {
     const settings = config?.inventorySheet
@@ -685,22 +764,33 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   }
 
   const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', ending: 'Ending stock per variety', milling: 'Milling liquidation', test: 'Test milling liquidation' }[view] ?? 'Stock Desk'
-  const back = () => (view === 'hub' ? onClose() : setView('hub'))
+  // Leaving plays an exit animation before the next screen enters.
+  const requestClose = () => { if (closing) return; setClosing(true); setTimeout(onClose, 200) }
+  const navigate = (next) => { if (leaving || next === view) return; setLeaving(true); setTimeout(() => { setView(next); setLeaving(false) }, 190) }
+  const back = () => (view === 'hub' ? requestClose() : navigate('hub'))
+  // Escape goes back one step: to the menu, then out of the Stock Desk. A sheet or dialog that is open closes first
+  // (it handles Escape itself), and Escape in a text field only leaves the field.
+  useEscapeKey(true, (e) => {
+    if (document.querySelector('[data-sd-overlay]')) return
+    const t = e?.target
+    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return
+    back()
+  })
   const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
 
   return createPortal(
-    <div className={`fixed inset-0 z-[80] flex flex-col bg-neutral-950 transition-opacity duration-200 ${entered ? 'opacity-100' : 'opacity-0'}`}>
+    <div className={`fixed inset-0 z-[80] flex flex-col bg-neutral-950 ${closing ? 'sd-pop-out' : 'sd-pop-in'}`}>
       <div className="mx-auto flex w-full max-w-[110rem] items-center justify-between gap-2 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <div className="flex min-w-0 items-center gap-2">
-          <button type="button" onClick={back} aria-label="Back" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-300"><ArrowLeft size={18} /></button>
+          <button type="button" onClick={back} aria-label="Back" className={backButtonClass}><ArrowLeft size={18} /></button>
           <h2 className="truncate text-base font-semibold text-app-text">{title}</h2>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
+        <button type="button" onClick={requestClose} aria-label="Close" className={closeButtonClass}><X size={18} /></button>
       </div>
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {view === 'hub' && (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {!isAdmin && !['ledger', 'summary', 'age', 'ending', 'procurement', 'milling', 'test', 'check'].some(mayOpen) && <p className="col-span-full py-6 text-center text-sm text-neutral-500">No reports are shared with you yet.</p>}
             {[
               { id: 'ledger', name: 'Daily inventory', desc: 'Per day: ADD and LESS by type, ending stock, by warehouse and variety', Icon: ClipboardList },
@@ -711,16 +801,20 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               { id: 'milling', name: 'Milling liquidation', desc: 'Regular milling per ricemill: issues, receipts, by-products, summary', Icon: Factory },
               { id: 'test', name: 'Test milling liquidation', desc: 'Test milling per ricemill: TMO and trials, by-products, summary', Icon: FlaskConical },
               { id: 'check', name: 'Data check', desc: 'Overrides in use, shortages, over-authorized stock, approximate ages, unassigned documents', Icon: ShieldCheck },
-            ].filter((t) => canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }) => (
-              <button key={id} type="button" onClick={() => setView(id)} className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-600">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-950 text-brand-neon"><Icon size={18} /></span>
-                <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-app-text">{name}</span><span className="block text-xs text-neutral-500">{desc}</span></span>
-                <ChevronRight size={16} className="shrink-0 text-neutral-500" />
+            ].filter((t) => canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }, n) => (
+              <button
+                key={id} type="button" onClick={() => navigate(id)} style={{ animationDelay: leaving ? `${n * 15}ms` : `${n * 50}ms` }}
+                className={`flex min-h-[116px] items-center gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-5 text-left transition-colors hover:border-brand-neon/60 hover:bg-neutral-800/60 ${leaving ? 'sd-tile-out' : 'sd-tile-in'}`}
+              >
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-brand-neon"><Icon size={26} /></span>
+                <span className="min-w-0 flex-1"><span className="block text-lg font-semibold text-app-text">{name}</span><span className="mt-0.5 block text-sm leading-snug text-neutral-400">{desc}</span></span>
+                <ChevronRight size={20} className="shrink-0 text-neutral-500" />
               </button>
             ))}
           </div>
         )}
 
+        <div className={`flex min-h-0 flex-1 flex-col ${view === 'hub' ? 'hidden' : leaving ? 'sd-slide-out' : 'sd-slide-in'}`} key={view}>
         {view === 'ending' && (loading || !built?.ending
           ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>
           : <EndingStockView data={built.ending} setMonth={setEndingMonth} unit={unit} setUnit={setUnit} narrow={narrow} />)}
@@ -761,6 +855,11 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               {view !== 'procurement' && <div className={`flex items-center ${CONTROL_H}`}>
                 <PillToggle options={[{ value: 'b', label: 'Net bags' }, { value: 'mt', label: 'MT' }]} value={unit} onChange={setUnit} />
               </div>}
+              {['ledger', 'summary', 'age'].includes(view) && (
+                <div className={`flex items-center ${CONTROL_H}`}>
+                  <PillToggle options={[{ value: false, label: 'Separate' }, { value: true, label: 'Combined' }]} value={filters.combine} onChange={(v) => setFilters({ ...filters, combine: v })} />
+                </div>
+              )}
               <div className={`flex items-center ${CONTROL_H}`}>
                 <button type="button" onClick={() => { setDraft(filters); setShowFilters(true) }} className={pillButton}>
                   <SlidersHorizontal size={14} /> Filter and sort{activeFilters > 0 && <span className="rounded-full bg-brand-neon px-1.5 text-[10px] font-bold text-brand-contrast">{activeFilters}</span>}
@@ -794,7 +893,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                 </div>
               )}
               <div className={`flex items-center ${CONTROL_H}`}>
-                <button type="button" onClick={handleExport} disabled={exporting || !model || !!model.empty || view === 'check'} className={pillButton}>
+                <button type="button" onClick={() => setConfirmExport({ what: title, run: handleExport })} disabled={exporting || !model || !!model.empty || view === 'check'} className={pillButton}>
                   <FileSpreadsheet size={14} /> {exporting ? 'Creating…' : 'Excel'}
                 </button>
               </div>
@@ -808,48 +907,43 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               <>
                 {view === 'check' ? <CheckView checks={built.checks} unit={unit} /> : (
                   <>
-                    <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>
-                    {['ledger', 'summary', 'age'].includes(view) && (
-                      <p className="mb-2 text-xs text-neutral-500">
-                        LESS shows authorized stock (AI), from the day it is authorized and from the age bracket named on the authority. That stock is reserved, so it is no longer available. WSIs are not used.
-                      </p>
-                    )}
-                    {config?.inventoryOpening && ['ledger', 'summary', 'age'].includes(view) && (
-                      <p className="mb-2 text-xs text-amber-400">
-                        Opening balance override applied from {longDate(config.inventoryOpening.date)} (Daily inventory, Summary and Age monitoring only).
-                        {config.inventoryOpening.ageSet !== filters.ageSet && ' It was typed in another bracket set, so its cells sit in the nearest bracket here.'}
-                      </p>
-                    )}
+                    {view === 'procurement' && <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>}
                     {view === 'age' ? (
                       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-                        {narrow && built.cards ? <SummaryCardList cards={built.cards} /> : <ModelTable model={model} short onNote={setNoteView} />}
+                        {narrow && built.cards ? <SummaryCardList cards={built.cards} /> : <ModelTable model={model} short onNote={openNote} />}
                         {built.lists && <AgeLists lists={built.lists} unit={unit} />}
                       </div>
                     ) : narrow && built.cards
-                      ? (view === 'summary' ? <SummaryCardList cards={built.cards} /> : view === 'procurement' ? <ProcurementCardList lines={built.cards} /> : <LedgerCardList days={built.cards} onNote={setNoteView} />)
-                      : <ModelTable model={model} onNote={setNoteView} />}
+                      ? (view === 'summary' ? <SummaryCardList cards={built.cards} /> : view === 'procurement' ? <ProcurementCardList lines={built.cards} /> : <LedgerCardList days={built.cards} onNote={openNote} />)
+                      : <ModelTable model={model} onNote={openNote} />}
                   </>
                 )}
               </>
             )}
-            {noteView && <NoteModal note={noteView} unit={unit} onClose={() => setNoteView(null)} />}
+            {noteView && <NoteModal note={noteView} open={noteOpen} unit={unit} onClose={closeNote} />}
             {openingEditor && (
               <InventoryOpeningEditor
+                open={openingOpen}
                 date={openingEditor.date} ageSet={filters.ageSet} baseCells={openingEditor.baseCells} existing={config?.inventoryOpening ?? null}
-                warehouses={warehouses} provinces={provinces ?? []} varieties={varieties} onClose={() => setOpeningEditor(null)}
+                warehouses={warehouses} provinces={provinces ?? []} varieties={varieties} onClose={closeOpeningEditor}
               />
             )}
-            {showFilters && (
-              <FilterSheet
-                draft={draft} setDraft={setDraft} provinces={provinces ?? []} warehouses={warehouses} view={view}
-                onApply={() => { setFilters(draft); try { localStorage.setItem(BANK_KEY, draft.bank ?? '') } catch { /* optional */ } setShowFilters(false) }}
-                onReset={() => setDraft(DEFAULT_FILTERS)}
-                onClose={() => setShowFilters(false)}
-              />
-            )}
+            <FilterSheet
+              open={showFilters}
+              draft={draft} setDraft={setDraft} provinces={provinces ?? []} warehouses={warehouses} view={view}
+              onApply={() => { setFilters(draft); try { localStorage.setItem(BANK_KEY, draft.bank ?? '') } catch { /* optional */ } setShowFilters(false) }}
+              onReset={() => setDraft({ ...DEFAULT_FILTERS, bank: draft.bank, combine: draft.combine, showByProducts: draft.showByProducts })}
+              onClose={() => setShowFilters(false)}
+            />
           </>
         )}
+        </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(confirmExport)} title="Export to Excel?" description={confirmExport ? `${confirmExport.what} will be saved as an Excel file.` : ''}
+        confirmLabel="Export" icon={FileSpreadsheet} destructive={false}
+        onConfirm={() => { const run = confirmExport?.run; setConfirmExport(null); run?.() }} onCancel={() => setConfirmExport(null)}
+      />
     </div>,
     document.body
   )
