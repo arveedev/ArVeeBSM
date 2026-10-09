@@ -8371,4 +8371,5 @@
 //   1.10-313 - Liquidation summary: palay issued is counted in net bags (net kilos / 50).
 //   1.10-314 - Report tables: row and column highlight under the mouse; every report starts at the Data Start Date (September 1): date pickers, default periods and the month list cannot go earlier.
 //   1.10-315 - Liquidation unit price: the pencil is clearer, shown to the Admin only, and the save is refused for any other role.
-export const APP_VERSION = '1.10-315'
+//   1.10-316 - Daily inventory LESS now comes from the authorities (AI): authorized stock is reserved and leaves the available stock on the authority date (option to show WSI instead); Data check lists over-authorized stock and is Admin only; icons on the Inventory Reports menu.
+export const APP_VERSION = '1.10-316'

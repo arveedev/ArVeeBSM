@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { ArrowLeft, X, SlidersHorizontal, FileSpreadsheet, ChevronRight, Sheet } from 'lucide-react'
+import { ArrowLeft, X, SlidersHorizontal, FileSpreadsheet, ChevronRight, Sheet, ClipboardList, Table, Hourglass, Wheat, Factory, FlaskConical, ShieldCheck } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { todayLocalISO } from '../../utils/calculations.js'
 import {
@@ -30,7 +30,7 @@ import useCrosshair from '../../hooks/useCrosshair.js'
 
 const BANK_KEY = 'inv.bankProvince'
 const readBank = () => { try { return localStorage.getItem(BANK_KEY) ?? 'Albay' } catch { return 'Albay' } }
-const DEFAULT_FILTERS = { combine: false, provinceId: '', commodity: '', warehouseIds: null, sort: 'name', ageSet: 'coarse', bank: 'Albay' }
+const DEFAULT_FILTERS = { combine: false, provinceId: '', commodity: '', warehouseIds: null, sort: 'name', ageSet: 'coarse', bank: 'Albay', lessSource: 'authority' }
 const fmtNum = (n) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const CONTROL_H = 'h-[46px]'
 
@@ -313,6 +313,8 @@ function CheckView({ checks, unit }) {
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
       <CheckSection title="Warehouses using a start-date override" tone="text-amber-400" items={checks.overrides} ok="None. Every warehouse follows the Data Start Date."
         render={(o, i) => checkLine(o.warehouse, `starts after ${fmtDay(o.date)}`, i)} />
+      <CheckSection title="Authorized more than the stock available" tone="text-brand-crimson" items={checks.overAuthorized ?? []} ok="No authority reserves more than the warehouse had."
+        render={(o, i) => checkLine(`AI ${o.aiNumber} · ${o.warehouse} · ${o.variety} · ${fmtDay(o.date)}`, `${fmtNum(toUnit(o.kilos, unit))} short`, i)} />
       <CheckSection title="Issued more than was received" tone="text-brand-crimson" items={checks.shortages} ok="No pile has issued more than it received."
         render={(o, i) => (
           <div key={i} className="border-b border-neutral-800 py-1 last:border-0">
@@ -414,6 +416,14 @@ function FilterSheet({ draft, setDraft, provinces, warehouses, view, onApply, on
               <option value="monthly">Monthly (0.1-1.0, 1.1-2.0, ...)</option>
             </select>
           </label>
+          {['ledger', 'summary', 'age'].includes(view) && (
+            <label className={labelClass}>LESS is taken from
+              <select className={selectClass} value={draft.lessSource} onChange={(e) => setDraft({ ...draft, lessSource: e.target.value })}>
+                <option value="authority">Authorities (reserved stock)</option>
+                <option value="wsi">WSI (stock actually issued)</option>
+              </select>
+            </label>
+          )}
           {view === 'summary' && (
             <label className={labelClass}>Sort warehouses
               <select className={selectClass} value={draft.sort} onChange={(e) => setDraft({ ...draft, sort: e.target.value })}>
@@ -493,14 +503,15 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const ledgerRows = useLiveQuery(() => db.cashLedgerV2.toArray(), [])
   const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), [])
   const branches = useLiveQuery(() => db.branches.toArray(), [])
+  const authorities = useLiveQuery(() => db.authorities.toArray(), [])
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
-  const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes].some((x) => x === undefined)
+  const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes, authorities].some((x) => x === undefined)
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
   const built = useMemo(() => {
-    if (loading || !['summary', 'ledger', 'age', 'check', 'procurement'].includes(view)) return null
+    if (loading || !['summary', 'ledger', 'age', 'check', 'procurement'].includes(view) || (view === 'check' && !isAdmin)) return null
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet: filters.ageSet, opening: config?.inventoryOpening ?? null })
-    const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null }
+    const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: filters.lessSource !== 'wsi' }
     const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
     const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
     const end = to < from ? from : to
@@ -530,10 +541,10 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       console.error(err)
       return { model: { title: '', subtitle: '', head: [], rows: [], edges: [], tones: [], empty: 'Could not build this report.' }, cards: null }
     }
-  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, startISO, sdoUsers, ledgerRows, activePrs, branches])
+  }, [loading, view, piles, transactions, warehouses, provinces, varieties, transactionTypes, config, filters, from, to, asOf, unit, narrow, windowDays, today, month, startISO, authorities, isAdmin, sdoUsers, ledgerRows, activePrs, branches])
   const model = built?.model ?? null
 
-  const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse'].filter(Boolean).length
+  const activeFilters = [filters.combine, filters.provinceId, filters.commodity, filters.warehouseIds, filters.sort !== 'name', filters.ageSet !== 'coarse', filters.lessSource === 'wsi'].filter(Boolean).length
 
   const handleExport = async () => {
     if (!model || model.empty) return
@@ -555,7 +566,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const openOpeningEditor = () => {
     const date = new Date(Date.parse(`${from}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)
     const ctx = makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: false, ageSet: filters.ageSet })
-    const baseCells = computeOpeningBase(ctx, { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null }, date)
+    const baseCells = computeOpeningBase(ctx, { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: filters.lessSource !== 'wsi' }, date)
     setOpeningEditor({ date, baseCells })
   }
 
@@ -570,14 +581,14 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       const monthStart = clampStart(`${ref.slice(0, 8)}01`)
       const f = { warehouseIds: filters.warehouseIds, provinceId: filters.provinceId || null, commodity: filters.commodity || null }
       const scope = filters.provinceId ? (provinces.find((p) => p.provinceId === filters.provinceId)?.name ?? '').toUpperCase() : 'ALBAY BRANCH'
-      const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null }
+      const inputs = { piles, transactions, warehouses, globalDataStartDate: config?.dataStartDate ?? null, authorities, reserve: filters.lessSource !== 'wsi' }
       const mk = (ageSet) => makeContext({ piles, warehouses, provinces, varieties, transactionTypes, combine: filters.combine, ageSet, opening: config?.inventoryOpening ?? null })
       const ctx = mk(filters.ageSet)
       const sheets = [
         modelToSheet(summaryModel(buildSummary(ctx, inputs, { asOf: ref, filters: f, sort: filters.sort }), 'b', { asOf: ref, scope }), 'SUMMARY'),
         modelToSheet(ledgerModel(buildLedger(ctx, inputs, { from: monthStart, to: ref, filters: f }), 'b', { from: monthStart, to: ref, scope }), ref.slice(0, 7)),
         modelToSheet(summaryModel(buildSummary(mk('fine'), inputs, { asOf: ref, filters: f, sort: filters.sort }), 'mt', { asOf: ref, scope }), 'WAREHOUSE_AGE_MT'),
-        modelToSheet(checksModel(buildChecks(ctx, inputs, { asOf: ref, todayISO: today }), 'b', { asOf: ref }), 'DATA_CHECK'),
+        ...(isAdmin ? [modelToSheet(checksModel(buildChecks(ctx, inputs, { asOf: ref, todayISO: today }), 'b', { asOf: ref }), 'DATA_CHECK')] : []),
       ]
       sheets[2].values[0][0] = 'WAREHOUSE AGE (MT)'
       const res = await postInventorySheet(settings, 'writeInventoryReport', { sheets })
@@ -608,15 +619,18 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       <div className="relative mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {view === 'hub' && (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {[['ledger', 'Daily inventory', 'Per day: ADD and LESS by type, ending stock, by warehouse and variety'],
-              ['summary', 'Summary', 'Stock by warehouse, variety and age bracket with province subtotals'],
-              ['age', 'Age monitoring', 'Age brackets per variety, stock moving to the next bracket, oldest stock'],
-              ['procurement', 'Daily procurement status', 'PD and PW bags per day, per province, with the CPF balance'],
-              ['milling', 'Milling liquidation', 'Regular milling per ricemill: issues, receipts, by-products, summary'],
-              ['test', 'Test milling liquidation', 'Test milling per ricemill: TMO and trials, by-products, summary'],
-              ['check', 'Data check', 'Overrides in use, shortages, approximate ages, unassigned documents']].map(([id, name, desc]) => (
-              <button key={id} type="button" onClick={() => setView(id)} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-600">
-                <span className="min-w-0"><span className="block text-sm font-semibold text-app-text">{name}</span><span className="block text-xs text-neutral-500">{desc}</span></span>
+            {[
+              { id: 'ledger', name: 'Daily inventory', desc: 'Per day: ADD and LESS by type, ending stock, by warehouse and variety', Icon: ClipboardList },
+              { id: 'summary', name: 'Summary', desc: 'Stock by warehouse, variety and age bracket with province subtotals', Icon: Table },
+              { id: 'age', name: 'Age monitoring', desc: 'Age brackets per variety, stock moving to the next bracket, oldest stock', Icon: Hourglass },
+              { id: 'procurement', name: 'Daily procurement status', desc: 'PD and PW bags per day, per province, with the CPF balance', Icon: Wheat },
+              { id: 'milling', name: 'Milling liquidation', desc: 'Regular milling per ricemill: issues, receipts, by-products, summary', Icon: Factory },
+              { id: 'test', name: 'Test milling liquidation', desc: 'Test milling per ricemill: TMO and trials, by-products, summary', Icon: FlaskConical },
+              ...(isAdmin ? [{ id: 'check', name: 'Data check', desc: 'Overrides in use, shortages, over-authorized stock, approximate ages, unassigned documents', Icon: ShieldCheck }] : []),
+            ].map(({ id, name, desc, Icon }) => (
+              <button key={id} type="button" onClick={() => setView(id)} className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left transition-colors hover:border-neutral-600">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-950 text-brand-neon"><Icon size={18} /></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-app-text">{name}</span><span className="block text-xs text-neutral-500">{desc}</span></span>
                 <ChevronRight size={16} className="shrink-0 text-neutral-500" />
               </button>
             ))}
@@ -695,6 +709,13 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                 {view === 'check' ? <CheckView checks={built.checks} unit={unit} /> : (
                   <>
                     <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>
+                    {['ledger', 'summary', 'age'].includes(view) && (
+                      <p className="mb-2 text-xs text-neutral-500">
+                        {filters.lessSource === 'wsi'
+                          ? 'LESS shows stock actually issued (WSI).'
+                          : 'LESS shows authorized stock (AI) from the day it is authorized: that stock is reserved, so it is no longer available.'}
+                      </p>
+                    )}
                     {config?.inventoryOpening && config.inventoryOpening.ageSet === filters.ageSet && ['ledger', 'summary', 'age'].includes(view) && (
                       <p className="mb-2 text-xs text-amber-400">Opening balance override applied from {longDate(config.inventoryOpening.date)} (Daily inventory, Summary and Age monitoring only).</p>
                     )}

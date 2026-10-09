@@ -420,6 +420,7 @@ export const checksModel = (checks, unit, { asOf }) => {
     for (const it of items) rows.push({ kind: 'row', ...line(it) })
   }
   section('Warehouses using a start-date override', checks.overrides, (o) => ({ first: o.warehouse, cells: [`starts after ${longDate(o.date)}`, null] }))
+  section('Authorized more than the stock available', checks.overAuthorized ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Issued more than was received', checks.shortages, (o) => ({ first: o.name, cells: [o.events.map((e) => `${e.kind} ${e.serial} ${e.type}`).join('; ') || 'bags over', Math.round(o.bags * 100) / 100] }))
   section('Rebuilt stock differs from the pile balance (today)', checks.mismatches, (o) => ({ first: o.name, cells: [`stored ${Math.round(toUnit(o.stored, unit) * 100) / 100}${o.note ? ` - ${o.note}` : ''}`, Math.round(toUnit(o.rebuilt, unit) * 100) / 100] }))
   section('Age is approximate (no readable Date Received)', checks.approx, (o) => ({ first: o.name, cells: [`from ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
@@ -488,7 +489,13 @@ export const buildAgeLists = (ctx, inputs, { asOf, filters = {}, windowDays = 30
  * differs from the pile's stored balance (as of today only).
  */
 export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
-  const state = buildLots({ ...inputs, asOf })
+  // piles are compared with PHYSICAL stock; authorities are checked on their own below
+  const state = buildLots({ ...inputs, asOf, reserve: false })
+  const reservedState = buildLots({ ...inputs, asOf, reserve: true })
+  const overAuthorized = (reservedState.authShort ?? []).map((x) => ({
+    aiNumber: x.aiNumber, date: x.date, kilos: x.kilos, customer: x.customer ?? '',
+    warehouse: warehouseLabel(ctx.whById.get(x.warehouseId)?.name, false), variety: ctx.varietyName.get(x.varietyId) ?? '?',
+  })).sort((a, b) => natural(a.warehouse, b.warehouse) || (a.date < b.date ? -1 : 1))
   const global = inputs.globalDataStartDate ?? null
   const overrides = []
   for (const w of inputs.warehouses) {
@@ -529,7 +536,7 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
     warehouse: warehouseLabel(whById.get(t.warehouseId)?.name, false),
   }))
   const byName = (a, b) => natural(a.name, b.name)
-  return { overrides, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
+  return { overrides, overAuthorized, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
 }
 
 /**

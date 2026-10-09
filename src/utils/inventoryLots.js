@@ -16,7 +16,7 @@
 //     Date, whichever is later)
 //   - a pile closed on or before `asOf` holds nothing
 
-import { effectiveCutoffDate } from './calculations.js'
+import { effectiveCutoffDate, isAuthorityComplete, dedupeAuthoritiesByRef } from './calculations.js'
 
 // Same month length the Google Sheet age script uses.
 export const DAYS_PER_MONTH = 30.44
@@ -88,7 +88,17 @@ const seedAnchor = (tx, pile) => {
  * @param {string} args.asOf             YYYY-MM-DD, inclusive
  * @returns {Map<string, {lots: object[], shortBags: number, shortKilos: number}>} keyed by pileId
  */
-const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf }, movements) => {
+/**
+ * `reserve` (reports only): an authority (AI) reserves stock when it is issued. On the
+ * authority's date its authorized kilos leave the available stock (oldest lot first,
+ * same warehouse and variety), so they cannot be authorized again; an authority that is
+ * already complete reserves only what was actually withdrawn. The WSIs and transfers
+ * that carry out an authority then only consume that reservation (they do not deduct a
+ * second time); anything issued beyond the authorization, and any issue with no
+ * authority, still deducts on its own date. Without `reserve` the stock is physical:
+ * only WSI and WTS deduct (used by the lots check, which must match the pile balances).
+ */
+const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf, authorities = [], reserve = false }, movements) => {
   const pileById = new Map(piles.map((p) => [p.pileId, p]))
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const state = new Map(piles.map((p) => [p.pileId, { lots: [], shortBags: 0, shortKilos: 0, shortEvents: [] }]))
@@ -116,8 +126,37 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
     else if (tx.type === 'WSI' && tx.pileId && counts(tx, tx.pileId)) events.push({ rank: 1, tx })
     else if (tx.type === 'WTS' && tx.date <= asOf) events.push({ rank: 1, tx })
   }
-  const when = (e) => (e.rank === -1 ? '' : e.tx.date)
-  events.sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : a.rank - b.rank || (a.tx.createdAt ?? 0) - (b.tx.createdAt ?? 0)))
+  // authorities that reserve stock (report mode)
+  const pools = new Map() // aiNumber -> { left: kilos, portions: [] }
+  const reservingAi = new Set()
+  const authShort = []
+  if (reserve) {
+    const linked = new Map() // aiNumber -> kilos withdrawn so far and the first withdrawal date
+    for (const tx of transactions) {
+      if (tx.status !== 'Active' || !tx.aiNumber || tx.date > asOf) continue
+      const k = tx.type === 'WSI' ? (tx.netKilos ?? 0) : tx.type === 'WTS' ? (tx.issuedNetKilos ?? 0) : null
+      if (k == null) continue
+      const cur = linked.get(tx.aiNumber) ?? { kilos: 0, first: null }
+      cur.kilos += k
+      if (!cur.first || tx.date < cur.first) cur.first = tx.date
+      linked.set(tx.aiNumber, cur)
+    }
+    for (const a of dedupeAuthoritiesByRef(authorities.filter((x) => x.type === 'AI'))) {
+      if (!a.aiNumber || !a.varietyId || !a.date || !whById.has(a.assignedWarehouse)) continue
+      const cut = effectiveCutoffDate(whById.get(a.assignedWarehouse).reportingCutoffDate, globalDataStartDate)
+      if (cut && a.date <= cut) continue
+      const w = linked.get(a.aiNumber) ?? { kilos: 0, first: null }
+      const amount = isAuthorityComplete(a) ? w.kilos : Math.max(a.totalAllocationKilos ?? 0, w.kilos)
+      if (amount <= 0) continue
+      const at = w.first && w.first < a.date ? w.first : a.date
+      if (at > asOf) continue
+      reservingAi.add(a.aiNumber)
+      events.push({ rank: 0.5, when: at, auth: { a, amount } })
+    }
+  }
+
+  const when = (e) => (e.rank === -1 ? '' : (e.tx ? e.tx.date : e.when))
+  events.sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : a.rank - b.rank || (a.tx?.createdAt ?? 0) - (b.tx?.createdAt ?? 0)))
 
   // Takes `bags` from the oldest lots of a pile. Returns the lots taken
   // (portions, original dates kept) and records any shortfall.
@@ -157,13 +196,56 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
   const note = (kind, tx, pileId, portions, label) => {
     if (!movements) return
     for (const l of portions) {
-      if (l.bags === 0 && l.kilos === 0) continue
+      if ((l.bags === 0 && l.kilos === 0) || l.fromPool) continue
       movements.push({
         date: tx.date, pileId, kind, label: label ?? null, typeId: tx.transactionTypeId ?? null,
         lotDate: l.date, varietyId: l.varietyId ?? null, bags: l.bags, kilos: l.kilos,
         docType: tx.type, serial: tx.serialNo ?? null, customer: tx.customerName ?? null,
       })
     }
+  }
+
+  // Reserve `kilos` of one variety in one warehouse, oldest lot first across its piles.
+  const reserveKilos = (warehouseId, varietyId, kilos) => {
+    const cand = []
+    for (const [pid, st] of state) {
+      const pile = pileById.get(pid)
+      if (pile?.warehouseId !== warehouseId) continue
+      for (const lot of st.lots) if ((lot.varietyId ?? pile.varietyId) === varietyId && lot.kilos > 0) cand.push({ pid, st, lot })
+    }
+    cand.sort((x, y) => (x.lot.date < y.lot.date ? -1 : x.lot.date > y.lot.date ? 1 : 0))
+    let need = kilos
+    const portions = []
+    for (const c of cand) {
+      if (need <= 1e-9) break
+      const useK = Math.min(c.lot.kilos, need)
+      const share = c.lot.kilos > 0 ? useK / c.lot.kilos : 0
+      const useBags = c.lot.bags * share
+      portions.push({ ...c.lot, pileId: c.pid, bags: useBags, kilos: round3(useK) })
+      c.lot.bags -= useBags
+      c.lot.kilos = round3(c.lot.kilos - useK)
+      need -= useK
+    }
+    for (const [, st] of state) st.lots = st.lots.filter((l) => l.kilos > 1e-6 || l.bags > 1e-9)
+    return { portions, short: need > 1e-6 ? need : 0 }
+  }
+
+  // Take up to `kilos` out of an authority's reservation, oldest portion first.
+  const drawPool = (pool, kilos) => {
+    const out = []
+    let need = kilos
+    while (need > 1e-9 && pool.portions.length > 0) {
+      const p = pool.portions[0]
+      const useK = Math.min(p.kilos, need)
+      const share = p.kilos > 0 ? useK / p.kilos : 1
+      out.push({ ...p, bags: p.bags * share, kilos: round3(useK), fromPool: true })
+      p.bags -= p.bags * share
+      p.kilos = round3(p.kilos - useK)
+      need -= useK
+      if (p.kilos <= 1e-6) pool.portions.shift()
+    }
+    pool.left = round3(Math.max(0, pool.left - (kilos - Math.max(0, need))))
+    return out
   }
 
   const addLot = (pileId, lot) => {
@@ -175,7 +257,19 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
     st.lots.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   }
 
-  for (const { tx } of events) {
+  for (const ev of events) {
+    if (ev.auth) {
+      const { a, amount } = ev.auth
+      const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount)
+      pools.set(a.aiNumber, { left: amount - short, portions: portions.map((x) => ({ ...x })) })
+      const byPile = new Map()
+      for (const x of portions) { const l = byPile.get(x.pileId) ?? []; l.push(x); byPile.set(x.pileId, l) }
+      const pseudo = { date: ev.when, type: 'AI', serialNo: a.aiNumber, customerName: a.customerName ?? null, transactionTypeId: null }
+      for (const [pid, list] of byPile) note('less', pseudo, pid, list, a.transactionTypeName || 'AUTHORIZED')
+      if (short > 0) authShort.push({ aiNumber: a.aiNumber, warehouseId: a.assignedWarehouse, varietyId: a.varietyId, date: ev.when, kilos: short, customer: a.customerName ?? null })
+      continue
+    }
+    const tx = ev.tx
     if (tx.type === 'WSR') {
       const pile = pileById.get(tx.pileId)
       const a = tx.isInitialBalance ? seedAnchor(tx, pile) : { date: tx.date, anchor: ANCHOR.TRANSACTION }
@@ -188,13 +282,39 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       addLot(tx.pileId, lot)
       note('add', tx, tx.pileId, [lot], tx.isInitialBalance ? 'BEGINNING BALANCE' : null)
     } else if (tx.type === 'WSI') {
-      note('less', tx, tx.pileId, take(tx.pileId, tx.numberOfBags ?? 0, tx.netKilos ?? 0, tx))
+      const pool = reserve && tx.aiNumber && reservingAi.has(tx.aiNumber) ? pools.get(tx.aiNumber) : null
+      if (pool) {
+        // already deducted when the authority was issued: only what goes beyond it deducts now
+        const wk = tx.netKilos ?? 0
+        const used = Math.min(pool.left, wk)
+        drawPool(pool, used)
+        const excess = wk - used
+        if (excess > 1e-6) note('less', tx, tx.pileId, take(tx.pileId, (tx.numberOfBags ?? 0) * (wk > 0 ? excess / wk : 1), excess, tx))
+      } else {
+        note('less', tx, tx.pileId, take(tx.pileId, tx.numberOfBags ?? 0, tx.netKilos ?? 0, tx))
+      }
     } else if (tx.type === 'WTS') {
       const from = tx.issuedPileId
       const to = tx.receivedPileId
       const outCounts = from && counts(tx, from)
       const inCounts = to && counts(tx, to)
-      const taken = outCounts ? take(from, tx.issuedBags ?? 0, tx.issuedNetKilos ?? 0, tx) : []
+      let taken = []
+      if (outCounts) {
+        const pool = reserve && tx.aiNumber && reservingAi.has(tx.aiNumber) ? pools.get(tx.aiNumber) : null
+        if (pool) {
+          // the stock this transfer moves was reserved by its authority: carry those lots
+          const want = tx.issuedNetKilos ?? 0
+          taken = drawPool(pool, want)
+          const rest = want - taken.reduce((sum, l) => sum + l.kilos, 0)
+          if (rest > 1e-6) {
+            const extra = take(from, (tx.issuedBags ?? 0) * (want > 0 ? rest / want : 1), rest, tx)
+            note('less', tx, from, extra, 'TRANSFER')
+            taken = [...taken, ...extra]
+          }
+        } else {
+          taken = take(from, tx.issuedBags ?? 0, tx.issuedNetKilos ?? 0, tx)
+        }
+      }
       if (!inCounts) { note('less', tx, from, taken, 'TRANSFER'); continue }
       const recBags = tx.receivedBags ?? 0
       const recKilos = tx.receivedNetKilos ?? 0
@@ -214,7 +334,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       // (bags can change, e.g. rebagging 40 -> 21).
       const takenBags = taken.reduce((s, l) => s + l.bags, 0)
       const takenKilos = taken.reduce((s, l) => s + l.kilos, 0)
-      const carried = taken.map((l) => ({
+      const carried = taken.map(({ fromPool, ...l }) => ({
         ...l, source: 'WTS',
         varietyId: tx.receivedVarietyId ?? l.varietyId,
         sackTypeId: tx.receivedSackTypeId ?? l.sackTypeId,
@@ -239,6 +359,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
     const closed = pileById.get(pileId)?.closedDate
     if (closed && asOf >= closed) st.lots = []
   }
+  state.authShort = authShort
   return state
 }
 
