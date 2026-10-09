@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-10-09T07:50:40.596Z",
+  "exportedAt": "2026-10-09T08:58:35.261Z",
   "databaseName": "BSMDatabase",
   "schemaVersion": 44,
   "tables": {
@@ -345,211 +345,211 @@
           "sdoReportCutoffs"
         ],
         "latestRevisions": {
-          "transactions": 117,
-          "sheetSources": 137,
-          "users": 3,
-          "cashLedgerV2": 1,
-          "reportConfig": 2,
-          "purchaseReceipts": 10
+          "transactions": 211,
+          "sheetSources": 14,
+          "errorLogs": 34,
+          "purchaseReceipts": 63,
+          "customers": 2,
+          "reportConfig": 1
         },
         "realms": [
           "rlm-public",
           "bsm-app-service@system.local"
         ],
         "inviteRealms": [],
-        "clientIdentity": "Z4s6S3IVLbMMjcI+rxB0IA==",
+        "clientIdentity": "6tn+5VC6G0zy2HLcjzym6w==",
         "remoteDbId": "zv432njdm",
         "initiallySynced": true,
-        "serverRevision": "1:207652",
-        "yServerRevision": "1:185252",
-        "timestamp": "2026-10-08T08:32:00.346Z"
+        "serverRevision": "1:206781",
+        "yServerRevision": "1:164585",
+        "timestamp": "2026-10-08T06:21:36.094Z"
       }
     ],
     "$baseRevs": [
       {
         "tableName": "authorities",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "branches",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "buyingPrices",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "cashDenominationCounts",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "cashLedgerV2",
-        "clientRev": 2,
-        "serverRev": "1:207652"
+        "clientRev": 1,
+        "serverRev": "1:206781"
       },
       {
         "tableName": "customerAliases",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "customers",
-        "clientRev": 1,
-        "serverRev": "1:207652"
+        "clientRev": 3,
+        "serverRev": "1:206781"
       },
       {
         "tableName": "enwFactors",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "errorLogs",
-        "clientRev": 1,
-        "serverRev": "1:207652"
+        "clientRev": 35,
+        "serverRev": "1:206781"
       },
       {
         "tableName": "googleSheetsConfig",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "members",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "pendingPrSheetDeletions",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "pendingSheetDeletions",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "pileLayoutBoxes",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "pileLayoutHistory",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "piles",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "prSheetSources",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "pricerEligibility",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "provinces",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "purchaseReceipts",
-        "clientRev": 11,
-        "serverRev": "1:207652"
+        "clientRev": 64,
+        "serverRev": "1:206781"
       },
       {
         "tableName": "realms",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "reportConfig",
-        "clientRev": 3,
-        "serverRev": "1:207652"
+        "clientRev": 2,
+        "serverRev": "1:206781"
       },
       {
         "tableName": "ricemillAllocations",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "roles",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "sackInventory",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "sackTypes",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "sdoReportCutoffs",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "settings",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "sheetSources",
-        "clientRev": 138,
-        "serverRev": "1:207652"
+        "clientRev": 15,
+        "serverRev": "1:206781"
       },
       {
         "tableName": "signatories",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "transactionTypes",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "transactions",
-        "clientRev": 118,
-        "serverRev": "1:207652"
+        "clientRev": 212,
+        "serverRev": "1:206781"
       },
       {
         "tableName": "userAliases",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "users",
-        "clientRev": 4,
-        "serverRev": "1:207652"
+        "clientRev": 1,
+        "serverRev": "1:206781"
       },
       {
         "tableName": "varietyTypes",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "warehouseAliases",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       },
       {
         "tableName": "warehouses",
         "clientRev": 1,
-        "serverRev": "1:207652"
+        "serverRev": "1:206781"
       }
     ],
     "$logins": [
@@ -566,12 +566,12 @@
           "rl": "prod",
           "sub": "bsm-app-service@system.local"
         },
-        "lastLogin": "2026-09-30T05:36:22.066Z",
+        "lastLogin": "2026-09-22T02:33:33.678Z",
         "nonExportablePrivateKey": {},
         "publicKey": {},
-        "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiQlNNIEFwcCIsImNsaWVudF9pZCI6InFlOGVjanVmbGNoejVuaGMiLCJzY29wZXMiOlsiQUNDRVNTX0RCIiwiSU1QRVJTT05BVEUiXSwidXNlclR5cGUiOiJwcm9kIiwibGljZW5zZSI6Im9rIiwicmwiOiJwcm9kIiwic3ViIjoiYnNtLWFwcC1zZXJ2aWNlQHN5c3RlbS5sb2NhbCIsImlhdCI6MTc5MTUzMjIzOCwibmJmIjoxNzkxNTMxOTM4LCJleHAiOjE3OTE1MzU4MzgsImF1ZCI6WyJodHRwczovL3p2NDMybmpkbS5kZXhpZS5jbG91ZCIsInp2NDMybmpkbSJdLCJpc3MiOiJodHRwczovL2RleGllLmNsb3VkIn0.xplT4CTQEu9NNTw7F4Eg-5h1IJ6vx4jzh3USJ-0TeJI",
-        "accessTokenExpiration": "2026-10-09T08:50:38.056Z",
-        "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJic20tYXBwLXNlcnZpY2VAc3lzdGVtLmxvY2FsIiwiYWNjZXNzX2NsYWltcyI6eyJuYW1lIjoiQlNNIEFwcCIsImNsaWVudF9pZCI6InFlOGVjanVmbGNoejVuaGMiLCJzY29wZXMiOlsiQUNDRVNTX0RCIiwiSU1QRVJTT05BVEUiXSwidXNlclR5cGUiOiJwcm9kIiwibGljZW5zZSI6Im9rIiwicmwiOiJwcm9kIn0sImNsaWVudF9wdWJsaWNfa2V5IjoiLS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS1cbk1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBM0VFaVhveHd2aStNRnlLdGNkUXBcbkxUSWc3QURabndGWDBJbFlDOFA0cG5qWjJhM1VmaWh0SjNLODdyaTR2TTNZaGhoMTJqT2d6THhJZlVYQWxtTGdcblBKb0dSY2ZaTGZERzUvbVhmbTZobmNYM09uN2xkTlhvZ3Q0RENPWVl1cDFySnBhaVFtbnVtaVNyOFhKbjVZMFhcbnJKZ0pvZVNWQXdaZStJZGVJcmZ1WlJWRlN6SG1YaEpFUzZMZ09lYnVFZGJMdHZSdmNjcTcxNTZEYy9xRDVQV3Fcbmt3RE5qa0E3Z1c1WC9STjJaaXAySDVWYzJxZVNlNzN0TGJqMHBhR1BEbzVueHpobU52eFppZldGMWxqRnpYVGJcbmhSZDE4Y25BaUZZSGJDYnoxNFJuYXBnVFovUVVvTEEvQWJuaGZWcnphUHZOQk9TTkpMY1BnOXRETjVTaGtiakRcbkRRSURBUUFCXG4tLS0tLUVORCBQVUJMSUMgS0VZLS0tLS0iLCJpYXQiOjE3OTA3NDY1ODEsIm5iZiI6MTc5MDY2MDE4MSwiZXhwIjoyMTA2MTA2NTgxLCJhdWQiOlsiaHR0cHM6Ly96djQzMm5qZG0uZGV4aWUuY2xvdWQiLCJ6djQzMm5qZG0iXSwiaXNzIjoiaHR0cHM6Ly9kZXhpZS5jbG91ZCJ9.zB7VUbyz01ea6-XEvTlA4ksUJe72GJPIkAthj8Qpv3I",
+        "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiQlNNIEFwcCIsImNsaWVudF9pZCI6InFlOGVjanVmbGNoejVuaGMiLCJzY29wZXMiOlsiQUNDRVNTX0RCIiwiSU1QRVJTT05BVEUiXSwidXNlclR5cGUiOiJwcm9kIiwibGljZW5zZSI6Im9rIiwicmwiOiJwcm9kIiwic3ViIjoiYnNtLWFwcC1zZXJ2aWNlQHN5c3RlbS5sb2NhbCIsImlhdCI6MTc5MTQ0MDM2OSwibmJmIjoxNzkxNDQwMDY5LCJleHAiOjE3OTE0NDM5NjksImF1ZCI6WyJodHRwczovL3p2NDMybmpkbS5kZXhpZS5jbG91ZCIsInp2NDMybmpkbSJdLCJpc3MiOiJodHRwczovL2RleGllLmNsb3VkIn0.IeqNpYffjl1aE3zI6NQ1rtJvQMPxV2q7fdVSYirHnyQ",
+        "accessTokenExpiration": "2026-10-08T07:19:29.840Z",
+        "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJic20tYXBwLXNlcnZpY2VAc3lzdGVtLmxvY2FsIiwiYWNjZXNzX2NsYWltcyI6eyJuYW1lIjoiQlNNIEFwcCIsImNsaWVudF9pZCI6InFlOGVjanVmbGNoejVuaGMiLCJzY29wZXMiOlsiQUNDRVNTX0RCIiwiSU1QRVJTT05BVEUiXSwidXNlclR5cGUiOiJwcm9kIiwibGljZW5zZSI6Im9rIiwicmwiOiJwcm9kIn0sImNsaWVudF9wdWJsaWNfa2V5IjoiLS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS1cbk1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBMmlqVzUrbzdYTnFGdVpodnVRaGFcblhZTnhCR1Z3UlNBeGRyR0lUSWErUVMrNklGL1M4MnlycmhLSUxkNmpLZjJHNjQrY0MrRnBzSko3SnZrSDVMdGtcbjhWcXM4T2xCSFJuZmY0Y3cvZ0ZUZ3l5RWtKRTVla0RSVkNkbVZWbU0xY3VpbW5PS0EzVzA2T2tYeGQzQ1pieDZcbkk5Y3JhTWllVDFXUkRTMjhrcmtvbVdJY1d4ajcydEU0N212TlFhNGxKdXRRUlJRRmNlNS8zNkE5YXpsSDJFQnNcbjlvT1dUZTY1eU5Gcmd2QVB6NHRhcCsrUzhmOEcrZzVqQzlXS1R6M2R6RDhVVzlYWXRWSXo4WTRKNDZZMTl1ZUlcbjFZdStnalQwZUFTd3U0aUk1WG53Snh3OW1CMXkzQ2xzcG9iT0wxM3hPNnVGRHVXR0VpSWNpWGdLeXIwejl6RGNcbmdRSURBUUFCXG4tLS0tLUVORCBQVUJMSUMgS0VZLS0tLS0iLCJpYXQiOjE3OTAwNDQ0MTMsIm5iZiI6MTc4OTk1ODAxMywiZXhwIjoyMTA1NDA0NDEzLCJhdWQiOlsiaHR0cHM6Ly96djQzMm5qZG0uZGV4aWUuY2xvdWQiLCJ6djQzMm5qZG0iXSwiaXNzIjoiaHR0cHM6Ly9kZXhpZS5jbG91ZCJ9.tyg-kmzFYn87bcs2j_4-nHo5xE6wz4XMgMM4nsW09B8",
         "userId": "bsm-app-service@system.local",
         "name": "BSM App",
         "license": {
@@ -635,7 +635,6 @@
         "accessCode": "fb93dead9d991560d29de0d682cf566d557584bd2fb8546c09599aa43381e302",
         "avatarAnim": "flip",
         "avatarFace": "🌼",
-        "cashOnBank": 3878497.05,
         "assignedWarehouses": [
           "62ba6c27-19c6-4e3e-8674-a0a9a36aae1b",
           "cce9f6ba-af14-4688-af85-ce9dc0792138",
@@ -648,7 +647,8 @@
           "c30b0303-d52e-4aee-b0aa-dc7b2c147f85"
         ],
         "priorityWarehouseId": "7ccc4649-f0cb-4ead-9c70-329060ef24d9",
-        "showReplenishmentDetails": false
+        "showReplenishmentDetails": false,
+        "cashOnBank": 3878497.05
       },
       {
         "uid": "700a6101-e809-4917-b91a-4c4d9719ba8c",
@@ -694,9 +694,13 @@
       },
       {
         "uid": "c657605f-7d49-4f5a-8166-53450a5db850",
-        "role": "SDO",
         "name": "Ma. Pritzel R. Sallena",
+        "role": "SDO",
+        "owner": "bsm-app-service@system.local",
+        "realmId": "bsm-app-service@system.local",
         "nickname": "Pritz",
+        "position": "Accounts Analyst / Alternate SDO",
+        "accessCode": "afaa424e83e7c571c03bfd1d99325e59c1d81ab1ead152a433410c451778a919",
         "assignedWarehouses": [
           "7ccc4649-f0cb-4ead-9c70-329060ef24d9",
           "694c1145-deed-49de-b9f9-c0ebbcf1a038",
@@ -706,10 +710,6 @@
           "5d4e3209-c0f4-48a9-a014-711aaa00d196",
           "536e5e41-c765-4363-b9ae-add16907b683"
         ],
-        "accessCode": "afaa424e83e7c571c03bfd1d99325e59c1d81ab1ead152a433410c451778a919",
-        "owner": "bsm-app-service@system.local",
-        "realmId": "bsm-app-service@system.local",
-        "position": "Accounts Analyst / Alternate SDO",
         "avatarBg": "hsl(272 72% 18%)",
         "avatarFace": null,
         "avatarAnim": "none",
@@ -1025,7 +1025,6 @@
         "condition": "GQ",
         "varietyId": "79daea35-81c3-4ec9-8a73-495c5aabe175",
         "cerealType": "Rice",
-        "zeroedDate": "2026-09-24",
         "currentBags": 0,
         "warehouseId": "3edc3b98-7ad0-4074-8f24-8da5571c6eea",
         "currentKilos": 0,
@@ -1034,7 +1033,8 @@
         "dateOfReceipt": "2026-08-31",
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "initialAgeValue": 1,
-        "moistureContent": 13.5
+        "moistureContent": 13.5,
+        "zeroedDate": "2026-09-24"
       },
       {
         "owner": "bsm-app-service@system.local",
@@ -8344,12 +8344,12 @@
         "grossKilos": 3904.71,
         "warehouseId": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
         "customerName": "Beginning Balance",
-        "dateProcured": null,
-        "mtsCondition": null,
         "numberOfBags": 106,
-        "mtsSackTypeId": null,
         "moistureContent": null,
-        "isInitialBalance": true
+        "isInitialBalance": true,
+        "mtsSackTypeId": null,
+        "mtsCondition": null,
+        "dateProcured": null
       },
       {
         "id": "04c4a8e9-ea41-4b3c-ac91-3bc942c8507f",
@@ -37436,6 +37436,7 @@
         "owner": "bsm-app-service@system.local",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
+        "aiNumber": null,
         "isSynced": true,
         "moNumber": "MO No. ALB - 2026-I-152",
         "serialNo": "840601",
@@ -37464,8 +37465,7 @@
         "hasBeenBackedUp": true,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "aiNumber": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "1e2e096f-93ea-4ea1-9fd9-f5f0ee883f3c",
@@ -40963,7 +40963,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -40973,8 +40972,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "216f191a-0b46-4551-aeb3-4337ec03329a",
@@ -46387,7 +46387,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 20,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -46397,8 +46396,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": true,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": true
       },
       {
         "id": "27b62ff1-24ec-4232-8d90-877af6baf971",
@@ -47767,7 +47767,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 136,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -47778,7 +47777,8 @@
         "moistureContent": 11,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "d38a6ebc-0f45-417a-96ae-accfd2edc463"
+        "transactionTypeId": "d38a6ebc-0f45-417a-96ae-accfd2edc463",
+        "groupSerialNo": null
       },
       {
         "id": "291c25fa-cdd3-4a8c-81fc-cd787f8f8c67",
@@ -51746,13 +51746,13 @@
         "cerealCategory": "Palay",
         "recordedByName": "Ron Vincent Jocson",
         "customerAddress": "SAN ISIDRO, LIBON",
-        "fromSheetImport": true,
         "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "fromSheetImport": true
       },
       {
         "id": "2da61398-d24f-426f-a30b-4e706968d119",
@@ -55902,7 +55902,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 26,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -55912,8 +55911,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": true,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": true
       },
       {
         "id": "31de9c80-e6d5-4c92-86ef-371d0d879205",
@@ -59264,12 +59264,12 @@
         "cerealCategory": "Palay",
         "recordedByName": "Ron Vincent Jocson",
         "customerAddress": "BAGONG ABRE, LEGAZPI CITY",
+        "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 14,
         "needsCompletion": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
         "syncFailureLogged": false,
-        "hasBeenBackedUp": true
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
       },
       {
         "id": "364116f7-29cb-4c51-aca8-1c2544e6a5e5",
@@ -61926,13 +61926,13 @@
         "cerealCategory": "Palay",
         "recordedByName": "Florante Reason",
         "customerAddress": "SABAN, OAS",
-        "fromSheetImport": true,
         "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 15,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "fromSheetImport": true
       },
       {
         "id": "39a5f7fc-b056-48aa-9f7a-ae4c4ca946b3",
@@ -67654,7 +67654,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 200,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -67665,7 +67664,8 @@
         "moistureContent": 12.5,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "41aaf8ae-b63c-470f-8723-5eb6c1152da1",
@@ -69388,7 +69388,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 21,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -69398,8 +69397,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": true,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": true
       },
       {
         "id": "44330f32-ae18-4e1d-b2cf-486bd99ec1d2",
@@ -69628,7 +69628,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -69638,8 +69637,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": true,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": true
       },
       {
         "id": "449b8d21-1a05-4e31-8943-53d51b74d2ba",
@@ -72521,7 +72521,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 22,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -72531,8 +72530,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "4829de68-6980-4a64-8eda-c4f9342c38e9",
@@ -74402,7 +74402,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -74412,8 +74411,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "4b4c5bbe-c018-41a5-810b-3c5e3ef75c2d",
@@ -76656,7 +76656,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 19,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -76666,8 +76665,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "4e49a7b0-9b21-41fc-a24d-653a87981ef6",
@@ -78129,6 +78129,7 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 300,
+        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -78139,8 +78140,7 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "groupSerialNo": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "50e2fbbe-18b0-4de2-8604-687810b46810",
@@ -79453,6 +79453,7 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 69,
+        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -79463,8 +79464,7 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "groupSerialNo": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "53c229df-aed9-4992-a8c2-45f079752974",
@@ -86353,13 +86353,13 @@
         "cerealCategory": "Palay",
         "recordedByName": "Florante Reason",
         "customerAddress": "BURABOD, LIBON",
-        "fromSheetImport": true,
         "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "fromSheetImport": true
       },
       {
         "id": "5e90df06-c300-4a0c-b2c6-9adc6c7185c0",
@@ -90444,13 +90444,13 @@
         "cerealCategory": "Palay",
         "recordedByName": "Florante Reason",
         "customerAddress": "SAN VICENTE, LIBON",
-        "fromSheetImport": true,
         "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 13.9,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "fromSheetImport": true
       },
       {
         "id": "672eb88b-1308-49f6-95b3-825905bd0ca0",
@@ -90973,12 +90973,12 @@
         "grossKilos": 4543.26,
         "warehouseId": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
         "customerName": "Beginning Balance",
-        "dateProcured": null,
-        "mtsCondition": null,
         "numberOfBags": 138,
-        "mtsSackTypeId": null,
         "moistureContent": null,
-        "isInitialBalance": true
+        "isInitialBalance": true,
+        "mtsSackTypeId": null,
+        "mtsCondition": null,
+        "dateProcured": null
       },
       {
         "id": "6842fb5a-66a1-4591-809e-ec55005b7e7d",
@@ -91117,7 +91117,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 140,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -91128,7 +91127,8 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "68ecf790-5996-46b3-a7e9-7cbb7f276eea",
@@ -91946,7 +91946,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -91956,8 +91955,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "6b16f596-61cb-4bf7-bee9-24565fdba3f9",
@@ -93262,7 +93262,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 100,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -93273,7 +93272,8 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "6f136c63-8342-4e37-bd09-9c1a691d0d66",
@@ -94439,13 +94439,13 @@
         "cerealCategory": "Palay",
         "recordedByName": "Florante Reason",
         "customerAddress": "SAN VICENTE, LIBON",
-        "fromSheetImport": true,
         "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 13.8,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "fromSheetImport": true
       },
       {
         "id": "71bc8cb6-ccb6-434b-8619-28564ebb26e3",
@@ -95087,13 +95087,13 @@
         "cerealCategory": "Palay",
         "recordedByName": "Florante Reason",
         "customerAddress": "ZONE 1, LIBON",
-        "fromSheetImport": true,
         "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "fromSheetImport": true
       },
       {
         "id": "73327b95-35d8-4666-b145-2818aea7f6bd",
@@ -97239,6 +97239,7 @@
         "farmerGender": "Male",
         "mtsCondition": "BN",
         "numberOfBags": 6,
+        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -97249,8 +97250,7 @@
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
-        "groupSerialNo": null
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
       },
       {
         "id": "7916b2c1-8195-42b1-9e9d-e3be9b113b68",
@@ -99014,7 +99014,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 141,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -99025,7 +99024,8 @@
         "moistureContent": 12.8,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "7faa30a8-4923-4a5d-b241-32d0b9780e5e",
@@ -101323,6 +101323,7 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 123,
+        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": true,
         "cerealCategory": "Rice",
@@ -101333,8 +101334,7 @@
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "groupSerialNo": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "85dbc9c4-a71c-4a06-a240-f6739ece4200",
@@ -104749,6 +104749,7 @@
         "moNumber": "MO No. ALB - 2026-I-154",
         "netKilos": 13665.3,
         "orNumber": null,
+        "poNumber": null,
         "serialNo": "26458849",
         "condition": "GQ",
         "createdAt": 1790412395843,
@@ -104765,6 +104766,7 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 260,
+        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -104775,9 +104777,7 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "poNumber": null,
-        "groupSerialNo": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "8f2e535f-64a3-4559-ad51-593b45a51aa4",
@@ -104953,7 +104953,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 190,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -104965,7 +104964,8 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "900b2d6b-6dfe-4dbb-bd85-a21e94d65cf7",
@@ -105166,12 +105166,12 @@
         "grossKilos": 2895.35,
         "warehouseId": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
         "customerName": "Beginning Balance",
-        "dateProcured": null,
-        "mtsCondition": null,
         "numberOfBags": 75,
-        "mtsSackTypeId": null,
         "moistureContent": null,
-        "isInitialBalance": true
+        "isInitialBalance": true,
+        "mtsSackTypeId": null,
+        "mtsCondition": null,
+        "dateProcured": null
       },
       {
         "id": "911bc344-7da5-43ad-8e3f-edd8744583ec",
@@ -106167,7 +106167,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 100,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -106179,7 +106178,8 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "93b10c41-4cb3-4612-a2dd-891f00d70fc6",
@@ -109200,7 +109200,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 200,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -109211,7 +109210,8 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "9dcbc6ad-023b-47b8-8cd5-f579a017c0c7",
@@ -109399,6 +109399,7 @@
         "farmerGender": "Female",
         "mtsCondition": "BN",
         "numberOfBags": 17,
+        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -109409,8 +109410,7 @@
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
-        "groupSerialNo": null
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
       },
       {
         "id": "9e7934f3-3626-4b04-aa9e-af7f90435f21",
@@ -110737,7 +110737,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 190,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -110748,7 +110747,8 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "a1e930fb-cb27-4a84-8777-3331f5a7044d",
@@ -111947,7 +111947,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 3,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -111957,8 +111956,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "a58d9c79-5a57-4207-9056-ba92204aeddc",
@@ -112344,7 +112344,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 100,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -112356,7 +112355,8 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "a790b16c-5db9-4b42-83ca-133c22a9f1c6",
@@ -113325,7 +113325,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 24,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -113335,8 +113334,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "aa649528-78a9-464d-8042-0a029469747a",
@@ -113408,7 +113408,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -113418,8 +113417,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "aaa2a2f4-0b93-4644-8021-2c1cae13b521",
@@ -114165,7 +114165,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 100,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -114177,7 +114176,8 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "ad7961e0-6265-417a-8948-81951405e2ac",
@@ -114338,7 +114338,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -114348,8 +114347,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "ada12752-e503-4ff7-becf-988e62d8ea6c",
@@ -114952,7 +114952,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 2,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -114962,8 +114961,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "aeec2629-8b5c-4106-9705-04dafac79861",
@@ -116510,13 +116510,13 @@
         "cerealCategory": "Palay",
         "recordedByName": "Ron Vincent Jocson",
         "customerAddress": "BALANGIBANG, POLANGUI",
-        "fromSheetImport": true,
         "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "fromSheetImport": true
       },
       {
         "id": "b3ae560a-bc7f-43a4-92c5-c6d3781722ba",
@@ -116550,7 +116550,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 90,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -116562,7 +116561,8 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "b3d6d673-8f7d-4992-9f46-345c2b87ab3a",
@@ -117247,7 +117247,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 2,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -117257,8 +117256,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "b615ce52-3e99-4f98-acd1-55f1af42595e",
@@ -118084,7 +118084,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 50,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -118095,7 +118094,8 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": true,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "b8f27ca6-6be3-4049-97da-4b71ab3c4728",
@@ -118349,6 +118349,7 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 343,
+        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -118359,8 +118360,7 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "groupSerialNo": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "ba212f57-9843-4f88-acf6-1710587b9d75",
@@ -119178,6 +119178,7 @@
         "farmerGender": "Female",
         "mtsCondition": "BN",
         "numberOfBags": 125,
+        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -119188,8 +119189,7 @@
         "moistureContent": 13.7,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
-        "groupSerialNo": null
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
       },
       {
         "id": "bd537e5a-16a2-4908-9bc1-a85fe34ae8c8",
@@ -119223,7 +119223,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 25,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -119233,8 +119232,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "bd83d278-86ba-42c1-9e2f-94f66abd01d9",
@@ -119268,7 +119268,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 19,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -119278,8 +119277,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "bdd888fe-a906-4510-95fa-8c6be220952b",
@@ -119782,7 +119782,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -119792,8 +119791,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "bfb7e09d-5196-4ec6-afc6-ebe300756bc2",
@@ -120440,7 +120440,6 @@
         "farmerGender": "Male",
         "mtsCondition": "BN",
         "numberOfBags": 22,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -120452,7 +120451,8 @@
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "groupSerialNo": null
       },
       {
         "id": "c2acea88-eb9b-41c3-9c39-ec54e4e48d5e",
@@ -120591,7 +120591,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 50,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -120602,7 +120601,8 @@
         "moistureContent": 12.8,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "c412b2df-45c7-4d15-b94e-d8df16568116",
@@ -121950,8 +121950,8 @@
         "initialAgeValue": 1,
         "moistureContent": 13,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "syncFailureLogged": false
       },
       {
         "id": "c8f6eb06-92e1-45ba-85d6-e643fd0d14ad",
@@ -123492,7 +123492,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 150,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -123503,7 +123502,8 @@
         "moistureContent": 12.5,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "cef96c7f-db19-4a53-9526-bb6c71614aba",
@@ -125767,6 +125767,7 @@
         "moNumber": "MO No. ALB - 2026-I-154",
         "netKilos": 13565.3,
         "orNumber": null,
+        "poNumber": null,
         "serialNo": "26458848",
         "condition": "GQ",
         "createdAt": 1790405372532,
@@ -125783,6 +125784,7 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 260,
+        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -125793,9 +125795,7 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "poNumber": null,
-        "groupSerialNo": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "d8ee5f91-6445-4f4e-8362-7fc509ae6dd3",
@@ -126225,6 +126225,7 @@
         "moNumber": "MO No. ALB - 2026-I-153",
         "netKilos": 296.215,
         "orNumber": null,
+        "poNumber": null,
         "serialNo": "26458846",
         "condition": "GQ",
         "createdAt": 1790323803638,
@@ -126241,6 +126242,7 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 6,
+        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -126251,9 +126253,7 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "poNumber": null,
-        "groupSerialNo": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "da82095d-3317-4049-a4ed-51e55526a279",
@@ -127435,7 +127435,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 2,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -127447,7 +127446,8 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": true,
-        "transactionTypeId": "f3c1d0ed-46e5-44f2-88df-d5abbdfd52ba"
+        "transactionTypeId": "f3c1d0ed-46e5-44f2-88df-d5abbdfd52ba",
+        "groupSerialNo": null
       },
       {
         "id": "df05988a-0e5f-4fcd-8258-63749b6a81c7",
@@ -128038,6 +128038,7 @@
         "moNumber": "MO No. ALB - 2026-I-154",
         "netKilos": 6508.125,
         "orNumber": null,
+        "poNumber": null,
         "serialNo": "26458847",
         "condition": "GQ",
         "createdAt": 1790405336815,
@@ -128054,6 +128055,7 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 125,
+        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "Palay",
@@ -128064,9 +128066,7 @@
         "moistureContent": 12,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711",
-        "poNumber": null,
-        "groupSerialNo": null
+        "transactionTypeId": "e42b0625-6f58-46a2-a8d5-50614a320711"
       },
       {
         "id": "e12aa6d7-f584-465c-887a-b3eb83bd761b",
@@ -128499,12 +128499,12 @@
         "grossKilos": 132340.96,
         "warehouseId": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
         "customerName": "Beginning Balance",
-        "dateProcured": null,
-        "mtsCondition": null,
         "numberOfBags": 2830,
-        "mtsSackTypeId": null,
         "moistureContent": null,
-        "isInitialBalance": true
+        "isInitialBalance": true,
+        "mtsSackTypeId": null,
+        "mtsCondition": null,
+        "dateProcured": null
       },
       {
         "id": "e20527b4-4c4c-4a3e-8cba-34a8ae06a56e",
@@ -128690,13 +128690,13 @@
         "cerealCategory": "Palay",
         "recordedByName": "Florante Reason",
         "customerAddress": "ZONE 1, LIBON",
-        "fromSheetImport": true,
         "hasBeenBackedUp": true,
         "initialAgeValue": 1,
         "moistureContent": 14,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e"
+        "transactionTypeId": "b99c5dd4-b8cb-43f1-b87f-f8049378ba0e",
+        "fromSheetImport": true
       },
       {
         "id": "e32ac40d-43ed-4993-9ba6-4b82636e1081",
@@ -128846,7 +128846,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 180,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -128857,7 +128856,8 @@
         "moistureContent": 13,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "e3d2a2d7-6a20-4e3e-95b2-4a51877a4aa9",
@@ -129508,7 +129508,6 @@
         "farmerGender": null,
         "mtsCondition": "BN",
         "numberOfBags": 150,
-        "groupSerialNo": null,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
         "autoComputeNet": false,
         "cerealCategory": "Rice",
@@ -129520,7 +129519,8 @@
         "moistureContent": 12.5,
         "needsCompletion": false,
         "syncFailureLogged": false,
-        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312"
+        "transactionTypeId": "2fa29d83-6566-49c0-a98c-e5e551151312",
+        "groupSerialNo": null
       },
       {
         "id": "e6343e6d-5135-44b0-99e3-b8ba6254865d",
@@ -130455,7 +130455,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -130465,8 +130464,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "ea82f7d9-fa20-438d-8703-eb6594b6d3af",
@@ -130857,7 +130857,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 21,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -130867,8 +130866,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "ec31341b-c25d-4f50-82a3-e3ac88683586",
@@ -134544,7 +134544,6 @@
         "farmerGender": null,
         "mtsCondition": "SH",
         "numberOfBags": 1,
-        "groupSerialNo": null,
         "mtsSackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
         "autoComputeNet": false,
         "cerealCategory": "By Products",
@@ -134554,8 +134553,9 @@
         "initialAgeValue": 1,
         "moistureContent": null,
         "needsCompletion": false,
-        "syncFailureLogged": false,
-        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285"
+        "transactionTypeId": "85296711-1d50-479c-9374-a211fc451285",
+        "groupSerialNo": null,
+        "syncFailureLogged": false
       },
       {
         "id": "fb216295-57f5-48d9-9b20-36c05e3f2706",
@@ -135241,7 +135241,6 @@
         "mtsCondition": "BN",
         "numberOfBags": 250,
         "mtsSackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
-        "authorityAckAt": 1791280190090,
         "autoComputeNet": true,
         "cerealCategory": "Rice",
         "recordedByName": "Vevencio Balaoro",
@@ -135250,9 +135249,10 @@
         "initialAgeValue": 4,
         "moistureContent": 13.5,
         "needsCompletion": false,
-        "authorityAckNote": "Verified",
         "syncFailureLogged": false,
-        "transactionTypeId": "d38a6ebc-0f45-417a-96ae-accfd2edc463"
+        "transactionTypeId": "d38a6ebc-0f45-417a-96ae-accfd2edc463",
+        "authorityAckAt": 1791280190090,
+        "authorityAckNote": "Verified"
       },
       {
         "id": "fd11cee4-b5e8-4916-9cec-0131cbcbbc98",
@@ -141466,36 +141466,6 @@
         "transactionTypeName": "TRANSFER",
         "totalAllocationKilos": 723.27,
         "regionalAuthorityNumber": "AO-2026-07-123"
-      },
-      {
-        "date": "2026-10-08",
-        "type": "AI",
-        "note1": "",
-        "note2": "",
-        "owner": "bsm-app-service@system.local",
-        "authId": "14c0b592-8aaf-4507-8f3f-b861688e7180",
-        "status": "Pending",
-        "realmId": "bsm-app-service@system.local",
-        "remarks": null,
-        "ageGroup": "0-6",
-        "aiNumber": "26320325",
-        "orNumber": "LOT 4 BATCH 2 OF 25",
-        "sourceId": "bb10d41d-0a5b-49bb-8895-bb206856ac10",
-        "condition": null,
-        "siaNumber": null,
-        "varietyId": "ea3e63c5-a71e-4046-b659-10ad0900b689",
-        "sackTypeId": null,
-        "firstSeenAt": "2026-10-08T08:10:09.303Z",
-        "customerName": "Buama Ricemill",
-        "sourceWarehouse": "TAB GID A",
-        "totalIssuedBags": 0,
-        "totalIssuedKilos": 0,
-        "assignedWarehouse": "98018561-5e00-40ad-b387-d72dba3d3fa4",
-        "manuallyCompleted": false,
-        "totalAllocationBags": null,
-        "transactionTypeName": "MILLING",
-        "totalAllocationKilos": 30000,
-        "regionalAuthorityNumber": ""
       },
       {
         "date": "2026-07-15",
@@ -160503,7 +160473,7 @@
       {
         "date": "2026-10-05",
         "type": "AI",
-        "note1": "305 / 4000",
+        "note1": "",
         "note2": "",
         "owner": "bsm-app-service@system.local",
         "authId": "6d108c2e-ac08-43a4-9f8a-33c86e3ba7b7",
@@ -160524,9 +160494,9 @@
         "totalIssuedKilos": 0,
         "assignedWarehouse": "7f150703-cc16-48fc-9da4-d71aef950c3c",
         "manuallyCompleted": false,
-        "totalAllocationBags": 105,
+        "totalAllocationBags": null,
         "transactionTypeName": "SALES",
-        "totalAllocationKilos": 5250,
+        "totalAllocationKilos": null,
         "regionalAuthorityNumber": "ORM-2026-I-1449 / FTI-SO-2026-00321"
       },
       {
@@ -169474,7 +169444,7 @@
       {
         "date": "2026-10-05",
         "type": "AI",
-        "note1": "200 / 4000",
+        "note1": "",
         "note2": "",
         "owner": "bsm-app-service@system.local",
         "authId": "a0ad1ebb-4956-4712-a556-ebae1d255a4e",
@@ -169496,9 +169466,9 @@
         "totalIssuedKilos": 0,
         "assignedWarehouse": "5d4e3209-c0f4-48a9-a014-711aaa00d196",
         "manuallyCompleted": false,
-        "totalAllocationBags": 200,
+        "totalAllocationBags": null,
         "transactionTypeName": "SALES",
-        "totalAllocationKilos": 10000,
+        "totalAllocationKilos": null,
         "regionalAuthorityNumber": "ORM-2026-I-1449 / FTI-SO-2026-00321"
       },
       {
@@ -170203,16 +170173,10 @@
         "owner": "bsm-app-service@system.local",
         "authId": "a4cda2e0-97f7-4335-8792-1d4e4b50d26f",
         "realmId": "bsm-app-service@system.local",
-        "remarks": "LOT 4 BATCH 2 OF 25",
+        "remarks": "LOT 7 BATCH 5 OF 8",
         "aiNumber": null,
         "sourceId": "bb10d41d-0a5b-49bb-8895-bb206856ac10",
         "sackLines": [
-          {
-            "condition": "BN",
-            "sackTypeId": "e51da66a-dc4b-4ccd-8da0-f408d2aaf8d0",
-            "totalIssuedBags": 0,
-            "totalAllocationBags": 390
-          },
           {
             "condition": "SH",
             "sackTypeId": "65f29ea9-bf8a-4bda-9d71-b630d2a9698c",
@@ -170222,8 +170186,8 @@
         ],
         "siaNumber": "0112405",
         "firstSeenAt": "2026-10-08T00:51:46.839Z",
-        "customerName": "Buama Ricemill",
-        "assignedWarehouse": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
+        "customerName": "MAGAYON RICEMILL",
+        "assignedWarehouse": "62ba6c27-19c6-4e3e-8674-a0a9a36aae1b",
         "manuallyCompleted": false,
         "transactionTypeName": "MILLING"
       },
@@ -182667,34 +182631,34 @@
         "regionalAuthorityNumber": ""
       },
       {
-        "date": "2026-10-08",
+        "date": null,
         "type": "AI",
-        "note1": "",
+        "note1": "2000 / 4012.57",
         "note2": "",
         "owner": "bsm-app-service@system.local",
         "authId": "f2e6e7e7-ff51-4324-829a-a4eb187b2c8d",
         "status": "Pending",
         "realmId": "bsm-app-service@system.local",
         "remarks": null,
-        "ageGroup": "0-3",
+        "ageGroup": "0-6",
         "aiNumber": "26320324",
-        "orNumber": null,
+        "orNumber": "LOT 12 BATCH 2 OF 4",
         "sourceId": "bb10d41d-0a5b-49bb-8895-bb206856ac10",
         "condition": null,
         "siaNumber": null,
-        "varietyId": "d7341f7b-798d-4708-a63a-85210913dd59",
+        "varietyId": "bf99e409-9f70-448d-861c-d65b5bc8bd64",
         "sackTypeId": null,
         "firstSeenAt": "2026-10-08T00:51:37.791Z",
-        "customerName": "FTI P20 BY MARIELLE MIÑAS",
-        "sourceWarehouse": "LEG GID",
+        "customerName": "Dens Marketing Corporation",
+        "sourceWarehouse": "KINALE",
         "totalIssuedBags": 0,
         "totalIssuedKilos": 0,
-        "assignedWarehouse": "7f150703-cc16-48fc-9da4-d71aef950c3c",
+        "assignedWarehouse": "694c1145-deed-49de-b9f9-c0ebbcf1a038",
         "manuallyCompleted": false,
         "totalAllocationBags": null,
-        "transactionTypeName": "SALES",
-        "totalAllocationKilos": null,
-        "regionalAuthorityNumber": "ORM-2026-I-1449 / FTI-SO-2026-00321"
+        "transactionTypeName": "MILLING",
+        "totalAllocationKilos": 50000,
+        "regionalAuthorityNumber": ""
       },
       {
         "date": "2026-07-06",
@@ -184926,8 +184890,8 @@
         "provinceId": "62952171-8bd6-4007-8494-cd09cfc711eb",
         "warehouseId": "7f150703-cc16-48fc-9da4-d71aef950c3c",
         "facilityType": "Warehouse",
-        "classifierName": "Peter James M. Murillo",
-        "reportingCutoffDate": "2026-09-01"
+        "reportingCutoffDate": "2026-09-01",
+        "classifierName": "Peter James M. Murillo"
       },
       {
         "code": "050577",
@@ -184938,8 +184902,8 @@
         "provinceId": "62952171-8bd6-4007-8494-cd09cfc711eb",
         "warehouseId": "8cc91400-2755-4175-8993-f62e840b0fab",
         "facilityType": "Mechanical Dryer",
-        "classifierName": "Aisa Grace P. Frial",
-        "reportingCutoffDate": "2026-08-31"
+        "reportingCutoffDate": "2026-08-31",
+        "classifierName": "Aisa Grace P. Frial"
       },
       {
         "code": "050501",
@@ -184998,8 +184962,8 @@
         "provinceId": "11880ded-47bc-49eb-aee4-041452b9ac0e",
         "warehouseId": "ef11c6e9-d274-4f58-b6ed-de119d172b24",
         "facilityType": "Warehouse",
-        "classifierName": "Hazel P. Tejada",
-        "reportingCutoffDate": "2026-09-01"
+        "reportingCutoffDate": "2026-09-01",
+        "classifierName": "Hazel P. Tejada"
       },
       {
         "code": "050520",
@@ -185268,7 +185232,6 @@
       {
         "code": "FRSB50",
         "owner": "bsm-app-service@system.local",
-        "active": false,
         "realmId": "bsm-app-service@system.local",
         "weights": {
           "BN": null,
@@ -185276,7 +185239,8 @@
           "US": null
         },
         "category": "Palay",
-        "sackTypeId": "2753704b-f6cd-47f2-bfd3-558b48acb525"
+        "sackTypeId": "2753704b-f6cd-47f2-bfd3-558b48acb525",
+        "active": false
       },
       {
         "code": "PPRE50",
@@ -185348,7 +185312,6 @@
         },
         "owner": "bsm-app-service@system.local",
         "realmId": "bsm-app-service@system.local",
-        "cashOnBank": 74925285.98,
         "notedByName": "Al Martin A. Menes",
         "auditedByName": "Bernadette Anonuevo",
         "dataStartDate": "2026-08-31",
@@ -185366,17 +185329,18 @@
         "lastAutoBackupAt": "2026-10-08T06:19:38.433Z",
         "auditedByPosition": "State Auditor V",
         "visitorAccessCode": "ca46f2b21e66a67bbec3fe3be0babfbb1f3190288f417b61fdfa16cb561a9340",
-        "cashOnBankUpdatedAt": "2026-10-08T00:36:52.945Z",
-        "cashOnBankUpdatedBy": "Josephine M. Etcoy",
         "disbursementNotedBy": {
           "name": "Al Martin A. Menes",
           "position": "Acting Branch Manager"
         },
-        "purityDisplayFormat": "letter",
         "disbursementVerifiedBy": {
           "name": "Geraldine B. Ballete",
           "position": "Accountant III"
         },
+        "purityDisplayFormat": "letter",
+        "cashOnBank": 74925285.98,
+        "cashOnBankUpdatedAt": "2026-10-08T00:36:52.945Z",
+        "cashOnBankUpdatedBy": "Josephine M. Etcoy",
         "cashOnBankHistory": [
           {
             "at": "2026-10-08T00:36:52.945Z",
@@ -188453,17 +188417,17 @@
         "addressesByWarehouse": {}
       },
       {
+        "customerId": "b52446b3-bc11-4471-a6fc-0ba63b9afe92",
         "name": "Borromeo Ricemill",
-        "owner": "bsm-app-service@system.local",
+        "normalizedName": "borromeo ricemill",
         "rsbsa": null,
         "gender": null,
         "address": "Ligao, Albay",
-        "realmId": "bsm-app-service@system.local",
-        "customerId": "b52446b3-bc11-4471-a6fc-0ba63b9afe92",
+        "addressesByWarehouse": {},
         "isFarmerOrg": false,
-        "normalizedName": "borromeo ricemill",
         "farmerCoopMembers": null,
-        "addressesByWarehouse": {}
+        "owner": "bsm-app-service@system.local",
+        "realmId": "bsm-app-service@system.local"
       },
       {
         "name": "TABACO CITY DISTRICT JAIL C/O JO3 MARK HERO BELO",
@@ -191225,296 +191189,116 @@
         "webAppUrl": "https://script.google.com/macros/s/AKfycbwzH51-BY_0PLIzZHwk5P-jgsyJiti74zKAteU_CcS2UPLsMsRHiFNdGqa6ctovaBSB1A/exec",
         "aiSheetName": "AI",
         "moSheetName": "MO",
-        "lastSyncedAt": "2026-10-08T08:31:58.956Z",
+        "lastSyncedAt": "2026-10-08T06:21:34.445Z",
         "siaSheetName": "SIA",
         "tmoSheetName": "TMO",
         "issuesSheetName": "Issues Backup",
         "receiptsSheetName": "DATA_ENTRY",
         "sacksIssuesSheetName": "Sacks Issues Backup",
+        "sacksReceiptsSheetName": "Sacks Receipts Backup",
         "lastFullPullRowCounts": {
           "ai": 1351,
           "sia": 883
-        },
-        "sacksReceiptsSheetName": "Sacks Receipts Backup"
+        }
       }
     ],
     "pendingSheetDeletions": [],
     "preloadState": [
       {
-        "warehouseId": "3edc3b98-7ad0-4074-8f24-8da5571c6eea",
-        "type": "ESI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:48.645Z"
-      },
-      {
-        "warehouseId": "3edc3b98-7ad0-4074-8f24-8da5571c6eea",
-        "type": "ESR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:46.897Z"
-      },
-      {
-        "warehouseId": "3edc3b98-7ad0-4074-8f24-8da5571c6eea",
-        "type": "WSI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:44.007Z"
-      },
-      {
-        "warehouseId": "3edc3b98-7ad0-4074-8f24-8da5571c6eea",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:41.968Z"
-      },
-      {
-        "warehouseId": "42ee11b0-fbdf-4ae0-960e-3065d327c08c",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.919Z"
-      },
-      {
-        "warehouseId": "536e5e41-c765-4363-b9ae-add16907b683",
-        "type": "ESI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:48.648Z"
-      },
-      {
-        "warehouseId": "536e5e41-c765-4363-b9ae-add16907b683",
-        "type": "ESR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:46.909Z"
-      },
-      {
-        "warehouseId": "536e5e41-c765-4363-b9ae-add16907b683",
-        "type": "WSI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:44.012Z"
-      },
-      {
-        "warehouseId": "536e5e41-c765-4363-b9ae-add16907b683",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:41.970Z"
-      },
-      {
-        "warehouseId": "5d4e3209-c0f4-48a9-a014-711aaa00d196",
-        "type": "ESI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:48.647Z"
-      },
-      {
-        "warehouseId": "5d4e3209-c0f4-48a9-a014-711aaa00d196",
-        "type": "ESR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:46.905Z"
-      },
-      {
-        "warehouseId": "5d4e3209-c0f4-48a9-a014-711aaa00d196",
-        "type": "WSI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:44.011Z"
-      },
-      {
-        "warehouseId": "5d4e3209-c0f4-48a9-a014-711aaa00d196",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:41.969Z"
-      },
-      {
-        "warehouseId": "62ba6c27-19c6-4e3e-8674-a0a9a36aae1b",
-        "type": "ESI",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:45:00.841Z"
-      },
-      {
-        "warehouseId": "62ba6c27-19c6-4e3e-8674-a0a9a36aae1b",
-        "type": "ESR",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:44:59.888Z"
-      },
-      {
-        "warehouseId": "62ba6c27-19c6-4e3e-8674-a0a9a36aae1b",
-        "type": "WSI",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:44:58.878Z"
-      },
-      {
-        "warehouseId": "62ba6c27-19c6-4e3e-8674-a0a9a36aae1b",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:44:57.579Z"
-      },
-      {
-        "warehouseId": "694c1145-deed-49de-b9f9-c0ebbcf1a038",
-        "type": "ESI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:48.631Z"
-      },
-      {
-        "warehouseId": "694c1145-deed-49de-b9f9-c0ebbcf1a038",
-        "type": "ESR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:46.890Z"
-      },
-      {
-        "warehouseId": "694c1145-deed-49de-b9f9-c0ebbcf1a038",
-        "type": "WSI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:44.006Z"
-      },
-      {
-        "warehouseId": "694c1145-deed-49de-b9f9-c0ebbcf1a038",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:41.965Z"
-      },
-      {
-        "warehouseId": "71527a4a-f2a3-4249-aa8a-5538f1a1f150",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.923Z"
-      },
-      {
-        "warehouseId": "745595d0-612a-45df-bdfc-56f806cf893c",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.924Z"
-      },
-      {
         "warehouseId": "783daf43-68a6-4067-bdca-5243a3db2766",
         "type": "ESI",
         "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:48.647Z"
+        "lastCheckedAt": "2026-10-08T06:21:39.561Z"
       },
       {
         "warehouseId": "783daf43-68a6-4067-bdca-5243a3db2766",
         "type": "ESR",
         "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:46.900Z"
+        "lastCheckedAt": "2026-10-08T06:21:37.484Z"
       },
       {
         "warehouseId": "783daf43-68a6-4067-bdca-5243a3db2766",
         "type": "WSI",
         "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:44.010Z"
+        "lastCheckedAt": "2026-10-08T06:21:35.243Z"
       },
       {
         "warehouseId": "783daf43-68a6-4067-bdca-5243a3db2766",
         "type": "WSR",
         "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:41.968Z"
+        "lastCheckedAt": "2026-10-08T06:21:32.373Z"
       },
       {
-        "warehouseId": "7ccc4649-f0cb-4ead-9c70-329060ef24d9",
+        "warehouseId": "98018561-5e00-40ad-b387-d72dba3d3fa4",
         "type": "ESI",
         "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:48.627Z"
+        "lastCheckedAt": "2026-10-08T06:21:39.550Z"
       },
       {
-        "warehouseId": "7ccc4649-f0cb-4ead-9c70-329060ef24d9",
+        "warehouseId": "98018561-5e00-40ad-b387-d72dba3d3fa4",
         "type": "ESR",
         "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:46.884Z"
+        "lastCheckedAt": "2026-10-08T06:21:37.473Z"
       },
       {
-        "warehouseId": "7ccc4649-f0cb-4ead-9c70-329060ef24d9",
+        "warehouseId": "98018561-5e00-40ad-b387-d72dba3d3fa4",
         "type": "WSI",
         "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:44.004Z"
-      },
-      {
-        "warehouseId": "7ccc4649-f0cb-4ead-9c70-329060ef24d9",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:41.963Z"
-      },
-      {
-        "warehouseId": "7f150703-cc16-48fc-9da4-d71aef950c3c",
-        "type": "ESI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:48.635Z"
-      },
-      {
-        "warehouseId": "7f150703-cc16-48fc-9da4-d71aef950c3c",
-        "type": "ESR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:46.893Z"
-      },
-      {
-        "warehouseId": "7f150703-cc16-48fc-9da4-d71aef950c3c",
-        "type": "WSI",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:44.006Z"
-      },
-      {
-        "warehouseId": "7f150703-cc16-48fc-9da4-d71aef950c3c",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-10-08T08:31:41.966Z"
-      },
-      {
-        "warehouseId": "8cc91400-2755-4175-8993-f62e840b0fab",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.927Z"
+        "lastCheckedAt": "2026-10-08T06:21:35.233Z"
       },
       {
         "warehouseId": "98018561-5e00-40ad-b387-d72dba3d3fa4",
         "type": "WSR",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.928Z"
+        "lastCheckedAt": "2026-10-08T06:21:32.363Z"
       },
       {
-        "warehouseId": "cce9f6ba-af14-4688-af85-ce9dc0792138",
+        "warehouseId": "e6183e9c-a4d7-42f5-8128-952727cd53cd",
         "type": "ESI",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:45:00.842Z"
+        "lastCheckedAt": "2026-10-08T06:21:39.556Z"
       },
       {
-        "warehouseId": "cce9f6ba-af14-4688-af85-ce9dc0792138",
+        "warehouseId": "e6183e9c-a4d7-42f5-8128-952727cd53cd",
         "type": "ESR",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:44:59.888Z"
+        "lastCheckedAt": "2026-10-08T06:21:37.479Z"
       },
       {
-        "warehouseId": "cce9f6ba-af14-4688-af85-ce9dc0792138",
+        "warehouseId": "e6183e9c-a4d7-42f5-8128-952727cd53cd",
         "type": "WSI",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:44:58.884Z"
-      },
-      {
-        "warehouseId": "cce9f6ba-af14-4688-af85-ce9dc0792138",
-        "type": "WSR",
-        "complete": true,
-        "lastCheckedAt": "2026-09-30T05:44:57.580Z"
+        "lastCheckedAt": "2026-10-08T06:21:35.238Z"
       },
       {
         "warehouseId": "e6183e9c-a4d7-42f5-8128-952727cd53cd",
         "type": "WSR",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.930Z"
+        "lastCheckedAt": "2026-10-08T06:21:32.366Z"
       },
       {
-        "warehouseId": "ef11c6e9-d274-4f58-b6ed-de119d172b24",
-        "type": "WSR",
+        "warehouseId": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
+        "type": "ESI",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.930Z"
+        "lastCheckedAt": "2026-10-08T06:21:39.540Z"
       },
       {
-        "warehouseId": "f030efcb-c9a9-400f-b7eb-790daf94be26",
-        "type": "WSR",
+        "warehouseId": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
+        "type": "ESR",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.931Z"
+        "lastCheckedAt": "2026-10-08T06:21:37.469Z"
       },
       {
-        "warehouseId": "fa8fed0c-abc2-4db5-a4ee-932dfb3da7c8",
-        "type": "WSR",
+        "warehouseId": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
+        "type": "WSI",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.932Z"
+        "lastCheckedAt": "2026-10-08T06:21:35.227Z"
       },
       {
         "warehouseId": "fe8bd7c9-4687-4118-8870-0b45ce3a0f9d",
         "type": "WSR",
         "complete": true,
-        "lastCheckedAt": "2026-09-30T05:42:27.932Z"
+        "lastCheckedAt": "2026-10-08T06:21:32.359Z"
       }
     ],
     "millingOrders": [
@@ -194255,22 +194039,6 @@
         "manuallyCompleted": false
       },
       {
-        "orderId": "MO::MO No. ALB - 2026-J-172",
-        "type": "MO",
-        "number": "MO No. ALB - 2026-J-172",
-        "ricemillName": "BUAMA RM",
-        "recoveryPercent": 64.92,
-        "dateOfMilling": "2026-10-09",
-        "batchCurrent": 2,
-        "batchTotal": 25,
-        "aiNumber": "26320325",
-        "siaNumber": "0112405",
-        "receivingWarehouse": "ABACORP B",
-        "sheetStatus": null,
-        "status": "Active",
-        "manuallyCompleted": false
-      },
-      {
         "orderId": "TMO::TMO No. ALB - 2026-A-001",
         "type": "TMO",
         "number": "TMO No. ALB - 2026-A-001",
@@ -195427,12 +195195,12 @@
       {
         "owner": "bsm-app-service@system.local",
         "realmId": "bsm-app-service@system.local",
-        "completedAt": null,
-        "completedBy": null,
         "totalNetKgs": 223600,
-        "manuallyCompleted": false,
         "regionalAuthorityNumber": "AO-2026-06-45",
-        "millingInputCapacityBags": 100
+        "millingInputCapacityBags": 100,
+        "manuallyCompleted": false,
+        "completedAt": null,
+        "completedBy": null
       },
       {
         "owner": "bsm-app-service@system.local",
@@ -196173,6 +195941,175 @@
         "timestamp": "2026-10-07T11:24:30.120Z",
         "resolvedAt": "2026-10-07T11:29:11.262Z",
         "deviceLabel": "Chrome on Windows"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458869",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458869 (2026-10-05, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:42.675Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458870",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458870 (2026-10-05, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:42.772Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458871",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458871 (2026-10-05, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:42.872Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458872",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458872 (2026-10-06, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:42.826Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458873",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458873 (2026-10-06, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:42.799Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458874",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458874 (2026-10-06, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:42.907Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458875",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458875 (2026-10-06, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:42.959Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458876",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458876 (2026-10-07, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:43.017Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458877",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458877 (2026-10-07, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:43.097Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458878",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458878 (2026-10-07, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:43.054Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458879",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458879 (2026-10-07, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:43.133Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458880",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458880 (2026-10-07, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:43.157Z"
+      },
+      {
+        "id": "skip-live-sheet-row:WSI:98018561-5e00-40ad-b387-d72dba3d3fa4:26458881",
+        "owner": "bsm-app-service@system.local",
+        "refId": null,
+        "stack": null,
+        "context": "Sheet import skipped",
+        "message": "WSI 26458881 (2026-10-07, ALB-TABACO GID A) is on the Sheet but the app has no record of it, so it was NOT imported - the app is the source of truth after 2026-08-31. If it is the old row of a serial that was changed, delete it on the Sheet; otherwise find out why the app lacks it.",
+        "realmId": "bsm-app-service@system.local",
+        "resolved": false,
+        "userName": null,
+        "userRole": null,
+        "timestamp": "2026-10-08T06:19:43.183Z"
       }
     ],
     "buyingPrices": [
@@ -196505,7 +196442,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-21",
         "isSynced": true,
         "netKilos": 5407.5,
         "unitCost": 28,
@@ -196532,7 +196468,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 13.9,
         "wsrTransactionId": "1b456b9d-3a9d-4f22-b5f4-695ac7cfbd99",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-21"
       },
       {
         "enw": 7285.65,
@@ -196632,7 +196569,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-21",
         "isSynced": true,
         "netKilos": 5557.5,
         "unitCost": 28,
@@ -196659,7 +196595,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 14,
         "wsrTransactionId": "a504dae0-edf1-4812-92f8-e2a6c93f42a4",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-21"
       },
       {
         "enw": 4817.085,
@@ -198445,7 +198382,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-16",
         "isSynced": true,
         "netKilos": 2331.92,
         "unitCost": 27,
@@ -198472,7 +198408,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 21,
         "wsrTransactionId": "ce36edd3-ce1e-4ea8-a4e8-6b159e7448b2",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-16"
       },
       {
         "enw": 8103.75,
@@ -198990,47 +198927,47 @@
         "syncFailureLogged": false
       },
       {
+        "enw": 1356.53,
+        "date": "2026-10-02",
         "prId": "34ce0ab6-8e43-4116-9fcf-cf94fa964889",
         "prNo": "5796225-1",
-        "sdoUid": "c657605f-7d49-4f5a-8166-53450a5db850",
-        "wsrTransactionId": "363e164c-482e-4d4b-99a3-57841ceb9f00",
-        "warehouseId": "536e5e41-c765-4363-b9ae-add16907b683",
-        "status": "Active",
-        "date": "2026-10-02",
-        "paymentMethod": "Cash",
-        "checkNumber": null,
-        "wsrDate": "2026-10-02",
-        "payeeName": "SONIA DEL MUNDO",
-        "payeeAddress": "BAGONG ABRE, LEGAZPI CITY",
-        "rsbsa": "050506003000076",
-        "poNumber": null,
-        "varietyId": "066916f0-da1d-4d1a-936f-f2f5c0be303b",
-        "classification": "PD1m-A",
-        "purityLetter": "A",
-        "purityMin": 95,
-        "purityMax": 100,
-        "ddMin": 0,
         "ddMax": 3,
-        "moistureContent": 14,
-        "numberOfBags": 26,
-        "grossKilos": 1359,
+        "ddMin": 0,
+        "owner": "bsm-app-service@system.local",
+        "rsbsa": "050506003000076",
+        "sdoUid": "c657605f-7d49-4f5a-8166-53450a5db850",
+        "status": "Active",
+        "realmId": "bsm-app-service@system.local",
+        "wsrDate": "2026-10-02",
+        "isSynced": true,
         "netKilos": 1356.53,
-        "sackKilos": 2.4700000000000273,
-        "mtsCondition": "BN",
-        "sackTypeCode": "PPRE50",
-        "enwFactor": 1,
-        "enw": 1356.53,
+        "poNumber": null,
         "unitCost": 28,
         "basicCost": 37982.84,
-        "pricerRate": null,
-        "pricerAmount": null,
-        "totalAmount": 37982.84,
         "createdAt": 1791350414193,
+        "enwFactor": 1,
+        "payeeName": "SONIA DEL MUNDO",
+        "purityMax": 100,
+        "purityMin": 95,
+        "sackKilos": 2.4700000000000273,
+        "varietyId": "066916f0-da1d-4d1a-936f-f2f5c0be303b",
+        "grossKilos": 1359,
+        "pricerRate": null,
+        "checkNumber": null,
+        "totalAmount": 37982.84,
+        "warehouseId": "536e5e41-c765-4363-b9ae-add16907b683",
         "createdByUid": "c657605f-7d49-4f5a-8166-53450a5db850",
-        "isSynced": true,
+        "mtsCondition": "BN",
+        "numberOfBags": 26,
+        "payeeAddress": "BAGONG ABRE, LEGAZPI CITY",
+        "pricerAmount": null,
+        "purityLetter": "A",
+        "sackTypeCode": "PPRE50",
+        "paymentMethod": "Cash",
+        "classification": "PD1m-A",
         "hasBeenBackedUp": true,
-        "owner": "bsm-app-service@system.local",
-        "realmId": "bsm-app-service@system.local",
+        "moistureContent": 14,
+        "wsrTransactionId": "363e164c-482e-4d4b-99a3-57841ceb9f00",
         "syncFailureLogged": false
       },
       {
@@ -199934,50 +199871,6 @@
         "syncFailureLogged": false
       },
       {
-        "prId": "51c34475-9abb-4482-9719-3dd5617a1989",
-        "prNo": "5796226-2",
-        "sdoUid": "c657605f-7d49-4f5a-8166-53450a5db850",
-        "wsrTransactionId": "87758654-0d81-4816-8bab-1d3eb5d6ace8",
-        "warehouseId": "536e5e41-c765-4363-b9ae-add16907b683",
-        "status": "Active",
-        "date": "2026-10-07",
-        "paymentMethod": "Cash",
-        "checkNumber": null,
-        "wsrDate": "2026-10-07",
-        "payeeName": "MICHAEL A. MIÑA",
-        "payeeAddress": "BAGONG ABRE, LEGAZPI CITY",
-        "rsbsa": "05-05-06-003-000136",
-        "poNumber": null,
-        "varietyId": "066916f0-da1d-4d1a-936f-f2f5c0be303b",
-        "classification": "PD1m-A",
-        "purityLetter": "A",
-        "purityMin": 95,
-        "purityMax": 100,
-        "ddMin": 0,
-        "ddMax": 3,
-        "moistureContent": 14,
-        "numberOfBags": 8,
-        "grossKilos": 413,
-        "netKilos": 412.24,
-        "sackKilos": 0.7599999999999909,
-        "mtsCondition": "BN",
-        "sackTypeCode": "PPRE50",
-        "enwFactor": 1,
-        "enw": 412.24,
-        "unitCost": 28,
-        "basicCost": 11542.72,
-        "pricerRate": null,
-        "pricerAmount": null,
-        "totalAmount": 11542.72,
-        "createdAt": 1791447795036,
-        "createdByUid": "c657605f-7d49-4f5a-8166-53450a5db850",
-        "isSynced": true,
-        "hasBeenBackedUp": true,
-        "owner": "bsm-app-service@system.local",
-        "realmId": "bsm-app-service@system.local",
-        "syncFailureLogged": false
-      },
-      {
         "enw": 8750.85,
         "date": "2026-10-06",
         "prId": "523cd345-31bd-41b8-9388-24eb7227993c",
@@ -200377,7 +200270,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-16",
         "isSynced": true,
         "netKilos": 10853.945,
         "unitCost": 27,
@@ -200404,7 +200296,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 14,
         "wsrTransactionId": "f928ad83-92fa-4e42-a261-f4de5cc469c8",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-16"
       },
       {
         "enw": 5510.595,
@@ -201163,7 +201056,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-21",
         "isSynced": true,
         "netKilos": 7520.74,
         "unitCost": 28,
@@ -201190,7 +201082,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 13.9,
         "wsrTransactionId": "c75c53c9-70cc-4295-b819-f944af3ca002",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-21"
       },
       {
         "enw": 759.572,
@@ -201769,7 +201662,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-21",
         "isSynced": true,
         "netKilos": 10159.375,
         "unitCost": 28,
@@ -201796,7 +201688,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 13.9,
         "wsrTransactionId": "789a2690-f810-41e7-98a2-02352f70b3d5",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-21"
       },
       {
         "enw": 10229.62,
@@ -202198,7 +202091,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-21",
         "isSynced": true,
         "netKilos": 7496.13,
         "unitCost": 28,
@@ -202225,7 +202117,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 13.9,
         "wsrTransactionId": "fb0a9b65-f33e-4f6f-8ae0-a1f38efa901d",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-21"
       },
       {
         "enw": 9523.565,
@@ -203141,7 +203034,6 @@
         "sdoUid": "d650dcc7-e96c-4367-9d78-b1484384f8f1",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-21",
         "isSynced": true,
         "netKilos": 1078.1,
         "unitCost": 28,
@@ -203168,7 +203060,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 13.9,
         "wsrTransactionId": "70f0aa52-c463-4d23-afc2-8849d4a0173f",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-21"
       },
       {
         "enw": 4154.534,
@@ -203736,7 +203629,6 @@
         "sdoUid": "d650dcc7-e96c-4367-9d78-b1484384f8f1",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-14",
         "isSynced": true,
         "netKilos": 5327.12,
         "unitCost": 27,
@@ -203763,7 +203655,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 13.8,
         "wsrTransactionId": "b8669244-3ea5-4ee7-a3a8-ce804da5fdba",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-14"
       },
       {
         "enw": 1647.055,
@@ -205245,7 +205138,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-07",
         "isSynced": true,
         "netKilos": 1540.245,
         "unitCost": 27,
@@ -205272,7 +205164,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 14,
         "wsrTransactionId": "0f5f3e2b-e04b-4312-b11f-8e240a877069",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-07"
       },
       {
         "enw": 3105.965,
@@ -205286,7 +205179,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-17",
         "isSynced": true,
         "netKilos": 3105.965,
         "unitCost": 27,
@@ -205313,7 +205205,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 14,
         "wsrTransactionId": "9c1cc82b-fbf5-4a0a-8d47-6aba48f10729",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-17"
       },
       {
         "enw": 2322.41,
@@ -205897,7 +205790,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-16",
         "isSynced": true,
         "netKilos": 8562.75,
         "unitCost": 27,
@@ -205924,7 +205816,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 13.9,
         "wsrTransactionId": "6d066ca3-93e3-4daa-8aba-c2a957714230",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-16"
       },
       {
         "enw": 5909.93,
@@ -206854,7 +206747,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-16",
         "isSynced": true,
         "netKilos": 2563.206,
         "unitCost": 27,
@@ -206881,7 +206773,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 27,
         "wsrTransactionId": "ce3ea785-834d-4c8f-a6e5-cd8e1bd49c13",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-16"
       },
       {
         "enw": 4098.738,
@@ -206939,7 +206832,6 @@
         "sdoUid": "d650dcc7-e96c-4367-9d78-b1484384f8f1",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-21",
         "isSynced": true,
         "netKilos": 8188.75,
         "unitCost": 28,
@@ -206966,7 +206858,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 13.7,
         "wsrTransactionId": "1135163e-c964-44f6-8f9a-c27031aa3efa",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-21"
       },
       {
         "enw": 3337.11,
@@ -207024,7 +206917,6 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "status": "Active",
         "realmId": "bsm-app-service@system.local",
-        "wsrDate": "2026-09-17",
         "isSynced": true,
         "netKilos": 4155.35,
         "unitCost": 27,
@@ -207051,7 +206943,8 @@
         "hasBeenBackedUp": true,
         "moistureContent": 14,
         "wsrTransactionId": "ef970f64-2524-4be7-8f75-dab1a45c1f01",
-        "syncFailureLogged": false
+        "syncFailureLogged": false,
+        "wsrDate": "2026-09-17"
       },
       {
         "enw": 2314.1318,
@@ -207316,35 +207209,27 @@
         "syncFailureLogged": false
       }
     ],
-    "sdoSerialCounterCache": [
-      {
-        "uid": "c657605f-7d49-4f5a-8166-53450a5db850",
-        "prefix": "5796226-",
-        "digits": 1,
-        "number": 2,
-        "updatedAt": "2026-10-08T08:23:15.040Z"
-      }
-    ],
+    "sdoSerialCounterCache": [],
     "cashLedger": [],
     "cashDenominationCounts": [
       {
         "owner": "bsm-app-service@system.local",
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "realmId": "bsm-app-service@system.local",
-        "updatedAt": "2026-10-08T07:59:38.466Z",
-        "countedTotal": 2494729,
+        "updatedAt": "2026-10-07T11:52:18.599Z",
+        "countedTotal": 130306,
         "forEncashment": "",
         "countsV2": {
           "d1": {
-            "pcs": 9,
+            "pcs": 11,
             "bundles": 1
           },
           "d5": {
-            "pcs": 74,
+            "pcs": 67,
             "bundles": ""
           },
           "d10": {
-            "pcs": 50,
+            "pcs": 61,
             "bundles": ""
           },
           "d20": {
@@ -207352,7 +207237,7 @@
             "bundles": ""
           },
           "d50": {
-            "pcs": 69,
+            "pcs": 71,
             "bundles": ""
           },
           "d0_1": {
@@ -207360,7 +207245,7 @@
             "bundles": ""
           },
           "d100": {
-            "pcs": 18,
+            "pcs": 27,
             "bundles": 1
           },
           "d200": {
@@ -207368,8 +207253,8 @@
             "bundles": ""
           },
           "d500": {
-            "pcs": 1,
-            "bundles": 20
+            "pcs": "",
+            "bundles": 1
           },
           "d0_01": {
             "pcs": "",
@@ -207384,8 +207269,8 @@
             "bundles": ""
           },
           "d1000": {
-            "pcs": 78,
-            "bundles": 14
+            "pcs": 63,
+            "bundles": 0
           }
         }
       }
@@ -209149,9 +209034,9 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "realmId": "bsm-app-service@system.local",
         "remarks": null,
+        "editedAt": 1791424742949,
         "createdAt": 1791286303013,
         "entryKind": "replenishment",
-        "editedAt": 1791424742949,
         "editedByUid": "68de9b93-24f5-4b32-a241-eedb7454be8b"
       },
       {
@@ -209184,14 +209069,14 @@
       },
       {
         "id": "7c280c0e-9b6e-42ff-b271-5f06a045aa55",
-        "sdoUid": "c657605f-7d49-4f5a-8166-53450a5db850",
-        "type": "replenish",
-        "amount": 250000,
-        "refNo": "Opening balance",
         "date": "2026-09-30",
-        "createdAt": 1790746826790,
+        "type": "replenish",
         "owner": "bsm-app-service@system.local",
-        "realmId": "bsm-app-service@system.local"
+        "refNo": "Opening balance",
+        "amount": 250000,
+        "sdoUid": "c657605f-7d49-4f5a-8166-53450a5db850",
+        "realmId": "bsm-app-service@system.local",
+        "createdAt": 1790746826790
       },
       {
         "id": "86c083ac-00de-4498-a0e5-f624fc8d228e",
@@ -209276,11 +209161,11 @@
         "refNo": "Opening balance",
         "amount": 1500000,
         "sdoUid": "d650dcc7-e96c-4367-9d78-b1484384f8f1",
-        "voided": true,
         "realmId": "bsm-app-service@system.local",
-        "voidedAt": 1790210805095,
         "createdAt": 1790057083241,
+        "voided": true,
         "voidReason": "Ok",
+        "voidedAt": 1790210805095,
         "voidedByUid": "d650dcc7-e96c-4367-9d78-b1484384f8f1"
       },
       {
@@ -209294,9 +209179,9 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "realmId": "bsm-app-service@system.local",
         "remarks": null,
+        "editedAt": 1791424756989,
         "createdAt": 1791198693706,
         "entryKind": "replenishment",
-        "editedAt": 1791424756989,
         "editedByUid": "68de9b93-24f5-4b32-a241-eedb7454be8b"
       },
       {
@@ -209500,9 +209385,9 @@
         "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
         "realmId": "bsm-app-service@system.local",
         "remarks": null,
+        "editedAt": 1791424726898,
         "createdAt": 1791373870442,
         "entryKind": "replenishment",
-        "editedAt": 1791424726898,
         "editedByUid": "68de9b93-24f5-4b32-a241-eedb7454be8b"
       },
       {
@@ -209540,36 +209425,7 @@
         "summarySheetName": "SUMMARY"
       }
     ],
-    "sdoReportCutoffs": [
-      {
-        "owner": "bsm-app-service@system.local",
-        "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
-        "realmId": "bsm-app-service@system.local",
-        "cutoffId": "3e568929-0639-46f7-b2df-ddfb1d79d82c",
-        "createdAt": "2026-09-28T10:26:25.235Z",
-        "cutoffDate": "2026-09-25",
-        "endingBalance": 1087726.55,
-        "reportedPrIds": [
-          "0cce4d19-20f2-46e6-ba13-6fe18324bb92",
-          "49ea4731-47c7-4e73-8fdd-ffc3baa9af0d",
-          "5256bb48-57c1-4738-9ee1-cb206477df0c"
-        ]
-      },
-      {
-        "owner": "bsm-app-service@system.local",
-        "sdoUid": "68de9b93-24f5-4b32-a241-eedb7454be8b",
-        "realmId": "bsm-app-service@system.local",
-        "cutoffId": "9d8b68ff-8c1b-4d5e-95c7-f195ab6a44e1",
-        "createdAt": "2026-09-29T00:44:41.040Z",
-        "cutoffDate": "2026-09-25",
-        "endingBalance": 1087726.55,
-        "reportedPrIds": [
-          "0cce4d19-20f2-46e6-ba13-6fe18324bb92",
-          "49ea4731-47c7-4e73-8fdd-ffc3baa9af0d",
-          "5256bb48-57c1-4738-9ee1-cb206477df0c"
-        ]
-      }
-    ],
+    "sdoReportCutoffs": [],
     "$members_mutations": [],
     "$roles_mutations": [],
     "$realms_mutations": [],
@@ -209603,7 +209459,96 @@
     "$userAliases_mutations": [],
     "$errorLogs_mutations": [],
     "$buyingPrices_mutations": [],
-    "$purchaseReceipts_mutations": [],
+    "$purchaseReceipts_mutations": [
+      {
+        "type": "modify",
+        "ts": 1791440496167,
+        "opNo": 1,
+        "keys": [],
+        "criteria": {
+          "index": null,
+          "range": {
+            "type": 1,
+            "lower": "778ed6d1-3aa2-417a-9c4d-0d0c6108d168",
+            "upper": "778ed6d1-3aa2-417a-9c4d-0d0c6108d168"
+          }
+        },
+        "changeSpec": {
+          "isSynced": true,
+          "hasBeenBackedUp": true,
+          "syncFailureLogged": false
+        },
+        "txid": "PObDJrY6sZqsUqrZwPaMYg==",
+        "userId": "bsm-app-service@system.local",
+        "rev": 64
+      },
+      {
+        "type": "modify",
+        "ts": 1791440499660,
+        "opNo": 1,
+        "keys": [],
+        "criteria": {
+          "index": null,
+          "range": {
+            "type": 1,
+            "lower": "79739b12-44cd-42bf-9626-ba83459c167b",
+            "upper": "79739b12-44cd-42bf-9626-ba83459c167b"
+          }
+        },
+        "changeSpec": {
+          "isSynced": true,
+          "hasBeenBackedUp": true,
+          "syncFailureLogged": false
+        },
+        "txid": "xR8kVajdbV47/EbfBE45Cw==",
+        "userId": "bsm-app-service@system.local",
+        "rev": 65
+      },
+      {
+        "type": "modify",
+        "ts": 1791440502707,
+        "opNo": 1,
+        "keys": [],
+        "criteria": {
+          "index": null,
+          "range": {
+            "type": 1,
+            "lower": "7a227902-b59c-4fbe-b52b-898e0fd79350",
+            "upper": "7a227902-b59c-4fbe-b52b-898e0fd79350"
+          }
+        },
+        "changeSpec": {
+          "isSynced": true,
+          "hasBeenBackedUp": true,
+          "syncFailureLogged": false
+        },
+        "txid": "8989a+hs4G75eKP+4aroEA==",
+        "userId": "bsm-app-service@system.local",
+        "rev": 66
+      },
+      {
+        "type": "modify",
+        "ts": 1791440505887,
+        "opNo": 1,
+        "keys": [],
+        "criteria": {
+          "index": null,
+          "range": {
+            "type": 1,
+            "lower": "7d70dd9f-55a2-414a-b9a7-2fb19a139e62",
+            "upper": "7d70dd9f-55a2-414a-b9a7-2fb19a139e62"
+          }
+        },
+        "changeSpec": {
+          "isSynced": true,
+          "hasBeenBackedUp": true,
+          "syncFailureLogged": false
+        },
+        "txid": "LKrLdP9fP8QYzru6LaaXZA==",
+        "userId": "bsm-app-service@system.local",
+        "rev": 67
+      }
+    ],
     "$sdoSerialCounterCache_mutations": [],
     "$cashLedger_mutations": [],
     "$cashDenominationCounts_mutations": [],
