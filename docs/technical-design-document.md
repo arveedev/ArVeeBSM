@@ -550,6 +550,21 @@ it is separate from the AI/SIA bridge so the bridge's write allowlist stays inta
 The only data writes in the whole feature are explicit saves of the optional
 `reportConfig` fields (milling prices, signatories, sheet export URL).
 
+### 2.33 A WTS issued from several piles is several ordinary WTS records
+
+**Decision**: a WTS taken from more than one pile of the same warehouse into one receiving pile is saved the way a
+multi-pile WSI is: the first pile stays the document's own record, and each extra issuing pile is its own ordinary
+two-sided WTS record (serial `<serial>-A`, `-B`, ..., shared `groupSerialNo`) with its own issued and received numbers
+into the same receiving pile (`src/utils/wtsGroup.js`, used by `WTSForm.jsx`). Save, update, void, un-void and delete
+act on the whole group in one Dexie transaction; opening an extra record opens the group's primary; Next / Previous skip
+the extra records.
+
+**Rationale**: no schema change and no reader changes: pile balances, the pile ledger, bin cards, Sheet sync and the Stock
+Desk (where each issuing pile's lots reach the receiving pile with their own receipt dates) already read ordinary WTS
+records, and Reports and the PDF already combine records sharing a `groupSerialNo`. Rejected: issued-only sibling records
+with one received total (one-sided records, and the Stock Desk would need group-aware lot carrying); one record holding a
+list of issuing piles (changes the shape every reader depends on).
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

@@ -173,6 +173,7 @@ sack documents and vice versa.
 | **WTS-specific (dual-sided)** | | |
 | `issuedPileId`, `issuedVarietyId`, `issuedCondition`, `issuedBags`, `issuedGrossKilos`, `issuedNetKilos` | | Issued side |
 | `receivedPileId`, `receivedVarietyId`, `receivedCondition`, `receivedBags`, `receivedGrossKilos`, `receivedNetKilos` | | Received side |
+| `groupSerialNo` (and serial `<serial>-A`, `-B`, ...) | string | A WTS issued from several piles of one warehouse into one receiving pile is saved as one ordinary two-sided WTS record per issuing pile, all into the same receiving pile, sharing the first record's serial as `groupSerialNo` (same mechanism as a multi-pile WSI). Pile balances, bin cards, the pile ledger and the Stock Desk read each record as a normal WTS; Reports and the PDF combine the group into one row |
 | **Sack fields (ESR/ESI)** | | |
 | `sackLines` | array of `{ sackTypeId, condition, pieces }` | One document can cover multiple sack types/conditions at once |
 | `linkedDocNo` | string | Cross-reference field |

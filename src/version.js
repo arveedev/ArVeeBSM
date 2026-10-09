@@ -8382,4 +8382,5 @@
 //   1.10-324 - Opening balance dated month-end holds its brackets through the next month (no age move until the month after); new Ending stock per variety screen (monthly NFA ending stock form).
 //   1.10-325 - Report Access: an Admin chooses per Inventory Reports screen whether a Visitor sees it or it is Admin only.
 //   1.10-326 - Named the Stock Desk; the Google Sheet button is Admin only (Excel stays for Visitors).
-export const APP_VERSION = '1.10-326'
+//   1.10-327 - WTS can be issued from several piles of the same warehouse into one receiving pile (extra piles saved as -A, -B records, like a multi-pile WSI).
+export const APP_VERSION = '1.10-327'

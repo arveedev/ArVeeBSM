@@ -15,6 +15,11 @@
 // amber/orange = receipts. The issued side is neon, the received side
 // is amber.
 //
+// A WTS can issue from several piles of the same warehouse into ONE receiving pile ("Add another issuing
+// pile"). Each extra pile is saved as its own ordinary WTS record (serial "<serial>-A", "-B", ..., same
+// groupSerialNo) with its own issued and received numbers, the same way a WSI issued from several piles is
+// saved. See utils/wtsGroup.js and docs/superpowers/specs/2026-10-09-wts-multi-pile-design.md.
+//
 // SidePanel is defined OUTSIDE this component, at module scope. Defining
 // it inside the render body would make React treat it as a brand new
 // component type on every keystroke (since the parent re-renders on every
@@ -53,6 +58,10 @@ import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useIsWideLayout, groupBoxClass, useWarehouseTypeahead } from './shared.js'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
+import {
+  nextLetter, letterOf, sideFields, sideIsComplete, lineIsEmpty, receivedOfLine, mirrorToReceived, firstLineProblem,
+  buildLineRecord, saveGroup, updateGroup, deleteGroup, voidGroup, unvoidGroup,
+} from '../../utils/wtsGroup.js'
 
 const STOCK_CONDITIONS = ['Good', 'Part Damaged', 'Damaged']
 
@@ -84,7 +93,7 @@ const ACCENTS = {
   amber: { border: 'border-brand-amber/30', activeBorder: 'border-brand-amber', activeBg: 'bg-brand-amber/10', text: 'text-brand-amber' },
 }
 
-function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sortedSackTypes, sackTypeMap, sortedVarieties }) {
+function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sortedSackTypes, sackTypeMap, sortedVarieties, lockedPileLabel = null }) {
   const { weightUnit } = useSettings() ?? {}
   // Admin-disabled sack codes (SackTypesPanel.jsx's own Disable toggle -
   // entry-forms-only) are excluded from new selection here, same as
@@ -107,6 +116,9 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={labelClass}>Pile</label>
+            {lockedPileLabel != null ? (
+              <div className={`${inputClass} opacity-60 ${!side.pileId ? '!border-brand-amber' : ''}`}>{lockedPileLabel}</div>
+            ) : (
             <select value={side.pileId} onChange={(e) => setSide((s) => ({ ...s, pileId: e.target.value }))} className={`${inputClass} ${!side.pileId ? '!border-brand-amber' : ''}`}>
               <option value="">Select pile…</option>
               {sortedPiles.map((p) => {
@@ -123,6 +135,7 @@ function SidePanel({ label, side, setSide, accent, sortedPiles, varietyMap, sort
                 )
               })}
             </select>
+            )}
           </div>
           <div>
             <label className={labelClass}>Variety</label>
@@ -221,6 +234,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     useWarehouse() ?? {}
   const { user } = useAuth()
   const isAdmin = user?.role === 'Admin'
+  const { weightUnit } = useSettings() ?? {}
 
   const [serialNo, setSerialNo] = useState('')
   const [date, setDate] = useState(todayLocalISO())
@@ -231,6 +245,10 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const [issuedSide, setIssuedSide] = useState(emptySide())
   const [receivedSide, setReceivedSide] = useState(emptySide())
   const [loadedTransaction, setLoadedTransaction] = useState(null)
+  // Extra issuing piles of this document: [{ key, txId, issued: side, received: side, receivedTouched }].
+  // originalExtraRecords is the saved sibling records exactly as loaded, so an edit can tell what changed.
+  const [extraLines, setExtraLines] = useState([])
+  const [originalExtraRecords, setOriginalExtraRecords] = useState([])
   // Same as StockFormBase.jsx - locks serial/warehouse only when
   // opened from Reports, since WTS transactions are tappable there
   // too (confirmed in Reports.jsx's stock statement query).
@@ -418,35 +436,47 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill])
 
-  const loadTransactionIntoForm = (tx) => {
+  const sideFromTx = (tx, prefix) => ({
+    pileId: tx[`${prefix}PileId`] ?? '',
+    varietyId: tx[`${prefix}VarietyId`] ?? '',
+    sackTypeId: tx[`${prefix}SackTypeId`] ?? '',
+    condition: tx[`${prefix}Condition`] ?? '',
+    bags: tx[`${prefix}Bags`] != null ? liveFormatNumber(String(tx[`${prefix}Bags`])) : '',
+    grossKilos: tx[`${prefix}GrossKilos`] != null ? liveFormatNumber(String(tx[`${prefix}GrossKilos`]), 3) : '',
+    stockCondition: tx[`${prefix}StockCondition`] ?? 'Good',
+  })
+
+  // The other records of a document issued from several piles (same groupSerialNo, same warehouse).
+  // groupSerialNo is not an indexed field, so this queries off the indexed `type`.
+  const fetchSiblings = async (tx) => {
+    if (!tx.groupSerialNo) return []
+    return db.transactions
+      .where('type').equals('WTS')
+      .and((t) => t.groupSerialNo === tx.groupSerialNo && t.id !== tx.id && t.warehouseId === tx.warehouseId && t.status === tx.status)
+      .toArray()
+  }
+
+  const loadTransactionIntoForm = (tx, siblings = []) => {
+    // a cancelled document keeps its siblings only so Delete / Un-void reach them; they have no content to show
+    setOriginalExtraRecords(siblings)
+    setExtraLines(tx.status === 'Cancelled' ? [] : siblings
+      .slice()
+      .sort((a, b) => String(a.serialNo).localeCompare(String(b.serialNo)))
+      .map((s) => ({ key: s.id, txId: s.id, issued: sideFromTx(s, 'issued'), received: sideFromTx(s, 'received'), receivedTouched: true })))
     setLoadedTransaction(tx)
     setIsCancelled(tx.status === 'Cancelled')
     setDate(tx.date ?? todayLocalISO())
     setAiNumber(tx.aiNumber ?? '')
     setTransactionTypeId(tx.transactionTypeId ?? '')
     setMoistureContent(tx.moistureContent != null ? liveFormatNumber(String(tx.moistureContent)) : '')
-    setIssuedSide({
-      pileId: tx.issuedPileId ?? '',
-      varietyId: tx.issuedVarietyId ?? '',
-      sackTypeId: tx.issuedSackTypeId ?? '',
-      condition: tx.issuedCondition ?? '',
-      bags: tx.issuedBags != null ? liveFormatNumber(String(tx.issuedBags)) : '',
-      grossKilos: tx.issuedGrossKilos != null ? liveFormatNumber(String(tx.issuedGrossKilos), 3) : '',
-      stockCondition: tx.issuedStockCondition ?? 'Good',
-    })
-    setReceivedSide({
-      pileId: tx.receivedPileId ?? '',
-      varietyId: tx.receivedVarietyId ?? '',
-      sackTypeId: tx.receivedSackTypeId ?? '',
-      condition: tx.receivedCondition ?? '',
-      bags: tx.receivedBags != null ? liveFormatNumber(String(tx.receivedBags)) : '',
-      grossKilos: tx.receivedGrossKilos != null ? liveFormatNumber(String(tx.receivedGrossKilos), 3) : '',
-      stockCondition: tx.receivedStockCondition ?? 'Good',
-    })
+    setIssuedSide(sideFromTx(tx, 'issued'))
+    setReceivedSide(sideFromTx(tx, 'received'))
   }
 
   const resetForm = (nextSerial) => {
     setLoadedTransaction(null)
+    setExtraLines([])
+    setOriginalExtraRecords([])
     setOpenedFromReports(false)
     setIsCancelled(false)
     setSerialNo(nextSerial)
@@ -467,10 +497,21 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   const checkAndLoadSerial = async (serial) => {
     if (!currentWarehouseId) return false
     latestRequestedSerial.current = serial
-    const existing = await findTransactionBySerial('WTS', currentWarehouseId, serial)
+    let existing = await findTransactionBySerial('WTS', currentWarehouseId, serial)
     if (latestRequestedSerial.current !== serial) return false
+    // An extra pile's record ("12345-A") is an internal detail, never its own document: landing on one
+    // (typed serial, Reports) opens the document's primary so the whole transfer shows.
+    if (existing?.groupSerialNo && existing.groupSerialNo !== existing.serialNo) {
+      const primary = await findTransactionBySerial('WTS', currentWarehouseId, existing.groupSerialNo)
+      if (primary) {
+        existing = primary
+        if (latestRequestedSerial.current === serial) setSerialNo(primary.serialNo)
+      }
+    }
     if (existing) {
-      loadTransactionIntoForm(existing)
+      const siblings = await fetchSiblings(existing)
+      if (latestRequestedSerial.current !== serial) return false
+      loadTransactionIntoForm(existing, siblings)
       return true
     }
     if (latestRequestedSerial.current !== serial) return false
@@ -489,10 +530,22 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   // in-progress serial has no "adjacent" record to walk from, so plain
   // ±1 nudging (unchanged) is still the right behavior there. See
   // StockFormBase.jsx's matching handlers for the full reasoning.
+  // The next real document in a direction, passing over the "-A", "-B" records of a multi-pile WTS.
+  const adjacentDocument = async (fromSerial, direction) => {
+    let from = fromSerial
+    for (let i = 0; i < 30; i++) {
+      const adjacent = await findAdjacentTransaction('WTS', currentWarehouseId, from, null, direction)
+      if (!adjacent) return null
+      if (!(adjacent.groupSerialNo && adjacent.groupSerialNo !== adjacent.serialNo)) return adjacent
+      from = adjacent.serialNo
+    }
+    return null
+  }
+
   const handleStepBack = async () => {
     let prev
     if (loadedTransaction) {
-      const adjacent = await findAdjacentTransaction('WTS', currentWarehouseId, serialNo.trim(), null, -1)
+      const adjacent = await adjacentDocument(serialNo.trim(), -1)
       prev = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), -1)
     } else {
       prev = stepSerial(serialNo.trim(), -1)
@@ -518,7 +571,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     if (jumpToGap) {
       next = stepSerial(serialNo.trim(), 1)
     } else if (wasLoaded) {
-      const adjacent = await findAdjacentTransaction('WTS', currentWarehouseId, serialNo.trim(), null, 1)
+      const adjacent = await adjacentDocument(serialNo.trim(), 1)
       next = adjacent ? adjacent.serialNo : stepSerial(serialNo.trim(), 1)
     } else {
       next = stepSerial(serialNo.trim(), 1)
@@ -612,26 +665,35 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       aiNumber: aiNumber.trim() || null,
       transactionTypeId: transactionTypeId || null,
       moistureContent: moistureContent === '' ? null : parseFloat(parseFormattedNumber(moistureContent).toFixed(2)),
-      issuedPileId: issuedSide.pileId || null,
-      issuedVarietyId: issuedSide.varietyId || null,
-      issuedSackTypeId: issuedSide.sackTypeId || null,
-      issuedCondition: issuedSide.condition || null,
-      issuedBags: issuedSide.bags === '' ? null : parseFormattedNumber(issuedSide.bags),
-      issuedGrossKilos: issuedSide.grossKilos === '' ? null : parseFormattedNumber(issuedSide.grossKilos),
-      issuedNetKilos: issuedSide.grossKilos === '' ? null : issuedNetKilos,
-      issuedStockCondition: issuedSide.stockCondition,
-      receivedPileId: receivedSide.pileId || null,
-      receivedVarietyId: receivedSide.varietyId || null,
-      receivedSackTypeId: receivedSide.sackTypeId || null,
-      receivedCondition: receivedSide.condition || null,
-      receivedBags: receivedSide.bags === '' ? null : parseFormattedNumber(receivedSide.bags),
-      receivedGrossKilos: receivedSide.grossKilos === '' ? null : parseFormattedNumber(receivedSide.grossKilos),
-      receivedNetKilos: receivedSide.grossKilos === '' ? null : receivedNetKilos,
-      receivedStockCondition: receivedSide.stockCondition,
+      ...sideFields('issued', issuedSide, issuedNetKilos),
+      ...sideFields('received', receivedSide, receivedNetKilos),
       isSynced: false,
       ...overrides,
     }
   }
+
+  // The extra issuing piles that are actually filled in, and the record each one is saved as.
+  const validLines = extraLines.filter((l) => !lineIsEmpty(l))
+  const lineRecord = (line, extra) => buildLineRecord({
+    base: buildPayload(), line, receivingSide: receivedSide,
+    issuedNet: computeSideNetKilos(line.issued, sackTypeMap),
+    receivedNet: computeSideNetKilos(receivedOfLine(line, receivedSide), sackTypeMap),
+    ...extra,
+  })
+  const lineProblem = firstLineProblem({ lines: extraLines, receivingSide: receivedSide, primaryIssuedPileId: issuedSide.pileId })
+
+  const setLineSide = (key, which, updater) => setExtraLines((lines) => lines.map((l) => {
+    if (l.key !== key) return l
+    const current = l[which]
+    const next = typeof updater === 'function' ? updater(current) : updater
+    if (which === 'received') return { ...l, received: next, receivedTouched: true }
+    // choosing a pile fixes the variety (a pile holds one variety), same as the first issued side
+    const pile = next.pileId !== current.pileId ? sortedPiles.find((p) => p.pileId === next.pileId) : null
+    const issued = pile?.varietyId ? { ...next, varietyId: pile.varietyId } : next
+    return { ...l, issued, received: l.receivedTouched ? l.received : mirrorToReceived(issued, l.received) }
+  }))
+  const addLine = () => setExtraLines((lines) => [...lines, { key: crypto.randomUUID(), txId: null, issued: emptySide(), received: emptySide(), receivedTouched: false }])
+  const removeLine = (key) => setExtraLines((lines) => lines.filter((l) => l.key !== key))
 
   // Unsaved-changes guard for series navigation - see StockFormBase.jsx's
   // matching comment for the full reasoning (same pattern, shared by
@@ -641,11 +703,12 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   // before and after) still re-captures a fresh baseline instead of
   // comparing against a stale one from the previous blank serial.
   const baselineRef = useRef(null)
+  const formSnapshot = () => JSON.stringify({ payload: buildPayload(), lines: extraLines.map((l) => ({ txId: l.txId, issued: l.issued, received: l.received })) })
   useEffect(() => {
-    baselineRef.current = JSON.stringify(buildPayload())
+    baselineRef.current = formSnapshot()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedTransaction, serialNo])
-  const isFormDirty = () => JSON.stringify(buildPayload()) !== baselineRef.current
+  const isFormDirty = () => formSnapshot() !== baselineRef.current
 
   const [pendingNavDirection, setPendingNavDirection] = useState(null) // 'back' | 'forward' | null
   const attemptStep = (direction) => {
@@ -818,9 +881,6 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
 
   // A WTS document with only one side filled is not valid — it must show
   // both an issue and a receipt, matching the real paper form.
-  const sideIsComplete = (side) =>
-    side.pileId && side.varietyId && side.sackTypeId && side.condition && side.bags !== '' && side.grossKilos !== ''
-
   // Gates the Save button - mirrors validate()'s synchronous checks
   // (serial-uniqueness is async and stays a save-time-only safety net).
   const canSave = isCancelled
@@ -831,6 +891,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       && Boolean(transactionTypeId)
       && sideIsComplete(issuedSide)
       && sideIsComplete(receivedSide)
+      && !lineProblem
       && moistureContent !== '' && !isNaN(parseFormattedNumber(moistureContent))
 
   const validate = async (excludeId = null) => {
@@ -847,11 +908,23 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       toast.error('Both sides (issued and received) must be fully filled in — pile, variety, sack type, condition, bags, and gross kilos')
       return false
     }
+    if (lineProblem) { toast.error(lineProblem); return false }
     if (moistureContent === '' || isNaN(parseFormattedNumber(moistureContent))) {
       toast.error('Moisture Content (MC %) is required')
       return false
     }
     return true
+  }
+
+  // Bags and net kilos of the whole document: the first pile plus every filled-in extra pile.
+  const documentTotals = () => {
+    const bagsOf = (side) => (side.bags === '' ? 0 : parseFormattedNumber(side.bags))
+    const sides = (which) => [which === 'issued' ? issuedSide : receivedSide, ...validLines.map((l) => (which === 'issued' ? l.issued : receivedOfLine(l, receivedSide)))]
+    const sum = (which, fn) => sides(which).reduce((t, side) => t + fn(side), 0)
+    return {
+      issuedBags: sum('issued', bagsOf), receivedBags: sum('received', bagsOf),
+      issuedNet: sum('issued', (side) => computeSideNetKilos(side, sackTypeMap)), receivedNet: sum('received', (side) => computeSideNetKilos(side, sackTypeMap)),
+    }
   }
 
   const handleSave = async () => {
@@ -875,17 +948,25 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // path. See serialNumber.js's compareByRecency for why this
     // exists - `date` alone can't disambiguate two series used on the
     // same calendar day.
-    const tx = { id: crypto.randomUUID(), ...buildPayload(), createdAt: Date.now() }
+    const serial = serialNo.trim()
+    const createdAt = Date.now()
+    const tx = { id: crypto.randomUUID(), ...buildPayload(), createdAt, ...(validLines.length > 0 ? { groupSerialNo: serial } : {}) }
+    const used = new Set()
+    const extras = validLines.map((line) => {
+      const letter = nextLetter(used)
+      used.add(letter)
+      return { ...lineRecord(line, { id: crypto.randomUUID(), serialNo: `${serial}-${letter}`, groupSerialNo: serial }), createdAt }
+    })
     // Grouped into one atomic Dexie transaction - see StockFormBase.jsx's
     // identical fix for the full reasoning (partial-write risk between
     // the transaction record and its effect on BOTH piles if the app
     // closed/lost power midway through the two-sided write).
-    await db.transaction('rw', db.tables, async () => {
-      await db.transactions.add(tx)
-      await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim(), null, { date: tx.date, createdAt: tx.createdAt })
-      await applyWtsToPiles(tx)
+    await saveGroup({
+      db, primary: tx, extras, applyToPiles: applyWtsToPiles,
+      inTransaction: () => recordSerialUsed('WTS', currentWarehouseId, serial, null, { date: tx.date, createdAt: tx.createdAt }),
     })
-    toast.success(<SavedReceipt title={`WTS saved — ${serialNo.trim()}`} stats={[{ label: 'issued bags', value: issuedSide.bags ? parseFormattedNumber(issuedSide.bags) : 0 }, { label: 'received bags', value: receivedSide.bags ? parseFormattedNumber(receivedSide.bags) : 0 }]} />)
+    const totals = documentTotals()
+    toast.success(<SavedReceipt title={`WTS saved — ${serial}`} stats={[{ label: 'issued bags', value: totals.issuedBags }, { label: 'received bags', value: totals.receivedBags }]} />)
     // See StockFormBase.jsx's identical fix/comment for the full
     // reasoning - tries the plain immediate next serial first (lands
     // there blank if it's genuinely free), only falling back to
@@ -919,7 +1000,17 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     setSavingAction('update')
     try {
     if (!(await validate(loadedTransaction.id))) return
-    const updated = buildPayload({ id: loadedTransaction.id })
+    const serial = serialNo.trim()
+    const updated = buildPayload({ id: loadedTransaction.id, groupSerialNo: validLines.length > 0 ? serial : null })
+    // A kept line keeps its own serial; a new line takes the next unused letter.
+    const used = new Set(validLines.filter((l) => l.txId).map((l) => letterOf(originalExtraRecords.find((o) => o.id === l.txId)?.serialNo ?? '', serial)).filter(Boolean))
+    const lines = validLines.map((line) => {
+      const orig = line.txId ? originalExtraRecords.find((o) => o.id === line.txId) : null
+      let letter = orig ? letterOf(orig.serialNo, serial) : null
+      if (!letter) { letter = nextLetter(used); used.add(letter) }
+      const record = { ...lineRecord(line, { id: line.txId ?? crypto.randomUUID(), serialNo: orig?.serialNo ?? `${serial}-${letter}`, groupSerialNo: serial }), createdAt: orig?.createdAt ?? loadedTransaction.createdAt ?? Date.now() }
+      return { txId: line.txId, record }
+    })
     // Grouped into one atomic Dexie transaction - see handleSave above.
     // Write the record's new values FIRST, then reconcile both piles'
     // effect via reapplyWtsToPiles - not reverse-old-then-apply-new
@@ -928,12 +1019,15 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // fallback (see reapplyWtsToPiles's own comment for the full
     // reasoning - same bug class as the void/delete ordering fix
     // elsewhere in this session, one step removed).
-    await db.transaction('rw', db.tables, async () => {
-      await db.transactions.update(loadedTransaction.id, updated)
-      await reapplyWtsToPiles(loadedTransaction, updated)
+    await updateGroup({
+      db, loaded: loadedTransaction, updated, lines, originals: originalExtraRecords,
+      applyToPiles: applyWtsToPiles, reapplyToPiles: reapplyWtsToPiles, reverseFromPiles: reverseWtsFromPiles,
+      queueDeletion: (serialNo) => queueTransactionDeletion(serialNo, 'WTS', currentWarehouse?.code),
     })
-    toast.success(<SavedReceipt title={`WTS ${serialNo.trim()} updated`} stats={[{ label: 'issued bags', value: issuedSide.bags ? parseFormattedNumber(issuedSide.bags) : 0 }, { label: 'received bags', value: receivedSide.bags ? parseFormattedNumber(receivedSide.bags) : 0 }]} />)
-    setLoadedTransaction(updated)
+    const totals = documentTotals()
+    toast.success(<SavedReceipt title={`WTS ${serial} updated`} stats={[{ label: 'issued bags', value: totals.issuedBags }, { label: 'received bags', value: totals.receivedBags }]} />)
+    // reload from what was just saved, so a second edit reconciles against the real current state
+    loadTransactionIntoForm(updated, await fetchSiblings(updated))
     scrollToTop()
     } catch (err) {
       console.error('WTS update failed:', err)
@@ -955,7 +1049,9 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
       })
       setPendingRename(false)
       setSerialNo(newSerial)
-      setLoadedTransaction((prev) => prev && ({ ...prev, serialNo: newSerial }))
+      const renamed = await findTransactionBySerial('WTS', currentWarehouseId, newSerial)
+      if (renamed) loadTransactionIntoForm(renamed, await fetchSiblings(renamed))
+      else setLoadedTransaction((prev) => prev && ({ ...prev, serialNo: newSerial }))
       toast.success(`Renamed to ${newSerial}`)
     } catch (err) {
       toast.error(err.message ?? 'Could not rename this serial number')
@@ -979,22 +1075,20 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // status from the DB - running it first left this record still
     // Active for that recompute to see, silently undoing the deletion's
     // effect on the pile total.
-    await db.transaction('rw', db.tables, async () => {
-      await db.transactions.delete(loadedTransaction.id)
-      await recalculateSerialCounter('WTS', currentWarehouseId)
-      // Reported real bug: deleting an already-Cancelled record (a
-      // cancelled document is never written to the Sheet by policy)
-      // triggered an alarming "no matching row found" toast for a
-      // guaranteed, expected outcome. expectMissing tells
-      // queueTransactionDeletion not to warn for exactly that case.
-      queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code, { expectMissing: loadedTransaction.status === 'Cancelled' })
-      // A Cancelled (already-voided) record's pile effect was already
-      // reversed at void time - reversing it again here would double-
-      // reverse both piles. Real, confirmed gap: Void already guards
-      // this exact case (wasActive), Delete never did.
-      if (loadedTransaction.status !== 'Cancelled') {
-        await reverseWtsFromPiles(loadedTransaction)
-      }
+    // A multi-pile transfer is one real-world event: deleting it deletes every record of the group.
+    const wasCancelled = loadedTransaction.status === 'Cancelled'
+    await deleteGroup({
+      db, loaded: loadedTransaction, originals: originalExtraRecords, reverseFromPiles: reverseWtsFromPiles,
+      queueDeletion: (serialNo) => queueTransactionDeletion(serialNo, 'WTS', currentWarehouse?.code, { expectMissing: wasCancelled }),
+      inTransaction: async () => {
+        await recalculateSerialCounter('WTS', currentWarehouseId)
+        // Reported real bug: deleting an already-Cancelled record (a
+        // cancelled document is never written to the Sheet by policy)
+        // triggered an alarming "no matching row found" toast for a
+        // guaranteed, expected outcome. expectMissing tells
+        // queueTransactionDeletion not to warn for exactly that case.
+        queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code, { expectMissing: wasCancelled })
+      },
     })
     toast.success(`WTS ${serialNo.trim()} deleted`)
     const freedSerial = serialNo.trim()
@@ -1034,12 +1128,13 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     // DB write happens BEFORE reversing pile effect - see
     // handleDeleteConfirmed's identical fix/reasoning just above.
     if (loadedTransaction) {
-      await db.transactions.update(loadedTransaction.id, cancelledRecord)
+      // voiding a multi-pile transfer voids the whole group (each extra record is kept as Cancelled)
+      await voidGroup({
+        db, loaded: loadedTransaction, cancelledPrimary: cancelledRecord, originals: originalExtraRecords,
+        cancelledOf: (orig) => ({ ...buildCancelledPayload(), serialNo: orig.serialNo }), reverseFromPiles: reverseWtsFromPiles,
+      })
     } else {
       await db.transactions.add(cancelledRecord)
-    }
-    if (wasActive) {
-      await reverseWtsFromPiles(loadedTransaction)
     }
     await recordSerialUsed('WTS', currentWarehouseId, serialNo.trim())
     setIsCancelled(true)
@@ -1064,13 +1159,16 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     try {
     // Grouped into one atomic Dexie transaction, same reasoning as
     // handleDeleteConfirmed's identical wrapping.
-    await db.transaction('rw', db.tables, async () => {
-      await db.transactions.delete(loadedTransaction.id)
-      await recalculateSerialCounter('WTS', currentWarehouseId)
-      // Un-voiding only ever deletes an already-Cancelled record - a "no
-      // matching row" result here is always expected, never a real
-      // discrepancy (see handleDeleteConfirmed's identical comment).
-      queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code, { expectMissing: true })
+    await unvoidGroup({
+      db, loaded: loadedTransaction, originals: originalExtraRecords,
+      queueDeletion: (serialNo) => queueTransactionDeletion(serialNo, 'WTS', currentWarehouse?.code, { expectMissing: true }),
+      inTransaction: async () => {
+        await recalculateSerialCounter('WTS', currentWarehouseId)
+        // Un-voiding only ever deletes an already-Cancelled record - a "no
+        // matching row" result here is always expected, never a real
+        // discrepancy (see handleDeleteConfirmed's identical comment).
+        queueTransactionDeletion(loadedTransaction.serialNo, 'WTS', currentWarehouse?.code, { expectMissing: true })
+      },
     })
     toast.success(`WTS ${serialNo.trim()} is no longer cancelled — available again`)
     resetForm(serialNo.trim())
@@ -1274,6 +1372,53 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
           sortedVarieties={sortedVarieties}
         />
         </div>
+
+        {!isCancelled && (
+          <div className="space-y-3">
+            {extraLines.map((line, i) => {
+              const takenElsewhere = new Set([issuedSide.pileId, ...extraLines.filter((l) => l.key !== line.key).map((l) => l.issued.pileId)].filter(Boolean))
+              const pilesForLine = sortedPiles.filter((p) => p.pileId === line.issued.pileId || !takenElsewhere.has(p.pileId))
+              const receivingPile = sortedPiles.find((p) => p.pileId === receivedSide.pileId)
+              return (
+                <div key={line.key} className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-neon">
+                      Extra issuing pile {i + 1}{line.txId ? ` · ${originalExtraRecords.find((o) => o.id === line.txId)?.serialNo ?? ''}` : ''}
+                    </p>
+                    <button type="button" onClick={() => removeLine(line.key)} aria-label={`Remove extra issuing pile ${i + 1}`}
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-brand-crimson/40 text-brand-crimson transition-all hover:bg-brand-crimson/10 active:scale-90">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className={isPC ? 'grid grid-cols-2 items-start gap-3' : 'space-y-3'}>
+                    <SidePanel
+                      label="Stocks from Pile (Issued)" side={line.issued} setSide={(u) => setLineSide(line.key, 'issued', u)} accent="neon"
+                      sortedPiles={pilesForLine} varietyMap={varietyMap} sortedSackTypes={sortedSackTypes} sackTypeMap={sackTypeMap} sortedVarieties={sortedVarieties}
+                    />
+                    <SidePanel
+                      label="Stocks Weighed (Received)" side={receivedOfLine(line, receivedSide)} setSide={(u) => setLineSide(line.key, 'received', u)} accent="amber"
+                      lockedPileLabel={receivingPile ? receivingPile.pileName : 'Choose the receiving pile above'}
+                      sortedPiles={sortedPiles} varietyMap={varietyMap} sortedSackTypes={sortedSackTypes} sackTypeMap={sackTypeMap} sortedVarieties={sortedVarieties}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+            <button type="button" onClick={addLine}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-neon/50 py-2.5 text-sm font-medium text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-[0.98]">
+              <Plus size={16} /> Add another issuing pile
+            </button>
+            {validLines.length > 0 && (() => {
+              const t = documentTotals()
+              return (
+                <p className="rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs text-neutral-300">
+                  Whole document: issued <span className="font-semibold tabular-nums text-brand-neon">{t.issuedBags.toLocaleString()} bags · {fmtWeight(t.issuedNet, weightUnit)}</span>
+                  {' '}→ received <span className="font-semibold tabular-nums text-brand-amber">{t.receivedBags.toLocaleString()} bags · {fmtWeight(t.receivedNet, weightUnit)}</span>
+                </p>
+              )
+            })()}
+          </div>
+        )}
 
         <label className="flex items-center justify-center gap-2 py-1 text-base font-semibold text-brand-crimson">
           <input
