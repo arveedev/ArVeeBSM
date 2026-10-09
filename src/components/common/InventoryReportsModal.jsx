@@ -206,6 +206,7 @@ function LedgerCardList({ days, onNote }) {
                   <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] tabular-nums text-neutral-500">
                     {l.beg != null && <span>Beginning {fmtNum(l.beg)}</span>}
                     {l.adj != null && <span>Pile closed {l.adj < 0 ? '-' : '+'}{fmtNum(Math.abs(l.adj))}</span>}
+                    {l.move != null && <span>Age move {l.move < 0 ? '-' : '+'}{fmtNum(Math.abs(l.move))}</span>}
                   </div>
                   {(l.adds.length > 0 || l.lesses.length > 0) && (
                     <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] tabular-nums">
@@ -309,9 +310,33 @@ const checkLine = (left, right, key) => (
   </div>
 )
 
+// The stock book proves itself against itself each time Data check opens (see buildSelfCheck).
+function SelfCheckCard({ results }) {
+  if (results.length === 0) return null
+  const allOk = results.every((r) => r.ok)
+  return (
+    <Card>
+      <p className={`mb-1 text-xs font-bold uppercase tracking-wide ${allOk ? 'text-brand-neon' : 'text-brand-crimson'}`}>
+        Stock book self-check · {allOk ? 'every check passed' : 'something does not add up'}
+      </p>
+      {results.map((r, i) => (
+        <div key={i} className="border-b border-neutral-800 py-1 last:border-0">
+          <div className="flex items-baseline justify-between gap-3 text-sm">
+            <span className="min-w-0 break-words text-neutral-300">{r.title}</span>
+            <span className={`shrink-0 text-xs font-bold ${r.ok ? 'text-brand-neon' : 'text-brand-crimson'}`}>{r.ok ? 'OK' : 'CHECK'}</span>
+          </div>
+          {!r.ok && r.detail.map((d, k) => <p key={k} className="break-words text-[11px] text-amber-400">{d}</p>)}
+          {!r.ok && r.more > 0 && <p className="text-[11px] text-neutral-500">and {r.more} more.</p>}
+        </div>
+      ))}
+    </Card>
+  )
+}
+
 function CheckView({ checks, unit }) {
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
+      <SelfCheckCard results={checks.selfCheck ?? []} />
       <CheckSection title="Warehouses using a start-date override" tone="text-amber-400" items={checks.overrides} ok="None. Every warehouse follows the Data Start Date."
         render={(o, i) => checkLine(o.warehouse, `starts after ${fmtDay(o.date)}`, i)} />
       <CheckSection title="Authorized more than the stock available" tone="text-brand-crimson" items={checks.overAuthorized ?? []} ok="No authority reserves more than the warehouse had."

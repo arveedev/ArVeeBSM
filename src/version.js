@@ -8378,4 +8378,5 @@
 //   1.10-320 - Daily inventory: Combined also merges dry palay (PD1m-A + PD1s-A = PD1-A, PDm + PDs = PD; PW unchanged); by-products hidden by default with a visible toggle; each day is its own block (date band, then ADD and LESS on their own rows); an authority is one line in a value's note, listing its piles.
 //   1.10-321 - Reports: PDm and PDs are never combined; Summary has a total per cereal type (palay, rice, by-products); an authority shows as one line with no piles; Daily inventory and Summary keep a lot's age bracket for the whole month (the move shows next month), Age monitoring shows the exact day.
 //   1.10-322 - Opening-balance override keeps the balance exactly as typed (no longer a correction that drifts), in Combined names, every bracket set and Age monitoring; the override notice always shows.
-export const APP_VERSION = '1.10-322'
+//   1.10-323 - Stock book accuracy: calendar-month ages, opening-balance override worked into the lots (ages like real stock), month-start age moves explained on the cells, no silent 200-day cut-off, Data check self-check.
+export const APP_VERSION = '1.10-323'

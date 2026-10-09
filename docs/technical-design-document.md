@@ -523,7 +523,7 @@ receipts as lots (one lot per WSR, beginning-balance line or transfer-in, each
 with its own receipt date) and issuing the oldest lot of the pile first
 (`src/utils/inventoryLots.js`). Transfers carry the original lot dates. A
 beginning balance is the pile's opening stock and is applied first. Age is
-counted in 30.44-day months, the same as the Google Sheet script it replaces.
+counted in calendar months: whole months between the receipt date and the report date (April 1 to October 1 is exactly 6.0), plus the days since the last monthly anniversary as a fraction of a 30.44-day month. A lot received exactly 6 months ago is therefore still in the 0-6 bracket; the former plain 30.44-day count made it 6.01 and moved it a bracket early. An Admin's opening-balance override is worked into the lots (a lower balance takes the difference out of the lots in that bracket, a higher one adds a lot of that age to a pile of the same warehouse and cereal), so a correction ages and is used up like real stock. The Data check runs a self-check on every open (summary equals ledger ending, each day starts where the day before ended, every day balances, no negative balance, typed balances show as typed, Combined equals separate, ages agree with an independent count) so a wrong figure is caught by the app, not by eye.
 Beginning-balance lots age from the readable date in "Date Received" (the first
 date of a range, the 1st of a month-only text), else from the pile date, and
 that fallback is listed as approximate.

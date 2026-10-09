@@ -58,16 +58,46 @@ export const parseReceivedText = (text) => {
   return toISO(y, month, day)
 }
 
-/** Age in months (30.44-day months) of a lot received on `fromISO`, as of `asOfISO`. */
+/** `iso` plus `n` calendar months (a day past the end of the month is moved back to its last day). */
+export const addMonthsISO = (iso, n) => {
+  const y = Number(iso.slice(0, 4))
+  const m = Number(iso.slice(5, 7)) - 1 + n
+  const ty = y + Math.floor(m / 12)
+  const tm = ((m % 12) + 12) % 12
+  const last = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate()
+  const day = Math.min(Number(iso.slice(8, 10)), last)
+  return `${String(ty).padStart(4, '0')}-${String(tm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/**
+ * Age in months of a lot received on `fromISO`, as of `asOfISO`: whole calendar months
+ * (April 1 to October 1 is exactly 6.0) plus the days since the last monthly anniversary
+ * as a fraction of a 30.44-day month.
+ */
 export const lotAgeMonths = (fromISO, asOfISO) => {
   if (!fromISO || !asOfISO) return null
-  const a = Date.parse(`${fromISO.slice(0, 10)}T00:00:00Z`)
-  const b = Date.parse(`${asOfISO.slice(0, 10)}T00:00:00Z`)
+  const from = fromISO.slice(0, 10)
+  const asOf = asOfISO.slice(0, 10)
+  const a = Date.parse(`${from}T00:00:00Z`)
+  const b = Date.parse(`${asOf}T00:00:00Z`)
   if (Number.isNaN(a) || Number.isNaN(b)) return null
-  return Math.max(0, (b - a) / 86400000) / DAYS_PER_MONTH
+  if (b <= a) return 0
+  let months = (Number(asOf.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(asOf.slice(5, 7)) - Number(from.slice(5, 7))
+  let anchor = addMonthsISO(from, months)
+  if (anchor > asOf) { months -= 1; anchor = addMonthsISO(from, months) }
+  const days = (b - Date.parse(`${anchor}T00:00:00Z`)) / 86400000
+  return months + days / DAYS_PER_MONTH
 }
 
 const round3 = (n) => Math.round(n * 1000) / 1000
+
+/** The date a lot must have been received for it to be `months` old on `refISO` (whole months, then days). */
+const ageToDate = (refISO, months) => {
+  const whole = Math.floor(months)
+  const back = addMonthsISO(refISO, -whole)
+  const days = Math.round((months - whole) * DAYS_PER_MONTH)
+  return new Date(Date.parse(`${back}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10)
+}
 
 /**
  * The age bracket an authority names in its Age Group column, as { lo, hi } months
@@ -118,7 +148,7 @@ const seedAnchor = (tx, pile) => {
  * bracket named in its Age Group column. Without `reserve` the stock is physical:
  * only WSI and WTS deduct (used by the lots check, which must match the pile balances).
  */
-const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf, authorities = [], reserve = false, clearClosed = true }, movements) => {
+const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf, authorities = [], reserve = false, clearClosed = true, opening = null }, movements) => {
   const pileById = new Map(piles.map((p) => [p.pileId, p]))
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const state = new Map(piles.map((p) => [p.pileId, { lots: [], shortBags: 0, shortKilos: 0, shortEvents: [] }]))
@@ -171,6 +201,13 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       events.push({ rank: 0.5, when: a.date, auth: { a, amount } })
     }
   }
+
+  // An Admin's opening-balance override (reports only): once the day it is dated has been processed,
+  // each corrected cell is worked into the lots themselves, so it ages and is used up like real stock.
+  // A cell that is lower than computed takes the difference out of the lots in that age bracket
+  // (oldest first); a cell that is higher adds a lot of that age to the pile chosen for it (`holder`).
+  const overrideShort = []
+  if (reserve && opening && opening.cells?.length > 0 && opening.date <= asOf) events.push({ rank: 2, when: opening.date, override: opening })
 
   const when = (e) => (e.rank === -1 ? '' : (e.tx ? e.tx.date : e.when))
   events.sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : a.rank - b.rank || (a.tx?.createdAt ?? 0) - (b.tx?.createdAt ?? 0)))
@@ -279,6 +316,25 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
   }
 
   for (const ev of events) {
+    if (ev.override) {
+      const first = `${ev.override.date.slice(0, 8)}01`
+      let n = 0
+      for (const c of ev.override.cells) {
+        if (c.k < 0) {
+          const { short } = reserveKilos(c.w, c.varietyId, -c.k, { lo: c.lo, hi: c.hi }, first)
+          if (short > 0) overrideShort.push({ ...c, short })
+        } else {
+          const holder = c.holder
+          if (!state.has(holder)) { overrideShort.push({ ...c, short: c.k }); continue }
+          n += 1
+          addLot(holder, {
+            lotId: `override-${ev.override.date}-${n}`, date: ageToDate(first, c.age), anchor: ANCHOR.TRANSACTION, source: 'override',
+            varietyId: c.varietyId, sackTypeId: null, mtsCondition: null, bags: c.k / 50, kilos: c.k,
+          })
+        }
+      }
+      continue
+    }
     if (ev.auth) {
       const { a, amount } = ev.auth
       const range = ageGroupRange(a.ageGroup)
@@ -383,6 +439,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
   state.authShort = authShort
   state.authNoAge = authNoAge
   state.uncovered = uncovered
+  state.overrideShort = overrideShort
   return state
 }
 

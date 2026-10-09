@@ -5,7 +5,7 @@
 // Units: everything is carried in KILOS. Net bags = kilos / 50 (the same as
 // Home > Stocks), MT = kilos / 1000.
 
-import { buildLots, buildLotsDetailed, lotAgeMonths, DAYS_PER_MONTH } from './inventoryLots.js'
+import { buildLots, buildLotsDetailed, lotAgeMonths, addMonthsISO } from './inventoryLots.js'
 
 export const NET_BAG_KG = 50
 export const toUnit = (kilos, unit) => (unit === 'mt' ? kilos / 1000 : kilos / NET_BAG_KG)
@@ -119,18 +119,55 @@ const applyOpening = (ctx, grid, stateDate, filters) => {
 // The typed balances of the override are kept as absolute values, so what an Admin typed is
 // what shows at the override date, whatever the report logic computes underneath. The
 // correction of each cell is worked out here (typed minus computed, both as of the override
-// date) and placed in the column the current view uses: Combined names merge the dry-palay
-// letters, and another bracket set gets the nearest bracket. Older saves that only kept the
-// correction itself (`k`) are used as they were.
+// date). Each correction is then worked into the lots themselves (see the lot engine), so it
+// ages and is used up like real stock instead of staying frozen in one bracket. Only a cell the
+// engine cannot place (a variety with no id, a warehouse with no pile) is added as a plain
+// correction in the column the view uses. Older saves that only kept the correction (`k`) are
+// used as they were.
+const bracketOf = (commodity, ageSet, label) => {
+  if (commodity === 'By Products') {
+    const n = parseInt(label, 10)
+    if (!Number.isFinite(n) || n < 1) return null
+    return { lo: n === 1 ? -1 : n - 1, hi: n, age: n - 0.5 }
+  }
+  const set = AGE_SETS[ageSet]?.[commodity]
+  const i = set ? set.findIndex((x) => x.label === label) : -1
+  if (i < 0) return null
+  const prev = i > 0 ? set[i - 1].max : 0
+  const hi = set[i].max
+  // a representative age in the middle of the bracket (a bracket is lo < age <= hi)
+  return { lo: i > 0 ? prev : -1, hi, age: Number.isFinite(hi) ? (prev + hi) / 2 : prev + 1 }
+}
+
 const withOpening = (ctx, inputs) => {
   if (ctx.openingCells) return ctx
   const o = ctx.opening
-  if (!o || !Array.isArray(o.cells) || o.cells.length === 0) return { ...ctx, openingCells: [] }
+  if (!o || !Array.isArray(o.cells) || o.cells.length === 0) return { ...ctx, openingCells: [], openingEngine: null }
   const needBase = o.cells.some((c) => c.t != null)
-  const base = needBase ? computeOpeningBase({ ...ctx, combine: false, ageBasis: 'month', ageSet: o.ageSet }, inputs, o.date) : new Map()
-  const cells = o.cells.map((c) => {
+  const base = needBase ? computeOpeningBase({ ...ctx, combine: false, ageBasis: 'month', ageSet: o.ageSet, openingCells: [] }, inputs, o.date) : new Map()
+  const idByName = new Map()
+  for (const [id, name] of ctx.varietyName) if (!idByName.has(name)) idByName.set(name, id)
+  // the pile that holds extra stock of a cell: same warehouse and cereal type, never-closed first, same variety first
+  const holderFor = (c, varietyId) => {
+    let best = null
+    let score = -1
+    for (const p of ctx.pileById.values()) {
+      if (p.warehouseId !== c.w || commodityOf(p) !== c.c) continue
+      const sc = (p.closedDate ? 0 : 2) + (p.varietyId === varietyId ? 1 : 0)
+      if (sc > score) { best = p.pileId; score = sc }
+    }
+    return best
+  }
+  const engine = []
+  const fallback = []
+  for (const c of o.cells) {
     const baseKilos = base.get(`${c.w}|${c.c}|${c.v}|${c.b}`)?.kilos ?? 0
     const k = c.t != null ? c.t - baseKilos : c.k
+    if (!(Math.abs(k) >= 0.001)) continue
+    const varietyId = idByName.get(c.v)
+    const br = bracketOf(c.c, o.ageSet, c.b)
+    const holder = varietyId && k > 0 ? holderFor(c, varietyId) : null
+    if (varietyId && br && (k < 0 || holder)) { engine.push({ w: c.w, c: c.c, v: c.v, b: c.b, varietyId, k, holder, lo: br.lo, hi: br.hi, age: br.age }); continue }
     let v = c.v
     if (ctx.combine && c.c === 'Palay') v = v.replace(/^(PD\d+)[ms](?=-|$)/i, '$1')
     let b = c.b
@@ -139,10 +176,13 @@ const withOpening = (ctx, inputs) => {
       const i = set.findIndex((x) => x.label === c.b)
       if (i >= 0) b = bucketOf(c.c, (i > 0 ? set[i - 1].max : 0) + 0.05, ctx.ageSet) || c.b
     }
-    return { w: c.w, c: c.c, v, b, k }
-  })
-  return { ...ctx, openingCells: cells }
+    fallback.push({ w: c.w, c: c.c, v, b, k })
+  }
+  return { ...ctx, openingCells: fallback, openingEngine: engine.length > 0 ? { date: o.date, cells: engine } : null }
 }
+
+// The inputs the lot engine needs for the reports: the override cells ride along.
+const withEngine = (ctx, inputs) => (ctx.openingEngine ? { ...inputs, opening: ctx.openingEngine } : inputs)
 
 const stockGrid = (ctx, state, ageDate, filters, stateDate = null) => {
   const grid = new Map()
@@ -198,16 +238,42 @@ const gridNonEmpty = (g) => [...g.values()].some((row) => [...row.values()].some
  * is shown as an adjustment naming the pile. An Admin's opening-balance override is shown
  * as its own row. `gapAt(date)` is the running total of gaps up to that date.
  */
-const analyzeDays = (ctx0, inputs, filters, from, to) => {
-  const ctx = withOpening(ctx0, inputs)
+// Longest span the daily analysis walks (about four years); a longer one would be cut short, so it is refused loudly.
+const MAX_DAYS = 1500
+// Every calendar day that carries a record (and the day after it, for 'after this date' rules).
+const eventDays = (inputs) => {
+  const out = new Set()
+  const scan = (o) => {
+    for (const v of Object.values(o)) {
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) { const d = v.slice(0, 10); out.add(d); out.add(addDaysISO(d, 1)) }
+    }
+  }
+  for (const list of [inputs.piles, inputs.transactions, inputs.warehouses, inputs.authorities]) for (const o of list ?? []) scan(o)
+  if (inputs.opening?.date) { out.add(inputs.opening.date); out.add(addDaysISO(inputs.opening.date, 1)) }
+  if (inputs.globalDataStartDate) { out.add(inputs.globalDataStartDate); out.add(addDaysISO(inputs.globalDataStartDate, 1)) }
+  return out
+}
+
+const analyzeDays = (ctx0, inputs0, filters, from, to) => {
+  const ctx = withOpening(ctx0, inputs0)
+  const inputs = withEngine(ctx, inputs0)
   const warmStart = inputs.globalDataStartDate ? addDaysISO(inputs.globalDataStartDate, 1) : from
   const first = warmStart < from ? warmStart : from
   const days = []
-  for (let d = first; d <= to && days.length < 200; d = addDaysISO(d, 1)) days.push(d)
+  for (let d = first; d <= to && days.length < MAX_DAYS; d = addDaysISO(d, 1)) days.push(d)
 
   const { movements } = buildLotsDetailed({ ...inputs, asOf: to })
+  // The lot state only changes on a day that has a record dated on it (a document, an authority, a
+  // pile or warehouse date), so every other day reuses the day before instead of being rebuilt.
+  const hot = eventDays(inputs)
   const stateAt = new Map()
-  const getState = (d) => { if (!stateAt.has(d)) stateAt.set(d, buildLots({ ...inputs, asOf: d })); return stateAt.get(d) }
+  const getState = (d) => {
+    if (!stateAt.has(d)) {
+      const before = addDaysISO(d, -1)
+      stateAt.set(d, !hot.has(d) && stateAt.has(before) ? stateAt.get(before) : buildLots({ ...inputs, asOf: d }))
+    }
+    return stateAt.get(d)
+  }
   const typeLabel = (m) => m.label ?? ctx.typeName.get(m.typeId) ?? 'OTHER'
   const opening = ctx.opening ? { date: ctx.opening.date, cells: ctx.openingCells } : null
 
@@ -266,6 +332,12 @@ const analyzeDays = (ctx0, inputs, filters, from, to) => {
     // an Admin's opening-balance override is a deliberate change
     const openingAdj = new Map()
     if (opening && d === opening.date) {
+      // the part worked into the lots: the day's stock with the override minus without it
+      if (ctx.openingEngine) {
+        const plain = buildLots({ ...inputs0, asOf: d })
+        const effect = gridDiff(stockGrid({ ...ctx, openingCells: [] }, getState(d), d, filters), stockGrid({ ...ctx, openingCells: [] }, plain, d, filters))
+        for (const [rk, row] of effect) for (const [id, v] of row) put(openingAdj, rk, id, v)
+      }
       for (const c of opening.cells) {
         const like = { warehouseId: c.w, cerealType: c.c }
         if (accept(filters, like, ctx)) put(openingAdj, rowKey(rowOf(ctx, like)), colId(c.c, c.v, c.b), c.k)
@@ -277,11 +349,11 @@ const analyzeDays = (ctx0, inputs, filters, from, to) => {
     gap = gridAdd(gap, dayGap)
     gapAt.set(d, gap)
     recs.push({
-      date: d, moves, adds, lesses, beg0, end0, closure, closureLines, openingAdj, gapBefore, gapNow: gap,
+      date: d, moves, adds, lesses, beg0, end0, closure, closureLines, openingAdj, gapBefore, gapNow: gap, stPrev,
       closedNames: closed.map((p) => `${rowOf(ctx, p).label} ${p.pileName}`),
     })
   }
-  return { recs, gapAt, prevOf: (d) => addDaysISO(d, -1) }
+  return { recs, gapAt, truncated: days.length >= MAX_DAYS && addDaysISO(days[days.length - 1], 1) <= to }
 }
 
 /**
@@ -289,13 +361,14 @@ const analyzeDays = (ctx0, inputs, filters, from, to) => {
  * subtotal per province and a branch total. Empty rows/columns are dropped. It equals the
  * Daily inventory's ending balance for that date.
  */
-export const buildSummary = (ctx0, inputs, { asOf, filters = {}, sort = 'name' }) => {
-  const ctx = withOpening(ctx0, inputs)
+export const buildSummary = (ctx0, inputs0, { asOf, filters = {}, sort = 'name' }) => {
+  const ctx = withOpening(ctx0, inputs0)
+  const inputs = withEngine(ctx, inputs0)
   const state = buildLots({ ...inputs, asOf })
   let grid = stockGrid(ctx, state, asOf, filters, asOf)
   const warm = inputs.globalDataStartDate ? addDaysISO(inputs.globalDataStartDate, 1) : null
   if (warm && asOf >= warm) {
-    const { gapAt } = analyzeDays(ctx, inputs, filters, asOf, asOf)
+    const { gapAt } = analyzeDays(ctx, inputs0, filters, asOf, asOf)
     const gap = gapAt.get(asOf)
     if (gap && gridNonEmpty(gap)) grid = gridDiff(grid, gap)
   }
@@ -326,8 +399,44 @@ export const buildSummary = (ctx0, inputs, { asOf, filters = {}, sort = 'name' }
  * in the period. A day appears only if it has an ADD, a LESS, a closed pile or an override.
  * Balances follow the documents; only a closed pile adjusts them (see analyzeDays).
  */
-export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
-  const { recs, gapAt } = analyzeDays(ctx, inputs, filters, from, to)
+/**
+ * The lots whose age bracket changes between the month of `oldRef` and the month of `newRef`
+ * (brackets are fixed for a month): per warehouse x column, what left and what arrived, with the
+ * pile and receipt date behind it. Quantity never changes, only the bracket it sits in.
+ */
+const ageMoves = (ctx, state, filters, oldRef, newRef) => {
+  const grid = new Map()
+  const lines = new Map()
+  const note = (rk, cid, line) => {
+    const k = `${rk}|${cid}`
+    if (!lines.has(k)) lines.set(k, [])
+    lines.get(k).push(line)
+  }
+  for (const [pileId, st] of state) {
+    const pile = ctx.pileById.get(pileId)
+    if (!accept(filters, pile, ctx)) continue
+    const rk = rowKey(rowOf(ctx, pile))
+    const where = `${rowOf(ctx, pile).label} ${pile.pileName}`
+    for (const lot of st.lots) {
+      if (lot.kilos < EPS_KG) continue
+      const a = lotCol(ctx, pile, lot.varietyId, lot.date, oldRef)
+      const b = lotCol(ctx, pile, lot.varietyId, lot.date, newRef)
+      const from = colId(a.commodity, a.variety, a.bucket)
+      const to = colId(b.commodity, b.variety, b.bucket)
+      if (from === to) continue
+      put(grid, rk, from, -lot.kilos)
+      put(grid, rk, to, lot.kilos)
+      const received = longDate(lot.date)
+      note(rk, from, { doc: `Moved to ${b.bucket}`, customer: '', pile: `${where}, received ${received}`, kilos: -lot.kilos })
+      note(rk, to, { doc: `Moved from ${a.bucket}`, customer: '', pile: `${where}, received ${received}`, kilos: lot.kilos })
+    }
+  }
+  return gridNonEmpty(grid) ? { grid, lines } : null
+}
+
+export const buildLedger = (ctx0, inputs0, { from, to, filters = {} }) => {
+  const ctx = withOpening(ctx0, inputs0)
+  const { recs, gapAt, truncated } = analyzeDays(ctx, inputs0, filters, from, to)
   const typeOrder = (a, b) => (a === 'BEGINNING BALANCE' ? -1 : b === 'BEGINNING BALANCE' ? 1 : a === 'TRANSFER' ? 1 : b === 'TRANSFER' ? -1 : natural(a, b))
   const zero = new Map()
   const out = []
@@ -340,15 +449,18 @@ export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
     const gPrev = gapAt.get(addDaysISO(r.date, -1)) ?? zero
     const beginning = gridDiff(r.beg0, gPrev)
     const ending = gridDiff(r.end0, r.gapNow)
+    // a new month re-sorts the stock into its new brackets: shown so the day's balances can be followed
+    const oldRef = out.length > 0 ? out[out.length - 1].date : addDaysISO(from, -1)
+    const ageMove = oldRef.slice(0, 7) !== r.date.slice(0, 7) ? ageMoves(ctx, r.stPrev, filters, oldRef, r.date) : null
     const rec = {
-      date: r.date, moves: r.moves, beginning, shift: null,
+      date: r.date, moves: r.moves, beginning, shift: null, ageMove, isFirst: out.length === 0,
       adds: [...r.adds].sort((a, b) => typeOrder(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
       lesses: [...r.lesses].sort((a, b) => typeOrder(a[0], b[0])).map(([label, grid]) => ({ label, grid })),
       adjustment: hasClosure ? r.closure : null, closureLines: r.closureLines, closedPiles: r.closedNames,
       openingAdj: hasOpening ? r.openingAdj : null, ending,
     }
     out.push(rec)
-    allGrids.push(beginning, ending, ...rec.adds.map((x) => x.grid), ...rec.lesses.map((x) => x.grid), ...(rec.adjustment ? [rec.adjustment] : []), ...(rec.openingAdj ? [rec.openingAdj] : []))
+    allGrids.push(beginning, ending, ...(ageMove ? [ageMove.grid] : []), ...rec.adds.map((x) => x.grid), ...rec.lesses.map((x) => x.grid), ...(rec.adjustment ? [rec.adjustment] : []), ...(rec.openingAdj ? [rec.openingAdj] : []))
   }
 
   // Columns: only warehouse x variety x bracket combinations with something in them.
@@ -361,7 +473,7 @@ export const buildLedger = (ctx, inputs, { from, to, filters = {} }) => {
   cols.sort((a, b) => natural(a.province, b.province) || natural(a.label, b.label)
     || (COMMODITY_ORDER[a.commodity] - COMMODITY_ORDER[b.commodity]) || natural(a.variety, b.variety)
     || (bucketRank(a, ctx.ageSet) - bucketRank(b, ctx.ageSet)))
-  return { cols, days: out }
+  return { cols, days: out, truncated }
 }
 
 /** Value of a ledger/summary grid cell in kilos (0 when absent). */
@@ -480,9 +592,14 @@ export const ledgerModel = (ledger, unit, { from, to, scope = 'ALBAY BRANCH' }) 
   })
   const rows = []
   const day = ledger.days
-  if (day.length > 0) rows.push(line(`${longDate(day[0].date)} · BEGINNING INVENTORY`, day[0].beginning, 'beg', true))
+  const moveNotes = (m) => cols.map((c) => { const l = m.lines.get(`${c.rowKey}|${c.id}`); return l ? l.map((x) => ({ doc: x.doc, customer: '', pile: x.pile, value: num(x.kilos, unit) ?? 0 })) : null })
+  if (day.length > 0) {
+    // the first day: its beginning already sits in the new month's brackets, so the move is explained on the cells
+    rows.push({ ...line(`${longDate(day[0].date)} · BEGINNING INVENTORY`, day[0].beginning, 'beg', true), ...(day[0].ageMove ? { notes: moveNotes(day[0].ageMove) } : {}) })
+  }
   for (const d of day) {
     rows.push({ kind: 'day', first: longDate(d.date), cells: [] })
+    if (d.ageMove && !d.isFirst) rows.push({ ...line('AGE BRACKET MOVES (new month)', d.ageMove.grid, 'row'), notes: moveNotes(d.ageMove), day: d.date })
     if (d.adds.length > 0) {
       rows.push({ kind: 'add-label', first: 'ADD:', cells: [] })
       for (const a of d.adds) rows.push({ ...line(a.label, a.grid, 'add'), notes: cols.map((c) => notesFor(d.moves, 'add', a.label, c, unit)), day: d.date })
@@ -550,8 +667,9 @@ export const ledgerCards = (ledger, unit) => {
         return {
           label: lineLabel(c), beg: num(v(d.beginning), unit), end: num(v(d.ending), unit),
           shift: null, adj: d.adjustment ? num(v(d.adjustment), unit) : null, adds, lesses,
+          move: d.ageMove ? num(v(d.ageMove.grid), unit) : null,
         }
-      }).filter((l) => l.beg != null || l.end != null || l.adj != null || l.adds.length || l.lesses.length)
+      }).filter((l) => l.beg != null || l.end != null || l.adj != null || l.move != null || l.adds.length || l.lesses.length)
       return { label: cols[0].label, lines }
     }).filter((w) => w.lines.length > 0),
   }))
@@ -564,6 +682,7 @@ export const checksModel = (checks, unit, { asOf }) => {
     if (items.length === 0) rows.push({ kind: 'row', first: 'None', cells: [null, null] })
     for (const it of items) rows.push({ kind: 'row', ...line(it) })
   }
+  section('Stock book self-check', checks.selfCheck ?? [], (r) => ({ first: r.title, cells: [r.ok ? 'passed' : r.detail.join('; '), null] }))
   section('Warehouses using a start-date override', checks.overrides, (o) => ({ first: o.warehouse, cells: [`starts after ${longDate(o.date)}`, null] }))
   section('Authorized more than the stock available', checks.overAuthorized ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Authority age group blank or unreadable (deducted from the oldest stock)', checks.noAgeGroup ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}${o.ageGroup ? ` · "${o.ageGroup}"` : ''}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
@@ -578,6 +697,147 @@ export const checksModel = (checks, unit, { asOf }) => {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Self-check: proves the stock book against itself every time it is opened in
+// Data check, so a wrong figure is caught instead of being found by eye.
+// ---------------------------------------------------------------------------
+
+// Age worked out a second, independent way (count whole monthly anniversaries one by one),
+// to catch any slip in lotAgeMonths.
+const slowAgeMonths = (fromISO, asOfISO) => {
+  if (asOfISO <= fromISO) return 0
+  let n = 0
+  while (addMonthsISO(fromISO, n + 1) <= asOfISO) n += 1
+  const days = (Date.parse(`${asOfISO}T00:00:00Z`) - Date.parse(`${addMonthsISO(fromISO, n)}T00:00:00Z`)) / 86400000
+  return n + days / 30.44
+}
+
+const byKey = (grid) => {
+  const out = new Map()
+  for (const [rk, row] of grid) for (const [id, v] of row) {
+    const [commodity, variety] = id.split('|')
+    const k = `${rk}|${commodity}|${variety}`
+    out.set(k, (out.get(k) ?? 0) + v)
+  }
+  return out
+}
+const cellKeys = (grid) => {
+  const out = new Map()
+  for (const [rk, row] of grid) for (const [id, v] of row) out.set(`${rk}|${id}`, v)
+  return out
+}
+const differences = (a, b, tolerance = 0.5) => {
+  const bad = []
+  for (const k of new Set([...a.keys(), ...b.keys()])) {
+    const d = (a.get(k) ?? 0) - (b.get(k) ?? 0)
+    if (Math.abs(d) >= tolerance) bad.push({ k, d })
+  }
+  return bad
+}
+const afterDate = (k) => k.split('|').slice(1).join(' · ')
+
+export const buildSelfCheck = (ctx0, inputs, { asOf }) => {
+  const warm = inputs.globalDataStartDate ? addDaysISO(inputs.globalDataStartDate, 1) : null
+  if (!warm || asOf < warm) return []
+  const results = []
+  const add = (title, bad, show) => results.push({ title, ok: bad.length === 0, detail: bad.slice(0, 6).map(show), more: Math.max(0, bad.length - 6) })
+  const bags = (kilos) => (kilos / 50).toFixed(2)
+  const ctx = withOpening({ ...ctx0, combine: false, ageBasis: 'month', openingCells: undefined }, inputs)
+  const filters = { byProducts: true }
+
+  const ledger = buildLedger(ctx, inputs, { from: warm, to: asOf, filters })
+  const lastDay = ledger.days.at(-1)?.date ?? asOf
+  const summary = buildSummary(ctx, inputs, { asOf: lastDay, filters })
+  const summaryGrid = new Map()
+  for (const p of summary.provinces) for (const r of p.rows) summaryGrid.set(`${p.name}|${r.label}`, r.values)
+  const last = ledger.days.at(-1)
+
+  results.push({ title: 'The period is fully covered (not cut short)', ok: !ledger.truncated, detail: ledger.truncated ? ['The period is longer than the report can walk day by day.'] : [], more: 0 })
+
+  // 1. The Summary and the Daily inventory work this out separately; they must agree on every cell.
+  if (last) add(`Summary equals the Daily inventory ending (${longDate(last.date)})`, differences(cellKeys(summaryGrid), cellKeys(last.ending)), (x) => `${afterDate(x.k)}: ${bags(x.d)} bags apart`)
+
+  // 2. A day starts where the day before ended; a new month only moves stock between brackets.
+  const continuity = []
+  const moved = []
+  ledger.days.forEach((d, i) => {
+    if (i > 0) {
+      const expected = new Map(cellKeys(ledger.days[i - 1].ending))
+      if (d.ageMove) for (const [k, v] of cellKeys(d.ageMove.grid)) expected.set(k, (expected.get(k) ?? 0) + v)
+      for (const x of differences(cellKeys(d.beginning), expected)) continuity.push({ k: `${d.date}|${x.k}`, d: x.d })
+    }
+    if (d.ageMove) for (const [k, v] of byKey(d.ageMove.grid)) if (Math.abs(v) >= 0.5) moved.push({ k: `${d.date}|${k}`, d: v })
+  })
+  add('Each day starts where the day before ended (a new month only moves stock between brackets)', continuity, (x) => `${longDate(x.k.split('|')[0])} ${afterDate(x.k)}: ${bags(x.d)} bags`)
+  add('An age move never changes the quantity of a variety', moved, (x) => `${longDate(x.k.split('|')[0])} ${afterDate(x.k)}: ${bags(x.d)} bags`)
+
+  // 3. Every day balances: beginning + ADD - LESS + closed piles + override = ending, per warehouse and variety.
+  const chain = []
+  for (const d of ledger.days) {
+    const net = new Map()
+    const addTo = (grid, sign) => { for (const [k, v] of byKey(grid)) net.set(k, (net.get(k) ?? 0) + sign * v) }
+    addTo(d.beginning, 1)
+    d.adds.forEach((x) => addTo(x.grid, 1))
+    d.lesses.forEach((x) => addTo(x.grid, -1))
+    if (d.adjustment) addTo(d.adjustment, 1)
+    if (d.openingAdj) addTo(d.openingAdj, 1)
+    for (const x of differences(net, byKey(d.ending))) chain.push({ k: `${d.date}|${x.k}`, d: x.d })
+  }
+  add('Every day balances (beginning + ADD - LESS = ending)', chain, (x) => `${longDate(x.k.split('|')[0])} ${afterDate(x.k)}: ${bags(x.d)} bags`)
+
+  // 4. No negative stock anywhere in the period.
+  const negative = []
+  for (const d of ledger.days) for (const [k, v] of cellKeys(d.ending)) if (v < -0.5) negative.push({ k: `${d.date}|${k}`, d: v })
+  add('No negative balance', negative, (x) => `${longDate(x.k.split('|')[0])} ${afterDate(x.k)}: ${bags(x.d)} bags`)
+
+  // 5. An opening balance typed by an Admin shows exactly as typed on its date.
+  const o = ctx0.opening
+  if (o && Array.isArray(o.cells) && o.cells.some((c) => c.t != null) && o.date >= warm && o.date <= asOf) {
+    // the cells were typed in the bracket set saved with the override, so they are read back in that set
+    const ctxO = withOpening({ ...ctx0, combine: false, ageBasis: 'month', ageSet: o.ageSet, openingCells: undefined }, inputs)
+    const atDate = buildSummary(ctxO, inputs, { asOf: o.date, filters })
+    const grid = new Map()
+    for (const p of atDate.provinces) for (const r of p.rows) grid.set(`${p.name}|${r.label}`, r.values)
+    const shown = cellKeys(grid)
+    const bad = []
+    for (const c of o.cells) {
+      if (c.t == null) continue
+      const k = `${rowKey(rowOf(ctxO, { warehouseId: c.w, cerealType: c.c }))}|${c.c}|${c.v}|${c.b}`
+      const got = shown.get(k) ?? 0
+      if (Math.abs(got - c.t) >= 0.5) bad.push({ k, d: got - c.t })
+    }
+    add(`The opening balance you typed shows as typed (${longDate(o.date)})`, bad, (x) => `${afterDate(x.k)}: shows ${bags(x.d)} bags off`)
+  }
+
+  // 5b. Every correction of the override is found in the stock (a lower balance needs that much stock in its bracket).
+  if (ctx.openingEngine) {
+    const short = buildLots({ ...withEngine(ctx, inputs), asOf }).overrideShort ?? []
+    add('The opening balance is fully worked into the stock', short, (x) => `${rowOf(ctx, { warehouseId: x.w, cerealType: x.c }).label} · ${x.v} · ${x.b}: ${bags(x.short)} bags could not be placed`)
+  }
+
+  // 6. Combined names only merge columns: the totals must equal the separate view.
+  const combined = buildSummary({ ...ctx, combine: true, openingCells: undefined }, inputs, { asOf: lastDay, filters })
+  const tot = (S) => [...S.total.values()].reduce((a, b) => a + b, 0)
+  add('Combined and separate names give the same total', Math.abs(tot(combined) - tot(summary)) >= 0.5 ? [{ k: 'total', d: tot(combined) - tot(summary) }] : [], (x) => `${bags(x.d)} bags apart`)
+
+  // 7. Ages: the report's age agrees with an independent count.
+  const state = buildLots({ ...inputs, asOf })
+  const ageBad = []
+  for (const [pileId, st] of state) {
+    const pile = ctx.pileById.get(pileId)
+    if (!pile) continue
+    for (const lot of st.lots) {
+      if (lot.kilos < EPS_KG || !lot.date) continue
+      const a = lotAgeMonths(lot.date, asOf)
+      const b = slowAgeMonths(lot.date.slice(0, 10), asOf)
+      if (a == null || Math.abs(a - b) > 1e-6) ageBad.push({ k: `${pile.pileName}|${lot.date}`, d: (a ?? 0) - b })
+    }
+  }
+  add('Lot ages agree with an independent count', ageBad, (x) => `${x.k.split('|')[0]} received ${x.k.split('|')[1]}`)
+  return results
+}
+
 // ---------------------------------------------------------------------------
 // Age monitoring lists and data checks (read-only).
 // ---------------------------------------------------------------------------
@@ -588,8 +848,9 @@ export const checksModel = (checks, unit, { asOf }) => {
  * oldest lots on hand. Each line is ONE lot, so only that lot moves, never the
  * whole pile. Quantities are kilos (convert with toUnit).
  */
-export const buildAgeLists = (ctx, inputs, { asOf, filters = {}, windowDays = 30, topOld = 15 }) => {
-  const state = buildLots({ ...inputs, asOf })
+export const buildAgeLists = (ctx0, inputs0, { asOf, filters = {}, windowDays = 30, topOld = 15 }) => {
+  const ctx = withOpening(ctx0, inputs0)
+  const state = buildLots({ ...withEngine(ctx, inputs0), asOf })
   const limit = addDaysISO(asOf, windowDays)
   const crossing = []
   const lots = []
@@ -619,7 +880,7 @@ export const buildAgeLists = (ctx, inputs, { asOf, filters = {}, windowDays = 30
         if (i >= 0 && Number.isFinite(set[i].max)) { boundary = set[i].max; nextLabel = set[i + 1].label }
       }
       if (boundary == null) continue
-      const crossDate = addDaysISO(lot.date, Math.floor(boundary * DAYS_PER_MONTH) + 1)
+      const crossDate = addDaysISO(addMonthsISO(lot.date, boundary), 1)
       if (crossDate >= asOf && crossDate <= limit) crossing.push({ ...base, nextLabel, crossDate })
     }
   }
@@ -690,7 +951,8 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
     warehouse: warehouseLabel(whById.get(t.warehouseId)?.name, false),
   }))
   const byName = (a, b) => natural(a.name, b.name)
-  return { overrides, overAuthorized, noAgeGroup, uncoveredWsi, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
+  const selfCheck = buildSelfCheck(ctx, inputs, { asOf })
+  return { selfCheck, overrides, overAuthorized, noAgeGroup, uncoveredWsi, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
 }
 
 /**

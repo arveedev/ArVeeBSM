@@ -7,8 +7,8 @@
 //
 // It changes ONLY what Daily inventory, Summary and Age monitoring show from that
 // date onward. No pile, transaction, authority or any other screen is touched,
-// and "Clear" removes it again. A correction does not age: it stays in the
-// bracket it was typed in. The balance typed is saved as typed, so it always shows.
+// and "Clear" removes it again. A correction is worked into the stock itself, so it
+// ages and is used up like the rest. The balance typed is saved as typed, so it always shows.
 
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
