@@ -291,18 +291,21 @@ function AdminHomeStocks({ onWarehouseSelect }) {
         title={(
           <>
             {/* Deliberately quiet entry to the Stock Desk (Admin/Visitor only, this page is theirs alone): dim,
-                no circle, brightens only on hover. It leads the title so it can never be pushed onto a line of its own. */}
-            {canOpenReports && (
-              <button
-                type="button"
-                onClick={() => setShowInventoryReports(true)}
-                aria-label="Stock Desk"
-                className="-ml-1 mr-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
-              >
-                <ClipboardList size={14} />
-              </button>
-            )}
-            {weightUnit === 'mt' ? 'Metric Tons by Province & Category' : 'Net Bags by Province & Category'}
+                no circle, brightens only on hover. It follows the title, tied to its last word so it never wraps onto a line of its own. */}
+            {weightUnit === 'mt' ? 'Metric Tons by Province & ' : 'Net Bags by Province & '}
+            <span className="whitespace-nowrap">
+              Category
+              {canOpenReports && (
+                <button
+                  type="button"
+                  onClick={() => setShowInventoryReports(true)}
+                  aria-label="Stock Desk"
+                  className="ml-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
+                >
+                  <ClipboardList size={14} />
+                </button>
+              )}
+            </span>
           </>
         )}
         headerRight={(
