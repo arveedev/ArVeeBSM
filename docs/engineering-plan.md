@@ -467,6 +467,37 @@ renumbered authority can each be found and corrected by the people who
 own them, one transaction at a time, with nothing changed behind their
 backs.
 
+## Phase 10 — Excel Parity, SDO Vouchers and the Logistics Inventory
+
+- **Excel on every report.** Built on a capture shim over the PDF generators (TDD §2.34), then reworked three times against
+  real exports. First version: right content, wrong look (widths, signature block crushed, label/value lines clipped) and no
+  working formulas, because totals sat in body rows and cancelled PRs left blank cells. Second: print-faithful widths from
+  the PDF's own geometry, signatories in bands, `SUBTOTAL` totals, roll-forward and running-balance formulas, cross-sheet
+  `SUMIFS` on the Stock Report. Third: Abstract reconciliation beside the signatories, derived-column formulas that tolerate
+  blank rows, the Pile Layout rebuilt as a landscape plan linked to a Pile Data sheet. Lesson: test with the real generators
+  and with cancelled / blank rows, not only with clean synthetic tables.
+- **One Export button.** Every report screen asks PDF or Excel through a shared dialog (`ExportFormatDialog`) instead of two
+  buttons.
+- **Closed piles in pickers.** A closed pile still appeared in the Edit Pile dropdown; all pickers now exclude it except the
+  document's own selection.
+- **CPF logbook and Abstract.** Certification and signature block kept as one group (the first fix moved it too late; the
+  block height was underestimated, 30 mm against 54 mm), and "Page X of Y" in the lower right.
+- **Negative pile age.** A layout dated before a pile's receipt showed a negative age; age is now floored at the age the
+  pile arrived with, in the shared calculation.
+- **Tab order from MTS (WSR/WSI).** Reported: Tab went to Address, skipping a blank Nature of Transaction (TDD §2.38).
+- **SDO Disbursement Voucher and BUR.** From the Abstract export, with the SDO's "dated" text setting off by default
+  (TDD §2.37). The Abstract's header grey is slightly darker.
+- **Weekly Warehouse Equipment and Logistics Report.** First built as a form whose values were remembered in local storage;
+  corrected to a stored, synced inventory with add / edit / delete (TDD §2.36). Period presets match the stock statement.
+- **Login logo.** Built in the deck first, then on the real login page, then re-timed to open large and shrink into place
+  (TDD §2.39).
+- **Process incident.** A commit staged the whole `docs` folder and swept unrelated, uncommitted working files into the
+  remote; it was reset and re-pushed with only the intended files. Lesson: stage named paths only.
+
+**Milestone**: every report can leave the app as a print-faithful PDF or an editable Excel workbook whose figures are live
+formulas, the SDO can produce the replenishment voucher and BUR from the same Abstract, and each warehouse keeps its
+logistics inventory in the app and prints the weekly report from it.
+
 ## Testing and Rollout Approach
 
 - **No dedicated automated test suite is assumed as a blocking gate** —

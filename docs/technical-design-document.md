@@ -565,6 +565,76 @@ records, and Reports and the PDF already combine records sharing a `groupSerialN
 with one received total (one-sided records, and the Stock Desk would need group-aware lot carrying); one record holding a
 list of issuing piles (changes the shape every reader depends on).
 
+### 2.34 Excel exports are built from what the PDF printed, not from a second set of calculations
+
+**Decision**: each PDF generator accepts an optional `capture` array. `src/utils/pdfCapture.js` wraps `autoTable` and `cap()`
+so that, next to everything a generator prints, it records the same content as plain data: title lines, headings, info
+lines, tables (head, body, foot) with the printed column widths, indent, page size and column alignment, reconciliation
+rows and signatories. `src/utils/reportExcel.js` (ExcelJS, imported only when Export is chosen) turns that record into the
+workbook. A single `saveReport({ kind })` writes the PDF or the Excel. The Pile Layout, which is a floor plan and not a
+table, has its own builder fed by the same `boxDetailEntries()` the PDF uses.
+
+**Rationale**: the Excel file always shows exactly the rows and totals the PDF shows, with no second calculation that could
+drift. Printed millimetres convert to Excel column widths, so the sheet prints at the PDF's proportions. Rejected:
+re-deriving each report for Excel (two sources of truth, which is what produced an Excel that "looked nothing like" the
+PDF in the first versions).
+
+### 2.35 Excel formulas are written only where they reproduce the printed figure
+
+**Decision**: after the cells are placed, `reportExcel.js` looks for relationships in the numbers themselves and writes a
+formula only where it gives the printed value on every row it applies to: totals (`SUBTOTAL(9, ...)` so a filtered sheet
+re-totals; a "TOTAL" or "SUB-TOTAL" row inside the body counts as a total, not only a footer), Ending = Beginning +
+Receipts - Issues, running balances, and any column that equals A - B or A x B of columns to its left (Net Wt = Gross - MTS,
+Equivalent Net Wt = Net Wt x ENW Factor, Amount = Kilos x Unit Cost), rounded to the printed decimals. Blank rows (a
+cancelled PR) are skipped. On the Stock Report the Summary receipts / issues and the Recapitulation figures are `SUMIFS`
+over the Statement sheets, and the grand total adds the activity totals. `fullCalcOnLoad` makes Excel recompute on open.
+
+**Rationale**: a formula that silently changed the report would be worse than a plain number, so each is verified against the
+printed value first and left as a number when it does not match. Targets must be to the right of their operands, which makes
+circular references impossible. An early version only looked at footer rows and skipped any column with a blank cell, so
+real exports (whose totals were body rows and which contained cancelled PRs) came out with no formulas at all.
+
+### 2.36 The logistics inventory is a stored, synced table
+
+**Decision**: `logisticsItems` (Dexie v45, synced; see backend-schema) holds one row per pallet, platform scale or other
+logistical / semi-expendable item of a warehouse, with add / edit / delete in the Logistics Inventory modal opened from Home.
+The Weekly Warehouse Equipment and Logistics Report prints whatever is stored; only the heading period is chosen at export
+(the same presets as the stock statement, defaulting to the 1st of the month through today).
+
+**Rationale**: the figures are an inventory that persists and changes by small edits, not a form retyped each week. The first
+version kept the typed values in the browser's local storage, which neither syncs nor backs up; a table is read by the daily
+GitHub backup and the device download automatically (both read `db.tables`) and syncs through Dexie Cloud. It is deliberately
+not in the Google Sheets sync.
+
+### 2.37 DV and BUR are drawn from the Abstract's data
+
+**Decision**: `src/utils/sdoDvBurPdfGenerator.js` draws the Disbursement Voucher (A4) and the Budget Utilization Request and
+Status (an A4 holding two identical copies above and below a dashed cut line), from the PRs of the Abstract export. Payee is
+the SDO, amount is the total of the paid PRs, particulars are "TO: REPLENISHMENT OF CPF FOR THE PAID PR #first TO last", plus
+" DATED ..." only when the SDO's own `dvDatedText` setting is on (default off). Signatories are the Abstract's.
+
+**Rationale**: the voucher cannot disagree with the Abstract it replenishes. Exact column proportions of the paper forms are
+drawn from the originals; a stray vertical line through the BUR's "Balance" heading and a missing JEV No. / Date column on the
+DV were both found by comparing the printout with the original side by side.
+
+### 2.38 Tab order is an explicit chain where the DOM order would mislead
+
+**Decision**: on the WSR/WSI form the Customer group sits before the Stock Details group in the desktop DOM, so Tab from MTS
+(the last field of Stock Details) is handled by an explicit chain: Nature of Transaction, Customer Name, Address, then the
+procurement fields, each stopped at only while empty, then Number of Bags. Shift+Tab walks the same chain backwards.
+
+**Rationale**: the earlier chain assumed an authority pick had always filled Nature of Transaction and Customer Name and skipped
+straight to Address, which left a blank Nature of Transaction unreachable by keyboard.
+
+### 2.39 The login logo timeline
+
+**Decision**: the logo opens large and centred (measured from an untransformed slot so its resting position is exact), builds
+its two triangles and notch, holds a beat, then shrinks into its place over 700 ms; the other elements keep their own
+entrance animations, delayed by one shared variable so they start as the logo begins to shrink. `prefers-reduced-motion`
+removes all of it.
+
+**Rationale**: one coordinated entrance instead of a logo effect competing with the rest of the screen.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

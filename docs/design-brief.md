@@ -262,6 +262,9 @@ one-off `@keyframes` block. Representative patterns already established:
   original problem it was solving (a field left hidden under the
   keyboard) on a phone specifically.
 
+- **The login logo**: opens large and centred, builds itself, holds, and shrinks into place while the other elements enter,
+  all on one shared timeline variable; removed under `prefers-reduced-motion`.
+
 ## 7. Iconography
 
 `lucide-react` is the app's single icon library — no mixing icon sets.
@@ -270,6 +273,18 @@ Icons are chosen for immediate real-world legibility over cleverness
 Piles, a `Plus` in a filled circle for the FAB) since the primary users
 are not expected to have prior exposure to app-design icon conventions.
 
+
+## Export choice
+
+Every exportable report has one primary Export button. It opens a small dialog with two clear choices, PDF (ready to print or
+send) and Excel (editable, totals are formulas), plus Cancel (`ExportFormatDialog`). Never two competing buttons per report.
+
+## Printed forms
+
+DV and BUR follow the paper originals exactly (box proportions, titles centred in their boxes, thin black rules, no
+instructional captions on the sheet). Tables on printed reports use a medium-grey header (slightly darker on the SDO Abstract), thin
+grey body rules and a heavy black header frame. The Logistics Inventory uses a bottom sheet on phones and a centred modal on
+wide screens, with the `Boxes` icon beside the warehouse card.
 
 ## Scrollbars
 

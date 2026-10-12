@@ -261,6 +261,12 @@ phone. The exported floor-plan PDF always shows true warehouse
 proportions (never auto-cropped to just the used area, unlike the
 on-screen editor) since a floor plan must represent the whole space.
 
+A pile that has been closed is offered in no selector or menu anywhere (the pile pickers of the
+stock forms, the WTS pile choices, the Piles screens): it survives only as data and in the pile layout
+of the day it closed and before. A document that already points at a closed pile keeps showing it as its
+own selection. A pile's age is never shown below the age it arrived with, so a layout or report dated
+before the pile was received shows that starting age, not a negative one.
+
 ## 9. Milling Operations
 
 Two structurally separate tracks, since NFA-owned facilities and private
@@ -411,6 +417,27 @@ REPLENISHMENT OF CPF FOR THE PAID PR #first TO last", the BUR office is "NFA -
 (province)", and the signatories are the Abstract's (Verified By certifies, Noted
 By approves). The " DATED OCT. 9-10, 2026" suffix is an SDO setting on the
 Settings page, off by default.
+
+Every printed report that has an Excel version offers ONE Export button. It asks whether to
+make the PDF or the Excel file, so every screen offers the same two formats the same way. The CPF
+logbook and the SDO Abstract print "Page X of Y" in the lower right of every page, and the logbook's
+certification and signature block is kept together as one group that moves whole to a new page rather
+than being cut off.
+
+The Excel file prints like the PDF: column proportions, indent, header, details, bordered table,
+signatories three across and the page footer follow the printed page, on an A4 sheet with the same
+orientation. The Pile Layout is a landscape one-page plan with coloured boxes whose label/figure rows and
+signatories match the PDF; its figures are formulas reading a "Pile Data" sheet in the same file.
+
+The Entry forms' Tab order never skips a field that still needs filling: from MTS on a WSR/WSI, Tab stops
+at a blank Nature of Transaction, then a blank Customer Name, then Address and the other blank fields,
+and only then reaches Number of Bags.
+
+The login screen opens with the logo large in the centre, builds itself, then shrinks into its place
+as the rest of the screen comes in.
+
+The Weekly Warehouse Equipment and Logistics Report, the Disbursement Voucher and the Budget
+Utilization Request are described with the Logistics Inventory and the SDO's reports above.
 
 ## 12. Data Integrity Principles
 

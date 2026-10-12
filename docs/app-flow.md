@@ -74,6 +74,9 @@ rather than the app navigating away and back.
    combination is touched) a transaction history preload — none of these
    block the user from immediately opening a form.
 
+*Login entrance*: the logo opens large in the centre of the screen and builds itself (two triangles lock together, the
+notch cuts in), holds briefly, then shrinks into its place at the top as the title, PIN dots and keypad come in.
+
 ## 3. Recording a Transaction (WSR / WSI / WTS / ESR / ESI)
 
 This is the app's single most frequent flow, and the one offline
@@ -210,6 +213,9 @@ reliability is built around.
 6. The user shares or prints the exported file through their device's
    own OS share sheet — the app itself has no direct printer
    integration.
+7. Every report that has an Excel version has one Export button; tapping it asks "PDF or Excel". The Excel file prints like the
+   PDF and its totals, balances and derived columns are formulas (on the Stock Report the Summary and Recapitulation sheets
+   read the Statement sheets).
 
 ## 7. Pile Layout Flow
 
@@ -406,3 +412,21 @@ the step-by-step journey.*
 6. In a liquidation, an Admin can edit a unit price in the SUMMARY; the value
    is saved for that ricemill and is the same one Admin > Operations > Milling
    Prices shows. A Visitor sees the prices read-only.
+
+## 13. SDO Disbursement Voucher and BUR Flow
+
+1. In the SDO's Abstract export window, after choosing the period (and optionally the checked receipts), the "DV & BUR" button
+   builds one PDF from those same PRs.
+2. Page 1 is the Disbursement Voucher: payee the SDO (address LEGAZPI CITY), amount due the total of the paid PRs, particulars
+   "TO: REPLENISHMENT OF CPF FOR THE PAID PR #first TO last", certified by the Abstract's Verified By, approved by its Noted By.
+3. Page 2 is an A4 holding two identical BURs (office "NFA - province"), cut along the dashed line.
+4. The SDO's Settings page has a switch for adding " DATED OCT. 9-10, 2026" to the particulars; it is off by default.
+
+## 14. Logistics Inventory Flow (warehouse staff)
+
+1. On Home, an icon beside the warehouse card opens Logistics Inventory for that warehouse.
+2. The modal lists Wooden Pallets, Platform Scale and Other Logistics. Add opens a form (pallets: classification, utilized,
+   available, transfer; scales: type, serials, serviceable / for repair / unserviceable; others: name, brand new, serviceable,
+   unserviceable; remarks on all); the pencil edits, the bin deletes after an inline confirmation.
+3. The period (From / To with the stock statement's presets, defaulting to the 1st of the month through today) is chosen at the
+   top; "Export Weekly Report (PDF)" prints the stored inventory with the signatories.

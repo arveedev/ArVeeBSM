@@ -67,6 +67,8 @@ ever reaches the server.
 | `role` | string | Indexed. `'Admin'` \| `'Warehouse Supervisor'` \| `'Acting Warehouse Supervisor'` \| `'Warehouse Assistant'` \| `'Acting Warehouse Assistant'` \| `'MPO III'` \| `'Acting MPO III'` \| `'Visitor'` (Visitor is not a real row here — it authenticates against `reportConfig.visitorAccessCode` instead) |
 | `assignedWarehouses` | string[] (FK → `warehouses.warehouseId`) | Multi-entry indexed (`*assignedWarehouses`). Admin implies access to every warehouse regardless of this list — enforced in application logic, not the schema. |
 
+SDO personal settings (plain, unindexed fields on the user's own row): `showReplenishmentDetails` (boolean, default true: Abstract cash reconciliation breakdown) and `dvDatedText` (boolean, default false: adds " DATED ..." to the Disbursement Voucher and BUR particulars).
+
 ## 3. Inventory
 
 ### `piles`
