@@ -8394,5 +8394,5 @@
 //   1.10-336 - SDO exports: CPF Cash Disbursement Record and Abstract show "Page X of Y" in the lower right of every page.
 //   1.10-337 - A closed pile is no longer offered in any pile picker (layout, stock forms, Weigher's tally); it stays only as history.
 //   1.10-338 - Export to Excel on every report (Stock Report, BIN Card, Pile Layout, SDO Abstract, CPF Cash Disbursement Record); the logo builds itself on the login page.
-//   1.10-339 - One Export button per report that asks PDF or Excel; the Excel file now follows the printed layout (header, details, bordered table, signatories across) and totals / Ending Balance are live formulas.
+//   1.10-339 - One Export button per report that asks PDF or Excel; the Excel file now prints like the PDF (same column proportions, header, details, bordered table, signatories across, page numbers) and its figures are live formulas: totals by SUBTOTAL, Ending = Beginning + Receipts - Issues, running balances, and the Summary / Recapitulation sheets pull from the Statement sheets with SUMIFS. WSI/procurement Tab from MTS now stops at a blank Nature of Transaction and Customer Name before Address.
 export const APP_VERSION = '1.10-339'

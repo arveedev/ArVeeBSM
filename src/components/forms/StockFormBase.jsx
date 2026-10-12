@@ -640,6 +640,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // focusNextInChain/focusPrevInChain/handleChainKeyDown) lives further
   // down, right after `isProcurement` is computed - it isn't available
   // yet this early in the component.
+  const transactionTypeSelectRef = useRef(null)
   const addressInputRef = useRef(null)
   const firstMemberNameRef = useRef(null)
   const farmerRsbsaRef = useRef(null)
@@ -809,7 +810,12 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // Shift+Tab (step back one relevant field, regardless of fill state -
   // going back is a deliberate revisit, never skipped past) can never
   // drift out of sync with each other.
+  // Nature of Transaction and Customer Name come first: Tab from MTS used to jump straight to Address
+  // even when the Nature of Transaction (or the name) was still blank - a reported bug. They are only
+  // stopped at while empty, like every other step here.
   const tabChainSteps = [
+    { key: 'transaction', focus: () => transactionTypeSelectRef.current?.focus(), relevant: true, filled: Boolean(transactionTypeId) },
+    { key: 'customer', focus: () => customerNameRef.current?.focus(), relevant: true, filled: Boolean(customerName.trim()) },
     { key: 'address', focus: () => addressInputRef.current?.focus(), relevant: true, filled: Boolean(customerAddress.trim()) },
     // Confirmed, reported real bug: an FA (Farmer Org) pick/toggle-on
     // auto-fills the FA's own Address but always starts the Members
@@ -3437,6 +3443,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
           <div>
             <label className={labelClass}>Nature of Transaction</label>
             <select
+              ref={transactionTypeSelectRef}
               value={transactionTypeId}
               onChange={(e) => setTransactionTypeId(e.target.value)}
               className={`${inputClass} ${!transactionTypeId ? '!border-brand-amber' : ''}`}
@@ -3473,7 +3480,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
             onKeyDown={(e) => {
               if (e.key !== 'Tab' || e.shiftKey || !tabSkipApplies) return
               e.preventDefault()
-              requestAnimationFrame(() => focusNextInChainRef.current(undefined))
+              requestAnimationFrame(() => focusNextInChainRef.current('customer'))
             }}
             // Procurement-only "FA" (Farmers Organization) toggle, now
             // in-line with the label itself - per explicit request,

@@ -384,10 +384,13 @@ CPF Cash Disbursement Record (a continuous ledger). The Excel file is built
 from the same recorded content as the PDF, so both always show the same rows
 and totals, laid out as printed (centred heading, details, bordered table,
 signatories three across). Each report has one Export button that asks for PDF
-or Excel. Amounts are real numbers, and wherever a figure is the sum of the rows
-above it, or Ending Balance = Beginning + Receipts - Issues, the Excel cell is a
-formula (written only where it reproduces the printed figure), so an edit
-carries through. The milling
+or Excel. Column widths follow the printed page, so the sheet prints like the PDF. Amounts
+are real numbers, and wherever a figure is derived the Excel cell is a formula
+(written only where it reproduces the printed figure): totals use SUBTOTAL,
+Ending Balance = Beginning + Receipts - Issues, running balances chain from the
+row above, and on the Stock Report the Summary and Recapitulation sheets pull
+their receipts and issues from the Statement sheets with SUMIFS, so an edit
+carries through every sheet. The milling
 liquidations and the Stock Desk reports already had their own Excel export.
 
 ## 12. Data Integrity Principles

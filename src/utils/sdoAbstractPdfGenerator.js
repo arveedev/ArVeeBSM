@@ -29,6 +29,11 @@ const HEADER_BG = [232, 232, 232]
 // margin frees up more width for the actual report content, same
 // in-to-mm conversion already used for the page dimensions below.
 const margin = 0.3 * 25.4
+// Where the printed columns really landed, handed to the Excel export so its columns match.
+const printedGeometry = (columnX, doc) => {
+  const cols = [...columnX.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v)
+  return { colWidths: cols.map((c) => c.width), startX: cols.length ? cols[0].x : margin, pageW: doc.internal.pageSize.getWidth(), pageH: doc.internal.pageSize.getHeight() }
+}
 // 8.5 x 13 in (the physical paper this is actually printed on -
 // confirmed directly, not A4), landscape: width/height swapped, both
 // converted from inches to mm since the rest of this file works in mm.
@@ -291,10 +296,11 @@ export const generateSdoAbstract = ({
   ]
 
   const foot = [[{ content: 'TOTAL', colSpan: 7 }, ...buildTotalsRowCells(totals)]]
+  let tableRec = null
   if (capture) {
     // For the Excel version: the same rows, without the blank spacer rows that only exist to space the printed page.
     capture.push({ kind: 'page', sheet: 'Abstract', lines: ['NATIONAL FOOD AUTHORITY', (branchLabel ?? '').toUpperCase(), 'ABSTRACT OF CEREAL PURCHASES', `FOR THE PERIOD ${periodLabel.toUpperCase()}`] })
-    capture.push({ kind: 'table', head, body: body0.filter((row) => !(row[0] && typeof row[0] === 'object' && row[0].styles && row[0].styles.minCellHeight === 3)), foot })
+    capture.push(tableRec = { kind: 'table', head, body: body0.filter((row) => !(row[0] && typeof row[0] === 'object' && row[0].styles && row[0].styles.minCellHeight === 3)), foot })
   }
 
   const lastColIndex = head[0].length - 1
@@ -591,6 +597,7 @@ export const generateSdoAbstract = ({
     reconRows.push({ label: e.label, amt: e.amount })
     reconRows.push({ label: totalLabel, amt: running, bold: true })
   }
+  if (tableRec) Object.assign(tableRec, printedGeometry(columnX, doc))
   if (capture) capture.push({ kind: 'kv', rows: reconRows.map((r) => [r.label, fmtPeso(r.amt), r.bold]) })
   // The box itself starts 4mm ABOVE `y` (see `ry = y - 4` below), so its
   // true bottom relative to `y` is 3mm plus one 7mm row per reconRows

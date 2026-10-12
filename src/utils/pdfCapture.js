@@ -12,8 +12,20 @@ import autoTableBase from 'jspdf-autotable'
 
 /** Same as autoTable(doc, options), and records the table (head, body, foot) when capturing. */
 export const autoTable = (doc, opts) => {
-  if (doc.__cap) doc.__cap.push({ kind: 'table', head: opts.head, body: opts.body, foot: opts.foot, showFoot: opts.showFoot })
-  return autoTableBase(doc, opts)
+  const rec = doc.__cap ? { kind: 'table', head: opts.head, body: opts.body, foot: opts.foot, showFoot: opts.showFoot } : null
+  if (rec) doc.__cap.push(rec)
+  const out = autoTableBase(doc, opts)
+  if (rec) {
+    // The printed geometry, so the Excel sheet can use the same column proportions and indent.
+    const m = opts.margin
+    rec.startX = typeof m === 'number' ? m : (m && m.left) ?? 14
+    rec.colWidths = (doc.lastAutoTable?.columns ?? []).map((c) => c.width)
+    rec.colHalign = Object.fromEntries(Object.entries(opts.columnStyles ?? {}).filter(([, v]) => v && v.halign).map(([k, v]) => [k, v.halign]))
+    rec.headStyle = opts.headStyles
+    rec.pageW = doc.internal.pageSize.getWidth()
+    rec.pageH = doc.internal.pageSize.getHeight()
+  }
+  return out
 }
 
 /** Records one piece of content on the capture array attached to `doc` (if any). */
