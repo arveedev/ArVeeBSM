@@ -634,8 +634,14 @@ export const generateCpfDisbursementRecord = ({
   // Confirmed, reported real bug (correction to an earlier change):
   // the gap above CERTIFICATION only needs to read as roughly one
   // table row's worth of space, not the much larger gap +14 produced.
+  // The whole block (heading, three sentence lines, signature line, name
+  // label, date line and its label) is ONE group: the "Date" label sits 51mm
+  // below the top of the heading, so 54mm (label plus its descender) must fit
+  // above the bottom margin or the entire block moves to a new page together -
+  // never split or cut off at the page edge.
+  const CERT_BLOCK_HEIGHT = 54
   let y = finalY + 8
-  if (y + 30 > pageH - BOTTOM_MARGIN) {
+  if (y + CERT_BLOCK_HEIGHT > pageH - BOTTOM_MARGIN) {
     doc.addPage()
     drawHeader(doc, { branchLabel, cityLabel, periodLabel, officer, isFirstPage: false })
     y = CONTINUATION_MARGIN_TOP + 8

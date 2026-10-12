@@ -352,7 +352,9 @@ Equivalent Net Weight (ENW) factor table.
   chosen period in one chronological ledger with a running Cash Advance/
   Fund Balance column, a balance-brought-forward opening row, per-page
   running SUB-TOTAL rows, a final TOTAL, and an officer identification
-  block and certification. Columns hold identical widths on every page;
+  block and certification. The certification and signature block is one group: it
+  prints whole on the last page or moves whole to a new page, and is never cut
+  off at the page edge. Columns hold identical widths on every page;
   nothing is truncated (names and RSBSA numbers break only at hyphens or
   spaces, PR numbers never break); replenishment rows print in blue and
   span the Name-of-Farmer through Nature-of-Payment columns.
