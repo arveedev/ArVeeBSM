@@ -86,7 +86,7 @@ ever reaches the server.
 | `condition` | string | Sack condition |
 | `dateProcured` | string | Free text — real procurement dates are ranges ("MAR 24 TO APR 4, 2025"), not a strict date |
 | `zeroedDate` | string (ISO date) | Indexed. Silently set the moment the pile's running totals hit zero (within a small floating-point tolerance); cleared the moment either goes back above zero. Distinct from `closedDate`, which is a deliberate user action. |
-| `closedDate` | string (ISO date) | Manual close, user-selected date |
+| `closedDate` | string (ISO date) | Manual close, user-selected date. A closed pile is history only: it is never offered in any pile picker (layout, stock forms, Weigher's tally) and appears only in records and layouts dated on or before this day; a document that already points at it keeps showing it. |
 
 ### `sackInventory`
 | Field | Type | Notes |

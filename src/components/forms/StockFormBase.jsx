@@ -753,14 +753,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // whatever authority variety happened to be selected wrongly
     // excluded genuinely valid piles - the reported bug.
     .filter((p) => !pileFilterVarietyId || activeCategory === 'By Products' || p.varietyId === pileFilterVarietyId)
-    // A pile that's already closed/zeroed stays out of the picker for
-    // a transaction dated on or after that point - but a backdated
-    // entry (a correction, or catching up on a late-entered document
-    // from before the pile closed) still needs to find it, so the
-    // exclusion is date-aware, not a blanket hide.
+    // A closed pile is never offered: it is history (its records and layout on and before its
+    // close date). The only exception is the pile this document already points at, so an old
+    // record still shows its own pile. A pile that merely ran empty (zeroed, not closed) stays out
+    // for a transaction dated after it emptied, but a backdated entry can still find it.
     .filter((p) => {
-      const effectiveCutoff = p.closedDate ?? p.zeroedDate
-      return !effectiveCutoff || !date || date <= effectiveCutoff
+      if (p.closedDate) return p.pileId === pileId
+      return !p.zeroedDate || !date || date <= p.zeroedDate
     })
     .sort((a, b) => byAlpha(a.pileName, b.pileName))
 

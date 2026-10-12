@@ -8392,4 +8392,5 @@
 //   1.10-334 - Stock Desk icon sits after the Home title again.
 //   1.10-335 - CPF Cash Disbursement Record: the CERTIFICATION and signature block is one group, so it moves to a new page whole instead of being cut off at the bottom.
 //   1.10-336 - SDO exports: CPF Cash Disbursement Record and Abstract show "Page X of Y" in the lower right of every page.
-export const APP_VERSION = '1.10-336'
+//   1.10-337 - A closed pile is no longer offered in any pile picker (layout, stock forms, Weigher's tally); it stays only as history.
+export const APP_VERSION = '1.10-337'

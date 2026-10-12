@@ -728,8 +728,11 @@ function Piles() {
   const assignedPileIds = new Set(
     boxes.filter((b) => b.id !== editingBoxId && b.pileId).map((b) => b.pileId)
   )
+  // A closed pile is history only (its records and its place on the layout on and before its
+  // close date); it is never offered again. The pile already in this box stays, so editing an
+  // old box still shows what it holds.
   const availablePiles = sortedPiles.filter(
-    (p) => !assignedPileIds.has(p.pileId) || p.pileId === pileId
+    (p) => (!assignedPileIds.has(p.pileId) || p.pileId === pileId) && (!p.closedDate || p.pileId === pileId)
   )
 
   const cancelDrawing = () => {

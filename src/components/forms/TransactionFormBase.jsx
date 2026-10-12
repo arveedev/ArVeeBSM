@@ -171,7 +171,7 @@ function TransactionFormBase({ type, title, includeFarmerCoop = false, onClose }
               className={inputClass}
             >
               <option value="">Select pile…</option>
-              {(piles ?? []).map((p) => (
+              {(piles ?? []).filter((p) => !p.closedDate || p.pileId === pileId).map((p) => (
                 <option key={p.pileId} value={p.pileId}>
                   {p.pileName} ({p.cerealType})
                 </option>

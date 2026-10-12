@@ -382,13 +382,14 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
     return supervisor ? formatRolePrefixedName(supervisor) : null
   }, [currentWarehouseId])
 
-  // A pile that's already closed/zeroed stays out of the picker for a
-  // transfer dated on or after that point - a backdated entry against
-  // its still-active period remains selectable.
+  // A closed pile is never offered (it is history). A pile that merely ran empty stays out for a
+  // transfer dated after it emptied, but a backdated entry can still find it. Piles this document
+  // already uses stay listed so an existing record still shows them.
+  const usedPileIds = new Set([issuedSide.pileId, receivedSide.pileId, ...extraLines.map((l) => l.issued?.pileId)].filter(Boolean))
   const sortedPiles = [...(piles ?? [])]
     .filter((p) => {
-      const effectiveCutoff = p.closedDate ?? p.zeroedDate
-      return !effectiveCutoff || !date || date <= effectiveCutoff
+      if (p.closedDate) return usedPileIds.has(p.pileId)
+      return !p.zeroedDate || !date || date <= p.zeroedDate
     })
     .sort((a, b) => byAlpha(a.pileName, b.pileName))
   const sortedVarieties = [...(varieties ?? [])].sort((a, b) => byAlpha(a.name, b.name))
