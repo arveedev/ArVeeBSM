@@ -393,6 +393,13 @@ their receipts and issues from the Statement sheets with SUMIFS, so an edit
 carries through every sheet. The milling
 liquidations and the Stock Desk reports already had their own Excel export.
 
+The Weekly Warehouse Equipment and Logistics Report is opened from the icon
+beside the warehouse on Home: the warehouse enters wooden pallet counts (utilized,
+available, transfer), platform scales (type, serials, serviceable / for repair /
+unserviceable) and other logistics (tarpaulin, sackoline, bag closer, fumigating
+sheets and any added item), then exports a PDF with the stock report's
+signatories. Entries are remembered on the device per warehouse.
+
 From the Abstract export, "DV & BUR" produces a Disbursement Voucher (A4) and a
 Budget Utilization Request and Status (an A4 holding two identical copies, to be
 cut in half) for the CPF replenishment. The payee is the SDO (address LEGAZPI

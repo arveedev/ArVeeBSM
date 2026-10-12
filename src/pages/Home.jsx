@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Boxes } from 'lucide-react'
 import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -15,6 +16,7 @@ import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
 import SectionErrorBoundary from '../components/common/SectionErrorBoundary.jsx'
 import AlertsPanel from '../components/common/AlertsPanel.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
+import LogisticsReportModal from '../components/common/LogisticsReportModal.jsx'
 import HomeStocks from './HomeStocks.jsx'
 import HomeSacks from './HomeSacks.jsx'
 
@@ -45,6 +47,7 @@ function Home() {
   // stacking everything on one screen, mirrors the same Summary/Stock
   // Statement split just added to Reports.jsx.
   const [pageTab, setPageTab] = useState('overview')
+  const [showLogistics, setShowLogistics] = useState(false)
   const [inventoryTab, setInventoryTab] = useState('stocks')
   // Per explicit request, Authority Monitor and Milling Operations are
   // now their own mutually-exclusive sub-tabs within Activity (previously
@@ -71,7 +74,8 @@ function Home() {
 
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
-      <div ref={warehouseSectionRef}>
+      <div ref={warehouseSectionRef} className="flex items-end gap-2">
+        <div className="min-w-0 flex-1">
         {sortedWarehouses.length > 1 ? (
           <div className="mt-4">
             <label className="text-[10px] font-semibold uppercase tracking-wide text-brand-neon">Warehouse</label>
@@ -97,7 +101,20 @@ function Home() {
         ) : (
           <p className="mt-3 text-xs text-neutral-500">No warehouse assigned yet.</p>
         )}
+        </div>
+        {currentWarehouse && (
+          <button
+            type="button"
+            onClick={() => setShowLogistics(true)}
+            aria-label="Weekly logistics report"
+            title="Weekly logistics report"
+            className="mb-0 flex h-[3.1rem] w-[3.1rem] shrink-0 items-center justify-center rounded-lg border-2 border-brand-neon/50 bg-neutral-950 text-brand-neon transition-all hover:border-brand-neon active:scale-95"
+          >
+            <Boxes size={22} />
+          </button>
+        )}
       </div>
+      {showLogistics && <LogisticsReportModal onClose={() => setShowLogistics(false)} />}
 
       <StickyWarehouseIndicator targetRef={warehouseSectionRef} warehouse={currentWarehouse} />
 
