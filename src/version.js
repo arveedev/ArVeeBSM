@@ -8391,4 +8391,5 @@
 //   1.10-333 - Phones: Stock Desk menu tiles show only the icon and name.
 //   1.10-334 - Stock Desk icon sits after the Home title again.
 //   1.10-335 - CPF Cash Disbursement Record: the CERTIFICATION and signature block is one group, so it moves to a new page whole instead of being cut off at the bottom.
-export const APP_VERSION = '1.10-335'
+//   1.10-336 - SDO exports: CPF Cash Disbursement Record and Abstract show "Page X of Y" in the lower right of every page.
+export const APP_VERSION = '1.10-336'

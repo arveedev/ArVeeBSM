@@ -22,6 +22,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { entryKindCpfLabel } from './cashEntryKind.js'
+import { addPageNumbers } from './pdfPageNumbers.js'
 
 const BLACK = [0, 0, 0]
 const HEADER_BG = [232, 232, 232]
@@ -682,6 +683,9 @@ export const generateCpfDisbursementRecord = ({
   doc.line(pageW / 2 - dateLineW / 2, dateLineY, pageW / 2 + dateLineW / 2, dateLineY)
   doc.text('Date', pageW / 2, dateLineY + 5, { align: 'center' })
   doc.setTextColor(...BLACK)
+
+  // Page X of Y in the lower right corner (inside the 5mm bottom margin).
+  addPageNumbers(doc, { right: margin, bottom: 2.5 })
 
   return doc
 }

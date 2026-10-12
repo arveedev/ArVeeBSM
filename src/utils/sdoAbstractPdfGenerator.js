@@ -20,6 +20,7 @@
 
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { addPageNumbers } from './pdfPageNumbers.js'
 
 const BLACK = [0, 0, 0]
 const GRAY_TEXT = [140, 140, 140]
@@ -650,6 +651,9 @@ export const generateSdoAbstract = ({
     doc.line(reconX, ry + 7, reconX + reconW, ry + 7)
     ry += 7
   })
+
+  // Page X of Y in the lower right corner.
+  addPageNumbers(doc, { right: margin, bottom: 3.5 })
 
   return doc
 }
