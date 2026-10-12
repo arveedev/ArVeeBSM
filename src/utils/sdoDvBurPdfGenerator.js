@@ -169,26 +169,31 @@ export const generateDvBur = ({
   y = sigBlock(L + W / 2, approved ?? {}) - 0
   void topCD
 
-  box(L, y, W, 5.2)                                    // E. Receipt of Payment
+  // E. Receipt of Payment - a narrow right-hand column holds "JEV No." (beside the header and the Check/ADA row)
+  // and "Date :" (beside the signature and Official Receipt rows)
+  const RW = 38, MW = W - RW
+  box(L, y, MW, 5.2)
   text('E.', L + 1.5, y + 3.9, { size: 8, bold: true })
   text('Receipt of Payment', L + 7, y + 3.9, { size: 7.5, bold: true })
-  vline(L + 150, y, y + 5.2)
-  text('JEV No.', L + 152, y + 3.9, { size: 7 })
+  box(R - RW, y, RW, 5.2 + 9)
+  text('JEV No.', R - RW + 2, y + 3.9, { size: 7 })
   y += 5.2
-  box(L, y, W, 9)
+  box(L, y, MW, 9)
   vline(L + 28, y, y + 9); vline(L + 80, y, y + 9); vline(L + 88, y, y + 9)
   text('Check/ADA No. :', L + 1.5, y + 4, { size: 7 })
   text('Date :', L + 81, y + 4, { size: 7 })
   text('Bank Name & Account Number:', L + 90, y + 4, { size: 7 })
   y += 9
-  box(L, y, W, 9)
+  box(L, y, MW, 9)
   vline(L + 28, y, y + 9); vline(L + 80, y, y + 9); vline(L + 88, y, y + 9)
   text('Signature :', L + 1.5, y + 6, { size: 7 })
   text('Date :', L + 81, y + 4, { size: 7 })
   text('Printed Name:', L + 90, y + 4, { size: 7 })
-  text(payee, L + 90 + (R - L - 90) / 2, y + 7.6, { size: 7.5, bold: true, align: 'center' })
+  text(payee, L + 90 + (MW - 90) / 2, y + 7.6, { size: 7.5, bold: true, align: 'center' })
+  box(R - RW, y, RW, 9 + 5.5)
+  text('Date:', R - RW + 2, y + 4, { size: 7 })
   y += 9
-  box(L, y, W, 5.5)
+  box(L, y, MW, 5.5)
   text('Official Receipt No. & Date/Other Documents', L + 1.5, y + 3.9, { size: 7 })
 
   // ===================== BUR x 2 on one A4 (page 2) =====================

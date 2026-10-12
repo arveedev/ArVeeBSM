@@ -425,3 +425,20 @@ number, customer name) rather than by internal primary key — this
 mirrors how the source spreadsheet itself identifies these records, and
 is what allows the one-way Sheets sync (TDD §2.4) to write a transaction
 referencing an authority it has never itself fetched a local copy of.
+
+## logisticsItems (Dexie v45, synced)
+
+One row per inventory line of a warehouse's logistical / semi-expendable equipment, read by the Weekly Logistics Report.
+
+| Field | Notes |
+|---|---|
+| `itemId` | App-assigned UUID (primary key). |
+| `warehouseId` | Indexed; the owning warehouse. |
+| `category` | Indexed; `'pallet'`, `'scale'` or `'other'`. |
+| `name` | Pallet classification (SERVICEABLE / UNSERVICEABLE / FOR REPAIR), scale type, or item name; stored upper case. |
+| `serials` | Scales only: serial number(s), free text. |
+| `utilized`, `available`, `transfer` | Pallets. Numbers or null. |
+| `serviceable`, `forRepair`, `unserviceable` | Scales (and `serviceable` / `unserviceable` for other items). |
+| `brandNew` | Other items. |
+| `remarks` | Free text. |
+| `createdAt`, `updatedAt`, `updatedBy` | Bookkeeping. |

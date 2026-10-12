@@ -8399,4 +8399,5 @@
 //   1.10-341 - SDO: Disbursement Voucher + Budget Utilization Request (two copies on one A4, cut in half) from the Abstract export ("DV & BUR"), with an SDO setting for the "DATED ..." text (off by default); Abstract Excel derives Net Wt / Equivalent Net Wt / Amount as formulas even with cancelled rows; Abstract header grey slightly darker; a pile's age is never shown negative on a layout dated before it was received.
 //   1.10-342 - DV and BUR: titles centred in their boxes, the "cut here" caption removed (the dashed line stays).
 //   1.10-343 - Weekly Warehouse Equipment and Logistics Report: an icon beside the warehouse on Home opens a form (wooden pallets, platform scales, other logistics) and exports the PDF; the figures are remembered on the device per warehouse.
-export const APP_VERSION = '1.10-343'
+//   1.10-344 - Logistics Inventory: the warehouse's pallets, platform scales and other logistical / semi-expendable items are now stored records (add, edit, delete; synced table db.logisticsItems, dexie.js v45) and the Weekly Logistics Report prints what is stored; the DV's lower-right JEV No. / Date cells restored.
+export const APP_VERSION = '1.10-344'

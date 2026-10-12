@@ -1085,6 +1085,15 @@ db.version(44).stores({
   sdoReportCutoffs: 'cutoffId, sdoUid, cutoffDate',
 })
 
+// v45 — logisticsItems: a warehouse's own inventory of logistical equipment and semi-expendable items (wooden
+// pallets by condition, platform scales, tarpaulin, sackoline, bag closers, fumigating sheets ...). One row per
+// item line, kept up to date by the warehouse and read by the Weekly Logistics Report. `itemId` is an app-assigned
+// UUID (see cashLedgerV2's comment for why); category is 'pallet' | 'scale' | 'other'. A real, shared record, so
+// it stays a synced table.
+db.version(45).stores({
+  logisticsItems: 'itemId, warehouseId, category',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the
