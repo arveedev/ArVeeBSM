@@ -8400,4 +8400,5 @@
 //   1.10-342 - DV and BUR: titles centred in their boxes, the "cut here" caption removed (the dashed line stays).
 //   1.10-343 - Weekly Warehouse Equipment and Logistics Report: an icon beside the warehouse on Home opens a form (wooden pallets, platform scales, other logistics) and exports the PDF; the figures are remembered on the device per warehouse.
 //   1.10-344 - Logistics Inventory: the warehouse's pallets, platform scales and other logistical / semi-expendable items are now stored records (add, edit, delete; synced table db.logisticsItems, dexie.js v45) and the Weekly Logistics Report prints what is stored; the DV's lower-right JEV No. / Date cells restored.
-export const APP_VERSION = '1.10-344'
+//   1.10-345 - BUR: a stray vertical line through the "Balance" heading removed; Logistics report period offers the same presets as the stock statement and starts on the 1st of the month through today.
+export const APP_VERSION = '1.10-345'

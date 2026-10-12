@@ -267,7 +267,7 @@ export const generateDvBur = ({
     hline(by + 5, xs[3], xs[8], 0.2)
     by += 5
     box(L, by, W, 7)
-    xs.slice(1, 8).forEach((x, i) => { if (i !== 5) vline(x, by, by + 7, i < 2 ? 0.3 : 0.2) })
+    xs.slice(1, 8).forEach((x, i) => { if (i < 5) vline(x, by, by + 7, i < 2 ? 0.3 : 0.2) })
     ;[['Date', 0], ['Particulars', 1], ['BURS/JEV\nNo.', 2], ['Utilization\n(a)', 3], ['Payable\n(b)', 4], ['Payment\n(c)', 5]].forEach(([t, i]) => {
       const ls = t.split('\n')
       ls.forEach((l, k) => text(l, (xs[i] + xs[i + 1]) / 2, by + (ls.length === 1 ? 4.4 : 3 + k * 3), { size: 6.5, align: 'center' }))

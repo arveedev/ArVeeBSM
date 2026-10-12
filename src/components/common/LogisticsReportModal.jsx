@@ -14,6 +14,7 @@ import { db } from '../../db/dexie.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
+import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import { generateLogisticsReport } from '../../utils/logisticsReportPdfGenerator.js'
 import { sanitizeForFilename, todayLocalISO } from '../../utils/calculations.js'
 
@@ -28,11 +29,6 @@ const FIELDS = {
 }
 const CATEGORY_TITLE = { pallet: 'Wooden pallets', scale: 'Platform scale', other: 'Other logistics' }
 
-const addDays = (iso, n) => {
-  const d = new Date(`${iso}T00:00:00`)
-  d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 const toNum = (v) => (v === '' || v == null ? null : Number(v))
 
 const inputClass = 'w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-2 text-sm text-app-text outline-none focus:border-brand-neon'
@@ -48,7 +44,7 @@ function LogisticsReportModal({ onClose }) {
   const { currentWarehouse, currentWarehouseId } = useWarehouse() ?? {}
   const items = useLiveQuery(() => (currentWarehouseId ? db.logisticsItems.where('warehouseId').equals(currentWarehouseId).toArray() : []), [currentWarehouseId])
   const [dateTo, setDateTo] = useState(() => todayLocalISO())
-  const [dateFrom, setDateFrom] = useState(() => addDays(todayLocalISO(), -6))
+  const [dateFrom, setDateFrom] = useState(() => `${todayLocalISO().slice(0, 8)}01`)
   const [editing, setEditing] = useState(null)        // { id|null, form }
   const [confirmId, setConfirmId] = useState(null)
   const [generating, setGenerating] = useState(false)
@@ -150,6 +146,7 @@ function LogisticsReportModal({ onClose }) {
           <div className="mt-1"><CalendarDatePicker value={dateTo} onChange={setDateTo} valueClassName="text-sm" /></div>
         </div>
       </div>
+      <PeriodPresetPicker onSelectRange={(from, to) => { setDateFrom(from); setDateTo(to) }} currentFrom={dateFrom} currentTo={dateTo} />
       {['pallet', 'scale', 'other'].map((cat) => {
         const rows = cat === 'pallet' ? byCategory(cat).sort((a, b) => palletOrder(a.name) - palletOrder(b.name)) : byCategory(cat)
         return (
