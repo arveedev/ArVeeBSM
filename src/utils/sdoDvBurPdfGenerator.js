@@ -70,7 +70,7 @@ export const generateDvBur = ({
   text('Republic of the Philippines', L + 70, y + 5.5, { align: 'center', size: 8 })
   text('NATIONAL FOOD AUTHORITY', L + 70, y + 10, { align: 'center', size: 9, bold: true })
   text(office, L + 70, y + 14.5, { align: 'center', size: 9, bold: true })
-  text('DISBURSEMENT  VOUCHER', L + 8, y + 26, { size: 15, bold: true })
+  text('DISBURSEMENT  VOUCHER', L + 70, y + 26, { size: 15, bold: true, align: 'center' })
   text('Fund Cluster :', L + 142, y + 5.5, { size: 7.5 })
   text('DV No. :', L + 142, y + 20, { size: 7.5 })
 
@@ -197,7 +197,7 @@ export const generateDvBur = ({
     let by = oy + 6
     box(L, by, W, 23)
     vline(L + 130, by, by + 23)
-    text('BUDGET UTILIZATION REQUEST AND STATUS', L + 3, by + 7, { size: 11.5, bold: true })
+    text('BUDGET UTILIZATION REQUEST AND STATUS', L + 65, by + 7, { size: 11.5, bold: true, align: 'center' })
     text('Republic of the Philippines', L + 68, by + 12.5, { align: 'center', size: 7.5 })
     text('NATIONAL FOOD AUTHORITY', L + 68, by + 16.5, { align: 'center', size: 8.5, bold: true })
     text(office, L + 68, by + 20.5, { align: 'center', size: 8.5, bold: true })
@@ -282,7 +282,5 @@ export const generateDvBur = ({
   doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.2)
   doc.line(4, 148.5, 206, 148.5)
   doc.setLineDashPattern([], 0)
-  doc.setFont('helvetica', 'italic'); doc.setFontSize(6); doc.setTextColor(120, 120, 120)
-  doc.text('cut here', 105, 147.6, { align: 'center' })
   return doc
 }
