@@ -141,7 +141,7 @@ const placeTable = (ws, startRow, t, ctx) => {
     }
     const bd = kind === 'head' ? headBorder : bodyBorder
     for (let dr = 0; dr < rs; dr++) for (let dc = 0; dc < cs; dc++) ws.getCell(r + dr, c + dc).border = bd
-    if (kind === 'head') wc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEAD_FILL } }
+    if (kind === 'head') wc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(t.headFill ?? t.headStyle?.fillColor) ?? HEAD_FILL } }
     else if (argb(st.fillColor)) wc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(st.fillColor) } }
     else if ((r - bodyStart) % 2 === 1 && kind === 'body') wc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ALT_FILL } }
     if (kind === 'head' && rs === 1) {
@@ -225,32 +225,31 @@ const applyTableFormulas = (ws, info, cells) => {
   // Row relationships found in the figures themselves (Net = Gross - Deduction, Amount = Kilos x Price ...):
   // a column that equals "A - B" or "A x B" on EVERY row becomes that formula, rounded as printed.
   if (dataRows.length >= 3) {
-    const cols = [...numCols]
-    const vals = {}
-    cols.forEach((c) => { vals[c] = dataRows.map((x) => num(x.r, c)) })
-    const full = cols.filter((c) => vals[c].every((v) => v != null))
-    const taken = new Set()
-    for (const T of full) {
-      if (taken.has(T) || (ge && T >= ge.c && T < ge.c + ge.cs) || /balance/i.test(head.filter((x) => T >= x.c && T < x.c + x.cs).map((x) => cellText(x.o)).join(' '))) continue
+    const cols = [...numCols].sort((x, y) => x - y)
+    for (const T of cols) {
+      if ((ge && T >= ge.c && T < ge.c + ge.cs) || /balance/i.test(head.filter((x) => T >= x.c && T < x.c + x.cs).map((x) => cellText(x.o)).join(' '))) continue
       const d = info.dec[T] || 0
       const tol = 0.5 * Math.pow(10, -d) + 1e-9
       let hit = null
-      for (const a of full) {
+      for (const a of cols) {
         if (a >= T || hit) continue
-        for (const b of full) {
+        for (const b of cols) {
           if (b >= T || hit) continue
-          const sameVal = (u, v) => vals[T].every((t, i) => Math.abs(t - (u(vals[a][i], vals[b][i]))) <= tol)
-          const flat = (c, k) => vals[c].every((v) => v === k)
-          if (a !== b && !flat(b, 0) && !flat(a, 0) && sameVal((x, y) => x - y)) hit = { op: '-', a, b }
-          else if (a < b && !flat(a, 1) && !flat(b, 1) && !flat(a, 0) && !flat(b, 0) && sameVal((x, y) => x * y)) hit = { op: '*', a, b }
+          // only rows that actually carry all three figures take part (a cancelled row is blank)
+          const rowsOK = dataRows.filter((x) => [T, a, b].every((c) => num(x.r, c) != null))
+          if (rowsOK.length < 3) continue
+          const v = (x, c) => num(x.r, c)
+          const flat = (c, k) => rowsOK.every((x) => v(x, c) === k)
+          const holds = (f) => rowsOK.every((x) => Math.abs(v(x, T) - f(v(x, a), v(x, b))) <= tol)
+          if (a !== b && !flat(b, 0) && !flat(a, 0) && holds((p, q) => p - q)) hit = { op: '-', a, b, rowsOK }
+          else if (a < b && !flat(a, 1) && !flat(b, 1) && !flat(a, 0) && !flat(b, 0) && holds((p, q) => p * q)) hit = { op: '*', a, b, rowsOK }
         }
       }
       if (!hit) continue
-      dataRows.forEach((row, i) => {
-        const expr = `${colName(hit.a)}${row.r}${hit.op}${colName(hit.b)}${row.r}`
-        writeF(ws, row.r, T, `ROUND(${expr},${d})`, vals[T][i])
+      hit.rowsOK.forEach((row) => {
+        writeF(ws, row.r, T, `ROUND(${colName(hit.a)}${row.r}${hit.op}${colName(hit.b)}${row.r},${d})`, num(row.r, T))
       })
-      taken.add(T); applied.derived = (applied.derived || 0) + 1
+      applied.derived = (applied.derived || 0) + 1
     }
   }
 

@@ -393,6 +393,15 @@ their receipts and issues from the Statement sheets with SUMIFS, so an edit
 carries through every sheet. The milling
 liquidations and the Stock Desk reports already had their own Excel export.
 
+From the Abstract export, "DV & BUR" produces a Disbursement Voucher (A4) and a
+Budget Utilization Request and Status (an A4 holding two identical copies, to be
+cut in half) for the CPF replenishment. The payee is the SDO (address LEGAZPI
+CITY), the amount is the total of the paid PRs, the particulars read "TO:
+REPLENISHMENT OF CPF FOR THE PAID PR #first TO last", the BUR office is "NFA -
+(province)", and the signatories are the Abstract's (Verified By certifies, Noted
+By approves). The " DATED OCT. 9-10, 2026" suffix is an SDO setting on the
+Settings page, off by default.
+
 ## 12. Data Integrity Principles
 
 - A transaction is never physically deleted — only marked Cancelled — so

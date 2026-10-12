@@ -24,7 +24,7 @@ import { addPageNumbers } from './pdfPageNumbers.js'
 
 const BLACK = [0, 0, 0]
 const GRAY_TEXT = [140, 140, 140]
-const HEADER_BG = [232, 232, 232]
+const HEADER_BG = [214, 214, 214]
 // 0.3in (was 12mm/~0.47in) - per explicit request, a tighter page
 // margin frees up more width for the actual report content, same
 // in-to-mm conversion already used for the page dimensions below.
@@ -300,7 +300,7 @@ export const generateSdoAbstract = ({
   if (capture) {
     // For the Excel version: the same rows, without the blank spacer rows that only exist to space the printed page.
     capture.push({ kind: 'page', sheet: 'Abstract', lines: ['NATIONAL FOOD AUTHORITY', (branchLabel ?? '').toUpperCase(), 'ABSTRACT OF CEREAL PURCHASES', `FOR THE PERIOD ${periodLabel.toUpperCase()}`] })
-    capture.push(tableRec = { kind: 'table', head, body: body0.filter((row) => !(row[0] && typeof row[0] === 'object' && row[0].styles && row[0].styles.minCellHeight === 3)), foot })
+    capture.push(tableRec = { kind: 'table', headFill: HEADER_BG, head, body: body0.filter((row) => !(row[0] && typeof row[0] === 'object' && row[0].styles && row[0].styles.minCellHeight === 3)), foot })
   }
 
   const lastColIndex = head[0].length - 1

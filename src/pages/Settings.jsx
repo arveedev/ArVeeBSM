@@ -146,6 +146,12 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
   const toggle = async () => {
     await db.users.update(uid, { showReplenishmentDetails: !showReplenishmentDetails })
   }
+  // Whether the Disbursement Voucher and the Budget Utilization Request particulars end with "DATED OCT. 9-10, 2026".
+  // Off by default.
+  const dvDatedText = userRecord?.dvDatedText === true
+  const toggleDvDated = async () => {
+    await db.users.update(uid, { dvDatedText: !dvDatedText })
+  }
 
   return (
     <section className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
@@ -174,6 +180,29 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
       <p className="mt-2 text-xs font-medium text-neutral-400">
         {showReplenishmentDetails ? 'Showing full breakdown' : 'Showing combined Fund Balance only'}
       </p>
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-neutral-800 pt-4">
+        <div>
+          <h2 className="text-base font-semibold text-app-text">Date on DV &amp; BUR</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            End the particulars with the receipts' dates, e.g. “… DATED OCT. 9-10, 2026”.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggleDvDated}
+          aria-pressed={dvDatedText}
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+            dvDatedText ? 'bg-brand-neon' : 'bg-neutral-700'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 rounded-full bg-neutral-950 shadow transition-transform ${
+              dvDatedText ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+      <p className="mt-2 text-xs font-medium text-neutral-400">{dvDatedText ? 'Dated text shown' : 'Dated text hidden'}</p>
     </section>
   )
 }

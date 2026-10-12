@@ -88,13 +88,14 @@ import { entryKindLabel } from '../../../utils/cashEntryKind.js'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { X, ListChecks, Check, Scissors } from 'lucide-react'
+import { X, ListChecks, Check, Scissors, FileText } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import ExportFormatDialog from '../ExportFormatDialog.jsx'
 import { generateSdoAbstract } from '../../../utils/sdoAbstractPdfGenerator.js'
+import { generateDvBur, replenishmentParticulars } from '../../../utils/sdoDvBurPdfGenerator.js'
 import { computeCashOnHand } from '../../../utils/sdoCalculations.js'
 
 // Shared numeric-then-string PR Number comparator - same rule the
@@ -324,6 +325,33 @@ function AbstractExportModal({ onClose }) {
       // consistent with what it actually lists.
       const periodTotal = enriched.reduce((s, pr) => s + (pr.totalAmount ?? 0), 0)
 
+      // Disbursement Voucher + Budget Utilization Request (two copies on one A4) for replenishing the CPF with
+      // exactly these paid PRs: payee is the SDO, amount is the total of the PRs, signatories are the Abstract's.
+      if (kind === 'dv') {
+        const live = enriched.filter((pr) => pr.status !== 'Cancelled')
+        if (live.length === 0) { toast.error('No Purchase Receipts to replenish'); return }
+        const dates = live.map((pr) => pr.date).sort()
+        const province = provinceMap.get(firstWarehouse?.provinceId)
+        const dvDoc = generateDvBur({
+          branchName: branch?.name,
+          provinceName: province?.name,
+          payeeName: user.name,
+          amount: periodTotal,
+          particulars: replenishmentParticulars({
+            firstPrNo: (live[0].prNo ?? '').toUpperCase(),
+            lastPrNo: (live[live.length - 1].prNo ?? '').toUpperCase(),
+            dateFrom: dates[0],
+            dateTo: dates[dates.length - 1],
+            showDated: userRecord?.dvDatedText === true,
+          }),
+          certified: config?.disbursementVerifiedBy,
+          approved: config?.disbursementNotedBy,
+        })
+        dvDoc.save(`DV-BUR-${dateFrom}-to-${dateTo}.pdf`)
+        onClose()
+        return
+      }
+
       // Per explicit request: an SDO-personal toggle (Settings page,
       // showReplenishmentDetails on their own user record - defaults
       // true) for how the Cash Reconciliation box reads. ON keeps
@@ -538,6 +566,17 @@ function AbstractExportModal({ onClose }) {
               {generating ? 'Generating…' : showChecklist ? `Export ${checkedIds.size} Selected` : 'Export'}
             </button>
             <ExportFormatDialog open={askFormat} onClose={() => setAskFormat(false)} onPick={(k) => { setAskFormat(false); handleExport(false, k) }} />
+            <button
+              type="button"
+              onClick={() => handleExport(false, 'dv')}
+              disabled={generating || (showChecklist && checkedIds.size === 0)}
+              aria-label="Disbursement Voucher and Budget Utilization Request for these purchase receipts"
+              title="Disbursement Voucher + BUR (2 copies on one A4)"
+              className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-brand-neon/40 px-3 py-3 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40"
+            >
+              <FileText size={15} />
+              DV &amp; BUR
+            </button>
             {/* Cut Off & Export, per explicit request - only offered
                 while the checklist is open, since a cut-off's whole job
                 is locking in EXACTLY which checked receipts count as

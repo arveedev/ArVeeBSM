@@ -178,7 +178,9 @@ export const calculateCurrentAge = (baseInitialAge, dateOfReceipt, autoAgeMonito
   receipt.setHours(0, 0, 0, 0)
   today.setHours(0, 0, 0, 0)
 
-  const elapsedDays = Math.floor((today - receipt) / (1000 * 60 * 60 * 24))
+  // Never below the age it arrived with: a layout / report dated before the pile was received (a pile
+  // added after the period) used to show a negative age.
+  const elapsedDays = Math.max(0, Math.floor((today - receipt) / (1000 * 60 * 60 * 24)))
 
   return baseInitialAge + elapsedDays
 }
