@@ -876,19 +876,19 @@ select {
   from { opacity: 0; transform: translateX(-100px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-.animate-login-title-in { animation: login-title-in 380ms cubic-bezier(0.34, 1.76, 0.64, 1) 800ms backwards; }
+.animate-login-title-in { animation: login-title-in 380ms cubic-bezier(0.34, 1.76, 0.64, 1) calc(800ms + var(--lt0)) backwards; }
 
 @keyframes login-subtitle-in {
   from { opacity: 0; transform: translateX(100px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-.animate-login-subtitle-in { animation: login-subtitle-in 380ms cubic-bezier(0.34, 1.76, 0.64, 1) 920ms backwards; }
+.animate-login-subtitle-in { animation: login-subtitle-in 380ms cubic-bezier(0.34, 1.76, 0.64, 1) calc(920ms + var(--lt0)) backwards; }
 
 @keyframes login-dots-in {
   from { opacity: 0; transform: translateY(70px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-login-dots-in { animation: login-dots-in 360ms cubic-bezier(0.34, 1.76, 0.64, 1) 1040ms backwards; }
+.animate-login-dots-in { animation: login-dots-in 360ms cubic-bezier(0.34, 1.76, 0.64, 1) calc(1040ms + var(--lt0)) backwards; }
 
 /* Login logo: the two triangles fly together and lock, the notch cuts in, then a ring pulses once. */
 .login-logo-assemble polygon, .login-logo-assemble .logo-notch { transform-box: fill-box; transform-origin: center; }
@@ -898,10 +898,19 @@ select {
 @keyframes logo-tri-a   { from { transform: translate(-260px, -190px) rotate(-55deg) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes logo-tri-b   { from { transform: translate(260px, 190px) rotate(55deg) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes logo-notch-in { from { transform: scaleY(0); opacity: 0; } to { transform: none; opacity: .85; } }
-.login-logo-glow { animation: login-logo-glow 1300ms ease-out 900ms backwards; }
+/* The logo's own timeline: builds itself large and centred (0 - 1.2s), holds a beat, then shrinks to its place
+   (1.5s - 2.2s). The rest of the page keeps its own entrance, shifted by --lt0 so it starts as the logo begins to shrink. */
+:root { --lt0: 700ms; }
+.login-logo-hero { animation: login-logo-hero 2200ms linear backwards; }
+@keyframes login-logo-hero {
+  0%, 68% { transform: translate(var(--lx), var(--ly)) scale(var(--ls)); animation-timing-function: cubic-bezier(.55, 0, .2, 1); }
+  100%    { transform: none; }
+}
+.login-logo-glow { animation: login-logo-hero 2200ms linear backwards, login-logo-glow 1300ms ease-out 2200ms backwards; }
 @keyframes login-logo-glow { 0% { box-shadow: 0 0 0 0 rgba(0, 255, 163, .55); } 100% { box-shadow: 0 0 0 28px rgba(0, 255, 163, 0); } }
 @media (prefers-reduced-motion: reduce) {
-  .login-logo-assemble .logo-tri-a, .login-logo-assemble .logo-tri-b, .login-logo-assemble .logo-notch, .login-logo-glow { animation: none; }
+  .login-logo-assemble .logo-tri-a, .login-logo-assemble .logo-tri-b, .login-logo-assemble .logo-notch, .login-logo-glow, .login-logo-hero { animation: none; }
+  :root { --lt0: 0ms; }
 }
 
 /* Keypad "Scan Reveal" - each button's own bounding box (rounded
@@ -917,7 +926,7 @@ select {
 }
 .animate-login-key-reveal {
   animation: login-key-reveal 420ms cubic-bezier(0.3, 0.6, 0.25, 1) backwards;
-  animation-delay: calc(1100ms + var(--key-i, 0) * 34ms);
+  animation-delay: calc(1100ms + var(--lt0) + var(--key-i, 0) * 34ms);
 }
 
 @keyframes login-key-scanline {
@@ -927,7 +936,7 @@ select {
 }
 .animate-login-key-scanline {
   animation: login-key-scanline 420ms cubic-bezier(0.3, 0.6, 0.25, 1) backwards;
-  animation-delay: calc(1100ms + var(--key-i, 0) * 34ms);
+  animation-delay: calc(1100ms + var(--lt0) + var(--key-i, 0) * 34ms);
 }
 
 /* BootScreen (concept W, picked) - shown the instant the page loads,

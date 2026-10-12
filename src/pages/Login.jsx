@@ -5,7 +5,7 @@
 // primary touch interface. Both paths feed the same `pin` string state so
 // leading zeros in access codes are preserved.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -233,6 +233,20 @@ function Login() {
     }
   }
 
+  // The logo opens large in the middle of the screen, builds itself, then shrinks into its place at the top
+  // of the form while everything else comes in (index.css: login-logo-hero, --lt0). The slot is never
+  // transformed, so measuring it gives the logo's true resting spot.
+  const logoSlotRef = useRef(null)
+  const [logoHero, setLogoHero] = useState(null)
+  useLayoutEffect(() => {
+    const el = logoSlotRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const vw = window.innerWidth, vh = window.innerHeight
+    const target = Math.min(200, vw * 0.55, vh * 0.3)
+    setLogoHero({ x: vw / 2 - (r.left + r.width / 2), y: vh / 2 - (r.top + r.height / 2), s: target / r.width })
+  }, [])
+
   return (
     <div className={`relative flex min-h-screen flex-col items-center justify-center px-6 ${isExiting ? 'overflow-hidden' : ''}`}>
       {/* "by ArVee" and the version sit as one tight block, not two
@@ -260,11 +274,12 @@ function Login() {
       <div className="w-full max-w-sm">
         {/* The logo builds itself on the way in: its two triangles fly together and lock, the notch cuts in,
             and a soft ring pulses once. Same shapes as /logo.svg, drawn inline so each piece can move. */}
+        <div ref={logoSlotRef} className="mx-auto mb-4 h-20 w-20">
         <div
           role="img"
           aria-label="BSM App logo"
-          style={isExiting ? flyTransformUp : undefined}
-          className={`mx-auto mb-4 h-20 w-20 rounded-2xl transition-all duration-[1400ms] ${!isExiting ? 'login-logo-glow' : ''}`}
+          style={isExiting ? flyTransformUp : (logoHero ? { '--lx': `${logoHero.x}px`, '--ly': `${logoHero.y}px`, '--ls': logoHero.s } : undefined)}
+          className={`relative z-20 h-20 w-20 rounded-2xl ${isExiting ? 'transition-all duration-[1400ms]' : (logoHero ? 'login-logo-hero login-logo-glow' : 'opacity-0')}`}
         >
           <svg viewBox="0 0 512 512" className={`h-full w-full rounded-2xl ${!isExiting ? 'login-logo-assemble' : ''}`} aria-hidden="true">
             <rect width="512" height="512" fill="#0A0A0A" />
@@ -272,6 +287,7 @@ function Login() {
             <polygon className="logo-tri-b" points="176,272 336,272 256,400" fill="#00B377" />
             <rect className="logo-notch" x="246" y="150" width="20" height="80" rx="10" fill="#0A0A0A" opacity="0.85" />
           </svg>
+        </div>
         </div>
         <h1
           style={isExiting ? flyTransformUp : undefined}

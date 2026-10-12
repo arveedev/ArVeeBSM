@@ -28,7 +28,7 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db } from '../db/dexie.js'
 import { fmtBags, fmtKilos, fmtWeight, fmtMc, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO, AGE_BUCKETS } from '../utils/calculations.js'
-import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
+import { generatePileLayoutReport, boxDetailEntries } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
 import { computeHistoricalPileState, computePileStockBreakdown, vacateBoxForPile, closePile, computePileStartDate } from '../utils/pileLedger.js'
@@ -1016,14 +1016,23 @@ function Piles() {
         // formatPileStockGroups) - the PDF generator renders them as-is,
         // same breakdown-when-multi-group rule as the on-screen box/popups.
         const groupRows = getGroupRows(pile)
-        return { ...box, pile: pile ? { ...pile, formattedAge } : pile, variety, groupRows }
+        const enriched = { ...box, pile: pile ? { ...pile, formattedAge } : pile, variety, groupRows }
+        return { ...enriched, entries: boxDetailEntries(enriched) }
       })
 
       if (kind === 'excel') {
         const { exportPileLayoutToExcel } = await import('../utils/reportExcel.js')
         await exportPileLayoutToExcel({
           warehouse: currentWarehouse, branch, periodFrom, periodTo, gridCols: GRID_COLS, gridRows: GRID_ROWS,
-          boxes: enrichedBoxes, fmtBags, fmtKilos,
+          boxes: enrichedBoxes,
+          signatories: {
+            preparedByName: currentWarehouse?.classifierName ?? null,
+            verifiedCorrect: reportConfig?.bsqao ?? null,
+            certifiedCorrectName: supervisor?.name ?? null,
+            certifiedCorrectPosition,
+            notedByName: reportConfig?.notedByName ?? null,
+            notedByPosition: reportConfig?.notedByPosition ?? null,
+          },
           fileName: `${sanitizeForFilename(currentWarehouse?.name) || 'WH'}-PileLayout-${fmtDateForFilename(periodFrom)}-${fmtDateForFilename(periodTo)}`,
         })
         toast.success('Pile Layout Excel exported')

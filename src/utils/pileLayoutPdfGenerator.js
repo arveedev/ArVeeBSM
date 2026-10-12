@@ -19,6 +19,59 @@ const fmtDate = (s) => {
   return d.toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+// The lines printed inside one pile box (shared by the PDF and the Excel layout): 'field' rows are
+// label/value pairs (raw carries the number behind a Bags / Net Kg figure), 'heading' and 'rule' are the
+// section breaks of a multi-group pile.
+export const boxDetailEntries = (box) => {
+  const isVacant = !box.pile
+  // Three entry kinds, so a multi-group pile's breakdown reads as
+  // distinct sections instead of a flat wall of identical label:value
+  // lines (confirmed, reported case - the plain field-list approach
+  // looked "crowded" and "not professional"): 'field' is the existing
+  // label:value row; 'heading' is a bold, left-aligned group name (with
+  // an optional lighter "aside" suffix - By Products' own Received
+  // date, folded into the heading line instead of its own row); 'rule'
+  // draws a thin divider above the next entry. Single-group piles are
+  // unaffected - still the plain flat field list, just expressed in the
+  // same entry shape.
+  const field = (label, value, bold = false, raw = null) => ({ kind: 'field', label, value, bold, raw })
+  const heading = (text, aside) => ({ kind: 'heading', text, aside })
+  const rule = () => ({ kind: 'rule' })
+
+  const isMultiGroup = !isVacant && box.groupRows?.length > 1
+  const isByProducts = box.pile?.cerealType === 'By Products'
+  return isVacant
+    ? []
+    : isMultiGroup
+      ? [
+          !isByProducts && box.variety?.name && field('Var', box.variety.name),
+          box.pile.formattedAge && field('Age', box.pile.formattedAge),
+          box.pile.condition && field('Cond', box.pile.condition),
+          box.pile.moistureContent && field('MC', fmtMc(box.pile.moistureContent)),
+          box.pile.purity && field('Purity', box.pile.purity),
+          !isByProducts && box.pile.dateProcured && field(box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured),
+          ...box.groupRows.flatMap((row) => [
+            rule(),
+            heading(groupHeading(row), isByProducts && row.lastReceivedDate ? `recv ${fmtGroupDate(row.lastReceivedDate)}` : null),
+            field('Bags', fmtBags(row.bags), false, { t: 'bags', n: row.bags }),
+            field('Net Kg', fmtKilos(row.kilos), false, { t: 'kilos', n: row.kilos }),
+          ]),
+          rule(),
+          field('TOTAL Bags', fmtBags(box.groupRows.reduce((sum, r) => sum + r.bags, 0)), true, { t: 'bags', n: box.groupRows.reduce((sum, r) => sum + r.bags, 0), total: true }),
+          field('TOTAL Net Kg', fmtKilos(box.groupRows.reduce((sum, r) => sum + r.kilos, 0)), true, { t: 'kilos', n: box.groupRows.reduce((sum, r) => sum + r.kilos, 0), total: true }),
+        ].filter(Boolean)
+      : [
+          box.variety?.name && field('Var', box.variety.name),
+          box.pile.currentBags != null && field('Bags', fmtBags(box.pile.currentBags), false, { t: 'bags', n: box.pile.currentBags, single: true }),
+          box.pile.currentKilos != null && field('Net Kg', fmtKilos(box.pile.currentKilos), false, { t: 'kilos', n: box.pile.currentKilos, single: true }),
+          box.pile.formattedAge && field('Age', box.pile.formattedAge),
+          box.pile.condition && field('Cond', box.pile.condition),
+          box.pile.moistureContent && field('MC', fmtMc(box.pile.moistureContent)),
+          box.pile.purity && field('Purity', box.pile.purity),
+          box.pile.dateProcured && field(box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured),
+        ].filter(Boolean)
+}
+
 export const generatePileLayoutReport = ({
   warehouse, branch, periodFrom, periodTo, gridCols, gridRows, boxes, signatories,
 }) => {
@@ -106,52 +159,7 @@ export const generatePileLayoutReport = ({
     const rawH = box.rowSpan * cellH
 
     const isVacant = !box.pile
-    // Three entry kinds, so a multi-group pile's breakdown reads as
-    // distinct sections instead of a flat wall of identical label:value
-    // lines (confirmed, reported case - the plain field-list approach
-    // looked "crowded" and "not professional"): 'field' is the existing
-    // label:value row; 'heading' is a bold, left-aligned group name (with
-    // an optional lighter "aside" suffix - By Products' own Received
-    // date, folded into the heading line instead of its own row); 'rule'
-    // draws a thin divider above the next entry. Single-group piles are
-    // unaffected - still the plain flat field list, just expressed in the
-    // same entry shape.
-    const field = (label, value, bold = false) => ({ kind: 'field', label, value, bold })
-    const heading = (text, aside) => ({ kind: 'heading', text, aside })
-    const rule = () => ({ kind: 'rule' })
-
-    const isMultiGroup = !isVacant && box.groupRows?.length > 1
-    const isByProducts = box.pile?.cerealType === 'By Products'
-    const detailFields = isVacant
-      ? []
-      : isMultiGroup
-        ? [
-            !isByProducts && box.variety?.name && field('Var', box.variety.name),
-            box.pile.formattedAge && field('Age', box.pile.formattedAge),
-            box.pile.condition && field('Cond', box.pile.condition),
-            box.pile.moistureContent && field('MC', fmtMc(box.pile.moistureContent)),
-            box.pile.purity && field('Purity', box.pile.purity),
-            !isByProducts && box.pile.dateProcured && field(box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured),
-            ...box.groupRows.flatMap((row) => [
-              rule(),
-              heading(groupHeading(row), isByProducts && row.lastReceivedDate ? `recv ${fmtGroupDate(row.lastReceivedDate)}` : null),
-              field('Bags', fmtBags(row.bags)),
-              field('Net Kg', fmtKilos(row.kilos)),
-            ]),
-            rule(),
-            field('TOTAL Bags', fmtBags(box.groupRows.reduce((sum, r) => sum + r.bags, 0)), true),
-            field('TOTAL Net Kg', fmtKilos(box.groupRows.reduce((sum, r) => sum + r.kilos, 0)), true),
-          ].filter(Boolean)
-        : [
-            box.variety?.name && field('Var', box.variety.name),
-            box.pile.currentBags != null && field('Bags', fmtBags(box.pile.currentBags)),
-            box.pile.currentKilos != null && field('Net Kg', fmtKilos(box.pile.currentKilos)),
-            box.pile.formattedAge && field('Age', box.pile.formattedAge),
-            box.pile.condition && field('Cond', box.pile.condition),
-            box.pile.moistureContent && field('MC', fmtMc(box.pile.moistureContent)),
-            box.pile.purity && field('Purity', box.pile.purity),
-            box.pile.dateProcured && field(box.pile.cerealType === 'Palay' ? 'Procured' : 'Received', box.pile.dateProcured),
-          ].filter(Boolean)
+    const detailFields = boxDetailEntries(box)
 
     // Fixed, comfortable, always-readable font sizes - only shrunk (down
     // to a genuinely legible floor, never the old illegible extreme) in

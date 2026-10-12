@@ -6,6 +6,8 @@
 // the PDF. The spreadsheet library is imported only when Export is tapped. Read-only: the
 // file is built in memory and downloaded; nothing in the app's data is touched.
 
+import { groupHeading } from './pileStockGroups.js'
+
 const NUMBER_LIKE = /^[₱]?\s?-?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d+$|^[₱]?\s?-?\d{1,3}(?:,\d{3})+$/
 
 const loadExcel = async () => {
@@ -220,6 +222,38 @@ const applyTableFormulas = (ws, info, cells) => {
     }
   }
 
+  // Row relationships found in the figures themselves (Net = Gross - Deduction, Amount = Kilos x Price ...):
+  // a column that equals "A - B" or "A x B" on EVERY row becomes that formula, rounded as printed.
+  if (dataRows.length >= 3) {
+    const cols = [...numCols]
+    const vals = {}
+    cols.forEach((c) => { vals[c] = dataRows.map((x) => num(x.r, c)) })
+    const full = cols.filter((c) => vals[c].every((v) => v != null))
+    const taken = new Set()
+    for (const T of full) {
+      if (taken.has(T) || (ge && T >= ge.c && T < ge.c + ge.cs) || /balance/i.test(head.filter((x) => T >= x.c && T < x.c + x.cs).map((x) => cellText(x.o)).join(' '))) continue
+      const d = info.dec[T] || 0
+      const tol = 0.5 * Math.pow(10, -d) + 1e-9
+      let hit = null
+      for (const a of full) {
+        if (a >= T || hit) continue
+        for (const b of full) {
+          if (b >= T || hit) continue
+          const sameVal = (u, v) => vals[T].every((t, i) => Math.abs(t - (u(vals[a][i], vals[b][i]))) <= tol)
+          const flat = (c, k) => vals[c].every((v) => v === k)
+          if (a !== b && !flat(b, 0) && !flat(a, 0) && sameVal((x, y) => x - y)) hit = { op: '-', a, b }
+          else if (a < b && !flat(a, 1) && !flat(b, 1) && !flat(a, 0) && !flat(b, 0) && sameVal((x, y) => x * y)) hit = { op: '*', a, b }
+        }
+      }
+      if (!hit) continue
+      dataRows.forEach((row, i) => {
+        const expr = `${colName(hit.a)}${row.r}${hit.op}${colName(hit.b)}${row.r}`
+        writeF(ws, row.r, T, `ROUND(${expr},${d})`, vals[T][i])
+      })
+      taken.add(T); applied.derived = (applied.derived || 0) + 1
+    }
+  }
+
   // Totals: the sum of the rows above (since the previous total), by SUBTOTAL so filtering the sheet re-totals it.
   let segStart = 0
   rows.forEach((row, idx) => {
@@ -279,7 +313,7 @@ const cerealOf = (h) => (h ? h.text.replace(/^(TYPE OF CEREAL|CEREAL TYPE):\s*/i
 const placeSignatures = (ws, startRow, blocks, cumMm, width) => {
   let r = startRow + 1
   const live = (blocks || []).filter((b) => (b.people || []).some((x) => x && (x.name || x.position)) || b.always)
-  const total = cumMm[cumMm.length - 1]
+  const total = cumMm[width]
   const bandOf = (k) => {
     const lo = (total * k) / 3, hi = (total * (k + 1)) / 3
     const cols = []
@@ -293,12 +327,13 @@ const placeSignatures = (ws, startRow, blocks, cumMm, width) => {
     const merged = (row, k, text, o = {}) => {
       const [c1, c2] = bandOf(k)
       // the signature line stops one column short of the band, leaving the gap between neighbouring lines
-      const inner = [c1, o.line && c2 - c1 >= 2 ? c2 - 1 : c2]
+      const shortEnough = c2 - c1 >= 2 && cumMm[c2 - 1] - cumMm[c1 - 1] >= 38
+      const inner = [c1, (o.line || o.short) && shortEnough ? c2 - 1 : c2]
       if (inner[1] > inner[0]) ws.mergeCells(row, inner[0], row, inner[1])
       const cell = ws.getCell(row, inner[0])
       cell.value = text
       cell.font = { name: FONT, size: 7, ...o.font }
-      cell.alignment = { horizontal: o.align || 'center', vertical: 'middle', wrapText: true }
+      cell.alignment = { horizontal: o.align || 'center', vertical: 'middle', wrapText: !o.line, shrinkToFit: !!o.line }
       if (o.line) cell.border = { top: { style: 'thin', color: { argb: 'FF000000' } } }
     }
     group.forEach((b, gi) => merged(r, slots[gi], b.role + ':', { align: 'left', font: { color: { argb: 'FF505050' } } }))
@@ -308,7 +343,7 @@ const placeSignatures = (ws, startRow, blocks, cumMm, width) => {
     for (let pi = 0; pi < most; pi++) {
       group.forEach((b, gi) => { const x = b.people[pi]; if (x && (x.name || b.always)) merged(r, slots[gi], x.name ? String(x.name).toUpperCase() : '', { line: true, font: { bold: true, size: 8 } }) })
       ws.getRow(r).height = 12; r++
-      group.forEach((b, gi) => { const x = b.people[pi]; if (x?.position) merged(r, slots[gi], x.position, { font: { size: 7 } }) })
+      group.forEach((b, gi) => { const x = b.people[pi]; if (x?.position) merged(r, slots[gi], x.position, { short: true, font: { size: 7 } }) })
       ws.getRow(r).height = 11; r++
       if (pi < most - 1) { ws.getRow(r).height = 10; r++ }
     }
@@ -457,7 +492,8 @@ export const captureToWorkbook = async (capture, { sheetName = 'Report' } = {}) 
     const kinds = pageKind(lines)
     const info = { kind: kinds, sheet, ws, cereal: cerealOf(heading), tables: [], activities: [] }
     let lastActivity = null
-    for (const it of p.items) {
+    for (let ix = 0; ix < p.items.length; ix++) {
+      const it = p.items[ix]
       if (it.kind === 'info') {
         it.lines.forEach((l) => {
           const m = LABEL_LINE.exec(l)
@@ -487,15 +523,35 @@ export const captureToWorkbook = async (capture, { sheetName = 'Report' } = {}) 
       } else if (it.kind === 'sign') {
         r = placeSignatures(ws, r, it.blocks, cumulative(width, mmCols, ctx.wmap), width)
       } else if (it.kind === 'kv') {
+        // as printed: the reconciliation sits at the right, beside the signatories on the left
+        const nxt = p.items[ix + 1]
+        const cum = cumulative(width, mmCols, ctx.wmap)
+        const total = cum[width]
+        let left = width - 1
+        while (left > 1 && total - cum[left] < 78) left--
+        const first = left + 1
+        let valueFrom = width
+        while (valueFrom > first + 1 && cum[width] - cum[valueFrom - 1] < 26) valueFrom--
+        let kr = r
         for (const [label, value, bold] of it.rows) {
-          const a = ws.getCell(r, 1), b = ws.getCell(r, 2), v = asCell(value)
+          if (valueFrom - 1 > first) ws.mergeCells(kr, first, kr, valueFrom - 1)
+          if (width > valueFrom) ws.mergeCells(kr, valueFrom, kr, width)
+          const a = ws.getCell(kr, first), b = ws.getCell(kr, valueFrom), v = asCell(value)
           a.value = label; b.value = v.value; if (v.numFmt) b.numFmt = v.numFmt
-          a.font = b.font = { name: FONT, size: 8, bold: !!bold }
-          b.alignment = { horizontal: 'right' }
-          ctx.wmap[1] = Math.max(ctx.wmap[1] || 0, String(label).length * 0.85 + 2)
-          ctx.wmap[2] = Math.max(ctx.wmap[2] || 0, String(value).length * 0.9 + 3)
-          r++
+          a.font = b.font = { name: FONT, size: 8.5, bold: !!bold }
+          a.alignment = { horizontal: 'left', vertical: 'middle' }
+          b.alignment = { horizontal: 'right', vertical: 'middle' }
+          for (let c = first; c <= width; c++) {
+            const cc = ws.getCell(kr, c)
+            cc.border = { bottom: { style: 'thin', color: { argb: bold ? 'FF000000' : 'FFC8C8C8' } } }
+            if (bold) cc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } }
+          }
+          ws.getRow(kr).height = 14
+          kr++
         }
+        let sr = r
+        if (nxt && nxt.kind === 'sign') { sr = placeSignatures(ws, r, nxt.blocks, cum, left); ix++ }
+        r = Math.max(kr, sr)
       }
     }
     for (let c = 1; c <= width; c++) {
@@ -535,52 +591,247 @@ export const exportCaptureToExcel = async (capture, { fileName, sheetName }) => 
   await download(wb, fileName)
 }
 
-/** Pile Layout: the floor plan as a grid of merged cells (one per pile box), plus a plain list of every pile. */
-export const exportPileLayoutToExcel = async ({ warehouse, branch, periodFrom, periodTo, gridCols, gridRows, boxes, fmtBags, fmtKilos, fileName }) => {
+/** Pile Layout: the floor plan laid out like the printed page (landscape, one box per pile, label left /
+ *  figure right), with the figures in each box linked to a "Pile Data" sheet so editing a pile updates the plan. */
+export const exportPileLayoutToExcel = async ({ warehouse, periodFrom, periodTo, gridCols, gridRows, boxes, signatories = {}, fileName }) => {
   const ExcelJS = await loadExcel()
   const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet('Layout')
+  wb.calcProperties = { fullCalcOnLoad: true }
+  const ws = wb.addWorksheet('Pile Layout', { views: [{ state: 'normal', showGridLines: false }] })
+  const data = wb.addWorksheet('Pile Data', { views: [{ state: 'normal', showGridLines: false }] })
   const cols = Math.max(gridCols || 1, 1), rows = Math.max(gridRows || 1, 1)
-  const lines = ['NATIONAL FOOD AUTHORITY', branch?.name, warehouse?.name, 'PILE LAYOUT', `As of ${periodFrom} - ${periodTo}`].filter(Boolean)
-  lines.forEach((l, i) => {
-    ws.mergeCells(i + 1, 1, i + 1, Math.max(cols, 4))
-    const c = ws.getCell(i + 1, 1)
-    c.value = l
-    c.font = { bold: i < 4, size: i === 0 ? 13 : 11 }
-    c.alignment = { horizontal: 'center' }
+  const fmtD = (s) => (s ? new Date(s + 'T00:00:00').toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' }) : '')
+  const thinBlack = { style: 'thin', color: { argb: 'FF000000' } }
+  const grayRule = { style: 'thin', color: { argb: 'FF787878' } }
+  const FILL = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } })
+
+  // ---------- Pile Data sheet: one row per pile, then one row per stock group of a multi-group pile ----------
+  const placed = boxes.filter((b) => b.pile)
+  const pileRow = new Map(), groupRows = new Map()
+  const head = (row, labels) => labels.forEach((t, i) => {
+    const c = data.getCell(row, i + 1)
+    c.value = t
+    c.font = { name: FONT, size: 8, bold: true }
+    c.fill = FILL(HEAD_FILL)
+    c.border = headBorder
+    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
   })
-  const top = lines.length + 2
-  for (let c = 1; c <= cols; c++) ws.getColumn(c).width = 18
-  for (let r = 0; r < rows; r++) ws.getRow(top + r).height = 46
-  const text = (box) => {
-    if (!box.pile) return `${box.label ?? ''}\nVACANT`.trim()
-    const p = box.pile
-    const rowsOf = box.groupRows ?? []
-    const parts = [p.pileName]
-    if (box.variety?.name) parts.push(`Var: ${box.variety.name}`)
-    if (rowsOf.length > 1) rowsOf.forEach((g) => parts.push(`${g.varietyName ?? g.sackLabelText ?? 'Stock'}: ${fmtBags(g.bags)} bags / ${fmtKilos(g.kilos)} kg`))
-    else parts.push(`${fmtBags(p.currentBags)} bags / ${fmtKilos(p.currentKilos)} kg`)
-    if (p.formattedAge) parts.push(`Age: ${p.formattedAge}`)
-    return parts.join('\n')
+  const body = (row, vals, fmts = {}) => vals.forEach((v, i) => {
+    const c = data.getCell(row, i + 1)
+    c.value = v
+    c.font = { name: FONT, size: 8 }
+    c.border = bodyBorder
+    if (fmts[i]) { c.numFmt = fmts[i]; c.alignment = { horizontal: 'right' } }
+  })
+  data.getCell(1, 1).value = `${warehouse?.name ?? ''} - PILE DATA`
+  data.getCell(1, 1).font = { name: FONT, size: 11, bold: true }
+  data.getCell(2, 1).value = 'The Pile Layout sheet reads these figures; change a pile here and its box updates.'
+  data.getCell(2, 1).font = { name: FONT, size: 8, italic: true, color: { argb: 'FF666666' } }
+  head(4, ['Pile', 'Cereal', 'Variety', 'Condition', 'Bags', 'Net Kg', 'Age', 'Row', 'Column'])
+  const multi = placed.filter((b) => (b.groupRows?.length ?? 0) > 1)
+  const firstPile = 5
+  const groupHead = firstPile + placed.length + 3
+  let gr = groupHead + 1
+  multi.forEach((b) => { groupRows.set(b.id, b.groupRows.map(() => gr++)) })
+  const groupFirst = groupHead + 1, groupLast = gr - 1
+  placed.forEach((b, i) => {
+    const r = firstPile + i
+    pileRow.set(b.id, r)
+    const isMulti = (b.groupRows?.length ?? 0) > 1
+    body(r, [b.pile.pileName, b.pile.cerealType ?? '', b.variety?.name ?? '', b.pile.condition ?? '',
+      isMulti ? { formula: `SUMIFS($C$${groupFirst}:$C$${groupLast},$A$${groupFirst}:$A$${groupLast},A${r})`, result: b.groupRows.reduce((s, x) => s + (x.bags || 0), 0) } : (b.pile.currentBags ?? 0),
+      isMulti ? { formula: `ROUND(SUMIFS($D$${groupFirst}:$D$${groupLast},$A$${groupFirst}:$A$${groupLast},A${r}),3)`, result: b.groupRows.reduce((s, x) => s + (x.kilos || 0), 0) } : (b.pile.currentKilos ?? 0),
+      b.pile.formattedAge ?? '', b.rowStart, b.colStart], { 4: '#,##0', 5: '#,##0.000' })
+  })
+  const totalRow = firstPile + placed.length
+  if (placed.length) {
+    const tl = data.getCell(totalRow, 1)
+    tl.value = 'TOTAL'; tl.font = { name: FONT, size: 8, bold: true }
+    for (const [c, f, fmt, key] of [[5, 'E', '#,##0', 'currentBags'], [6, 'F', '#,##0.000', 'currentKilos']]) {
+      const cell = data.getCell(totalRow, c)
+      const result = placed.reduce((s, b) => s + (b.groupRows?.length > 1 ? b.groupRows.reduce((t, x) => t + (c === 5 ? x.bags : x.kilos || 0), 0) : (b.pile[key] ?? 0)), 0)
+      cell.value = { formula: `SUBTOTAL(9,${f}${firstPile}:${f}${totalRow - 1})`, result }
+      cell.numFmt = fmt; cell.font = { name: FONT, size: 8, bold: true }; cell.alignment = { horizontal: 'right' }
+    }
+    for (let c = 1; c <= 9; c++) { data.getCell(totalRow, c).border = bodyBorder; data.getCell(totalRow, c).fill = FILL('FFEEEEEE') }
   }
-  for (const box of boxes) {
-    const r1 = top + box.rowStart - 1, c1 = box.colStart, r2 = r1 + box.rowSpan - 1, c2 = c1 + box.colSpan - 1
-    if (r2 > r1 || c2 > c1) ws.mergeCells(r1, c1, r2, c2)
-    const cell = ws.getCell(r1, c1)
-    cell.value = text(box)
-    cell.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' }
-    cell.font = { size: 9, color: { argb: box.pile ? 'FF000000' : 'FF888888' } }
-    for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) ws.getCell(r, c).border = { top: { style: 'medium' }, left: { style: 'medium' }, bottom: { style: 'medium' }, right: { style: 'medium' } }
-    if (box.pile) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7F4EA' } }
+  if (multi.length) {
+    data.getCell(groupHead - 1, 1).value = 'Stock groups of piles holding more than one'
+    data.getCell(groupHead - 1, 1).font = { name: FONT, size: 8, bold: true }
+    head(groupHead, ['Pile', 'Group', 'Bags', 'Net Kg'])
+    multi.forEach((b) => b.groupRows.forEach((g, i) => {
+      body(groupRows.get(b.id)[i], [b.pile.pileName, groupHeading(g), g.bags ?? 0, g.kilos ?? 0], { 2: '#,##0', 3: '#,##0.000' })
+    }))
   }
-  const list = wb.addWorksheet('Piles')
-  const head = ['Pile', 'Cereal', 'Variety', 'Bags', 'Net kg', 'Age', 'Row', 'Column']
-  list.addRow(head).font = { bold: true }
-  for (const b of boxes.filter((x) => x.pile)) {
-    list.addRow([b.pile.pileName, b.pile.cerealType ?? '', b.variety?.name ?? '', b.pile.currentBags ?? '', b.pile.currentKilos ?? '', b.pile.formattedAge ?? '', b.rowStart, b.colStart])
+  ;[16, 12, 14, 12, 12, 16, 18, 7, 8].forEach((w, i) => { data.getColumn(i + 1).width = w })
+  data.getColumn(2).width = 26
+  data.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+
+  // ---------- Pile Layout sheet geometry (printed mm -> Excel) ----------
+  const PAGE_W = 297, PAGE_H = 210, M = 12, INSET = 4
+  const outerW = PAGE_W - M * 2
+  const gridStartY = 14 + 5 + (warehouse?.address ? 5 : 0) + 3 + 6 + 6
+  const outerH = PAGE_H - gridStartY - 38 - M
+  const cellW = (outerW - INSET * 2) / cols
+  const cellH = (outerH - INSET * 2) / rows
+
+  // how many sheet rows a box needs: its name, one per printed line, and a spare row for breathing room
+  const need = (b) => 2 + (b.entries ?? []).filter((e) => e.kind !== 'rule').length
+  const k = Math.max(2, ...boxes.map((b) => Math.ceil(need(b) / Math.max(b.rowSpan, 1))))
+  const subH = Math.max(9, (cellH / k) * 2.835)
+
+  const CW = 2 * cols + 2                                  // inset | label,value per grid column | inset
+  ws.getColumn(1).width = mmToChars(INSET)
+  for (let c = 0; c < cols * 2; c++) ws.getColumn(c + 2).width = mmToChars(cellW / 2)
+  ws.getColumn(CW).width = mmToChars(INSET)
+  // outer margin columns: the sheet starts at the page margin, so no extra column is needed for it
+
+  let r = 1
+  const full = (text, o = {}) => {
+    ws.mergeCells(r, 1, r, CW)
+    const c = ws.getCell(r, 1)
+    c.value = text
+    c.font = { name: FONT, size: o.size || 8, bold: !!o.bold, color: o.color ? { argb: o.color } : undefined }
+    c.alignment = { horizontal: 'center', vertical: 'middle' }
+    ws.getRow(r).height = (o.size || 8) * 1.5 + 1
+    r++
   }
-  list.getColumn(4).numFmt = '#,##0'; list.getColumn(5).numFmt = '#,##0.000'
-  ;[18, 12, 18, 10, 14, 14, 8, 8].forEach((w, i) => { list.getColumn(i + 1).width = w })
+  full((warehouse?.name ?? '').toUpperCase(), { size: 11, bold: true })
+  if (warehouse?.address) full(warehouse.address.toUpperCase(), { size: 8 })
+  ws.getRow(r).height = 8; r++
+  full('PILE LAYOUT', { size: 14, bold: true })
+  full(`As of ${fmtD(periodFrom)} - ${fmtD(periodTo)}`, { size: 8 })
+  ws.getRow(r).height = 8; r++
+
+  // outer boundary: an inset row/column of white around the grid, framed by one rectangle
+  const frameTop = r
+  ws.getRow(r).height = INSET * 2.835; r++
+  const gridTop = r
+  for (let i = 0; i < rows * k; i++) { ws.getRow(r + i).height = subH }
+  r += rows * k
+  ws.getRow(r).height = INSET * 2.835
+  const frameBottom = r
+  r++
+  const edge = (row, c, side) => {
+    const cell = ws.getCell(row, c)
+    cell.border = { ...(cell.border || {}), [side]: { style: 'medium', color: { argb: 'FF000000' } } }
+  }
+  for (let c = 1; c <= CW; c++) { edge(frameTop, c, 'top'); edge(frameBottom, c, 'bottom') }
+  for (let row = frameTop; row <= frameBottom; row++) { edge(row, 1, 'left'); edge(row, CW, 'right') }
+
+  // ---------- the boxes ----------
+  const fillOf = (b) => (!b.pile ? 'FFFFFFFF' : b.variety?.category === 'Palay' ? 'FFADEBB3' : b.variety?.category === 'By Products' ? 'FFFBEBCC' : 'FFB8E3E9')
+  for (const b of boxes) {
+    const c1 = 2 + (b.colStart - 1) * 2, c2 = c1 + b.colSpan * 2 - 1, mid = c1 + Math.max(1, Math.round(b.colSpan * 2 * (b.colSpan <= 3 ? 0.5 : 0.4))) - 1
+    const rowTop = gridTop + (b.rowStart - 1) * k, nRows = Math.max(b.rowSpan, 1) * k
+    const fill = FILL(fillOf(b))
+    const entries = (b.entries ?? []).filter(Boolean)
+    const lines = entries.filter((e) => e.kind !== 'rule').length
+    const used = 1 + (b.pile ? lines : 1)
+    const lead = Math.max(0, Math.floor((nRows - used) / 2))
+    // what each row of the box shows
+    const plan = Array.from({ length: nRows }, () => ({ type: 'blank' }))
+    let at = lead
+    plan[at++] = { type: 'name' }
+    if (!b.pile) plan[at++] = { type: 'vacant' }
+    else {
+      let ruleNext = false, gi = -1
+      for (const e of entries) {
+        if (e.kind === 'rule') { ruleNext = true; continue }
+        if (at >= nRows) break
+        if (e.kind === 'heading') { gi++; plan[at++] = { type: 'heading', e, rule: ruleNext } }
+        else plan[at++] = { type: 'field', e, rule: ruleNext, gi }
+        ruleNext = false
+      }
+    }
+    const isMulti = (b.groupRows?.length ?? 0) > 1
+    plan.forEach((p, i) => {
+      const row = rowTop + i, first = i === 0, last = i === nRows - 1
+      const bdr = (side) => (side === 'top' ? first : side === 'bottom' ? last : true)
+      const mergedBorder = (extra = {}) => ({
+        ...(first ? { top: thinBlack } : {}), ...(last ? { bottom: thinBlack } : {}), ...extra,
+      })
+      if (p.type === 'field') {
+        if (mid > c1) ws.mergeCells(row, c1, row, mid)
+        if (c2 > mid + 1) ws.mergeCells(row, mid + 1, row, c2)
+        const a = ws.getCell(row, c1), v = ws.getCell(row, mid + 1)
+        a.value = `${p.e.label}:`
+        a.font = { name: FONT, size: 7, bold: p.e.bold, color: { argb: p.e.bold ? 'FF000000' : 'FF505050' } }
+        a.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }
+        a.fill = fill
+        a.border = mergedBorder({ left: thinBlack, ...(p.rule ? { top: grayRule } : {}) })
+        v.fill = fill
+        v.border = mergedBorder({ right: thinBlack, ...(p.rule ? { top: grayRule } : {}) })
+        v.font = { name: FONT, size: 7, bold: p.e.bold }
+        v.alignment = { horizontal: 'right', vertical: 'middle', indent: 1 }
+        const raw = p.e.raw
+        if (raw && b.pile) {
+          const pr = pileRow.get(b.id)
+          const col = raw.t === 'bags' ? 'E' : 'F'
+          const ref = isMulti && !raw.total
+            ? `'Pile Data'!${raw.t === 'bags' ? 'C' : 'D'}${groupRows.get(b.id)[p.gi]}`
+            : `'Pile Data'!${col}${pr}`
+          v.value = { formula: ref, result: raw.n ?? 0 }
+          v.numFmt = raw.t === 'bags' ? '#,##0' : '#,##0.000'
+        } else v.value = String(p.e.value ?? '')
+        return
+      }
+      if (c2 > c1) ws.mergeCells(row, c1, row, c2)
+      const cell = ws.getCell(row, c1)
+      cell.fill = fill
+      cell.border = mergedBorder({ left: thinBlack, right: thinBlack, ...(p.rule ? { top: grayRule } : {}) })
+      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+      if (p.type === 'name') {
+        cell.value = b.pile?.pileName ?? b.label ?? ''
+        cell.font = { name: FONT, size: 10, bold: true }
+        cell.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true }
+        if (!b.pile) cell.value = b.label ?? ''
+        ws.getRow(row).height = Math.max(ws.getRow(row).height || 0, 13)
+      } else if (p.type === 'vacant') {
+        cell.value = 'VACANT'
+        cell.font = { name: FONT, size: 7, color: { argb: 'FF505050' } }
+      } else if (p.type === 'heading') {
+        cell.value = p.e.aside ? { richText: [{ text: p.e.text, font: { name: FONT, size: 7, bold: true } }, { text: ` · ${p.e.aside}`, font: { name: FONT, size: 6, color: { argb: 'FF505050' } } }] } : p.e.text
+        cell.font = { name: FONT, size: 7, bold: true }
+        cell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }
+      }
+      void bdr
+    })
+  }
+
+  // ---------- signatories: Prepared by | Verified Correct | Certified Correct | Noted by ----------
+  r++
+  const sig = [
+    ['Prepared by:', signatories.preparedByName, 'Classifier'],
+    ['Verified Correct:', signatories.verifiedCorrect?.name, signatories.verifiedCorrect?.position],
+    ['Certified Correct:', signatories.certifiedCorrectName, signatories.certifiedCorrectPosition],
+    ['Noted by:', signatories.notedByName, signatories.notedByPosition],
+  ]
+  const per = Math.floor((CW - 2) / 4)
+  const span = (i) => [2 + i * per, i === 3 ? CW - 1 : 1 + (i + 1) * per]
+  const sigRow = (height, fn) => {
+    sig.forEach((s, i) => {
+      const [a, z] = span(i)
+      const end = fn.line && z - a >= 2 ? z - 1 : z
+      if (end > a) ws.mergeCells(r, a, r, end)
+      const cell = ws.getCell(r, a)
+      fn.set(cell, s)
+      if (fn.line) cell.border = { top: thinBlack }
+    })
+    ws.getRow(r).height = height
+    r++
+  }
+  sigRow(11, { set: (c, s) => { c.value = s[0]; c.font = { name: FONT, size: 7, color: { argb: 'FF505050' } }; c.alignment = { horizontal: 'left', vertical: 'middle' } } })
+  ws.getRow(r).height = 24; r++
+  sigRow(13, { line: true, set: (c, s) => { c.value = String(s[1] ?? '').toUpperCase(); c.font = { name: FONT, size: 8, bold: true }; c.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true } } })
+  sigRow(11, { set: (c, s) => { c.value = s[2] ?? ''; c.font = { name: FONT, size: 7 }; c.alignment = { horizontal: 'center', vertical: 'middle' } } })
+  r++
+  full(`BSM by ArVee - ${new Date().toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' })}`, { size: 6, color: 'FFA0A0A0' })
+
+  ws.pageSetup = {
+    paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true,
+    margins: { left: M / 25.4, right: M / 25.4, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+  }
   await download(wb, fileName)
 }
 
