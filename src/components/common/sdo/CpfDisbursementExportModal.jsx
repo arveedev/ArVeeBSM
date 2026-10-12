@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import { X } from 'lucide-react'
+import ExportFormatDialog from '../ExportFormatDialog.jsx'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
@@ -24,6 +25,7 @@ function CpfDisbursementExportModal({ onClose }) {
   const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().slice(0, 10))
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [generating, setGenerating] = useState(false)
+  const [askFormat, setAskFormat] = useState(false)
   const [entered, setEntered] = useState(false)
 
   useEffect(() => {
@@ -150,20 +152,13 @@ function CpfDisbursementExportModal({ onClose }) {
           </p>
           <button
             type="button"
-            onClick={() => handleExport('pdf')}
+            onClick={() => setAskFormat(true)}
             disabled={generating}
             className="w-full rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
           >
-            {generating ? 'Generating…' : 'Export PDF'}
+            {generating ? 'Generating…' : 'Export'}
           </button>
-          <button
-            type="button"
-            onClick={() => handleExport('excel')}
-            disabled={generating}
-            className="mt-2 w-full rounded-xl border border-brand-neon/40 px-3 py-3 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40"
-          >
-            Export Excel
-          </button>
+          <ExportFormatDialog open={askFormat} onClose={() => setAskFormat(false)} onPick={(k) => { setAskFormat(false); handleExport(k) }} />
         </div>
       </div>
     </div>,

@@ -382,7 +382,12 @@ Every report can also be exported to Excel as well as PDF: the Stock Report
 plan as merged cells, plus a plain list of piles), the SDO Abstract and the
 CPF Cash Disbursement Record (a continuous ledger). The Excel file is built
 from the same recorded content as the PDF, so both always show the same rows
-and totals; amounts are real numbers, so Excel can add them up. The milling
+and totals, laid out as printed (centred heading, details, bordered table,
+signatories three across). Each report has one Export button that asks for PDF
+or Excel. Amounts are real numbers, and wherever a figure is the sum of the rows
+above it, or Ending Balance = Beginning + Receipts - Issues, the Excel cell is a
+formula (written only where it reproduces the printed figure), so an edit
+carries through. The milling
 liquidations and the Stock Desk reports already had their own Excel export.
 
 ## 12. Data Integrity Principles

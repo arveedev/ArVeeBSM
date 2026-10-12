@@ -8394,4 +8394,5 @@
 //   1.10-336 - SDO exports: CPF Cash Disbursement Record and Abstract show "Page X of Y" in the lower right of every page.
 //   1.10-337 - A closed pile is no longer offered in any pile picker (layout, stock forms, Weigher's tally); it stays only as history.
 //   1.10-338 - Export to Excel on every report (Stock Report, BIN Card, Pile Layout, SDO Abstract, CPF Cash Disbursement Record); the logo builds itself on the login page.
-export const APP_VERSION = '1.10-338'
+//   1.10-339 - One Export button per report that asks PDF or Excel; the Excel file now follows the printed layout (header, details, bordered table, signatories across) and totals / Ending Balance are live formulas.
+export const APP_VERSION = '1.10-339'

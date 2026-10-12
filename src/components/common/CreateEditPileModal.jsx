@@ -35,6 +35,7 @@ import { inputClass, primaryButtonClass, byAlpha } from './admin/shared.js'
 import { CONDITION_FLAGS } from '../forms/shared.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
+import ExportFormatDialog from './ExportFormatDialog.jsx'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const AGE_UNITS = ['Days', 'Months']
@@ -89,6 +90,7 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
   const [nameCheckStatus, setNameCheckStatus] = useState('idle')
   const [showHint, setShowHint] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [askFormat, setAskFormat] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
   const [pendingCloseToggle, setPendingCloseToggle] = useState(null)
   const [closeDate, setCloseDate] = useState(todayLocalISO())
@@ -353,12 +355,10 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                       <div className="animate-popover-in absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 text-left shadow-xl" style={{ transformOrigin: 'top right' }}>
-                        <button type="button" onClick={() => handleExportBinCard('pdf')} className="block w-full px-3 py-2 text-left text-base text-app-text hover:bg-neutral-800">
+                        <button type="button" onClick={() => { setMenuOpen(false); setAskFormat(true) }} className="block w-full px-3 py-2 text-left text-base text-app-text hover:bg-neutral-800">
                           Export BIN Card
                         </button>
-                        <button type="button" onClick={() => handleExportBinCard('excel')} className="block w-full px-3 py-2 text-left text-base text-app-text hover:bg-neutral-800">
-                          BIN Card (Excel)
-                        </button>
+                        <ExportFormatDialog open={askFormat} title="Export BIN Card as" onClose={() => setAskFormat(false)} onPick={(k) => { setAskFormat(false); handleExportBinCard(k) }} />
                         <button type="button" onClick={confirmCloseToggle} className="block w-full px-3 py-2 text-left text-base text-app-text hover:bg-neutral-800">
                           {pile.closedDate ? 'Re-open Pile' : 'Close Pile'}
                         </button>

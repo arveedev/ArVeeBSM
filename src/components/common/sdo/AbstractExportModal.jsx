@@ -93,6 +93,7 @@ import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import ExportFormatDialog from '../ExportFormatDialog.jsx'
 import { generateSdoAbstract } from '../../../utils/sdoAbstractPdfGenerator.js'
 import { computeCashOnHand } from '../../../utils/sdoCalculations.js'
 
@@ -116,6 +117,7 @@ function AbstractExportModal({ onClose }) {
   const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().slice(0, 10))
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10))
   const [generating, setGenerating] = useState(false)
+  const [askFormat, setAskFormat] = useState(false)
   const [entered, setEntered] = useState(false)
   const [showChecklist, setShowChecklist] = useState(false)
   const [checkedIds, setCheckedIds] = useState(() => new Set())
@@ -531,14 +533,11 @@ function AbstractExportModal({ onClose }) {
           )}
 
           <div className="flex gap-2">
-            <button type="button" onClick={() => handleExport(false, 'pdf')} disabled={generating || (showChecklist && checkedIds.size === 0)}
+            <button type="button" onClick={() => setAskFormat(true)} disabled={generating || (showChecklist && checkedIds.size === 0)}
               className="flex-1 rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40">
-              {generating ? 'Generating…' : showChecklist ? `Export ${checkedIds.size} Selected` : 'Export PDF'}
+              {generating ? 'Generating…' : showChecklist ? `Export ${checkedIds.size} Selected` : 'Export'}
             </button>
-            <button type="button" onClick={() => handleExport(false, 'excel')} disabled={generating || (showChecklist && checkedIds.size === 0)}
-              className="rounded-xl border border-brand-neon/40 px-3 py-3 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40">
-              Excel
-            </button>
+            <ExportFormatDialog open={askFormat} onClose={() => setAskFormat(false)} onPick={(k) => { setAskFormat(false); handleExport(false, k) }} />
             {/* Cut Off & Export, per explicit request - only offered
                 while the checklist is open, since a cut-off's whole job
                 is locking in EXACTLY which checked receipts count as

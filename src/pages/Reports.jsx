@@ -30,6 +30,7 @@ import DailySummaryCard from '../components/cards/DailySummaryCard.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
+import ExportFormatDialog from '../components/common/ExportFormatDialog.jsx'
 
 // The Stock/Sack + Receipts/Issues merged segmented control (see its
 // render site below) - one entry per combination, in reading order so a
@@ -181,6 +182,7 @@ function Reports() {
   const [stmtTo, setStmtTo] = useState('')
   const stmtToPickerRef = useRef(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [askFormat, setAskFormat] = useState(null)
   // Concept U (picked) - a brief "Ready" checkmark state after a
   // successful export, instead of snapping straight back to "Export
   // PDF" the instant the file is generated with no visible confirmation
@@ -642,7 +644,7 @@ function Reports() {
               <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} label="End Date" onChange={setStmtTo} />
             </div>
           </div>
-          <button type="button" onClick={() => handleExport('pdf')}
+          <button type="button" onClick={() => setAskFormat(true)}
             disabled={isExporting || needsDates}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
             {isExporting ? (
@@ -652,14 +654,9 @@ function Reports() {
             ) : (
               <FileDown size={15} />
             )}
-            {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export PDF'}
+            {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export'}
           </button>
-          <button type="button" onClick={() => handleExport('excel')}
-            disabled={isExporting || needsDates}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-neon/40 px-5 py-2.5 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40">
-            <FileDown size={15} />
-            Export Excel
-          </button>
+          <ExportFormatDialog open={!!askFormat} onClose={() => setAskFormat(null)} onPick={(k) => { setAskFormat(null); handleExport(k) }} />
         </div>
 
         <div className="mt-3">

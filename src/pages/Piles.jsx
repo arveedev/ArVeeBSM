@@ -35,6 +35,7 @@ import { computeHistoricalPileState, computePileStockBreakdown, vacateBoxForPile
 import { formatPileStockGroups, groupHeading, fmtGroupDate } from '../utils/pileStockGroups.js'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
+import ExportFormatDialog from '../components/common/ExportFormatDialog.jsx'
 import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
@@ -382,6 +383,7 @@ function Piles() {
   // period that just completed than for the current month, which has
   // barely started. The arrows below let the user override this either way.
   const [isExporting, setIsExporting] = useState(false)
+  const [askFormat, setAskFormat] = useState(null)
 
   const [pendingDelete, setPendingDelete] = useState(null)
   // Closing a pile, from the box detail popup - every user with access
@@ -1808,17 +1810,10 @@ function Piles() {
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
-                      onClick={() => handleExportPileBinCard(pile)}
+                      onClick={() => setAskFormat({ run: (k) => handleExportPileBinCard(pile, k), title: 'Export BIN Card as' })}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
                     >
                       Export BIN Card
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExportPileBinCard(pile, 'excel')}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
-                    >
-                      BIN Card (Excel)
                     </button>
                     <button
                       type="button"
@@ -1908,14 +1903,11 @@ function Piles() {
         (isFullScreen && overlayNode) ? overlayNode : document.body
       )}
 
-      <button type="button" onClick={() => handleExport('pdf')} disabled={isExporting}
+      <button type="button" onClick={() => setAskFormat({ run: (k) => handleExport(k), title: 'Export Pile Layout as' })} disabled={isExporting}
         className={`mt-2 w-full ${primaryButtonClass}`}>
-        {isExporting ? 'Exporting…' : 'Export Pile Layout PDF'}
+        {isExporting ? 'Exporting…' : 'Export Pile Layout'}
       </button>
-      <button type="button" onClick={() => handleExport('excel')} disabled={isExporting}
-        className="mt-2 w-full rounded-xl border border-brand-neon/40 px-4 py-2.5 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40">
-        {isExporting ? 'Exporting…' : 'Export Pile Layout Excel'}
-      </button>
+      <ExportFormatDialog open={!!askFormat} title={askFormat?.title} onClose={() => setAskFormat(null)} onPick={(k) => { const f = askFormat; setAskFormat(null); f?.run(k) }} />
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}

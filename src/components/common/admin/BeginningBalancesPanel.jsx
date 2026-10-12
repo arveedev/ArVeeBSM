@@ -21,6 +21,7 @@ import { recalculatePileCurrentState, closePile, reopenPile, computePileStartDat
 import { generatePileBinCard } from '../../../utils/pileBinCardGenerator.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import ExportFormatDialog from '../ExportFormatDialog.jsx'
 import {
   inputClass, labelClass, primaryButtonClass, secondaryButtonClass,
   listItemClass, editIconClass, deleteIconClass, byAlpha, SACK_CONDITIONS,
@@ -500,6 +501,7 @@ function PilesBeginningBalances({ warehouseId }) {
   // close date. Only relevant while closing, not re-opening.
   const [closeDate, setCloseDate] = useState(todayLocalISO())
   const [openMenuPileId, setOpenMenuPileId] = useState(null)
+  const [askPile, setAskPile] = useState(null)
 
   const piles = useLiveQuery(
     () => (warehouseId ? db.piles.where('warehouseId').equals(warehouseId).toArray() : []),
@@ -632,15 +634,13 @@ function PilesBeginningBalances({ warehouseId }) {
               >
                 <MoreVertical size={20} />
               </button>
+              <ExportFormatDialog open={askPile?.pileId === p.pileId} title="Export BIN Card as" onClose={() => setAskPile(null)} onPick={(k) => { setAskPile(null); handleExportBinCard(p, k) }} />
               {openMenuPileId === p.pileId && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setOpenMenuPileId(null)} />
                   <div className="animate-popover-in absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 shadow-xl" style={{ transformOrigin: 'top right' }}>
-                    <button type="button" onClick={() => handleExportBinCard(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                    <button type="button" onClick={() => { setOpenMenuPileId(null); setAskPile(p) }} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
                       Export BIN Card
-                    </button>
-                    <button type="button" onClick={() => handleExportBinCard(p, 'excel')} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
-                      BIN Card (Excel)
                     </button>
                     <button type="button" onClick={() => confirmCloseToggle(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
                       {p.closedDate ? 'Re-open Pile' : 'Close Pile'}
