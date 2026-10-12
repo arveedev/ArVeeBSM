@@ -20,7 +20,7 @@
 //   Kilos         = 2 decimal places with comma separator (427,309.97)
 
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { autoTable, cap, attachCapture } from './pdfCapture.js'
 import { customerNameWithMillingRef } from './calculations.js'
 import { compareByRecency } from './serialNumber.js'
 
@@ -141,6 +141,18 @@ const pageW = 210 // A4 width mm
 
 // ── Header builder ────────────────────────────────────────────────────────────
 
+// Short worksheet names for the Excel version of each page of the report.
+const excelSheetLabel = (subtitle) => {
+  const t = subtitle.toUpperCase()
+  if (t.startsWith('SUMMARY OF WEEKLY STOCK')) return 'Summary'
+  if (t.includes('RECAPITULATION OF STOCK RECEIPTS')) return 'Recap Receipts'
+  if (t.includes('RECAPITULATION OF STOCK ISSUES')) return 'Recap Issues'
+  if (t.includes('STATEMENT OF WEEKLY RECEIPTS')) return 'Receipts'
+  if (t.includes('STATEMENT OF WEEKLY ISSUES')) return 'Issues'
+  if (t.includes('MTS') || t.includes('SACK')) return t.replace(/WAREHOUSE |STATEMENT OF |WEEKLY |RECAPITULATION OF/g, m => (m.startsWith('RECAP') ? 'RECAP ' : '')).toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()).slice(0, 24)
+  return subtitle.slice(0, 20)
+}
+
 const addPageHeader = (doc, { branch, warehouse, province, periodLabel, subtitle }) => {
   let y = 14
 
@@ -176,6 +188,11 @@ const addPageHeader = (doc, { branch, warehouse, province, periodLabel, subtitle
   doc.text(`FOR THE PERIOD: ${periodLabel}`, pageW / 2, y, { align: 'center' })
   y += 6
 
+  cap(doc, {
+    kind: 'page',
+    sheet: excelSheetLabel(subtitleLines.join(' ')),
+    lines: ['NATIONAL FOOD AUTHORITY', branch?.name?.toUpperCase(), branch?.address?.toUpperCase(), ...subtitleLines, `FOR THE PERIOD: ${periodLabel}`].filter(Boolean),
+  })
   return y
 }
 
@@ -214,6 +231,10 @@ const addRegionProvinceCodeWhse = (doc, { warehouse, province, branch }, y) => {
   doc.text(warehouse?.name?.toUpperCase() ?? '', leftX + labelW, y)
   y += 7
 
+  cap(doc, {
+    kind: 'info',
+    lines: [`REGION: ${branch?.region ?? ''}`, `PROVINCE: ${province?.name?.toUpperCase() ?? ''}`, `CODE: ${warehouse?.code ?? ''}`, `WHSE: ${warehouse?.name?.toUpperCase() ?? ''}`],
+  })
   return y
 }
 
@@ -254,6 +275,15 @@ const addSignatories = (doc, { certifiedCorrectName, certifiedCorrectPosition, s
   // more) instead of a rounder, padded guess - a small 3mm safety
   // margin covers font-metrics rounding, not a full extra line's worth.
   const vcList = signatories?.verifiedCorrect ?? []
+  cap(doc, {
+    kind: 'sign',
+    blocks: [
+      { role: 'Certified Correct', people: [{ name: certifiedCorrectName, position: certifiedCorrectPosition }], always: true },
+      { role: 'Verified Correct', people: vcList.map((v) => ({ name: v.name, position: v.position })) },
+      { role: 'Audited By', people: [{ name: signatories?.auditedByName, position: signatories?.auditedByPosition }] },
+      { role: 'Noted By', people: [{ name: signatories?.notedByName, position: signatories?.notedByPosition }] },
+    ],
+  })
   const topRowHeight = Math.max(lineGap * 3 + vcList.length * lineGap * 3.5, lineGap * 7)
   const requiredHeight = 10 /* baseY offset */ + topRowHeight + 4 /* notedY gap */ + 18 /* notedY label -> position bottom */ + 3 /* margin */
   const pageH = doc.internal.pageSize.getHeight()
@@ -411,6 +441,7 @@ const addStockSummaryPage = (doc, { header, cerealType, varieties, receipts, iss
   doc.setFontSize(8)
   doc.setTextColor(...BLACK)
   doc.text(`CEREAL TYPE: LOCAL ${cerealType.toUpperCase()}`, margin, y)
+  cap(doc, { kind: 'h', text: `CEREAL TYPE: LOCAL ${cerealType.toUpperCase()}` })
   y += 4
 
   // Collect variety+condition+mtsWeight raw keys from transactions AND
@@ -575,6 +606,7 @@ const addStockStatementPage = (doc, { header, cerealType, transactions, isIssues
   doc.setFontSize(8)
   doc.setTextColor(...BLACK)
   doc.text(`TYPE OF CEREAL: LOCAL ${cerealType.toUpperCase()}`, margin, y)
+  cap(doc, { kind: 'h', text: `TYPE OF CEREAL: LOCAL ${cerealType.toUpperCase()}` })
   y += 3
 
   const isByProducts = cerealType === 'By Products'
@@ -772,6 +804,7 @@ const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, si
   doc.setFontSize(8)
   doc.setTextColor(...BLACK)
   doc.text(`CEREAL TYPE: LOCAL ${cerealType.toUpperCase()}`, margin, y)
+  cap(doc, { kind: 'h', text: `CEREAL TYPE: LOCAL ${cerealType.toUpperCase()}` })
   y += 5
 
   const byActivity = {}
@@ -787,6 +820,7 @@ const addStockRecapPage = (doc, { header, cerealType, transactions, isIssues, si
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.text(`ACTIVITY: ${activity.toUpperCase()}`, margin, y)
+    cap(doc, { kind: 'h', text: `ACTIVITY: ${activity.toUpperCase()}` })
     y += 2
 
     const byVC = {}
@@ -848,6 +882,7 @@ const addSackSummaryPage = (doc, { header, sackReceipts, sackIssues, sackBeginBa
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.text('A. EMPTY SACK REPORT', margin, y)
+  cap(doc, { kind: 'h', text: 'A. EMPTY SACK REPORT' })
   y += 3
 
   // Collect all sack type+condition combos from transactions AND from
@@ -1070,8 +1105,10 @@ export const generateNfaReport = ({
   signatories, certifiedCorrect,
   varieties, sackTypes, sackTypeMap, pileMtsById,
   decimals = 2,
+  capture = null,
 }) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  attachCapture(doc, capture)
   doc.deletePage(1)
 
   const periodLabel = fmtPeriod(dateFrom, dateTo)

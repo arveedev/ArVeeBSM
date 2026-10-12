@@ -258,12 +258,21 @@ function Login() {
         <p className="text-[10px] tracking-wide text-neutral-500 opacity-35">v{APP_VERSION}</p>
       </div>
       <div className="w-full max-w-sm">
-        <img
-          src="/logo.svg"
-          alt="BSM App logo"
+        {/* The logo builds itself on the way in: its two triangles fly together and lock, the notch cuts in,
+            and a soft ring pulses once. Same shapes as /logo.svg, drawn inline so each piece can move. */}
+        <div
+          role="img"
+          aria-label="BSM App logo"
           style={isExiting ? flyTransformUp : undefined}
-          className={`mx-auto mb-4 h-20 w-20 rounded-2xl transition-all duration-[1400ms] ${!isExiting ? 'animate-login-logo-in' : ''}`}
-        />
+          className={`mx-auto mb-4 h-20 w-20 rounded-2xl transition-all duration-[1400ms] ${!isExiting ? 'login-logo-glow' : ''}`}
+        >
+          <svg viewBox="0 0 512 512" className={`h-full w-full rounded-2xl ${!isExiting ? 'login-logo-assemble' : ''}`} aria-hidden="true">
+            <rect width="512" height="512" fill="#0A0A0A" />
+            <polygon className="logo-tri-a" points="256,110 336,250 176,250" fill="#00FFA3" />
+            <polygon className="logo-tri-b" points="176,272 336,272 256,400" fill="#00B377" />
+            <rect className="logo-notch" x="246" y="150" width="20" height="80" rx="10" fill="#0A0A0A" opacity="0.85" />
+          </svg>
+        </div>
         <h1
           style={isExiting ? flyTransformUp : undefined}
           className={`text-center text-2xl font-semibold text-app-text transition-all duration-[1400ms] ${!isExiting ? 'animate-login-title-in' : ''}`}

@@ -31,7 +31,7 @@ function CpfDisbursementExportModal({ onClose }) {
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  const handleExport = async () => {
+  const handleExport = async (kind = 'pdf') => {
     setGenerating(true)
     try {
       const [periodPrsRaw, priorPrsRaw, warehouses, provinces, branches, ledgerEntriesAll] = await Promise.all([
@@ -90,7 +90,9 @@ function CpfDisbursementExportModal({ onClose }) {
 
       const openingBalance = computeCashOnHand(priorLedgerEntries, priorPrsRaw)
 
+      const capture = kind === 'excel' ? [] : null
       const doc = generateCpfDisbursementRecord({
+        capture,
         branchLabel,
         cityLabel,
         dateFrom,
@@ -102,7 +104,8 @@ function CpfDisbursementExportModal({ onClose }) {
         officer: { name: user.name, position: userRecord?.position?.trim() || 'Accountable Officer' },
       })
 
-      doc.save(`CPF-Cash-Disbursement-Record-${dateFrom}-to-${dateTo}.pdf`)
+      const { saveReport } = await import('../../../utils/reportExcel.js')
+      await saveReport({ doc, capture, kind, baseName: `CPF-Cash-Disbursement-Record-${dateFrom}-to-${dateTo}`, sheetName: 'CPF Record' })
       onClose()
     } catch (err) {
       toast.error('Failed to generate export')
@@ -147,11 +150,19 @@ function CpfDisbursementExportModal({ onClose }) {
           </p>
           <button
             type="button"
-            onClick={handleExport}
+            onClick={() => handleExport('pdf')}
             disabled={generating}
             className="w-full rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
           >
             {generating ? 'Generating…' : 'Export PDF'}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExport('excel')}
+            disabled={generating}
+            className="mt-2 w-full rounded-xl border border-brand-neon/40 px-3 py-3 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40"
+          >
+            Export Excel
           </button>
         </div>
       </div>

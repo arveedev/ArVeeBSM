@@ -163,7 +163,7 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel, isFirstPage = true })
  */
 export const generateSdoAbstract = ({
   branchLabel, dateFrom, dateTo, purchaseReceipts, purityDisplayFormat = 'range',
-  reconciliation, signatories,
+  reconciliation, signatories, capture = null,
 }) => {
   const pricerEnabled = purchaseReceipts.some((pr) => pr.pricerAmount != null)
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
@@ -291,6 +291,11 @@ export const generateSdoAbstract = ({
   ]
 
   const foot = [[{ content: 'TOTAL', colSpan: 7 }, ...buildTotalsRowCells(totals)]]
+  if (capture) {
+    // For the Excel version: the same rows, without the blank spacer rows that only exist to space the printed page.
+    capture.push({ kind: 'page', sheet: 'Abstract', lines: ['NATIONAL FOOD AUTHORITY', (branchLabel ?? '').toUpperCase(), 'ABSTRACT OF CEREAL PURCHASES', `FOR THE PERIOD ${periodLabel.toUpperCase()}`] })
+    capture.push({ kind: 'table', head, body: body0.filter((row) => !(row[0] && typeof row[0] === 'object' && row[0].styles && row[0].styles.minCellHeight === 3)), foot })
+  }
 
   const lastColIndex = head[0].length - 1
 
@@ -586,6 +591,7 @@ export const generateSdoAbstract = ({
     reconRows.push({ label: e.label, amt: e.amount })
     reconRows.push({ label: totalLabel, amt: running, bold: true })
   }
+  if (capture) capture.push({ kind: 'kv', rows: reconRows.map((r) => [r.label, fmtPeso(r.amt), r.bold]) })
   // The box itself starts 4mm ABOVE `y` (see `ry = y - 4` below), so its
   // true bottom relative to `y` is 3mm plus one 7mm row per reconRows
   // entry, not `y` plus the header bar.
@@ -608,6 +614,7 @@ export const generateSdoAbstract = ({
     { role: 'Verified By', person: signatories?.verifiedBy },
     { role: 'Noted By', person: signatories?.notedBy },
   ]
+  if (capture) capture.push({ kind: 'sign', blocks: sigCols.map((c) => ({ role: c.role, people: [{ name: c.person?.name, position: c.person?.position }], always: true })) })
   sigCols.forEach((c, i) => {
     const x = margin + i * (sigW + sigGap)
     doc.setFont('helvetica', 'bold')

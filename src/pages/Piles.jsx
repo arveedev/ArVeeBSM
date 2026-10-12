@@ -27,7 +27,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { db } from '../db/dexie.js'
-import { fmtBags, fmtWeight, fmtMc, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO, AGE_BUCKETS } from '../utils/calculations.js'
+import { fmtBags, fmtKilos, fmtWeight, fmtMc, fmtDateForFilename, sanitizeForFilename, calculateCurrentAge, fmtAge, todayLocalISO, AGE_BUCKETS } from '../utils/calculations.js'
 import { generatePileLayoutReport } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
@@ -937,7 +937,7 @@ function Piles() {
     clearTimeout(longPressTimer.current)
   }
 
-  const handleExportPileBinCard = async (pile) => {
+  const handleExportPileBinCard = async (pile, kind = 'pdf') => {
     // Previously had no error handling at all - any failure (a thrown
     // error inside generatePileBinCard, or doc.save() itself) rejected
     // silently with no visible feedback, matching the reported symptom
@@ -957,14 +957,17 @@ function Piles() {
       const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
       const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
 
+      const capture = kind === 'excel' ? [] : null
       const doc = generatePileBinCard({
         warehouse: currentWarehouse, branch, pile, variety,
         transactions: [...allPileTransactions, ...wtsTransfers],
         transactionTypeMap,
         globalDataStartDate,
         varietyMap, sackTypeMap: sackTypeMapForBreakdown,
+        capture,
       })
-      doc.save(`${(pile.pileName || 'Pile').replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
+      const { saveReport } = await import('../utils/reportExcel.js')
+      await saveReport({ doc, capture, kind, baseName: `${(pile.pileName || 'Pile').replace(/[^a-z0-9]+/gi, '-')}-BIN-Card`, sheetName: 'BIN Card' })
       // Was missing entirely - a silent success looked identical to a
       // silent failure, which is exactly why this was reported as "not
       // functioning" even on runs that actually worked.
@@ -975,7 +978,7 @@ function Piles() {
     }
   }
 
-  const handleExport = async () => {
+  const handleExport = async (kind = 'pdf') => {
     if (!periodFrom || !periodTo) {
       toast.error('Set both Period From and Period To before exporting')
       return
@@ -1013,6 +1016,17 @@ function Piles() {
         const groupRows = getGroupRows(pile)
         return { ...box, pile: pile ? { ...pile, formattedAge } : pile, variety, groupRows }
       })
+
+      if (kind === 'excel') {
+        const { exportPileLayoutToExcel } = await import('../utils/reportExcel.js')
+        await exportPileLayoutToExcel({
+          warehouse: currentWarehouse, branch, periodFrom, periodTo, gridCols: GRID_COLS, gridRows: GRID_ROWS,
+          boxes: enrichedBoxes, fmtBags, fmtKilos,
+          fileName: `${sanitizeForFilename(currentWarehouse?.name) || 'WH'}-PileLayout-${fmtDateForFilename(periodFrom)}-${fmtDateForFilename(periodTo)}`,
+        })
+        toast.success('Pile Layout Excel exported')
+        return
+      }
 
       const doc = generatePileLayoutReport({
         warehouse: currentWarehouse,
@@ -1801,6 +1815,13 @@ function Piles() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => handleExportPileBinCard(pile, 'excel')}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs font-medium text-neutral-300 transition-all active:scale-95"
+                    >
+                      BIN Card (Excel)
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => { setCloseDate(todayLocalISO()); setPendingClose({ pileId: pile.pileId, pileName: pile.pileName }) }}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-crimson/40 py-2 text-xs font-medium text-brand-crimson transition-all active:scale-95"
                     >
@@ -1887,9 +1908,13 @@ function Piles() {
         (isFullScreen && overlayNode) ? overlayNode : document.body
       )}
 
-      <button type="button" onClick={handleExport} disabled={isExporting}
+      <button type="button" onClick={() => handleExport('pdf')} disabled={isExporting}
         className={`mt-2 w-full ${primaryButtonClass}`}>
         {isExporting ? 'Exporting…' : 'Export Pile Layout PDF'}
+      </button>
+      <button type="button" onClick={() => handleExport('excel')} disabled={isExporting}
+        className="mt-2 w-full rounded-xl border border-brand-neon/40 px-4 py-2.5 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40">
+        {isExporting ? 'Exporting…' : 'Export Pile Layout Excel'}
       </button>
 
       <ConfirmDialog

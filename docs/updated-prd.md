@@ -377,6 +377,14 @@ setting (Admin > System > Stock Report Decimals), applied to every
 figure of the exported statement, with beginning and ending balances
 rounded consistently so a column always foots.
 
+Every report can also be exported to Excel as well as PDF: the Stock Report
+(one sheet per page of the report), the BIN Card, the Pile Layout (the floor
+plan as merged cells, plus a plain list of piles), the SDO Abstract and the
+CPF Cash Disbursement Record (a continuous ledger). The Excel file is built
+from the same recorded content as the PDF, so both always show the same rows
+and totals; amounts are real numbers, so Excel can add them up. The milling
+liquidations and the Stock Desk reports already had their own Excel export.
+
 ## 12. Data Integrity Principles
 
 - A transaction is never physically deleted — only marked Cancelled — so

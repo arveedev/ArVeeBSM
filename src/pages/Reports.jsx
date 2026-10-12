@@ -316,7 +316,7 @@ function Reports() {
     }
   }
 
-  const handleExportPdf = async () => {
+  const handleExport = async (kind = 'pdf') => {
     if (!stmtFrom || !stmtTo) {
       toast.error('Set the Statement period (From and To) before exporting')
       return
@@ -484,7 +484,9 @@ function Reports() {
         }
       }
 
+      const capture = kind === 'excel' ? [] : null
       const doc = generateNfaReport({
+        capture,
         warehouse: currentWarehouse,
         province,
         branch,
@@ -506,8 +508,14 @@ function Reports() {
       })
 
       const filename = `${sanitizeForFilename(currentWarehouse?.name) || 'WH'}-StockReport-${fmtDateForFilename(stmtFrom)}-${fmtDateForFilename(stmtTo)}.pdf`
-      doc.save(filename)
-      toast.success('PDF exported')
+      if (kind === 'excel') {
+        const { exportCaptureToExcel } = await import('../utils/reportExcel.js')
+        await exportCaptureToExcel(capture, { fileName: filename.replace(/[.]pdf$/, '.xlsx'), sheetName: 'Stock Report' })
+        toast.success('Excel exported')
+      } else {
+        doc.save(filename)
+        toast.success('PDF exported')
+      }
       setJustExported(true)
       setTimeout(() => setJustExported(false), 1600)
     } catch (err) {
@@ -634,7 +642,7 @@ function Reports() {
               <CalendarDatePicker ref={stmtToPickerRef} value={stmtTo} label="End Date" onChange={setStmtTo} />
             </div>
           </div>
-          <button type="button" onClick={handleExportPdf}
+          <button type="button" onClick={() => handleExport('pdf')}
             disabled={isExporting || needsDates}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-neon px-5 py-2.5 text-sm font-bold text-neutral-950 shadow-lg shadow-brand-neon/20 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:shadow-none">
             {isExporting ? (
@@ -645,6 +653,12 @@ function Reports() {
               <FileDown size={15} />
             )}
             {isExporting ? 'Building…' : justExported ? 'Ready' : 'Export PDF'}
+          </button>
+          <button type="button" onClick={() => handleExport('excel')}
+            disabled={isExporting || needsDates}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-neon/40 px-5 py-2.5 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40">
+            <FileDown size={15} />
+            Export Excel
           </button>
         </div>
 

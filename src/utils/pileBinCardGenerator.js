@@ -6,7 +6,7 @@
 // Balance on the far right - the classic warehouse "bin card" format.
 
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { autoTable, cap, attachCapture } from './pdfCapture.js'
 import { fmtBags, fmtKilos, effectiveCutoffDate } from './calculations.js'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 import { sackLabelText } from './pileStockGroups.js'
@@ -130,8 +130,9 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
   return rows
 }
 
-export const generatePileBinCard = ({ warehouse, branch, pile, variety, transactions, transactionTypeMap, globalDataStartDate = null, varietyMap = null, sackTypeMap = null }) => {
+export const generatePileBinCard = ({ warehouse, branch, pile, variety, transactions, transactionTypeMap, globalDataStartDate = null, varietyMap = null, sackTypeMap = null, capture = null }) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  attachCapture(doc, capture)
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
   const pileName = pile?.pileName ?? ''
@@ -189,6 +190,12 @@ export const generatePileBinCard = ({ warehouse, branch, pile, variety, transact
   doc.setFont('helvetica', 'bold')
   doc.text(headerVarietyText, margin + labelW, y)
   y += 7
+  cap(doc, {
+    kind: 'page',
+    sheet: pileName || 'BIN Card',
+    lines: ['NATIONAL FOOD AUTHORITY', branch?.name?.toUpperCase(), 'BIN CARD', pileName.toUpperCase()].filter(Boolean),
+  })
+  cap(doc, { kind: 'info', lines: [`WAREHOUSE: ${warehouseName.toUpperCase()}`, `CEREAL TYPE: ${pile?.cerealType?.toUpperCase() ?? ''}`, `VARIETY: ${headerVarietyText}`] })
 
   // By Products gets both a VARIETY column (genuinely multi-valued) and
   // the Remarks column; Rice/Palay (locked to one variety for life,

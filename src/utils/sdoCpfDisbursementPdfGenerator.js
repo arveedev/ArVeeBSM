@@ -202,7 +202,7 @@ const drawHeader = (doc, { branchLabel, cityLabel, periodLabel, officer, isFirst
  */
 export const generateCpfDisbursementRecord = ({
   branchLabel, cityLabel, dateFrom, dateTo,
-  purchaseReceipts, ledgerEntries, openingBalance, purityDisplayFormat = 'range', officer,
+  purchaseReceipts, ledgerEntries, openingBalance, purityDisplayFormat = 'range', officer, capture = null,
 }) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
   const periodLabel = fmtPeriodLabel(dateFrom, dateTo)
@@ -485,6 +485,13 @@ export const generateCpfDisbursementRecord = ({
     columnStyles,
   }
 
+  if (capture) {
+    // For the Excel version: the whole ledger as one continuous table (no page-break continuation rows).
+    capture.push({ kind: 'page', sheet: 'CPF Record', lines: ['CPF CASH DISBURSEMENT RECORD', 'NATIONAL FOOD AUTHORITY', (branchLabel ?? '').toUpperCase(), (cityLabel ?? '').toUpperCase(), `FOR THE PERIOD ${periodLabel.toUpperCase()}`].filter(Boolean) })
+    capture.push({ kind: 'info', lines: [`ACCOUNTABLE OFFICER: ${(officer?.name ?? '').toUpperCase()}`, `OFFICIAL DESIGNATION: ${(officer?.position ?? '').toUpperCase()}`, 'STATION: FINANCE'] })
+    capture.push({ kind: 'table', head, body: body0, foot })
+  }
+
   // PASS 1 - throwaway measurement renders (discarded jsPDF instances)
   // purely to learn where autoTable's own layout engine will actually
   // put each page break. Confirmed, reported real bug: an earlier
@@ -659,6 +666,7 @@ export const generateCpfDisbursementRecord = ({
   doc.text(certLine1, pageW / 2, y, { align: 'center' })
   doc.text(certLine2, pageW / 2, y + 5, { align: 'center' })
   doc.text(certLine3, pageW / 2, y + 10, { align: 'center' })
+  if (capture) capture.push({ kind: 'info', lines: ['CERTIFICATION', certLine1, certLine2, certLine3, '', (officer?.name ?? '').toUpperCase(), 'Name and Signature', '', 'Date'] })
 
   const sigY = y + 28
   const sigW = 70

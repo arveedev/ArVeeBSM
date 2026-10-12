@@ -173,7 +173,7 @@ function AbstractExportModal({ onClose }) {
   const allChecked = periodPrs.length > 0 && checkedIds.size === periodPrs.length
   const toggleAll = () => setCheckedIds(allChecked ? new Set() : new Set(periodPrs.map((pr) => pr.prId)))
 
-  const handleExport = async (markCutoff = false) => {
+  const handleExport = async (markCutoff = false, kind = 'pdf') => {
     if (showChecklist && checkedIds.size === 0) {
       toast.error('Check at least one Purchase Receipt to export')
       return
@@ -338,7 +338,9 @@ function AbstractExportModal({ onClose }) {
       const totalReplenished = uncheckedReplenished + checkedReplenishEntries.reduce((s, e) => s + (e.amount ?? 0), 0)
       const combinedFundBalance = openingBalance + totalReplenished - periodLiquidated
 
+      const capture = kind === 'excel' ? [] : null
       const doc = generateSdoAbstract({
+        capture,
         branchLabel,
         dateFrom,
         dateTo,
@@ -396,7 +398,8 @@ function AbstractExportModal({ onClose }) {
         })
       }
 
-      doc.save(`Abstract-${dateFrom}-to-${dateTo}.pdf`)
+      const { saveReport } = await import('../../../utils/reportExcel.js')
+      await saveReport({ doc, capture, kind, baseName: `Abstract-${dateFrom}-to-${dateTo}`, sheetName: 'Abstract' })
       onClose()
     } catch (err) {
       toast.error('Failed to generate export')
@@ -528,9 +531,13 @@ function AbstractExportModal({ onClose }) {
           )}
 
           <div className="flex gap-2">
-            <button type="button" onClick={() => handleExport(false)} disabled={generating || (showChecklist && checkedIds.size === 0)}
+            <button type="button" onClick={() => handleExport(false, 'pdf')} disabled={generating || (showChecklist && checkedIds.size === 0)}
               className="flex-1 rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40">
               {generating ? 'Generating…' : showChecklist ? `Export ${checkedIds.size} Selected` : 'Export PDF'}
+            </button>
+            <button type="button" onClick={() => handleExport(false, 'excel')} disabled={generating || (showChecklist && checkedIds.size === 0)}
+              className="rounded-xl border border-brand-neon/40 px-3 py-3 text-sm font-semibold text-brand-neon transition-all hover:bg-brand-neon/10 active:scale-95 disabled:opacity-40">
+              Excel
             </button>
             {/* Cut Off & Export, per explicit request - only offered
                 while the checklist is open, since a cut-off's whole job

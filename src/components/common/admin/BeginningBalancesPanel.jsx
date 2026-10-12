@@ -569,7 +569,7 @@ function PilesBeginningBalances({ warehouseId }) {
     }
   }
 
-  const handleExportBinCard = async (pile) => {
+  const handleExportBinCard = async (pile, kind = 'pdf') => {
     setOpenMenuPileId(null)
     const warehouse = await db.warehouses.get(warehouseId)
     const branch = warehouse?.branchId ? await db.branches.get(warehouse.branchId) : null
@@ -585,14 +585,17 @@ function PilesBeginningBalances({ warehouseId }) {
     const transactionTypes = await db.transactionTypes.toArray()
     const transactionTypeMap = new Map(transactionTypes.map((t) => [t.transactionTypeId, t.name]))
     const globalDataStartDate = (await db.reportConfig.get('global'))?.dataStartDate || null
+    const capture = kind === 'excel' ? [] : null
     const doc = generatePileBinCard({
       warehouse, branch, pile, variety,
       transactions: [...allPileTransactions, ...wtsTransfers],
       transactionTypeMap,
       globalDataStartDate,
       varietyMap, sackTypeMap: new Map(sackTypes.map((s) => [s.sackTypeId, s])),
+      capture,
     })
-    doc.save(`${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card.pdf`)
+    const { saveReport } = await import('../../../utils/reportExcel.js')
+    await saveReport({ doc, capture, kind, baseName: `${pile.pileName.replace(/[^a-z0-9]+/gi, '-')}-BIN-Card`, sheetName: 'BIN Card' })
   }
 
   return (
@@ -635,6 +638,9 @@ function PilesBeginningBalances({ warehouseId }) {
                   <div className="animate-popover-in absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-neutral-800 bg-neutral-900 py-1 shadow-xl" style={{ transformOrigin: 'top right' }}>
                     <button type="button" onClick={() => handleExportBinCard(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
                       Export BIN Card
+                    </button>
+                    <button type="button" onClick={() => handleExportBinCard(p, 'excel')} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
+                      BIN Card (Excel)
                     </button>
                     <button type="button" onClick={() => confirmCloseToggle(p)} className="block w-full px-3 py-2 text-left text-sm text-app-text hover:bg-neutral-800">
                       {p.closedDate ? 'Re-open Pile' : 'Close Pile'}

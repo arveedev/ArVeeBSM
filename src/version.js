@@ -8393,4 +8393,5 @@
 //   1.10-335 - CPF Cash Disbursement Record: the CERTIFICATION and signature block is one group, so it moves to a new page whole instead of being cut off at the bottom.
 //   1.10-336 - SDO exports: CPF Cash Disbursement Record and Abstract show "Page X of Y" in the lower right of every page.
 //   1.10-337 - A closed pile is no longer offered in any pile picker (layout, stock forms, Weigher's tally); it stays only as history.
-export const APP_VERSION = '1.10-337'
+//   1.10-338 - Export to Excel on every report (Stock Report, BIN Card, Pile Layout, SDO Abstract, CPF Cash Disbursement Record); the logo builds itself on the login page.
+export const APP_VERSION = '1.10-338'
