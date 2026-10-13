@@ -238,7 +238,7 @@ function PrivateMillerAllocationsPanel() {
   const [editingKey, setEditingKey] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
 
-  const allocations = useLiveQuery(() => db.privateMillerAllocations.toArray(), []) ?? []
+  const allocations = useLiveQuery(() => db.privateMillerShares.toArray(), []) ?? []
   const sortedAllocations = [...allocations].sort((a, b) =>
     byAlpha(a.regionalAuthorityNumber, b.regionalAuthorityNumber) || byAlpha(a.ricemillName, b.ricemillName)
   )
@@ -303,10 +303,15 @@ function PrivateMillerAllocationsPanel() {
     }
     if (totalNetKgs === '') { toast.error('Total Net Kgs is required'); return }
 
-    await db.privateMillerAllocations.put({
+    const id = `${regionalAuthorityNumber.trim()}::${ricemillName.trim()}`
+    // renaming the number or the miller while editing moves the row instead of leaving the old one behind
+    if (editingKey && editingKey !== id) await db.privateMillerShares.delete(editingKey)
+    await db.privateMillerShares.put({
+      id,
       regionalAuthorityNumber: regionalAuthorityNumber.trim(),
       ricemillName: ricemillName.trim(),
       totalNetKgs: parseFormattedNumber(totalNetKgs),
+      updatedAt: new Date().toISOString(),
     })
     toast.success(editingKey ? 'Allocation updated' : 'Allocation saved')
     resetForm()
@@ -372,7 +377,7 @@ function PrivateMillerAllocationsPanel() {
         title="Delete this allocation?"
         description="This cannot be undone."
         onConfirm={async () => {
-          await db.privateMillerAllocations.delete([pendingDelete.regionalAuthorityNumber, pendingDelete.ricemillName])
+          await db.privateMillerShares.delete(`${pendingDelete.regionalAuthorityNumber}::${pendingDelete.ricemillName}`)
           setPendingDelete(null)
           toast.success('Deleted')
         }}

@@ -636,6 +636,11 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), [])
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), [])
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
+  // The province that receives Cash in Bank is saved with the shared report settings (synced), not just on this device,
+  // so every device and every user sees the same figure. The device's own copy is only the fallback until it loads.
+  useEffect(() => {
+    if (config?.procurementBank) setFilters((f) => (f.bank === config.procurementBank ? f : { ...f, bank: config.procurementBank }))
+  }, [config?.procurementBank])
   // Reports start the day after the Data Start Date (September 1, 2026): no earlier date can be chosen.
   const startISO = config?.dataStartDate ? new Date(Date.parse(`${config.dataStartDate}T00:00:00Z`) + 86400000).toISOString().slice(0, 10) : null
   const clampStart = (iso) => (startISO && iso < startISO ? startISO : iso)
@@ -951,7 +956,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             <FilterSheet
               open={showFilters}
               draft={draft} setDraft={setDraft} provinces={provinces ?? []} warehouses={warehouses} view={view}
-              onApply={() => { setFilters(draft); try { localStorage.setItem(BANK_KEY, draft.bank ?? '') } catch { /* optional */ } setShowFilters(false) }}
+              onApply={() => { setFilters(draft); try { localStorage.setItem(BANK_KEY, draft.bank ?? '') } catch { /* optional */ } if (isAdmin && draft.bank && draft.bank !== config?.procurementBank) db.reportConfig.update('global', { procurementBank: draft.bank }).catch(() => {}); setShowFilters(false) }}
               onReset={() => setDraft({ ...DEFAULT_FILTERS, bank: draft.bank, combine: draft.combine, showByProducts: draft.showByProducts })}
               onClose={() => setShowFilters(false)}
             />

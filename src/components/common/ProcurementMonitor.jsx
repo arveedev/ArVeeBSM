@@ -244,6 +244,7 @@ function ProcurementMonitor() {
   const { weightUnit } = useSettings() ?? {}
   const [searchQuery, setSearchQuery] = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState('')
+  const [openCards, setOpenCards] = useState(() => new Set())
   const [varietyFilter, setVarietyFilter] = useState('')
   const [sortBy, setSortBy] = useState('date-desc')
   // Per explicit request: this tab shows one month at a time, defaulting
@@ -358,6 +359,7 @@ function ProcurementMonitor() {
     byWarehouse.get(t.warehouseId).push(t)
   }
 
+  const cardIsOpen = (c) => Boolean(q) || Boolean(warehouseFilter) || openCards.has(c.warehouseId)
   const cards = [...byWarehouse.entries()]
     .map(([warehouseId, rows]) => {
       const totalBags = rows.reduce((s, t) => s + (t.numberOfBags ?? 0), 0)
@@ -541,16 +543,24 @@ function ProcurementMonitor() {
         <div key={listAnimationKey} className="mt-3 space-y-3 stagger-fields">
           {cards.map((c) => (
             <div key={c.warehouseId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-base font-semibold text-app-text">
-                  {c.warehouse.code} — {c.warehouse.name}
+              {/* Every warehouse starts collapsed (its total stays visible); tap it to see its transactions. While
+                  searching, or when one warehouse is picked in the filter, the matching ones are open. */}
+              <button
+                type="button"
+                onClick={() => setOpenCards((prev) => { const next = new Set(prev); if (next.has(c.warehouseId)) next.delete(c.warehouseId); else next.add(c.warehouseId); return next })}
+                aria-expanded={cardIsOpen(c)}
+                className="mb-2 flex w-full items-center justify-between gap-2 text-left"
+              >
+                <p className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-app-text">
+                  <ChevronDown size={16} className={`shrink-0 text-neutral-500 transition-transform ${cardIsOpen(c) ? '' : '-rotate-90'}`} />
+                  <span className="break-words">{c.warehouse.code} — {c.warehouse.name}</span>
                 </p>
                 <span className="shrink-0 text-xs text-neutral-500">
                   {c.rowCount} {c.rowCount === 1 ? 'transaction' : 'transactions'}
                 </span>
-              </div>
+              </button>
 
-              <div className="space-y-4">
+              {cardIsOpen(c) && <div className="space-y-4">
                 {c.varietyGroups.map((vg) => (
                   <div key={vg.varietyId}>
                     <p className="mb-2 text-base font-bold text-app-text">{vg.varietyName}</p>
@@ -604,7 +614,7 @@ function ProcurementMonitor() {
                     )}
                   </div>
                 ))}
-              </div>
+              </div>}
 
               <div className="mt-3 rounded-lg border border-brand-neon/40 bg-brand-neon/5 px-3 py-3">
                 <div className="flex items-start justify-between gap-3">

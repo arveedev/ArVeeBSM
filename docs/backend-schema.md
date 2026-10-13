@@ -456,3 +456,15 @@ Whether an MO/TMO was marked complete or reverted, shared between devices (`mill
 | `number` | Control number. |
 | `completed` | Boolean: true = complete, false = reverted to pending. |
 | `updatedAt`, `updatedBy` | Bookkeeping (`'migrated'` for completions uploaded from a device's older local flags). |
+
+## privateMillerShares (Dexie v47, synced)
+
+Replaces `privateMillerAllocations` (compound key, never synced). The split of a Regional Authority Number between private millers.
+
+| Field | Notes |
+|---|---|
+| `id` | Primary key, `"<regionalAuthorityNumber>::<ricemillName>"`. |
+| `regionalAuthorityNumber` | Indexed. |
+| `ricemillName`, `totalNetKgs`, `updatedAt` | The miller and its share. |
+
+`reportConfig` also carries `procurementBank` (province receiving Cash in Bank in the Stock Desk's procurement status).

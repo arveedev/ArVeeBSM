@@ -8415,4 +8415,5 @@
 //   1.10-357 - DV: the Date boxes of the Receipt of Payment block are wide, and their right edge lines up with the C | D divider above.
 //   1.10-358 - Secret keyboard shortcut Ctrl + Alt + D opens the Stock Desk (Admin, and a Visitor with something shared), on the admin Home.
 //   1.10-359 - (1) Purchase Receipt numbers: the app learned the series (serial + hyphen + serial mod 7, e.g. 5798006-4, 5798009-0) and suggests the next number with its right check digit, warns when a typed one does not fit, and completes a bare serial. (2) Marking an MO/TMO done no longer empties and refills the whole list (the monitor keeps the last result while it recomputes). (3) Escape now closes the topmost modal everywhere (a shared stack, so a confirmation over a dialog closes just the confirmation).
-export const APP_VERSION = '1.10-359'
+//   1.10-360 - (1) The Stock Desk opens from any page with Ctrl + Alt + D (one host in the app shell). (2) Procurement monitor: every warehouse card starts collapsed (its total shows), open on tap. (3) Sync gap closed: the private-miller shares of a Regional Authority Number now sync between devices (new synced table, dexie.js v47; each device's earlier entries are uploaded once), and the Cash in Bank province is saved with the shared report settings.
+export const APP_VERSION = '1.10-360'

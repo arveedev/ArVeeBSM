@@ -1102,6 +1102,14 @@ db.version(46).stores({
   millingOrderCompletions: 'orderId, type',
 })
 
+// v47 — privateMillerShares: the admin-entered split of a Regional Authority Number between private millers. The older
+// privateMillerAllocations table keys on a COMPOUND key, which Dexie Cloud cannot sync, so every device kept its own
+// private copy and the admin's figures never reached the others. Same data, one text id ("<regional number>::<ricemill>"),
+// synced. The old table stays only as the source of a one-time upload (see services/legacyMigrations.js).
+db.version(47).stores({
+  privateMillerShares: 'id, regionalAuthorityNumber',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

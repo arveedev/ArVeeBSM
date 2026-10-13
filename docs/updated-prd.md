@@ -456,6 +456,11 @@ failure.
 The Weekly Warehouse Equipment and Logistics Report, the Disbursement Voucher and the Budget
 Utilization Request are described with the Logistics Inventory and the SDO's reports above.
 
+Purchase Receipt numbers follow a series (a serial, a hyphen and a check digit that is the serial modulo 7); the SDO's next number is
+suggested with its right check digit, and a number that does not fit is flagged. Escape closes the topmost modal on every screen. The Stock Desk
+opens from the Home icon or, on any page, Ctrl + Alt + D (Admin, or a Visitor with a screen shared). In the procurement monitor each warehouse
+starts collapsed with its total showing and opens on tap.
+
 ## 12. Data Integrity Principles
 
 - A transaction is never physically deleted — only marked Cancelled — so

@@ -659,6 +659,42 @@ bringing a reverted order straight back).
 **Rationale**: one device showed many finished mills while the others still listed them as pending. Rejected: syncing
 `millingOrders` itself (a cache that is cleared and rebuilt wholesale on each pull would fight the sync).
 
+### 2.41 Everything an admin enters must live in a synced table
+
+**Decision**: a table that holds data entered by people is never excluded from sync and never keyed by a compound key. The
+private-miller shares of a Regional Authority Number were the one such table that was not synced (compound primary key, which
+Dexie Cloud cannot sync, so each device kept its own copy). They now live in `privateMillerShares` (Dexie v47, key
+`<regional number>::<ricemill>`, synced); `src/services/legacyMigrations.js` uploads whatever a device already held in the old table
+once. The province that receives Cash in Bank moved from browser storage to the shared report settings (`reportConfig.procurementBank`).
+What stays device-only is only what can be rebuilt: the serial counters, the preload state, and the Sheet cache `millingOrders`
+(whose completion state is synced separately, §2.40).
+
+**Rationale**: a user on several devices, and an admin looking at everyone's work, must see the same data; a local-only copy looks
+correct on the device that made it and silently differs everywhere else.
+
+### 2.42 Escape closes the topmost modal, through one stack
+
+**Decision**: `src/utils/useEscapeClose.js` keeps a stack of open overlays and one window listener hands each Escape to the
+most recently opened one only. Every modal, sheet and dialog registers its own close routine (the one that plays its exit
+animation), including ConfirmDialog, the export dialog and the calendar, so a confirmation over a dialog, or a calendar inside it,
+closes alone. Entry forms and the Stock Desk keep their own Escape rules.
+
+### 2.43 The Stock Desk opens from anywhere
+
+**Decision**: `StockDeskHost` is mounted once in the app shell; the Home icon and Ctrl + Alt + D (on any page) both ask it to open the
+Stock Desk, for an Admin or a Visitor who has a screen shared.
+
+### 2.44 Purchase Receipt numbers follow a check-digit series
+
+**Decision**: a PR number is a serial, a hyphen and one check digit equal to the serial modulo 7 (5798006-4, 5798009-0, 5798030-0).
+`suggestNextPrSerial` takes the SDO's latest issued number and suggests the next serial with its own check digit; a typed number whose
+digit does not fit gets a warning (nothing is blocked), and a bare serial is completed on leaving the field.
+
+### 2.45 A recompute keeps the previous result on screen
+
+**Decision**: `useDebouncedLiveCompute` takes `keepPrevious`; the MO/TMO monitors use it so marking an order done does not empty and
+refill the whole list while the status is recomputed.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

@@ -18,6 +18,7 @@ import ProtectedRoute from './components/common/ProtectedRoute.jsx'
 import SectionErrorBoundary from './components/common/SectionErrorBoundary.jsx'
 import BottomNav, { REGULAR_NAV_COLUMN } from './components/layout/BottomNav.jsx'
 import AppHeader from './components/layout/AppHeader.jsx'
+import StockDeskHost from './components/common/StockDeskHost.jsx'
 import { useSettings } from './context/SettingsContext.jsx'
 import TransactionModal from './components/common/TransactionModal.jsx'
 import WSRForm from './components/forms/WSRForm.jsx'
@@ -30,6 +31,7 @@ import { usePageHeader } from './context/PageHeaderContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 import { startBackupWorker } from './services/backupWorker.js'
 import { startMillingCompletionSync } from './services/millingCompletion.js'
+import { uploadLegacyPrivateMillerShares } from './services/legacyMigrations.js'
 import AnimatedToast from './components/common/AnimatedToast.jsx'
 import UpdateChecker from './components/common/UpdateChecker.jsx'
 import useDelayedUnmount from './hooks/useDelayedUnmount.js'
@@ -265,6 +267,7 @@ function App() {
   // in line with it (see millingCompletion.js).
   useEffect(() => {
     if (!user) return
+    uploadLegacyPrivateMillerShares().catch((e) => console.error('[legacyMigrations] failed', e))
     return startMillingCompletionSync()
   }, [user])
 
@@ -286,6 +289,8 @@ function App() {
           pathname==='/admin' - so it can slide away instead of just
           vanishing - see AppHeader's own comment. */}
       {user && pathname !== '/login' && <AppHeader hidden={barsHidden} />}
+      {/* the Stock Desk, from the Home icon or Ctrl + Alt + D on any page (Admin / Visitor with access only) */}
+      {user && pathname !== '/login' && <StockDeskHost />}
       {/* No page-slide for /admin - it's a fixed-position overlay with
           its own pop transition (see AdminDashboard.jsx), and a
           transform applied by this wrapper would become its containing
