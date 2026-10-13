@@ -417,9 +417,9 @@ the step-by-step journey.*
 
 1. In the SDO's Abstract export window, after choosing the period (and optionally the checked receipts), the "DV & BUR" button
    builds one PDF from those same PRs.
-2. Page 1 is the Disbursement Voucher: payee the SDO (address LEGAZPI CITY), amount due the total of the paid PRs, particulars
+2. Pages 1 to 4 are the Disbursement Voucher, four identical copies: payee the SDO (address LEGAZPI CITY), amount due the total of the paid PRs, particulars
    "TO: REPLENISHMENT OF CPF FOR THE PAID PR #first TO last", certified by the Abstract's Verified By, approved by its Noted By.
-3. Page 2 is an A4 holding two identical BURs (office "NFA - province"), cut along the dashed line.
+3. Page 5 is an A4 holding two identical BURs (office "NFA - province"), cut along the dashed line.
 4. The SDO's Settings page has a switch for adding " DATED OCT. 9-10, 2026" to the particulars; it is off by default.
 
 ## 14. Logistics Inventory Flow (warehouse staff)

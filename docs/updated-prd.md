@@ -413,9 +413,9 @@ synced record (db.millingOrderCompletions) and copied onto each device's local m
 Sheet's STATUS never overrides it, and the app writes its decision (DONE, or blank when reverted) to the Sheet, retrying until
 the write succeeds.
 
-From the Abstract export, "DV & BUR" produces a Disbursement Voucher (A4) and a
-Budget Utilization Request and Status (an A4 holding two identical copies, to be
-cut in half) for the CPF replenishment. The payee is the SDO (address LEGAZPI
+From the Abstract export, "DV & BUR" produces a Disbursement Voucher (four identical A4 copies) and a
+Budget Utilization Request and Status (one A4 holding two identical copies, to be
+cut in half), five pages in all for the CPF replenishment. The payee is the SDO (address LEGAZPI
 CITY), the amount is the total of the paid PRs, the particulars read "TO:
 REPLENISHMENT OF CPF FOR THE PAID PR #first TO last", the BUR office is "NFA -
 (province)", and the signatories are the Abstract's (Verified By certifies, Noted

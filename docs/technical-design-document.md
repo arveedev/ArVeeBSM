@@ -610,8 +610,8 @@ the Google Sheets sync.
 
 ### 2.37 DV and BUR are drawn from the Abstract's data
 
-**Decision**: `src/utils/sdoDvBurPdfGenerator.js` draws the Disbursement Voucher (A4) and the Budget Utilization Request and
-Status (an A4 holding two identical copies above and below a dashed cut line), from the PRs of the Abstract export. Payee is
+**Decision**: `src/utils/sdoDvBurPdfGenerator.js` draws the Disbursement Voucher (four identical A4 pages) and the Budget Utilization Request and
+Status (one A4 holding two identical copies above and below a dashed cut line), five pages in all, from the PRs of the Abstract export. Payee is
 the SDO, amount is the total of the paid PRs, particulars are "TO: REPLENISHMENT OF CPF FOR THE PAID PR #first TO last", plus
 " DATED ..." only when the SDO's own `dvDatedText` setting is on (default off). Signatories are the Abstract's.
 

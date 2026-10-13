@@ -1,7 +1,7 @@
 // Disbursement Voucher (DV) and Budget Utilization Request and Status (BUR) for the SDO's CPF replenishment.
 //
-// Page 1 is the DV on a full A4. Page 2 is an A4 holding TWO identical BURs, one above the other, so cutting the
-// sheet along the dashed line gives two copies. Both forms are drawn from the same data the Abstract export has:
+// Pages 1-4 are four identical copies of the DV, each a full A4. Page 5 is an A4 holding TWO identical BURs, one above
+// the other, so cutting the sheet along the dashed line gives two copies. Both forms are drawn from the same data the Abstract export has:
 // the payee is the SDO, the amount is the replenishment (the total of the paid PRs), and the signatories are the
 // Abstract's (Verified By certifies, Noted By approves).
 
@@ -62,141 +62,148 @@ export const generateDvBur = ({
   const payee = (payeeName ?? '').toUpperCase()
   const amt = fmtAmount(amount)
 
-  // ===================== DISBURSEMENT VOUCHER (page 1) =====================
-  let y = 10
-  box(L, y, W, 30)
-  vline(L + 140, y, y + 30)
-  hline(y + 13, L + 140, R)
-  text('Republic of the Philippines', L + 70, y + 5.5, { align: 'center', size: 8 })
-  text('NATIONAL FOOD AUTHORITY', L + 70, y + 10, { align: 'center', size: 9, bold: true })
-  text(office, L + 70, y + 14.5, { align: 'center', size: 9, bold: true })
-  text('DISBURSEMENT  VOUCHER', L + 70, y + 26, { size: 15, bold: true, align: 'center' })
-  text('Fund Cluster :', L + 142, y + 5.5, { size: 7.5 })
-  text('DV No. :', L + 142, y + 20, { size: 7.5 })
+  // ===================== DISBURSEMENT VOUCHER x 4 (pages 1-4) =====================
+  // Four identical copies, one per page.
+  const drawDv = () => {
+    let y = 10
+    box(L, y, W, 30)
+    vline(L + 140, y, y + 30)
+    hline(y + 13, L + 140, R)
+    text('Republic of the Philippines', L + 70, y + 5.5, { align: 'center', size: 8 })
+    text('NATIONAL FOOD AUTHORITY', L + 70, y + 10, { align: 'center', size: 9, bold: true })
+    text(office, L + 70, y + 14.5, { align: 'center', size: 9, bold: true })
+    text('DISBURSEMENT  VOUCHER', L + 70, y + 26, { size: 15, bold: true, align: 'center' })
+    text('Fund Cluster :', L + 142, y + 5.5, { size: 7.5 })
+    text('DV No. :', L + 142, y + 20, { size: 7.5 })
 
-  y += 30                                              // Mode of Payment
-  box(L, y, W, 8)
-  vline(L + 28, y, y + 8)
-  text('Mode of', L + 2, y + 3.4, { size: 7.5, bold: true })
-  text('Payment', L + 2, y + 6.6, { size: 7.5, bold: true })
-  ;[[L + 36, 'MDS Check'], [L + 66, 'Commercial Check'], [L + 118, 'ADA'], [L + 140, 'Others (Please specify)']].forEach(([x, t]) => {
-    check(x, y + 2.4); text(t, x + 4.6, y + 5.2, { size: 7.5 })
-  })
-  hline(y + 7, L + 141, R - 2, 0.2)
-
-  y += 8                                               // Payee
-  box(L, y, W, 10)
-  vline(L + 28, y, y + 10); vline(L + 128, y, y + 10); vline(L + 160, y, y + 10)
-  text('Payee', L + 2, y + 6, { size: 8, bold: true })
-  text(payee, L + 31, y + 6, { size: 8, bold: true })
-  text('TIN/Employee No.:', L + 129.5, y + 4, { size: 7 })
-  text('BURS No.:', L + 161.5, y + 4, { size: 7 })
-
-  y += 10                                              // Address
-  box(L, y, W, 7)
-  vline(L + 28, y, y + 7)
-  text('Address', L + 2, y + 5, { size: 8, bold: true })
-  text(payeeAddress, L + 31, y + 4.2, { size: 8 })
-
-  y += 7                                               // Particulars table
-  const cw = [90, 34, 27, 39]
-  const cx = [L, L + 90, L + 124, L + 151]
-  box(L, y, W, 9)
-  cx.slice(1).forEach((x) => vline(x, y, y + 9))
-  ;['Particulars', 'Responsibility Center', 'MFO/PAP', 'Amount'].forEach((t, i) => text(t, cx[i] + cw[i] / 2, y + 5.4, { align: 'center', size: 7.5 }))
-  y += 9
-  const bodyH = 48
-  box(L, y, W, bodyH)
-  cx.slice(1).forEach((x) => vline(x, y, y + bodyH))
-  wrapped(particulars, L + 3, y + 24, 84, { size: 8 })
-  text(amt, R - 3, y + 24, { align: 'right', size: 8 })
-  y += bodyH
-  box(L, y, W, 6.5)
-  vline(L + 151, y, y + 6.5)
-  text('Amount Due', L + 100, y + 4.6, { size: 8, bold: true, align: 'right' })
-  text(amt, R - 3, y + 4.6, { size: 8, bold: true, align: 'right' })
-
-  y += 6.5                                             // A. Certified
-  box(L, y, W, 27)
-  text('A.', L + 1.5, y + 4.4, { size: 8, bold: true })
-  text('Certified:', L + 7, y + 4.4, { size: 7.5, bold: true })
-  text('Expenses/Cash Advance necessary, lawful and incurred under my direct supervision.', L + 22, y + 4.4, { size: 7.5 })
-  text(name, L + 95, y + 17, { align: 'center', size: 8, bold: true })
-  text(certified?.position ?? '', L + 95, y + 21.4, { align: 'center', size: 7.5 })
-
-  y += 27                                              // B. Accounting Entry
-  box(L, y, W, 5.5)
-  text('B.', L + 1.5, y + 4, { size: 8, bold: true })
-  text('Accounting Entry:', L + 7, y + 4, { size: 7.5 })
-  y += 5.5
-  const ac = [76, 53, 27, 34]
-  const ax = [L, L + 76, L + 129, L + 156]
-  box(L, y, W, 6.5)
-  ax.slice(1).forEach((x) => vline(x, y, y + 6.5))
-  ;['Account Title', 'UACS Code', 'Debit', 'Credit'].forEach((t, i) => text(t, ax[i] + ac[i] / 2, y + 4.4, { align: 'center', size: 7.5 }))
-  y += 6.5
-  for (let i = 0; i < 9; i++) {
-    box(L, y, W, 5.2, 0.2)
-    ax.slice(1).forEach((x) => vline(x, y, y + 5.2, 0.2))
-    y += 5.2
-  }
-
-  const topCD = y                                      // C. Certified | D. Approved for Payment
-  box(L, y, W / 2, 22); box(L + W / 2, y, W / 2, 22)
-  text('C.', L + 1.5, y + 4.4, { size: 8, bold: true })
-  text('Certified:', L + 7, y + 4.4, { size: 7.5, bold: true })
-  ;['Cash available', 'Subject to Authority to Debit Account (when applicable)', 'Supporting documents complete and amount claimed proper'].forEach((t, i) => {
-    check(L + 2, y + 6.4 + i * 4.8)
-    if (i === 2) wrapped(t, L + 7, y + 9 + i * 4.8, 85, { size: 7 })
-    else text(t, L + 7, y + 9 + i * 4.8, { size: 7 })
-  })
-  text('D.', L + W / 2 + 1.5, y + 4.4, { size: 8, bold: true })
-  text('Approved for Payment', L + W / 2 + 7, y + 4.4, { size: 7.5, bold: true })
-  y += 22
-  const sigBlock = (x, who) => {
-    const lw = 20
-    let yy = y
-    ;[['Signature', 8], ['Printed Name', 6.2], ['Position', 6.2], ['Date', 5]].forEach(([label, h]) => {
-      box(x, yy, W / 2, h); vline(x + lw, yy, yy + h)
-      text(label, x + 1.5, yy + h - 1.8, { size: 7 })
-      if (label === 'Printed Name') text((who.name ?? '').toUpperCase(), x + lw + (W / 2 - lw) / 2, yy + h - 1.8, { align: 'center', size: 7.5, bold: true })
-      if (label === 'Position') text(who.position ?? '', x + lw + (W / 2 - lw) / 2, yy + h - 1.8, { align: 'center', size: 7.5 })
-      yy += h
+    y += 30                                              // Mode of Payment
+    box(L, y, W, 8)
+    vline(L + 28, y, y + 8)
+    text('Mode of', L + 2, y + 3.4, { size: 7.5, bold: true })
+    text('Payment', L + 2, y + 6.6, { size: 7.5, bold: true })
+    ;[[L + 36, 'MDS Check'], [L + 66, 'Commercial Check'], [L + 118, 'ADA'], [L + 140, 'Others (Please specify)']].forEach(([x, t]) => {
+      check(x, y + 2.4); text(t, x + 4.6, y + 5.2, { size: 7.5 })
     })
-    return yy
+    hline(y + 7, L + 141, R - 2, 0.2)
+
+    y += 8                                               // Payee
+    box(L, y, W, 10)
+    vline(L + 28, y, y + 10); vline(L + 128, y, y + 10); vline(L + 160, y, y + 10)
+    text('Payee', L + 2, y + 6, { size: 8, bold: true })
+    text(payee, L + 31, y + 6, { size: 8, bold: true })
+    text('TIN/Employee No.:', L + 129.5, y + 4, { size: 7 })
+    text('BURS No.:', L + 161.5, y + 4, { size: 7 })
+
+    y += 10                                              // Address
+    box(L, y, W, 7)
+    vline(L + 28, y, y + 7)
+    text('Address', L + 2, y + 5, { size: 8, bold: true })
+    text(payeeAddress, L + 31, y + 4.2, { size: 8 })
+
+    y += 7                                               // Particulars table
+    const cw = [90, 34, 27, 39]
+    const cx = [L, L + 90, L + 124, L + 151]
+    box(L, y, W, 9)
+    cx.slice(1).forEach((x) => vline(x, y, y + 9))
+    ;['Particulars', 'Responsibility Center', 'MFO/PAP', 'Amount'].forEach((t, i) => text(t, cx[i] + cw[i] / 2, y + 5.4, { align: 'center', size: 7.5 }))
+    y += 9
+    const bodyH = 48
+    box(L, y, W, bodyH)
+    cx.slice(1).forEach((x) => vline(x, y, y + bodyH))
+    wrapped(particulars, L + 3, y + 24, 84, { size: 8 })
+    text(amt, R - 3, y + 24, { align: 'right', size: 8 })
+    y += bodyH
+    box(L, y, W, 6.5)
+    vline(L + 151, y, y + 6.5)
+    text('Amount Due', L + 100, y + 4.6, { size: 8, bold: true, align: 'right' })
+    text(amt, R - 3, y + 4.6, { size: 8, bold: true, align: 'right' })
+
+    y += 6.5                                             // A. Certified
+    box(L, y, W, 27)
+    text('A.', L + 1.5, y + 4.4, { size: 8, bold: true })
+    text('Certified:', L + 7, y + 4.4, { size: 7.5, bold: true })
+    text('Expenses/Cash Advance necessary, lawful and incurred under my direct supervision.', L + 22, y + 4.4, { size: 7.5 })
+    text(name, L + 95, y + 17, { align: 'center', size: 8, bold: true })
+    text(certified?.position ?? '', L + 95, y + 21.4, { align: 'center', size: 7.5 })
+
+    y += 27                                              // B. Accounting Entry
+    box(L, y, W, 5.5)
+    text('B.', L + 1.5, y + 4, { size: 8, bold: true })
+    text('Accounting Entry:', L + 7, y + 4, { size: 7.5 })
+    y += 5.5
+    const ac = [76, 53, 27, 34]
+    const ax = [L, L + 76, L + 129, L + 156]
+    box(L, y, W, 6.5)
+    ax.slice(1).forEach((x) => vline(x, y, y + 6.5))
+    ;['Account Title', 'UACS Code', 'Debit', 'Credit'].forEach((t, i) => text(t, ax[i] + ac[i] / 2, y + 4.4, { align: 'center', size: 7.5 }))
+    y += 6.5
+    for (let i = 0; i < 9; i++) {
+      box(L, y, W, 5.2, 0.2)
+      ax.slice(1).forEach((x) => vline(x, y, y + 5.2, 0.2))
+      y += 5.2
+    }
+
+    const topCD = y                                      // C. Certified | D. Approved for Payment
+    box(L, y, W / 2, 22); box(L + W / 2, y, W / 2, 22)
+    text('C.', L + 1.5, y + 4.4, { size: 8, bold: true })
+    text('Certified:', L + 7, y + 4.4, { size: 7.5, bold: true })
+    ;['Cash available', 'Subject to Authority to Debit Account (when applicable)', 'Supporting documents complete and amount claimed proper'].forEach((t, i) => {
+      check(L + 2, y + 6.4 + i * 4.8)
+      if (i === 2) wrapped(t, L + 7, y + 9 + i * 4.8, 85, { size: 7 })
+      else text(t, L + 7, y + 9 + i * 4.8, { size: 7 })
+    })
+    text('D.', L + W / 2 + 1.5, y + 4.4, { size: 8, bold: true })
+    text('Approved for Payment', L + W / 2 + 7, y + 4.4, { size: 7.5, bold: true })
+    y += 22
+    const sigBlock = (x, who) => {
+      const lw = 20
+      let yy = y
+      ;[['Signature', 8], ['Printed Name', 6.2], ['Position', 6.2], ['Date', 5]].forEach(([label, h]) => {
+        box(x, yy, W / 2, h); vline(x + lw, yy, yy + h)
+        text(label, x + 1.5, yy + h - 1.8, { size: 7 })
+        if (label === 'Printed Name') text((who.name ?? '').toUpperCase(), x + lw + (W / 2 - lw) / 2, yy + h - 1.8, { align: 'center', size: 7.5, bold: true })
+        if (label === 'Position') text(who.position ?? '', x + lw + (W / 2 - lw) / 2, yy + h - 1.8, { align: 'center', size: 7.5 })
+        yy += h
+      })
+      return yy
+    }
+    sigBlock(L, certified ?? {})
+    y = sigBlock(L + W / 2, approved ?? {}) - 0
+    void topCD
+
+    // E. Receipt of Payment - a narrow right-hand column holds "JEV No." (beside the header and the Check/ADA row)
+    // and "Date :" (beside the signature and Official Receipt rows)
+    const RW = 38, MW = W - RW
+    box(L, y, MW, 5.2)
+    text('E.', L + 1.5, y + 3.9, { size: 8, bold: true })
+    text('Receipt of Payment', L + 7, y + 3.9, { size: 7.5, bold: true })
+    box(R - RW, y, RW, 5.2 + 9)
+    text('JEV No.', R - RW + 2, y + 3.9, { size: 7 })
+    y += 5.2
+    box(L, y, MW, 9)
+    vline(L + 28, y, y + 9); vline(L + 80, y, y + 9); vline(L + 88, y, y + 9)
+    text('Check/ADA No. :', L + 1.5, y + 4, { size: 7 })
+    text('Date :', L + 81, y + 4, { size: 7 })
+    text('Bank Name & Account Number:', L + 90, y + 4, { size: 7 })
+    y += 9
+    box(L, y, MW, 9)
+    vline(L + 28, y, y + 9); vline(L + 80, y, y + 9); vline(L + 88, y, y + 9)
+    text('Signature :', L + 1.5, y + 6, { size: 7 })
+    text('Date :', L + 81, y + 4, { size: 7 })
+    text('Printed Name:', L + 90, y + 4, { size: 7 })
+    text(payee, L + 90 + (MW - 90) / 2, y + 7.6, { size: 7.5, bold: true, align: 'center' })
+    box(R - RW, y, RW, 9 + 5.5)
+    text('Date:', R - RW + 2, y + 4, { size: 7 })
+    y += 9
+    box(L, y, MW, 5.5)
+    text('Official Receipt No. & Date/Other Documents', L + 1.5, y + 3.9, { size: 7 })
   }
-  sigBlock(L, certified ?? {})
-  y = sigBlock(L + W / 2, approved ?? {}) - 0
-  void topCD
+  for (let copy = 0; copy < 4; copy++) {
+    if (copy > 0) doc.addPage()
+    drawDv()
+  }
 
-  // E. Receipt of Payment - a narrow right-hand column holds "JEV No." (beside the header and the Check/ADA row)
-  // and "Date :" (beside the signature and Official Receipt rows)
-  const RW = 38, MW = W - RW
-  box(L, y, MW, 5.2)
-  text('E.', L + 1.5, y + 3.9, { size: 8, bold: true })
-  text('Receipt of Payment', L + 7, y + 3.9, { size: 7.5, bold: true })
-  box(R - RW, y, RW, 5.2 + 9)
-  text('JEV No.', R - RW + 2, y + 3.9, { size: 7 })
-  y += 5.2
-  box(L, y, MW, 9)
-  vline(L + 28, y, y + 9); vline(L + 80, y, y + 9); vline(L + 88, y, y + 9)
-  text('Check/ADA No. :', L + 1.5, y + 4, { size: 7 })
-  text('Date :', L + 81, y + 4, { size: 7 })
-  text('Bank Name & Account Number:', L + 90, y + 4, { size: 7 })
-  y += 9
-  box(L, y, MW, 9)
-  vline(L + 28, y, y + 9); vline(L + 80, y, y + 9); vline(L + 88, y, y + 9)
-  text('Signature :', L + 1.5, y + 6, { size: 7 })
-  text('Date :', L + 81, y + 4, { size: 7 })
-  text('Printed Name:', L + 90, y + 4, { size: 7 })
-  text(payee, L + 90 + (MW - 90) / 2, y + 7.6, { size: 7.5, bold: true, align: 'center' })
-  box(R - RW, y, RW, 9 + 5.5)
-  text('Date:', R - RW + 2, y + 4, { size: 7 })
-  y += 9
-  box(L, y, MW, 5.5)
-  text('Official Receipt No. & Date/Other Documents', L + 1.5, y + 3.9, { size: 7 })
-
-  // ===================== BUR x 2 on one A4 (page 2) =====================
+  // ===================== BUR (page 5): two copies on one A4 =====================
   doc.addPage()
   const bur = (oy) => {
     let by = oy + 6
