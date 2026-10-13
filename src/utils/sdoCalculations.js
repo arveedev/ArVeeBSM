@@ -98,7 +98,18 @@ export const lookupEnwFactor = (enwFactors, variety, mcValue) => {
 }
 
 /** Equivalent Net Weight = Net Kilos × ENW factor, truncated to 3 decimals when factor is exactly 1, 4 otherwise. */
-export const computeEquivalentNetWeight = (netKilos, factor) => truncTo(netKilos * factor, enwDecimalsForFactor(factor))
+export const computeEquivalentNetWeight = (netKilos, factor, netDecimals = 3) => (
+  normalizeNetDecimals(netDecimals) === 2 ? truncTo(netKilos * factor, 2) : truncTo(netKilos * factor, enwDecimalsForFactor(factor))
+)
+
+/**
+ * Some Disbursing Officers work to 2 decimals on the net weight (and so on the Equivalent Net Weight, which then also
+ * truncates to 2). `netDecimals` is that SDO's own setting (users.netWeightDecimals), 3 unless set to 2.
+ */
+export const normalizeNetDecimals = (d) => (Number(d) === 2 ? 2 : 3)
+
+/** The net weight a Purchase Receipt works from: the WSR's net, with the third decimal dropped (never rounded) when the SDO works to 2. */
+export const netKilosForPr = (netKilos, netDecimals = 3) => (normalizeNetDecimals(netDecimals) === 2 ? truncTo(netKilos ?? 0, 2) : (netKilos ?? 0))
 
 /** Basic Cost = Equivalent Net Weight × Unit Cost, rounded to 2 decimals. */
 export const computeBasicCost = (enw, unitCost) => roundPeso2(enw * unitCost)
@@ -164,15 +175,15 @@ export const resolveUnitCost = (priceRow, moistureState) => {
  * from SdoHome.jsx's own math. Returns 0 when no ENW factor or price
  * row applies (unresolved WSR), same as SdoHome.jsx's own fallback.
  */
-export const computeWsrProcurementCost = (wsr, { varietyMap, buyingPrices, enwFactors, getPalayMoistureState }) => {
+export const computeWsrProcurementCost = (wsr, { varietyMap, buyingPrices, enwFactors, getPalayMoistureState, netDecimals = 3 }) => {
   const variety = varietyMap.get(wsr.varietyId)
   const moistureState = getPalayMoistureState(variety?.name, wsr.cerealCategory)
   const priceRow = resolveBuyingPrice(buyingPrices, wsr.date)
   const unitCost = resolveUnitCost(priceRow, moistureState)
   const factor = lookupEnwFactor(enwFactors, variety, wsr.moistureContent)
-  const netKilos = wsr.netKilos ?? 0
+  const netKilos = netKilosForPr(wsr.netKilos, netDecimals)
   if (factor == null || unitCost == null) return 0
-  const enw = computeEquivalentNetWeight(netKilos, factor)
+  const enw = computeEquivalentNetWeight(netKilos, factor, netDecimals)
   return computeBasicCost(enw, unitCost)
 }
 

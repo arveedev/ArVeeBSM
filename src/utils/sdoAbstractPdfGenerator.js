@@ -171,6 +171,10 @@ export const generateSdoAbstract = ({
   reconciliation, signatories, capture = null,
 }) => {
   const pricerEnabled = purchaseReceipts.some((pr) => pr.pricerAmount != null)
+  // A receipt issued by an SDO working to 2 decimals prints its Net Wt and Equivalent Net Wt with 2; the totals use 2
+  // only when every counted receipt does.
+  const dec2 = (pr) => pr.netWeightDecimals === 2
+  const totalsTwo = purchaseReceipts.filter((pr) => pr.status !== 'Cancelled').length > 0 && purchaseReceipts.filter((pr) => pr.status !== 'Cancelled').every(dec2)
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
   const periodLabel = fmtPeriodLabel(dateFrom, dateTo)
 
@@ -247,8 +251,8 @@ export const generateSdoAbstract = ({
     // whole number (14 -> "14.0") - fmtKilos already supports a
     // decimal-count override, reused here rather than a new helper.
     baseVarietyCode(pr.classification).toUpperCase(), fmtKilos(pr.moistureContent, 1), purityText(pr).toUpperCase(),
-    fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
-    pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 4), fmtKilos(pr.unitCost, 2),
+    fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos, dec2(pr) ? 2 : 3),
+    pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, dec2(pr) ? 2 : 4), fmtKilos(pr.unitCost, 2),
     ...(pricerEnabled ? [fmtPeso(pr.basicCost), fmtKilos(pr.pricerRate, 2), fmtPeso(pr.pricerAmount)] : []),
     fmtPeso(pr.totalAmount),
   ]
@@ -289,8 +293,8 @@ export const generateSdoAbstract = ({
   // could drift apart.
   const buildTotalsRowCells = (t) => [
     fmtBags(t.bags), '', '', '',
-    fmtKilos(t.gross), fmtKilos(t.sack), fmtKilos(t.net),
-    '', fmtKilos(t.enw, 4), '',
+    fmtKilos(t.gross), fmtKilos(t.sack), fmtKilos(t.net, totalsTwo ? 2 : 3),
+    '', fmtKilos(t.enw, totalsTwo ? 2 : 4), '',
     ...(pricerEnabled ? [fmtPeso(t.basic), '', fmtPeso(t.pricer)] : []),
     fmtPeso(t.total),
   ]

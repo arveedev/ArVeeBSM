@@ -149,6 +149,9 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
   // Whether the Disbursement Voucher and the Budget Utilization Request particulars end with "DATED OCT. 9-10, 2026".
   // Off by default.
   const dvDatedText = userRecord?.dvDatedText === true
+  // Net weight and Equivalent Net Weight to 3 decimals (default) or 2 - changes how new Purchase Receipts are computed.
+  const netDecimals = userRecord?.netWeightDecimals === 2 ? 2 : 3
+  const setNetDecimals = async (d) => { await db.users.update(uid, { netWeightDecimals: d }) }
   const toggleDvDated = async () => {
     await db.users.update(uid, { dvDatedText: !dvDatedText })
   }
@@ -203,6 +206,27 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
         </button>
       </div>
       <p className="mt-2 text-xs font-medium text-neutral-400">{dvDatedText ? 'Dated text shown' : 'Dated text hidden'}</p>
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-neutral-800 pt-4">
+        <div>
+          <h2 className="text-base font-semibold text-app-text">Net weight decimals</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            With 2, the Net Weight and the Equivalent Net Weight both drop to 2 decimals, so the amount paid is worked out from them. Applies to Purchase Receipts issued from now on; issued ones keep theirs.
+          </p>
+        </div>
+        <div className="flex shrink-0 overflow-hidden rounded-lg border border-neutral-800">
+          {[3, 2].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setNetDecimals(d)}
+              aria-pressed={netDecimals === d}
+              className={`px-3 py-1.5 text-xs font-semibold ${netDecimals === d ? 'bg-brand-neon text-brand-contrast' : 'text-neutral-400'}`}
+            >
+              {d} decimals
+            </button>
+          ))}
+        </div>
+      </div>
     </section>
   )
 }

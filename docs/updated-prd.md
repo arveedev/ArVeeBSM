@@ -413,6 +413,12 @@ synced record (db.millingOrderCompletions) and copied onto each device's local m
 Sheet's STATUS never overrides it, and the app writes its decision (DONE, or blank when reverted) to the Sheet, retrying until
 the write succeeds.
 
+An SDO who works to two decimals on the net weight sets "Net weight decimals" to 2 on their Settings page (default 3). New Purchase
+Receipts then drop the third decimal of the WSR's net weight (never rounded), compute the Equivalent Net Weight from that net and
+truncate it to 2 decimals as well, and work out the Basic Cost and Total Amount from those figures; the Net Wt and Equivalent Net Wt
+print with 2 decimals on the Abstract and the CPF record. A receipt keeps the setting it was issued with, so changing it never
+alters issued receipts.
+
 From the Abstract export, "DV & BUR" produces a Disbursement Voucher (four identical A4 copies) and a
 Budget Utilization Request and Status (one A4 holding two identical copies, to be
 cut in half), five pages in all for the CPF replenishment. The payee is the SDO (address LEGAZPI

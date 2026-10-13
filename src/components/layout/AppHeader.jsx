@@ -437,7 +437,7 @@ function AppHeader({ hidden = false }) {
     ])
     const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
     const totalAmount = unpaid.reduce(
-      (s, t) => s + computeWsrProcurementCost(t, { varietyMap, buyingPrices: buyingPricesForSdo(buyingPrices, user?.uid), enwFactors, getPalayMoistureState }),
+      (s, t) => s + computeWsrProcurementCost(t, { varietyMap, buyingPrices: buyingPricesForSdo(buyingPrices, user?.uid), enwFactors, getPalayMoistureState, netDecimals: userRecord?.netWeightDecimals }),
       0
     )
     return {

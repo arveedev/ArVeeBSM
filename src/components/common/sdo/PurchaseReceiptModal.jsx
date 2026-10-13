@@ -19,7 +19,7 @@ import { getPalayMoistureState, fmtBags, fmtKilos, liveFormatNumber, parseFormat
 import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken } from '../../../utils/serialNumber.js'
 import { queuePrDeletion } from '../../../services/syncWorker.js'
 import {
-  lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost, computePricerAmount,
+  lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost, computePricerAmount, netKilosForPr, normalizeNetDecimals,
   resolveBuyingPrice, resolveUnitCost, amountInWords, buyingPricesForSdo,
 } from '../../../utils/sdoCalculations.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
@@ -74,6 +74,9 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   const config = useLiveQuery(() => db.reportConfig.get('global'), [])
   const eligibility = useLiveQuery(() => user ? db.pricerEligibility.get(user.uid) : null, [user?.uid])
   const pricerEnabled = eligibility?.enabled ?? false
+  // This SDO's own setting (Settings page): net weight and Equivalent Net Weight to 3 decimals (default) or 2. A saved
+  // receipt keeps the decimals it was issued with.
+  const userRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
 
   // Entry-form auto-exit on inactivity - per explicit request, same
   // admin-configurable timeout (db.reportConfig 'global') and shared
@@ -135,8 +138,9 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   const priceRow = resolveBuyingPrice(buyingPrices, wsr.date)
   const unitCost = resolveUnitCost(priceRow, moistureState)
   const factor = lookupEnwFactor(enwFactors, variety, wsr.moistureContent)
-  const netKilos = wsr.netKilos ?? 0
-  const enw = factor != null ? computeEquivalentNetWeight(netKilos, factor) : null
+  const netDec = existingPr ? normalizeNetDecimals(existingPr.netWeightDecimals) : normalizeNetDecimals(userRecord?.netWeightDecimals)
+  const netKilos = netKilosForPr(wsr.netKilos, netDec)
+  const enw = factor != null ? computeEquivalentNetWeight(netKilos, factor, netDec) : null
   const basicCost = enw != null && unitCost != null ? computeBasicCost(enw, unitCost) : null
   const rateNum = parseFormattedNumber(pricerRate) || 0
   const pricerAmount = pricerEnabled && enw != null ? computePricerAmount(enw, rateNum) : 0
@@ -228,6 +232,7 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
           numberOfBags: wsr.numberOfBags,
           grossKilos: wsr.grossKilos,
           netKilos,
+          netWeightDecimals: netDec,
           sackKilos: (wsr.grossKilos ?? 0) - netKilos,
           mtsCondition: wsr.mtsCondition,
           sackTypeCode: sackType?.code ?? null,
@@ -526,13 +531,13 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
             <div className="mt-1 grid grid-cols-2 gap-2">
               <p>Bags <span className="font-semibold tabular-nums text-app-text">{fmtBags(wsr.numberOfBags)}</span></p>
               <p>Gross <span className="font-semibold tabular-nums text-app-text">{fmtKilos(wsr.grossKilos)}</span></p>
-              <p>Net <span className="font-semibold tabular-nums text-app-text">{fmtKilos(netKilos)}</span></p>
+              <p>Net <span className="font-semibold tabular-nums text-app-text">{fmtKilos(netKilos, netDec)}</span></p>
               {/* Per explicit request, Equivalent Net Weight always
                   DISPLAYS 4 decimals everywhere - the underlying stored
                   value's own truncation precision (enwDecimalsForFactor,
                   3 vs 4 depending on the ENW factor) is unchanged, this
                   only affects how many places are shown/padded. */}
-              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—'}</span></p>
+              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: netDec === 2 ? 2 : 4, maximumFractionDigits: netDec === 2 ? 2 : 4 }) : '—'}</span></p>
             </div>
           </div>
 

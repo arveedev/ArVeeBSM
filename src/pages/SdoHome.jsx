@@ -218,8 +218,9 @@ function SdoHome() {
   const varietyMap = useMemo(() => new Map(varieties.map((v) => [v.varietyId, v])), [varieties])
   const enwFactors = useLiveQuery(() => db.enwFactors.toArray(), []) ?? []
 
+  const sdoRecord = useLiveQuery(() => (user?.uid ? db.users.get(user.uid) : null), [user?.uid])
   const computeWsrBasicCost = (wsr) =>
-    computeWsrProcurementCost(wsr, { varietyMap, buyingPrices, enwFactors, getPalayMoistureState })
+    computeWsrProcurementCost(wsr, { varietyMap, buyingPrices, enwFactors, getPalayMoistureState, netDecimals: sdoRecord?.netWeightDecimals })
 
   const priorityWarehouseId = user?.priorityWarehouseId ?? null
   // Defaults to the priority warehouse, per explicit request, but is

@@ -216,6 +216,8 @@ export const generateCpfDisbursementRecord = ({
   // spent" rather than briefly going negative on paper for a same-day
   // replenishment that actually happened first.
   const prEvents = purchaseReceipts.map((pr) => ({ kind: 'pr', date: pr.date, pr }))
+  // Net Wt / Equivalent Net Wt print with 2 decimals for receipts issued by an SDO working to 2; totals only when all are.
+  const totalsTwo = purchaseReceipts.length > 0 && purchaseReceipts.every((pr) => pr.netWeightDecimals === 2)
   const ledgerEvents = ledgerEntries.map((e) => ({ kind: 'ledger', date: e.date, entry: e }))
   const events = [...ledgerEvents, ...prEvents].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1
@@ -323,8 +325,8 @@ export const generateCpfDisbursementRecord = ({
       hyphenWrap((pr.rsbsa ?? '').toUpperCase()), 'CASH', '',
       fmtBags(pr.numberOfBags), baseVarietyCode(pr.classification).toUpperCase(),
       fmtKilos(pr.moistureContent, 1), purityText(pr).toUpperCase(),
-      fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos),
-      pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 4), fmtKilos(pr.unitCost, 2),
+      fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos, pr.netWeightDecimals === 2 ? 2 : 3),
+      pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, pr.netWeightDecimals === 2 ? 2 : 4), fmtKilos(pr.unitCost, 2),
       fmtPeso(pr.totalAmount),
       fmtPeso(running),
     ]
@@ -366,8 +368,8 @@ export const generateCpfDisbursementRecord = ({
   // genuinely needs to carry that figure forward across the page break).
   const buildTotalsRowCells = (t, runningBalance) => [
     fmtBags(t.bags), '', '', '',
-    fmtKilos(t.gross), '', fmtKilos(t.net),
-    '', fmtKilos(t.enw, 4), '',
+    fmtKilos(t.gross), '', fmtKilos(t.net, totalsTwo ? 2 : 3),
+    '', fmtKilos(t.enw, totalsTwo ? 2 : 4), '',
     fmtPeso(t.amount),
     runningBalance == null ? '' : fmtPeso(runningBalance),
   ]
