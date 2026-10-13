@@ -594,17 +594,19 @@ printed value first and left as a number when it does not match. Targets must be
 circular references impossible. An early version only looked at footer rows and skipped any column with a blank cell, so
 real exports (whose totals were body rows and which contained cancelled PRs) came out with no formulas at all.
 
-### 2.36 The logistics inventory is a stored, synced table
+### 2.36 The logistics inventory is a stored, synced table, printed with the Stock Report
 
 **Decision**: `logisticsItems` (Dexie v45, synced; see backend-schema) holds one row per pallet, platform scale or other
 logistical / semi-expendable item of a warehouse, with add / edit / delete in the Logistics Inventory modal opened from Home.
-The Weekly Warehouse Equipment and Logistics Report prints whatever is stored; only the heading period is chosen at export
-(the same presets as the stock statement, defaulting to the 1st of the month through today).
+The modal does no exporting. `generateNfaReport` takes `logisticsItems` and, only when the list is not empty, adds a last
+page (`addLogisticsPage` in `pdfGenerator.js`) with the three tables under the Stock Report's header, period and signatories.
+Because it is an ordinary captured page, the Excel export includes it as a sheet with no extra code.
 
-**Rationale**: the figures are an inventory that persists and changes by small edits, not a form retyped each week. The first
-version kept the typed values in the browser's local storage, which neither syncs nor backs up; a table is read by the daily
-GitHub backup and the device download automatically (both read `db.tables`) and syncs through Dexie Cloud. It is deliberately
-not in the Google Sheets sync.
+**Rationale**: the figures are an inventory that persists and changes by small edits, and the report is part of the weekly
+stock submission rather than a separate document. The first version kept typed values in the browser's local storage (neither
+synced nor backed up), the second exported its own PDF from the modal; both were replaced. A table is read by the daily GitHub
+backup and the device download automatically (both read `db.tables`) and syncs through Dexie Cloud. It is deliberately not in
+the Google Sheets sync.
 
 ### 2.37 DV and BUR are drawn from the Abstract's data
 
@@ -634,6 +636,18 @@ entrance animations, delayed by one shared variable so they start as the logo be
 removes all of it.
 
 **Rationale**: one coordinated entrance instead of a logo effect competing with the rest of the screen.
+
+### 2.40 MO/TMO completion is a synced decision, not a flag in a local cache
+
+**Decision**: `millingOrders` is rebuilt from the Sheet on every sync and is not synced, so a manual "mark done" kept only
+there never left the device (the best-effort write of DONE to the Sheet fails offline). The decision is now a row in
+`millingOrderCompletions` (Dexie v46, synced, keyed like `millingOrders`: `type::number`, `completed` true / false).
+`src/services/millingCompletion.js` writes the row and the local flag together, copies synced rows onto the local cache
+whenever they change (a live query, so a change from another device applies at once), merges them inside the Sheet sync's
+rebuild so they win over a local flag, and on first run uploads completions the device had marked before the table existed.
+
+**Rationale**: one device showed many finished mills while the others still listed them as pending. Rejected: syncing
+`millingOrders` itself (a cache that is cleared and rebuilt wholesale on each pull would fight the sync).
 
 ## 3. Non-Functional Requirements
 

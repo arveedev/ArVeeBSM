@@ -1,9 +1,6 @@
 // Warehouse logistics inventory (wooden pallets, platform scales, other logistical and semi-expendable
-// equipment) with the Weekly Warehouse Equipment and Logistics Report built from it.
-//
-// The inventory is stored per warehouse (db.logisticsItems, synced): every line can be added, edited and
-// deleted, and the weekly report prints whatever is stored at the time of export. Only the report period
-// (the dates in its heading) is chosen when exporting.
+// equipment): add, edit and delete only. The inventory is stored per warehouse (db.logisticsItems, synced) and is
+// printed as the last page of the Stock Report whenever the warehouse has any items - nothing is exported from here.
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -13,10 +10,6 @@ import { ArrowLeft, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
-import CalendarDatePicker from './CalendarDatePicker.jsx'
-import PeriodPresetPicker from './PeriodPresetPicker.jsx'
-import { generateLogisticsReport } from '../../utils/logisticsReportPdfGenerator.js'
-import { sanitizeForFilename, todayLocalISO } from '../../utils/calculations.js'
 
 const PALLET_CLASSES = ['SERVICEABLE', 'UNSERVICEABLE', 'FOR REPAIR']
 const SUGGESTED_ITEMS = ['TARPAULIN', 'SACKOLINE', 'BAG CLOSER', 'FUMIGATING SHEETS']
@@ -43,11 +36,8 @@ function LogisticsReportModal({ onClose }) {
   const { user } = useAuth()
   const { currentWarehouse, currentWarehouseId } = useWarehouse() ?? {}
   const items = useLiveQuery(() => (currentWarehouseId ? db.logisticsItems.where('warehouseId').equals(currentWarehouseId).toArray() : []), [currentWarehouseId])
-  const [dateTo, setDateTo] = useState(() => todayLocalISO())
-  const [dateFrom, setDateFrom] = useState(() => `${todayLocalISO().slice(0, 8)}01`)
   const [editing, setEditing] = useState(null)        // { id|null, form }
   const [confirmId, setConfirmId] = useState(null)
-  const [generating, setGenerating] = useState(false)
   const [entered, setEntered] = useState(false)
 
   useEffect(() => {
@@ -92,61 +82,12 @@ function LogisticsReportModal({ onClose }) {
     toast.success('Item deleted')
   }
 
-  const handleExport = async () => {
-    if (!currentWarehouse) { toast.error('No warehouse selected'); return }
-    setGenerating(true)
-    try {
-      const province = currentWarehouse.provinceId ? await db.provinces.get(currentWarehouse.provinceId) : null
-      const branch = province?.branchId ? await db.branches.get(province.branchId) : null
-      const config = await db.reportConfig.get('global')
-      const supervisorSig = user ? await db.signatories.get(user.uid) : null
-      const verified = config?.verifiedCorrect ?? []
-      const isManager = (p) => /manager/i.test(p?.position ?? '')
-      const show = (v) => (v == null ? '' : String(v))
-      const palletItems = byCategory('pallet').sort((a, b) => palletOrder(a.name) - palletOrder(b.name))
-      const doc = generateLogisticsReport({
-        branch, warehouse: currentWarehouse, province, dateFrom, dateTo,
-        data: {
-          palletRows: palletItems.length
-            ? palletItems.map((r) => ({ classification: r.name, utilized: show(r.utilized), available: show(r.available), transfer: show(r.transfer), remarks: r.remarks }))
-            : PALLET_CLASSES.map((classification) => ({ classification, utilized: '', available: '', transfer: '', remarks: '' })),
-          scaleRows: byCategory('scale').map((r) => ({ type: r.name, serials: r.serials, serviceable: show(r.serviceable), forRepair: show(r.forRepair), unserviceable: show(r.unserviceable), remarks: r.remarks })),
-          logisticRows: byCategory('other').map((r) => ({ name: r.name, brandNew: show(r.brandNew), serviceable: show(r.serviceable), unserviceable: show(r.unserviceable), remarks: r.remarks })),
-        },
-        signatories: {
-          certifiedCorrect: { name: user?.name ?? '', position: supervisorSig?.certifiedCorrectPosition || 'Warehouse Supervisor' },
-          reviewedBy: verified.filter(isManager),
-          verifiedCorrect: verified.filter((p) => !isManager(p)),
-          auditedBy: { name: config?.auditedByName ?? '', position: config?.auditedByPosition ?? '' },
-          notedBy: { name: config?.notedByName ?? '', position: config?.notedByPosition ?? '' },
-        },
-      })
-      doc.save(`${sanitizeForFilename(currentWarehouse.name) || 'WH'}-Logistics-${dateFrom}-to-${dateTo}.pdf`)
-      toast.success('Logistics report exported')
-    } catch (err) {
-      console.error(err)
-      toast.error('Failed to generate the report')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
   const summary = (it) => FIELDS[it.category].filter(([k]) => it[k] != null).map(([k, label]) => `${label} ${Number(it[k]).toLocaleString('en-PH')}`).join(' · ')
   const card = 'rounded-xl border border-neutral-800 bg-neutral-900 p-3'
 
   const list = (
     <>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className={labelClass}>Report from</label>
-          <div className="mt-1"><CalendarDatePicker value={dateFrom} onChange={setDateFrom} valueClassName="text-sm" /></div>
-        </div>
-        <div>
-          <label className={labelClass}>to</label>
-          <div className="mt-1"><CalendarDatePicker value={dateTo} onChange={setDateTo} valueClassName="text-sm" /></div>
-        </div>
-      </div>
-      <PeriodPresetPicker onSelectRange={(from, to) => { setDateFrom(from); setDateTo(to) }} currentFrom={dateFrom} currentTo={dateTo} />
+      <p className="rounded-xl border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-xs text-neutral-400">What is recorded here prints as the last page of this warehouse's Stock Report. A warehouse with nothing recorded gets no such page.</p>
       {['pallet', 'scale', 'other'].map((cat) => {
         const rows = cat === 'pallet' ? byCategory(cat).sort((a, b) => palletOrder(a.name) - palletOrder(b.name)) : byCategory(cat)
         return (
@@ -261,9 +202,9 @@ function LogisticsReportModal({ onClose }) {
               </button>
             </>
           ) : (
-            <button type="button" onClick={handleExport} disabled={generating}
-              className="flex-1 rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40">
-              {generating ? 'Generating…' : 'Export Weekly Report (PDF)'}
+            <button type="button" onClick={onClose}
+              className="flex-1 rounded-xl bg-brand-neon px-3 py-3 text-sm font-semibold text-brand-contrast transition-all hover:brightness-110 active:scale-95">
+              Done
             </button>
           )}
         </div>

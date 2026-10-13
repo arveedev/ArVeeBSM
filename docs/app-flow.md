@@ -427,6 +427,6 @@ the step-by-step journey.*
 1. On Home, an icon beside the warehouse card opens Logistics Inventory for that warehouse.
 2. The modal lists Wooden Pallets, Platform Scale and Other Logistics. Add opens a form (pallets: classification, utilized,
    available, transfer; scales: type, serials, serviceable / for repair / unserviceable; others: name, brand new, serviceable,
-   unserviceable; remarks on all); the pencil edits, the bin deletes after an inline confirmation.
-3. The period (From / To with the stock statement's presets, defaulting to the 1st of the month through today) is chosen at the
-   top; "Export Weekly Report (PDF)" prints the stored inventory with the signatories.
+   unserviceable; remarks on all); the pencil edits, the bin deletes after an inline confirmation. Done closes it.
+3. Nothing is exported from here. When the Stock Report is exported (PDF or Excel), the stored inventory is its last page,
+   under the Stock Report's period and signatories; a warehouse with no inventory gets no such page.

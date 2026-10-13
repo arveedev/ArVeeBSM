@@ -8401,4 +8401,5 @@
 //   1.10-343 - Weekly Warehouse Equipment and Logistics Report: an icon beside the warehouse on Home opens a form (wooden pallets, platform scales, other logistics) and exports the PDF; the figures are remembered on the device per warehouse.
 //   1.10-344 - Logistics Inventory: the warehouse's pallets, platform scales and other logistical / semi-expendable items are now stored records (add, edit, delete; synced table db.logisticsItems, dexie.js v45) and the Weekly Logistics Report prints what is stored; the DV's lower-right JEV No. / Date cells restored.
 //   1.10-345 - BUR: a stray vertical line through the "Balance" heading removed; Logistics report period offers the same presets as the stock statement and starts on the 1st of the month through today.
-export const APP_VERSION = '1.10-345'
+//   1.10-346 - Logistics inventory is added / edited / deleted only; it prints as the last page of the Stock Report (PDF and Excel) and only when the warehouse has any. MO/TMO marked complete on one device now shows complete on every device (synced db.millingOrderCompletions, dexie.js v46; earlier local completions are uploaded once).
+export const APP_VERSION = '1.10-346'

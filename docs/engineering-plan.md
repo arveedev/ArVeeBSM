@@ -488,9 +488,10 @@ backs.
 - **SDO Disbursement Voucher and BUR.** From the Abstract export, with the SDO's "dated" text setting off by default
   (TDD §2.37). The Abstract's header grey is slightly darker.
 - **Weekly Warehouse Equipment and Logistics Report.** First built as a form whose values were remembered in local storage;
-  corrected to a stored, synced inventory with add / edit / delete (TDD §2.36). Period presets match the stock statement.
+  corrected to a stored, synced inventory with add / edit / delete, then moved from its own export to the last page of the Stock Report, printed only when the warehouse has inventory (TDD §2.36).
 - **Login logo.** Built in the deck first, then on the real login page, then re-timed to open large and shrink into place
   (TDD §2.39).
+- **MO/TMO completion differing between devices.** One device showed many finished mills, others many pending: the completion flag lived in an unsynced cache table. Now a synced decision table with a live copy onto each device's cache and a one-time upload of earlier local completions (TDD §2.40). Note: the new synced table needs Dexie Cloud to accept it; verify sync after release.
 - **Process incident.** A commit staged the whole `docs` folder and swept unrelated, uncommitted working files into the
   remote; it was reset and re-pushed with only the intended files. Lesson: stage named paths only.
 

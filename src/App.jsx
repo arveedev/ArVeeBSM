@@ -29,6 +29,7 @@ import { useAuth } from './context/AuthContext.jsx'
 import { usePageHeader } from './context/PageHeaderContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 import { startBackupWorker } from './services/backupWorker.js'
+import { startMillingCompletionSync } from './services/millingCompletion.js'
 import AnimatedToast from './components/common/AnimatedToast.jsx'
 import UpdateChecker from './components/common/UpdateChecker.jsx'
 import useDelayedUnmount from './hooks/useDelayedUnmount.js'
@@ -258,6 +259,13 @@ function App() {
   useEffect(() => {
     if (!user) return
     return startBackupWorker()
+  }, [user])
+
+  // MO/TMO completions are shared between devices through a synced table; this keeps each device's local cache
+  // in line with it (see millingCompletion.js).
+  useEffect(() => {
+    if (!user) return
+    return startMillingCompletionSync()
   }, [user])
 
   // Transaction data (WSR/WSI/ESR/ESI) - same shape as above, but on a

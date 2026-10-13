@@ -444,3 +444,15 @@ One row per inventory line of a warehouse's logistical / semi-expendable equipme
 | `brandNew` | Other items. |
 | `remarks` | Free text. |
 | `createdAt`, `updatedAt`, `updatedBy` | Bookkeeping. |
+
+## millingOrderCompletions (Dexie v46, synced)
+
+Whether an MO/TMO was marked complete or reverted, shared between devices (`millingOrders` is an unsynced cache).
+
+| Field | Notes |
+|---|---|
+| `orderId` | Primary key, `"MO::<number>"` / `"TMO::<number>"`, same as `millingOrders.orderId`. |
+| `type` | Indexed; `'MO'` or `'TMO'`. |
+| `number` | Control number. |
+| `completed` | Boolean: true = complete, false = reverted to pending. |
+| `updatedAt`, `updatedBy` | Bookkeeping (`'migrated'` for completions uploaded from a device's older local flags). |

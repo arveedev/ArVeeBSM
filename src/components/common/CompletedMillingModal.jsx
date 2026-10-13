@@ -10,6 +10,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, AlertTriangle, Search } from 'lucide-react'
 import { db } from '../../db/dexie.js'
+import { setMillingOrderCompleted } from '../../services/millingCompletion.js'
 import { markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import { MillingOrderRow } from './MillingMonitor.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
@@ -140,7 +141,7 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
       // googleSheetsBridge.js) still read 'DONE' in the meantime.
       // Setting it to null here immediately makes the app's own state
       // consistent without waiting on that next sync.
-      db.millingOrders.update(order.orderId, { manuallyCompleted: false, sheetStatus: null })
+      setMillingOrderCompleted(order, false)
       // Best-effort, fire-and-forget - clears the Sheet's own STATUS
       // cell too, so the two stay in agreement once the next sync does
       // run (and so anyone viewing the Sheet directly sees it blank).

@@ -1094,6 +1094,14 @@ db.version(45).stores({
   logisticsItems: 'itemId, warehouseId, category',
 })
 
+// v46 — millingOrderCompletions: whether an MO/TMO has been marked complete (or reverted), one row per order,
+// keyed by the same "type::number" id as millingOrders. millingOrders itself is an unsynced cache rebuilt from the
+// Sheet, so a completion stored only there never reached the other devices. This synced table carries the
+// decision; src/services/millingCompletion.js copies it onto each device's cache.
+db.version(46).stores({
+  millingOrderCompletions: 'orderId, type',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

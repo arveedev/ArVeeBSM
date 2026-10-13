@@ -149,6 +149,7 @@ const excelSheetLabel = (subtitle) => {
   if (t.includes('RECAPITULATION OF STOCK ISSUES')) return 'Recap Issues'
   if (t.includes('STATEMENT OF WEEKLY RECEIPTS')) return 'Receipts'
   if (t.includes('STATEMENT OF WEEKLY ISSUES')) return 'Issues'
+  if (t.includes('LOGISTICS')) return 'Logistics'
   if (t.includes('MTS') || t.includes('SACK')) return t.replace(/WAREHOUSE |STATEMENT OF |WEEKLY |RECAPITULATION OF/g, m => (m.startsWith('RECAP') ? 'RECAP ' : '')).toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()).slice(0, 24)
   return subtitle.slice(0, 20)
 }
@@ -1096,6 +1097,54 @@ const addSackRecapPage = (doc, { header, transactions, isIssues, sackTypeMap, si
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
+// ── LOGISTICS PAGE (last page of the Stock Report; only when the warehouse has logistics inventory) ──
+// Wooden pallets, platform scales and other logistical / semi-expendable equipment as stored in
+// db.logisticsItems, in the three tables of the weekly equipment and logistics report. The three tables share
+// one set of column widths so the Excel version lines their columns up.
+const addLogisticsPage = (doc, { header, items, sigCtx }) => {
+  doc.addPage()
+  let y = addPageHeader(doc, { ...header, subtitle: 'Weekly Warehouse Equipment and Logistics Report' })
+  y = addRegionProvinceCodeWhse(doc, header, y)
+
+  const PALLET_ORDER = ['SERVICEABLE', 'UNSERVICEABLE', 'FOR REPAIR']
+  const show = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString('en-PH'))
+  const of = (category) => items.filter((i) => i.category === category)
+  const byName = (a, b) => String(a.name).localeCompare(String(b.name)) || String(a.serials ?? '').localeCompare(String(b.serials ?? ''))
+  const pallets = of('pallet').sort((a, b) => (PALLET_ORDER.indexOf(a.name) + 1 || 99) - (PALLET_ORDER.indexOf(b.name) + 1 || 99))
+  const scales = of('scale').sort(byName)
+  const others = of('other').sort(byName)
+  const centre = { halign: 'center' }
+  const columnStyles = { 0: { cellWidth: 50 }, 1: { cellWidth: 26, ...centre }, 2: { cellWidth: 26, ...centre }, 3: { cellWidth: 26, ...centre } }
+
+  const section = (title, head, body) => {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(...BLACK)
+    doc.text(title, margin, y)
+    cap(doc, { kind: 'h', text: title })
+    autoTable(doc, { startY: y + 2, margin: { left: margin, right: margin }, ...tableStyles, head, body, columnStyles })
+    y = doc.lastAutoTable.finalY + 6
+  }
+
+  if (pallets.length) {
+    section('WOODEN PALLETS',
+      [[{ content: 'CLASSIFICATION', rowSpan: 2 }, { content: 'QUANTITY', colSpan: 3 }, { content: 'REMARKS', rowSpan: 2 }], ['UTILIZED', 'AVAILABLE', 'TRANSFER']],
+      pallets.map((r) => [r.name, show(r.utilized), show(r.available), show(r.transfer), r.remarks ?? '']))
+  }
+  if (scales.length) {
+    section('PLATFORM SCALE',
+      [['TYPE', 'SERVICEABLE', 'FOR REPAIR', 'UNSERVICEABLE', 'REMARKS']],
+      scales.map((r) => [`${r.name}${r.serials ? `
+${r.serials}` : ''}`, show(r.serviceable), show(r.forRepair), show(r.unserviceable), r.remarks ?? '']))
+  }
+  if (others.length) {
+    section('OTHER LOGISTICS',
+      [[{ content: 'NAME', rowSpan: 2 }, { content: 'QUANTITY', colSpan: 3 }, { content: 'REMARKS', rowSpan: 2 }], ['BRAND NEW', 'SERVICEABLE', 'UNSERVICEABLE']],
+      others.map((r) => [r.name, show(r.brandNew), show(r.serviceable), show(r.unserviceable), r.remarks ?? '']))
+  }
+  addSignatories(doc, sigCtx, y)
+}
+
 export const generateNfaReport = ({
   warehouse, province, branch,
   dateFrom, dateTo,
@@ -1105,6 +1154,7 @@ export const generateNfaReport = ({
   signatories, certifiedCorrect,
   varieties, sackTypes, sackTypeMap, pileMtsById,
   decimals = 2,
+  logisticsItems = null,
   capture = null,
 }) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -1202,6 +1252,9 @@ export const generateNfaReport = ({
       addSackRecapPage(doc, { header, transactions: resolvedSackIssues, isIssues: true, sackTypeMap, sigCtx })
     }
   }
+
+  // Last page: the warehouse's logistics inventory, only when it has any
+  if (logisticsItems?.length) addLogisticsPage(doc, { header, items: logisticsItems, sigCtx })
 
   addFooter(doc)
   return doc

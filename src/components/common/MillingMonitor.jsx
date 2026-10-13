@@ -14,6 +14,7 @@ import { computeMillingOrderStatuses } from '../../utils/millingOrderStatus.js'
 import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
 import { fmtBags, fmtWeight, fmtNetBags, fmtKilos, calculateCurrentAge, AGE_BUCKETS, formatTrialLabel, expandTrialNumbers, todayLocalISO } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
+import { setMillingOrderCompleted } from '../../services/millingCompletion.js'
 import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
@@ -1152,7 +1153,7 @@ function MillingMonitor({ isAdmin = false, active = true }) {
     e.stopPropagation()
     setCompletingId(order.orderId)
     setTimeout(() => {
-      db.millingOrders.update(order.orderId, { manuallyCompleted: true })
+      setMillingOrderCompleted(order, true)
       // Best-effort, fire-and-forget - same pattern already used
       // elsewhere for natural completion (StockFormBase/SackFormBase).
       // The local flag is the source of truth either way; this just

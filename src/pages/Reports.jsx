@@ -486,9 +486,13 @@ function Reports() {
         }
       }
 
+      const logisticsItems = currentWarehouse?.warehouseId
+        ? await db.logisticsItems.where('warehouseId').equals(currentWarehouse.warehouseId).toArray()
+        : []
       const capture = kind === 'excel' ? [] : null
       const doc = generateNfaReport({
         capture,
+        logisticsItems,
         warehouse: currentWarehouse,
         province,
         branch,

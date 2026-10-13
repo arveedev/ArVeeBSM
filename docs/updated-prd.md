@@ -399,15 +399,17 @@ their receipts and issues from the Statement sheets with SUMIFS, so an edit
 carries through every sheet. The milling
 liquidations and the Stock Desk reports already had their own Excel export.
 
-The Logistics Inventory is opened from the icon beside the warehouse on Home. Each
-warehouse keeps its own stored, synced inventory of logistical and semi-expendable
-equipment (db.logisticsItems): wooden pallets by classification (utilized,
-available, transfer), platform scales (type, serial numbers, serviceable / for
-repair / unserviceable) and other items (tarpaulin, sackoline, bag closer,
-fumigating sheets and any added item: brand new / serviceable / unserviceable),
-each with remarks. Items are added, edited and deleted there. The Weekly Warehouse
-Equipment and Logistics Report exports whatever is stored, under the chosen period
-heading, with the stock report's signatories.
+The Logistics Inventory is opened from the icon beside the warehouse on Home and is for adding, editing and
+deleting only. Each warehouse keeps its own stored, synced inventory of logistical and semi-expendable equipment
+(db.logisticsItems): wooden pallets by classification (utilized, available, transfer), platform scales (type, serial
+numbers, serviceable / for repair / unserviceable) and other items (tarpaulin, sackoline, bag closer, fumigating
+sheets and any added item: brand new / serviceable / unserviceable), each with remarks. Nothing is exported from the
+inventory screen: the Weekly Warehouse Equipment and Logistics Report is the LAST PAGE of the warehouse's Stock Report
+(PDF and Excel), under the Stock Report's own period and signatories, and it is printed only when the warehouse has
+at least one inventory item.
+
+An MO/TMO marked complete (or reverted) on one device shows as complete on every device: the decision is held in a
+synced record (db.millingOrderCompletions) and copied onto each device's local milling cache.
 
 From the Abstract export, "DV & BUR" produces a Disbursement Voucher (A4) and a
 Budget Utilization Request and Status (an A4 holding two identical copies, to be

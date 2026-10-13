@@ -733,10 +733,12 @@ const runMillingOrdersSync = async () => {
     // correctly picked up) or is queued to run after it commits (and
     // lands on top of the freshly-synced data) - never in between.
     let records = []
-    await db.transaction('rw', db.millingOrders, async () => {
+    await db.transaction('rw', db.millingOrders, db.millingOrderCompletions, async () => {
       const existingManuallyCompletedByOrderId = new Map(
         (await db.millingOrders.toArray()).map((o) => [o.orderId, o.manuallyCompleted ?? false])
       )
+      // The synced completion decisions (shared between devices) win over this device's own flag.
+      for (const c of await db.millingOrderCompletions.toArray()) existingManuallyCompletedByOrderId.set(c.orderId, Boolean(c.completed))
 
       records = allOrders.map((order) => {
         const orderId = `${order.type}::${order.number}`
