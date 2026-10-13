@@ -12,8 +12,10 @@ import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
 import { roundPeso2 } from '../../../utils/sdoCalculations.js'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 function CashOnBankModal({ current, onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   const [amount, setAmount] = useState(current?.cashOnBank ? liveFormatNumber(String(current.cashOnBank), 2) : '')
   const [saving, setSaving] = useState(false)

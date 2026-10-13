@@ -17,6 +17,7 @@ import ConfirmDialog from './ConfirmDialog.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
 import { authorityMatchesQuery, authorityMatchRank } from '../../utils/monitoringSearch.js'
 import { rankSortKeepingAll } from '../../utils/fuzzySearch.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -27,6 +28,7 @@ const MONTHS = [
 const CLOSE_ANIMATION_MS = 300
 
 function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, warehouseMap, accessibleWarehouses, canManuallyToggle = true, onClose }) {
+  useEscapeClose(() => handleClose())
   // Delays the actual onClose call until the exit animation has time
   // to play, per the standing rule that every entrance needs a
   // matching exit rather than an instant, jarring unmount.

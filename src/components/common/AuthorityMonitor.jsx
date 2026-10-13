@@ -27,6 +27,7 @@ import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import CompletedAuthorityModal from './CompletedAuthorityModal.jsx'
 import AuthorityReconciliationPanel from './AuthorityReconciliationPanel.jsx'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const TOP_TABS = ['AI', 'SIA']
 
@@ -447,6 +448,7 @@ function ChoiceAuthorityModal({ choiceAuthority, onAddNew, onViewTransactions, o
     setIsClosing(true)
     setTimeout(onClose, 250)
   }
+  useEscapeClose(() => handleClose())
 
   const isAi = choiceAuthority.type === 'AI'
   const refNumber = isAi ? choiceAuthority.aiNumber : choiceAuthority.siaNumber

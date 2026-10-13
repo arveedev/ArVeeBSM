@@ -49,7 +49,10 @@
 // state, exactly as a plain useLiveQuery result already would.
 import { useEffect, useRef, useState } from 'react'
 
-export function useDebouncedLiveCompute(computeFn, changeSignal, errorFallback, { debounceMs = 700, maxWaitMs = 30000 } = {}) {
+// `keepPrevious`: keep returning the last result while a recompute is in flight (only the very first computation
+// is `undefined`). Without it every recompute first resets to `undefined`, so a list built from the result empties
+// and refills - the whole page seemed to reset each time an MO/TMO was marked done.
+export function useDebouncedLiveCompute(computeFn, changeSignal, errorFallback, { debounceMs = 700, maxWaitMs = 30000, keepPrevious = false } = {}) {
   const [trigger, setTrigger] = useState(0)
   const debounceTimerRef = useRef(null)
   const maxWaitTimerRef = useRef(null)
@@ -85,7 +88,7 @@ export function useDebouncedLiveCompute(computeFn, changeSignal, errorFallback, 
   const [result, setResult] = useState(undefined)
   useEffect(() => {
     let cancelled = false
-    setResult(undefined)
+    if (!keepPrevious) setResult(undefined)
     ;(async () => {
       try {
         const value = await computeFnRef.current()

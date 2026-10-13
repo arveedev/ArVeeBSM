@@ -10,11 +10,13 @@ import { ArrowLeft } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import HomeStocks from './HomeStocks.jsx'
 import HomeSacks from './HomeSacks.jsx'
+import { useEscapeClose } from '../utils/useEscapeClose.js'
 
 // Must match the transition durations used below.
 const SLIDE_MS = 280
 
 function WarehouseDetailModal({ warehouse, initialTab = 'stocks', onClose }) {
+  useEscapeClose(() => onClose?.())
   const [activeTab, setActiveTab] = useState(initialTab)
   const { weightUnit, updateSetting } = useSettings() ?? {}
   const isMt = weightUnit === 'mt'

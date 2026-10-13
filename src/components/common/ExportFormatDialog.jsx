@@ -2,17 +2,12 @@
 // editable Excel workbook. One button per report, one choice here - so every report offers the
 // same two formats the same way.
 
-import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { FileText, FileSpreadsheet } from 'lucide-react'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 function ExportFormatDialog({ open, title = 'Export as', onPick, onClose }) {
-  useEffect(() => {
-    if (!open) return undefined
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  useEscapeClose(() => onClose?.(), open)
 
   if (!open) return null
   return createPortal(

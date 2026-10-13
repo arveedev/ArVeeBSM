@@ -27,8 +27,10 @@ import { useAuth } from '../../../context/AuthContext.jsx'
 import { todayLocalISO } from '../../../utils/calculations.js'
 import { suggestNextPrSerial, recordPrSerialUsed } from '../../../utils/serialNumber.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 function CancelPrModal({ onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   const [prNo, setPrNo] = useState('')
   const [date, setDate] = useState(todayLocalISO())

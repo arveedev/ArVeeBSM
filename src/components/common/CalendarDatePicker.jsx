@@ -12,6 +12,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -103,6 +104,8 @@ const CalendarDatePicker = forwardRef(function CalendarDatePicker({ value, onCha
   // its real onClick (handleDayTap) with no separate key handling
   // needed for selection itself - only movement and Escape are custom.
   const [focusedIso, setFocusedIso] = useState(null)
+  // Escape closes just this calendar (and not the dialog it sits in) while it is open
+  useEscapeClose(() => { setIsOpen(false); triggerRef.current?.focus() }, isOpen)
   const dayButtonRefs = useRef(new Map())
 
   // Keep the calendar's viewed month in sync if the value changes from

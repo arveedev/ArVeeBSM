@@ -10,6 +10,7 @@ import { ArrowLeft, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const PALLET_CLASSES = ['SERVICEABLE', 'UNSERVICEABLE', 'FOR REPAIR']
 const SUGGESTED_ITEMS = ['TARPAULIN', 'SACKOLINE', 'BAG CLOSER', 'FUMIGATING SHEETS']
@@ -33,6 +34,7 @@ const emptyForm = (category) => ({
 })
 
 function LogisticsReportModal({ onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   const { currentWarehouse, currentWarehouseId } = useWarehouse() ?? {}
   const items = useLiveQuery(() => (currentWarehouseId ? db.logisticsItems.where('warehouseId').equals(currentWarehouseId).toArray() : []), [currentWarehouseId])

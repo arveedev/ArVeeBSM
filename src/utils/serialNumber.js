@@ -527,8 +527,47 @@ export const findAdjacentTransaction = async (type, warehouseId, serialNo, cerea
  * sdoSerialCounterCache tracker. Falls back to `fallback` if this SDO
  * has never issued one yet.
  */
+// How a Purchase Receipt number is built (learned from the issued series, e.g. 5798006-4, 5798007-5 ... 5798009-0 ...
+// 5798016-0): a 7-digit serial, a hyphen, and one check digit that is the serial modulo 7 (5798009 is a multiple of 7,
+// so it ends -0; the next one ends -1, and so on up to -6, then back to -0). So the next number in a series is the
+// next serial with its own check digit, never "last digit + 1".
+export const prCheckDigit = (serial) => Number(serial) % 7
+
+/** { serial, width, check } for "5798006-4", or null when the text is not shaped like a PR number. */
+export const parsePrNo = (text) => {
+  const m = /^\s*(\d{4,})-(\d)\s*$/.exec(String(text ?? ''))
+  return m ? { serial: Number(m[1]), width: m[1].length, check: Number(m[2]) } : null
+}
+
+export const formatPrNo = (serial, width = 7) => `${String(serial).padStart(width, '0')}-${prCheckDigit(serial)}`
+
+/** True when the number has the right shape AND its check digit matches its serial. */
+export const isPrCheckDigitValid = (text) => {
+  const p = parsePrNo(text)
+  return Boolean(p) && p.check === prCheckDigit(p.serial)
+}
+
+/** Turns a bare serial ("5798010") into a full PR number ("5798010-1"); anything else is returned as typed. */
+export const completePrNo = (text) => {
+  const t = String(text ?? '').trim()
+  return /^\d{4,}$/.test(t) ? formatPrNo(Number(t), t.length) : t
+}
+
+/**
+ * Suggests the next Purchase Receipt number for this SDO: the serial after the one on the PR they most recently
+ * issued (Active or Cancelled - a cancelled number is still "used", never reissued), with its check digit worked
+ * out. "Most recent" is the latest PR date, then the highest serial. Falls back to the old counter tracker, then to
+ * `fallback`, for an SDO whose numbers are not in this shape.
+ */
 export const suggestNextPrSerial = async (sdoUid, fallback = '1') => {
   if (!sdoUid) return fallback
+  const all = await db.purchaseReceipts.where('sdoUid').equals(sdoUid).toArray()
+  const parsed = all.map((pr) => ({ pr, p: parsePrNo(pr.prNo) })).filter((x) => x.p && x.p.check === prCheckDigit(x.p.serial))
+  if (parsed.length > 0) {
+    parsed.sort((a, b) => (a.pr.date < b.pr.date ? 1 : a.pr.date > b.pr.date ? -1 : b.p.serial - a.p.serial))
+    const last = parsed[0].p
+    return formatPrNo(last.serial + 1, last.width)
+  }
   const tracked = await db.sdoSerialCounterCache.get(sdoUid)
   if (!tracked) return fallback
   return formatSerial({ prefix: tracked.prefix, digits: tracked.digits, number: tracked.number + 1 })

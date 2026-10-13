@@ -16,7 +16,7 @@ import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import { getPalayMoistureState, fmtBags, fmtKilos, liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
-import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken } from '../../../utils/serialNumber.js'
+import { suggestNextPrSerial, recordPrSerialUsed, isPrSerialTaken, parsePrNo, isPrCheckDigitValid, prCheckDigit, completePrNo } from '../../../utils/serialNumber.js'
 import { queuePrDeletion } from '../../../services/syncWorker.js'
 import {
   lookupEnwFactor, computeEquivalentNetWeight, computeBasicCost, computePricerAmount, netKilosForPr, normalizeNetDecimals,
@@ -25,8 +25,10 @@ import {
 import ConfirmDialog from '../ConfirmDialog.jsx'
 import { useIdleCountdown } from '../../../hooks/useIdleCountdown.js'
 import IdleCloseWarning from '../IdleCloseWarning.jsx'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   const [prNo, setPrNo] = useState('')
   // Per explicit request: captured for a later report ("CPF Cash
@@ -442,12 +444,20 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
               {isReadOnly ? (
                 <p className="mt-1 font-mono text-lg font-semibold text-app-text">{existingPr.prNo}</p>
               ) : (
-                <input
-                  type="text"
-                  value={prNo}
-                  onChange={(e) => setPrNo(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 font-mono text-lg text-app-text outline-none focus:border-brand-neon"
-                />
+                <>
+                  <input
+                    type="text"
+                    value={prNo}
+                    onChange={(e) => setPrNo(e.target.value)}
+                    onBlur={() => setPrNo((v) => completePrNo(v))}
+                    className="mt-1 w-full rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 font-mono text-lg text-app-text outline-none focus:border-brand-neon"
+                  />
+                  {/* The check digit after the hyphen is the serial modulo 7 - a number that does not follow it is
+                      most likely mistyped (a warning only: nothing is blocked). */}
+                  {prNo.trim() && parsePrNo(prNo) && !isPrCheckDigitValid(prNo) && (
+                    <p className="mt-1 text-xs text-brand-amber">The last digit should be {prCheckDigit(parsePrNo(prNo).serial)} for this number.</p>
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -21,6 +21,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import PeriodPresetPicker from '../PeriodPresetPicker.jsx'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 const SORTS = [
   { id: 'date-desc', label: 'Date (Newest)' },
@@ -30,6 +31,7 @@ const SORTS = [
 ]
 
 function SdoProcurementFilterModal({ periodFrom, periodTo, sortBy, onChange, onReset, onClose }) {
+  useEscapeClose(() => onClose?.())
   const periodToPickerRef = useRef(null)
 
   return createPortal(

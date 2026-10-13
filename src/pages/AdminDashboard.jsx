@@ -41,6 +41,7 @@ import ErrorLogPanel from '../components/common/admin/ErrorLogPanel.jsx'
 import EnwFactorTablePanel from '../components/common/admin/EnwFactorTablePanel.jsx'
 import DisbursementSettingsPanel from '../components/common/admin/DisbursementSettingsPanel.jsx'
 import SessionTimeoutsPanel from '../components/common/admin/SessionTimeoutsPanel.jsx'
+import { useEscapeClose } from '../utils/useEscapeClose.js'
 
 const GROUPS = [
   {
@@ -107,6 +108,7 @@ const GROUPS = [
 ]
 
 function AdminDashboard({ onClose }) {
+  useEscapeClose(() => handleClose())
   const { setPageHeader } = usePageHeader() ?? {}
   // Deep-link support (e.g. the admin-only error notification bell in
   // AppHeader.jsx navigating here with a specific entry to jump to):

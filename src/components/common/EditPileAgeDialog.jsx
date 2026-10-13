@@ -27,10 +27,12 @@ import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { normalizeAgeToDays, fmtAge, localISODaysAgo, bestAgeUnit, liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
 import { inputClass, labelClass, primaryButtonClass } from '../forms/shared.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const AGE_UNITS = ['Days', 'Months', 'Months + Days']
 
 function EditPileAgeDialog({ pile, currentAge, onClose }) {
+  useEscapeClose(() => handleClose())
   const [isClosing, setIsClosing] = useState(false)
   const handleClose = () => {
     setIsClosing(true)

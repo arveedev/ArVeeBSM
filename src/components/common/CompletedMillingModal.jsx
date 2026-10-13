@@ -15,11 +15,13 @@ import { MillingOrderRow } from './MillingMonitor.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import { millingOrderMatchesQuery, millingOrderMatchRank } from '../../utils/monitoringSearch.js'
 import { rankSortKeepingAll } from '../../utils/fuzzySearch.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 // Must match the transition duration below.
 const CLOSE_ANIMATION_MS = 300
 
 function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Map(), type, onSelectOrder, onClose, isAdmin = false }) {
+  useEscapeClose(() => handleClose())
   // Delays the actual onClose call until the exit animation has time
   // to play, same rule as CompletedAuthorityModal.jsx - every entrance
   // needs a matching exit rather than an instant, jarring unmount.

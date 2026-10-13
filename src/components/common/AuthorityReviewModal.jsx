@@ -20,12 +20,14 @@ import { computeReviewGroups, acknowledgeTransactions } from '../../utils/author
 import { FIELD_LABELS } from '../../utils/authorityChanges.js'
 import { findReplacementCandidates, applyReplacementAuthority, moveTransactionForAuthority } from '../../utils/authorityActions.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 3 })
 const btn = 'rounded-lg border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 text-xs font-medium text-neutral-200 transition-all hover:border-neutral-500 active:scale-95 disabled:opacity-40'
 const btnPrimary = 'rounded-lg bg-brand-neon px-2.5 py-1.5 text-xs font-bold text-brand-contrast transition-all hover:brightness-110 active:scale-95 disabled:opacity-40'
 
 function AuthorityReviewModal({ authId, onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   const { accessibleWarehouses, setCurrentWarehouseId } = useWarehouse() ?? {}
   const isAdmin = user?.role === 'Admin'

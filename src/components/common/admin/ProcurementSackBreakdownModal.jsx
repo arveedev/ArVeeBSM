@@ -17,8 +17,10 @@ import { db } from '../../../db/dexie.js'
 import { fmtBags, isProcurementTypeName, effectiveCutoffDate, getPeriodPresetRanges } from '../../../utils/calculations.js'
 import PeriodPresetPicker from '../PeriodPresetPicker.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 function ProcurementSackBreakdownModal({ onClose }) {
+  useEscapeClose(() => onClose?.())
   const [periodFrom, setPeriodFrom] = useState(() => getPeriodPresetRanges(0).monthFrom)
   const [periodTo, setPeriodTo] = useState(() => getPeriodPresetRanges(0).monthTo)
   const [warehouseFilter, setWarehouseFilter] = useState('')

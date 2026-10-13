@@ -8,6 +8,7 @@
 
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const SORTS = [
   { id: 'date-desc', label: 'Date (Newest)' },
@@ -27,6 +28,7 @@ function ProcurementSortFilterModal({
   warehouseOptions, varietyOptions,
   onChange, onReset, onClose,
 }) {
+  useEscapeClose(() => onClose?.())
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div

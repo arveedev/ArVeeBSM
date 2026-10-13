@@ -1112,9 +1112,11 @@ function MillingMonitor({ isAdmin = false, active = true }) {
     () => computeMillingOrderStatuses(topTab),
     ordersChangeSignal,
     [],
-    { maxWaitMs: 30000 }
+    { maxWaitMs: 30000, keepPrevious: true }
   )
-  const orders = ordersRaw ?? []
+  // The last result stays on screen while a recompute runs (so the list does not empty and refill); only orders of the
+  // tab being shown are used, so a switch between MO and TMO never briefly shows the other tab's list.
+  const orders = (ordersRaw ?? []).filter((o) => o.type === topTab)
   const authorities = useLiveQuery(() => db.authorities.toArray(), []) ?? []
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))

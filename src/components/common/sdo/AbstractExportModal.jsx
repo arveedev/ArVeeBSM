@@ -97,6 +97,7 @@ import ExportFormatDialog from '../ExportFormatDialog.jsx'
 import { generateSdoAbstract } from '../../../utils/sdoAbstractPdfGenerator.js'
 import { generateDvBur, replenishmentParticulars } from '../../../utils/sdoDvBurPdfGenerator.js'
 import { computeCashOnHand } from '../../../utils/sdoCalculations.js'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 // Shared numeric-then-string PR Number comparator - same rule the
 // printed table itself uses (a free-typed string field, so a plain
@@ -110,6 +111,7 @@ const byPrNo = (a, b) => {
 }
 
 function AbstractExportModal({ onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   // Read live, not from the AuthContext snapshot - `user` is only set
   // once at login, so a Position edited in Settings just now wouldn't

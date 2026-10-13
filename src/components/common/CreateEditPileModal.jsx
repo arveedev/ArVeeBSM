@@ -36,6 +36,7 @@ import { CONDITION_FLAGS } from '../forms/shared.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import ExportFormatDialog from './ExportFormatDialog.jsx'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const CATEGORIES = ['Rice', 'Palay', 'By Products']
 const AGE_UNITS = ['Days', 'Months']
@@ -61,6 +62,7 @@ const heroTint = (category) => {
 }
 
 function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }) {
+  useEscapeClose(() => handleClose(), open)
   const { weightUnit } = useSettings() ?? {}
   const isEditing = Boolean(pile)
 

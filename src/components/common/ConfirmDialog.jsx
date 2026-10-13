@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 // Must match the transition duration used on the box below.
 const BOX_ANIMATION_MS = 220
@@ -23,6 +24,7 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
   const [shouldRender, setShouldRender] = useState(open)
   const [hasEntered, setHasEntered] = useState(false)
   const cancelButtonRef = useRef(null)
+  useEscapeClose(() => onCancel?.(), open)
 
   // Focuses Cancel the moment this dialog opens - the safer of the two
   // buttons to land on by default, and also what makes an underlying
@@ -67,10 +69,8 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
   useEffect(() => {
     if (!open) return
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onCancel?.()
-      } else if (e.key === 'Enter' && !destructive && !confirmDisabled) {
+      // Escape goes through useEscapeClose (below), so only the topmost overlay answers it.
+      if (e.key === 'Enter' && !destructive && !confirmDisabled) {
         e.preventDefault()
         onConfirm?.()
       }

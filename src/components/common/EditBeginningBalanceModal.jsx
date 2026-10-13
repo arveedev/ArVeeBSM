@@ -11,11 +11,13 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { PileBalanceForm } from './admin/BeginningBalancesPanel.jsx'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 // Must match animate-sheet-slide-down's own duration (index.css).
 const CLOSE_ANIMATION_MS = 300
 
 function EditBeginningBalanceModal({ open, pile, warehouseId, onClose }) {
+  useEscapeClose(() => handleClose(), open)
   const [isClosing, setIsClosing] = useState(false)
   const handleClose = () => {
     setIsClosing(true)

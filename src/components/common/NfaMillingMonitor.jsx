@@ -291,7 +291,7 @@ function NfaMillingMonitor({ warehouseId, active = true, isAdmin = false } = {})
       })
     }
     return summary
-  }, recoveryChangeSignal, new Map(), { maxWaitMs: 30000 }) ?? new Map()
+  }, recoveryChangeSignal, new Map(), { maxWaitMs: 30000, keepPrevious: true }) ?? new Map()
 
   // Confirmed, reported real bug: typing an exact match left it wherever
   // plain alphabetical Regional Authority Number order put it.

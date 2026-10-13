@@ -16,6 +16,7 @@ import { X } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 const DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.25, 0.1, 0.05, 0.01]
 const BUNDLE_SIZE = 100
@@ -56,6 +57,7 @@ const normalizeEntry = (raw) => {
 }
 
 function DenominationModal({ currentCashOnHand, onClose }) {
+  useEscapeClose(() => handleClose())
   const { user } = useAuth()
   const saved = useLiveQuery(() => user ? db.cashDenominationCounts.get(user.uid) : null, [user?.uid])
   const [counts, setCounts] = useState({})

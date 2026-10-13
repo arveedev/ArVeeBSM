@@ -15,6 +15,7 @@ import { NfaAllocationRow } from './NfaMillingMonitor.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import { nfaAllocationMatchesQuery, nfaAllocationMatchRank } from '../../utils/monitoringSearch.js'
 import { rankSortKeepingAll } from '../../utils/fuzzySearch.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 // Must match the transition duration below.
 const CLOSE_ANIMATION_MS = 300
@@ -24,6 +25,7 @@ const CLOSE_ANIMATION_MS = 300
 const ROW_EXIT_MS = 700
 
 function CompletedNfaMillingModal({ allocations, recoverySummaryByNumber = new Map(), weightUnit, onClose, isAdmin = false }) {
+  useEscapeClose(() => handleClose())
   // Delays the actual onClose call until the exit animation has time
   // to play, same rule as CompletedMillingModal.jsx - every entrance
   // needs a matching exit rather than an instant, jarring unmount.

@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import Avatar from './Avatar.jsx'
 import { primaryButtonClass } from '../forms/shared.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 import {
   AVATAR_PALETTES,
   AVATAR_SOLID_PALETTE_SWATCHES,
@@ -66,6 +67,7 @@ function SwatchGrid({ onPick, selected }) {
 }
 
 function AvatarPickerModal({ open, current, name, onSave, onClose }) {
+  useEscapeClose(() => onClose?.(), open)
   const [avatarBg, setAvatarBg] = useState(current?.avatarBg || DEFAULT_AVATAR.avatarBg)
   const [avatarFace, setAvatarFace] = useState(current?.avatarFace ?? DEFAULT_AVATAR.avatarFace)
   const [avatarAnim, setAvatarAnim] = useState(current?.avatarAnim || DEFAULT_AVATAR.avatarAnim)

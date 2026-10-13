@@ -30,6 +30,7 @@ import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import EntryKindToggle from './EntryKindToggle.jsx'
 import { REPLENISH_KINDS, LIQUIDATE_KINDS, entryKindOf, entryKindLabel } from '../../../utils/cashEntryKind.js'
 import ConfirmDialog from '../ConfirmDialog.jsx'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 const LIST_PAGE_SIZE = 50
 
@@ -98,6 +99,7 @@ function EditEntryForm({ entry, onSave, onCancel }) {
 }
 
 function CashHistoryModal({ onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   const [voidTargetId, setVoidTargetId] = useState(null)
   const [voidReason, setVoidReason] = useState('')

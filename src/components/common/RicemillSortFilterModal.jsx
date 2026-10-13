@@ -13,6 +13,7 @@ import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 export const DEFAULT_SORT = 'date-desc'
 
@@ -24,6 +25,7 @@ const SORT_OPTIONS = [
 ]
 
 function RicemillSortFilterModal({ sortBy, dateFrom, dateTo, onChange, onClose }) {
+  useEscapeClose(() => onClose?.())
   const toPickerRef = useRef(null)
 
   return createPortal(

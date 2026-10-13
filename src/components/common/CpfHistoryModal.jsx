@@ -10,6 +10,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronDown, X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const fmtPeso = (n) => `${n < 0 ? '-' : ''}₱${Math.abs(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtDate = (iso) => {
@@ -18,6 +19,7 @@ const fmtDate = (iso) => {
 }
 
 function CpfHistoryModal({ onClose }) {
+  useEscapeClose(() => onClose?.())
   const [entered, setEntered] = useState(false)
   const [openId, setOpenId] = useState(null)
   useEffect(() => {

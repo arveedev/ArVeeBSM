@@ -27,10 +27,12 @@ import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { fmtBags, fmtKilos, fmtNetBags, authorityExtraDetails } from '../../utils/calculations.js'
 import { getUnwithdrawnDetail, resolveBags } from '../../utils/unwithdrawnStock.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 const netBagsOf = (kilos) => (kilos ?? 0) / 50
 
 function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, subtitle, rawBags = false, onClose }) {
+  useEscapeClose(() => handleClose())
   const [isClosing, setIsClosing] = useState(false)
   const handleClose = () => {
     setIsClosing(true)

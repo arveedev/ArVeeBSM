@@ -24,8 +24,10 @@ import { db } from '../../../db/dexie.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { liveFormatNumber, parseFormattedNumber, todayLocalISO } from '../../../utils/calculations.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 function BuyingPriceModal({ currentPriceRow, onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   const [price, setPrice] = useState(currentPriceRow ? liveFormatNumber(String(currentPriceRow.dryPrice), 2) : '')
   const [effectiveFrom, setEffectiveFrom] = useState(todayLocalISO())

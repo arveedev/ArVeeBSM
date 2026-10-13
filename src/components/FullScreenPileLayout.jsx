@@ -16,10 +16,12 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowLeft } from 'lucide-react'
 import { fmtBags, fmtWeight } from '../utils/calculations.js'
+import { useEscapeClose } from '../utils/useEscapeClose.js'
 
 const BASE_CELL_PX = 38
 
 function FullScreenPileLayout({ boxes, pileMap, varietyMap, gridCols, gridRows, weightUnit, onClose }) {
+  useEscapeClose(() => onClose?.())
   const [selectedBox, setSelectedBox] = useState(null)
 
   const naturalWidth = gridCols * BASE_CELL_PX

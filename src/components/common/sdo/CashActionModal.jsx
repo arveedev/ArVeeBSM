@@ -19,8 +19,10 @@ import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import EntryKindToggle from './EntryKindToggle.jsx'
 import { REPLENISH_KINDS, LIQUIDATE_KINDS } from '../../../utils/cashEntryKind.js'
 import { liveFormatNumber, parseFormattedNumber } from '../../../utils/calculations.js'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 function CashActionModal({ mode, currentCashOnHand, onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   const isReplenish = mode === 'replenish'
   const [amount, setAmount] = useState('')

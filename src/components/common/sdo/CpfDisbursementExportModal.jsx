@@ -16,8 +16,10 @@ import { useAuth } from '../../../context/AuthContext.jsx'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import { generateCpfDisbursementRecord } from '../../../utils/sdoCpfDisbursementPdfGenerator.js'
 import { computeCashOnHand } from '../../../utils/sdoCalculations.js'
+import { useEscapeClose } from '../../../utils/useEscapeClose.js'
 
 function CpfDisbursementExportModal({ onClose }) {
+  useEscapeClose(() => onClose?.())
   const { user } = useAuth()
   // Read live, not the AuthContext snapshot - same reasoning
   // AbstractExportModal.jsx's own userRecord has.

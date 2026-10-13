@@ -10,6 +10,7 @@ import { X } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags } from '../../utils/calculations.js'
+import { useEscapeClose } from '../../utils/useEscapeClose.js'
 
 // Newest first, per explicit request - a reconciliation view is read
 // most often right after the latest document was posted, not from the
@@ -17,6 +18,7 @@ import { fmtBags, fmtWeight, fmtNetBags } from '../../utils/calculations.js'
 const byDateDesc = (a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0)
 
 function AuthorityReconciliationPanel({ authority, onClose }) {
+  useEscapeClose(() => handleClose())
   const [isClosing, setIsClosing] = useState(false)
   const handleClose = () => {
     setIsClosing(true)
