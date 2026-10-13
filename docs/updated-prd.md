@@ -409,8 +409,8 @@ inventory screen: the Weekly Warehouse Equipment and Logistics Report is the LAS
 at least one inventory item.
 
 An MO/TMO marked complete (or reverted) on one device shows as complete on every device: the decision is held in a
-synced record (db.millingOrderCompletions) and copied onto each device's local milling cache. The app's decision is final: the
-Sheet's STATUS never overrides it, and the app writes its decision (DONE, or blank when reverted) to the Sheet, retrying until
+synced record (db.millingOrderCompletions) and copied onto each device's local milling cache. Completion is manual-only and the app's decision is final: an MO/TMO nobody marked done in the app is pending
+whatever the Sheet's STATUS cell says, the Sheet's STATUS never overrides a decision, and the app writes its decision (DONE, or blank when reverted) to the Sheet, retrying until
 the write succeeds.
 
 An SDO who works to two decimals on the net weight sets "Net weight decimals" to 2 on their Settings page (default 3). New Purchase

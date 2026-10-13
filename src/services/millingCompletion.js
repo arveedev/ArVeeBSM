@@ -11,9 +11,9 @@
 //   - startMillingCompletionSync() uploads completions this device made before the table existed (one time) and
 //     watches for changes arriving from other devices.
 //
-// The app's decision rules, and the Sheet follows it: once an order has a decision row, the Sheet's STATUS column can
-// never complete or reopen it here (the cache's `sheetStatus` is the decision; the Sheet's own value is kept apart as
-// `sheetStatusRaw`). Whenever the Sheet disagrees with the decision, pushCompletionsToSheet() writes the decision to the
+// The app's decision rules, and the Sheet follows it: completion is manual-only, so the Sheet's STATUS column can
+// never complete or reopen an order here (the cache's `sheetStatus` is the decision, DONE only for an order marked
+// done in the app; the Sheet's own value is kept apart as `sheetStatusRaw`). Whenever the Sheet disagrees with the decision, pushCompletionsToSheet() writes the decision to the
 // Sheet (DONE, or blank for a reverted order), retried every minute while online until it succeeds.
 
 import { liveQuery } from 'dexie'
@@ -36,6 +36,11 @@ export const setMillingOrderCompleted = async (order, completed, uid = null) => 
 export const applyMillingCompletions = async () => {
   await db.transaction('rw', db.millingOrders, db.millingOrderCompletions, async () => {
     const rows = await db.millingOrderCompletions.toArray()
+    // Completion is manual-only: an order with no decision is pending even if the cached Sheet value says DONE
+    // (the Sheet's own value stays in sheetStatusRaw). Cleans the cache that was built before this rule.
+    const decided = new Set(rows.map((c) => c.orderId))
+    const stale = await db.millingOrders.filter((o) => o.sheetStatus === 'DONE' && !decided.has(o.orderId)).toArray()
+    for (const o of stale) await db.millingOrders.update(o.orderId, { sheetStatusRaw: o.sheetStatusRaw ?? 'DONE', sheetStatus: null })
     for (const c of rows) {
       const order = await db.millingOrders.get(c.orderId)
       if (!order || Boolean(order.manuallyCompleted) === Boolean(c.completed)) continue

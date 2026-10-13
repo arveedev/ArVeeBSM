@@ -767,7 +767,9 @@ const runMillingOrdersSync = async () => {
           // The Sheet's own value is kept as sheetStatusRaw; once the app has decided (completed or reverted) the
           // decision, not the Sheet, is what the app reads as sheetStatus.
           sheetStatusRaw: order.sheetStatus ?? null,
-          sheetStatus: decisions.has(orderId) ? (decisions.get(orderId) ? 'DONE' : null) : (order.sheetStatus ?? null),
+          // An order nobody marked done in the app is pending, whatever the Sheet's STATUS cell says: completion is
+          // manual-only (older versions wrote DONE to the Sheet on their own, leaving DONE cells nobody chose).
+          sheetStatus: decisions.has(orderId) && decisions.get(orderId) ? 'DONE' : null,
           status: 'Active',
           manuallyCompleted: existingManuallyCompletedByOrderId.get(orderId) ?? false,
         }

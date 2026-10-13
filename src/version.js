@@ -8409,4 +8409,5 @@
 //   1.10-351 - SDO setting "Net weight decimals" (2 or 3, default 3): with 2, a Purchase Receipt's net weight and Equivalent Net Weight both truncate to 2 decimals and the amount paid is worked from them; the Abstract and CPF record print them with 2.
 //   1.10-352 - Net weight decimals = 2 now ROUNDS (half up) the net weight and the Equivalent Net Weight to 2 decimals instead of dropping the third decimal.
 //   1.10-353 - Completed Milling is sorted by MO/TMO number, highest first (same as the pending list), instead of by last transaction date.
-export const APP_VERSION = '1.10-353'
+//   1.10-354 - MO/TMO completion is manual-only: an order nobody marked done in the app stays pending even if the Sheet's STATUS cell says DONE (older versions had written DONE on their own), so unchecked entries leave Completed Milling and a reverted order no longer returns to it.
+export const APP_VERSION = '1.10-354'

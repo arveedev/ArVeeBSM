@@ -649,8 +649,9 @@ rebuild so they win over a local flag, and on first run uploads completions the 
 The app's decision is final and the Sheet follows it: once an order has a decision row, the Sheet's STATUS value can neither
 complete nor reopen it in the app (the cache keeps the Sheet's own value apart as `sheetStatusRaw` and reads the decision as
 `sheetStatus`). Whenever the Sheet disagrees with a decision, `pushCompletionsToSheet()` writes it (DONE, or blank for a
-reverted order), on every change, on start and every minute while online, until the write succeeds. An order the app has never
-decided still follows the Sheet's DONE as before.
+reverted order), on every change, on start and every minute while online, until the write succeeds. Completion is manual-only: an order nobody marked done in the app is pending whatever the Sheet's STATUS cell says (older
+versions wrote DONE to the Sheet by themselves, and those cells had been listing orders as completed with no check mark, and
+bringing a reverted order straight back).
 
 **Rationale**: one device showed many finished mills while the others still listed them as pending. Rejected: syncing
 `millingOrders` itself (a cache that is cleared and rebuilt wholesale on each pull would fight the sync).
