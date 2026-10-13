@@ -1255,10 +1255,12 @@ function MillingMonitor({ isAdmin = false, active = true }) {
   }
   const completedFiltered = orders
     .filter((o) => isOrderCompleted(o) && passesSharedFilters(o))
-    // Latest activity first; orders sharing a date (the usual case - a whole day's milling) fall back to the
-    // MO/TMO number, highest first, so the list never looks unsorted.
-    .sort((a, b) => lastActivityDate(b).localeCompare(lastActivityDate(a))
-      || String(b.number).localeCompare(String(a.number), undefined, { numeric: true, sensitivity: 'base' }))
+    // Highest MO/TMO number first - the same order the pending list uses (J-162 above I-161 ... above B-018) -
+    // so the newest order is always on top. (It used to sort by last transaction date, which put orders of
+    // different dates in an order that did not follow the numbers and looked unsorted.) A tie falls back to
+    // the latest activity date.
+    .sort((a, b) => String(b.number).localeCompare(String(a.number), undefined, { numeric: true, sensitivity: 'base' })
+      || lastActivityDate(b).localeCompare(lastActivityDate(a)))
 
   const availableRegionalAuthNumbers = [...new Set([...regionalAuthByOrder.values()].filter(Boolean))].sort()
 
