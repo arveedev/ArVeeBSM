@@ -646,6 +646,12 @@ there never left the device (the best-effort write of DONE to the Sheet fails of
 whenever they change (a live query, so a change from another device applies at once), merges them inside the Sheet sync's
 rebuild so they win over a local flag, and on first run uploads completions the device had marked before the table existed.
 
+The app's decision is final and the Sheet follows it: once an order has a decision row, the Sheet's STATUS value can neither
+complete nor reopen it in the app (the cache keeps the Sheet's own value apart as `sheetStatusRaw` and reads the decision as
+`sheetStatus`). Whenever the Sheet disagrees with a decision, `pushCompletionsToSheet()` writes it (DONE, or blank for a
+reverted order), on every change, on start and every minute while online, until the write succeeds. An order the app has never
+decided still follows the Sheet's DONE as before.
+
 **Rationale**: one device showed many finished mills while the others still listed them as pending. Rejected: syncing
 `millingOrders` itself (a cache that is cleared and rebuilt wholesale on each pull would fight the sync).
 

@@ -409,7 +409,9 @@ inventory screen: the Weekly Warehouse Equipment and Logistics Report is the LAS
 at least one inventory item.
 
 An MO/TMO marked complete (or reverted) on one device shows as complete on every device: the decision is held in a
-synced record (db.millingOrderCompletions) and copied onto each device's local milling cache.
+synced record (db.millingOrderCompletions) and copied onto each device's local milling cache. The app's decision is final: the
+Sheet's STATUS never overrides it, and the app writes its decision (DONE, or blank when reverted) to the Sheet, retrying until
+the write succeeds.
 
 From the Abstract export, "DV & BUR" produces a Disbursement Voucher (A4) and a
 Budget Utilization Request and Status (an A4 holding two identical copies, to be

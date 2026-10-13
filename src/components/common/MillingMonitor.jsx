@@ -15,7 +15,7 @@ import { useDebouncedLiveCompute } from '../../utils/useDebouncedLiveCompute.js'
 import { fmtBags, fmtWeight, fmtNetBags, fmtKilos, calculateCurrentAge, AGE_BUCKETS, formatTrialLabel, expandTrialNumbers, todayLocalISO } from '../../utils/calculations.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { setMillingOrderCompleted } from '../../services/millingCompletion.js'
-import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix, markMillingOrderDone } from '../../services/googleSheetsBridge.js'
+import { syncMillingOrdersFromSheets, stripWarehouseCodePrefix } from '../../services/googleSheetsBridge.js'
 import CompletedMillingModal from './CompletedMillingModal.jsx'
 import ShrinkFilterRow from './ShrinkFilterRow.jsx'
 import { millingOrderMatchesQuery, millingOrderMatchRank } from '../../utils/monitoringSearch.js'
@@ -1154,12 +1154,7 @@ function MillingMonitor({ isAdmin = false, active = true }) {
     setCompletingId(order.orderId)
     setTimeout(() => {
       setMillingOrderCompleted(order, true)
-      // Best-effort, fire-and-forget - same pattern already used
-      // elsewhere for natural completion (StockFormBase/SackFormBase).
-      // The local flag is the source of truth either way; this just
-      // keeps the Sheet's own STATUS column in sync for anyone viewing
-      // it directly.
-      markMillingOrderDone(order.type, order.number)
+      // The decision is saved (and synced) by setMillingOrderCompleted, which also keeps the Sheet's STATUS in step.
     }, ROW_EXIT_MS)
   }
 

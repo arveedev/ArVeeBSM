@@ -8403,4 +8403,5 @@
 //   1.10-345 - BUR: a stray vertical line through the "Balance" heading removed; Logistics report period offers the same presets as the stock statement and starts on the 1st of the month through today.
 //   1.10-346 - Logistics inventory is added / edited / deleted only; it prints as the last page of the Stock Report (PDF and Excel) and only when the warehouse has any. MO/TMO marked complete on one device now shows complete on every device (synced db.millingOrderCompletions, dexie.js v46; earlier local completions are uploaded once).
 //   1.10-347 - Completed Milling: newest first, and orders with the same date are ordered by MO/TMO number, highest first.
-export const APP_VERSION = '1.10-347'
+//   1.10-348 - MO/TMO: the app's completed / reverted decision is final (the Sheet's STATUS can no longer override it), and the app keeps writing that decision to the Sheet, retrying every minute until it succeeds.
+export const APP_VERSION = '1.10-348'

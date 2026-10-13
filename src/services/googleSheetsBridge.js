@@ -738,7 +738,11 @@ const runMillingOrdersSync = async () => {
         (await db.millingOrders.toArray()).map((o) => [o.orderId, o.manuallyCompleted ?? false])
       )
       // The synced completion decisions (shared between devices) win over this device's own flag.
-      for (const c of await db.millingOrderCompletions.toArray()) existingManuallyCompletedByOrderId.set(c.orderId, Boolean(c.completed))
+      const decisions = new Map()
+      for (const c of await db.millingOrderCompletions.toArray()) {
+        existingManuallyCompletedByOrderId.set(c.orderId, Boolean(c.completed))
+        decisions.set(c.orderId, Boolean(c.completed))
+      }
 
       records = allOrders.map((order) => {
         const orderId = `${order.type}::${order.number}`
@@ -760,7 +764,10 @@ const runMillingOrdersSync = async () => {
           aiNumber: order.aiNumber ?? null,
           siaNumber: order.siaNumber ?? null,
           receivingWarehouse: order.receivingWarehouse ?? null,
-          sheetStatus: order.sheetStatus ?? null,
+          // The Sheet's own value is kept as sheetStatusRaw; once the app has decided (completed or reverted) the
+          // decision, not the Sheet, is what the app reads as sheetStatus.
+          sheetStatusRaw: order.sheetStatus ?? null,
+          sheetStatus: decisions.has(orderId) ? (decisions.get(orderId) ? 'DONE' : null) : (order.sheetStatus ?? null),
           status: 'Active',
           manuallyCompleted: existingManuallyCompletedByOrderId.get(orderId) ?? false,
         }

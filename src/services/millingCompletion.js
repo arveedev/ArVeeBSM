@@ -10,9 +10,15 @@
 //     and by the Sheet sync's rebuild of the cache);
 //   - startMillingCompletionSync() uploads completions this device made before the table existed (one time) and
 //     watches for changes arriving from other devices.
+//
+// The app's decision rules, and the Sheet follows it: once an order has a decision row, the Sheet's STATUS column can
+// never complete or reopen it here (the cache's `sheetStatus` is the decision; the Sheet's own value is kept apart as
+// `sheetStatusRaw`). Whenever the Sheet disagrees with the decision, pushCompletionsToSheet() writes the decision to the
+// Sheet (DONE, or blank for a reverted order), retried every minute while online until it succeeds.
 
 import { liveQuery } from 'dexie'
 import { db } from '../db/dexie.js'
+import { markMillingOrderDone } from './googleSheetsBridge.js'
 
 export const setMillingOrderCompleted = async (order, completed, uid = null) => {
   await db.millingOrderCompletions.put({
@@ -23,7 +29,8 @@ export const setMillingOrderCompleted = async (order, completed, uid = null) => 
     updatedAt: new Date().toISOString(),
     updatedBy: uid,
   })
-  await db.millingOrders.update(order.orderId, completed ? { manuallyCompleted: true } : { manuallyCompleted: false, sheetStatus: null })
+  await db.millingOrders.update(order.orderId, { manuallyCompleted: Boolean(completed), sheetStatus: completed ? 'DONE' : null })
+  pushCompletionsToSheet().catch(() => {})
 }
 
 export const applyMillingCompletions = async () => {
@@ -32,9 +39,32 @@ export const applyMillingCompletions = async () => {
     for (const c of rows) {
       const order = await db.millingOrders.get(c.orderId)
       if (!order || Boolean(order.manuallyCompleted) === Boolean(c.completed)) continue
-      await db.millingOrders.update(c.orderId, c.completed ? { manuallyCompleted: true } : { manuallyCompleted: false, sheetStatus: null })
+      await db.millingOrders.update(c.orderId, { manuallyCompleted: Boolean(c.completed), sheetStatus: c.completed ? 'DONE' : null })
     }
   })
+  pushCompletionsToSheet().catch(() => {})
+}
+
+let pushing = false
+/** Writes every decision the Sheet disagrees with back to the Sheet (best effort, safe to repeat from any device). */
+export const pushCompletionsToSheet = async () => {
+  if (pushing || (typeof navigator !== 'undefined' && navigator.onLine === false)) return
+  pushing = true
+  try {
+    const [decisions, orders] = await Promise.all([db.millingOrderCompletions.toArray(), db.millingOrders.toArray()])
+    const byId = new Map(orders.map((o) => [o.orderId, o]))
+    for (const c of decisions) {
+      const o = byId.get(c.orderId)
+      if (!o) continue
+      const raw = o.sheetStatusRaw !== undefined ? o.sheetStatusRaw : (o.sheetStatus ?? null)
+      const sheetSaysDone = raw === 'DONE'
+      if (Boolean(c.completed) === sheetSaysDone) continue
+      const res = await markMillingOrderDone(c.type, c.number, c.completed ? 'DONE' : '')
+      if (res?.ok) await db.millingOrders.update(c.orderId, { sheetStatusRaw: c.completed ? 'DONE' : null })
+    }
+  } finally {
+    pushing = false
+  }
 }
 
 // One time per device: completions marked here before the synced table existed are uploaded, so the device that
@@ -59,5 +89,7 @@ export const startMillingCompletionSync = () => {
     next: () => { if (!stopped) applyMillingCompletions().catch((e) => console.error('[millingCompletion] apply failed', e)) },
     error: (e) => console.error('[millingCompletion] watch failed', e),
   })
-  return () => { stopped = true; sub.unsubscribe() }
+  const timer = setInterval(() => { pushCompletionsToSheet().catch(() => {}) }, 60000)
+  pushCompletionsToSheet().catch(() => {})
+  return () => { stopped = true; sub.unsubscribe(); clearInterval(timer) }
 }
