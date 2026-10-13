@@ -446,6 +446,13 @@ and only then reaches Number of Bags.
 The login screen opens with the logo large in the centre, builds itself, then shrinks into its place
 as the rest of the screen comes in.
 
+In the Stock Desk's Daily inventory, Summary and Age monitoring an authority (AI) always deducts its full authorized
+amount (kilos converted to net bags at 50 kg a bag) from the age bracket named in its Age Group column, on its date. When
+that bracket held less than the authority asks for, the missing part is still deducted, as a negative lot in the same
+bracket, so the cell shows the full amount and a shortage appears as a negative balance until the stock is entered. Such an
+authority is also listed on the Data check as over-authorized, and its negative cells are not counted as a self-check
+failure.
+
 The Weekly Warehouse Equipment and Logistics Report, the Disbursement Voucher and the Budget
 Utilization Request are described with the Logistics Inventory and the SDO's reports above.
 

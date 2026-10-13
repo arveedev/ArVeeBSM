@@ -219,8 +219,11 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
     const st = state.get(pileId)
     const taken = []
     let needBags = bags
-    while (needBags > 1e-9 && st.lots.length > 0) {
-      const lot = st.lots[0]
+    while (needBags > 1e-9) {
+      // an authority's shortfall (a negative lot, see the authority branch below) is never taken from
+      const idx = st.lots.findIndex((l) => l.source !== 'shortfall')
+      if (idx < 0) break
+      const lot = st.lots[idx]
       const useBags = Math.min(lot.bags, needBags)
       // The issue's own recorded net kilos are split across the lots it
       // takes from, by bags, so total kilos always agree with the pile
@@ -231,10 +234,11 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       lot.kilos = round3(lot.kilos - useKilos)
       needBags -= useBags
       if (lot.bags <= 1e-9) {
-        st.lots.shift()
+        st.lots.splice(idx, 1)
         // Whatever kilos are left over (either sign) move to the next
         // oldest lot, so nothing is lost or invented.
-        if (st.lots.length > 0) st.lots[0].kilos = round3(st.lots[0].kilos + lot.kilos)
+        const next = st.lots.find((l) => l.source !== 'shortfall')
+        if (next) next.kilos = round3(next.kilos + lot.kilos)
       }
     }
     if (needBags > 1e-9) {
@@ -288,7 +292,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       c.lot.kilos = round3(c.lot.kilos - useK)
       need -= useK
     }
-    for (const [, st] of state) st.lots = st.lots.filter((l) => l.kilos > 1e-6 || l.bags > 1e-9)
+    for (const [, st] of state) st.lots = st.lots.filter((l) => l.source === 'shortfall' || l.kilos > 1e-6 || l.bags > 1e-9)
     return { portions, short: need > 1e-6 ? need : 0 }
   }
 
@@ -345,6 +349,28 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       if (!range) authNoAge.push({ aiNumber: a.aiNumber, ageGroup: a.ageGroup ?? '', warehouseId: a.assignedWarehouse, varietyId: a.varietyId, date: ev.when, kilos: amount, customer: a.customerName ?? null })
       const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount, range, basisOf(ev.when), ev.when)
       pools.set(a.aiNumber, { left: amount - short, portions: portions.map((x) => ({ ...x })) })
+      // An authority always deducts in full. What the named bracket did not hold is deducted anyway, as a negative
+      // lot in that bracket (placed in a pile of the same warehouse and variety), so the cell shows the full
+      // authorized amount and the shortage shows as a negative balance until the stock is entered. It is also
+      // listed on the Data check as over-authorized.
+      if (short > 0) {
+        const open = [...state.keys()].filter((pid) => {
+          const pl = pileById.get(pid)
+          return pl && pl.warehouseId === a.assignedWarehouse && !(pl.closedDate && pl.closedDate < ev.when)
+        })
+        // a pile of the same variety if there is one, otherwise any open pile of the warehouse (the negative lot
+        // carries its own variety, so the cell it lands in is the authority's)
+        const holder = open.find((pid) => pileById.get(pid).varietyId === a.varietyId || state.get(pid).lots.some((l) => l.varietyId === a.varietyId)) ?? open[0]
+        if (holder) {
+          const mid = range ? (Number.isFinite(range.hi) ? (range.lo + range.hi) / 2 : range.lo + 1) : 0
+          const deficit = {
+            lotId: `shortfall-${a.aiNumber}`, date: ageToDate(basisOf(ev.when), mid), anchor: ANCHOR.TRANSACTION, source: 'shortfall',
+            varietyId: a.varietyId, sackTypeId: null, mtsCondition: null, bags: -short / 50, kilos: round3(-short),
+          }
+          state.get(holder).lots.push(deficit)
+          portions.push({ ...deficit, pileId: holder, bags: short / 50, kilos: round3(short) })
+        }
+      }
       const byPile = new Map()
       for (const x of portions) { const l = byPile.get(x.pileId) ?? []; l.push(x); byPile.set(x.pileId, l) }
       const pseudo = { date: ev.when, type: 'AI', serialNo: a.aiNumber, customerName: a.customerName ?? null, transactionTypeId: null }

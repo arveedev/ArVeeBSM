@@ -528,6 +528,9 @@ Beginning-balance lots age from the readable date in "Date Received" (the first
 date of a range, the 1st of a month-only text), else from the pile date, and
 that fallback is listed as approximate.
 
+An authority always deducts in full: the part its named age bracket could not supply is deducted anyway as a negative "shortfall" lot of that
+bracket (placed in an open pile of the authority's warehouse, preferring one of the same variety), and WSI / transfer draws never take from it.
+
 **Rationale**: a stored snapshot table would need a schema version on a synced
 database and would go stale whenever an old record is corrected. Computing from
 the same records and the same inclusion rules as `computeHistoricalPileState`

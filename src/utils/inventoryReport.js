@@ -797,8 +797,11 @@ export const buildSelfCheck = (ctx0, inputs, { asOf }) => {
   add('Every day balances (beginning + ADD - LESS = ending)', chain, (x) => `${longDate(x.k.split('|')[0])} ${afterDate(x.k)}: ${bags(x.d)} bags`)
 
   // 4. No negative stock anywhere in the period.
+  // An authority always deducts in full, so a warehouse whose authority asked for more than the bracket held shows a
+  // negative cell on purpose; that is listed on its own (authorities over-authorized) and is not counted here.
+  const overAuthRows = new Set((buildLots({ ...inputs, asOf, reserve: true }).authShort ?? []).map((x) => warehouseLabel(ctx0.whById.get(x.warehouseId)?.name, false)))
   const negative = []
-  for (const d of ledger.days) for (const [k, v] of cellKeys(d.ending)) if (v < -0.5) negative.push({ k: `${d.date}|${k}`, d: v })
+  for (const d of ledger.days) for (const [k, v] of cellKeys(d.ending)) if (v < -0.5 && !overAuthRows.has(k.split('|')[1])) negative.push({ k: `${d.date}|${k}`, d: v })
   add('No negative balance', negative, (x) => `${longDate(x.k.split('|')[0])} ${afterDate(x.k)}: ${bags(x.d)} bags`)
 
   // 5. An opening balance typed by an Admin shows exactly as typed on its date.

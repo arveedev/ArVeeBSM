@@ -8411,4 +8411,5 @@
 //   1.10-353 - Completed Milling is sorted by MO/TMO number, highest first (same as the pending list), instead of by last transaction date.
 //   1.10-354 - MO/TMO completion is manual-only: an order nobody marked done in the app stays pending even if the Sheet's STATUS cell says DONE (older versions had written DONE on their own), so unchecked entries leave Completed Milling and a reverted order no longer returns to it.
 //   1.10-355 - Marking an MO/TMO done (or back to pending) is checked as Admin-only in the code as well as hidden from everyone else.
-export const APP_VERSION = '1.10-355'
+//   1.10-356 - Stock Desk: an authority always deducts its full authorized amount; what the named age bracket did not hold is deducted anyway as a negative lot in that bracket (the cell shows the full amount, a shortage reads as a negative balance and stays listed as over-authorized on the Data check).
+export const APP_VERSION = '1.10-356'
