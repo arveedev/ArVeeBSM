@@ -8405,4 +8405,5 @@
 //   1.10-347 - Completed Milling: newest first, and orders with the same date are ordered by MO/TMO number, highest first.
 //   1.10-348 - MO/TMO: the app's completed / reverted decision is final (the Sheet's STATUS can no longer override it), and the app keeps writing that decision to the Sheet, retrying every minute until it succeeds.
 //   1.10-349 - DV & BUR export is five pages: the Disbursement Voucher in four copies, then the BUR page (two BURs to cut in half).
-export const APP_VERSION = '1.10-349'
+//   1.10-350 - Abstract: a long reconciliation label (e.g. "Additional Cash Advance - Check No. ...") wraps onto a second line and its row grows, instead of overprinting the amount.
+export const APP_VERSION = '1.10-350'

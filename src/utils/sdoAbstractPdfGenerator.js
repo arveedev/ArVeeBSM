@@ -602,7 +602,17 @@ export const generateSdoAbstract = ({
   // The box itself starts 4mm ABOVE `y` (see `ry = y - 4` below), so its
   // true bottom relative to `y` is 3mm plus one 7mm row per reconRows
   // entry, not `y` plus the header bar.
-  const reconBoxH = 3 + reconRows.length * 7
+  // A long label ("Additional Cash Advance - Check No. 0093...") wraps onto a second line, and its row grows with it,
+  // instead of running into the amount beside it.
+  const RECON_W = 78
+  const reconLayout = reconRows.map(({ label, amt, bold }) => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+    doc.setFontSize(8.5)
+    const room = Math.max(20, RECON_W - 3 - doc.getTextWidth(fmtPeso(amt)) - 4)
+    const lines = doc.splitTextToSize(String(label), room)
+    return { lines, h: Math.max(7, lines.length * 3.8 + 3.2) }
+  })
+  const reconBoxH = 3 + reconLayout.reduce((sum, r) => sum + r.h, 0)
   const sigBoxH = 28 // role line at y, signature line at y+16, name/position through y+24
   const footerH = Math.max(reconBoxH, sigBoxH)
 
@@ -610,7 +620,7 @@ export const generateSdoAbstract = ({
   if (y + footerH > pageH - margin) { doc.addPage(); drawBranchHeader(doc, { branchLabel, periodLabel, isFirstPage: false }); y = CONTINUATION_MARGIN_TOP + 4 }
 
   const usableW = pageW - margin * 2
-  const reconW = 78
+  const reconW = RECON_W
   const gapBeforeRecon = 10
   const sigGap = 6
   const sigAreaW = usableW - reconW - gapBeforeRecon
@@ -651,19 +661,20 @@ export const generateSdoAbstract = ({
   // LESS deduction - confirmed directly against a real sample of this
   // document, and something this generator was missing entirely before
   // ("we are missing a total on the cash reconciliation part").
-  reconRows.forEach(({ label, amt, bold }) => {
+  reconRows.forEach(({ label, amt, bold }, idx) => {
+    const { lines, h } = reconLayout[idx]
     if (bold) {
       doc.setFillColor(238, 238, 238)
-      doc.rect(reconX, ry, reconW, 7, 'F')
+      doc.rect(reconX, ry, reconW, h, 'F')
     }
     doc.setFont('helvetica', bold ? 'bold' : 'normal')
     doc.setFontSize(8.5)
-    doc.text(label, reconX + 1.5, ry + 4.5)
+    lines.forEach((l, k) => doc.text(l, reconX + 1.5, ry + 4.5 + k * 3.8))
     doc.text(fmtPeso(amt), reconX + reconW - 1.5, ry + 4.5, { align: 'right' })
     doc.setDrawColor(bold ? 0 : 200, bold ? 0 : 200, bold ? 0 : 200)
     doc.setLineWidth(bold ? 0.3 : 0.1)
-    doc.line(reconX, ry + 7, reconX + reconW, ry + 7)
-    ry += 7
+    doc.line(reconX, ry + h, reconX + reconW, ry + h)
+    ry += h
   })
 
   // Page X of Y in the lower right corner.
