@@ -210,7 +210,7 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
         <div>
           <h2 className="text-base font-semibold text-app-text">Net weight decimals</h2>
           <p className="mt-1 text-xs text-neutral-500">
-            With 2, the Net Weight and the Equivalent Net Weight both drop to 2 decimals, so the amount paid is worked out from them. Applies to Purchase Receipts issued from now on; issued ones keep theirs.
+            With 2, the Net Weight and the Equivalent Net Weight are both rounded to 2 decimals, and the amount paid is worked out from them. Applies to Purchase Receipts issued from now on; issued ones keep theirs.
           </p>
         </div>
         <div className="flex shrink-0 overflow-hidden rounded-lg border border-neutral-800">

@@ -99,17 +99,17 @@ export const lookupEnwFactor = (enwFactors, variety, mcValue) => {
 
 /** Equivalent Net Weight = Net Kilos × ENW factor, truncated to 3 decimals when factor is exactly 1, 4 otherwise. */
 export const computeEquivalentNetWeight = (netKilos, factor, netDecimals = 3) => (
-  normalizeNetDecimals(netDecimals) === 2 ? truncTo(netKilos * factor, 2) : truncTo(netKilos * factor, enwDecimalsForFactor(factor))
+  normalizeNetDecimals(netDecimals) === 2 ? roundTo(netKilos * factor, 2) : truncTo(netKilos * factor, enwDecimalsForFactor(factor))
 )
 
 /**
- * Some Disbursing Officers work to 2 decimals on the net weight (and so on the Equivalent Net Weight, which then also
- * truncates to 2). `netDecimals` is that SDO's own setting (users.netWeightDecimals), 3 unless set to 2.
+ * Some Disbursing Officers work to 2 decimals on the net weight (and so on the Equivalent Net Weight, which then is also
+ * rounded to 2). `netDecimals` is that SDO's own setting (users.netWeightDecimals), 3 unless set to 2.
  */
 export const normalizeNetDecimals = (d) => (Number(d) === 2 ? 2 : 3)
 
-/** The net weight a Purchase Receipt works from: the WSR's net, with the third decimal dropped (never rounded) when the SDO works to 2. */
-export const netKilosForPr = (netKilos, netDecimals = 3) => (normalizeNetDecimals(netDecimals) === 2 ? truncTo(netKilos ?? 0, 2) : (netKilos ?? 0))
+/** The net weight a Purchase Receipt works from: the WSR's net, rounded to 2 decimals (standard rounding, .005 and up goes up) when the SDO works to 2. */
+export const netKilosForPr = (netKilos, netDecimals = 3) => (normalizeNetDecimals(netDecimals) === 2 ? roundTo(netKilos ?? 0, 2) : (netKilos ?? 0))
 
 /** Basic Cost = Equivalent Net Weight × Unit Cost, rounded to 2 decimals. */
 export const computeBasicCost = (enw, unitCost) => roundPeso2(enw * unitCost)

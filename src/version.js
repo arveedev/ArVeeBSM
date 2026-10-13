@@ -8407,4 +8407,5 @@
 //   1.10-349 - DV & BUR export is five pages: the Disbursement Voucher in four copies, then the BUR page (two BURs to cut in half).
 //   1.10-350 - Abstract: a long reconciliation label (e.g. "Additional Cash Advance - Check No. ...") wraps onto a second line and its row grows, instead of overprinting the amount.
 //   1.10-351 - SDO setting "Net weight decimals" (2 or 3, default 3): with 2, a Purchase Receipt's net weight and Equivalent Net Weight both truncate to 2 decimals and the amount paid is worked from them; the Abstract and CPF record print them with 2.
-export const APP_VERSION = '1.10-351'
+//   1.10-352 - Net weight decimals = 2 now ROUNDS (half up) the net weight and the Equivalent Net Weight to 2 decimals instead of dropping the third decimal.
+export const APP_VERSION = '1.10-352'
