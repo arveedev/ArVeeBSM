@@ -8413,4 +8413,5 @@
 //   1.10-355 - Marking an MO/TMO done (or back to pending) is checked as Admin-only in the code as well as hidden from everyone else.
 //   1.10-356 - Stock Desk: an authority always deducts its full authorized amount; what the named age bracket did not hold is deducted anyway as a negative lot in that bracket (the cell shows the full amount, a shortage reads as a negative balance and stays listed as over-authorized on the Data check).
 //   1.10-357 - DV: the Date boxes of the Receipt of Payment block are wide, and their right edge lines up with the C | D divider above.
-export const APP_VERSION = '1.10-357'
+//   1.10-358 - Secret keyboard shortcut Ctrl + Alt + D opens the Stock Desk (Admin, and a Visitor with something shared), on the admin Home.
+export const APP_VERSION = '1.10-358'

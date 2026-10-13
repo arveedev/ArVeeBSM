@@ -7,7 +7,7 @@
 // pile.currentKilos read directly - see computeCurrentPileStatesBatch's
 // own comment for why this page used to bypass that override entirely.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight, ChevronDown, ClipboardList } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
@@ -86,6 +86,19 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // the quiet reports icon shows for a Visitor only when at least one screen is shared with them
   const reportAccess = useLiveQuery(() => db.reportConfig.get('global').then((c) => c?.inventoryReportsAccess ?? null), [])
   const canOpenReports = authUser?.role === 'Admin' || REPORT_SCREENS.some((s) => canViewReport(s.id, false, reportAccess))
+  // Secret keyboard shortcut: Ctrl + Alt + D opens the Stock Desk (the same one the quiet icon opens), for whoever
+  // is allowed to see it. Not shown anywhere in the app.
+  useEffect(() => {
+    if (!canOpenReports) return undefined
+    const onKey = (e) => {
+      if (e.ctrlKey && e.altKey && !e.shiftKey && e.code === 'KeyD') {
+        e.preventDefault()
+        setShowInventoryReports(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [canOpenReports])
   const [breakdownShowPotential, setBreakdownShowPotential] = useState(false)
   // Age Grouping used to always show Potential with no toggle of its
   // own - per explicit request, it now gets the same Actual/Potential
