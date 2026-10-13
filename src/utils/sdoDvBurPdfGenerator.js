@@ -181,17 +181,17 @@ export const generateDvBur = ({
     text('JEV No.', R - RW + 2, y + 3.9, { size: 7 })
     y += 5.2
     box(L, y, MW, 9)
-    vline(L + 28, y, y + 9); vline(L + 80, y, y + 9); vline(L + 88, y, y + 9)
+    vline(L + 28, y, y + 9); vline(L + 60, y, y + 9); vline(L + W / 2, y, y + 9) // the last one lines up with the C | D divider above
     text('Check/ADA No. :', L + 1.5, y + 4, { size: 7 })
-    text('Date :', L + 81, y + 4, { size: 7 })
-    text('Bank Name & Account Number:', L + 90, y + 4, { size: 7 })
+    text('Date :', L + 62, y + 4, { size: 7 })
+    text('Bank Name & Account Number:', L + W / 2 + 2, y + 4, { size: 7 })
     y += 9
     box(L, y, MW, 9)
-    vline(L + 28, y, y + 9); vline(L + 80, y, y + 9); vline(L + 88, y, y + 9)
+    vline(L + 28, y, y + 9); vline(L + 60, y, y + 9); vline(L + W / 2, y, y + 9) // the last one lines up with the C | D divider above
     text('Signature :', L + 1.5, y + 6, { size: 7 })
-    text('Date :', L + 81, y + 4, { size: 7 })
-    text('Printed Name:', L + 90, y + 4, { size: 7 })
-    text(payee, L + 90 + (MW - 90) / 2, y + 7.6, { size: 7.5, bold: true, align: 'center' })
+    text('Date :', L + 62, y + 4, { size: 7 })
+    text('Printed Name:', L + W / 2 + 2, y + 4, { size: 7 })
+    text(payee, L + W / 2 + (MW - W / 2) / 2, y + 7.6, { size: 7.5, bold: true, align: 'center' })
     box(R - RW, y, RW, 9 + 5.5)
     text('Date:', R - RW + 2, y + 4, { size: 7 })
     y += 9
