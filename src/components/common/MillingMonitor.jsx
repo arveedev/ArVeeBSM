@@ -1260,7 +1260,10 @@ function MillingMonitor({ isAdmin = false, active = true }) {
   }
   const completedFiltered = orders
     .filter((o) => isOrderCompleted(o) && passesSharedFilters(o))
-    .sort((a, b) => lastActivityDate(b).localeCompare(lastActivityDate(a)))
+    // Latest activity first; orders sharing a date (the usual case - a whole day's milling) fall back to the
+    // MO/TMO number, highest first, so the list never looks unsorted.
+    .sort((a, b) => lastActivityDate(b).localeCompare(lastActivityDate(a))
+      || String(b.number).localeCompare(String(a.number), undefined, { numeric: true, sensitivity: 'base' }))
 
   const availableRegionalAuthNumbers = [...new Set([...regionalAuthByOrder.values()].filter(Boolean))].sort()
 

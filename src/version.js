@@ -8402,4 +8402,5 @@
 //   1.10-344 - Logistics Inventory: the warehouse's pallets, platform scales and other logistical / semi-expendable items are now stored records (add, edit, delete; synced table db.logisticsItems, dexie.js v45) and the Weekly Logistics Report prints what is stored; the DV's lower-right JEV No. / Date cells restored.
 //   1.10-345 - BUR: a stray vertical line through the "Balance" heading removed; Logistics report period offers the same presets as the stock statement and starts on the 1st of the month through today.
 //   1.10-346 - Logistics inventory is added / edited / deleted only; it prints as the last page of the Stock Report (PDF and Excel) and only when the warehouse has any. MO/TMO marked complete on one device now shows complete on every device (synced db.millingOrderCompletions, dexie.js v46; earlier local completions are uploaded once).
-export const APP_VERSION = '1.10-346'
+//   1.10-347 - Completed Milling: newest first, and orders with the same date are ordered by MO/TMO number, highest first.
+export const APP_VERSION = '1.10-347'
