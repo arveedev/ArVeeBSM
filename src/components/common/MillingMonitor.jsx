@@ -1151,6 +1151,7 @@ function MillingMonitor({ isAdmin = false, active = true }) {
 
   const toggleManualComplete = (order, e) => {
     e.stopPropagation()
+    if (!isAdmin) return // marking an MO/TMO done is Admin-only
     setCompletingId(order.orderId)
     setTimeout(() => {
       setMillingOrderCompleted(order, true)

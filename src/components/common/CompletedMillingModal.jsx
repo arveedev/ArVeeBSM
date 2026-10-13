@@ -122,7 +122,7 @@ function CompletedMillingModal({ orders, authorities = [], warehouseMap = new Ma
     setPendingUncomplete(order)
   }
   const confirmUncomplete = () => {
-    if (!pendingUncomplete) return
+    if (!pendingUncomplete || !isAdmin) return // reverting to pending is Admin-only too
     const order = pendingUncomplete
     setPendingUncomplete(null)
     setRevertingId(order.orderId)
