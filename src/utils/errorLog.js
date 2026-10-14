@@ -156,6 +156,26 @@ export const logSyncFailure = async (context, message, refId) => {
 }
 
 /**
+ * Sweeps the log: a "failed to push to the Sheet" entry whose record is now confirmed on the Sheet
+ * (isSynced) is marked resolved. Needed because the device that logged the failure is not always the one
+ * whose retry finally succeeds (the pending flag is shared between devices), and only the device that
+ * saw the failure flag used to resolve it, so the entry stayed open forever.
+ */
+export const resolveHealedSheetFailures = async () => {
+  try {
+    const open = await db.errorLogs.filter((e) => e.context === 'Sheet sync' && e.resolved !== true && e.refId).toArray()
+    for (const e of open) {
+      const tx = await db.transactions.get(e.refId)
+      if (tx && tx.isSynced === true && !(Array.isArray(tx.staleSheetSerials) && tx.staleSheetSerials.length > 0)) {
+        await db.errorLogs.update(e.id, { resolved: true, resolvedAt: new Date().toISOString() })
+      }
+    }
+  } catch (loggingErr) {
+    console.error('[errorLog] failed to sweep healed sync failures:', loggingErr)
+  }
+}
+
+/**
  * Marks every still-unresolved sync-failure log entry for `refId` as
  * resolved - call the moment that same record's push finally succeeds
  * on a later retry.

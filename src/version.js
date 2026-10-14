@@ -8433,4 +8433,5 @@
 //   1.10-375 - SDO Denomination Count: it shows when it was last updated and the latest five updates (date, time and counted total), and closing it without having changed anything no longer writes a new record (so it cannot replace the saved count with an older copy).
 //   1.10-376 - Exported DV: the signatory's name in section A (Certified) is underlined.
 //   1.10-377 - Ctrl + Alt + A opens the Admin Dashboard from any page; it does nothing unless an Admin is logged in (and not on the Login page or while an entry form is open).
-export const APP_VERSION = '1.10-377'
+//   1.10-378 - A "failed to push to the Sheet" entry in the error log now closes itself once its record is on the Sheet, even when another device made the retry succeed (before, only the device that saw the failure flag could close it, so the error bell kept showing it).
+export const APP_VERSION = '1.10-378'

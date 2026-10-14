@@ -13,7 +13,7 @@ import { db } from '../db/dexie.js'
 import { pushTransactionBackup, updateTransactionBackup, deleteTransactionBackup, removeStaleSheetRow, pushPrBackup, updatePrBackup, deletePrBackup, stripWarehouseCodePrefix, syncAuthoritiesFromSheets, syncMillingOrdersFromSheets } from './googleSheetsBridge.js'
 import { preloadTransactionsForUser } from './transactionPreload.js'
 import { pauseTransactionSync, resumeTransactionSync, isTransactionSyncPaused } from './syncPauseState.js'
-import { logSyncFailure, resolveSyncFailure } from '../utils/errorLog.js'
+import { logSyncFailure, resolveSyncFailure, resolveHealedSheetFailures } from '../utils/errorLog.js'
 
 // Re-exported so every existing form import (`from
 // '../../services/syncWorker.js'`) keeps working unchanged - see
@@ -227,6 +227,9 @@ const runSyncQueue = async () => {
         }
       }
     }
+
+    // entries for records that are on the Sheet by now (pushed by another device, or earlier) are closed
+    await resolveHealedSheetFailures()
 
     // Old Sheet rows left behind by a serial change (utils/serialRename.js).
     // Only for records whose NEW-serial row is already confirmed on the
