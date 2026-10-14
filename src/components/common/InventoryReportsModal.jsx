@@ -32,6 +32,7 @@ import LiquidationReport from './LiquidationReport.jsx'
 import InventoryOpeningEditor from './InventoryOpeningEditor.jsx'
 import PillToggle from './PillToggle.jsx'
 import useCrosshair from '../../hooks/useCrosshair.js'
+import useTableScroll from '../../hooks/useTableScroll.js'
 import useEscapeKey from '../../hooks/useEscapeKey.js'
 import useBodyScrollLock from '../../hooks/useBodyScrollLock.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
@@ -91,6 +92,7 @@ function ModelTable({ model, short = false, onNote }) {
   const bodyRef = useRef(null)
   const [entering, setEntering] = useState(null)
   useCrosshair(boxRef)
+  useTableScroll(boxRef)
 
   // What happens when the model changes, using only transform, opacity and text changes (nothing that makes
   // the browser lay the table out again on every frame, which is what made it stutter):
@@ -676,6 +678,7 @@ function IssuanceFilterSheet({ open, draft, setDraft, provinces, warehouses, cus
 function IssuanceTable({ rows, cols }) {
   const boxRef = useRef(null)
   useCrosshair(boxRef)
+  useTableScroll(boxRef)
   return (
     <div ref={boxRef} className="overflow-x-auto">
       <table className="min-w-full border-separate border-spacing-0 text-xs tabular-nums">

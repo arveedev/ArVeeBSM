@@ -1163,3 +1163,18 @@ select {
 .sd-slide-in-left { animation: sd-slide-in-left 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .sd-slide-out-left { animation: sd-slide-out-left 0.17s ease-in both; }
 @media (prefers-reduced-motion: reduce) { .sd-slide-in-left, .sd-slide-out-left { animation-duration: 1ms !important; } }
+
+/* ---------------------------------------------------------------------------
+   Stock Desk tables: large scroll bars that light up when the mouse comes close,
+   and Space + drag to move the table (see hooks/useTableScroll.js)
+   --------------------------------------------------------------------------- */
+.sd-scroll { scrollbar-width: auto; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
+.sd-scroll.sb-near { scrollbar-color: rgba(0, 255, 163, 0.7) rgba(255, 255, 255, 0.06); }
+.sd-scroll::-webkit-scrollbar { width: 20px; height: 20px; background: transparent; }
+.sd-scroll::-webkit-scrollbar-track { background: transparent; border-radius: 10px; }
+.sd-scroll::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.14); border: 7px solid transparent; background-clip: padding-box; border-radius: 12px; }
+.sd-scroll.sb-near::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+.sd-scroll.sb-near::-webkit-scrollbar-thumb { background-color: rgba(0, 255, 163, 0.75); border-width: 2px; }
+.sd-scroll.sb-near::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 255, 163, 0.95); }
+.sd-grab, .sd-grab * { cursor: grab !important; user-select: none; }
+.sd-grabbing, .sd-grabbing * { cursor: grabbing !important; }

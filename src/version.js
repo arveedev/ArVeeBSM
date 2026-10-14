@@ -8434,4 +8434,5 @@
 //   1.10-376 - Exported DV: the signatory's name in section A (Certified) is underlined.
 //   1.10-377 - Ctrl + Alt + A opens the Admin Dashboard from any page; it does nothing unless an Admin is logged in (and not on the Login page or while an entry form is open).
 //   1.10-378 - A "failed to push to the Sheet" entry in the error log now closes itself once its record is on the Sheet, even when another device made the retry succeed (before, only the device that saw the failure flag could close it, so the error bell kept showing it).
-export const APP_VERSION = '1.10-378'
+//   1.10-379 - Stock Desk tables: the scroll bars are large and light up as soon as the mouse comes near the right or bottom edge (and stay large while being dragged); and holding the Space bar over a table and dragging with the mouse moves the table in any direction while the wheel moves it up and down.
+export const APP_VERSION = '1.10-379'
