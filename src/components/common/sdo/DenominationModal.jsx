@@ -56,6 +56,16 @@ const normalizeEntry = (raw) => {
   }
 }
 
+// What the form holds, as one comparable string: closing without having changed anything must not write a new record.
+const snapshotOf = (entries, forEncashment) => JSON.stringify({ d: DENOMINATIONS.map((d) => normalizeEntry(entries[d])), e: forEncashment })
+
+// the latest saves kept on the record (when and how much), newest first
+const LOG_SIZE = 5
+const stamp = (iso) => (iso ? new Date(iso).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '')
+const logOf = (record) => (Array.isArray(record?.updateLog) && record.updateLog.length > 0
+  ? record.updateLog
+  : (record?.updatedAt ? [{ at: record.updatedAt, total: record.countedTotal ?? null }] : []))
+
 function DenominationModal({ currentCashOnHand, onClose }) {
   useEscapeClose(() => handleClose())
   const { user } = useAuth()
@@ -69,6 +79,8 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   // record - no Dexie schema change needed since only sdoUid is indexed.
   const [forEncashment, setForEncashment] = useState('')
   const [entered, setEntered] = useState(false)
+  // the form as last loaded or saved; null until the saved record has been read
+  const [baseline, setBaseline] = useState(null)
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true))
@@ -76,10 +88,15 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   }, [])
 
   useEffect(() => {
-    if (!saved?.countsV2 && !saved?.counts) return
-    setCounts(Object.fromEntries(DENOMINATIONS.map((d) => [d, normalizeEntry(savedEntryFor(saved, d))])))
-    setForEncashment(saved.forEncashment ? liveFormatNumber(String(saved.forEncashment), 2) : '')
+    if (saved === undefined) return
+    if (!saved?.countsV2 && !saved?.counts) { setBaseline(snapshotOf({}, '')); return }
+    const loaded = Object.fromEntries(DENOMINATIONS.map((d) => [d, normalizeEntry(savedEntryFor(saved, d))]))
+    const enc = saved.forEncashment ? liveFormatNumber(String(saved.forEncashment), 2) : ''
+    setCounts(loaded)
+    setForEncashment(enc)
+    setBaseline(snapshotOf(loaded, enc))
   }, [saved])
+  const dirty = baseline != null && snapshotOf(counts, forEncashment) !== baseline
 
   const setField = (d, field, rawValue) =>
     setCounts((c) => ({ ...c, [d]: { ...normalizeEntry(c[d]), [field]: liveFormatNumber(rawValue, 0) } }))
@@ -110,6 +127,8 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   const diff = total - currentCashOnHand
 
   const handleSave = async () => {
+    // nothing was changed: nothing is written (no new "updated" time, no overwrite)
+    if (!dirty) { if (saved !== undefined) toast('No changes to save'); onClose(); return }
     // Saved as plain numbers, not the comma-formatted display strings
     // the inputs hold - the stored shape stays exactly what it always
     // was, only how it's edited on screen changed.
@@ -127,6 +146,8 @@ function DenominationModal({ currentCashOnHand, onClose }) {
       forEncashment: forEncashment === '' ? '' : forEncashmentValue,
       countedTotal: total,
       updatedAt: new Date().toISOString(),
+      // when it was saved and for how much, the latest few
+      updateLog: [{ at: new Date().toISOString(), total }, ...logOf(saved)].slice(0, LOG_SIZE),
     })
     toast.success('Denomination count saved')
     onClose()
@@ -147,7 +168,7 @@ function DenominationModal({ currentCashOnHand, onClose }) {
   // into `counts` would otherwise write blank/zero values over whatever
   // was already saved, instead of just leaving it untouched.
   const handleClose = () => {
-    if (saved !== undefined) {
+    if (saved !== undefined && dirty) {
       handleSave()
     } else {
       onClose()
@@ -169,6 +190,10 @@ function DenominationModal({ currentCashOnHand, onClose }) {
           <div>
             <h2 className="text-base font-semibold text-app-text">Denomination Count</h2>
             <p className="text-xs text-neutral-500">A bundle is {BUNDLE_SIZE} pieces</p>
+            <p className="mt-0.5 text-xs text-neutral-400">
+              {logOf(saved).length > 0 ? `Last updated ${stamp(logOf(saved)[0].at)}` : 'Not saved yet'}
+              {dirty && <span className="ml-1 font-semibold text-amber-400">· unsaved changes</span>}
+            </p>
           </div>
           <button type="button" onClick={handleClose} aria-label="Close" className="rounded-lg bg-neutral-900 p-1.5 text-neutral-400"><X size={18} /></button>
         </div>
@@ -179,6 +204,17 @@ function DenominationModal({ currentCashOnHand, onClose }) {
             past all 13 denominations first. Zero-subtotal rows dim instead
             of being hidden, so the grid stays a consistent shape. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3">
+          {logOf(saved).length > 1 && (
+            <div className="mb-2 rounded-lg bg-neutral-900 px-2.5 py-1.5 text-[11px] text-neutral-500">
+              <p className="font-semibold uppercase text-neutral-500">Latest updates</p>
+              {logOf(saved).map((e, i) => (
+                <p key={`${e.at}-${i}`} className="flex justify-between gap-2 tabular-nums text-neutral-400">
+                  <span>{stamp(e.at)}</span>
+                  <span>{e.total != null ? `₱${Number(e.total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}</span>
+                </p>
+              ))}
+            </div>
+          )}
           {/* True equal columns, as explicitly requested - made to actually
               fit by shrinking the one thing that didn't: the per-row
               subtotal's unnecessary ".00" (fmtRowSubtotal, above). Every

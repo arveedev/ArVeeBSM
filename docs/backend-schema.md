@@ -469,3 +469,5 @@ Replaces `privateMillerAllocations` (compound key, never synced). The split of a
 | `ricemillName`, `totalNetKgs`, `updatedAt` | The miller and its share. |
 
 `reportConfig` also carries `procurementBank` (province receiving Cash in Bank in the Stock Desk's procurement status).
+
+`cashDenominationCounts` also carries `updateLog` (v1.10-375): the latest five saves as `{ at, total }`, newest first; `updatedAt` stays the newest.
