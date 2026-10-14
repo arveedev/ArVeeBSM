@@ -174,7 +174,17 @@ const withOpening = (ctx, inputs) => {
   }
   const engine = []
   const fallback = []
-  for (const c of o.cells) {
+  // A frozen opening balance (`full`): the balance typed is the WHOLE stock of that day. Every cell the
+  // report computes that is not in the list is brought to nothing, so no cell can drift afterwards;
+  // only documents dated after the opening day move it.
+  let cellsToApply = o.cells
+  if (o.full && needBase) {
+    const listed = new Set(o.cells.map((c) => `${c.w}|${c.c}|${c.v}|${c.b}`))
+    const zeroed = []
+    for (const [key, cell] of base) if (!listed.has(key) && Math.abs(cell.kilos) >= 0.001) zeroed.push({ w: cell.w, c: cell.c, v: cell.v, b: cell.b, t: 0 })
+    cellsToApply = [...o.cells, ...zeroed]
+  }
+  for (const c of cellsToApply) {
     const baseKilos = base.get(`${c.w}|${c.c}|${c.v}|${c.b}`)?.kilos ?? 0
     const k = c.t != null ? c.t - baseKilos : c.k
     if (!(Math.abs(k) >= 0.001)) continue

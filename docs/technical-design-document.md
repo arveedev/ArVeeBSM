@@ -726,11 +726,11 @@ counted them and the two stopped tallying. An ordinary transfer needs no new cal
 CLOSING RESIDUE with the other pile's name), the Stock Report and the Stock Desk read it as they read any transfer, and it nets to zero at
 variety level. Using the closing date keeps earlier reports unchanged.
 
-### 2.48 History must not change when an authority is completed
+### 2.48 The opening balance is a frozen snapshot; authorities always deduct in full
 
-**Decision**: the Stock Desk deducts an authority in full from its date. Marking it complete by hand stores the day (`manuallyCompletedDate`); the lots engine releases the unwithdrawn part on that day only (a `release` event that returns the pool's remaining lots, with their ages, and cancels the authority's shortfall). An authority completed before this decision has no day and keeps the earlier rule (counts what was issued, from its own date). Reverting clears the day.
+**Decision**: saving the Daily inventory Opening balance stores the whole balance of that day (`inventoryOpening.cells`, every cell as shown, with `full: true`). At report time every computed cell on that day that is not in the list is brought to nothing and every listed cell is brought to its typed value (`withOpening`), worked into the lots so it ages and is used up; documents dated after the day add and take as usual. An override without `full` (saved before this decision) keeps the earlier partial behaviour. The Stock Desk deducts an authority's full authorized amount (or what it issued if more) from its date whether or not it was completed.
 
-**Rationale**: the earlier rule read the authority's current state and applied it to the past, so a completion today changed every balance back to the authority's date; owners saw beginning balances that moved by themselves (a 500-bag authority moved a month-end balance by 500 bags in the 2026-10-08 backup). A completion is an event with a date, like every other movement.
+**Rationale**: a partial override left every other cell computed from the history before the opening day, so any later change to that history (a Sheet authority dated in the past, an edited amount, a back-dated document, an authority completion) moved balances the owner had already fixed, and they had to be corrected again each day. A snapshot cuts the history: the opening day is a fixed figure and only later documents move it. An authority completed after the fact is no reason to give stock back: once authorized, the stock is committed.
 
 ## 3. Non-Functional Requirements
 

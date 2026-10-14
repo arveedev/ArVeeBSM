@@ -1066,7 +1066,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               {view === 'ledger' && isAdmin && (
                 <div className={`flex items-center ${CONTROL_H}`}>
                   <button type="button" onClick={openOpeningEditor} disabled={loading} className={pillButton}>
-                    Opening balance{config?.inventoryOpening && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-label="Override active" />}
+                    Opening balance{config?.inventoryOpening && !config.inventoryOpening.full && <span className="text-amber-300">(not frozen - open and Save)</span>}{config?.inventoryOpening && <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-label="Override active" />}
                   </button>
                 </div>
               )}

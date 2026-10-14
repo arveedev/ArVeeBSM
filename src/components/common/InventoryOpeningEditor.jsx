@@ -80,16 +80,18 @@ function InventoryOpeningEditor({ open = true, date, ageSet, baseCells, existing
   const save = async () => {
     setBusy(true)
     try {
+      // The whole balance is saved, every cell as shown (typed or not), and frozen: nothing before this
+      // day can move it afterwards, only the documents dated after it.
       const out = []
       for (const [k, c] of cells) {
         const entered = parseFormattedNumber(values[k] ?? '')
         const delta = Math.round((entered * KG - c.base) * 1000) / 1000
         // `t` is the balance typed; the report works out the correction from it, so the typed
         // value is what shows. `k` (the correction when saved) is kept for reference only.
-        if (Math.abs(delta) >= 0.5) out.push({ w: c.w, c: c.c, v: c.v, b: c.b, t: Math.round(entered * KG * 1000) / 1000, k: delta })
+        if (Math.abs(entered) >= 0.0005 || Math.abs(c.base) >= 0.0005) out.push({ w: c.w, c: c.c, v: c.v, b: c.b, t: Math.round(entered * KG * 1000) / 1000, k: delta })
       }
-      await persist(out.length ? { date, ageSet, cells: out, updatedAt: new Date().toISOString() } : null)
-      toast.success(out.length ? `Opening balance saved (${out.length} change${out.length === 1 ? '' : 's'})` : 'No changes to save')
+      await persist(out.length ? { date, ageSet, cells: out, full: true, updatedAt: new Date().toISOString() } : null)
+      toast.success(out.length ? `Opening balance saved and frozen (${out.length} cells)` : 'Nothing to save')
       onClose()
     } catch (err) {
       console.error(err)
@@ -118,7 +120,8 @@ function InventoryOpeningEditor({ open = true, date, ageSet, baseCells, existing
         </div>
         <p className="mt-2 text-xs text-neutral-500">
           Type the balance that Daily inventory should start from. This changes only Daily inventory, Summary and Age monitoring from this
-          date on; piles, transactions and every other screen stay as they are. Only the cells you change are saved. Clear removes the override.
+          date on; piles, transactions and every other screen stay as they are. Saving freezes the whole balance as shown: nothing dated
+          on or before this day can change it, only the documents after it add to or take from it. Clear removes it.
         </p>
         {existing && !sameDate && (
           <p className="mt-2 rounded-lg border border-amber-700/50 bg-amber-950/30 p-2 text-xs text-amber-300">
