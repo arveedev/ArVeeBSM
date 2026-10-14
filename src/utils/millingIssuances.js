@@ -1,11 +1,14 @@
 // Milling and Issuances (Stock Desk, Admin only) - READ-ONLY, pure functions.
 //
-// Three groups, every figure in net bags (net kilos / 50) and totalled per province. Issuances are taken
-// from the AUTHORITIES (what the authority authorizes, or what it issued once complete), never from the
-// WSI documents, and are counted in the period the authority is dated:
-//  - Milling: authorities of a milling transaction type (MILLING, REMILLING, TEST MILLING, ...), listed per
-//    authority, and the rice recovered from milling (WSR with an MO / TMO number, listed per WSR; rice only,
-//    no by-products).
+// Every figure is in net bags (net kilos / 50). Issuances are taken from the AUTHORITIES (what the authority
+// authorizes, or what it issued once complete), never from the WSI documents, and are counted in the period
+// the authority is dated. Recoveries are the rice WSRs of milling (no by-products).
+//  - Milling (private millers): authorities of a milling transaction type (MILLING, REMILLING, TEST MILLING, ...)
+//    that do not belong to an NFA-owned ricemill; recoveries are the rice WSRs of milling (an MO / TMO number or
+//    a milling transaction type) that did not come from an NFA-owned ricemill.
+//  - NFA-owned: milling authorities whose Regional Authority Number is set up for an NFA-owned ricemill
+//    (Admin > Miller Allocations) are the issuances; the rice the ricemill hands out (TRANSFER authorities of
+//    that Regional Authority Number, rice only) are its recoveries - both from the authorities.
 //  - Issuances to LGU: authorities of type SALES whose customer name contains "LGU".
 //  - Issuances to FTI: authorities of type SALES (CONSIGNMENT).
 // A warehouse's reporting start (override) date is respected like everywhere else.
@@ -18,10 +21,12 @@ const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeri
 
 export const netBags = (kilos) => (kilos ?? 0) / NET_BAG_KG
 
-export const buildMillingIssuances = ({ transactions, authorities, warehouses, provinces, varieties, globalDataStartDate = null, from, to }) => {
+export const buildMillingIssuances = ({ transactions, authorities, warehouses, provinces, varieties, transactionTypes = [], ricemillAllocations = [], globalDataStartDate = null, from, to }) => {
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const provById = new Map(provinces.map((p) => [p.provinceId, p]))
   const varById = new Map(varieties.map((v) => [v.varietyId, v]))
+  const typeName = new Map(transactionTypes.map((t) => [t.transactionTypeId, norm(t.name)]))
+  const nfaRans = new Set(ricemillAllocations.map((r) => r.regionalAuthorityNumber))
   const inCutoff = (wh, date) => { const cut = effectiveCutoffDate(wh?.reportingCutoffDate, globalDataStartDate); return !(cut && date <= cut) }
   const place = (warehouseId) => {
     const wh = whById.get(warehouseId)
@@ -31,18 +36,22 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
   // recoveries: one row per WSR, rice only
   const recoveries = []
   for (const t of transactions) {
-    if (t.status !== 'Active' || t.type !== 'WSR' || t.isInitialBalance || !(t.moNumber || t.tmoNumber)) continue
+    if (t.status !== 'Active' || t.type !== 'WSR' || t.isInitialBalance) continue
     if (t.date < from || t.date > to || varById.get(t.varietyId)?.category !== 'Rice') continue
+    if (!(t.moNumber || t.tmoNumber || typeName.get(t.transactionTypeId)?.includes('MILLING'))) continue
     const pl = place(t.warehouseId)
     if (!inCutoff(pl.wh, t.date)) continue
-    recoveries.push({
+    const row = {
       id: t.id, date: t.date, serialNo: t.serialNo ?? '', province: pl.province, warehouse: pl.warehouse, customer: t.customerName ?? '',
       moNo: t.moNumber ?? t.tmoNumber ?? '', variety: varById.get(t.varietyId)?.name ?? '', kilos: t.netKilos ?? 0, bags: netBags(t.netKilos),
-    })
+    }
+    recoveries.push(row)
   }
 
   // issuances: one row per authority, by the authority's own figures
   const milling = []
+  const nfa = []
+  const nfaRecoveries = []
   const lgu = []
   const fti = []
   for (const a of dedupeAuthoritiesByRef((authorities ?? []).filter((x) => x.type === 'AI'))) {
@@ -58,13 +67,15 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
       id: a.authId ?? a.aiNumber, date: a.date, aiNumber: a.aiNumber ?? '', province: pl.province, warehouse: pl.warehouse, customer: a.customerName ?? '',
       kilos, bags: netBags(kilos), withdrawn: netBags(issued),
     }
-    if (type.includes('MILLING')) milling.push(row)
+    const isNfa = nfaRans.has(a.regionalAuthorityNumber)
+    if (type.includes('MILLING')) (isNfa ? nfa : milling).push(row)
+    else if (isNfa && type === 'TRANSFER' && varById.get(a.varietyId)?.category === 'Rice') nfaRecoveries.push(row)
     else if (type === 'SALES' && /LGU/i.test(a.customerName ?? '')) lgu.push(row)
     else if (type === 'SALES (CONSIGNMENT)') fti.push(row)
   }
 
   const byDate = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : natural(a.aiNumber ?? a.serialNo, b.aiNumber ?? b.serialNo))
-  for (const l of [milling, recoveries, lgu, fti]) l.sort(byDate)
+  for (const l of [milling, recoveries, nfa, nfaRecoveries, lgu, fti]) l.sort(byDate)
 
   const perProvince = (lists) => {
     const m = new Map()
@@ -78,37 +89,51 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
     return [...m.values()].sort((a, b) => natural(a.province, b.province))
   }
   const sum = (list) => list.reduce((s, r) => s + r.bags, 0)
+  const group = (issues, recs) => ({
+    perProvince: perProvince({ issued: issues, recovered: recs }), issuedTotal: sum(issues), recoveredTotal: sum(recs), issues, recoveries: recs,
+  })
 
   return {
-    milling: { perProvince: perProvince({ issued: milling, recovered: recoveries }), issuedTotal: sum(milling), recoveredTotal: sum(recoveries), issues: milling, recoveries },
+    milling: group(milling, recoveries),
+    nfa: group(nfa, nfaRecoveries),
     lgu: { perProvince: perProvince({ bags: lgu }), total: sum(lgu), rows: lgu },
     fti: { perProvince: perProvince({ bags: fti }), total: sum(fti), rows: fti },
+    // per province (for the pasted text, every province is listed, even with nothing)
+    provinces: provinces.map((p) => ({ name: p.name, code: p.code ?? p.name })).sort((a, b) => natural(a.code, b.code)),
   }
 }
 
-const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const longDay = (iso) => { const [y, m, d] = iso.split('-').map(Number); return `${MONTHS_LONG[m - 1]} ${d}, ${y}` }
-const bagsText = (n) => (n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'June', 'July', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec']
+const periodLabel = (from, to) => {
+  const [fy, fm, fd] = from.split('-').map(Number)
+  const [ty, tm, td] = to.split('-').map(Number)
+  if (from === to) return `${MONTH_ABBR[fm - 1]} ${fd}`
+  if (fy === ty && fm === tm) return `${MONTH_ABBR[fm - 1]} ${fd}-${td}`
+  return `${MONTH_ABBR[fm - 1]} ${fd} - ${MONTH_ABBR[tm - 1]} ${td}`
+}
+const num = (n) => (Math.round((n ?? 0) * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })
 
-/** The main tables only (no lists), as Markdown text that can be pasted into a chat. */
-export const issuancesMarkdown = (data, from, to) => {
-  const table = (heading, columns, rows, total) => {
-    const lines = [`**${heading}**`, '', `| Province | ${columns.map((c) => c.label).join(' | ')} |`, `|:--|${columns.map(() => '--:').join('|')}|`]
-    if (rows.length === 0) lines.push(`| (nothing in this period) |${columns.map(() => '').join('|')}|`)
-    for (const r of rows) lines.push(`| ${r.province} | ${columns.map((c) => bagsText(r[c.key])).join(' | ')} |`)
-    lines.push(`| **Total** | ${columns.map((c) => `**${bagsText(total[c.key])}**`).join(' | ')} |`)
-    return lines.join('\n')
-  }
-  const { milling, lgu, fti } = data
+/** The main values only (no lists), as plain text for pasting into a chat. */
+export const issuancesText = (data, from, to) => {
+  const byProv = (rows, key) => data.provinces.map((p) => `${p.code} - ${num(rows.find((r) => r.province === p.name)?.[key])}`)
+  const { milling, nfa, lgu, fti } = data
   return [
-    '**MILLING AND ISSUANCES**',
-    `${from === to ? longDay(from) : `${longDay(from)} to ${longDay(to)}`} (net bags)`,
+    'Milling per Province',
     '',
-    table('Milling', [{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }], milling.perProvince, { issued: milling.issuedTotal, recovered: milling.recoveredTotal }),
+    periodLabel(from, to),
+    'MILLING',
+    `ISSUANCE - ${num(milling.issuedTotal)}`,
+    `RECOVERIES - ${num(milling.recoveredTotal)}`,
     '',
-    table('Issuances to LGU', [{ key: 'bags', label: 'Net bags' }], lgu.perProvince, { bags: lgu.total }),
+    'NFA-OWNED',
+    `ISSUANCE - ${num(nfa.issuedTotal)}`,
+    `RECOVERIES - ${num(nfa.recoveredTotal)}`,
     '',
-    table('Issuances to FTI', [{ key: 'bags', label: 'Net bags' }], fti.perProvince, { bags: fti.total }),
+    'ISSUANCE TO LGU',
+    ...byProv(lgu.perProvince, 'bags'),
+    '',
+    'ISSUANCE TO FTI',
+    ...byProv(fti.perProvince, 'bags'),
     '',
   ].join('\n')
 }

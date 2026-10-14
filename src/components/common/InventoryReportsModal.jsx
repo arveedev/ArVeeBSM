@@ -22,7 +22,7 @@ import {
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
 import { buildEndingStockData, endingStockModels } from '../../utils/endingStockReport.js'
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
-import { buildMillingIssuances, issuancesMarkdown } from '../../utils/millingIssuances.js'
+import { buildMillingIssuances, issuancesText as buildIssuancesText } from '../../utils/millingIssuances.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
@@ -663,12 +663,14 @@ function MillingIssuancesView({ data }) {
   const drawnCol = { key: 'withdrawn', label: 'Withdrawn net bags', num: true, render: (r) => fmtNum(r.withdrawn) }
   const kgCol = { key: 'kilos', label: 'Net kilos', num: true, render: (r) => r.kilos.toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }
   const authCols = [...authBase, bagsCol('Authority net bags'), drawnCol, kgCol]
-  const { milling, lgu, fti } = data
+  const { milling, nfa, lgu, fti } = data
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
       <p className="text-xs text-neutral-500">Issuances are the authorities' own net bags (counted in the period the authority is dated), not the WSI documents. Recoveries are the WSRs of milling.</p>
       <MainValues title="Milling (net bags)" columns={[{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }]}
         rows={milling.perProvince} total={{ issued: milling.issuedTotal, recovered: milling.recoveredTotal }} />
+      <MainValues title="NFA-owned milling (net bags)" columns={[{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }]}
+        rows={nfa.perProvince} total={{ issued: nfa.issuedTotal, recovered: nfa.recoveredTotal }} />
       <ExpandCard title="Milling issuances per authority" count={milling.issues.length} ok>
         {milling.issues.length === 0 ? <p className="py-2 text-xs text-neutral-500">No milling authorities in this period.</p>
           : <IssuanceTable rows={milling.issues} cols={authCols} />}
@@ -676,6 +678,14 @@ function MillingIssuancesView({ data }) {
       <ExpandCard title="Recoveries per WSR (rice only, no by-products)" count={milling.recoveries.length} ok>
         {milling.recoveries.length === 0 ? <p className="py-2 text-xs text-neutral-500">No recoveries in this period.</p>
           : <IssuanceTable rows={milling.recoveries} cols={[...wsrBase, bagsCol('Net bags'), kgCol]} />}
+      </ExpandCard>
+      <ExpandCard title="NFA-owned: issuances and recoveries (authorities)" count={nfa.issues.length + nfa.recoveries.length} ok>
+        {nfa.issues.length + nfa.recoveries.length === 0 ? <p className="py-2 text-xs text-neutral-500">Nothing for an NFA-owned ricemill in this period.</p> : (
+          <>
+            {nfa.issues.length > 0 && <IssuanceTable rows={nfa.issues} cols={authCols} />}
+            {nfa.recoveries.length > 0 && <p className="mb-1 mt-3 text-xs font-semibold text-neutral-400">Rice handed out by the ricemill (recoveries, from its transfer authorities)</p><IssuanceTable rows={nfa.recoveries} cols={authCols} />}
+          </>
+        )}
       </ExpandCard>
 
       <MainValues title="Issuances to LGU (net bags)" columns={[{ key: 'bags', label: 'Authority net bags' }]} rows={lgu.perProvince} total={{ bags: lgu.total }} />
@@ -750,12 +760,13 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), [])
   const branches = useLiveQuery(() => db.branches.toArray(), [])
   const authorities = useLiveQuery(() => db.authorities.toArray(), [])
+  const ricemillAllocations = useLiveQuery(() => db.ricemillAllocations.toArray(), [])
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
   const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes, authorities].some((x) => x === undefined)
   const issuancesData = useMemo(() => (isAdmin && view === 'issuances' && !loading
-    ? buildMillingIssuances({ transactions, authorities, warehouses: warehousesRaw, provinces, varieties, globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to })
-    : null), [isAdmin, view, loading, transactions, authorities, warehousesRaw, provinces, varieties, config, from, to])
-  const issuancesText = () => issuancesMarkdown(issuancesData, from, to < from ? from : to)
+    ? buildMillingIssuances({ transactions, authorities, warehouses: warehousesRaw, provinces, varieties, transactionTypes, ricemillAllocations: ricemillAllocations ?? [], globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to })
+    : null), [isAdmin, view, loading, transactions, authorities, warehousesRaw, provinces, varieties, transactionTypes, ricemillAllocations, config, from, to])
+  const issuancesText = () => buildIssuancesText(issuancesData, from, to < from ? from : to)
   const copyIssuances = async () => {
     const text = issuancesText()
     try {
@@ -771,14 +782,14 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
       const ok = document.execCommand('copy')
       document.body.removeChild(ta)
       if (ok) toast.success('Copied - paste it into the chat')
-      else toast.error('Could not copy - use Save .md instead')
+      else toast.error('Could not copy - use Save .txt instead')
     }
   }
   const downloadIssuances = () => {
-    const url = URL.createObjectURL(new Blob([issuancesText()], { type: 'text/markdown;charset=utf-8' }))
+    const url = URL.createObjectURL(new Blob([issuancesText()], { type: 'text/plain;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `milling-and-issuances-${from}_to_${to < from ? from : to}.md`
+    a.download = `milling-and-issuances-${from}_to_${to < from ? from : to}.txt`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -971,7 +982,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
                 <ClipboardList size={14} /> Copy text
               </button>
               <button type="button" onClick={() => downloadIssuances()} disabled={!issuancesData} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
-                <FileSpreadsheet size={14} /> Save .md
+                <FileSpreadsheet size={14} /> Save .txt
               </button>
             </div>
             <div className="mb-3">
