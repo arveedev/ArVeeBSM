@@ -8428,4 +8428,5 @@
 //   1.10-370 - Daily inventory: (1) an authority always deducts its full authorized amount, whether or not it was marked complete (this replaces the dated completion of 1.10-369). (2) The Opening balance is now frozen: Save writes the whole balance as shown (every cell, typed or not) and nothing dated on or before that day can change it any more; only the documents after it add and take. An override saved before this version is partial and still lets the other cells move; the button says "not frozen" until it is opened and saved once.
 //   1.10-371 - Milling and Issuances: the lists can be sorted by Date, Warehouse or Ricemill (the customer: the miller on milling rows, the buyer on LGU and FTI rows).
 //   1.10-372 - Milling and Issuances: a Filter and sort sheet like the other Stock Desk reports (sort by Date, Warehouse or Ricemill; filter by province, warehouse and ricemill / customer). The filter also drives the per-province totals and the copied text. The same miller written several ways (Borromeo Ricemill, BORROMEO RM) counts as one.
-export const APP_VERSION = '1.10-372'
+//   1.10-373 - Milling and Issuances: the tables light up the row and column under the mouse, like the other Stock Desk tables.
+export const APP_VERSION = '1.10-373'

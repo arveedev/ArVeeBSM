@@ -663,8 +663,10 @@ function IssuanceFilterSheet({ open, draft, setDraft, provinces, warehouses, cus
 
 // Milling and Issuances (Admin only): per-province totals in net bags, each with its expandable list.
 function IssuanceTable({ rows, cols }) {
+  const boxRef = useRef(null)
+  useCrosshair(boxRef)
   return (
-    <div className="overflow-x-auto">
+    <div ref={boxRef} className="overflow-x-auto">
       <table className="min-w-full border-separate border-spacing-0 text-xs tabular-nums">
         <thead>
           <tr>{cols.map((c) => <th key={c.key} className={`border-b border-neutral-800 px-2 py-1 font-semibold text-neutral-400 ${c.num ? 'text-right' : 'text-left'}`}>{c.label}</th>)}</tr>
@@ -680,8 +682,10 @@ function IssuanceTable({ rows, cols }) {
 }
 
 function MainValues({ title, columns, rows, total }) {
+  const boxRef = useRef(null)
+  useCrosshair(boxRef)
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+    <div ref={boxRef} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
       <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand-neon">{title}</p>
       <table className="min-w-full border-separate border-spacing-0 text-sm tabular-nums">
         <thead>

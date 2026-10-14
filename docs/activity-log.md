@@ -18538,3 +18538,5 @@ Owner: the opening balance, already adjusted by hand, changed almost every day a
 2026-10-14 (v1.10-371): Milling and Issuances lists can be sorted by Date (default), Warehouse or Ricemill (customer); the main values are unchanged.
 
 2026-10-14 (v1.10-372): Milling and Issuances: the sort switch became a Filter and sort sheet like the other Stock Desk reports: sort by Date / Warehouse / Ricemill and filter by province, warehouses and ricemill / customer. Filters apply to every row, so the per-province totals and the copied text follow them; a ricemill is matched by `millerKey` so its different spellings are one.
+
+2026-10-14 (v1.10-373): Milling and Issuances tables (main values and lists) use the shared row and column highlight (`useCrosshair`).
