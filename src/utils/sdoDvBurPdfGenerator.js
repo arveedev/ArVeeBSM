@@ -124,6 +124,8 @@ export const generateDvBur = ({
     text('Certified:', L + 7, y + 4.4, { size: 7.5, bold: true })
     text('Expenses/Cash Advance necessary, lawful and incurred under my direct supervision.', L + 22, y + 4.4, { size: 7.5 })
     text(name, L + 95, y + 17, { align: 'center', size: 8, bold: true })
+    // the signatory's name is underlined (the line is as wide as the name)
+    if (name) { const nw = doc.getTextWidth(name); hline(y + 17.9, L + 95 - nw / 2 - 1, L + 95 + nw / 2 + 1, 0.25) }
     text(certified?.position ?? '', L + 95, y + 21.4, { align: 'center', size: 7.5 })
 
     y += 27                                              // B. Accounting Entry
