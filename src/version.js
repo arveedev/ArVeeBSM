@@ -8429,4 +8429,5 @@
 //   1.10-371 - Milling and Issuances: the lists can be sorted by Date, Warehouse or Ricemill (the customer: the miller on milling rows, the buyer on LGU and FTI rows).
 //   1.10-372 - Milling and Issuances: a Filter and sort sheet like the other Stock Desk reports (sort by Date, Warehouse or Ricemill; filter by province, warehouse and ricemill / customer). The filter also drives the per-province totals and the copied text. The same miller written several ways (Borromeo Ricemill, BORROMEO RM) counts as one.
 //   1.10-373 - Milling and Issuances: the tables light up the row and column under the mouse, like the other Stock Desk tables.
-export const APP_VERSION = '1.10-373'
+//   1.10-374 - Stock Desk Data check: (1) the age-group warning is only for sales, sales (consignment), milling, test milling, remilling and test remilling authorities, never a by-products variety or a transfer / fillers / rebagging / repiling authority. (2) Issued more than was received now warns only when the NET KILOS are over (a few bags over is fine). (3) For an Admin, a document number in the Data check is a link: tapping it opens that WSI / WSR / WTS (the Stock Desk steps aside and returns when the document is closed).
+export const APP_VERSION = '1.10-374'

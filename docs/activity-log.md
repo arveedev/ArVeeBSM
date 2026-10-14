@@ -18540,3 +18540,7 @@ Owner: the opening balance, already adjusted by hand, changed almost every day a
 2026-10-14 (v1.10-372): Milling and Issuances: the sort switch became a Filter and sort sheet like the other Stock Desk reports: sort by Date / Warehouse / Ricemill and filter by province, warehouses and ricemill / customer. Filters apply to every row, so the per-province totals and the copied text follow them; a ricemill is matched by `millerKey` so its different spellings are one.
 
 2026-10-14 (v1.10-373): Milling and Issuances tables (main values and lists) use the shared row and column highlight (`useCrosshair`).
+
+## 2026-10-14 - Data check refinements (v1.10-374)
+
+Age group blank or unreadable: only authorities of type SALES, SALES (CONSIGNMENT) and the milling types, and never a by-products variety (3 left on the 2026-10-08 backup). Issued more than was received: flagged only when the pile's net kilos go negative (issued short-bag kilos beyond what the pile still holds), shown in kilos; on the backup 3 piles. Document numbers (WSI not covered by an authority, issued more, documents not assigned) are links for the Admin: `openDoc` switches the warehouse, hides the Stock Desk and opens the form; `bsm:form-closed` (sent by `closeForm` in App.jsx) brings the Stock Desk back, and `window.__bsmFormOpen` keeps the Stock Desk's Escape quiet while a form is open.

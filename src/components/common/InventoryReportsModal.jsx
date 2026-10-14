@@ -24,6 +24,7 @@ import { buildEndingStockData, endingStockModels } from '../../utils/endingStock
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
 import { buildMillingIssuances, issuancesText as buildIssuancesText } from '../../utils/millingIssuances.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
+import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
@@ -467,7 +468,17 @@ function EndingStockView({ data, setMonth, unit, setUnit }) {
   )
 }
 
-function CheckView({ checks, unit }) {
+// A document number in the Data check: for an Admin it opens that document (to look at it or change it).
+function DocLink({ type, serial, warehouseId, openDoc, children }) {
+  if (!openDoc || !serial) return <>{children ?? `${type} ${serial}`}</>
+  return (
+    <button type="button" onClick={() => openDoc(type, serial, warehouseId)} className="font-semibold text-brand-neon underline decoration-dotted underline-offset-2 hover:decoration-solid">
+      {children ?? `${type} ${serial}`}
+    </button>
+  )
+}
+
+function CheckView({ checks, unit, openDoc }) {
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
       <SelfCheckCard results={checks.selfCheck ?? []} />
@@ -475,18 +486,18 @@ function CheckView({ checks, unit }) {
         render={(o, i) => checkLine(o.warehouse, `starts after ${fmtDay(o.date)}`, i)} />
       <CheckSection title="Authorized more than the stock available" tone="text-brand-crimson" items={checks.overAuthorized ?? []} ok="No authority reserves more than the warehouse had."
         render={(o, i) => checkLine(`AI ${o.aiNumber} · ${o.warehouse} · ${o.variety} · ${fmtDay(o.date)}${o.ageGroup ? ` · age ${o.ageGroup}` : ''}`, `${fmtNum(toUnit(o.kilos, unit))} short`, i)} />
-      <CheckSection title="Authority age group blank or unreadable (deducted from the oldest stock)" tone="text-amber-400" items={checks.noAgeGroup ?? []} ok="Every authority names a readable age group."
+      <CheckSection title="Authority age group blank or unreadable (sales, consignment and milling authorities; deducted from the oldest stock)" tone="text-amber-400" items={checks.noAgeGroup ?? []} ok="Every authority names a readable age group."
         render={(o, i) => checkLine(`AI ${o.aiNumber} · ${o.warehouse} · ${o.variety} · ${fmtDay(o.date)}${o.ageGroup ? ` · "${o.ageGroup}"` : ''}`, fmtNum(toUnit(o.kilos, unit)), i)} />
       <ExpandCard title="WSI not covered by an authority (not deducted from the inventory)" tone="text-amber-400" count={(checks.uncoveredWsi ?? []).length}>
-        {(checks.uncoveredWsi ?? []).length === 0 ? <p className="py-1 text-sm text-neutral-400">Every WSI belongs to an authority that reserves stock.</p> : (checks.uncoveredWsi ?? []).slice(0, 80).map((o, i) => checkLine(`WSI ${o.serial} · ${o.warehouse}${o.aiNumber ? ` · AI ${o.aiNumber}` : ' · no AI'} · ${fmtDay(o.date)}`, fmtNum(toUnit(o.kilos, unit)), i))}
+        {(checks.uncoveredWsi ?? []).length === 0 ? <p className="py-1 text-sm text-neutral-400">Every WSI belongs to an authority that reserves stock.</p> : (checks.uncoveredWsi ?? []).slice(0, 80).map((o, i) => checkLine(<><DocLink type="WSI" serial={o.serial} warehouseId={o.warehouseId} openDoc={openDoc} /> · {o.warehouse}{o.aiNumber ? ` · AI ${o.aiNumber}` : ' · no AI'} · {fmtDay(o.date)}</>, fmtNum(toUnit(o.kilos, unit)), i))}
         {(checks.uncoveredWsi ?? []).length > 80 && <p className="pt-1 text-xs text-neutral-500">and {(checks.uncoveredWsi ?? []).length - 80} more.</p>}
       </ExpandCard>
-      <CheckSection title="Issued more than was received" tone="text-brand-crimson" items={checks.shortages} ok="No pile has issued more than it received."
+      <CheckSection title="Issued more net kilos than was received (a few bags over is fine)" tone="text-brand-crimson" items={checks.shortages} ok="No pile has issued more net kilos than it received."
         render={(o, i) => (
           <div key={i} className="border-b border-neutral-800 py-1 last:border-0">
-            {checkLine(o.name, `${fmtNum(o.bags)} bags over`, `h${i}`)}
+            {checkLine(o.name, `${fmtNum(toUnit(o.kilos, unit))} over`, `h${i}`)}
             {o.events.map((e, k) => (
-              <p key={k} className="text-[11px] text-neutral-500">{e.kind} {e.serial} · <span className="font-semibold text-neutral-300">{e.type}</span> · {e.date ? fmtDay(e.date) : ''} · {fmtNum(e.bags)} bags over</p>
+              <p key={k} className="text-[11px] text-neutral-500"><DocLink type={e.kind} serial={e.serial} warehouseId={e.warehouseId} openDoc={openDoc} /> · <span className="font-semibold text-neutral-300">{e.type}</span> · {e.date ? fmtDay(e.date) : ''} · {fmtNum(toUnit(e.kilos, unit))} over</p>
             ))}
           </div>
         )} />
@@ -500,7 +511,7 @@ function CheckView({ checks, unit }) {
       <CheckSection title="Age is approximate (no readable Date Received)" tone="text-amber-400" items={checks.approx} ok="Every lot has a readable receipt date."
         render={(o, i) => checkLine(`${o.name} · from ${fmtDay(o.date)}`, fmtNum(toUnit(o.kilos, unit)), i)} />
       <CheckSection title="Documents not assigned to a pile" tone="text-amber-400" items={checks.unassigned} ok="No receipt or issue is waiting for a pile."
-        render={(o, i) => checkLine(`${o.type} ${o.serial} · ${o.warehouse} · ${fmtDay(o.date)}`, `${fmtNum(o.bags)} bags`, i)} />
+        render={(o, i) => checkLine(<><DocLink type={o.type} serial={o.serial} warehouseId={o.warehouseId} openDoc={openDoc} /> · {o.warehouse} · {fmtDay(o.date)}</>, `${fmtNum(o.bags)} bags`, i)} />
     </div>
   )
 }
@@ -797,6 +808,22 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [issFilters, setIssFilters] = useState(ISS_DEFAULTS)
   const [issDraft, setIssDraft] = useState(ISS_DEFAULTS)
   const [showIssFilters, setShowIssFilters] = useState(false)
+  // A document opened from the Data check: the Stock Desk steps aside while its form is up and comes back (with
+  // everything as it was) when the form closes.
+  const { setCurrentWarehouseId } = useWarehouse() ?? {}
+  const [formOpen, setFormOpen] = useState(false)
+  useEffect(() => {
+    const back = () => setFormOpen(false)
+    window.addEventListener('bsm:form-closed', back)
+    return () => window.removeEventListener('bsm:form-closed', back)
+  }, [])
+  const openDoc = (type, serialNo, warehouseId) => {
+    if (typeof window.openTransactionForm !== 'function') return
+    if (warehouseId) setCurrentWarehouseId?.(warehouseId)
+    setFormOpen(true)
+    // a moment for the warehouse switch to land before the form loads the serial
+    setTimeout(() => window.openTransactionForm(type, { serialNo }), 150)
+  }
   const [exporting, setExporting] = useState(false)
   const [sheetBusy, setSheetBusy] = useState(false)
   const [openingEditor, setOpeningEditor] = useState(null)
@@ -1007,7 +1034,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   // Escape goes back one step: to the menu, then out of the Stock Desk. A sheet or dialog that is open closes first
   // (it handles Escape itself), and Escape in a text field only leaves the field.
   useEscapeKey(true, (e) => {
-    if (document.querySelector('[data-sd-overlay]')) return
+    if (window.__bsmFormOpen || document.querySelector('[data-sd-overlay]')) return
     const t = e?.target
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return
     back()
@@ -1015,7 +1042,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const pillButton = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40'
 
   return createPortal(
-    <div className={`fixed inset-0 z-[80] flex flex-col bg-neutral-950 ${closing ? 'sd-pop-out' : 'sd-pop-in'}`}>
+    <div className={`fixed inset-0 z-[80] flex flex-col bg-neutral-950 ${formOpen ? 'hidden' : ''} ${closing ? 'sd-pop-out' : 'sd-pop-in'}`}>
       <div className="mx-auto flex w-full max-w-[110rem] items-center justify-between gap-2 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <div className="flex min-w-0 items-center gap-2">
           <button type="button" onClick={back} aria-label="Back" className={backButtonClass}><ArrowLeft size={18} /></button>
@@ -1177,7 +1204,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             )}
             {loading || !built ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p> : (
               <>
-                {view === 'check' ? <CheckView checks={built.checks} unit={unit} /> : (
+                {view === 'check' ? <CheckView checks={built.checks} unit={unit} openDoc={isAdmin ? openDoc : null} /> : (
                   <>
                     {view === 'procurement' && <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>}
                     {view === 'age' ? (

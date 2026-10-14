@@ -60,6 +60,7 @@ export const makeContext = ({ piles, warehouses, provinces, varieties, transacti
   whById: new Map(warehouses.map((w) => [w.warehouseId, w])),
   provById: new Map(provinces.map((p) => [p.provinceId ?? p.id, p])),
   varietyName: new Map(varieties.map((v) => [v.varietyId, v.name])),
+  varietyCategory: new Map(varieties.map((v) => [v.varietyId, v.category])),
   typeName: new Map(transactionTypes.map((t) => [t.transactionTypeId ?? t.id, t.name])),
   combine, ageSet,
 })
@@ -707,7 +708,7 @@ export const checksModel = (checks, unit, { asOf }) => {
   section('Authorized more than the stock available', checks.overAuthorized ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Authority age group blank or unreadable (deducted from the oldest stock)', checks.noAgeGroup ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}${o.ageGroup ? ` · "${o.ageGroup}"` : ''}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('WSI not covered by an authority (not deducted)', checks.uncoveredWsi ?? [], (o) => ({ first: `WSI ${o.serial} · ${o.warehouse}${o.aiNumber ? ` · AI ${o.aiNumber}` : ''}`, cells: [`${o.customer} · ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
-  section('Issued more than was received', checks.shortages, (o) => ({ first: o.name, cells: [o.events.map((e) => `${e.kind} ${e.serial} ${e.type}`).join('; ') || 'bags over', Math.round(o.bags * 100) / 100] }))
+  section('Issued more net kilos than was received', checks.shortages, (o) => ({ first: o.name, cells: [o.events.map((e) => `${e.kind} ${e.serial} ${e.type}`).join('; ') || 'net kilos over', Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Rebuilt stock differs from the pile balance (today)', checks.mismatches, (o) => ({ first: o.name, cells: [`stored ${Math.round(toUnit(o.stored, unit) * 100) / 100}${o.note ? ` - ${o.note}` : ''}`, Math.round(toUnit(o.rebuilt, unit) * 100) / 100] }))
   section('Age is approximate (no readable Date Received)', checks.approx, (o) => ({ first: o.name, cells: [`from ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Documents not assigned to a pile', checks.unassigned, (o) => ({ first: `${o.type} ${o.serial} · ${o.warehouse}`, cells: [longDate(o.date), o.bags] }))
@@ -928,11 +929,19 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
     ageGroup: x.ageGroup ?? '',
   })).sort((a, b) => natural(a.warehouse, b.warehouse) || (a.date < b.date ? -1 : 1))
   const label = (id) => warehouseLabel(ctx.whById.get(id)?.name, false)
-  const noAgeGroup = (reservedState.authNoAge ?? []).map((x) => ({
+  // Only the authorities whose age group decides what stock they take: sales, sales (consignment) and the milling
+  // types (milling, test milling, remilling, test remilling), never a by-products variety, never a transfer,
+  // fillers, rebagging, repiling and the like.
+  const ageGroupMatters = (x) => {
+    const t = String(x.typeName ?? '').trim().toUpperCase().replace(/\s+/g, ' ')
+    const typeOk = t === 'SALES' || t === 'SALES (CONSIGNMENT)' || t.includes('MILLING')
+    return typeOk && ctx.varietyCategory.get(x.varietyId) !== 'By Products'
+  }
+  const noAgeGroup = (reservedState.authNoAge ?? []).filter(ageGroupMatters).map((x) => ({
     aiNumber: x.aiNumber, date: x.date, kilos: x.kilos, customer: x.customer ?? '', ageGroup: x.ageGroup, warehouse: label(x.warehouseId), variety: ctx.varietyName.get(x.varietyId) ?? '?',
   })).sort((a, b) => natural(a.warehouse, b.warehouse) || (a.date < b.date ? -1 : 1))
   const uncoveredWsi = (reservedState.uncovered ?? []).map((x) => ({
-    serial: x.serial, date: x.date, aiNumber: x.aiNumber, kilos: x.kilos, customer: x.customer ?? '', warehouse: label(x.warehouseId),
+    type: 'WSI', serial: x.serial, date: x.date, aiNumber: x.aiNumber, kilos: x.kilos, customer: x.customer ?? '', warehouse: label(x.warehouseId), warehouseId: x.warehouseId,
   })).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const global = inputs.globalDataStartDate ?? null
   const overrides = []
@@ -948,11 +957,18 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
     const pile = ctx.pileById.get(pileId)
     const row = rowOf(ctx, pile)
     const name = `${row.label} · ${pile.pileName}`
+    // Issued more than was received is only a problem when the NET KILOS go negative: a few bags over is normal
+    // (bags are counted, kilos are weighed), so a pile is flagged only when its issued net kilos exceed what it
+    // received (the kilos of the missing bags beyond whatever kilos the pile still holds).
     if (st.shortBags > 0) {
-      shortages.push({
-        name, bags: st.shortBags, kilos: st.shortKilos,
-        events: st.shortEvents.map((e) => ({ serial: e.serial, date: e.date, kind: e.kind, type: ctx.typeName.get(e.typeId) ?? (e.kind === 'WTS' ? 'TRANSFER' : 'OTHER'), bags: e.bags })),
-      })
+      const held = st.lots.reduce((s, l) => s + l.kilos, 0)
+      const over = st.shortKilos - held
+      if (over >= 1) {
+        shortages.push({
+          name, bags: st.shortBags, kilos: over,
+          events: st.shortEvents.map((e) => ({ serial: e.serial, date: e.date, kind: e.kind, warehouseId: e.warehouseId, type: ctx.typeName.get(e.typeId) ?? (e.kind === 'WTS' ? 'TRANSFER' : 'OTHER'), bags: e.bags, kilos: e.kilos ?? 0 })),
+        })
+      }
     }
     for (const lot of st.lots) if (lot.anchor === 'pile-date' && lot.kilos >= EPS_KG) approx.push({ name, kilos: lot.kilos, date: lot.date })
     if (asOf === todayISO) {
@@ -971,7 +987,7 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
     return !cut || t.date > cut
   }).map((t) => ({
     type: t.type, serial: t.serialNo, date: t.date, kilos: t.netKilos ?? 0, bags: t.numberOfBags ?? 0,
-    warehouse: warehouseLabel(whById.get(t.warehouseId)?.name, false),
+    warehouse: warehouseLabel(whById.get(t.warehouseId)?.name, false), warehouseId: t.warehouseId,
   }))
   const byName = (a, b) => natural(a.name, b.name)
   const selfCheck = buildSelfCheck(ctx, inputs, { asOf })

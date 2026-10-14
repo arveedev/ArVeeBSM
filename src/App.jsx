@@ -168,7 +168,11 @@ function App() {
 
   const closeForm = () => {
     setActiveFormType(null)
+    // the Stock Desk hides itself while a form opened from its Data check is up, and comes back with this
+    window.dispatchEvent(new Event('bsm:form-closed'))
   }
+  // read by the Stock Desk, whose Escape must not also act while an entry form is open
+  window.__bsmFormOpen = Boolean(activeFormType)
 
   // Entry-form auto-exit / SDO auto-logout - per explicit request.
   // Admin-configurable via db.reportConfig 'global' (Admin Dashboard >

@@ -255,7 +255,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       st.shortBags += needBags
       st.shortKilos += bags > 0 ? kilos * (needBags / bags) : 0
       // which document was issued beyond what the pile had received
-      st.shortEvents.push({ serial: tx?.serialNo ?? null, date: tx?.date ?? null, kind: tx?.type ?? null, typeId: tx?.transactionTypeId ?? null, bags: needBags })
+      st.shortEvents.push({ serial: tx?.serialNo ?? null, date: tx?.date ?? null, kind: tx?.type ?? null, typeId: tx?.transactionTypeId ?? null, warehouseId: tx?.warehouseId ?? null, bags: needBags, kilos: bags > 0 ? kilos * (needBags / bags) : 0 })
     }
     return taken
   }
@@ -356,7 +356,7 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
     if (ev.auth) {
       const { a, amount } = ev.auth
       const range = ageGroupRange(a.ageGroup)
-      if (!range) authNoAge.push({ aiNumber: a.aiNumber, ageGroup: a.ageGroup ?? '', warehouseId: a.assignedWarehouse, varietyId: a.varietyId, date: ev.when, kilos: amount, customer: a.customerName ?? null })
+      if (!range) authNoAge.push({ aiNumber: a.aiNumber, typeName: a.transactionTypeName ?? '', ageGroup: a.ageGroup ?? '', warehouseId: a.assignedWarehouse, varietyId: a.varietyId, date: ev.when, kilos: amount, customer: a.customerName ?? null })
       const { portions, short } = reserveKilos(a.assignedWarehouse, a.varietyId, amount, range, basisOf(ev.when), ev.when)
       pools.set(a.aiNumber, { left: amount - short, portions: portions.map((x) => ({ ...x })) })
       // An authority always deducts in full. What the named bracket did not hold is deducted anyway, as a negative

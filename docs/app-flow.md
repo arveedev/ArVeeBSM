@@ -421,6 +421,12 @@ the step-by-step journey.*
 4. Copy text and Save .txt give the main values in the group-chat format (period, MILLING and NFA-OWNED issuance / recoveries, issuance to LGU and FTI per province code), without the lists.
 5. Under each block an expandable list shows the documents: milling issuances per authority, recoveries per WSR (rice only), LGU sales from authorities, FTI sales consignment from authorities.
 
+## 12b. Data check: documents as links (Admin)
+
+1. In the Stock Desk's Data check, a document number (WSI not covered by an authority, issued more net kilos than received, documents not assigned to a pile) is a link for the Admin.
+2. Tapping it switches to that document's warehouse, steps the Stock Desk aside and opens the document in its entry form to look at or change it.
+3. Closing the form brings the Stock Desk back where it was.
+
 ## 13. SDO Disbursement Voucher and BUR Flow
 
 1. In the SDO's Abstract export window, after choosing the period (and optionally the checked receipts), the "DV & BUR" button
