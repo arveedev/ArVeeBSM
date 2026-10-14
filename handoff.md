@@ -1,6 +1,62 @@
 # Project Handoff — BSM App
 
-## Last Updated
+## CURRENT STATE (verified 2026-10-14, app v1.10-361) - READ THIS FIRST
+
+Everything below the "Historical record" heading near the end of this section was last verified between August and
+2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
+session that changes the app** (a Stop hook in `.claude/settings.json` runs `.claude/hooks/docs-fresh.sh` and blocks the end
+of a turn when code changed but this file and `docs/activity-log.md` did not, or when this file is more than 6 hours older than
+the latest code commit). Update it before saying a task is done.
+
+### Where things are
+- Repo `C:\Users\DjArVee\Documents\GitHub\claude bsm app\bsm-app`, branch `main`, Vercel production, version in `src/version.js`
+  (each build has a changelog comment there; `public/version.json` is synced by `node sync-version.cjs`).
+- Planning documents (PRD, app flow, schema, design brief, engineering plan, technical design) live in `docs/` and were brought
+  up to date on 2026-10-12 / 2026-10-14. Newest technical decisions are TDD sections 2.31 to 2.45; the build history of this
+  period is engineering-plan Phase 10; new tables are at the end of `docs/backend-schema.md`.
+- Dexie schema is at **v47**. Added since v44: `sdoReportCutoffs` (v44), `logisticsItems` (v45), `millingOrderCompletions` (v46),
+  `privateMillerShares` (v47). All four are synced tables. **Not yet confirmed on real devices that Dexie Cloud accepts v45-v47.**
+- The presentation is a published artifact (https://claude.ai/artifact/XQnKB9A8HoQKqRbRcsbAyN); its build scripts live only in a
+  session scratchpad, so edit it by reading the published artifact, not from a repo file.
+
+### What shipped since v1.10-271 (all pushed)
+- **Stock Desk** (Admin / Visitor): Daily inventory, Summary, Age monitoring (lots per receipt, oldest issued first), Data check
+  with a stock-book self-check, Ending stock per variety, Daily procurement status, Milling liquidation. An authority always deducts
+  its full authorized amount from the age bracket it names (a shortfall becomes a negative lot). Opens from the quiet Home icon or
+  **Ctrl + Alt + D on any page**.
+- **Excel on every report** (one Export button asking PDF or Excel): built from the same captured content as the PDF, prints like the
+  PDF, formulas written only where they reproduce the printed figure (SUBTOTAL totals, Ending = Beginning + Receipts - Issues, running
+  balances, derived columns, Summary/Recap `SUMIFS` over the Statement sheets). Pile Layout is a landscape plan linked to a Pile Data sheet.
+- **SDO**: Disbursement Voucher x 4 + BUR page (two BURs to cut) from the Abstract export; SDO settings for "dated" text (off by default)
+  and **net weight decimals (2 or 3, rounded)**; PR numbers follow serial + hyphen + (serial mod 7) and the next one is suggested.
+- **Logistics inventory** (Home icon beside the warehouse): add / edit / delete per warehouse; printed as the last page of the Stock
+  Report only when the warehouse has items.
+- **MO/TMO completion** is manual-only, Admin-only, shared across devices (`millingOrderCompletions`), and written to the Sheet with
+  retry; the Sheet's DONE never completes an order. Completed Milling sorts by number, highest first.
+- **Sync design rules** (see TDD 2.40, 2.41, 2.46): admin-entered data never sits in an unsynced or compound-key table; totals that are
+  derived from transactions (an authority's issued totals, a pile's balance) are recomputed from the synced transactions on every
+  device by `src/services/derivedTotalsSync.js`, but only when the device is fully caught up with the cloud
+  (`isCloudSyncFullyCaughtUp` in `db/dexie.js`); new authorities get the deterministic id `AI::<number>` / `SIA::<number>`.
+- UI: Escape closes the topmost modal everywhere (`utils/useEscapeClose.js`); login logo opens large then shrinks into place;
+  closed piles are in no picker; a pile's age is never negative; Tab from MTS stops at blank fields; procurement warehouse cards start
+  collapsed; lists sorted as the owner decided (unwithdrawn detail by authority number, PRs by PR number, review transactions by
+  serial, CPF history newest first).
+
+### Open items (nothing here is done)
+1. Two-device test of sync, including the three new tables and the authority "used / available" fix (needs real devices).
+2. GSR (Grains Situationer Report) is NOT built; assessment given on 2026-10-13: roughly 55-60% of the data exists in the app
+   (inventory about 90%, procurement about 70%, distribution about 50%, prices about 10%). Owner wants the sync issues fixed first, then
+   backup, then GSR.
+3. Backup/restore plan beyond rehearsal step 4 (`docs/backup-and-restore-plan.md`).
+4. Stock Desk: authority shortfall that cannot be placed (about 81,000 kg on the 2026-10-08 backup, probably piles closed later) and the
+   pre-existing "No negative balance" failure for Legazpi GID A by-products around Sep 4.
+5. Old DONE cells in the MO/TMO Sheet are cleared only when an order is marked and reverted.
+6. Excel exports for CPF, BIN Card and Abstract formulas have not been checked against real data in Excel; DV/BUR not against a real Abstract.
+7. Entry forms and the Piles name dialog keep their own Escape handling (not on the shared stack).
+
+### Historical record (stale, last verified before 2026-10-14)
+
+## Last Updated (historical, before 2026-10-14)
 2026-10-05 addendum: app is now v1.10-271 and live (production, real data since Sept 1).
 Only the entry at the top of "In Progress / Not Yet Done" and docs/backup-and-restore-plan.md
 (sections 24-25) are current for this period; the rest of this file was last verified in August.
@@ -2528,3 +2584,5 @@ just the ones already built.
   CURRENT state only)
 
 (2026-10-05, end of session) Next step: restore rehearsal on a scratch Dexie database before any further production cleanup or backup changes.
+
+(2026-10-05) Restore rehearsal steps 1-4 PASSED: 2026-10-04 backup imported into a throwaway Dexie DB (z1wnhq0k3, creds in BSM-Safetyehearsal) and exported back, 32/32 tables identical. Next: browser checks against a preview app (sign-in, serials, balances, device switch), gap recovery. Also verify the scheduled GitHub backup actually ran for 2026-10-05.

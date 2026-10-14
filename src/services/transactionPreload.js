@@ -46,7 +46,7 @@
 // sheet source - see fetchTransactionsBulk), regardless of warehouse
 // count. This was the primary cause of a very slow first preload.
 
-import { db } from '../db/dexie.js'
+import { db, isCloudSyncFullyCaughtUp } from '../db/dexie.js'
 import { effectiveCutoffDate } from '../utils/calculations.js'
 import { fetchTransactionsBulk, mapSheetRowToTransaction, stripWarehouseCodePrefix, markRowsSeen, isWtsBackupSerial } from './googleSheetsBridge.js'
 import { recordSerialUsed } from '../utils/serialNumber.js'
@@ -490,6 +490,9 @@ const maybeRecalculatePileStates = async (warehouseIds) => {
   // be interrupted mid-flight without restructuring it), but the
   // common case (form opens before this point is reached) is covered.
   if (isTransactionSyncPaused()) return
+  // a device still pulling holds fewer transactions than the others; its recompute would be lower than the truth and
+  // would sync everywhere (see isCloudSyncFullyCaughtUp)
+  if (!isCloudSyncFullyCaughtUp()) return
   lastPileRecalcAt = Date.now()
   try {
     await recalculatePileStatesForWarehouses(warehouseIds)

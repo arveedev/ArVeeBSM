@@ -96,7 +96,9 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   // individually cancellable here, not silently collapsed to whichever
   // one `.first()` happened to return.
   const existingPrs = useLiveQuery(
-    () => db.purchaseReceipts.where('wsrTransactionId').equals(wsr.id).and((pr) => pr.status === 'Active').toArray(),
+    () => db.purchaseReceipts.where('wsrTransactionId').equals(wsr.id).and((pr) => pr.status === 'Active').toArray()
+      // by PR number
+      .then((rows) => rows.sort((a, b) => String(a.prNo).localeCompare(String(b.prNo), undefined, { numeric: true }))),
     [wsr.id]
   )
   // undefined while the query hasn't resolved yet - kept distinct from

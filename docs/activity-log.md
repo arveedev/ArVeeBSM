@@ -18493,3 +18493,18 @@ Handoff refreshed 2026-10-05: `handoff.md` now carries a v1.10-271 addendum and 
 2026-10-08 restore rehearsal, app-side checks: on the restored 2026-10-04 data the app's own calculations reproduced all 76 pile balances, the SDO cash on hand (one equals the live figure), and valid serial suggestions; duplicates equal the known pre-cleanup count. PIN sign-in, gap recovery and device-switch still to do. Noted: suggestNextSerial may suggest an INIT- seed serial in some warehouses (to confirm).
 
 2026-10-09 Inventory Reports (v1.10-302 to v1.10-309): read-only lot engine (one lot per receipt, oldest issued first, transfers keep dates, beginning balances first) with an Admin > System "Inventory Lots Check"; Home > Stocks quiet icon opens Inventory Reports for Admin and Visitor: Daily inventory, Summary, Age monitoring, Daily procurement status, Milling and Test Milling Liquidation, Data check; date range, filters behind one button, net bags or MT, card layout on phones, Excel for all, PDF for liquidations, Google Sheet export through a separate Apps Script. Settings: Admin > Operations > Milling Prices (signatories, contractor, per-ricemill prices), Admin > System > Sheet Export. No schema change; the only writes are explicit saves of optional reportConfig fields.
+
+## 2026-10-14 - Sync audit and fixes; Esc, PR series, Stock Desk anywhere; handoff brought current (v1.10-359 to 361)
+
+Sync audit: the only admin-entered table that never synced was the private-miller shares (compound key); now `privateMillerShares`
+(v47) with a one-time upload of each device's old rows. The Cash-in-Bank province moved into the shared report settings. Authority
+"used / available" differing between devices: the issued totals are stored numbers moved by read-modify-write on each device, and the
+recompute that heals them ran only inside the 5-minute Sheet sync and also on devices that had not finished pulling (writing a LOWER
+total that then synced everywhere). New `derivedTotalsSync.js` recomputes authority totals and pile balances from the synced
+transactions on every device after any change and whenever the device is in-sync, gated by `isCloudSyncFullyCaughtUp`; the old sweeps are
+gated too; new authorities get deterministic ids. PR numbers follow serial + hyphen + serial mod 7 and the next is suggested. Escape
+closes the topmost modal through one stack (`useEscapeClose.js`). Ctrl + Alt + D opens the Stock Desk from any page
+(`StockDeskHost`). MO/TMO monitors keep the previous list while recomputing (no page reset). Procurement warehouse cards start collapsed.
+Lists sorted as decided. Stop hook replaced by `.claude/hooks/docs-fresh.sh` (line-ending-only changes no longer count as an update).
+`handoff.md` rewritten at the top (CURRENT STATE); it had been stale since v1.10-271 because the old hook was satisfied by a CRLF-only change.
+

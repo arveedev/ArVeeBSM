@@ -47,10 +47,12 @@ function UnwithdrawnDetailModal({ warehouseId, varietyIds, bucketFilter, title, 
     return () => { document.body.style.overflow = '' }
   }, [])
 
-  const detail = useLiveQuery(
+  const detailRaw = useLiveQuery(
     () => getUnwithdrawnDetail(warehouseId, varietyIds, bucketFilter),
     [warehouseId, JSON.stringify(varietyIds), JSON.stringify(bucketFilter)]
   ) ?? []
+  // by authority number (AI / SIA), numbers compared as numbers
+  const detail = [...detailRaw].sort((x, y) => String(x.authority.aiNumber ?? x.authority.siaNumber ?? '').localeCompare(String(y.authority.aiNumber ?? y.authority.siaNumber ?? ''), undefined, { numeric: true, sensitivity: 'base' }))
   const varieties = useLiveQuery(() => db.varietyTypes.toArray(), []) ?? []
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
   // Reported: this modal showed far less detail per AI than the

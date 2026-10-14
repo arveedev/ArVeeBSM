@@ -164,7 +164,7 @@ function AuthorityReviewModal({ authId, onClose }) {
 
             <p className="mt-3 text-xs font-semibold uppercase text-neutral-500">{group.transactions.length} transaction{group.transactions.length === 1 ? '' : 's'} to review</p>
             <ul className="mt-1 space-y-2">
-              {group.transactions.map((tx) => {
+              {[...group.transactions].sort((a, b) => String(a.serialNo ?? '').localeCompare(String(b.serialNo ?? ''), undefined, { numeric: true, sensitivity: 'base' })).map((tx) => {
                 const canMove = tx.type !== 'ESR' && tx.type !== 'ESI' && authorityWarehouse && authorityWarehouse !== tx.warehouseId && userCanUse(tx.warehouseId) && userCanUse(authorityWarehouse)
                 return (
                   <li key={tx.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">

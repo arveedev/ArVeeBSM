@@ -695,6 +695,20 @@ digit does not fit gets a warning (nothing is blocked), and a bare serial is com
 **Decision**: `useDebouncedLiveCompute` takes `keepPrevious`; the MO/TMO monitors use it so marking an order done does not empty and
 refill the whole list while the status is recomputed.
 
+### 2.46 Derived totals are recomputed from the synced transactions, never trusted from a stored number
+
+**Decision**: an authority's issued bags / kilos and a pile's balance are stored on synced rows for fast reading, but they are derived
+data. Each device recomputes them from the synced transactions (`src/services/derivedTotalsSync.js`) after any change to the
+transactions, whenever it reaches the cloud's `in-sync` phase, and every five minutes, and writes only a value that differs. The recompute is
+gated by `isCloudSyncFullyCaughtUp()` (phase exactly `in-sync`), and the older sweeps (the Sheet sync's authority recompute, the pile
+sweep in the transaction preload) are gated the same way. New authorities get the deterministic id `AI::<number>` / `SIA::<number>`.
+
+**Rationale**: a form save moves these totals with a read-modify-write, so two devices saving against the same authority before they had
+synced lost one side's change, and a device that had not finished pulling recomputed a LOWER total from fewer transactions and synced it to
+everyone. The result was an authority that one user saw as used and another as still available. Every device computing the same function of the
+same synced transactions converges; waiting for `in-sync` keeps a device with a partial copy from writing a wrong number. Random ids let two
+devices that first saw the same Sheet row create two authority records, one of which a dedupe pass then deleted, taking its issued total with it.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

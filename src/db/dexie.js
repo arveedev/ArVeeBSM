@@ -1255,6 +1255,13 @@ export const isCloudSyncCaughtUp = () => {
   return phase == null || phase === 'in-sync' || phase === 'pushing' || phase === 'offline'
 }
 
+// Stricter than isCloudSyncCaughtUp: true only when the cloud connection is up AND this device has pulled everything
+// ('in-sync'). Anything that RECOMPUTES a stored total from this device's local transactions (an authority's issued
+// totals, a pile's balance) must wait for this: a device that has not finished pulling holds fewer transactions, so
+// its recompute is LOWER than the truth, and that lower number would then sync to every other device - one device
+// showing an authority as available while the others show it used.
+export const isCloudSyncFullyCaughtUp = () => db.cloud.syncState.value?.phase === 'in-sync'
+
 db.cloud.currentUser.subscribe((user) => {
   console.log('[DEXIE-CLOUD-DIAGNOSTIC] currentUser:', JSON.stringify(user))
   // THE SINGLE MOST DIRECT CHECK for whether every device is sharing

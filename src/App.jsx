@@ -32,6 +32,7 @@ import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, 
 import { startBackupWorker } from './services/backupWorker.js'
 import { startMillingCompletionSync } from './services/millingCompletion.js'
 import { uploadLegacyPrivateMillerShares } from './services/legacyMigrations.js'
+import { startDerivedTotalsSync } from './services/derivedTotalsSync.js'
 import AnimatedToast from './components/common/AnimatedToast.jsx'
 import UpdateChecker from './components/common/UpdateChecker.jsx'
 import useDelayedUnmount from './hooks/useDelayedUnmount.js'
@@ -261,6 +262,13 @@ function App() {
   useEffect(() => {
     if (!user) return
     return startBackupWorker()
+  }, [user])
+
+  // An authority's issued totals and a pile's balance are recomputed from the synced transactions on every device, so all
+  // devices show the same (see derivedTotalsSync.js).
+  useEffect(() => {
+    if (!user) return
+    return startDerivedTotalsSync()
   }, [user])
 
   // MO/TMO completions are shared between devices through a synced table; this keeps each device's local cache

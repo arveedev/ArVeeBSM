@@ -70,7 +70,7 @@
 // callers are expected to check `.ok` before using `.data`.
 
 import { buildChangeLogPatch, markMissingAuthorities } from '../utils/authorityChanges.js'
-import { db } from '../db/dexie.js'
+import { db, isCloudSyncFullyCaughtUp } from '../db/dexie.js'
 import { normalizeWarehouseAlias } from '../utils/warehouseMatching.js'
 import { todayLocalISO } from '../utils/calculations.js'
 
@@ -515,7 +515,9 @@ const upsertAuthority = async (incoming, cacheByAiNumber = null) => {
     }
   } else {
     final = {
-      authId: crypto.randomUUID(),
+      // one id per authority number, so two devices that first see the same Sheet row at the same moment write the
+      // SAME record instead of two (which one would then delete, taking any issued total with it)
+      authId: `AI::${incoming.aiNumber}`,
       ...incoming,
       firstSeenAt: new Date().toISOString(),
       totalIssuedBags: 0,
@@ -605,7 +607,7 @@ const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null) => {
     }
   } else {
     final = {
-      authId: crypto.randomUUID(),
+      authId: `SIA::${incoming.siaNumber}`,
       type: 'SIA',
       firstSeenAt: new Date().toISOString(),
       siaNumber: incoming.siaNumber,
@@ -958,7 +960,8 @@ const runAuthoritiesSync = async () => {
     // table - see each function's own comment for why both sweeps are
     // needed on top of the per-row cleanup those caches feed into.
     await dedupeStaleAuthorities()
-    await recalculateAuthorityIssuedTotals()
+    // only once this device has everything the others have (see isCloudSyncFullyCaughtUp)
+    if (isCloudSyncFullyCaughtUp()) await recalculateAuthorityIssuedTotals()
 
     const [warehouses, aliases, varieties, sackTypes, customerAliases, customers] = await Promise.all([
       db.warehouses.toArray(),
