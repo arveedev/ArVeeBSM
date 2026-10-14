@@ -12,7 +12,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { ArrowLeft, X, SlidersHorizontal, FileSpreadsheet, ChevronRight, Sheet, ClipboardList, Table, Hourglass, Wheat, Factory, FlaskConical, ShieldCheck, Boxes } from 'lucide-react'
+import { ArrowLeft, X, SlidersHorizontal, FileSpreadsheet, ChevronRight, Sheet, ClipboardList, Table, Hourglass, Wheat, Factory, FlaskConical, ShieldCheck, Boxes, Truck } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { todayLocalISO } from '../../utils/calculations.js'
 import {
@@ -22,6 +22,7 @@ import {
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
 import { buildEndingStockData, endingStockModels } from '../../utils/endingStockReport.js'
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
+import { buildMillingIssuances } from '../../utils/millingIssuances.js'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
@@ -601,6 +602,96 @@ function FilterSheet({ open, draft, setDraft, provinces, warehouses, view, onApp
   )
 }
 
+// Milling and Issuances (Admin only): per-province totals in net bags, each with its expandable list.
+function IssuanceTable({ rows, cols }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full border-separate border-spacing-0 text-xs tabular-nums">
+        <thead>
+          <tr>{cols.map((c) => <th key={c.key} className={`border-b border-neutral-800 px-2 py-1 font-semibold text-neutral-400 ${c.num ? 'text-right' : 'text-left'}`}>{c.label}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.id ?? i}>{cols.map((c) => <td key={c.key} className={`border-b border-neutral-900 px-2 py-1 align-top text-neutral-300 ${c.num ? 'text-right' : 'break-words'}`}>{c.render ? c.render(r) : r[c.key]}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function MainValues({ title, columns, rows, total }) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand-neon">{title}</p>
+      <table className="min-w-full border-separate border-spacing-0 text-sm tabular-nums">
+        <thead>
+          <tr>
+            <th className="border-b border-neutral-800 px-2 py-1 text-left text-xs font-semibold text-neutral-400">Province</th>
+            {columns.map((c) => <th key={c.key} className="border-b border-neutral-800 px-2 py-1 text-right text-xs font-semibold text-neutral-400">{c.label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan={columns.length + 1} className="px-2 py-2 text-xs text-neutral-500">Nothing in this period.</td></tr>}
+          {rows.map((r) => (
+            <tr key={r.province}>
+              <td className="border-b border-neutral-900 px-2 py-1 text-app-text">{r.province}</td>
+              {columns.map((c) => <td key={c.key} className="border-b border-neutral-900 px-2 py-1 text-right text-app-text">{fmtNum(r[c.key] ?? 0)}</td>)}
+            </tr>
+          ))}
+          <tr>
+            <td className="px-2 py-1 font-bold text-app-text">Total</td>
+            {columns.map((c) => <td key={c.key} className="px-2 py-1 text-right font-bold text-app-text">{fmtNum(total[c.key] ?? 0)}</td>)}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function MillingIssuancesView({ data }) {
+  const base = [
+    { key: 'date', label: 'Date' }, { key: 'serialNo', label: 'Serial' }, { key: 'province', label: 'Province' },
+    { key: 'warehouse', label: 'Warehouse' }, { key: 'customer', label: 'Customer' },
+  ]
+  const bagsCol = { key: 'bags', label: 'Net bags', num: true, render: (r) => fmtNum(r.bags) }
+  const kgCol = { key: 'kilos', label: 'Net kilos', num: true, render: (r) => r.kilos.toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }
+  const authCol = { key: 'aiNumber', label: 'Authority' }
+  const moCol = { key: 'moNo', label: 'MO / TMO' }
+  const { milling, lgu, fti } = data
+  return (
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
+      <MainValues title="Milling (net bags)" columns={[{ key: 'issued', label: 'Issued' }, { key: 'recovered', label: 'Recovered' }]}
+        rows={milling.perProvince} total={{ issued: milling.issuedTotal, recovered: milling.recoveredTotal }} />
+      <ExpandCard title="Milling issuances per authority" count={milling.issues.length} ok>
+        {milling.perAuthority.length === 0 && <p className="py-2 text-xs text-neutral-500">No milling issuances in this period.</p>}
+        {milling.perAuthority.map((a) => (
+          <div key={a.aiNumber} className="mb-3 last:mb-0">
+            <p className="mb-1 flex items-baseline justify-between gap-3 text-sm font-semibold text-app-text"><span className="break-words">{a.aiNumber}</span><span className="tabular-nums">{fmtNum(a.bags)}</span></p>
+            <IssuanceTable rows={a.rows} cols={[...base, moCol, bagsCol, kgCol]} />
+          </div>
+        ))}
+      </ExpandCard>
+      <ExpandCard title="Recoveries per WSR (rice only, no by-products)" count={milling.recoveries.length} ok>
+        {milling.recoveries.length === 0 ? <p className="py-2 text-xs text-neutral-500">No recoveries in this period.</p>
+          : <IssuanceTable rows={milling.recoveries} cols={[...base, moCol, { key: 'variety', label: 'Variety' }, bagsCol, kgCol]} />}
+      </ExpandCard>
+
+      <MainValues title="Issuances to LGU (net bags)" columns={[{ key: 'bags', label: 'Net bags' }]} rows={lgu.perProvince} total={{ bags: lgu.total }} />
+      <ExpandCard title="Issuances to LGU (sales, from authorities)" count={lgu.rows.length} ok>
+        {lgu.rows.length === 0 ? <p className="py-2 text-xs text-neutral-500">No issuances to an LGU in this period.</p>
+          : <IssuanceTable rows={lgu.rows} cols={[...base, authCol, bagsCol, kgCol]} />}
+      </ExpandCard>
+
+      <MainValues title="Issuances to FTI (net bags)" columns={[{ key: 'bags', label: 'Net bags' }]} rows={fti.perProvince} total={{ bags: fti.total }} />
+      <ExpandCard title="Issuances to FTI (sales consignment, from authorities)" count={fti.rows.length} ok>
+        {fti.rows.length === 0 ? <p className="py-2 text-xs text-neutral-500">No issuances to FTI in this period.</p>
+          : <IssuanceTable rows={fti.rows} cols={[...base, authCol, bagsCol, kgCol]} />}
+      </ExpandCard>
+    </div>
+  )
+}
+
 function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [view, setView] = useState('hub')
   const today = todayLocalISO()
@@ -660,6 +751,9 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const authorities = useLiveQuery(() => db.authorities.toArray(), [])
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
   const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes, authorities].some((x) => x === undefined)
+  const issuancesData = useMemo(() => (isAdmin && view === 'issuances' && !loading
+    ? buildMillingIssuances({ transactions, warehouses: warehousesRaw, provinces, varieties, transactionTypes, globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to })
+    : null), [isAdmin, view, loading, transactions, warehousesRaw, provinces, varieties, transactionTypes, config, from, to])
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
   // a screen an Admin has made Admin only is closed for a Visitor even if it was open when the setting changed
@@ -781,7 +875,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     }
   }
 
-  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', ending: 'Ending stock per variety', milling: 'Milling liquidation', test: 'Test milling liquidation' }[view] ?? 'Stock Desk'
+  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', ending: 'Ending stock per variety', milling: 'Milling liquidation', test: 'Test milling liquidation', issuances: 'Milling and Issuances' }[view] ?? 'Stock Desk'
   // Leaving plays an exit animation before the next screen enters.
   const requestClose = () => { if (closing) return; setClosing(true); setTimeout(onClose, 200) }
   const navigate = (next) => { if (leaving || next === view) return; setLeaving(true); setTimeout(() => { setView(next); setLeaving(false) }, 190) }
@@ -819,7 +913,8 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               { id: 'milling', name: 'Milling liquidation', desc: 'Regular milling per ricemill: issues, receipts, by-products, summary', Icon: Factory },
               { id: 'test', name: 'Test milling liquidation', desc: 'Test milling per ricemill: TMO and trials, by-products, summary', Icon: FlaskConical },
               { id: 'check', name: 'Data check', desc: 'Overrides in use, shortages, over-authorized stock, approximate ages, unassigned documents', Icon: ShieldCheck },
-            ].filter((t) => canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }, n) => (
+              ...(isAdmin ? [{ id: 'issuances', name: 'Milling and Issuances', desc: 'Milling, issuances to LGU and issuances to FTI per province in net bags, with the lists behind them (Admin only)', Icon: Truck }] : []),
+            ].filter((t) => t.id === 'issuances' || canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }, n) => (
               <button
                 key={id} type="button" onClick={() => navigate(id)} style={{ animationDelay: leaving ? `${n * 15}ms` : `${n * 50}ms` }}
                 className={`flex min-h-[68px] items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-left sm:min-h-[116px] sm:gap-4 sm:p-5 transition-colors hover:border-brand-neon/60 hover:bg-neutral-800/60 ${leaving ? 'sd-tile-out' : 'sd-tile-in'}`}
@@ -836,6 +931,16 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
         {view === 'ending' && (loading || !built?.ending
           ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>
           : <EndingStockView data={built.ending} setMonth={setEndingMonth} unit={unit} setUnit={setUnit} narrow={narrow} />)}
+
+        {view === 'issuances' && isAdmin && (
+          <>
+            <div className="mb-2 flex flex-wrap items-end gap-x-2 gap-y-2">
+              <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">From</p><CalendarDatePicker value={from} label="Start Date" onChange={(iso) => { setFrom(iso); toRef.current?.open() }} /></div>
+              <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">To</p><CalendarDatePicker ref={toRef} value={to} label="End Date" onChange={setTo} /></div>
+            </div>
+            {issuancesData ? <MillingIssuancesView data={issuancesData} /> : <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>}
+          </>
+        )}
 
         {(view === 'milling' || view === 'test') && narrow && (
           <div className="sd-fade-in mx-auto mt-6 flex max-w-md flex-col items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-center">
