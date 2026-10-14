@@ -8423,4 +8423,5 @@
 //   1.10-365 - Milling and Issuances: the period buttons (1-7, 8-15, 16-22, 23-end, month arrows) like the Stock Statement, and every issuance figure (milling, LGU, FTI) now comes from the authorities (their own net bags, counted in the period the authority is dated), not from the WSI documents. Recoveries stay per WSR.
 //   1.10-366 - Milling and Issuances: Copy text and Save .md buttons give the three main tables (milling, LGU, FTI) as Markdown text, without the lists, ready to paste into a chat group.
 //   1.10-367 - Milling and Issuances: the copied text now follows the group-chat format (Milling per Province, the period, MILLING and NFA-OWNED issuance / recoveries, ISSUANCE TO LGU and ISSUANCE TO FTI per province code). NFA-owned milling is split out (authorities of an NFA ricemill's Regional Authority Number; its recoveries are the rice its transfer authorities hand out). Private-miller recoveries now also count milling WSRs without an MO number. Save .txt replaces Save .md.
-export const APP_VERSION = '1.10-367'
+//   1.10-368 - Milling and Issuances: an authority counts for what it authorizes even when it was marked complete with nothing issued (the issuance to FTI for Sept 23-30 now reads 2,669 for Albay, as expected).
+export const APP_VERSION = '1.10-368'

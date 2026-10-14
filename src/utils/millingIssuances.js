@@ -1,7 +1,7 @@
 // Milling and Issuances (Stock Desk, Admin only) - READ-ONLY, pure functions.
 //
 // Every figure is in net bags (net kilos / 50). Issuances are taken from the AUTHORITIES (what the authority
-// authorizes, or what it issued once complete), never from the WSI documents, and are counted in the period
+// authorizes), never from the WSI documents, and are counted in the period
 // the authority is dated. Recoveries are the rice WSRs of milling (no by-products).
 //  - Milling (private millers): authorities of a milling transaction type (MILLING, REMILLING, TEST MILLING, ...)
 //    that do not belong to an NFA-owned ricemill; recoveries are the rice WSRs of milling (an MO / TMO number or
@@ -13,7 +13,7 @@
 //  - Issuances to FTI: authorities of type SALES (CONSIGNMENT).
 // A warehouse's reporting start (override) date is respected like everywhere else.
 
-import { effectiveCutoffDate, dedupeAuthoritiesByRef, isAuthorityComplete } from './calculations.js'
+import { effectiveCutoffDate, dedupeAuthoritiesByRef } from './calculations.js'
 
 const NET_BAG_KG = 50
 const norm = (s) => String(s ?? '').trim().toUpperCase().replace(/\s+/g, ' ')
@@ -60,7 +60,8 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
     if (!inCutoff(pl.wh, a.date)) continue
     const alloc = a.totalAllocationKilos || (a.totalAllocationBags ?? 0) * NET_BAG_KG
     const issued = a.totalIssuedKilos ?? 0
-    const kilos = isAuthorityComplete(a) ? issued : Math.max(alloc, issued)
+    // what the authority authorizes, even when it was marked complete with nothing issued
+    const kilos = Math.max(alloc, issued)
     if (!(kilos > 0)) continue
     const type = norm(a.transactionTypeName)
     const row = {
