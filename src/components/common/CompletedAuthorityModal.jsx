@@ -118,7 +118,7 @@ function CompletedAuthorityModal({ authorities, type, varietyMap, sackTypeMap, w
     setPendingUncomplete(null)
     setRevertingId(authId)
     setTimeout(() => {
-      db.authorities.update(authId, { manuallyCompleted: false })
+      db.authorities.update(authId, { manuallyCompleted: false, manuallyCompletedDate: null })
       // revertingId is cleared by the effect above, once the live
       // query confirms the authority has actually left this list.
     }, ROW_EXIT_MS)

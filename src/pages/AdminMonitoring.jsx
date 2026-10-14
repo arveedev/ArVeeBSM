@@ -21,7 +21,7 @@ import { db } from '../db/dexie.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
-import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, dedupeAuthoritiesByRef, fmtBags, fmtWeight } from '../utils/calculations.js'
+import { calculateAuthorityStatus, isAuthorityComplete, todayLocalISO, authorityExtraDetails, dedupeAuthoritiesByRef, fmtBags, fmtWeight } from '../utils/calculations.js'
 import ShrinkFilterRow from '../components/common/ShrinkFilterRow.jsx'
 import { authorityMatchesQuery, authorityMatchRank } from '../utils/monitoringSearch.js'
 import { rankSortKeepingAll } from '../utils/fuzzySearch.js'
@@ -132,7 +132,7 @@ function AdminMonitoring() {
     e.stopPropagation()
     setCompletingId(authority.authId)
     setTimeout(() => {
-      db.authorities.update(authority.authId, { manuallyCompleted: true })
+      db.authorities.update(authority.authId, { manuallyCompleted: true, manuallyCompletedDate: todayLocalISO() })
     }, ROW_EXIT_MS)
   }
   const warehouses = useLiveQuery(() => db.warehouses.toArray(), []) ?? []

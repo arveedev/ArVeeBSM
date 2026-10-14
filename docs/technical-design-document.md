@@ -726,6 +726,12 @@ counted them and the two stopped tallying. An ordinary transfer needs no new cal
 CLOSING RESIDUE with the other pile's name), the Stock Report and the Stock Desk read it as they read any transfer, and it nets to zero at
 variety level. Using the closing date keeps earlier reports unchanged.
 
+### 2.48 History must not change when an authority is completed
+
+**Decision**: the Stock Desk deducts an authority in full from its date. Marking it complete by hand stores the day (`manuallyCompletedDate`); the lots engine releases the unwithdrawn part on that day only (a `release` event that returns the pool's remaining lots, with their ages, and cancels the authority's shortfall). An authority completed before this decision has no day and keeps the earlier rule (counts what was issued, from its own date). Reverting clears the day.
+
+**Rationale**: the earlier rule read the authority's current state and applied it to the past, so a completion today changed every balance back to the authority's date; owners saw beginning balances that moved by themselves (a 500-bag authority moved a month-end balance by 500 bags in the 2026-10-08 backup). A completion is an event with a date, like every other movement.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

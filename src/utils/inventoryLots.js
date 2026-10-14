@@ -196,10 +196,15 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       // the authority's own figures: authorized kilos, or, once complete, what it issued
       const alloc = a.totalAllocationKilos || (a.totalAllocationBags ?? 0) * 50
       const issued = a.totalIssuedKilos ?? 0
-      const amount = isAuthorityComplete(a) ? issued : Math.max(alloc, issued)
+      // An authority marked complete by hand on a known day keeps deducting in full until that day and gives back
+      // what was never withdrawn from then on, so completing it today cannot change any earlier day's balance.
+      // (An older completion with no recorded day keeps the earlier rule: it counts what was issued, from its date.)
+      const doneOn = a.manuallyCompleted && a.manuallyCompletedDate && a.manuallyCompletedDate > a.date ? a.manuallyCompletedDate : null
+      const amount = isAuthorityComplete(a) && !doneOn ? issued : Math.max(alloc, issued)
       if (amount <= 0 || a.date > asOf) continue
       reservingAi.add(a.aiNumber)
       events.push({ rank: 0.5, when: a.date, auth: { a, amount } })
+      if (doneOn && doneOn <= asOf && amount > issued) events.push({ rank: 0.6, when: doneOn, release: { a, kilos: amount - issued } })
     }
   }
 
@@ -350,6 +355,33 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
           })
         }
       }
+      continue
+    }
+    if (ev.release) {
+      const { a, kilos } = ev.release
+      const pool = pools.get(a.aiNumber)
+      if (!pool) continue
+      const back = drawPool(pool, kilos).map(({ fromPool, ...l }) => ({ ...l, source: 'release' }))
+      for (const l of back) addLot(l.pileId, l)
+      // whatever the stock never held (the authority's shortfall, a negative lot) is given back too
+      let missing = kilos - back.reduce((sum, l) => sum + l.kilos, 0)
+      if (missing > 1e-6) {
+        for (const [, st] of state) {
+          const idx = st.lots.findIndex((l) => l.lotId === `shortfall-${a.aiNumber}`)
+          if (idx < 0) continue
+          const lot = st.lots[idx]
+          const give = Math.min(missing, -lot.kilos)
+          lot.kilos = round3(lot.kilos + give)
+          lot.bags = lot.kilos / 50
+          if (lot.kilos > -1e-6) st.lots.splice(idx, 1)
+          missing -= give
+          break
+        }
+      }
+      const pseudo = { date: ev.when, type: 'AI', serialNo: a.aiNumber, customerName: a.customerName ?? null, transactionTypeId: null }
+      const byPile = new Map()
+      for (const x of back) { const l = byPile.get(x.pileId) ?? []; l.push(x); byPile.set(x.pileId, l) }
+      for (const [pid, list] of byPile) note('add', pseudo, pid, list, 'AUTHORITY COMPLETED')
       continue
     }
     if (ev.auth) {

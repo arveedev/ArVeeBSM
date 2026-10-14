@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-14, app v1.10-368) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-14, app v1.10-369) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
@@ -39,6 +39,7 @@ the latest code commit). Update it before saying a task is done.
   (`isCloudSyncFullyCaughtUp` in `db/dexie.js`); new authorities get the deterministic id `AI::<number>` / `SIA::<number>`.
 - **Closing residue** (v1.10-362, TDD 2.47): a pile closed with 0 bags but net kilos left moves them to the open same-variety pile with the most stock as a 0-bag WTS (`RESIDUE-` serial, `isClosingResidue`) dated the closing date, noted on both BIN Cards; Admin > Closing Residue handles piles closed earlier; re-open undoes it. Residue records carry the piles' dominant sack type and condition (v1.10-363). Run once on live data by the owner (ABACORP A Pile 2 to Pile 6).
 - **Milling and Issuances** (v1.10-364, Admin only, Stock Desk hub): per-province net bags for milling, issuances to LGU and issuances to FTI (issuances = the authorities' own net bags, not WSI; recoveries = WSR) with expandable lists; From / To plus the 1-7 / 8-15 / 16-22 / 23-end period buttons. Copy text / Save .txt give the main values in the owner's chat format (no lists); NFA-owned is split out. OPEN: recoveries differ from the owner's own figures (see activity log).
+- **Authority completion is dated** (v1.10-369, TDD 2.48): `manuallyCompletedDate` is stamped when an authority is marked complete; the Stock Desk keeps deducting in full until that day, then releases the unwithdrawn part. Completions made before have no date and use the old rule (deduct issued from the authority date).
 - UI: Escape closes the topmost modal everywhere (`utils/useEscapeClose.js`); login logo opens large then shrinks into place;
   closed piles are in no picker; a pile's age is never negative; Tab from MTS stops at blank fields; procurement warehouse cards start
   collapsed; lists sorted as the owner decided (unwithdrawn detail by authority number, PRs by PR number, review transactions by

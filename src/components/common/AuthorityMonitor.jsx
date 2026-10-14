@@ -22,7 +22,7 @@ import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Check, Inbox } from 'lucide-react'
 import { db } from '../../db/dexie.js'
-import { calculateAuthorityStatus, isAuthorityComplete, authorityExtraDetails, fmtBags, fmtWeight } from '../../utils/calculations.js'
+import { calculateAuthorityStatus, isAuthorityComplete, todayLocalISO, authorityExtraDetails, fmtBags, fmtWeight } from '../../utils/calculations.js'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import CompletedAuthorityModal from './CompletedAuthorityModal.jsx'
@@ -184,7 +184,7 @@ function AuthorityMonitor() {
     e.stopPropagation()
     setCompletingId(authority.authId)
     setTimeout(() => {
-      db.authorities.update(authority.authId, { manuallyCompleted: true })
+      db.authorities.update(authority.authId, { manuallyCompleted: true, manuallyCompletedDate: todayLocalISO() })
       // completingId is cleared by the effect above, once the live
       // query confirms the authority has actually left this list - not
       // here, to avoid a race with Dexie's async re-query.
