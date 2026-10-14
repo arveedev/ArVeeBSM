@@ -709,6 +709,23 @@ everyone. The result was an authority that one user saw as used and another as s
 same synced transactions converges; waiting for `in-sync` keeps a device with a partial copy from writing a wrong number. Random ids let two
 devices that first saw the same Sheet row create two authority records, one of which a dedupe pass then deleted, taking its issued total with it.
 
+### 2.47 A closed pile's leftover net kilos move to another pile as a 0-bag transfer
+
+**Decision**: when a pile is closed with no bags left but net kilos still in its ledger, those kilos are moved to an open pile of the same variety
+and cereal in the same warehouse by an ordinary WTS record with 0 bags (`utils/closingResidue.js`): issued from the closed pile, received by
+the destination, dated the pile's closing date, serial `RESIDUE-<7 digits>` taken from the closed pile's id, flagged `isClosingResidue`
+and marked synced so nothing is written to the Google Sheet. The record's id is `residue::<closed pile id>`, so repeating the move changes
+nothing. A warehouse's reporting start (override) date is respected: a pile closed on or before it has no residue and is left alone, and
+the ledger it is computed from uses the same cutoff. Re-opening a pile deletes its residue record. Closing from any screen goes through
+`closePileWithResidue`, which picks the open pile holding the most stock; Admin > Closing Residue scans piles that were closed earlier
+and moves them with a destination chosen per pile. In the Stock Desk lots, a closed pile keeps its leftover as a 0-bag lot with its
+original receipt date and the residue transfer carries that lot to the destination, so the stock keeps its age.
+
+**Rationale**: closing a pile zeroes it, so its leftover kilos disappeared from every pile-level view while the warehouse statement still
+counted them and the two stopped tallying. An ordinary transfer needs no new calculation anywhere: pile balances, BIN Cards (labelled
+CLOSING RESIDUE with the other pile's name), the Stock Report and the Stock Desk read it as they read any transfer, and it nets to zero at
+variety level. Using the closing date keeps earlier reports unchanged.
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Offline capability

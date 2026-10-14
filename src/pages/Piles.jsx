@@ -31,7 +31,8 @@ import { fmtBags, fmtKilos, fmtWeight, fmtMc, fmtDateForFilename, sanitizeForFil
 import { generatePileLayoutReport, boxDetailEntries } from '../utils/pileLayoutPdfGenerator.js'
 import { generatePileBinCard } from '../utils/pileBinCardGenerator.js'
 
-import { computeHistoricalPileState, computePileStockBreakdown, vacateBoxForPile, closePile, computePileStartDate } from '../utils/pileLedger.js'
+import { computeHistoricalPileState, computePileStockBreakdown, vacateBoxForPile, computePileStartDate } from '../utils/pileLedger.js'
+import { closePileWithResidue } from '../utils/closingResidue.js'
 import { formatPileStockGroups, groupHeading, fmtGroupDate } from '../utils/pileStockGroups.js'
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, byAlpha } from '../components/common/admin/shared.js'
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx'
@@ -925,8 +926,8 @@ function Piles() {
   // so the popup just needs to close along with it.
   const handleCloseConfirmed = async () => {
     const { pileName, pileId } = pendingClose
-    await closePile(pileId, closeDate)
-    toast.success(`Pile "${pileName}" closed`)
+    const residue = await closePileWithResidue(pileId, closeDate)
+    toast.success(`Pile "${pileName}" closed${residue ? ` - ${residue}` : ''}`)
     setPendingClose(null)
     setEditingBoxId(null)
   }

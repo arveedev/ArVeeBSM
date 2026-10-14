@@ -430,3 +430,12 @@ the step-by-step journey.*
    unserviceable; remarks on all); the pencil edits, the bin deletes after an inline confirmation. Done closes it.
 3. Nothing is exported from here. When the Stock Report is exported (PDF or Excel), the stored inventory is its last page,
    under the Stock Report's period and signatories; a warehouse with no inventory gets no such page.
+
+## 15. Closing a Pile With Net Kilos Left
+
+1. A pile is closed from the Piles list, the layout or Admin > Beginning Balances, with the closing date typed in the dialog.
+2. If the pile has no bags left but net kilos remain on its ledger as of that date, they move to the open pile of the same variety in the same
+   warehouse that holds the most stock; the confirmation message names the pile. With no such pile the message says so and the kilos stay unmoved.
+3. Both piles' BIN Cards show a CLOSING RESIDUE line dated the closing date; the closed pile then shows a balance of 0.
+4. Admin > Closing Residue scans piles closed earlier, lists the kilos each still holds, lets the Admin choose a destination per pile and moves them.
+5. Re-opening a pile takes its residue move back. A warehouse's reporting start date is respected: piles closed on or before it are left alone.

@@ -7,7 +7,7 @@
 
 import jsPDF from 'jspdf'
 import { autoTable, cap, attachCapture } from './pdfCapture.js'
-import { fmtBags, fmtKilos, effectiveCutoffDate } from './calculations.js'
+import { fmtBags, fmtKilos, effectiveCutoffDate, round3 } from './calculations.js'
 import { stripWarehouseCodePrefix } from '../services/googleSheetsBridge.js'
 import { sackLabelText } from './pileStockGroups.js'
 
@@ -84,6 +84,13 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
       type = transactionTypeMap?.get(t.transactionTypeId) ?? t.type
       customer = ''
       reference = t.serialNo ?? ''
+      if (t.isClosingResidue) {
+        // The net kilos a closed pile still held (no bags) moved to a pile of the same variety.
+        type = 'CLOSING RESIDUE'
+        customer = t.issuedPileId === pile.pileId
+          ? `Net kilos moved to ${t.residueToPileName || 'another pile'}`
+          : `Net kilos from closed ${t.residueFromPileName || 'pile'}`
+      }
       if (t.receivedPileId === pile.pileId) {
         receiptBags = t.receivedBags ?? 0
         receiptKilos = t.receivedNetKilos ?? 0
@@ -95,7 +102,7 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
     }
 
     runningBags += (receiptBags ?? 0) - (issueBags ?? 0)
-    runningKilos += (receiptKilos ?? 0) - (issueKilos ?? 0)
+    runningKilos = round3(runningKilos + (receiptKilos ?? 0) - (issueKilos ?? 0)) + 0
 
     rows.push({
       date: t.date, type, customer, reference,
@@ -121,7 +128,8 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
       receiptBags: runningBags < 0 ? -runningBags : null,
       receiptKilos: runningBags < 0 ? -runningKilos : null,
       issueBags: runningBags > 0 ? runningBags : null,
-      issueKilos: runningBags > 0 ? runningKilos : null,
+      // kilos left with no bags (and no residue move recorded) are written off here too
+      issueKilos: runningBags > 0 || runningKilos > 0.0005 ? runningKilos : null,
       balanceBags: 0,
       balanceKilos: 0,
     })

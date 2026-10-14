@@ -494,6 +494,9 @@ backs.
 - **MO/TMO completion differing between devices.** One device showed many finished mills, others many pending: the completion flag lived in an unsynced cache table. Now a synced decision table with a live copy onto each device's cache and a one-time upload of earlier local completions (TDD §2.40). Note: the new synced table needs Dexie Cloud to accept it; verify sync after release.
 - **Process incident.** A commit staged the whole `docs` folder and swept unrelated, uncommitted working files into the
   remote; it was reset and re-pushed with only the intended files. Lesson: stage named paths only.
+- **Closing residue (v1.10-362).** Reported: closing a pile with no bags but net kilos left lost those kilos from pile-level views and the
+  exported stock statement stopped tallying. Built as a 0-bag transfer to a same-variety pile (TDD §2.47), a scan-first Admin tool for piles
+  already closed, BIN Card labels on both piles and age-keeping in the Stock Desk lots.
 
 **Milestone**: every report can leave the app as a print-faithful PDF or an editable Excel workbook whose figures are live
 formulas, the SDO can produce the replenishment voucher and BUR from the same Abstract, and each warehouse keeps its

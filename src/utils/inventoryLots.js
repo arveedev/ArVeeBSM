@@ -221,7 +221,8 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
     let needBags = bags
     while (needBags > 1e-9) {
       // an authority's shortfall (a negative lot, see the authority branch below) is never taken from
-      const idx = st.lots.findIndex((l) => l.source !== 'shortfall')
+      // (a lot already down to 0 bags only holds leftover kilos - see below - and has nothing to give)
+      const idx = st.lots.findIndex((l) => l.source !== 'shortfall' && l.bags > 1e-9)
       if (idx < 0) break
       const lot = st.lots[idx]
       const useBags = Math.min(lot.bags, needBags)
@@ -234,11 +235,19 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       lot.kilos = round3(lot.kilos - useKilos)
       needBags -= useBags
       if (lot.bags <= 1e-9) {
-        st.lots.splice(idx, 1)
         // Whatever kilos are left over (either sign) move to the next
         // oldest lot, so nothing is lost or invented.
-        const next = st.lots.find((l) => l.source !== 'shortfall')
-        if (next) next.kilos = round3(next.kilos + lot.kilos)
+        const next = st.lots.find((l, i) => i !== idx && l.source !== 'shortfall')
+        if (next) {
+          st.lots.splice(idx, 1)
+          next.kilos = round3(next.kilos + lot.kilos)
+        } else if (lot.kilos > 1e-6 && pileById.get(pileId)?.closedDate) {
+          // A closed pile with no later lot to take them: it keeps the leftover net kilos as a 0-bag lot
+          // (original date kept), so they can follow the pile's closing residue to a pile of the same variety.
+          lot.bags = 0
+        } else {
+          st.lots.splice(idx, 1)
+        }
       }
     }
     if (needBags > 1e-9) {
@@ -406,6 +415,34 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       const outCounts = from && counts(tx, from)
       const inCounts = to && counts(tx, to)
       let taken = []
+      if (tx.isClosingResidue) {
+        // Net kilos only (0 bags): the closed pile's leftover 0-bag lots move across with their original dates.
+        const kept = []
+        let want = tx.issuedNetKilos ?? 0
+        const st = from ? state.get(from) : null
+        if (outCounts && st) {
+          for (const lot of [...st.lots]) {
+            if (want <= 1e-6) break
+            if (lot.source === 'shortfall' || lot.bags > 1e-9 || !(lot.kilos > 0)) continue
+            const useK = Math.min(lot.kilos, want)
+            kept.push({ ...lot, bags: 0, kilos: round3(useK) })
+            lot.kilos = round3(lot.kilos - useK)
+            want -= useK
+            if (lot.kilos <= 1e-6) st.lots.splice(st.lots.indexOf(lot), 1)
+          }
+        }
+        if (want > 1e-6 && outCounts) {
+          // nothing left to carry (e.g. kilos not held as lots): date what is missing at the transfer itself
+          kept.push({ lotId: tx.id, date: tx.date, anchor: ANCHOR.TRANSACTION, source: 'WTS', varietyId: tx.receivedVarietyId ?? null, sackTypeId: null, mtsCondition: null, bags: 0, kilos: round3(want) })
+        }
+        note('less', tx, from, kept, 'CLOSING RESIDUE')
+        if (inCounts) {
+          const carried = kept.map((l) => ({ ...l, source: 'WTS', varietyId: tx.receivedVarietyId ?? l.varietyId }))
+          carried.forEach((l) => addLot(to, l))
+          note('add', tx, to, carried, 'CLOSING RESIDUE')
+        }
+        continue
+      }
       if (outCounts) {
         const pool = reserve && tx.aiNumber && reservingAi.has(tx.aiNumber) ? pools.get(tx.aiNumber) : null
         if (pool) {

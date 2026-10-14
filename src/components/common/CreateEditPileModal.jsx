@@ -29,7 +29,8 @@ import { X, Check, AlertTriangle, MoreVertical } from 'lucide-react'
 import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, todayLocalISO, liveFormatNumber, parseFormattedNumber } from '../../utils/calculations.js'
-import { createPileWithBeginningBalance, recalculatePileCurrentState, closePile, reopenPile } from '../../utils/pileLedger.js'
+import { createPileWithBeginningBalance, recalculatePileCurrentState } from '../../utils/pileLedger.js'
+import { closePileWithResidue, reopenPileWithResidue } from '../../utils/closingResidue.js'
 import { generatePileBinCard } from '../../utils/pileBinCardGenerator.js'
 import { inputClass, primaryButtonClass, byAlpha } from './admin/shared.js'
 import { CONDITION_FLAGS } from '../forms/shared.js'
@@ -166,11 +167,11 @@ function CreateEditPileModal({ open, warehouseId, pile, onClose, onGoToBalance }
     const willClose = pendingCloseToggle?.willClose
     setPendingCloseToggle(null)
     if (!willClose) {
-      await reopenPile(pile.pileId)
+      await reopenPileWithResidue(pile.pileId)
       toast.success(`Pile "${pile.pileName}" re-opened`)
     } else {
-      await closePile(pile.pileId, closeDate)
-      toast.success(`Pile "${pile.pileName}" closed`)
+      const residue = await closePileWithResidue(pile.pileId, closeDate)
+      toast.success(`Pile "${pile.pileName}" closed${residue ? ` - ${residue}` : ''}`)
     }
     handleClose()
   }

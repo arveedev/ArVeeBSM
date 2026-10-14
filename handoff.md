@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-14, app v1.10-361) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-14, app v1.10-362) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
@@ -37,6 +37,7 @@ the latest code commit). Update it before saying a task is done.
   derived from transactions (an authority's issued totals, a pile's balance) are recomputed from the synced transactions on every
   device by `src/services/derivedTotalsSync.js`, but only when the device is fully caught up with the cloud
   (`isCloudSyncFullyCaughtUp` in `db/dexie.js`); new authorities get the deterministic id `AI::<number>` / `SIA::<number>`.
+- **Closing residue** (v1.10-362, TDD 2.47): a pile closed with 0 bags but net kilos left moves them to the open same-variety pile with the most stock as a 0-bag WTS (`RESIDUE-` serial, `isClosingResidue`) dated the closing date, noted on both BIN Cards; Admin > Closing Residue handles piles closed earlier; re-open undoes it. Not yet run on live data.
 - UI: Escape closes the topmost modal everywhere (`utils/useEscapeClose.js`); login logo opens large then shrinks into place;
   closed piles are in no picker; a pile's age is never negative; Tab from MTS stops at blank fields; procurement warehouse cards start
   collapsed; lists sorted as the owner decided (unwithdrawn detail by authority number, PRs by PR number, review transactions by

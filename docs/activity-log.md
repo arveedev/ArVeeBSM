@@ -18508,3 +18508,7 @@ closes the topmost modal through one stack (`useEscapeClose.js`). Ctrl + Alt + D
 Lists sorted as decided. Stop hook replaced by `.claude/hooks/docs-fresh.sh` (line-ending-only changes no longer count as an update).
 `handoff.md` rewritten at the top (CURRENT STATE); it had been stale since v1.10-271 because the old hook was satisfied by a CRLF-only change.
 
+
+## 2026-10-14 - Closing residue (v1.10-362)
+
+Reported: a pile closed with no bags but net kilos left lost those kilos from pile-level views, so the exported stock statement did not tally. Built `utils/closingResidue.js`: the leftover moves to an open pile of the same variety in the same warehouse as a 0-bag WTS dated the closing date (original age kept in the Stock Desk lots, warehouse reporting start date respected), labelled CLOSING RESIDUE on both BIN Cards. Closing from the Piles list, layout or Beginning Balances runs it; re-opening a pile undoes it. Admin > Closing Residue scans piles closed earlier (on the 2026-10-08 backup: 2 piles, 226.46 kg, one with no open pile of its variety) and moves them with a chosen destination. TDD 2.47, app-flow 15, schema `isClosingResidue`.

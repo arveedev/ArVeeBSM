@@ -32,6 +32,7 @@ import DataRepairPanel from '../components/common/admin/DataRepairPanel.jsx'
 import AuthorityLinksPanel from '../components/common/admin/AuthorityLinksPanel.jsx'
 import MoveRecordsPanel from '../components/common/admin/MoveRecordsPanel.jsx'
 import DuplicateCleanupPanel from '../components/common/admin/DuplicateCleanupPanel.jsx'
+import ClosingResiduePanel from '../components/common/admin/ClosingResiduePanel.jsx'
 import InventoryLotsCheckPanel from '../components/common/admin/InventoryLotsCheckPanel.jsx'
 import MillingSettingsPanel from '../components/common/admin/MillingSettingsPanel.jsx'
 import InventorySheetExportPanel from '../components/common/admin/InventorySheetExportPanel.jsx'
@@ -98,6 +99,7 @@ const GROUPS = [
       { id: 'dataRepair', label: 'Data Repair', Panel: DataRepairPanel },
       { id: 'moveRecords', label: 'Move Records', Panel: MoveRecordsPanel },
       { id: 'duplicateCleanup', label: 'Duplicate Cleanup', Panel: DuplicateCleanupPanel },
+      { id: 'closingResidue', label: 'Closing Residue', Panel: ClosingResiduePanel },
       { id: 'inventoryLotsCheck', label: 'Inventory Lots Check', Panel: InventoryLotsCheckPanel },
       { id: 'inventorySheetExport', label: 'Sheet Export', Panel: InventorySheetExportPanel },
       { id: 'inventoryReportsAccess', label: 'Report Access', Panel: InventoryReportsAccessPanel },

@@ -364,7 +364,7 @@ export const createPileWithBeginningBalance = async ({
  * in scope (e.g. a loop over every pile in one warehouse) to avoid a
  * redundant db.warehouses.get per call.
  */
-export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOverride = null) => {
+export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOverride = null, { ignoreClose = false } = {}) => {
   const pile = await db.piles.get(pileId)
 
   // closePile() deliberately zeroes a pile's balance "regardless of its
@@ -379,7 +379,9 @@ export const computeHistoricalPileState = async (pileId, cutoffDate, warehouseOv
   // shows: zero. Before the close date (a backdated "as of" report,
   // still legitimate), the pile's real history at that earlier point
   // still matters and is computed normally.
-  if (pile?.closedDate && cutoffDate >= pile.closedDate) {
+  // ignoreClose: the pile's real ledger balance, before the closing zero-out (used to find the
+  // net kilos a closed pile still held - see utils/closingResidue.js).
+  if (!ignoreClose && pile?.closedDate && cutoffDate >= pile.closedDate) {
     return { bags: 0, kilos: 0 }
   }
 

@@ -152,6 +152,7 @@ sack documents and vice versa.
 | `isSynced` | boolean | Indexed. Whether this record has reached the Sheets backup log |
 | `hasBeenBackedUp` | boolean | Distinct from `isSynced` — persists across a later edit that resets `isSynced` to false, so an edit updates the existing Sheet row instead of appending a duplicate |
 | `isInitialBalance` | boolean | Indexed. Marks a synthetic beginning-balance seed row — excluded from statement/recap line items, included in beginning-balance math |
+| `isClosingResidue` | boolean | WTS only. A 0-bag transfer that moves a closed pile's leftover net kilos to a same-variety pile (id `residue::<closed pile id>`, serial `RESIDUE-<7 digits>`, `residueFromPileName`, `residueToPileName`, `isSynced: true`). Read like any transfer; labelled CLOSING RESIDUE on BIN Cards |
 | `aiNumber` | string | Indexed. WSI's linked AI authority |
 | `siaNumber` | string | Indexed. ESI's linked SIA authority |
 | `moNumber` / `tmoNumber` | string | Indexed. Milling/Test Milling order reference |

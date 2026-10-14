@@ -17,7 +17,8 @@ import {
   fmtBags, fmtWeight, liveFormatNumber, parseFormattedNumber,
   normalizeAgeToDays, todayLocalISO,
 } from '../../../utils/calculations.js'
-import { recalculatePileCurrentState, closePile, reopenPile, computePileStartDate } from '../../../utils/pileLedger.js'
+import { recalculatePileCurrentState, computePileStartDate } from '../../../utils/pileLedger.js'
+import { closePileWithResidue, reopenPileWithResidue } from '../../../utils/closingResidue.js'
 import { generatePileBinCard } from '../../../utils/pileBinCardGenerator.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
@@ -563,11 +564,11 @@ function PilesBeginningBalances({ warehouseId }) {
     const pile = pendingCloseToggle
     setPendingCloseToggle(null)
     if (pile.closedDate) {
-      await reopenPile(pile.pileId)
+      await reopenPileWithResidue(pile.pileId)
       toast.success(`Pile "${pile.pileName}" re-opened`)
     } else {
-      await closePile(pile.pileId, closeDate)
-      toast.success(`Pile "${pile.pileName}" closed`)
+      const residue = await closePileWithResidue(pile.pileId, closeDate)
+      toast.success(`Pile "${pile.pileName}" closed${residue ? ` - ${residue}` : ''}`)
     }
   }
 
