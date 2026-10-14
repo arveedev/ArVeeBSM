@@ -683,7 +683,12 @@ function MillingIssuancesView({ data }) {
         {nfa.issues.length + nfa.recoveries.length === 0 ? <p className="py-2 text-xs text-neutral-500">Nothing for an NFA-owned ricemill in this period.</p> : (
           <>
             {nfa.issues.length > 0 && <IssuanceTable rows={nfa.issues} cols={authCols} />}
-            {nfa.recoveries.length > 0 && <p className="mb-1 mt-3 text-xs font-semibold text-neutral-400">Rice handed out by the ricemill (recoveries, from its transfer authorities)</p><IssuanceTable rows={nfa.recoveries} cols={authCols} />}
+            {nfa.recoveries.length > 0 && (
+              <>
+                <p className="mb-1 mt-3 text-xs font-semibold text-neutral-400">Rice handed out by the ricemill (recoveries, from its transfer authorities)</p>
+                <IssuanceTable rows={nfa.recoveries} cols={authCols} />
+              </>
+            )}
           </>
         )}
       </ExpandCard>
