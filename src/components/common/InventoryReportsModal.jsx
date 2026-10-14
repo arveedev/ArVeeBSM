@@ -22,7 +22,7 @@ import {
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
 import { buildEndingStockData, endingStockModels } from '../../utils/endingStockReport.js'
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
-import { buildMillingIssuances } from '../../utils/millingIssuances.js'
+import { buildMillingIssuances, issuancesMarkdown } from '../../utils/millingIssuances.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
@@ -755,6 +755,33 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const issuancesData = useMemo(() => (isAdmin && view === 'issuances' && !loading
     ? buildMillingIssuances({ transactions, authorities, warehouses: warehousesRaw, provinces, varieties, globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to })
     : null), [isAdmin, view, loading, transactions, authorities, warehousesRaw, provinces, varieties, config, from, to])
+  const issuancesText = () => issuancesMarkdown(issuancesData, from, to < from ? from : to)
+  const copyIssuances = async () => {
+    const text = issuancesText()
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Copied - paste it into the chat')
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      if (ok) toast.success('Copied - paste it into the chat')
+      else toast.error('Could not copy - use Save .md instead')
+    }
+  }
+  const downloadIssuances = () => {
+    const url = URL.createObjectURL(new Blob([issuancesText()], { type: 'text/markdown;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `milling-and-issuances-${from}_to_${to < from ? from : to}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
   // a screen an Admin has made Admin only is closed for a Visitor even if it was open when the setting changed
@@ -938,6 +965,14 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             <div className="mb-2 flex flex-wrap items-end gap-x-2 gap-y-2">
               <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">From</p><CalendarDatePicker value={from} label="Start Date" onChange={(iso) => { setFrom(iso); toRef.current?.open() }} /></div>
               <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">To</p><CalendarDatePicker ref={toRef} value={to} label="End Date" onChange={setTo} /></div>
+            </div>
+            <div className="mb-2 flex flex-wrap gap-2">
+              <button type="button" onClick={() => copyIssuances()} disabled={!issuancesData} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
+                <ClipboardList size={14} /> Copy text
+              </button>
+              <button type="button" onClick={() => downloadIssuances()} disabled={!issuancesData} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
+                <FileSpreadsheet size={14} /> Save .md
+              </button>
             </div>
             <div className="mb-3">
               <PeriodPresetPicker onSelectRange={(f, t) => { setFrom(f); setTo(t) }} currentFrom={from} currentTo={to} />

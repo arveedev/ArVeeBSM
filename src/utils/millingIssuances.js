@@ -85,3 +85,30 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
     fti: { perProvince: perProvince({ bags: fti }), total: sum(fti), rows: fti },
   }
 }
+
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const longDay = (iso) => { const [y, m, d] = iso.split('-').map(Number); return `${MONTHS_LONG[m - 1]} ${d}, ${y}` }
+const bagsText = (n) => (n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+/** The main tables only (no lists), as Markdown text that can be pasted into a chat. */
+export const issuancesMarkdown = (data, from, to) => {
+  const table = (heading, columns, rows, total) => {
+    const lines = [`**${heading}**`, '', `| Province | ${columns.map((c) => c.label).join(' | ')} |`, `|:--|${columns.map(() => '--:').join('|')}|`]
+    if (rows.length === 0) lines.push(`| (nothing in this period) |${columns.map(() => '').join('|')}|`)
+    for (const r of rows) lines.push(`| ${r.province} | ${columns.map((c) => bagsText(r[c.key])).join(' | ')} |`)
+    lines.push(`| **Total** | ${columns.map((c) => `**${bagsText(total[c.key])}**`).join(' | ')} |`)
+    return lines.join('\n')
+  }
+  const { milling, lgu, fti } = data
+  return [
+    '**MILLING AND ISSUANCES**',
+    `${from === to ? longDay(from) : `${longDay(from)} to ${longDay(to)}`} (net bags)`,
+    '',
+    table('Milling', [{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }], milling.perProvince, { issued: milling.issuedTotal, recovered: milling.recoveredTotal }),
+    '',
+    table('Issuances to LGU', [{ key: 'bags', label: 'Net bags' }], lgu.perProvince, { bags: lgu.total }),
+    '',
+    table('Issuances to FTI', [{ key: 'bags', label: 'Net bags' }], fti.perProvince, { bags: fti.total }),
+    '',
+  ].join('\n')
+}

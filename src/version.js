@@ -8421,4 +8421,5 @@
 //   1.10-363 - Closing residue: the moved net kilos carry the sack weight and condition of the piles (so they join the pile's existing group instead of showing as a separate one) and the BIN Card line has no reference number. Admin > Closing Residue (scan) repairs residue records made in 1.10-362.
 //   1.10-364 - Stock Desk, Admin only: new report Milling and Issuances. Per province, in net bags: milling (issued and recovered; recoveries are rice only, no by-products), issuances to LGU (sales from authorities with LGU in the customer name) and issuances to FTI (sales consignment from authorities), each with an expandable list behind it (milling issuances per authority, recoveries per WSR). From / To period like the Daily inventory.
 //   1.10-365 - Milling and Issuances: the period buttons (1-7, 8-15, 16-22, 23-end, month arrows) like the Stock Statement, and every issuance figure (milling, LGU, FTI) now comes from the authorities (their own net bags, counted in the period the authority is dated), not from the WSI documents. Recoveries stay per WSR.
-export const APP_VERSION = '1.10-365'
+//   1.10-366 - Milling and Issuances: Copy text and Save .md buttons give the three main tables (milling, LGU, FTI) as Markdown text, without the lists, ready to paste into a chat group.
+export const APP_VERSION = '1.10-366'
