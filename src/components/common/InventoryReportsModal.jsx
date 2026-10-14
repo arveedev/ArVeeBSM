@@ -23,6 +23,7 @@ import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/pr
 import { buildEndingStockData, endingStockModels } from '../../utils/endingStockReport.js'
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
 import { buildMillingIssuances } from '../../utils/millingIssuances.js'
+import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
 import { buildCpfHistory } from '../../utils/cpfHistory.js'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
@@ -650,43 +651,43 @@ function MainValues({ title, columns, rows, total }) {
 }
 
 function MillingIssuancesView({ data }) {
-  const base = [
-    { key: 'date', label: 'Date' }, { key: 'serialNo', label: 'Serial' }, { key: 'province', label: 'Province' },
+  const authBase = [
+    { key: 'date', label: 'Date' }, { key: 'aiNumber', label: 'Authority' }, { key: 'province', label: 'Province' },
     { key: 'warehouse', label: 'Warehouse' }, { key: 'customer', label: 'Customer' },
   ]
-  const bagsCol = { key: 'bags', label: 'Net bags', num: true, render: (r) => fmtNum(r.bags) }
+  const wsrBase = [
+    { key: 'date', label: 'Date' }, { key: 'serialNo', label: 'WSR' }, { key: 'province', label: 'Province' },
+    { key: 'warehouse', label: 'Warehouse' }, { key: 'customer', label: 'Miller' }, { key: 'moNo', label: 'MO / TMO' }, { key: 'variety', label: 'Variety' },
+  ]
+  const bagsCol = (label) => ({ key: 'bags', label, num: true, render: (r) => fmtNum(r.bags) })
+  const drawnCol = { key: 'withdrawn', label: 'Withdrawn net bags', num: true, render: (r) => fmtNum(r.withdrawn) }
   const kgCol = { key: 'kilos', label: 'Net kilos', num: true, render: (r) => r.kilos.toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }
-  const authCol = { key: 'aiNumber', label: 'Authority' }
-  const moCol = { key: 'moNo', label: 'MO / TMO' }
+  const authCols = [...authBase, bagsCol('Authority net bags'), drawnCol, kgCol]
   const { milling, lgu, fti } = data
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
-      <MainValues title="Milling (net bags)" columns={[{ key: 'issued', label: 'Issued' }, { key: 'recovered', label: 'Recovered' }]}
+      <p className="text-xs text-neutral-500">Issuances are the authorities' own net bags (counted in the period the authority is dated), not the WSI documents. Recoveries are the WSRs of milling.</p>
+      <MainValues title="Milling (net bags)" columns={[{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }]}
         rows={milling.perProvince} total={{ issued: milling.issuedTotal, recovered: milling.recoveredTotal }} />
       <ExpandCard title="Milling issuances per authority" count={milling.issues.length} ok>
-        {milling.perAuthority.length === 0 && <p className="py-2 text-xs text-neutral-500">No milling issuances in this period.</p>}
-        {milling.perAuthority.map((a) => (
-          <div key={a.aiNumber} className="mb-3 last:mb-0">
-            <p className="mb-1 flex items-baseline justify-between gap-3 text-sm font-semibold text-app-text"><span className="break-words">{a.aiNumber}</span><span className="tabular-nums">{fmtNum(a.bags)}</span></p>
-            <IssuanceTable rows={a.rows} cols={[...base, moCol, bagsCol, kgCol]} />
-          </div>
-        ))}
+        {milling.issues.length === 0 ? <p className="py-2 text-xs text-neutral-500">No milling authorities in this period.</p>
+          : <IssuanceTable rows={milling.issues} cols={authCols} />}
       </ExpandCard>
       <ExpandCard title="Recoveries per WSR (rice only, no by-products)" count={milling.recoveries.length} ok>
         {milling.recoveries.length === 0 ? <p className="py-2 text-xs text-neutral-500">No recoveries in this period.</p>
-          : <IssuanceTable rows={milling.recoveries} cols={[...base, moCol, { key: 'variety', label: 'Variety' }, bagsCol, kgCol]} />}
+          : <IssuanceTable rows={milling.recoveries} cols={[...wsrBase, bagsCol('Net bags'), kgCol]} />}
       </ExpandCard>
 
-      <MainValues title="Issuances to LGU (net bags)" columns={[{ key: 'bags', label: 'Net bags' }]} rows={lgu.perProvince} total={{ bags: lgu.total }} />
-      <ExpandCard title="Issuances to LGU (sales, from authorities)" count={lgu.rows.length} ok>
-        {lgu.rows.length === 0 ? <p className="py-2 text-xs text-neutral-500">No issuances to an LGU in this period.</p>
-          : <IssuanceTable rows={lgu.rows} cols={[...base, authCol, bagsCol, kgCol]} />}
+      <MainValues title="Issuances to LGU (net bags)" columns={[{ key: 'bags', label: 'Authority net bags' }]} rows={lgu.perProvince} total={{ bags: lgu.total }} />
+      <ExpandCard title="Issuances to LGU (sales authorities)" count={lgu.rows.length} ok>
+        {lgu.rows.length === 0 ? <p className="py-2 text-xs text-neutral-500">No authorities to an LGU in this period.</p>
+          : <IssuanceTable rows={lgu.rows} cols={authCols} />}
       </ExpandCard>
 
-      <MainValues title="Issuances to FTI (net bags)" columns={[{ key: 'bags', label: 'Net bags' }]} rows={fti.perProvince} total={{ bags: fti.total }} />
-      <ExpandCard title="Issuances to FTI (sales consignment, from authorities)" count={fti.rows.length} ok>
-        {fti.rows.length === 0 ? <p className="py-2 text-xs text-neutral-500">No issuances to FTI in this period.</p>
-          : <IssuanceTable rows={fti.rows} cols={[...base, authCol, bagsCol, kgCol]} />}
+      <MainValues title="Issuances to FTI (net bags)" columns={[{ key: 'bags', label: 'Authority net bags' }]} rows={fti.perProvince} total={{ bags: fti.total }} />
+      <ExpandCard title="Issuances to FTI (sales consignment authorities)" count={fti.rows.length} ok>
+        {fti.rows.length === 0 ? <p className="py-2 text-xs text-neutral-500">No authorities to FTI in this period.</p>
+          : <IssuanceTable rows={fti.rows} cols={authCols} />}
       </ExpandCard>
     </div>
   )
@@ -752,8 +753,8 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
   const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes, authorities].some((x) => x === undefined)
   const issuancesData = useMemo(() => (isAdmin && view === 'issuances' && !loading
-    ? buildMillingIssuances({ transactions, warehouses: warehousesRaw, provinces, varieties, transactionTypes, globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to })
-    : null), [isAdmin, view, loading, transactions, warehousesRaw, provinces, varieties, transactionTypes, config, from, to])
+    ? buildMillingIssuances({ transactions, authorities, warehouses: warehousesRaw, provinces, varieties, globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to })
+    : null), [isAdmin, view, loading, transactions, authorities, warehousesRaw, provinces, varieties, config, from, to])
   const warehouses = useMemo(() => [...(warehousesRaw ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')), [warehousesRaw])
 
   // a screen an Admin has made Admin only is closed for a Visitor even if it was open when the setting changed
@@ -937,6 +938,9 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             <div className="mb-2 flex flex-wrap items-end gap-x-2 gap-y-2">
               <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">From</p><CalendarDatePicker value={from} label="Start Date" onChange={(iso) => { setFrom(iso); toRef.current?.open() }} /></div>
               <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">To</p><CalendarDatePicker ref={toRef} value={to} label="End Date" onChange={setTo} /></div>
+            </div>
+            <div className="mb-3">
+              <PeriodPresetPicker onSelectRange={(f, t) => { setFrom(f); setTo(t) }} currentFrom={from} currentTo={to} />
             </div>
             {issuancesData ? <MillingIssuancesView data={issuancesData} /> : <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>}
           </>

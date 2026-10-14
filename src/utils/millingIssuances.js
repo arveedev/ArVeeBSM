@@ -1,14 +1,16 @@
 // Milling and Issuances (Stock Desk, Admin only) - READ-ONLY, pure functions.
 //
-// Three groups, every figure in net bags (net kilos / 50) and totalled per province:
-//  - Milling: the palay issued to milling (WSI with an MO / TMO number, listed per authority) and the
-//    rice recovered from it (WSR with an MO / TMO number, listed per WSR; rice only, no by-products).
-//  - Issuances to LGU: WSI from an authority, transaction type SALES, customer name containing "LGU".
-//  - Issuances to FTI: WSI from an authority, transaction type SALES (CONSIGNMENT).
-// A warehouse's reporting start (override) date is respected like everywhere else: documents dated on
-// or before it are left out.
+// Three groups, every figure in net bags (net kilos / 50) and totalled per province. Issuances are taken
+// from the AUTHORITIES (what the authority authorizes, or what it issued once complete), never from the
+// WSI documents, and are counted in the period the authority is dated:
+//  - Milling: authorities of a milling transaction type (MILLING, REMILLING, TEST MILLING, ...), listed per
+//    authority, and the rice recovered from milling (WSR with an MO / TMO number, listed per WSR; rice only,
+//    no by-products).
+//  - Issuances to LGU: authorities of type SALES whose customer name contains "LGU".
+//  - Issuances to FTI: authorities of type SALES (CONSIGNMENT).
+// A warehouse's reporting start (override) date is respected like everywhere else.
 
-import { effectiveCutoffDate } from './calculations.js'
+import { effectiveCutoffDate, dedupeAuthoritiesByRef, isAuthorityComplete } from './calculations.js'
 
 const NET_BAG_KG = 50
 const norm = (s) => String(s ?? '').trim().toUpperCase().replace(/\s+/g, ' ')
@@ -16,48 +18,54 @@ const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeri
 
 export const netBags = (kilos) => (kilos ?? 0) / NET_BAG_KG
 
-export const buildMillingIssuances = ({ transactions, warehouses, provinces, varieties, transactionTypes, globalDataStartDate = null, from, to }) => {
+export const buildMillingIssuances = ({ transactions, authorities, warehouses, provinces, varieties, globalDataStartDate = null, from, to }) => {
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const provById = new Map(provinces.map((p) => [p.provinceId, p]))
   const varById = new Map(varieties.map((v) => [v.varietyId, v]))
-  const typeName = new Map(transactionTypes.map((t) => [t.transactionTypeId, norm(t.name)]))
-
-  const row = (t) => {
-    const wh = whById.get(t.warehouseId)
-    const prov = provById.get(wh?.provinceId)
-    return {
-      id: t.id, date: t.date, serialNo: t.serialNo ?? '', provinceId: wh?.provinceId ?? '', province: prov?.name ?? 'No province',
-      warehouse: wh?.name ?? '', customer: t.customerName ?? '', aiNumber: t.aiNumber ?? '', kind: t.moNumber ? 'MO' : t.tmoNumber ? 'TMO' : '',
-      moNo: t.moNumber ?? t.tmoNumber ?? '', kilos: t.netKilos ?? 0, bags: netBags(t.netKilos), variety: varById.get(t.varietyId)?.name ?? '',
-    }
+  const inCutoff = (wh, date) => { const cut = effectiveCutoffDate(wh?.reportingCutoffDate, globalDataStartDate); return !(cut && date <= cut) }
+  const place = (warehouseId) => {
+    const wh = whById.get(warehouseId)
+    return { wh, province: provById.get(wh?.provinceId)?.name ?? 'No province', warehouse: wh?.name ?? '' }
   }
 
-  const milling = { issues: [], recoveries: [] }
+  // recoveries: one row per WSR, rice only
+  const recoveries = []
+  for (const t of transactions) {
+    if (t.status !== 'Active' || t.type !== 'WSR' || t.isInitialBalance || !(t.moNumber || t.tmoNumber)) continue
+    if (t.date < from || t.date > to || varById.get(t.varietyId)?.category !== 'Rice') continue
+    const pl = place(t.warehouseId)
+    if (!inCutoff(pl.wh, t.date)) continue
+    recoveries.push({
+      id: t.id, date: t.date, serialNo: t.serialNo ?? '', province: pl.province, warehouse: pl.warehouse, customer: t.customerName ?? '',
+      moNo: t.moNumber ?? t.tmoNumber ?? '', variety: varById.get(t.varietyId)?.name ?? '', kilos: t.netKilos ?? 0, bags: netBags(t.netKilos),
+    })
+  }
+
+  // issuances: one row per authority, by the authority's own figures
+  const milling = []
   const lgu = []
   const fti = []
-
-  for (const t of transactions) {
-    if (t.status !== 'Active' || !['WSI', 'WSR'].includes(t.type) || t.isInitialBalance) continue
-    if (t.date < from || t.date > to) continue
-    const wh = whById.get(t.warehouseId)
-    const cut = effectiveCutoffDate(wh?.reportingCutoffDate, globalDataStartDate)
-    if (cut && t.date <= cut) continue
-    const milled = Boolean(t.moNumber || t.tmoNumber)
-    if (t.type === 'WSR') {
-      if (milled && varById.get(t.varietyId)?.category === 'Rice') milling.recoveries.push(row(t))
-      continue
+  for (const a of dedupeAuthoritiesByRef((authorities ?? []).filter((x) => x.type === 'AI'))) {
+    if (!a.date || a.date < from || a.date > to) continue
+    const pl = place(a.assignedWarehouse)
+    if (!inCutoff(pl.wh, a.date)) continue
+    const alloc = a.totalAllocationKilos || (a.totalAllocationBags ?? 0) * NET_BAG_KG
+    const issued = a.totalIssuedKilos ?? 0
+    const kilos = isAuthorityComplete(a) ? issued : Math.max(alloc, issued)
+    if (!(kilos > 0)) continue
+    const type = norm(a.transactionTypeName)
+    const row = {
+      id: a.authId ?? a.aiNumber, date: a.date, aiNumber: a.aiNumber ?? '', province: pl.province, warehouse: pl.warehouse, customer: a.customerName ?? '',
+      kilos, bags: netBags(kilos), withdrawn: netBags(issued),
     }
-    if (milled) { milling.issues.push(row(t)); continue }
-    if (!t.aiNumber) continue
-    const type = typeName.get(t.transactionTypeId)
-    if (type === 'SALES' && /LGU/i.test(t.customerName ?? '')) lgu.push(row(t))
-    else if (type === 'SALES (CONSIGNMENT)') fti.push(row(t))
+    if (type.includes('MILLING')) milling.push(row)
+    else if (type === 'SALES' && /LGU/i.test(a.customerName ?? '')) lgu.push(row)
+    else if (type === 'SALES (CONSIGNMENT)') fti.push(row)
   }
 
-  const byDate = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : natural(a.serialNo, b.serialNo))
-  for (const l of [milling.issues, milling.recoveries, lgu, fti]) l.sort(byDate)
+  const byDate = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : natural(a.aiNumber ?? a.serialNo, b.aiNumber ?? b.serialNo))
+  for (const l of [milling, recoveries, lgu, fti]) l.sort(byDate)
 
-  // per-province totals, in the order of the provinces' names
   const perProvince = (lists) => {
     const m = new Map()
     for (const [key, list] of Object.entries(lists)) {
@@ -71,23 +79,8 @@ export const buildMillingIssuances = ({ transactions, warehouses, provinces, var
   }
   const sum = (list) => list.reduce((s, r) => s + r.bags, 0)
 
-  // milling issues grouped per authority (then per province), recoveries stay one row per WSR
-  const authorities = new Map()
-  for (const r of milling.issues) {
-    const key = r.aiNumber || 'No authority'
-    const e = authorities.get(key) ?? { aiNumber: key, bags: 0, rows: [] }
-    e.bags += r.bags
-    e.rows.push(r)
-    authorities.set(key, e)
-  }
-
   return {
-    milling: {
-      perProvince: perProvince({ issued: milling.issues, recovered: milling.recoveries }),
-      issuedTotal: sum(milling.issues), recoveredTotal: sum(milling.recoveries),
-      issues: milling.issues, recoveries: milling.recoveries,
-      perAuthority: [...authorities.values()].sort((a, b) => natural(a.aiNumber, b.aiNumber)),
-    },
+    milling: { perProvince: perProvince({ issued: milling, recovered: recoveries }), issuedTotal: sum(milling), recoveredTotal: sum(recoveries), issues: milling, recoveries },
     lgu: { perProvince: perProvince({ bags: lgu }), total: sum(lgu), rows: lgu },
     fti: { perProvince: perProvince({ bags: fti }), total: sum(fti), rows: fti },
   }

@@ -416,8 +416,8 @@ the step-by-step journey.*
 ## 12a. Milling and Issuances (Admin only)
 
 1. In the Stock Desk, an Admin sees a Milling and Issuances tile; it is not shared with Visitors.
-2. From and To set the period (default: this month to today); each warehouse's reporting start date still applies.
-3. Three blocks of main values, per province in net bags: Milling (issued, recovered), Issuances to LGU, Issuances to FTI.
+2. The period is set like the Stock Statement (1-7, 8-15, 16-22, 23-end buttons with month arrows, or From and To); each warehouse's reporting start date still applies.
+3. Issuances come from the authorities (their own net bags, by the authority's date), not from WSI documents. Three blocks of main values, per province in net bags: Milling (issued, recovered), Issuances to LGU, Issuances to FTI.
 4. Under each block an expandable list shows the documents: milling issuances per authority, recoveries per WSR (rice only), LGU sales from authorities, FTI sales consignment from authorities.
 
 ## 13. SDO Disbursement Voucher and BUR Flow

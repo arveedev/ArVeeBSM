@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-14, app v1.10-364) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-14, app v1.10-365) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
@@ -38,7 +38,7 @@ the latest code commit). Update it before saying a task is done.
   device by `src/services/derivedTotalsSync.js`, but only when the device is fully caught up with the cloud
   (`isCloudSyncFullyCaughtUp` in `db/dexie.js`); new authorities get the deterministic id `AI::<number>` / `SIA::<number>`.
 - **Closing residue** (v1.10-362, TDD 2.47): a pile closed with 0 bags but net kilos left moves them to the open same-variety pile with the most stock as a 0-bag WTS (`RESIDUE-` serial, `isClosingResidue`) dated the closing date, noted on both BIN Cards; Admin > Closing Residue handles piles closed earlier; re-open undoes it. Residue records carry the piles' dominant sack type and condition (v1.10-363). Run once on live data by the owner (ABACORP A Pile 2 to Pile 6).
-- **Milling and Issuances** (v1.10-364, Admin only, Stock Desk hub): per-province net bags for milling, issuances to LGU and issuances to FTI with expandable lists; From / To period. Screen only (no export yet).
+- **Milling and Issuances** (v1.10-364, Admin only, Stock Desk hub): per-province net bags for milling, issuances to LGU and issuances to FTI (issuances = the authorities' own net bags, not WSI; recoveries = WSR) with expandable lists; From / To plus the 1-7 / 8-15 / 16-22 / 23-end period buttons. Screen only (no export yet).
 - UI: Escape closes the topmost modal everywhere (`utils/useEscapeClose.js`); login logo opens large then shrinks into place;
   closed piles are in no picker; a pile's age is never negative; Tab from MTS stops at blank fields; procurement warehouse cards start
   collapsed; lists sorted as the owner decided (unwithdrawn detail by authority number, PRs by PR number, review transactions by
