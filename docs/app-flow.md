@@ -427,6 +427,11 @@ the step-by-step journey.*
 2. Tapping it switches to that document's warehouse, steps the Stock Desk aside and opens the document in its entry form to look at or change it.
 3. Closing the form brings the Stock Desk back where it was.
 
+## 12c. Keyboard shortcuts (Admin)
+
+1. Ctrl + Alt + D opens the Stock Desk from any page (Admin, or a Visitor with a screen shared).
+2. Ctrl + Alt + A opens the Admin Dashboard from any page. It works only while an Admin is logged in, and not on the Login page or while an entry form is open.
+
 ## 13. SDO Disbursement Voucher and BUR Flow
 
 1. In the SDO's Abstract export window, after choosing the period (and optionally the checked receipts), the "DV & BUR" button

@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-14, app v1.10-376) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-14, app v1.10-377) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
@@ -23,7 +23,7 @@ the latest code commit). Update it before saying a task is done.
 - **Stock Desk** (Admin / Visitor): Daily inventory, Summary, Age monitoring (lots per receipt, oldest issued first), Data check
   with a stock-book self-check, Ending stock per variety, Daily procurement status, Milling liquidation. An authority always deducts
   its full authorized amount from the age bracket it names (a shortfall becomes a negative lot). Opens from the quiet Home icon or
-  **Ctrl + Alt + D on any page**.
+  **Ctrl + Alt + D on any page**; **Ctrl + Alt + A** opens the Admin Dashboard (Admin only).
 - **Excel on every report** (one Export button asking PDF or Excel): built from the same captured content as the PDF, prints like the
   PDF, formulas written only where they reproduce the printed figure (SUBTOTAL totals, Ending = Beginning + Receipts - Issues, running
   balances, derived columns, Summary/Recap `SUMIFS` over the Statement sheets). Pile Layout is a landscape plan linked to a Pile Data sheet.

@@ -8432,4 +8432,5 @@
 //   1.10-374 - Stock Desk Data check: (1) the age-group warning is only for sales, sales (consignment), milling, test milling, remilling and test remilling authorities, never a by-products variety or a transfer / fillers / rebagging / repiling authority. (2) Issued more than was received now warns only when the NET KILOS are over (a few bags over is fine). (3) For an Admin, a document number in the Data check is a link: tapping it opens that WSI / WSR / WTS (the Stock Desk steps aside and returns when the document is closed).
 //   1.10-375 - SDO Denomination Count: it shows when it was last updated and the latest five updates (date, time and counted total), and closing it without having changed anything no longer writes a new record (so it cannot replace the saved count with an older copy).
 //   1.10-376 - Exported DV: the signatory's name in section A (Certified) is underlined.
-export const APP_VERSION = '1.10-376'
+//   1.10-377 - Ctrl + Alt + A opens the Admin Dashboard from any page; it does nothing unless an Admin is logged in (and not on the Login page or while an entry form is open).
+export const APP_VERSION = '1.10-377'

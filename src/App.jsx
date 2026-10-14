@@ -121,6 +121,20 @@ function App() {
   const isVisitor = user?.role === 'Visitor'
   const isSdo = user?.role === 'SDO'
 
+  // Ctrl + Alt + A opens the Admin Dashboard from any page. Only an Admin who is logged in; nothing happens for
+  // any other role, on the Login page, or while an entry form is open.
+  useEffect(() => {
+    if (!isAdmin) return undefined
+    const onKey = (e) => {
+      if (!(e.ctrlKey && e.altKey && !e.shiftKey && e.code === 'KeyA')) return
+      e.preventDefault()
+      if (activeFormType || window.location.pathname === '/admin' || window.location.pathname === '/login') return
+      navigate('/admin')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isAdmin, activeFormType, navigate])
+
   // "+" (or numpad +) as a global shortcut for the FAB's own job -
   // opening the document-type selector - per explicit request. Only
   // active exactly where the real on-screen FAB itself is actually
