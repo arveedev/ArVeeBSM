@@ -55,12 +55,10 @@ the latest code commit). Update it before saying a task is done.
    pre-existing "No negative balance" failure for Legazpi GID A by-products around Sep 4.
 5. Old DONE cells in the MO/TMO Sheet are cleared only when an order is marked and reverted.
 6. Excel exports for CPF, BIN Card and Abstract formulas have not been checked against real data in Excel; DV/BUR not against a real Abstract.
-7. Entry forms and the Piles name dialog keep their own Escape handling (not on the shared stack).
-8. Closing residue (v1.10-362/363): not yet run on live data (ABACORP A Pile 2 -> Pile 6 was; scan again to repair sack types). A closed pile with no open pile of its variety (ABACORP A Pile 1, 37.5 kg) stays unmoved. Automatic move for piles closed earlier was offered and not decided.
-9. Opening balance (v1.10-370): the owner must open Opening balance and Save once so the old partial override becomes a frozen one (button says "not frozen" until then). A daily change log of opening cells was offered and not built.
-10. Denomination Count: cause of the SDO's lost / old values not proven (unsaved typing lost on idle logout, Back or reload is the likely one). Autosave while typing, saving on leaving and wider boxes were declined for now; watch the update list added in v1.10-375.
-11. Milling and Issuances (Admin only): no Excel / PDF export (only copy text / .txt), the copied text does not name an active filter, test milling (TMO) is included, an LGU is matched by the letters LGU anywhere in the name, NFA-owned issuance (the owner's 50 and 600) is not found in the data.
-12. The presentation deck (artifact, version 31) does not yet show Closing residue, Milling and Issuances, the frozen opening balance or the Data check links.
+7. Opening balance (v1.10-370): the owner must open Opening balance and Save once so the old partial override becomes a frozen one (the button says "not frozen" until then). The opening must never move once set; no change log wanted.
+8. Milling and Issuances (Admin only): test milling (TMO) is included and an LGU is matched by the letters LGU anywhere in the customer name; neither was confirmed by the owner.
+
+Closed by the owner on 2026-10-14 (nothing to do): closing residue for already-closed piles is the manual scan under Admin > System > Closing Residue; denomination count needs only the update list; no change log, no export, no filter note on the reports; NFA-owned figures were the owner's own mistake. Escape closes every modal and entry form; the forms and the Piles name dialog just use their own handler, not a gap. The presentation (artifact, version 32) now has the Closing residue and Data check slides; it deliberately has no Milling and Issuances slide.
 
 ### Historical record (stale, last verified before 2026-10-14)
 
