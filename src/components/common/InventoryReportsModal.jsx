@@ -650,7 +650,16 @@ function MainValues({ title, columns, rows, total }) {
   )
 }
 
+const natCmp = (a, b) => String(a ?? '').localeCompare(String(b ?? ''), undefined, { numeric: true, sensitivity: 'base' })
+const sortRows = (rows, sort) => {
+  if (sort === 'date') return rows
+  const key = sort === 'warehouse' ? 'warehouse' : 'customer'
+  const second = sort === 'warehouse' ? 'customer' : 'warehouse'
+  return [...rows].sort((a, b) => natCmp(a[key], b[key]) || natCmp(a[second], b[second]) || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+}
+
 function MillingIssuancesView({ data }) {
+  const [sort, setSort] = useState('date')
   const authBase = [
     { key: 'date', label: 'Date' }, { key: 'aiNumber', label: 'Authority' }, { key: 'province', label: 'Province' },
     { key: 'warehouse', label: 'Warehouse' }, { key: 'customer', label: 'Customer' },
@@ -663,9 +672,19 @@ function MillingIssuancesView({ data }) {
   const drawnCol = { key: 'withdrawn', label: 'Withdrawn net bags', num: true, render: (r) => fmtNum(r.withdrawn) }
   const kgCol = { key: 'kilos', label: 'Net kilos', num: true, render: (r) => r.kilos.toLocaleString('en-PH', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }
   const authCols = [...authBase, bagsCol('Authority net bags'), drawnCol, kgCol]
-  const { milling, nfa, lgu, fti } = data
+  const view = useMemo(() => ({
+    milling: { ...data.milling, issues: sortRows(data.milling.issues, sort), recoveries: sortRows(data.milling.recoveries, sort) },
+    nfa: { ...data.nfa, issues: sortRows(data.nfa.issues, sort), recoveries: sortRows(data.nfa.recoveries, sort) },
+    lgu: { ...data.lgu, rows: sortRows(data.lgu.rows, sort) },
+    fti: { ...data.fti, rows: sortRows(data.fti.rows, sort) },
+  }), [data, sort])
+  const { milling, nfa, lgu, fti } = view
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] uppercase text-neutral-500">Sort the lists by</span>
+        <PillToggle options={[{ value: 'date', label: 'Date' }, { value: 'warehouse', label: 'Warehouse' }, { value: 'ricemill', label: 'Ricemill' }]} value={sort} onChange={setSort} />
+      </div>
       <p className="text-xs text-neutral-500">Issuances are the authorities' own net bags (counted in the period the authority is dated), not the WSI documents. Recoveries are the WSRs of milling.</p>
       <MainValues title="Milling (net bags)" columns={[{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }]}
         rows={milling.perProvince} total={{ issued: milling.issuedTotal, recovered: milling.recoveredTotal }} />
