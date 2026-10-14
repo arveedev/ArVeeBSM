@@ -719,7 +719,7 @@ nothing. A warehouse's reporting start (override) date is respected: a pile clos
 the ledger it is computed from uses the same cutoff. Re-opening a pile deletes its residue record. Closing from any screen goes through
 `closePileWithResidue`, which picks the open pile holding the most stock; Admin > Closing Residue scans piles that were closed earlier
 and moves them with a destination chosen per pile. In the Stock Desk lots, a closed pile keeps its leftover as a 0-bag lot with its
-original receipt date and the residue transfer carries that lot to the destination, so the stock keeps its age.
+original receipt date and the residue transfer carries that lot to the destination, so the stock keeps its age. The record carries the dominant sack weight and condition (by net kilos) of the source on its issued side and of the destination on its received side, so the kilos join the pile's existing stock group.
 
 **Rationale**: closing a pile zeroes it, so its leftover kilos disappeared from every pile-level view while the warehouse statement still
 counted them and the two stopped tallying. An ordinary transfer needs no new calculation anywhere: pile balances, BIN Cards (labelled

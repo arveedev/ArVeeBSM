@@ -8,7 +8,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import ConfirmDialog from '../ConfirmDialog.jsx'
-import { findClosingResidues, moveResidue } from '../../../utils/closingResidue.js'
+import { findClosingResidues, moveResidue, refreshResidueRecords } from '../../../utils/closingResidue.js'
 import { labelClass, primaryButtonClass, secondaryButtonClass } from './shared.js'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 3 })
@@ -24,6 +24,7 @@ function ClosingResiduePanel() {
   const scan = async () => {
     setBusy(true)
     try {
+      await refreshResidueRecords()
       const found = await findClosingResidues()
       setRows(found)
       setDest(Object.fromEntries(found.map((r) => [r.pile.pileId, r.destinations[0]?.pileId ?? ''])))

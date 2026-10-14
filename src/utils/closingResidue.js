@@ -28,6 +28,32 @@ export const residueIdFor = (pileId) => `residue::${pileId}`
 
 const globalStart = async () => (await db.reportConfig.get('global'))?.dataStartDate || null
 
+// The sack weight and condition a pile mostly holds (by net kilos), so the moved kilos join that group
+// of the pile's stock breakdown instead of showing up as a separate one.
+const dominantSack = async (pile) => {
+  const [direct, wts] = await Promise.all([
+    db.transactions.where('pileId').equals(pile.pileId).toArray(),
+    db.transactions.where('type').equals('WTS').and((t) => t.issuedPileId === pile.pileId || t.receivedPileId === pile.pileId).toArray(),
+  ])
+  const tally = new Map()
+  const add = (sackTypeId, condition, kilos) => {
+    if (!sackTypeId) return
+    const k = `${sackTypeId}|${condition ?? ''}`
+    tally.set(k, (tally.get(k) ?? 0) + Math.abs(kilos ?? 0))
+  }
+  for (const t of direct) if (t.status === 'Active' && !t.isClosingResidue) add(t.mtsSackTypeId, t.mtsCondition, t.netKilos)
+  for (const t of wts) {
+    if (t.status !== 'Active' || t.isClosingResidue) continue
+    if (t.receivedPileId === pile.pileId) add(t.receivedSackTypeId, t.receivedCondition, t.receivedNetKilos)
+    if (t.issuedPileId === pile.pileId) add(t.issuedSackTypeId, t.issuedCondition, t.issuedNetKilos)
+  }
+  let best = null
+  for (const [k, v] of tally) if (!best || v > best[1]) best = [k, v]
+  if (!best) return { sackTypeId: pile.mtsSackTypeId ?? null, condition: pile.mtsCondition ?? null }
+  const [sackTypeId, condition] = best[0].split('|')
+  return { sackTypeId, condition: condition || null }
+}
+
 /** Open piles of the same variety (and cereal) in the same warehouse that can take the residue on `date`. */
 export const residueDestinations = (source, piles, date) => piles
   .filter((p) => p.pileId !== source.pileId && p.warehouseId === source.warehouseId &&
@@ -80,6 +106,7 @@ export const moveResidue = async ({ source, dest, kilos, date, createdByName = n
   if (!source || !dest || !(net >= MIN_KILOS)) return null
   const id = residueIdFor(source.pileId)
   const existing = await db.transactions.get(id)
+  const [fromSack, toSack] = await Promise.all([dominantSack(source), dominantSack(dest)])
   const record = {
     id,
     type: 'WTS',
@@ -93,16 +120,16 @@ export const moveResidue = async ({ source, dest, kilos, date, createdByName = n
     moistureContent: null,
     issuedPileId: source.pileId,
     issuedVarietyId: source.varietyId ?? null,
-    issuedSackTypeId: null,
-    issuedCondition: null,
+    issuedSackTypeId: fromSack.sackTypeId,
+    issuedCondition: fromSack.condition,
     issuedBags: 0,
     issuedGrossKilos: net,
     issuedNetKilos: net,
     issuedStockCondition: 'Good',
     receivedPileId: dest.pileId,
     receivedVarietyId: dest.varietyId ?? source.varietyId ?? null,
-    receivedSackTypeId: null,
-    receivedCondition: null,
+    receivedSackTypeId: toSack.sackTypeId,
+    receivedCondition: toSack.condition,
     receivedBags: 0,
     receivedGrossKilos: net,
     receivedNetKilos: net,
@@ -172,4 +199,21 @@ export const closePileWithResidue = async (pileId, closedDate, createdByName = n
 export const reopenPileWithResidue = async (pileId) => {
   await undoResidue(pileId)
   return reopenPile(pileId)
+}
+
+/** Gives residue records made before sack types were carried the sack type and condition of their piles. */
+export const refreshResidueRecords = async () => {
+  const recs = await db.transactions.filter((t) => t.isClosingResidue === true && !t.receivedSackTypeId).toArray()
+  let fixed = 0
+  for (const t of recs) {
+    const [src, dst] = await Promise.all([db.piles.get(t.issuedPileId), db.piles.get(t.receivedPileId)])
+    if (!src || !dst) continue
+    const [a, b] = await Promise.all([dominantSack(src), dominantSack(dst)])
+    if (!b.sackTypeId) continue
+    await db.transactions.update(t.id, {
+      issuedSackTypeId: a.sackTypeId, issuedCondition: a.condition, receivedSackTypeId: b.sackTypeId, receivedCondition: b.condition,
+    })
+    fixed += 1
+  }
+  return fixed
 }

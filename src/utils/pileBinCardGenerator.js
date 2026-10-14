@@ -87,6 +87,7 @@ const buildLedgerRows = (pile, transactions, transactionTypeMap, reportingCutoff
       if (t.isClosingResidue) {
         // The net kilos a closed pile still held (no bags) moved to a pile of the same variety.
         type = 'CLOSING RESIDUE'
+        reference = ''
         customer = t.issuedPileId === pile.pileId
           ? `Net kilos moved to ${t.residueToPileName || 'another pile'}`
           : `Net kilos from closed ${t.residueFromPileName || 'pile'}`
