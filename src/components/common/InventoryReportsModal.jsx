@@ -603,6 +603,64 @@ function FilterSheet({ open, draft, setDraft, provinces, warehouses, view, onApp
   )
 }
 
+const ISS_DEFAULTS = { provinceId: '', warehouseIds: null, customer: '', sort: 'date' }
+
+function IssuanceFilterSheet({ open, draft, setDraft, provinces, warehouses, customers, onApply, onReset, onClose }) {
+  const all = draft.warehouseIds == null
+  const toggleWh = (id) => {
+    const set = new Set(all ? warehouses.map((w) => w.warehouseId) : draft.warehouseIds)
+    if (set.has(id)) set.delete(id); else set.add(id)
+    setDraft({ ...draft, warehouseIds: set.size === warehouses.length ? null : set })
+  }
+  const selectClass = 'mt-1 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-app-text outline-none focus:border-brand-neon'
+  const labelClass = 'mt-3 block text-xs text-neutral-400'
+  return (
+    <SdOverlay open={open} onClose={onClose} align="sheet" z="z-[90]" panelClassName="sd-table flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:mt-14 sm:w-80 sm:rounded-2xl">
+      <>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-app-text">Filter and sort</h3>
+          <button type="button" onClick={onClose} aria-label="Close" className={closeButtonClass}><X size={16} /></button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+          <label className={labelClass}>Sort the lists by
+            <select className={selectClass} value={draft.sort} onChange={(e) => setDraft({ ...draft, sort: e.target.value })}>
+              <option value="date">Date</option><option value="warehouse">Warehouse</option><option value="ricemill">Ricemill</option>
+            </select>
+          </label>
+          <label className={labelClass}>Province
+            <select className={selectClass} value={draft.provinceId} onChange={(e) => setDraft({ ...draft, provinceId: e.target.value })}>
+              <option value="">All provinces</option>
+              {provinces.map((p) => <option key={p.provinceId} value={p.provinceId}>{p.name}</option>)}
+            </select>
+          </label>
+          <label className={labelClass}>Ricemill / customer
+            <select className={selectClass} value={draft.customer} onChange={(e) => setDraft({ ...draft, customer: e.target.value })}>
+              <option value="">All</option>
+              {customers.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+            </select>
+          </label>
+          <div className={`${labelClass} flex items-center justify-between`}>
+            <span>Warehouses</span>
+            <button type="button" className="text-brand-neon" onClick={() => setDraft({ ...draft, warehouseIds: all ? new Set() : null })}>{all ? 'Clear all' : 'Select all'}</button>
+          </div>
+          <div className="mt-1 space-y-1">
+            {warehouses.map((w) => (
+              <label key={w.warehouseId} className="flex items-center gap-2 text-sm text-neutral-300">
+                <input type="checkbox" checked={all || draft.warehouseIds.has(w.warehouseId)} onChange={() => toggleWh(w.warehouseId)} />
+                <span className="break-words">{w.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={onReset} className="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300">Reset</button>
+          <button type="button" onClick={onApply} className="flex-1 rounded-xl bg-brand-neon px-3 py-2 text-sm font-semibold text-brand-contrast">Apply</button>
+        </div>
+      </>
+    </SdOverlay>
+  )
+}
+
 // Milling and Issuances (Admin only): per-province totals in net bags, each with its expandable list.
 function IssuanceTable({ rows, cols }) {
   return (
@@ -658,8 +716,7 @@ const sortRows = (rows, sort) => {
   return [...rows].sort((a, b) => natCmp(a[key], b[key]) || natCmp(a[second], b[second]) || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
 }
 
-function MillingIssuancesView({ data }) {
-  const [sort, setSort] = useState('date')
+function MillingIssuancesView({ data, sort }) {
   const authBase = [
     { key: 'date', label: 'Date' }, { key: 'aiNumber', label: 'Authority' }, { key: 'province', label: 'Province' },
     { key: 'warehouse', label: 'Warehouse' }, { key: 'customer', label: 'Customer' },
@@ -681,10 +738,6 @@ function MillingIssuancesView({ data }) {
   const { milling, nfa, lgu, fti } = view
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] uppercase text-neutral-500">Sort the lists by</span>
-        <PillToggle options={[{ value: 'date', label: 'Date' }, { value: 'warehouse', label: 'Warehouse' }, { value: 'ricemill', label: 'Ricemill' }]} value={sort} onChange={setSort} />
-      </div>
       <p className="text-xs text-neutral-500">Issuances are the authorities' own net bags (counted in the period the authority is dated), not the WSI documents. Recoveries are the WSRs of milling.</p>
       <MainValues title="Milling (net bags)" columns={[{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }]}
         rows={milling.perProvince} total={{ issued: milling.issuedTotal, recovered: milling.recoveredTotal }} />
@@ -737,6 +790,9 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS, bank: readBank() }))
   const [draft, setDraft] = useState(DEFAULT_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
+  const [issFilters, setIssFilters] = useState(ISS_DEFAULTS)
+  const [issDraft, setIssDraft] = useState(ISS_DEFAULTS)
+  const [showIssFilters, setShowIssFilters] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [sheetBusy, setSheetBusy] = useState(false)
   const [openingEditor, setOpeningEditor] = useState(null)
@@ -788,8 +844,9 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const sackTypes = useLiveQuery(() => db.sackTypes.toArray(), [])
   const loading = [piles, transactions, warehousesRaw, provinces, varieties, transactionTypes, authorities].some((x) => x === undefined)
   const issuancesData = useMemo(() => (isAdmin && view === 'issuances' && !loading
-    ? buildMillingIssuances({ transactions, authorities, warehouses: warehousesRaw, provinces, varieties, transactionTypes, ricemillAllocations: ricemillAllocations ?? [], globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to })
-    : null), [isAdmin, view, loading, transactions, authorities, warehousesRaw, provinces, varieties, transactionTypes, ricemillAllocations, config, from, to])
+    ? buildMillingIssuances({ transactions, authorities, warehouses: warehousesRaw, provinces, varieties, transactionTypes, ricemillAllocations: ricemillAllocations ?? [], globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to, filters: issFilters })
+    : null), [isAdmin, view, loading, transactions, authorities, warehousesRaw, provinces, varieties, transactionTypes, ricemillAllocations, config, from, to, issFilters])
+  const issuanceFilterCount = [issFilters.provinceId, issFilters.warehouseIds, issFilters.customer, issFilters.sort !== 'date'].filter(Boolean).length
   const issuancesText = () => buildIssuancesText(issuancesData, from, to < from ? from : to)
   const copyIssuances = async () => {
     const text = issuancesText()
@@ -1002,6 +1059,9 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               <div className="w-[calc(50%-0.25rem)] sm:w-40"><p className="mb-0.5 text-[10px] uppercase text-neutral-500">To</p><CalendarDatePicker ref={toRef} value={to} label="End Date" onChange={setTo} /></div>
             </div>
             <div className="mb-2 flex flex-wrap gap-2">
+              <button type="button" onClick={() => { setIssDraft(issFilters); setShowIssFilters(true) }} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200">
+                <SlidersHorizontal size={14} /> Filter and sort{issuanceFilterCount > 0 && <span className="rounded-full bg-brand-neon px-1.5 text-[10px] font-bold text-brand-contrast">{issuanceFilterCount}</span>}
+              </button>
               <button type="button" onClick={() => copyIssuances()} disabled={!issuancesData} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
                 <ClipboardList size={14} /> Copy text
               </button>
@@ -1012,7 +1072,11 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             <div className="mb-3">
               <PeriodPresetPicker onSelectRange={(f, t) => { setFrom(f); setTo(t) }} currentFrom={from} currentTo={to} />
             </div>
-            {issuancesData ? <MillingIssuancesView data={issuancesData} /> : <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>}
+            <IssuanceFilterSheet
+              open={showIssFilters} draft={issDraft} setDraft={setIssDraft} provinces={provinces ?? []} warehouses={warehouses} customers={issuancesData?.customers ?? []}
+              onApply={() => { setIssFilters(issDraft); setShowIssFilters(false) }} onReset={() => setIssDraft(ISS_DEFAULTS)} onClose={() => setShowIssFilters(false)}
+            />
+            {issuancesData ? <MillingIssuancesView data={issuancesData} sort={issFilters.sort} /> : <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>}
           </>
         )}
 

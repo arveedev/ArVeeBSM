@@ -14,6 +14,7 @@
 // A warehouse's reporting start (override) date is respected like everywhere else.
 
 import { effectiveCutoffDate, dedupeAuthoritiesByRef } from './calculations.js'
+import { millerKey } from './millingLiquidation.js'
 
 const NET_BAG_KG = 50
 const norm = (s) => String(s ?? '').trim().toUpperCase().replace(/\s+/g, ' ')
@@ -21,13 +22,29 @@ const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeri
 
 export const netBags = (kilos) => (kilos ?? 0) / NET_BAG_KG
 
-export const buildMillingIssuances = ({ transactions, authorities, warehouses, provinces, varieties, transactionTypes = [], ricemillAllocations = [], globalDataStartDate = null, from, to }) => {
+export const buildMillingIssuances = ({ transactions, authorities, warehouses, provinces, varieties, transactionTypes = [], ricemillAllocations = [], globalDataStartDate = null, from, to, filters = {} }) => {
   const whById = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const provById = new Map(provinces.map((p) => [p.provinceId, p]))
   const varById = new Map(varieties.map((v) => [v.varietyId, v]))
   const typeName = new Map(transactionTypes.map((t) => [t.transactionTypeId, norm(t.name)]))
   const nfaRans = new Set(ricemillAllocations.map((r) => r.regionalAuthorityNumber))
   const inCutoff = (wh, date) => { const cut = effectiveCutoffDate(wh?.reportingCutoffDate, globalDataStartDate); return !(cut && date <= cut) }
+  // Filter and sort (Stock Desk): a province, a set of warehouses, a ricemill / customer. Applied to every row, so the
+  // per-province totals and the copied text follow it. `customers` lists every customer before filtering.
+  // (the same miller is written several ways: Borromeo Ricemill, BORROMEO RM; they count as one)
+  const customers = new Map()
+  const keep = (row, warehouseId) => {
+    if (row.customer) {
+      const k = millerKey(row.customer)
+      const names = customers.get(k) ?? []
+      names.push(row.customer)
+      customers.set(k, names)
+    }
+    if (filters.provinceId && whById.get(warehouseId)?.provinceId !== filters.provinceId) return false
+    if (filters.warehouseIds && !filters.warehouseIds.has(warehouseId)) return false
+    if (filters.customer && millerKey(row.customer) !== filters.customer) return false
+    return true
+  }
   const place = (warehouseId) => {
     const wh = whById.get(warehouseId)
     return { wh, province: provById.get(wh?.provinceId)?.name ?? 'No province', warehouse: wh?.name ?? '' }
@@ -45,7 +62,7 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
       id: t.id, date: t.date, serialNo: t.serialNo ?? '', province: pl.province, warehouse: pl.warehouse, customer: t.customerName ?? '',
       moNo: t.moNumber ?? t.tmoNumber ?? '', variety: varById.get(t.varietyId)?.name ?? '', kilos: t.netKilos ?? 0, bags: netBags(t.netKilos),
     }
-    recoveries.push(row)
+    if (keep(row, t.warehouseId)) recoveries.push(row)
   }
 
   // issuances: one row per authority, by the authority's own figures
@@ -69,10 +86,12 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
       kilos, bags: netBags(kilos), withdrawn: netBags(issued),
     }
     const isNfa = nfaRans.has(a.regionalAuthorityNumber)
-    if (type.includes('MILLING')) (isNfa ? nfa : milling).push(row)
-    else if (isNfa && type === 'TRANSFER' && varById.get(a.varietyId)?.category === 'Rice') nfaRecoveries.push(row)
-    else if (type === 'SALES' && /LGU/i.test(a.customerName ?? '')) lgu.push(row)
-    else if (type === 'SALES (CONSIGNMENT)') fti.push(row)
+    let target = null
+    if (type.includes('MILLING')) target = isNfa ? nfa : milling
+    else if (isNfa && type === 'TRANSFER' && varById.get(a.varietyId)?.category === 'Rice') target = nfaRecoveries
+    else if (type === 'SALES' && /LGU/i.test(a.customerName ?? '')) target = lgu
+    else if (type === 'SALES (CONSIGNMENT)') target = fti
+    if (target && keep(row, a.assignedWarehouse)) target.push(row)
   }
 
   const byDate = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : natural(a.aiNumber ?? a.serialNo, b.aiNumber ?? b.serialNo))
@@ -100,6 +119,7 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
     lgu: { perProvince: perProvince({ bags: lgu }), total: sum(lgu), rows: lgu },
     fti: { perProvince: perProvince({ bags: fti }), total: sum(fti), rows: fti },
     // per province (for the pasted text, every province is listed, even with nothing)
+    customers: [...customers].map(([key, names]) => ({ key, name: names.find((n) => /rice\s*mill/i.test(n) && n !== n.toUpperCase()) ?? names[0] })).sort((a, b) => natural(a.name, b.name)),
     provinces: provinces.map((p) => ({ name: p.name, code: p.code ?? p.name })).sort((a, b) => natural(a.code, b.code)),
   }
 }
