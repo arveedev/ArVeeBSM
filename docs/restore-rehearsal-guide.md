@@ -90,6 +90,15 @@ the sign-in can be checked by Claude.
 
 Do **not** save or enter any real transaction there.
 
+**Safety wall (added 2026-10-16).** The restored data contains the production Google Sheet addresses, and the app fetches the Sheet
+directly from the browser, so a signed-in rehearsal copy could write to the real Sheet. The rehearsal copy's `index.html` therefore starts
+with a guard that refuses every request except the throwaway database, the app's own address and the fonts (it logs
+`[REHEARSAL GUARD] blocked request to ...`). Keep that guard when you refresh the copy: it lives in `rehearsalpp\index.html`, so
+do not copy the repository's `index.html` over it.
+
+**Expect a slow first load.** The first sign-in pulls the whole database (about 8,300 objects) into a fresh browser profile and the dev copy is
+slow; the Settings page shows `pulling / connected` until it finishes. Give it several minutes before judging.
+
 ## 4. Step 7: a device that used the old database, switched to a new one
 
 This is what users would see if the cloud database is ever rebuilt (R2). It needs **two** throwaway databases, because
