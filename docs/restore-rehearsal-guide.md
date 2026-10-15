@@ -61,7 +61,12 @@ winner: applying the older or the newer copy blindly would have changed them. Th
 
 ## 3. Step 5: sign in on a copy of the app pointed at the throwaway
 
-You do the PIN sign-in (I cannot enter a PIN).
+You do the PIN sign-in (I am not allowed to type or read a PIN). **You do not need your own PIN:** on 2026-10-16 a test
+Admin account ("Rehearsal Test Admin") was created in the throwaway database only, and the rehearsal app copy was refreshed
+to the current code with its database address set to `z1wnhq0k3`. Its PIN is in the text file
+`C:\Users\DjArVee\BSM-Safety\rehearsal\TEST-ADMIN.txt` (open it yourself). The rehearsal app is started with the launch
+entry **rehearsal-throwaway**, opens on `http://localhost:5174`, and you type that PIN on its login screen. Everything after
+the sign-in can be checked by Claude.
 
 1. Make sure the rehearsal copy is current. The copy in `C:\Users\DjArVee\BSM-Safety\rehearsal\app` was made on
    2026-10-08. To rehearse the current app, copy `src`, `public`, `index.html` and `package.json` from the repository
