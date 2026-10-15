@@ -808,6 +808,18 @@ function MillingIssuancesView({ data, sort }) {
     fti: { ...data.fti, rows: sortRows(data.fti.rows, sort) },
   }), [data, sort])
   const { milling, nfa, lgu, fti } = view
+  // the NFA-owned ricemill works by its Regional Authority Number: one group per number, its milling authorities
+  // (issued) and its rice transfer authorities (recovered) together, with the totals
+  const nfaGroups = (() => {
+    const m = new Map()
+    const group = (ran) => {
+      if (!m.has(ran)) m.set(ran, { ran, issues: [], recoveries: [], issued: 0, recovered: 0 })
+      return m.get(ran)
+    }
+    for (const r of nfa.issues) { const g = group(r.ran ?? ''); g.issues.push(r); g.issued += r.bags }
+    for (const r of nfa.recoveries) { const g = group(r.ran ?? ''); g.recoveries.push(r); g.recovered += r.bags }
+    return [...m.values()].sort((a, b) => natCmp(a.ran, b.ran))
+  })()
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
       <p className="text-xs text-neutral-500">Issuances are the authorities' own net bags (counted in the period the authority is dated), not the WSI documents. Recoveries are the WSRs of milling.</p>
@@ -823,17 +835,28 @@ function MillingIssuancesView({ data, sort }) {
         {milling.recoveries.length === 0 ? <p className="py-2 text-xs text-neutral-500">No recoveries in this period.</p>
           : <IssuanceTable rows={milling.recoveries} cols={[...wsrBase, bagsCol('Net bags'), kgCol]} />}
       </ExpandCard>
-      <ExpandCard title="NFA-owned: issuances and recoveries (authorities)" count={nfa.issues.length + nfa.recoveries.length} ok>
+      <ExpandCard title="NFA-owned: issuances and recoveries, by authority" count={nfa.issues.length + nfa.recoveries.length} ok>
         {nfa.issues.length + nfa.recoveries.length === 0 ? <p className="py-2 text-xs text-neutral-500">Nothing for an NFA-owned ricemill in this period.</p> : (
-          <>
-            {nfa.issues.length > 0 && <IssuanceTable rows={nfa.issues} cols={authCols} />}
-            {nfa.recoveries.length > 0 && (
-              <>
-                <p className="mb-1 mt-3 text-xs font-semibold text-neutral-400">Rice handed out by the ricemill (recoveries, from its transfer authorities)</p>
-                <IssuanceTable rows={nfa.recoveries} cols={authCols} />
-              </>
-            )}
-          </>
+          nfaGroups.map((g) => (
+            <div key={g.ran} className="mb-4 last:mb-0">
+              <p className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm font-semibold text-app-text">
+                <span className="break-words">{g.ran || 'No Regional Authority Number'}</span>
+                <span className="text-xs font-medium tabular-nums text-neutral-400">Issued {fmtNum(g.issued)} · Recovered {fmtNum(g.recovered)}{g.issued > 0 ? ` · ${(g.recovered / g.issued * 100).toLocaleString('en-PH', { maximumFractionDigits: 1 })}%` : ''}</span>
+              </p>
+              {g.issues.length > 0 && (
+                <>
+                  <p className="mb-1 text-xs font-semibold text-neutral-400">Issued to the ricemill (milling authorities)</p>
+                  <IssuanceTable rows={g.issues} cols={authCols} />
+                </>
+              )}
+              {g.recoveries.length > 0 && (
+                <>
+                  <p className="mb-1 mt-2 text-xs font-semibold text-neutral-400">Rice handed out (transfer authorities, recoveries)</p>
+                  <IssuanceTable rows={g.recoveries} cols={authCols} />
+                </>
+              )}
+            </div>
+          ))
         )}
       </ExpandCard>
 
