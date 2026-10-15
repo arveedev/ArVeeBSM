@@ -23,7 +23,7 @@ import { User } from 'lucide-react'
 import { searchCustomers, findCustomerByName } from '../../utils/customerDirectory.js'
 import { inputClass } from './shared.js'
 
-const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ value, onChange, onMatch, placeholder = 'Member Full Name', required = false }, ref) {
+const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ value, onChange, onMatch, onKeyDown, placeholder = 'Member Full Name', required = false }, ref) {
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   // Same Arrow Down/Up + Tab-to-accept behavior as CustomerNameAutocomplete.jsx.
@@ -97,6 +97,10 @@ const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ valu
   }
 
   const handleKeyDown = (e) => {
+    handleSuggestionKey(e)
+    onKeyDown?.(e) // the form's Tab chain (next field in order)
+  }
+  const handleSuggestionKey = (e) => {
     if (!showSuggestions || suggestions.length === 0) return
     if (e.key === 'ArrowDown') {
       e.preventDefault()

@@ -8440,4 +8440,5 @@
 //   1.10-382 - Milling and Issuances: a Per ricemill button opens a window with the milling issuance (authority net bags), the rice recovered and the recovery % for each ricemill, for the same period (and filters); the NFA-owned ricemill is its own row.
 //   1.10-383 - Milling and Issuances: the NFA-owned list is grouped by authority (its Regional Authority Number): for each number, the milling authorities issued to the ricemill and the rice transfer authorities handed out, with the issued and recovered totals and the recovery %.
 //   1.10-384 - Milling and Issuances, Per ricemill window: the NFA-owned ricemill is grouped by authority too (one row per Regional Authority Number under an NFA-owned heading), included in the total.
-export const APP_VERSION = '1.10-384'
+//   1.10-385 - Receipt (WSR) form with FA switched on: turning FA on moves the cursor to the first member's name, and Tab now visits every member in order (name, RSBSA, gender, then the next member) and then goes on to PO No. / Number of Bags, skipping the Add member button. Before, only the first member's name was in the Tab order and a member's RSBSA and gender were never stopped at.
+export const APP_VERSION = '1.10-385'

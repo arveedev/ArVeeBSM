@@ -642,7 +642,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // yet this early in the component.
   const transactionTypeSelectRef = useRef(null)
   const addressInputRef = useRef(null)
-  const firstMemberNameRef = useRef(null)
+  // one entry per Farmer Organization member row: { name, rsbsa, gender } input handles, for the Tab chain
+  const memberRefs = useRef([])
   const farmerRsbsaRef = useRef(null)
   const farmerGenderRef = useRef(null)
   const poNumberRef = useRef(null)
@@ -827,7 +828,13 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
     // name on its way to Number of Bags. Mirrors rsbsa/gender's own
     // isProcurement && farmerOrgEnabled gating, just the opposite toggle
     // state.
-    { key: 'memberName', focus: () => firstMemberNameRef.current?.focus(), relevant: isProcurement && farmerOrgEnabled, filled: Boolean(members[0]?.name?.trim()) },
+    // Every member row is its own stop, in order: name, RSBSA, then gender. A member's gender starts as Male only as
+    // a default, so it is always stopped at (never treated as already filled).
+    ...members.flatMap((m, i) => [
+      { key: `memberName${i}`, focus: () => memberRefs.current[i]?.name?.focus(), relevant: isProcurement && farmerOrgEnabled, filled: Boolean(m.name?.trim()) },
+      { key: `memberRsbsa${i}`, focus: () => memberRefs.current[i]?.rsbsa?.focus(), relevant: isProcurement && farmerOrgEnabled, filled: Boolean(m.rsbsa?.trim()) },
+      { key: `memberGender${i}`, focus: () => memberRefs.current[i]?.gender?.focus(), relevant: isProcurement && farmerOrgEnabled, filled: false },
+    ]),
     { key: 'rsbsa', focus: () => farmerRsbsaRef.current?.focus(), relevant: isProcurement && !farmerOrgEnabled, filled: Boolean(farmerRsbsa.trim()) },
     { key: 'gender', focus: () => farmerGenderRef.current?.focus(), relevant: isProcurement && !farmerOrgEnabled, filled: Boolean(farmerGender) },
     { key: 'po', focus: () => poNumberRef.current?.focus(), relevant: isProcurement, filled: Boolean(poNumber.trim()) },
@@ -3497,7 +3504,11 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                   // fix as handleCustomerMatch, applied here too so
                   // manually flipping it off then back on doesn't leave
                   // stale member rows from earlier in the same session.
-                  if (next) setMembers([emptyMember()])
+                  if (next) {
+                    setMembers([emptyMember()])
+                    // the first member's name is where the typing continues
+                    requestAnimationFrame(() => requestAnimationFrame(() => memberRefs.current[0]?.name?.focus()))
+                  }
                   return next
                 })}
                 aria-pressed={farmerOrgEnabled}
@@ -3572,7 +3583,8 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                           objecting. `required` matches Customer Name's
                           own amber-border convention exactly. */}
                       <MemberNameAutocomplete
-                        ref={i === 0 ? firstMemberNameRef : undefined}
+                        ref={(h) => { memberRefs.current[i] = { ...(memberRefs.current[i] ?? {}), name: h } }}
+                        onKeyDown={handleChainKeyDown(`memberName${i}`)}
                         value={m.name}
                         onChange={(v) => updateMember(i, 'name', v)}
                         onMatch={(customer) => handleMemberMatch(i, customer)}
@@ -3580,12 +3592,16 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
                       />
                       <input
                         type="text"
+                        ref={(h) => { memberRefs.current[i] = { ...(memberRefs.current[i] ?? {}), rsbsa: h } }}
+                        onKeyDown={handleChainKeyDown(`memberRsbsa${i}`)}
                         value={m.rsbsa}
                         onChange={(e) => updateMember(i, 'rsbsa', e.target.value)}
                         className={`${inputClass} ${!m.rsbsa.trim() ? '!border-brand-amber' : ''}`}
                         placeholder="RSBSA Reference Registration ID"
                       />
                       <select
+                        ref={(h) => { memberRefs.current[i] = { ...(memberRefs.current[i] ?? {}), gender: h } }}
+                        onKeyDown={handleChainKeyDown(`memberGender${i}`)}
                         value={m.gender}
                         onChange={(e) => updateMember(i, 'gender', e.target.value)}
                         className={inputClass}
