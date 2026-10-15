@@ -158,8 +158,12 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
     const wh = whById.get(pileById.get(pileId)?.warehouseId)
     return effectiveCutoffDate(wh?.reportingCutoffDate, globalDataStartDate)
   }
+  // A frozen opening balance is the whole stock of its day: a pile's beginning balance (INIT) dated after that day is
+  // not a document and is left out, so nothing but real documents (and authorities) adds to or takes from it.
+  const frozenDate = reserve && opening?.full ? opening.date : null
   const counts = (tx, pileId) => {
     if (!pileById.has(pileId)) return false
+    if (frozenDate && tx.isInitialBalance && tx.date > frozenDate) return false
     // Reports: a beginning balance is OPENING stock, whatever date it was typed. One entered
     // late (e.g. Sep 22 for stock that was already there on Sep 3) must exist from the start,
     // or the documents that took stock out before it would drive the balance negative.

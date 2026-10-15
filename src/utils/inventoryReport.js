@@ -203,7 +203,7 @@ const withOpening = (ctx, inputs) => {
     }
     fallback.push({ w: c.w, c: c.c, v, b, k })
   }
-  return { ...ctx, openingCells: fallback, openingEngine: engine.length > 0 ? { date: o.date, cells: engine } : null }
+  return { ...ctx, openingCells: fallback, openingEngine: engine.length > 0 || o.full ? { date: o.date, cells: engine, full: Boolean(o.full) } : null }
 }
 
 // The inputs the lot engine needs for the reports: the override cells ride along.
