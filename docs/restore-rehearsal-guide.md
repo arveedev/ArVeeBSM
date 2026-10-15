@@ -12,7 +12,7 @@ Companion to `backup-and-restore-plan.md` (Section 9). Written 2026-10-16. Every
 | 6 Balances, serials, duplicates | The restored data gives the same answers | **Done 2026-10-08** in the app's calculations (76 pile balances, SDO cash). The INIT- serial note was fixed in v1.10-388 |
 | **8 Gap recovery (R3)** | Records newer than the backup can be added without touching anything else | **Done 2026-10-16, mechanically** (Section 2). The real-device version is still open (Section 5) |
 | 5 Sign in with a PIN on an app copy pointed at the throwaway | The app really works on the restored database | **Open** (Section 3) |
-| 7 A device that used the old database, switched | What users see when the database address changes | **Open** (Section 4) |
+| 7 A device that used the old database, switched | What users see when the database address changes | **Done 2026-10-16** (Section 4): devices never sync with the new database until their local data is cleared |
 | 9 Record the results | The proof is written down | **Open** (Section 6) |
 
 The throwaway database now holds the 2026-10-04 backup **plus** the 732 records gap recovery inserted
