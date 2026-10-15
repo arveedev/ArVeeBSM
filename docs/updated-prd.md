@@ -379,7 +379,7 @@ date) rather than always showing today's live totals, correctly handling
 WTS's two-sided structure. PDF export never truncates a field — long
 values wrap instead, with every wrapped line's height reserved correctly
 in the layout. The Stock Statement's decimal display is an admin-level
-setting (Admin > System > Stock Report Decimals), applied to every
+setting (Admin > Reports & Sheets > Stock Report Decimals), applied to every
 figure of the exported statement, with beginning and ending balances
 rounded consistently so a column always foots.
 
@@ -479,10 +479,10 @@ starts collapsed with its total showing and opens on tap.
 - **The variety is the truth for a transaction's cereal tab.** When a
   transaction's stored cereal category disagrees with its own variety's
   category, the variety wins everywhere (serial lookup, tab selection).
-  Admin > System > Data Repair scans for such records and rewrites them
+  Admin > Data Care > Data Repair scans for such records and rewrites them
   only on confirmation.
 - **Moving records between warehouses is admin-driven, selective and
-  previewed.** Admin > System > Move Records moves selected transactions
+  previewed.** Admin > Data Care > Move Records moves selected transactions
   (never a whole warehouse) wrongly encoded under another warehouse:
   pile name unchanged (merge into the destination pile of that name and
   cereal type, or create it empty), serial numbers unchanged and blocked

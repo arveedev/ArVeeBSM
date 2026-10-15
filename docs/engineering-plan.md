@@ -430,7 +430,7 @@ role's own screens or data.
   user then reported identical symptoms on a real record, which proved
   the stored data was already wrong, so the real fix made the variety's
   category the truth (`isCategoryCompatible`), applied it to the primary
-  lookup as well, and added Admin > System > Data Repair to scan and
+  lookup as well, and added Admin > Data Care > Data Repair to scan and
   rewrite existing mismatches on confirmation. Lesson: the first fix
   addressed how the bad data was *created*, not the bad data already
   there. Repair is scan-first because a record whose variety itself was

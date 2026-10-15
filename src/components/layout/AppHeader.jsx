@@ -565,7 +565,7 @@ function AppHeader({ hidden = false }) {
       detail: entry.message,
       onClick: () => {
         setNotifOpen(false)
-        navigate('/admin', { state: { groupId: 'system', tabId: 'errorLog', focusEntryId: entry.id } })
+        navigate('/admin', { state: { groupId: 'data', tabId: 'errorLog', focusEntryId: entry.id } })
       },
     })),
     // title carries the warehouse name (bold, the first thing read) -

@@ -334,7 +334,7 @@ the step-by-step journey.*
 
 *See `docs/updated-prd.md` §12 for the rules.*
 
-1. Admin opens Admin > System > Move Records and picks the source and
+1. Admin opens Admin > Data Care > Move Records and picks the source and
    destination warehouse.
 2. The source warehouse's transactions list (initial-balance seeds
    excluded) can be filtered by type, serial or date; the admin ticks the
@@ -458,3 +458,11 @@ the step-by-step journey.*
 3. Both piles' BIN Cards show a CLOSING RESIDUE line dated the closing date; the closed pile then shows a balance of 0.
 4. Admin > Closing Residue scans piles closed earlier, lists the kilos each still holds, lets the Admin choose a destination per pile and moves them.
 5. Re-opening a pile takes its residue move back. A warehouse's reporting start date is respected: piles closed on or before it are left alone.
+
+## 16. Admin Dashboard Layout
+
+1. Seven groups across the top: Structure, Inventory, Operations, Disbursement, Reports & Sheets, Data Care, Access. No group needs more than seven tabs.
+2. Reports & Sheets: Signatories, Stock Report Decimals, Data Start Date, Report Access, Sheet Sources, PR Sheet Sources, Sheet Export.
+3. Data Care: Backup, Error Log, Data Repair, Move Records, Duplicate Cleanup, Closing Residue, Inventory Lots Check.
+4. Access: Visitor Access, Session Timeouts.
+5. Tapping an Edit pencil in any panel scrolls the screen to that panel's form (above the list) and puts the cursor in its first box.

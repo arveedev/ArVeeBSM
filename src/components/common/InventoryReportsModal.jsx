@@ -1090,7 +1090,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
 
   const handleSheet = async () => {
     const settings = config?.inventorySheet
-    if (!settings?.webAppUrl) { toast.error('Set up Sheet Export first (Admin Dashboard > System > Sheet Export)'); return }
+    if (!settings?.webAppUrl) { toast.error('Set up Sheet Export first (Admin Dashboard > Reports & Sheets > Sheet Export)'); return }
     if (loading || !isAdmin) return
     setSheetBusy(true)
     setSheetResult(null)

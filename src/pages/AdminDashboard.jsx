@@ -6,7 +6,7 @@
 // sub-tabs - Structure follows the dependency chain (Provinces -> Branches
 // -> Warehouses -> Users), the others are grouped by what they configure.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
@@ -85,32 +85,72 @@ const GROUPS = [
       { id: 'disbursementSettings', label: 'Settings', Panel: DisbursementSettingsPanel },
     ],
   },
+  // The old single "System" group held sixteen tabs and needed scrolling; it is now three groups of what belongs together.
   {
-    id: 'system',
-    label: 'System',
+    id: 'reports',
+    label: 'Reports & Sheets',
     tabs: [
       { id: 'signatories', label: 'Signatories', Panel: SignatoriesPanel },
-      { id: 'visitor', label: 'Visitor Access', Panel: VisitorAccessPanel },
+      { id: 'stockReportDecimals', label: 'Stock Report Decimals', Panel: StockReportDecimalsPanel },
+      { id: 'dataStartDate', label: 'Data Start Date', Panel: DataStartDatePanel },
+      { id: 'inventoryReportsAccess', label: 'Report Access', Panel: InventoryReportsAccessPanel },
       { id: 'sheets', label: 'Sheet Sources', Panel: SheetSourcesPanel },
       { id: 'prSheets', label: 'PR Sheet Sources', Panel: PrSheetSourcesPanel },
-      { id: 'dataStartDate', label: 'Data Start Date', Panel: DataStartDatePanel },
-      { id: 'stockReportDecimals', label: 'Stock Report Decimals', Panel: StockReportDecimalsPanel },
+      { id: 'inventorySheetExport', label: 'Sheet Export', Panel: InventorySheetExportPanel },
+    ],
+  },
+  {
+    id: 'data',
+    label: 'Data Care',
+    tabs: [
       { id: 'backup', label: 'Backup', Panel: BackupPanel },
+      { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
       { id: 'dataRepair', label: 'Data Repair', Panel: DataRepairPanel },
       { id: 'moveRecords', label: 'Move Records', Panel: MoveRecordsPanel },
       { id: 'duplicateCleanup', label: 'Duplicate Cleanup', Panel: DuplicateCleanupPanel },
       { id: 'closingResidue', label: 'Closing Residue', Panel: ClosingResiduePanel },
       { id: 'inventoryLotsCheck', label: 'Inventory Lots Check', Panel: InventoryLotsCheckPanel },
-      { id: 'inventorySheetExport', label: 'Sheet Export', Panel: InventorySheetExportPanel },
-      { id: 'inventoryReportsAccess', label: 'Report Access', Panel: InventoryReportsAccessPanel },
-      { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
+    ],
+  },
+  {
+    id: 'access',
+    label: 'Access',
+    tabs: [
+      { id: 'visitor', label: 'Visitor Access', Panel: VisitorAccessPanel },
       { id: 'sessionTimeouts', label: 'Session Timeouts', Panel: SessionTimeoutsPanel },
     ],
   },
 ]
 
+// Tapping an Edit pencil in any panel fills a form that sits above the list. The screen moves to that form and puts the
+// cursor in its first box, so an edit made far down a long list is not made out of sight.
+const FORM_FIELD = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea'
+function useScrollToFormOnEdit(containerRef) {
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root) return undefined
+    const onClick = (e) => {
+      const btn = e.target.closest?.('button[aria-label^="Edit"]')
+      if (!btn) return
+      const panel = btn.closest('[data-admin-panel]')
+      if (!panel) return
+      // after the panel has put the record into its form
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const field = [...panel.querySelectorAll(FORM_FIELD)].find((el) => !el.closest('li, tr, [role=listitem]') && el.offsetParent !== null)
+        if (!field) return
+        field.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        field.focus({ preventScroll: true })
+      }))
+    }
+    root.addEventListener('click', onClick)
+    return () => root.removeEventListener('click', onClick)
+  }, [containerRef])
+}
+
 function AdminDashboard({ onClose }) {
   useEscapeClose(() => handleClose())
+  const scrollAreaRef = useRef(null)
+  useScrollToFormOnEdit(scrollAreaRef)
   const { setPageHeader } = usePageHeader() ?? {}
   // Deep-link support (e.g. the admin-only error notification bell in
   // AppHeader.jsx navigating here with a specific entry to jump to):
@@ -220,7 +260,7 @@ function AdminDashboard({ onClose }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3">
+      <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-3">
         <div key={activeGroupId} className="animate-flow-down">
           <div className="relative flex gap-2 overflow-x-auto pb-1">
             {activeGroup.tabs.map((tab) => (
@@ -254,7 +294,7 @@ function AdminDashboard({ onClose }) {
             const Panel = tab.Panel
             const isActive = activeGroupId === group.id && activeTabId === tab.id
             return (
-              <div key={`${group.id}-${tab.id}`} className={isActive ? '' : 'hidden'}>
+              <div key={`${group.id}-${tab.id}`} data-admin-panel className={isActive ? '' : 'hidden'}>
                 {tab.id === 'errorLog'
                   ? <Panel focusEntryId={focusEntryId} onFocusHandled={() => setFocusEntryId(null)} />
                   : <Panel />}

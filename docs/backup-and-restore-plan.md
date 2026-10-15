@@ -526,7 +526,8 @@ scratch database is created once.) This is a new item, Phase 6b.
 | 2026-10-16 | 8 (gap recovery, `tools/gap-recovery/gap.mjs`, throwaway `z1wnhq0k3`, the 2026-10-15 cloud export standing in for a device) | Pass: 732 missing records inserted, 0 existing records changed or removed, counts grew by exactly 732, a second preview found 0 missing, 1,769 conflicts reported and left untouched |
 | 2026-10-16 | 5, part 1 (rehearsal app copy, test Admin, sign-in, first sync, Home) | Pass so far: sign-in works, sync reaches in-sync, Home totals equal the ledger recomputed outside the app (Rice exact). After the gap recovery the app recomputed all 76 pile balances by itself (31 stale before, 0 after) |
 | 2026-10-16 | 5, part 2 (Reports, serials on an entry form, Admin dashboard, Stock Desk, error log) | Pass: Reports match the transactions on every line checked; the suggested WSR serial is the next real number; Admin and Stock Desk open; no unexpected errors (only the rehearsal copy's backup attempts, HTTP 404, harmless). Side findings: PR Sheet-error entries never closed (fixed v1.10-389); a 0-bag pile with kilos left is left out of Home (see the closing residue) |
-| open | 7 (device switch), 8 with a real Export All Data file | See `restore-rehearsal-guide.md` |
+| 2026-10-16 | 8 with a real Export All Data file (device file of 2026-10-15, throwaway `z1wnhq0k3`) | Pass: 41 missing records inserted (772 against the Oct 4 backup), 0 existing records changed or removed, counts grew by exactly 41, a second preview found 0 missing, 1,771 conflicts reported and left untouched |
+| open | 7 (device switch) | See `restore-rehearsal-guide.md` |
 
 ---
 

@@ -35,6 +35,6 @@ so update **each** one you want covered. The formula only matters in the monthly
 
 Copy the previous month's spreadsheet (so it carries the script and headers), then create a **new**
 Web app deployment (Deploy → New deployment → Web app → Execute as **Me**, access **Anyone**), copy the
-address ending in `/exec`, and add it in the app under Admin → System → PR Sheet Sources. The address
+address ending in `/exec`, and add it in the app under Admin → Reports & Sheets → PR Sheet Sources. The address
 must start with `https://script.google.com/macros/s/`, not with `docs.google.com`.
 (The new daily audit will report an error if a source address is of the wrong kind.)

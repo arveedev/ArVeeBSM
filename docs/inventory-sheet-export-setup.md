@@ -16,7 +16,7 @@ sheets, the transaction backup sheets, or your existing Daily Inventory sheet.
    - Execute as: **Me**
    - Who has access: **Anyone**
    - Copy the **Web app URL** it gives you.
-5. In the BSM App: **Admin Dashboard > System > Sheet Export**. Paste the URL (and the
+5. In the BSM App: **Admin Dashboard > Reports & Sheets > Sheet Export**. Paste the URL (and the
    token if you set one), tap **Test connection**. You should see the spreadsheet name.
 6. Open the **Stock Desk** (the quiet icon on Home > Stocks) as an Admin. On Daily inventory,
    Summary or Age monitoring, tap **Google Sheet**. The button is Admin only; Visitors keep Excel.
