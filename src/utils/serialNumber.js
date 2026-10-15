@@ -304,7 +304,8 @@ export const suggestNextSerial = async (type, warehouseId, fallback = '1', cerea
   const existing = await db.transactions
     .where('[type+warehouseId+serialNo]')
     .between([type, warehouseId, Dexie.minKey], [type, warehouseId, Dexie.maxKey])
-    .and((tx) => cerealCategory == null || tx.cerealCategory === cerealCategory)
+    // a pile's beginning-balance seed (INIT-...) is not a numbered document: it must never become the series' latest
+    .and((tx) => !tx.isInitialBalance && (cerealCategory == null || tx.cerealCategory === cerealCategory))
     .toArray()
 
   let best = tracked
@@ -501,7 +502,7 @@ export const findAdjacentTransaction = async (type, warehouseId, serialNo, cerea
   const pool = await db.transactions
     .where('[type+warehouseId+serialNo]')
     .between([type, warehouseId, Dexie.minKey], [type, warehouseId, Dexie.maxKey])
-    .and((tx) => effectiveCategory == null || tx.cerealCategory === effectiveCategory)
+    .and((tx) => !tx.isInitialBalance && (effectiveCategory == null || tx.cerealCategory === effectiveCategory))
     .toArray()
 
   const sorted = pool.slice().sort(compareByRecency)
