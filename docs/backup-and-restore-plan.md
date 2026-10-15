@@ -952,3 +952,9 @@ used the old database behaves when switched (a one-off test needing the owner's 
 warehouse whose newest WSR is older than its beginning-balance seed (seen for ALB-LEGAZPI GID A, ALB-VRT). Called
 without a cereal category as in this check; to be confirmed in the form before any change.
 
+
+---
+
+## 26a. Drive copy and monthly restore test built (2026-10-16), not yet switched on
+
+The daily server backup of Section 22 has run every day since 2026-10-04. Built locally in `bsm-backups` (commit 75029e8, not pushed): the Google Drive receiver (Apps Script) with a delivery step that treats a file as delivered only when Drive reads it back with the same SHA-256 (phase 3), and the monthly restore test (phase 6b: newest passing backup loaded into a scratch database, exported again, compared record by record, result saved under `restore-tests/`). Both stay inactive until the owner adds their GitHub secrets; setup steps are in `SETUP-DRIVE-AND-RESTORE-TEST.md` in that repository. The phase 4 stopped-job warning is not built; a daily task on the owner's always-on PC is the proposal.

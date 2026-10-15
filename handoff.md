@@ -57,6 +57,7 @@ the latest code commit). Update it before saying a task is done.
 6. Excel exports for CPF, BIN Card and Abstract formulas have not been checked against real data in Excel; DV/BUR not against a real Abstract.
 7. Opening balance (v1.10-370): the owner must open Opening balance and Save once so the old partial override becomes a frozen one (the button says "not frozen" until then). The opening must never move once set; no change log wanted.
 8. Milling and Issuances (Admin only): test milling (TMO) is included and an LGU is matched by the letters LGU anywhere in the customer name; neither was confirmed by the owner.
+9. Backup: the daily server backup (bsm-backups repo) is live and verified daily. Drive copy and monthly restore test are built locally in bsm-backups (commit 75029e8, not pushed); they need the owner's Drive folder + script deployment, a scratch database and five GitHub secrets (see SETUP-DRIVE-AND-RESTORE-TEST.md there). Stopped-job warning task on the PC proposed, not built.
 
 Closed by the owner on 2026-10-14 (nothing to do): closing residue for already-closed piles is the manual scan under Admin > Data Care > Closing Residue; denomination count needs only the update list; no change log, no export, no filter note on the reports; NFA-owned figures were the owner's own mistake. Escape closes every modal and entry form; the forms and the Piles name dialog just use their own handler, not a gap. The presentation (artifact, version 32) now has the Closing residue and Data check slides; it deliberately has no Milling and Issuances slide.
 
