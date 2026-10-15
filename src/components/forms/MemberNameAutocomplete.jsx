@@ -129,6 +129,9 @@ const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ valu
           setShowSuggestions(true)
         }}
         onFocus={() => setShowSuggestions(true)}
+        // The suggestion list used to stay open after Tab moved on, sitting right over the member's RSBSA and gender
+        // boxes (the next fields) so they were focused but hidden. It closes as soon as the name box loses focus.
+        onBlur={() => setShowSuggestions(false)}
         onKeyDown={handleKeyDown}
         className={`${inputClass} ${required && !(value ?? '').trim() ? '!border-brand-amber' : ''}`}
         placeholder={placeholder}
@@ -138,6 +141,8 @@ const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ valu
       {showSuggestions && suggestions.length > 0 && dropdownRect && createPortal(
         <ul
           ref={dropdownRef}
+          // pressing a suggestion must not take the focus off the name box (which would close the list first)
+          onMouseDown={(e) => e.preventDefault()}
           className="fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
           style={{
             top: dropdownRect.top,
