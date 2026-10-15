@@ -405,6 +405,10 @@ an older version of a record could overwrite newer data. Gap recovery is therefo
 7. **Devices must not be wiped first.** The runbook says: do not clear browser data, reinstall the app,
    or log out and reset any device until gap recovery is finished.
 
+**Tooling (built 2026-10-16):** `tools/gap-recovery/gap.mjs`, with the commands `preview` and `apply` described in the steps below
+(they are the plan's `gap-preview` and `gap-apply`). The apply step also proves, from a before and an after export, that
+no existing record changed.
+
 **Steps**
 
 1. Complete R2 (fresh database restored from the latest backup). Keep devices untouched.
@@ -512,6 +516,15 @@ permanent scratch Dexie database, compares record counts per table, spot-checks 
 the result. The owner is alerted if it ever fails. This proves **every month, without anyone remembering
 to do it**, that the backups can really be restored. (Dexie's free tier allows several databases; the
 scratch database is created once.) This is a new item, Phase 6b.
+
+### 9.2 Rehearsal log
+
+| Date | Step | Result |
+|---|---|---|
+| 2026-10-05 | 1-4 (throwaway database, import the 2026-10-04 backup, counts, round-trip) | Pass: all 32 tables matched exactly |
+| 2026-10-08 | 6 (balances, serials, duplicates, in the app's calculations on the restored data) | Pass: 76 of 76 pile balances, SDO cash on hand, valid serial suggestions. Finding: the next-serial suggestion could be an INIT- number; fixed in v1.10-388 |
+| 2026-10-16 | 8 (gap recovery, `tools/gap-recovery/gap.mjs`, throwaway `z1wnhq0k3`, the 2026-10-15 cloud export standing in for a device) | Pass: 732 missing records inserted, 0 existing records changed or removed, counts grew by exactly 732, a second preview found 0 missing, 1,769 conflicts reported and left untouched |
+| open | 5 (PIN sign-in on the rehearsal app), 7 (device switch), 8 with a real Export All Data file | See `restore-rehearsal-guide.md` |
 
 ---
 

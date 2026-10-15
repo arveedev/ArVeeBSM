@@ -66,6 +66,10 @@ You do the PIN sign-in (I cannot enter a PIN).
 1. Make sure the rehearsal copy is current. The copy in `C:\Users\DjArVee\BSM-Safety\rehearsal\app` was made on
    2026-10-08. To rehearse the current app, copy `src`, `public`, `index.html` and `package.json` from the repository
    into that folder (keep its `vite.config.js`, `token-server.cjs` and `node_modules`).
+   **Then fix the database address:** the copied `src\db\dexie.js` points at production. In the rehearsal folder open
+   `src\db\dexie.js`, find the line `databaseUrl:` and make it `'https://z1wnhq0k3.dexie.cloud'`. Check it with
+   `Select-String -Path C:\Users\DjArVee\BSM-Safety\rehearsal\app\src\db\dexie.js -Pattern databaseUrl`;
+   it must show `z1wnhq0k3`, never `zv432njdm`.
 2. Start it. In the Claude desktop app use the launch entry **rehearsal-throwaway** (port 5174), or in PowerShell:
    `node C:\Users\DjArVee\BSM-Safety\rehearsal\app\start-rehearsal.mjs`.
    It refuses to start unless the database is the throwaway one.
@@ -91,9 +95,11 @@ the point is a browser that has already synced with one and is then pointed at t
    `http://localhost:5174` (`npx dexie-cloud whitelist http://localhost:5174`).
 2. In an incognito window open the rehearsal app against the **first** throwaway, sign in, let it sync, and make one
    harmless change (add a logistics item, then leave it).
-3. Stop the rehearsal app. Edit `C:\Users\DjArVee\BSM-Safety\rehearsal\dexie-cloud.json` (and the matching entry in the
-   `dexie-cloud.key` file) so the app points at the **second** throwaway. Start it again and reload the **same**
-   incognito window (do not close it).
+3. Stop the rehearsal app. Point it at the **second** throwaway in three places: `databaseUrl:` in
+   `rehearsal\app\src\db\dexie.js`; `rehearsal\dexie-cloud.json` (and the matching entry in
+   `rehearsal\dexie-cloud.key`, which is keyed by the database address); and the safety check near the top of
+   `rehearsal\app\token-server.cjs` (it refuses any address except the first throwaway, so change the address in that
+   line too). Start it again and reload the **same** incognito window (do not close it).
 4. Write down what happened, exactly: an error screen? asked to sign in again? the old data still shown? the harmless
    change from step 2 present in the second database afterwards (`npx dexie-cloud export` and look)?
 5. Pass condition: you know the answer and it is written in the runbook. There is no "wrong" outcome here; the point is
