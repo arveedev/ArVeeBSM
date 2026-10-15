@@ -158,3 +158,32 @@ export const issuancesText = (data, from, to) => {
     '',
   ].join('\n')
 }
+
+/**
+ * Milling per ricemill: for each ricemill the net bags issued to it (its milling authorities) and the net bags of
+ * rice recovered from it (its milling WSRs), plus the recovery %. Different spellings of one miller (Borromeo
+ * Ricemill, BORROMEO RM) are one row. The NFA-owned ricemill is its own last row. Follows the report's period and
+ * filters because it is built from the same data.
+ */
+export const perRicemill = (data) => {
+  const m = new Map()
+  const row = (r) => {
+    const key = millerKey(r.customer)
+    if (!m.has(key)) m.set(key, { key, names: [], issued: 0, recovered: 0 })
+    const e = m.get(key)
+    if (r.customer) e.names.push(r.customer)
+    return e
+  }
+  for (const r of data.milling.issues) row(r).issued += r.bags
+  for (const r of data.milling.recoveries) row(r).recovered += r.bags
+  const rows = [...m.values()].map((e) => ({
+    key: e.key,
+    name: e.names.find((n) => /rice\s*mill/i.test(n) && n !== n.toUpperCase()) ?? e.names[0] ?? '(no name)',
+    issued: e.issued, recovered: e.recovered, pct: e.issued > 0 ? (e.recovered / e.issued) * 100 : null,
+  })).sort((a, b) => natural(a.name, b.name))
+  const nfa = { key: 'nfa', name: 'NFA-owned ricemill', issued: data.nfa.issuedTotal, recovered: data.nfa.recoveredTotal, pct: data.nfa.issuedTotal > 0 ? (data.nfa.recoveredTotal / data.nfa.issuedTotal) * 100 : null }
+  if (nfa.issued > 0 || nfa.recovered > 0) rows.push(nfa)
+  const issued = rows.reduce((s, r) => s + r.issued, 0)
+  const recovered = rows.reduce((s, r) => s + r.recovered, 0)
+  return { rows, total: { issued, recovered, pct: issued > 0 ? (recovered / issued) * 100 : null } }
+}

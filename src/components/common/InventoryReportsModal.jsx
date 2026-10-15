@@ -22,7 +22,7 @@ import {
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
 import { buildEndingStockData, endingStockModels } from '../../utils/endingStockReport.js'
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
-import { buildMillingIssuances, issuancesText as buildIssuancesText } from '../../utils/millingIssuances.js'
+import { buildMillingIssuances, issuancesText as buildIssuancesText, perRicemill } from '../../utils/millingIssuances.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
 import { modelToSheet, postInventorySheet } from '../../services/inventorySheetExport.js'
@@ -616,6 +616,60 @@ function FilterSheet({ open, draft, setDraft, provinces, warehouses, view, onApp
   )
 }
 
+// Milling per ricemill (Admin only): issued and recovered per ricemill for the report's period.
+function RicemillModal({ open, data, from, to, onClose }) {
+  const boxRef = useRef(null)
+  useCrosshair(boxRef)
+  useTableScroll(boxRef)
+  const { rows, total } = data ? perRicemill(data) : { rows: [], total: { issued: 0, recovered: 0, pct: null } }
+  const pct = (v) => (v == null ? '-' : `${v.toLocaleString('en-PH', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`)
+  return (
+    <SdOverlay open={open} onClose={onClose} z="z-[95]" panelClassName="sd-table flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-2xl sm:rounded-2xl">
+      <>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-app-text">Milling per ricemill</h3>
+            <p className="text-xs text-neutral-400">{from === to ? longDate(from) : `${longDate(from)} to ${longDate(to)}`} · net bags</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className={closeButtonClass}><X size={16} /></button>
+        </div>
+        <p className="mt-1 text-xs text-neutral-500">Issued is what the ricemill's milling authorities authorize; recovered is the rice (no by-products) received from it.</p>
+        <div ref={boxRef} className="mt-3 min-h-0 flex-1 overflow-auto">
+          <table className="min-w-full border-separate border-spacing-0 text-sm tabular-nums">
+            <thead>
+              <tr>
+                <th className="border-b border-neutral-800 px-2 py-1 text-left text-xs font-semibold text-neutral-400">Ricemill</th>
+                <th className="border-b border-neutral-800 px-2 py-1 text-right text-xs font-semibold text-neutral-400">Issued</th>
+                <th className="border-b border-neutral-800 px-2 py-1 text-right text-xs font-semibold text-neutral-400">Recovered</th>
+                <th className="border-b border-neutral-800 px-2 py-1 text-right text-xs font-semibold text-neutral-400">Recovery</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && <tr><td colSpan={4} className="px-2 py-3 text-xs text-neutral-500">No milling in this period.</td></tr>}
+              {rows.map((r) => (
+                <tr key={r.key}>
+                  <td className="break-words border-b border-neutral-900 px-2 py-1 text-app-text">{r.name}</td>
+                  <td className="border-b border-neutral-900 px-2 py-1 text-right text-app-text">{fmtNum(r.issued)}</td>
+                  <td className="border-b border-neutral-900 px-2 py-1 text-right text-app-text">{fmtNum(r.recovered)}</td>
+                  <td className="border-b border-neutral-900 px-2 py-1 text-right text-neutral-300">{pct(r.pct)}</td>
+                </tr>
+              ))}
+              {rows.length > 0 && (
+                <tr>
+                  <td className="px-2 py-1 font-bold text-app-text">Total</td>
+                  <td className="px-2 py-1 text-right font-bold text-app-text">{fmtNum(total.issued)}</td>
+                  <td className="px-2 py-1 text-right font-bold text-app-text">{fmtNum(total.recovered)}</td>
+                  <td className="px-2 py-1 text-right font-bold text-neutral-300">{pct(total.pct)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>
+    </SdOverlay>
+  )
+}
+
 const ISS_DEFAULTS = { provinceId: '', warehouseIds: null, customer: '', sort: 'date' }
 
 function IssuanceFilterSheet({ open, draft, setDraft, provinces, warehouses, customers, onApply, onReset, onClose }) {
@@ -811,6 +865,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
   const [issFilters, setIssFilters] = useState(ISS_DEFAULTS)
   const [issDraft, setIssDraft] = useState(ISS_DEFAULTS)
   const [showIssFilters, setShowIssFilters] = useState(false)
+  const [showMillers, setShowMillers] = useState(false)
   // A document opened from the Data check: the Stock Desk steps aside while its form is up and comes back (with
   // everything as it was) when the form closes.
   const { setCurrentWarehouseId } = useWarehouse() ?? {}
@@ -1096,6 +1151,9 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               <button type="button" onClick={() => { setIssDraft(issFilters); setShowIssFilters(true) }} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200">
                 <SlidersHorizontal size={14} /> Filter and sort{issuanceFilterCount > 0 && <span className="rounded-full bg-brand-neon px-1.5 text-[10px] font-bold text-brand-contrast">{issuanceFilterCount}</span>}
               </button>
+              <button type="button" onClick={() => setShowMillers(true)} disabled={!issuancesData} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
+                <Factory size={14} /> Per ricemill
+              </button>
               <button type="button" onClick={() => copyIssuances()} disabled={!issuancesData} className="flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40">
                 <ClipboardList size={14} /> Copy text
               </button>
@@ -1106,6 +1164,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             <div className="mb-3">
               <PeriodPresetPicker onSelectRange={(f, t) => { setFrom(f); setTo(t) }} currentFrom={from} currentTo={to} />
             </div>
+            <RicemillModal open={showMillers} data={issuancesData} from={from} to={to < from ? from : to} onClose={() => setShowMillers(false)} />
             <IssuanceFilterSheet
               open={showIssFilters} draft={issDraft} setDraft={setIssDraft} provinces={provinces ?? []} warehouses={warehouses} customers={issuancesData?.customers ?? []}
               onApply={() => { setIssFilters(issDraft); setShowIssFilters(false) }} onReset={() => setIssDraft(ISS_DEFAULTS)} onClose={() => setShowIssFilters(false)}
