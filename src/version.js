@@ -8439,4 +8439,5 @@
 //   1.10-381 - Pile layout / Home Stocks: a pile no longer shows a negative line (e.g. DKA 4 bags, then DKA -4 bags). An issue recorded without the sack type of the receipt landed in a group of its own and went negative; each negative group is now taken out of the same variety's positive groups, oldest receipt first, so only real stock is listed. Totals are unchanged.
 //   1.10-382 - Milling and Issuances: a Per ricemill button opens a window with the milling issuance (authority net bags), the rice recovered and the recovery % for each ricemill, for the same period (and filters); the NFA-owned ricemill is its own row.
 //   1.10-383 - Milling and Issuances: the NFA-owned list is grouped by authority (its Regional Authority Number): for each number, the milling authorities issued to the ricemill and the rice transfer authorities handed out, with the issued and recovered totals and the recovery %.
-export const APP_VERSION = '1.10-383'
+//   1.10-384 - Milling and Issuances, Per ricemill window: the NFA-owned ricemill is grouped by authority too (one row per Regional Authority Number under an NFA-owned heading), included in the total.
+export const APP_VERSION = '1.10-384'

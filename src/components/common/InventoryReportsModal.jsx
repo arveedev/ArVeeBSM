@@ -621,7 +621,7 @@ function RicemillModal({ open, data, from, to, onClose }) {
   const boxRef = useRef(null)
   useCrosshair(boxRef)
   useTableScroll(boxRef)
-  const { rows, total } = data ? perRicemill(data) : { rows: [], total: { issued: 0, recovered: 0, pct: null } }
+  const { rows, nfaRows = [], total } = data ? perRicemill(data) : { rows: [], nfaRows: [], total: { issued: 0, recovered: 0, pct: null } }
   const pct = (v) => (v == null ? '-' : `${v.toLocaleString('en-PH', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`)
   return (
     <SdOverlay open={open} onClose={onClose} z="z-[95]" panelClassName="sd-table flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-2xl sm:rounded-2xl">
@@ -645,7 +645,7 @@ function RicemillModal({ open, data, from, to, onClose }) {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={4} className="px-2 py-3 text-xs text-neutral-500">No milling in this period.</td></tr>}
+              {rows.length + nfaRows.length === 0 && <tr><td colSpan={4} className="px-2 py-3 text-xs text-neutral-500">No milling in this period.</td></tr>}
               {rows.map((r) => (
                 <tr key={r.key}>
                   <td className="break-words border-b border-neutral-900 px-2 py-1 text-app-text">{r.name}</td>
@@ -654,7 +654,20 @@ function RicemillModal({ open, data, from, to, onClose }) {
                   <td className="border-b border-neutral-900 px-2 py-1 text-right text-neutral-300">{pct(r.pct)}</td>
                 </tr>
               ))}
-              {rows.length > 0 && (
+              {nfaRows.length > 0 && (
+                <>
+                  <tr><td colSpan={4} className="border-b border-neutral-800 px-2 pb-1 pt-3 text-xs font-bold uppercase tracking-wide text-brand-neon">NFA-owned ricemill, by authority</td></tr>
+                  {nfaRows.map((r) => (
+                    <tr key={r.key}>
+                      <td className="break-words border-b border-neutral-900 px-2 py-1 pl-4 text-app-text">{r.name}</td>
+                      <td className="border-b border-neutral-900 px-2 py-1 text-right text-app-text">{fmtNum(r.issued)}</td>
+                      <td className="border-b border-neutral-900 px-2 py-1 text-right text-app-text">{fmtNum(r.recovered)}</td>
+                      <td className="border-b border-neutral-900 px-2 py-1 text-right text-neutral-300">{pct(r.pct)}</td>
+                    </tr>
+                  ))}
+                </>
+              )}
+              {rows.length + nfaRows.length > 0 && (
                 <tr>
                   <td className="px-2 py-1 font-bold text-app-text">Total</td>
                   <td className="px-2 py-1 text-right font-bold text-app-text">{fmtNum(total.issued)}</td>

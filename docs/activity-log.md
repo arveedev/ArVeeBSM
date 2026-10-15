@@ -18568,3 +18568,5 @@ Two-device test reported by the owner: all five checks passed. The Stock Desk ta
 2026-10-15 (v1.10-382): Milling and Issuances: Per ricemill window (`perRicemill` in `utils/millingIssuances.js`, `RicemillModal`): issued, recovered and recovery % per ricemill for the selected period and filters, spellings of one miller merged, NFA-owned ricemill as its own row, with a total. On the 2026-10-15 cloud export, Oct 1-7: Borromeo 3,052.70 issued / 2,409.66 recovered, Magayon 2,000 / 1,929, Buama 600 / 0, Dens 0 / 643.50, NFA-owned 0 / 448.47; recovered total 5,430.63 equals the milling block plus the NFA-owned recoveries.
 
 2026-10-15 (v1.10-383): Milling and Issuances: the NFA-owned list is grouped by Regional Authority Number (the reference an NFA-owned ricemill works by): per number, issued to the ricemill (milling authorities) and handed out (rice transfer authorities), with totals and recovery %. Rows carry `ran`.
+
+2026-10-15 (v1.10-384): Per ricemill window: the NFA-owned ricemill is no longer one row; it is a section with one row per Regional Authority Number (issued, recovered, recovery %), added to the total (`nfaRows` from `perRicemill`).
