@@ -558,13 +558,39 @@ export const computePileStockBreakdown = async (pileId, cutoffDate = '9999-12-31
     }
   }
 
-  // NOT floored per group - see computePileStockBySackWeight's original
-  // comment (kept verbatim in spirit): a single pile's transactions can
-  // genuinely resolve to different groups over its life, so one group
-  // going negative while another is correspondingly positive is a REAL,
-  // NEEDED offset - the pile's true total is only correct once every
-  // group is summed together.
-  return [...groups.values()]
+  // An issue is often recorded without the sack type / condition its bags were received with (older transfers, a
+  // WSI typed with another sack), so it lands in a group of its own and that group goes negative while the group it
+  // really came out of stays positive. The pile's total is right once both are summed, but the pile layout and Home
+  // Stocks showed a negative line. Each negative group is therefore taken out of the positive groups of the SAME
+  // variety, the oldest receipt first, so only real stock is listed. A negative that finds nothing left to net
+  // against is an over-issue (the Data check lists it); it is not shown as stock.
+  const all = [...groups.values()]
+  const byVariety = new Map()
+  for (const g of all) {
+    const k = g.varietyId ?? ''
+    if (!byVariety.has(k)) byVariety.set(k, [])
+    byVariety.get(k).push(g)
+  }
+  for (const list of byVariety.values()) {
+    const positives = list.filter((g) => g.bags > 0 || g.kilos > 0)
+      .sort((a, b) => (a.lastReceivedDate ?? '9999') < (b.lastReceivedDate ?? '9999') ? -1 : 1)
+    for (const neg of list.filter((g) => g.bags < 0 || g.kilos < 0)) {
+      let needBags = Math.max(0, -neg.bags)
+      let needKilos = Math.max(0, -neg.kilos)
+      for (const pos of positives) {
+        if (needBags <= 0 && needKilos <= 0) break
+        const tb = Math.min(Math.max(0, pos.bags), needBags)
+        const tk = Math.min(Math.max(0, pos.kilos), needKilos)
+        pos.bags -= tb
+        pos.kilos = round3(pos.kilos - tk)
+        needBags -= tb
+        needKilos = round3(needKilos - tk)
+      }
+      neg.bags = needBags > 0 ? -needBags : 0
+      neg.kilos = needKilos > 0 ? -needKilos : 0
+    }
+  }
+  return all.filter((g) => g.bags > 0 || g.kilos > 0)
 }
 
 /**
