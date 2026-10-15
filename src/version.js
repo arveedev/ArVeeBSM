@@ -8442,4 +8442,5 @@
 //   1.10-384 - Milling and Issuances, Per ricemill window: the NFA-owned ricemill is grouped by authority too (one row per Regional Authority Number under an NFA-owned heading), included in the total.
 //   1.10-385 - Receipt (WSR) form with FA switched on: turning FA on moves the cursor to the first member's name, and Tab now visits every member in order (name, RSBSA, gender, then the next member) and then goes on to PO No. / Number of Bags, skipping the Add member button. Before, only the first member's name was in the Tab order and a member's RSBSA and gender were never stopped at.
 //   1.10-386 - Receipt form, FA members: the member-name suggestion list stayed open after Tab moved on and covered the member's RSBSA and gender boxes (they had the focus but could not be seen); it now closes when the name box loses the focus.
-export const APP_VERSION = '1.10-386'
+//   1.10-387 - Entry forms: tabbing onto a field now scrolls the screen so the field is really in view above the fixed Save bar. The old check measured the whole screen, so a field sitting behind the Save bar (the member name, RSBSA and gender of a Farmer Organization are low on the form) counted as visible and the screen never moved. The field is now centred in the area between the top of the form and the Save bar. Applies to all the entry forms.
+export const APP_VERSION = '1.10-387'

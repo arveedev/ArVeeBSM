@@ -4598,7 +4598,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+      <div data-form-footer className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         {isEditMode ? (
           <div>
           <div className="flex gap-3">

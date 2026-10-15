@@ -293,7 +293,7 @@ function TransactionFormBase({ type, title, includeFarmerCoop = false, onClose }
       </div>
 
       {/* Sticky Save/Cancel footer */}
-      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-6">
+      <div data-form-footer className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-800 bg-neutral-900 p-4 pb-6">
         <div className="mx-auto flex max-w-md gap-3">
           <button
             type="button"

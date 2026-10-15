@@ -157,9 +157,18 @@ export const attachCenterFocusScroll = (containerEl) => {
     // visualViewport is undefined on desktop/older browsers, where
     // innerHeight is already correct and this falls back to it.
     const viewportH = window.visualViewport?.height ?? window.innerHeight
-    const comfortablyVisible = rect.top >= margin && rect.bottom <= viewportH - margin
+    // The form's Save bar is fixed over the bottom of the screen: whatever sits behind it is NOT visible, so the
+    // visible area ends where that bar starts (and starts at the top of the scrolling area). Before, a field tabbed
+    // onto just above the screen bottom counted as in view although the bar covered it, and the screen never moved.
+    const footer = containerEl.parentElement?.querySelector('[data-form-footer]')
+    const rootRect = containerEl.getBoundingClientRect()
+    const topLimit = Math.max(0, rootRect.top)
+    const bottomLimit = Math.min(viewportH, footer ? footer.getBoundingClientRect().top : viewportH)
+    const comfortablyVisible = rect.top >= topLimit + margin / 2 && rect.bottom <= bottomLimit - margin / 2
     if (comfortablyVisible) return
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // centre the field in the visible area
+    const delta = (rect.top + rect.bottom) / 2 - (topLimit + bottomLimit) / 2
+    containerEl.scrollBy({ top: delta, behavior: 'smooth' })
   }
   containerEl.addEventListener('focusin', handleFocusIn)
   return () => containerEl.removeEventListener('focusin', handleFocusIn)

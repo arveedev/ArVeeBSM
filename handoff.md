@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-14, app v1.10-386) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-14, app v1.10-387) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
