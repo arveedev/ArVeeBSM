@@ -165,7 +165,8 @@ export const resolveHealedSheetFailures = async () => {
   try {
     const open = await db.errorLogs.filter((e) => e.context === 'Sheet sync' && e.resolved !== true && e.refId).toArray()
     for (const e of open) {
-      const tx = await db.transactions.get(e.refId)
+      // the record is a transaction, or a purchase receipt (same isSynced flag)
+      const tx = (await db.transactions.get(e.refId)) ?? (await db.purchaseReceipts.get(e.refId))
       if (tx && tx.isSynced === true && !(Array.isArray(tx.staleSheetSerials) && tx.staleSheetSerials.length > 0)) {
         await db.errorLogs.update(e.id, { resolved: true, resolvedAt: new Date().toISOString() })
       }

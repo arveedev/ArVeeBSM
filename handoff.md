@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-14, app v1.10-388) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-14, app v1.10-389) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
@@ -50,7 +50,7 @@ the latest code commit). Update it before saying a task is done.
 2. GSR (Grains Situationer Report) is NOT built; assessment given on 2026-10-13: roughly 55-60% of the data exists in the app
    (inventory about 90%, procurement about 70%, distribution about 50%, prices about 10%). Owner wants the sync issues fixed first, then
    backup, then GSR.
-3. Backup/restore plan: rehearsal steps 1-4, 6 and the gap recovery tool (`tools/gap-recovery/gap.mjs`, rehearsed 2026-10-16 on the throwaway) are done; PIN sign-in on the rehearsal app, device switch, gap recovery with a real Export All Data file and the rehearsal log are open; the restore tooling (`restore-preview` / `restore-apply`) and the rest of the plan's phases are not built. Step by step: `docs/restore-rehearsal-guide.md`. A test Admin exists in the throwaway (PIN in `BSM-Safety/rehearsal/TEST-ADMIN.txt`); the rehearsal app copy is current; the owner types that PIN once, then Claude can run the step 5 checks. The rehearsal copy now has a request guard (index.html) that blocks everything except the throwaway database; never copy the repository's index.html over it. First attempt: signed in fine, first sync very slow, Home still "Computing branch totals" after 5+ minutes - sign-in and sync passed on the second attempt (Home totals equal the ledger; all piles recomputed by the app after the gap recovery). Still to do in the browser: Reports, entry-form serials, Admin / Stock Desk, error log; a reload logs the app out.
+3. Backup/restore plan: rehearsal steps 1-4, 6 and the gap recovery tool (`tools/gap-recovery/gap.mjs`, rehearsed 2026-10-16 on the throwaway) are done; PIN sign-in on the rehearsal app, device switch, gap recovery with a real Export All Data file and the rehearsal log are open; the restore tooling (`restore-preview` / `restore-apply`) and the rest of the plan's phases are not built. Step by step: `docs/restore-rehearsal-guide.md`. A test Admin exists in the throwaway (PIN in `BSM-Safety/rehearsal/TEST-ADMIN.txt`); the rehearsal app copy is current; the owner types that PIN once, then Claude can run the step 5 checks. The rehearsal copy now has a request guard (index.html) that blocks everything except the throwaway database; never copy the repository's index.html over it. First attempt: signed in fine, first sync very slow, Home still "Computing branch totals" after 5+ minutes - step 5 is DONE and passed (sign-in, sync, Home, Reports, serials, Admin, Stock Desk, error log; all piles recomputed by the app after the gap recovery). Open: step 7 (device switch) and step 8 with a real Export All Data file.
 4. Stock Desk: authority shortfall that cannot be placed (about 81,000 kg on the 2026-10-08 backup, probably piles closed later) and the
    pre-existing "No negative balance" failure for Legazpi GID A by-products around Sep 4.
 5. Old DONE cells in the MO/TMO Sheet are cleared only when an order is marked and reverted.
