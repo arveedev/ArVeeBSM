@@ -899,8 +899,9 @@ select {
 @keyframes logo-tri-b   { from { transform: translate(260px, 190px) rotate(55deg) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes logo-notch-in { from { transform: scaleY(0); opacity: 0; } to { transform: none; opacity: .85; } }
 /* The logo's own timeline: builds itself large and centred (0 - 1.2s), holds a beat, then shrinks to its place
-   (1.5s - 2.2s). The rest of the page keeps its own entrance, shifted by --lt0 so it starts as the logo begins to shrink. */
-:root { --lt0: 700ms; }
+   (1.5s - 2.2s). The rest of the page keeps its own entrance, shifted by --lt0 so the first piece (the title, 800ms in)
+   starts only once the logo has finished shrinking into place (2.2s). */
+:root { --lt0: 1400ms; }
 .login-logo-hero { animation: login-logo-hero 2200ms linear backwards; }
 @keyframes login-logo-hero {
   0%, 68% { transform: translate(var(--lx), var(--ly)) scale(var(--ls)); animation-timing-function: cubic-bezier(.55, 0, .2, 1); }
