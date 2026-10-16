@@ -214,7 +214,10 @@ export const dropdownPlacement = (rect) => {
   const clamp = (n) => Math.max(96, Math.min(288, n))
   const base = { left: rect.left, width: rect.width }
   if (below >= 150 || below >= above) return { ...base, top: rect.bottom, maxHeight: clamp(below) }
-  return { ...base, bottom: window.innerHeight - rect.top + 6, maxHeight: clamp(above) }
+  // Anchored by its own bottom edge via translate, not CSS `bottom`: with the keyboard open the layout height
+  // that `bottom` counts from differs from the visible area, which put the list over the input. The list's
+  // 6px top margin is part of the offset (12 = 6 margin + 6 gap).
+  return { ...base, top: rect.top - 12, transform: 'translateY(-100%)', maxHeight: clamp(above) }
 }
 
 // Scrolls an entry form back to its top and puts the cursor in the Date box. The focus would otherwise trigger

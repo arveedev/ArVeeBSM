@@ -8448,4 +8448,5 @@
 //   1.10-390 - Admin dashboard: the sixteen-tab System group is split into three: Reports & Sheets (Signatories, Stock Report Decimals, Data Start Date, Report Access, Sheet Sources, PR Sheet Sources, Sheet Export), Data Care (Backup, Error Log, Data Repair, Move Records, Duplicate Cleanup, Closing Residue, Inventory Lots Check) and Access (Visitor Access, Session Timeouts), so no row needs scrolling. Tapping an Edit pencil in any Admin panel (customers and the rest) now scrolls to the form above the list and puts the cursor in its first box.
 //   1.10-391 - Entry forms on a phone: the customer and member suggestion lists are placed against the VISIBLE screen (the keyboard no longer pushes them off it; they open upward when there is more room above), and after Save / Update / Delete the form really scrolls back to the top (the Date focus used to re-centre the Date box and cancel the scroll).
 //   1.10-392 - Login animation: the logo now finishes shrinking into its place before anything else (title, PIN dots, keys) starts to enter (--lt0 700ms to 1400ms).
-export const APP_VERSION = '1.10-392'
+//   1.10-393 - Suggestion list that opens upward (phone keyboard open) was anchored with CSS bottom and landed over the input, hiding what was being typed; now anchored by its own bottom edge just above the input.
+export const APP_VERSION = '1.10-393'
