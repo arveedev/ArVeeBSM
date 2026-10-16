@@ -200,6 +200,20 @@ export const focusFirstInvalidField = (containerEl) => {
   return false
 }
 
+// A phone-width screen (the on-screen keyboard leaves very little room, and the screen coordinates of a fixed list
+// drift while it is up), where the name suggestion lists are drawn small and directly under their input instead.
+export const useIsPhone = () => {
+  const query = '(max-width: 640px)'
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches)
+  useEffect(() => {
+    const mql = window.matchMedia(query)
+    const onChange = (e) => setPhone(e.matches)
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
+  return phone
+}
+
 // Where a suggestion list goes under (or, when there is no room below, above) its input. On a phone the
 // on-screen keyboard shrinks the VISIBLE area (window.visualViewport) while window.innerHeight stays the full
 // height, so the old "room below" sums let the list run under the keyboard or off the screen. Measured against

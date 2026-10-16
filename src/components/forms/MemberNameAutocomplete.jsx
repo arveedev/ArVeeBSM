@@ -21,7 +21,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { createPortal } from 'react-dom'
 import { User } from 'lucide-react'
 import { searchCustomers, findCustomerByName } from '../../utils/customerDirectory.js'
-import { inputClass, dropdownPlacement } from './shared.js'
+import { inputClass, dropdownPlacement, useIsPhone } from './shared.js'
 
 const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ value, onChange, onMatch, onKeyDown, placeholder = 'Member Full Name', required = false }, ref) {
   const [suggestions, setSuggestions] = useState([])
@@ -29,6 +29,9 @@ const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ valu
   // Same Arrow Down/Up + Tab-to-accept behavior as CustomerNameAutocomplete.jsx.
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const [dropdownRect, setDropdownRect] = useState(null)
+  // On a phone the list is small (three rows) and sits directly under the input, in the page itself.
+  const isPhone = useIsPhone()
+  const wrapList = (el) => (isPhone ? el : createPortal(el, document.body))
   const containerRef = useRef(null)
   const dropdownRef = useRef(null)
   const inputRef = useRef(null)
@@ -143,21 +146,21 @@ const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ valu
         autoComplete="off"
       />
 
-      {showSuggestions && suggestions.length > 0 && dropdownRect && createPortal(
+      {showSuggestions && suggestions.length > 0 && (isPhone || dropdownRect) && wrapList(
         <ul
           ref={dropdownRef}
           // pressing a suggestion must not take the focus off the name box (which would close the list first)
           onMouseDown={(e) => e.preventDefault()}
-          className="fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
-          style={dropdownRect}
+          className={isPhone ? 'absolute inset-x-0 top-full z-[62] mt-1 max-h-[6.5rem] divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50' : 'fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50'}
+          style={isPhone ? undefined : dropdownRect}
         >
-          {suggestions.map((c, i) => (
+          {(isPhone ? suggestions.slice(0, 3) : suggestions).map((c, i) => (
             <li key={c.customerId}>
               <button
                 type="button"
                 onClick={() => handleSelect(c)}
                 onMouseEnter={() => setHighlightedIndex(i)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-neutral-800 active:bg-neutral-800 ${
+                className={`flex w-full items-center gap-2.5 px-3 ${isPhone ? 'py-1.5' : 'py-2'} text-left text-sm transition-colors hover:bg-neutral-800 active:bg-neutral-800 ${
                   i === highlightedIndex ? 'bg-neutral-800' : ''
                 }`}
               >
@@ -169,8 +172,7 @@ const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ valu
               </button>
             </li>
           ))}
-        </ul>,
-        document.body
+        </ul>
       )}
     </div>
   )

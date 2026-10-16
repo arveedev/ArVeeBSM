@@ -19,7 +19,7 @@ import {
   searchWarehouseSupervisors,
   searchMpoUsers,
 } from '../../utils/customerDirectory.js'
-import { inputClass, labelClass, dropdownPlacement } from './shared.js'
+import { inputClass, labelClass, dropdownPlacement, useIsPhone } from './shared.js'
 
 const initialsOf = (name = '') =>
   name
@@ -60,6 +60,9 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
   const dropdownRef = useRef(null)
   const inputRef = useRef(null)
   const pickingRef = useRef(false)
+  // On a phone the list is small (three rows) and sits directly under the input, in the page itself.
+  const isPhone = useIsPhone()
+  const wrapList = (el) => (isPhone ? el : createPortal(el, document.body))
 
   useImperativeHandle(ref, () => ({
     focus: () => inputRef.current?.focus(),
@@ -278,7 +281,7 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
         autoComplete="off"
       />
 
-      {showSuggestions && suggestions.length > 0 && dropdownRect && createPortal(
+      {showSuggestions && suggestions.length > 0 && (isPhone || dropdownRect) && wrapList(
         <ul
           ref={dropdownRef}
           // The text input itself keeps real focus throughout (rows are
@@ -295,16 +298,16 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
           // and flags the touch case for onBlur above.
           onMouseDown={(e) => e.preventDefault()}
           onPointerDown={() => { pickingRef.current = true; setTimeout(() => { pickingRef.current = false }, 600) }}
-          className="fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
-          style={dropdownRect}
+          className={isPhone ? 'absolute inset-x-0 top-full z-[62] mt-1 max-h-[9.25rem] divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50' : 'fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50'}
+          style={isPhone ? undefined : dropdownRect}
         >
-          {suggestions.map((c, i) => (
+          {(isPhone ? suggestions.slice(0, 3) : suggestions).map((c, i) => (
             <li key={c.customerId}>
               <button
                 type="button"
                 onClick={() => handleSelect(c)}
                 onMouseEnter={() => setHighlightedIndex(i)}
-                className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-neutral-800 active:bg-neutral-800 ${
+                className={`flex w-full items-center gap-3 px-3 ${isPhone ? 'py-1.5' : 'py-2.5'} text-left transition-colors hover:bg-neutral-800 active:bg-neutral-800 ${
                   i === highlightedIndex ? 'bg-neutral-800' : ''
                 }`}
               >
@@ -348,8 +351,7 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
               </button>
             </li>
           ))}
-        </ul>,
-        document.body
+        </ul>
       )}
     </div>
   )

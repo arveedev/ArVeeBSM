@@ -8449,4 +8449,5 @@
 //   1.10-391 - Entry forms on a phone: the customer and member suggestion lists are placed against the VISIBLE screen (the keyboard no longer pushes them off it; they open upward when there is more room above), and after Save / Update / Delete the form really scrolls back to the top (the Date focus used to re-centre the Date box and cancel the scroll).
 //   1.10-392 - Login animation: the logo now finishes shrinking into its place before anything else (title, PIN dots, keys) starts to enter (--lt0 700ms to 1400ms).
 //   1.10-393 - Suggestion list that opens upward (phone keyboard open) was anchored with CSS bottom and landed over the input, hiding what was being typed; now anchored by its own bottom edge just above the input.
-export const APP_VERSION = '1.10-393'
+//   1.10-394 - Phone width (640px or less): the customer and member suggestion lists are compact (three rows) and sit directly under their input, in the page, instead of a floating list placed by screen coordinates, which still covered the typing box with the keyboard open. Larger screens keep the floating list.
+export const APP_VERSION = '1.10-394'
