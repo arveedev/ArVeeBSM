@@ -55,7 +55,7 @@ import {
   round3,
 } from '../../utils/calculations.js'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
-import { inputClass, labelClass, attachCenterFocusScroll, focusFirstInvalidField, useIsWideLayout, groupBoxClass, useWarehouseTypeahead } from './shared.js'
+import { inputClass, labelClass, attachCenterFocusScroll, scrollFormToTop, focusFirstInvalidField, useIsWideLayout, groupBoxClass, useWarehouseTypeahead } from './shared.js'
 import { logError } from '../../utils/errorLog.js'
 import { renameTransactionSerial } from '../../utils/serialRename.js'
 import {
@@ -314,8 +314,7 @@ function WTSForm({ onClose, prefill, isOpen = true }) {
   // field, is back in view) and moves focus to Date, per explicit
   // request - called after every Save/Update/Delete.
   const scrollToTop = () => {
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-    dateRef.current?.focus({ preventScroll: true })
+    scrollFormToTop(scrollContainerRef.current, dateRef.current)
   }
 
   // Tracks whether the actual WTS No. field is currently scrolled into

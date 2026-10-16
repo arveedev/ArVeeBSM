@@ -109,6 +109,7 @@ import {
   removeButtonClass,
   CONDITION_FLAGS,
   attachCenterFocusScroll,
+  scrollFormToTop,
   focusFirstInvalidField,
   useIsWideLayout,
   groupBoxClass,
@@ -1657,8 +1658,7 @@ function StockFormBase({ type, title, onClose, prefill, isOpen = true }) {
   // avoids fighting the smooth scrollTo above with the browser's own
   // default "scroll focused element into view" behavior.
   const scrollToTop = () => {
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-    dateRef.current?.focus({ preventScroll: true })
+    scrollFormToTop(scrollContainerRef.current, dateRef.current)
   }
 
   // Loads an existing transaction's full data into the form for review/

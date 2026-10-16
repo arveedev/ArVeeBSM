@@ -19,7 +19,7 @@ import {
   searchWarehouseSupervisors,
   searchMpoUsers,
 } from '../../utils/customerDirectory.js'
-import { inputClass, labelClass } from './shared.js'
+import { inputClass, labelClass, dropdownPlacement } from './shared.js'
 
 const initialsOf = (name = '') =>
   name
@@ -173,14 +173,19 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
     const updatePosition = () => {
       if (!inputRef.current) return
       const rect = inputRef.current.getBoundingClientRect()
-      setDropdownRect({ top: rect.bottom, left: rect.left, width: rect.width })
+      setDropdownRect(dropdownPlacement(rect))
     }
     updatePosition()
     window.addEventListener('resize', updatePosition)
     document.addEventListener('scroll', updatePosition, true)
+    // the phone keyboard opening, closing or panning the screen changes the visible area without a window resize
+    window.visualViewport?.addEventListener('resize', updatePosition)
+    window.visualViewport?.addEventListener('scroll', updatePosition)
     return () => {
       window.removeEventListener('resize', updatePosition)
       document.removeEventListener('scroll', updatePosition, true)
+      window.visualViewport?.removeEventListener('resize', updatePosition)
+      window.visualViewport?.removeEventListener('scroll', updatePosition)
     }
   }, [showSuggestions])
 
@@ -291,18 +296,7 @@ const CustomerNameAutocomplete = forwardRef(function CustomerNameAutocomplete(
           onMouseDown={(e) => e.preventDefault()}
           onPointerDown={() => { pickingRef.current = true; setTimeout(() => { pickingRef.current = false }, 600) }}
           className="fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
-          style={{
-            top: dropdownRect.top,
-            left: dropdownRect.left,
-            width: dropdownRect.width,
-            // Same 288px cap as before when there's room for it, but
-            // shrinks further (down to a 120px floor) when the input
-            // sits low enough on screen that 288px would run off the
-            // bottom of the viewport - never a flat max-height that
-            // could overflow past the visible screen regardless of
-            // where the input actually is.
-            maxHeight: Math.max(120, Math.min(288, window.innerHeight - dropdownRect.top - 12)),
-          }}
+          style={dropdownRect}
         >
           {suggestions.map((c, i) => (
             <li key={c.customerId}>

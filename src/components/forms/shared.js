@@ -132,6 +132,7 @@ export const attachCenterFocusScroll = (containerEl) => {
     const el = e.target
     if (!(el instanceof HTMLElement)) return
     if (!['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(el.tagName)) return
+    if (containerEl.dataset.skipCenterScroll) return
     // Real bug found, reported directly: this used to re-center EVERY
     // focused field unconditionally, so tabbing/clicking between fields
     // that were already comfortably on screen still triggered a fresh
@@ -197,4 +198,36 @@ export const focusFirstInvalidField = (containerEl) => {
     }
   }
   return false
+}
+
+// Where a suggestion list goes under (or, when there is no room below, above) its input. On a phone the
+// on-screen keyboard shrinks the VISIBLE area (window.visualViewport) while window.innerHeight stays the full
+// height, so the old "room below" sums let the list run under the keyboard or off the screen. Measured against
+// the visible area instead; the list opens upward when the space above is clearly larger.
+export const dropdownPlacement = (rect) => {
+  const vv = window.visualViewport
+  const visTop = vv ? vv.offsetTop : 0
+  const visBottom = vv ? vv.offsetTop + vv.height : window.innerHeight
+  const room = 8
+  const below = visBottom - rect.bottom - room
+  const above = rect.top - visTop - room
+  const clamp = (n) => Math.max(96, Math.min(288, n))
+  const base = { left: rect.left, width: rect.width }
+  if (below >= 150 || below >= above) return { ...base, top: rect.bottom, maxHeight: clamp(below) }
+  return { ...base, bottom: window.innerHeight - rect.top + 6, maxHeight: clamp(above) }
+}
+
+// Scrolls an entry form back to its top and puts the cursor in the Date box. The focus would otherwise trigger
+// attachCenterFocusScroll, which then centres the Date box from wherever the form still is and cancels the
+// scroll to the top, so it is told to stand aside until the scroll has finished.
+export const scrollFormToTop = (containerEl, focusEl) => {
+  if (containerEl) {
+    containerEl.dataset.skipCenterScroll = '1'
+    containerEl.scrollTo({ top: 0, behavior: 'smooth' })
+    setTimeout(() => {
+      if (containerEl.scrollTop > 2) containerEl.scrollTo({ top: 0, behavior: 'auto' })
+      delete containerEl.dataset.skipCenterScroll
+    }, 700)
+  }
+  focusEl?.focus({ preventScroll: true })
 }

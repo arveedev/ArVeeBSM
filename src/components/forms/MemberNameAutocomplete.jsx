@@ -21,7 +21,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { createPortal } from 'react-dom'
 import { User } from 'lucide-react'
 import { searchCustomers, findCustomerByName } from '../../utils/customerDirectory.js'
-import { inputClass } from './shared.js'
+import { inputClass, dropdownPlacement } from './shared.js'
 
 const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ value, onChange, onMatch, onKeyDown, placeholder = 'Member Full Name', required = false }, ref) {
   const [suggestions, setSuggestions] = useState([])
@@ -79,14 +79,19 @@ const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ valu
     const updatePosition = () => {
       if (!inputRef.current) return
       const rect = inputRef.current.getBoundingClientRect()
-      setDropdownRect({ top: rect.bottom, left: rect.left, width: rect.width })
+      setDropdownRect(dropdownPlacement(rect))
     }
     updatePosition()
     window.addEventListener('resize', updatePosition)
     document.addEventListener('scroll', updatePosition, true)
+    // the phone keyboard opening, closing or panning the screen changes the visible area without a window resize
+    window.visualViewport?.addEventListener('resize', updatePosition)
+    window.visualViewport?.addEventListener('scroll', updatePosition)
     return () => {
       window.removeEventListener('resize', updatePosition)
       document.removeEventListener('scroll', updatePosition, true)
+      window.visualViewport?.removeEventListener('resize', updatePosition)
+      window.visualViewport?.removeEventListener('scroll', updatePosition)
     }
   }, [showSuggestions])
 
@@ -144,12 +149,7 @@ const MemberNameAutocomplete = forwardRef(function MemberNameAutocomplete({ valu
           // pressing a suggestion must not take the focus off the name box (which would close the list first)
           onMouseDown={(e) => e.preventDefault()}
           className="fixed z-[62] mt-1.5 divide-y divide-neutral-800 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl shadow-black/50"
-          style={{
-            top: dropdownRect.top,
-            left: dropdownRect.left,
-            width: dropdownRect.width,
-            maxHeight: Math.max(120, Math.min(288, window.innerHeight - dropdownRect.top - 12)),
-          }}
+          style={dropdownRect}
         >
           {suggestions.map((c, i) => (
             <li key={c.customerId}>

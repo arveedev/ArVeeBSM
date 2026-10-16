@@ -62,6 +62,7 @@ import {
   smallButtonClass,
   removeButtonClass,
   attachCenterFocusScroll,
+  scrollFormToTop,
   focusFirstInvalidField,
   useIsWideLayout,
   groupBoxClass,
@@ -560,8 +561,7 @@ const SackFormBase = forwardRef(function SackFormBase(
   // this component's externally-exposed imperative `focus()` (still
   // Customer Name, used when the form first opens).
   const scrollToTop = () => {
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-    dateRef.current?.focus({ preventScroll: true })
+    scrollFormToTop(scrollContainerRef.current, dateRef.current)
   }
 
   const loadTransactionIntoForm = (tx) => {
