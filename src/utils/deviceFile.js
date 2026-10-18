@@ -16,6 +16,8 @@ export const DEVICE_FILE_VERSION = 1
 export const RESTORE_EXCLUDED_TABLES = new Set([
   'serialCounterCache', 'sdoSerialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations', 'cashLedger',
   'deviceStatus', 'systemStatus', 'deviceInfo', 'errorLogs',
+  // Dexie Cloud's own access tables: the server manages them
+  'realms', 'members', 'roles',
 ])
 
 const isInternal = (table) => table.startsWith('$')

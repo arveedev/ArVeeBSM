@@ -19,6 +19,7 @@ import SectionErrorBoundary from './components/common/SectionErrorBoundary.jsx'
 import BottomNav, { REGULAR_NAV_COLUMN } from './components/layout/BottomNav.jsx'
 import AppHeader from './components/layout/AppHeader.jsx'
 import StockDeskHost from './components/common/StockDeskHost.jsx'
+import SystemHealthHost from './components/common/SystemHealthHost.jsx'
 import { useSettings } from './context/SettingsContext.jsx'
 import TransactionModal from './components/common/TransactionModal.jsx'
 import WSRForm from './components/forms/WSRForm.jsx'
@@ -332,6 +333,7 @@ function App() {
       {user && pathname !== '/login' && <AppHeader hidden={barsHidden} />}
       {/* the Stock Desk, from the Home icon or Ctrl + Alt + D on any page (Admin / Visitor with access only) */}
       {user && pathname !== '/login' && <StockDeskHost />}
+      {user && pathname !== '/login' && <SystemHealthHost />}
       {user && pathname !== '/login' && <DeviceBackupBanner />}
       {/* No page-slide for /admin - it's a fixed-position overlay with
           its own pop transition (see AdminDashboard.jsx), and a

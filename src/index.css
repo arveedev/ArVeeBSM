@@ -1179,3 +1179,22 @@ select {
 .sd-scroll.sb-near::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 255, 163, 0.95); }
 .sd-grab, .sd-grab * { cursor: grab !important; user-select: none; }
 .sd-grabbing, .sd-grabbing * { cursor: grabbing !important; }
+
+/* System health (SystemHealthPanel.jsx): bar fill, pulsing amber/red dot, card entrance, slide-open detail lists. */
+@keyframes sh-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.sh-fill { transform-origin: left; animation: sh-fill 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes sh-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(245, 165, 36, 0.55); } 50% { box-shadow: 0 0 0 6px rgba(245, 165, 36, 0); } }
+.sh-pulse { animation: sh-pulse 1.8s ease-in-out infinite; }
+@keyframes sh-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.sh-card { animation: sh-up 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.sh-card:hover { transform: translateY(-2px); }
+.sh-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.sh-collapse > div { overflow: hidden; min-height: 0; }
+.sh-collapse.sh-open { grid-template-rows: 1fr; }
+@keyframes sh-spin-once { to { transform: rotate(360deg); } }
+.sh-spin-once { animation: sh-spin-once 0.6s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .sh-fill, .sh-pulse, .sh-card, .sh-spin-once { animation: none; }
+  .sh-card:hover { transform: none; }
+  .sh-collapse { transition: none; }
+}

@@ -26,6 +26,7 @@ import TransactionTypesPanel from '../components/common/admin/TransactionTypesPa
 import SheetSourcesPanel from '../components/common/admin/SheetSourcesPanel.jsx'
 import PrSheetSourcesPanel from '../components/common/admin/PrSheetSourcesPanel.jsx'
 import BackupPanel from '../components/common/admin/BackupPanel.jsx'
+import SystemHealthPanel from '../components/common/admin/SystemHealthPanel.jsx'
 import DataStartDatePanel from '../components/common/admin/DataStartDatePanel.jsx'
 import StockReportDecimalsPanel from '../components/common/admin/StockReportDecimalsPanel.jsx'
 import DataRepairPanel from '../components/common/admin/DataRepairPanel.jsx'
@@ -103,6 +104,7 @@ const GROUPS = [
     id: 'data',
     label: 'Data Care',
     tabs: [
+      { id: 'systemHealth', label: 'System health', Panel: SystemHealthPanel },
       { id: 'backup', label: 'Backup', Panel: BackupPanel },
       { id: 'errorLog', label: 'Error Log', Panel: ErrorLogPanel },
       { id: 'dataRepair', label: 'Data Repair', Panel: DataRepairPanel },

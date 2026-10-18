@@ -29,6 +29,7 @@ import CashHistoryModal from '../components/common/sdo/CashHistoryModal.jsx'
 import CancelPrModal from '../components/common/sdo/CancelPrModal.jsx'
 import CashOnBankModal from '../components/common/sdo/CashOnBankModal.jsx'
 import CpfDisbursementExportModal from '../components/common/sdo/CpfDisbursementExportModal.jsx'
+import HealthDot from '../components/common/HealthDot.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
@@ -974,7 +975,7 @@ function Settings() {
         >
           <ShieldCheck size={28} className="shrink-0" />
           <div>
-            <p className="text-base font-bold">Admin Dashboard</p>
+            <p className="flex items-center gap-2 text-base font-bold">Admin Dashboard<HealthDot /></p>
             <p className="text-xs text-brand-neon/70">Warehouses, users, sheet sources, and more</p>
           </div>
         </Link>
