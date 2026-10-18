@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-14, app v1.10-390) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-19, app v1.10-396; v1.10-395/396 committed, see the push note under Open items) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
@@ -14,12 +14,13 @@ the latest code commit). Update it before saying a task is done.
 - Planning documents (PRD, app flow, schema, design brief, engineering plan, technical design) live in `docs/` and were brought
   up to date on 2026-10-12 / 2026-10-14. Newest technical decisions are TDD sections 2.31 to 2.45; the build history of this
   period is engineering-plan Phase 10; new tables are at the end of `docs/backend-schema.md`.
-- Dexie schema is at **v47**. Added since v44: `sdoReportCutoffs` (v44), `logisticsItems` (v45), `millingOrderCompletions` (v46),
+- Dexie schema is at **v48** (v48 = `deviceStatus` and `systemStatus` synced, `deviceInfo` never synced; v47 below). Added since v44: `sdoReportCutoffs` (v44), `logisticsItems` (v45), `millingOrderCompletions` (v46),
   `privateMillerShares` (v47). All four are synced tables. **Not yet confirmed on real devices that Dexie Cloud accepts v45-v47.**
 - The presentation is a published artifact (https://claude.ai/artifact/XQnKB9A8HoQKqRbRcsbAyN); its build scripts live only in a
   session scratchpad, so edit it by reading the published artifact, not from a repo file.
 
 ### What shipped since v1.10-271 (all pushed)
+- **System health and device backups (v1.10-395/396, 2026-10-19)**: Admin-only System health screen (Ctrl+Alt+Q, also Admin > Data Care > System health; health bar, four cards, device table, dot beside the Settings Admin card); every device reports into `deviceStatus`, the nightly GitHub jobs into `systemStatus`; office PCs (Chrome/Edge, not phones) keep their own daily backup file (idle-only, checked, 45 days) in a folder chosen once with one click (`C:\BSM-Backup`, banner with full steps) and on the Admin's Drive via `api/device-backup.js`; Admin > Backup has "This PC's automatic backup" and "Restore this PC from a backup file" (insert-only, offline). Tools: `tools/device-file/verify.mjs`, gap and restore read `.json.gz`. Design/plan in `docs/superpowers/`; tests `npm test` (26) plus bsm-backups tests.
 - **Stock Desk** (Admin / Visitor): Daily inventory, Summary, Age monitoring (lots per receipt, oldest issued first), Data check
   with a stock-book self-check, Ending stock per variety, Daily procurement status, Milling liquidation. An authority always deducts
   its full authorized amount from the age bracket it names (a shortfall becomes a negative lot). Opens from the quiet Home icon or
