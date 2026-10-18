@@ -16,12 +16,15 @@ Goals
 - One Admin-only screen, "System health", that shows overall status and four cards (Backups, Restore test, Devices, Data checks),
   each opening a detailed list; a collapsed per-device data table inside the Devices card; animated; opened by the secret
   shortcut **Ctrl+Alt+Q** (never shown in the UI); a coloured dot beside the Admin entry point when something is amber or red.
-- Every office PC (Windows, Chrome or Edge, installed app) automatically saves a full dated backup file of its own data to a
-  folder chosen once, keeping **at least 30 days** (decision: 45 daily files).
+- Every office PC (Windows, Chrome or Edge, installed app) automatically keeps a full dated backup file of its own data in TWO
+  independent places: (1) a folder on the PC itself, chosen once per PC, so the PC can heal itself with no internet; (2) the
+  Admin's Google Drive, uploaded automatically with no field-office setup. At least 30 days are kept in both (decision: 45
+  daily files).
+- A PC can restore itself from its own file with no internet: an in-app "Restore this PC from a backup file" (see 4.6).
 - Device files and the nightly status are usable by the existing tools (backup, merging, restoration).
 
 Non-goals
-- Phones and tablets do NOT save backup files (owner decision). They still report their sync status (a few numbers) so the
+- Phones and tablets do NOT make backup files (no local file, no Drive upload) (owner decision). They still report their sync status (a few numbers) so the
   Devices card is complete.
 - The screen shows problems; it does not repair them. Repairs stay with Data Repair and the restore tools.
 - No change to the nightly GitHub backup itself, to how the Google Sheet sync works, or to who may enter data.
@@ -65,21 +68,37 @@ per-table counts, Drive delivered yes/no), `restoreTest` (time, result, records 
 errors, warnings, top lines), `history` (last 30 days of backup results for the strip). The nightly workflow gets one extra
 step; the restore-test workflow gets one extra step. The in-app backup time (already in reportConfig) is shown too.
 
-### 4.3 Automatic backup on each office PC
-- First run: a quiet banner (Admin or user) "Choose a folder for this PC's automatic backup". Choosing it stores the folder
-  handle and a marker file. Without a folder the PC reports "no folder yet" (amber after 3 days).
-- Daily file `bsm-<deviceName>-<yyyy-mm-dd>.json.gz` plus `bsm-<deviceName>-<yyyy-mm-dd>.manifest.json`. Keep the newest 45
-  days (never fewer than 30); delete only files matching its own naming pattern; never anything else in the folder.
-- Never interrupts: starts only after the app has been idle for a while, with no entry form open and no unsent typing; reads
-  tables in small slices yielding to the interface; no pop-ups; stops and retries later if the user starts working or taps
-  update. The file is written under a temporary name and renamed only when complete and read back successfully.
-- Content (a superset of today's Export All Data JSON, so `tools/gap-recovery/gap.mjs` reads it unchanged after the `.gz` is
-  handled): `meta` block (format version, device id and name, user, app version, schema version, the database id the device is
-  bound to, export time, last successful sync time, count and ids per table of entries still waiting to send), `tables`
-  (every table in full), `counts` per table, and a SHA-256 of the canonical tables content. The manifest repeats `meta`,
-  `counts` and the hash so a file can be checked without opening it.
-- After writing, the app verifies the file by reading it back and recomputing the hash; the result is reported in
-  `deviceStatus`.
+### 4.3 Automatic backup on each office PC (two independent copies)
+Why two: the local file survives a Drive or internet failure and lets an offline PC restore itself; the Drive copy survives the
+loss of the PC or its disk. Losing either one never loses the other. (The main database already has three more copies: cloud,
+GitHub, Drive, and the Admin PC folder.)
+
+Local copy
+- A browser cannot choose a folder by itself, so each PC needs ONE click, once: a quiet banner "Choose a folder for this PC's
+  automatic backup" with a single button. The folder name is the same everywhere by convention (`C:\BSM-Backup`, the banner says
+  so), and the Admin sees in System health which PCs have no folder yet (amber after 3 days) so the Admin can ask that office
+  to click the banner; nothing needs a visit. Chrome/Edge may ask for one click to renew the folder permission after a
+  restart; the banner returns until done.
+- Daily file `bsm-<deviceName>-<yyyy-mm-dd>.json.gz` plus a `.manifest.json`. Keep the newest 45 days (never fewer than 30);
+  delete only files matching its own naming pattern, never anything else in the folder. A marker file holds the device id.
+- Until the folder is chosen, the PC may keep its newest file in the browser's own private file storage (OPFS) as a stop-gap
+  that needs no click (builder: confirm it survives the cases we care about; it does not survive "clear site data").
+
+Drive copy
+- The same file is uploaded automatically, in the background, to one central Drive folder `BSM Device Backups`, one subfolder per
+  PC, through an app server function that holds the Drive secret (the secret never reaches a PC). The Drive receiver script gets
+  a device-file mode that accepts only these file names and trims only the oldest device files beyond 45 per PC.
+- Upload only when online; a failed upload retries later; nothing blocks the user.
+
+Both copies
+- Never interrupt: start only after the app has been idle for a while, with no entry form open and no unsent typing; read tables
+  in small slices yielding to the interface; no pop-ups; stop and retry later if the user starts working or taps update. The
+  file is written under a temporary name and renamed only when complete and read back successfully.
+- Content (a superset of today's Export All Data JSON, so `tools/gap-recovery/gap.mjs` reads it after `.gz` handling): a `meta`
+  block (format version, device id and name, user, app version, schema version, the database id the device is bound to, export
+  time, last successful sync time, count and ids per table of entries still waiting to send), `tables` (every table in
+  full), `counts` per table, and a SHA-256 of the canonical tables content. The manifest repeats `meta`, `counts` and the hash.
+- After writing, the app reads the file back and recomputes the hash; both copies' results are reported in `deviceStatus`.
 
 ### 4.4 Tools (rehearsed on practice databases before any real use)
 - `tools/gap-recovery/gap.mjs`: read `.json.gz` device files and a whole folder of them; use `meta.pending` to flag entries
@@ -87,6 +106,16 @@ step; the restore-test workflow gets one extra step. The in-app backup time (alr
 - New `verify-device-file` command: checks hash, counts, database id and format version; says plainly if the file is usable.
 - `tools/restore/restore.mjs` option 3 (recover from devices) accepts the folder.
 - Rehearsal log entry and runbook update (`docs/restore-runbook.md`).
+
+### 4.4b Restore this PC from a backup file (new in-app feature, works offline)
+Today the app can export but not restore. New Admin-only (Admin PIN) action in Admin > Backup: "Restore this PC from a backup
+file". It reads a device file (or the newest file in this PC's backup folder), verifies it (hash, counts, database id, format
+version), shows a preview in plain words (how many records are missing from this PC, how many differ, how many entries are
+waiting to send), and only after a typed confirmation adds the missing records to this PC's local database. It never deletes
+and never overwrites a record that differs without showing it (conflicts are listed and left alone). Works with no internet;
+the PC syncs normally when it is back online. Same insert-only rules as the gap-recovery tool; rehearsed on a practice database
+and a rehearsal copy of the app first. A PC whose local database must be fully reset can reset, then restore from its file,
+then sign in. (Builder: check how Dexie Cloud treats restored records on first sync and write that into the rehearsal.)
 
 ### 4.5 The System health screen
 Layout agreed in chat (the interactive mock): top "System health" with a segmented health bar (one segment per card, filling
@@ -108,8 +137,8 @@ Admin button.
 1. Device status reporting (schema v48, deviceStatus). Screen not yet built; the Admin dashboard shows a plain list.
 2. Job status reporting (systemStatus) from the two GitHub workflows.
 3. The System health screen, dot and shortcut.
-4. PC folder backup (idle-aware, verified, 45-day retention, banner, marker file).
-5. Tools: read device files, verify command, rehearsal on practice databases, runbook.
+4. PC backup: local folder (idle-aware, verified, 45-day retention, banner, marker file), then the Drive upload (server function, Drive receiver device mode).
+5. Restore this PC from a file (in-app, offline) and the tools: read device files, verify command; rehearsal on practice databases and the rehearsal app; runbook.
 Docs (PRD, app-flow, backend-schema, TDD, activity log, handoff) updated at each stage.
 
 ## 6. Calls made by the assistant (owner to confirm or change)
@@ -117,6 +146,8 @@ Docs (PRD, app-flow, backend-schema, TDD, activity log, handoff) updated at each
 - Thresholds in 4.5 and the 10-minute reporting throttle.
 - File naming and `.json.gz` compression; manifest file beside each backup.
 - Phones report status only (no files), per the owner's decision.
+- Local folder needs one click per PC (browser security); the Admin chases it from the System health card, no visits.
+- Drive device folder trimmed by the receiver to 45 files per PC; the Drive secret stays on the server.
 - The nightly workflows write status into the database (needs their service client to have write access, which it already has).
 
 ## 7. Left to the builder
