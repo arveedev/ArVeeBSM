@@ -28,7 +28,7 @@ const DEVICE_LABEL_KEY = 'bsm-device-label'
  * synchronous and trivial to read on every single log call, and never
  * needs to sync anywhere itself.
  */
-const getDeviceId = () => {
+export const getDeviceId = () => {
   try {
     let id = localStorage.getItem(DEVICE_ID_KEY)
     if (!id) {
@@ -41,6 +41,11 @@ const getDeviceId = () => {
   }
 }
 
+/** Used when a PC's backup folder remembers its device id (marker file) after the browser data was cleared. */
+export const setDeviceId = (id) => {
+  try { localStorage.setItem(DEVICE_ID_KEY, id) } catch { /* private mode: keeps the generated id */ }
+}
+
 /**
  * A short, human-readable device label an admin can actually recognize
  * at a glance (e.g. "Chrome on Android") without decoding a UUID or a
@@ -48,7 +53,7 @@ const getDeviceId = () => {
  * alongside the device id, since parsing it fresh on every error is
  * unnecessary work for a value that never changes for a given install.
  */
-const getDeviceLabel = () => {
+export const getDeviceLabel = () => {
   try {
     const cached = localStorage.getItem(DEVICE_LABEL_KEY)
     if (cached) return cached

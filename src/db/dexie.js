@@ -1110,6 +1110,17 @@ db.version(47).stores({
   privateMillerShares: 'id, regionalAuthorityNumber',
 })
 
+// v48 — System health. deviceStatus: one small record per device (written by that device every ~10 minutes: who is
+// signed in, app version, last sync, entries waiting to send, record counts, its own backup state) so the Admin can see every
+// device from one screen. systemStatus: a few records the nightly GitHub jobs write (cloud backup, restore test, Sheet
+// audit, 30-day history). Both are SYNCED and follow the errorLogs pattern (string id, ownerless; only the Admin screen
+// reads them). deviceInfo: this browser's own facts (device id, chosen backup folder handle) and NEVER synced.
+db.version(48).stores({
+  deviceStatus: 'id, lastSeen',
+  systemStatus: 'id',
+  deviceInfo: 'id',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the
@@ -1167,7 +1178,7 @@ db.cloud.configure({
   // here defensively regardless. Every OTHER new SDO table
   // (buyingPrices, purchaseReceipts, cashLedgerV2,
   // cashDenominationCounts, pricerEligibility, enwFactors) DOES sync.
-  unsyncedTables: ['serialCounterCache', 'sdoSerialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations', 'cashLedger'],
+  unsyncedTables: ['serialCounterCache', 'sdoSerialCounterCache', 'preloadState', 'millingOrders', 'privateMillerAllocations', 'cashLedger', 'deviceInfo'],
   // requireAuth MUST be false for an offline-first app. When true,
   // Dexie Cloud refuses to run ANY operation - including purely local
   // reads/writes that have nothing to do with syncing - until it has a

@@ -30,6 +30,7 @@ import { useAuth } from './context/AuthContext.jsx'
 import { usePageHeader } from './context/PageHeaderContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 import { startBackupWorker } from './services/backupWorker.js'
+import { startDeviceStatusWorker } from './services/deviceStatusWorker.js'
 import { startMillingCompletionSync } from './services/millingCompletion.js'
 import { uploadLegacyPrivateMillerShares } from './services/legacyMigrations.js'
 import { startDerivedTotalsSync } from './services/derivedTotalsSync.js'
@@ -280,6 +281,12 @@ function App() {
   useEffect(() => {
     if (!user) return
     return startBackupWorker()
+  }, [user])
+
+  // Tells the Admin's System health screen how this device is doing (see deviceStatusWorker.js).
+  useEffect(() => {
+    if (!user) return undefined
+    return startDeviceStatusWorker(user)
   }, [user])
 
   // An authority's issued totals and a pile's balance are recomputed from the synced transactions on every device, so all
