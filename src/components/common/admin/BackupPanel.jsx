@@ -12,6 +12,7 @@ import { logError } from '../../../utils/errorLog.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { primaryButtonClass } from './shared.js'
 import RestoreFromFilePanel from './RestoreFromFilePanel.jsx'
+import PcBackupCard from './PcBackupCard.jsx'
 
 const GITHUB_BACKUPS_URL = 'https://github.com/arveedev/ArVeeBSM/tree/backups/backups'
 
@@ -96,6 +97,8 @@ function BackupPanel() {
           View backups on GitHub
         </a>
       </div>
+
+      <PcBackupCard />
 
       <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
         <h2 className="text-sm font-semibold text-app-text">Manual Export</h2>

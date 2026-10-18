@@ -52,6 +52,13 @@ export const chooseBackupFolder = async () => {
       if (p === 'granted') { await reportDeviceStatusNow(window.__bsmUser, { force: true }); return { ok: true, message: 'Backup folder allowed again.' } }
     }
     const handle = await window.showDirectoryPicker({ id: 'bsm-backup', mode: 'readwrite', startIn: 'documents' })
+    // every PC uses the same folder name; a different one is allowed only on purpose
+    if (handle.name !== 'BSM-Backup' && !window.confirm(`You chose the folder "${handle.name}". Every PC should use a folder named BSM-Backup (C:\\BSM-Backup).
+
+OK = use "${handle.name}" anyway
+Cancel = choose again`)) {
+      return { ok: false, message: 'Choose the folder named BSM-Backup (C:\\BSM-Backup).' }
+    }
     // A marker file remembers this PC's id, so a PC whose browser data was cleared is recognised again.
     let marker = null
     try { marker = JSON.parse(await (await (await handle.getFileHandle(MARKER)).getFile()).text()) } catch { /* no marker yet */ }
@@ -68,7 +75,7 @@ export const chooseBackupFolder = async () => {
     await reportDeviceStatusNow(window.__bsmUser, { force: true })
     window.dispatchEvent(new Event('bsm:device-backup-folder'))
     scheduleSoon()
-    return { ok: true, message: `Backup folder set: ${handle.name}` }
+    return { ok: true, message: `Backup folder set: ${handle.name}. This PC will save a backup here once a day by itself.` }
   } catch (e) {
     if (e?.name === 'AbortError') return { ok: false, message: 'No folder chosen.' }
     return { ok: false, message: e?.message ?? 'Could not set the folder.' }
