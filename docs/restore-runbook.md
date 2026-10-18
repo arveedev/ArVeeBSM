@@ -69,3 +69,12 @@ automatic restore test (plan phase 6b) and the Google Sheet check (option 5) are
 
 Stop, keep the screen text and the `restore-logs` folder, and do not run anything else. The safety export taken before every
 write is the way back (option 2 with that file as the backup gives an exact return).
+
+## 7. Device files (the PCs' own backups) - added 2026-10-19
+
+Each office PC saves a daily checked file `bsm-<device>-<id>-<date>.json.gz` in its backup folder (and a copy in the Admin's Drive, folder `Device Backups`). They are the third source of truth after the cloud and the nightly backups.
+
+- **Check files:** `node tools/device-file/verify.mjs <file or folder>` says PASS or FAIL in plain words (checksum, counts, database id, who made it, entries that were still waiting to send). Never restore from a FAIL.
+- **A PC lost or damaged its own data:** on that PC, Admin > Data Care > Backup > Restore this PC from a backup file (works offline), choose the newest file. It adds only what is missing.
+- **The cloud lost entries:** option 3 above now accepts a folder of device files: for each PC only the newest file is used, damaged files are skipped with the reason, and a device that had entries waiting to send is flagged. Same insert-only rules and typed phrase as before.
+- **Rehearsed 2026-10-19 on the practice database zwz12553b:** device files built from real exports verified; a flipped byte, a cut-short file, a non-gzip file and an edited-but-valid-gzip file were all refused; the gap preview read a device file and found 72 missing records; applying them inserted 72 of 72 with 0 existing records changed or removed and the per-table counts growing by exactly those numbers. The in-app restore was rehearsed in a real browser database: 2 deleted records came back, a locally changed record was left alone, and a file from another database was refused.

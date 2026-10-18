@@ -466,3 +466,16 @@ the step-by-step journey.*
 3. Data Care: Backup, Error Log, Data Repair, Move Records, Duplicate Cleanup, Closing Residue, Inventory Lots Check.
 4. Access: Visitor Access, Session Timeouts.
 5. Tapping an Edit pencil in any panel scrolls the screen to that panel's form (above the list) and puts the cursor in its first box.
+
+## 17. System Health (Admin only)
+
+1. The Admin opens System health with the secret shortcut Ctrl+Alt+Q (any page, never while an entry form is open) or from Admin > Data Care > System health. Nobody else can: the shortcut and the screen check the Admin role, and the Settings card for the Admin Dashboard shows a pulsing amber or red dot while anything needs attention.
+2. The screen shows a health bar of four segments (Backups, Restore test, Devices, Data checks), one line saying what needs attention with a button that opens the right card, and the four cards.
+3. Tapping a card slides its detail list open under the cards (one at a time). Backups: cloud backup, Google Drive copy, in-app backup, a 30-day strip. Restore test: the monthly test result. Devices: every device seen in the last 30 days with its sync state, and "Show device data" (folded by default) for the full table including each PC's own backup state; the Admin can rename a device. Data checks: Sheet audit, error log; the Stock check is run on demand.
+4. Colours: green = fine, amber = look at it, red = act, grey = nothing reported yet (never counted as a problem). Thresholds are in `src/utils/healthRules.js` (`HEALTH_THRESHOLDS`).
+
+## 18. Device Backup and Restore This PC (office PCs)
+
+1. A PC (Chrome or Edge) with no backup folder shows a quiet banner: "Choose this PC's backup folder", one button, once (browser rule: a site cannot pick a folder by itself). The same folder name is used everywhere by convention (C:\BSM-Backup). Phones and tablets never make backup files.
+2. Every day, after the PC has been idle for a minute and with no entry form open, the app reads the data in small slices, writes `bsm-<device>-<id>-<date>.json.gz` and a manifest to the folder (or to the browser's private storage until a folder is chosen), reads the file back and checks its checksum, keeps the newest 45 days (deleting only its own files), then uploads the same file to the Admin's Google Drive in the background. It never shows a pop-up and tries again later if the user starts working.
+3. Admin > Data Care > Backup > "Restore this PC from a backup file" (works offline): choose a file or a file from this PC's folder; the app checks it, shows how many records this PC is missing (and how many differ, which are left alone), and after the typed phrase `RESTORE n RECORDS INTO THIS PC` adds only the missing records. A file from another database is refused.

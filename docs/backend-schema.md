@@ -471,3 +471,15 @@ Replaces `privateMillerAllocations` (compound key, never synced). The split of a
 `reportConfig` also carries `procurementBank` (province receiving Cash in Bank in the Stock Desk's procurement status).
 
 `cashDenominationCounts` also carries `updateLog` (v1.10-375): the latest five saves as `{ at, total }`, newest first; `updatedAt` stays the newest.
+
+## deviceStatus (Dexie v48, synced)
+`id` (the device id, same as the error log's deviceId), `name` (browser and system, or the Admin's chosen name when `nameSetByAdmin`), `kind` (`pc` or `phone`), `user`, `role`, `warehouse`, `appVersion`, `firstSeen`, `lastSeen`, `lastSyncAt`, `pending` (entries waiting to send, from the `$*_mutations` logs), `pendingSince`, `counts` (transactions, purchaseReceipts, piles, authorities, customers), `backup` (PCs: `at`, `ok`, `folder` = ok / none / needs-permission / unsupported, `driveAt`, `driveOk`, `savedTo`). Written by each device about every 10 minutes (never more often than every 30 seconds unless something real changed). Read only by the Admin screen. Index `lastSeen`.
+
+## systemStatus (Dexie v48, synced)
+Records written by the nightly GitHub jobs (bsm-backups repository) through the backup client: `cloudBackup` (at, result, records, zipBytes, tables, driveDelivered), `history` (last 30 days of results), `sheetAudit` (at, errors, warnings, lines), `restoreTest` (at, result, records, identical). Never contains business data.
+
+## deviceInfo (Dexie v48, NEVER synced)
+This browser's own facts: `folder` (the chosen backup folder handle) and `backupState` (last backup time, result, Drive result). Listed in `unsyncedTables`.
+
+## Device backup file (not a table)
+gzip of two lines: line 1 meta (format `bsm-device-backup`, version 1, deviceId, deviceName, user, appVersion, schemaVersion, dbId, exportedAt, lastSyncAt, `pending` per table, `counts` per table, `tablesSha256`); line 2 the Export All Data JSON. The checksum is the SHA-256 of line 2's bytes. See `src/utils/deviceFile.js`.

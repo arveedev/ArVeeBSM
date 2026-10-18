@@ -8450,4 +8450,5 @@
 //   1.10-392 - Login animation: the logo now finishes shrinking into its place before anything else (title, PIN dots, keys) starts to enter (--lt0 700ms to 1400ms).
 //   1.10-393 - Suggestion list that opens upward (phone keyboard open) was anchored with CSS bottom and landed over the input, hiding what was being typed; now anchored by its own bottom edge just above the input.
 //   1.10-394 - Phone width (640px or less): the customer and member suggestion lists are compact (three rows) and sit directly under their input, in the page, instead of a floating list placed by screen coordinates, which still covered the typing box with the keyboard open. Larger screens keep the floating list.
-export const APP_VERSION = '1.10-394'
+//   1.10-395 - System health (Admin only, Ctrl+Alt+Q, also Admin > Data Care > System health): health bar, Backups / Restore test / Devices / Data checks cards with detail lists, device table. Every device reports its status (deviceStatus, schema v48); the nightly GitHub jobs report theirs (systemStatus). Office PCs keep their own automatic backup file (idle-only, never interrupts): a folder chosen with one click plus an automatic Google Drive copy; Admin > Backup > Restore this PC from a backup file (insert-only, works offline).
+export const APP_VERSION = '1.10-395'
