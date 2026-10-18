@@ -11,6 +11,7 @@ import { db } from '../../../db/dexie.js'
 import { logError } from '../../../utils/errorLog.js'
 import { useAuth } from '../../../context/AuthContext.jsx'
 import { primaryButtonClass } from './shared.js'
+import RestoreFromFilePanel from './RestoreFromFilePanel.jsx'
 
 const GITHUB_BACKUPS_URL = 'https://github.com/arveedev/ArVeeBSM/tree/backups/backups'
 
@@ -121,6 +122,8 @@ function BackupPanel() {
           </p>
         )}
       </div>
+
+      <RestoreFromFilePanel />
     </div>
   )
 }
