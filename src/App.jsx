@@ -31,6 +31,8 @@ import { usePageHeader } from './context/PageHeaderContext.jsx'
 import { startSyncWorker, startAuthoritySyncWorker, startTransactionSyncWorker, registerImmediateSyncOnSave } from './services/syncWorker.js'
 import { startBackupWorker } from './services/backupWorker.js'
 import { startDeviceStatusWorker } from './services/deviceStatusWorker.js'
+import { startDeviceBackup } from './services/deviceBackup.js'
+import DeviceBackupBanner from './components/common/DeviceBackupBanner.jsx'
 import { startMillingCompletionSync } from './services/millingCompletion.js'
 import { uploadLegacyPrivateMillerShares } from './services/legacyMigrations.js'
 import { startDerivedTotalsSync } from './services/derivedTotalsSync.js'
@@ -289,6 +291,12 @@ function App() {
     return startDeviceStatusWorker(user)
   }, [user])
 
+  // This PC's own automatic backup (idle-only, never interrupts; office PCs only) - see deviceBackup.js.
+  useEffect(() => {
+    if (!user) return undefined
+    return startDeviceBackup(user)
+  }, [user])
+
   // An authority's issued totals and a pile's balance are recomputed from the synced transactions on every device, so all
   // devices show the same (see derivedTotalsSync.js).
   useEffect(() => {
@@ -324,6 +332,7 @@ function App() {
       {user && pathname !== '/login' && <AppHeader hidden={barsHidden} />}
       {/* the Stock Desk, from the Home icon or Ctrl + Alt + D on any page (Admin / Visitor with access only) */}
       {user && pathname !== '/login' && <StockDeskHost />}
+      {user && pathname !== '/login' && <DeviceBackupBanner />}
       {/* No page-slide for /admin - it's a fixed-position overlay with
           its own pop transition (see AdminDashboard.jsx), and a
           transform applied by this wrapper would become its containing
