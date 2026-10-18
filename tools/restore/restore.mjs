@@ -23,6 +23,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import JSZip from 'jszip'
 import { readSource } from '../gap-recovery/gap.mjs'
+import { checkFile as checkDeviceFile } from '../device-file/verify.mjs'
 
 export const REQUIRED_TABLES = ['users', 'warehouses', 'transactions', 'piles', 'authorities', 'reportConfig', 'settings', 'signatories', 'provinces', 'branches', 'varietyTypes', 'sackTypes']
 const NPX = process.platform === 'win32' ? 'npx.cmd' : 'npx'
@@ -341,13 +342,36 @@ const optionRebuild = async (ctx) => {
   out(`   Old database: ${ctx.db.url}   (hash of the backup used: ${sha.slice(0, 16)}...)`)
 }
 
+/** Device files in a folder: for each PC only its NEWEST daily .json.gz (older days are subsets), plus plain Export All Data .json files. */
+export const deviceFilesIn = (dir) => {
+  const names = fs.readdirSync(dir)
+  const newest = new Map()
+  for (const f of names.filter((n) => n.endsWith('.json.gz'))) {
+    const m = f.match(/^(.*)-(\d{4}-\d{2}-\d{2})\.json\.gz$/)
+    const key = m ? m[1] : f
+    const date = m ? m[2] : ''
+    if (!newest.has(key) || date > newest.get(key).date) newest.set(key, { f, date })
+  }
+  const plain = names.filter((n) => n.endsWith('.json') && !n.endsWith('.manifest.json') && n !== 'bsm-device.json')
+  return [...[...newest.values()].map((x) => x.f), ...plain].map((f) => path.join(dir, f))
+}
+
 const optionDevices = async (ctx) => {
   logFile = path.join(ctx.logs, `devices-${stampNow()}.txt`)
   header(1, 3, 'Before you start', READS)
   if (!(await checklist(['Option 2 (rebuild) is finished and checked', 'No device has been cleared or reinstalled yet', 'You exported each device (Admin > Backup > Export All Data) and put the files in one folder']))) return
-  const dir = await ask('\n   Folder with the device files (.json) >  ')
-  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => path.join(dir, f)) : []
-  if (files.length === 0) { out('   No .json files there. Stopped, nothing was changed.'); return }
+  const dir = await ask('\n   Folder with the device files (.json.gz from the PCs, or Export All Data .json) >  ')
+  const found = fs.existsSync(dir) ? deviceFilesIn(dir) : []
+  // a damaged device file is skipped with the reason, never merged and never allowed to stop the others
+  const files = []
+  for (const f of found) {
+    if (!f.endsWith('.gz')) { files.push(f); continue }
+    const r = await checkDeviceFile(f)
+    if (r.ok) files.push(f)
+    else out(`   SKIPPED ${path.basename(f)} - it failed its check: ${r.problems.join('; ')}`)
+  }
+  if (files.length === 0) { out('   No usable device files there. Stopped, nothing was changed.'); return }
+  out(`   Using ${files.length} file(s): ${files.map((f) => path.basename(f)).join(', ')}`)
   header(2, 3, 'Preview (uses the gap recovery tool)', READS)
   const tmp = path.join(ctx.logs, `devices-current-${stampNow()}.zip`)
   dexie(ctx.cwd, ['export', tmp])

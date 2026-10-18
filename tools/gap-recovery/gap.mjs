@@ -19,15 +19,18 @@
 //        [--plan gap-plan.json] [--list]
 //   node tools/gap-recovery/gap.mjs apply --plan gap-plan.json --cwd <folder with dexie-cloud.json> [--dry]
 //
-// A "--device" file is either an Export All Data file (.json: { tables: { name: [records] } }) or a Dexie Cloud
-// export (.zip / .ndjson), which lets one export stand in for a device when rehearsing.
+// A "--device" file is a PC's automatic device backup (.json.gz, checked first: a damaged one is refused), an Export All
+// Data file (.json: { tables: { name: [records] } }) or a Dexie Cloud export (.zip / .ndjson), which lets one export
+// stand in for a device when rehearsing.
 
 import fs from 'node:fs'
 import path from 'node:path'
 import readline from 'node:readline'
 import { execFileSync } from 'node:child_process'
 import crypto from 'node:crypto'
+import zlib from 'node:zlib'
 import JSZip from 'jszip'
+import { verifyDeviceFile } from '../../src/utils/deviceFile.js'
 
 // the only tables gap recovery may touch, with the field that is each table's primary key
 export const ELIGIBLE = {
@@ -53,10 +56,20 @@ export const readSource = async (file) => {
   const ext = path.extname(file).toLowerCase()
   const out = { file, tables: {}, kind: '', dbId: null, schema: null, exportedAt: null }
   const add = (table, id, data) => { (out.tables[table] ??= new Map()).set(String(id), data) }
-  if (ext === '.json') {
-    const j = JSON.parse(buf.toString('utf8'))
+  if (ext === '.json' || ext === '.gz') {
+    let j
+    if (ext === '.gz') {
+      let text
+      try { text = zlib.gunzipSync(buf).toString('utf8') } catch { throw new Error(`${file}: not a readable gzip file (damaged or cut short)`) }
+      const v = await verifyDeviceFile(text)
+      if (!v.ok) throw new Error(`${file}: failed its check: ${v.problems.join('; ')}`)
+      j = v.data
+      out.meta = v.meta
+    } else {
+      j = JSON.parse(buf.toString('utf8'))
+    }
     if (!j?.tables) throw new Error(`${file}: not an Export All Data file (no "tables")`)
-    out.kind = 'device-json'
+    out.kind = ext === '.gz' ? 'device-file' : 'device-json'
     out.exportedAt = j.exportedAt ?? null
     for (const [table, list] of Object.entries(j.tables)) {
       const pk = ELIGIBLE[table]
@@ -132,7 +145,7 @@ export const computeGap = (restored, devices) => {
       }
       stats[table] = s
     }
-    perDevice.push({ file: dev.file, kind: dev.kind, exportedAt: dev.exportedAt, stats })
+    perDevice.push({ file: dev.file, kind: dev.kind, exportedAt: dev.exportedAt, meta: dev.meta ?? null, stats })
   }
   // an id two devices disagree about is never inserted
   const blocked = new Set(conflicts.filter((c) => c.kind.startsWith('two devices')).map((c) => `${c.table}|${c.id}`))
@@ -149,6 +162,10 @@ const printGap = (restored, gap, list) => {
   console.log(`\nRestored database: ${restored.file}  (exported ${restored.exportedAt ?? '?'}, db ${restored.dbId ?? '?'})`)
   for (const d of gap.perDevice) {
     console.log(`\nDevice file: ${d.file}  [${d.kind}${d.exportedAt ? `, exported ${d.exportedAt}` : ''}]`)
+    if (d.meta) {
+      const waiting = Object.values(d.meta.pending ?? {}).reduce((a, b) => a + b, 0)
+      console.log(`  made by ${d.meta.deviceName ?? '?'} (${d.meta.user || 'no user'}), app ${d.meta.appVersion ?? '?'}, database ${d.meta.dbId}${waiting ? `; ${waiting} entries were still WAITING TO SEND when it was saved (they may exist nowhere else)` : ''}`)
+    }
     console.log('  table                   on device   identical   MISSING   conflicts')
     for (const [t, s] of Object.entries(d.stats)) console.log(`  ${t.padEnd(22)} ${String(s.onDevice).padStart(9)} ${String(s.identical).padStart(11)} ${String(s.missing).padStart(9)} ${String(s.conflicts).padStart(11)}`)
   }

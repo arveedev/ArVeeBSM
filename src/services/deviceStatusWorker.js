@@ -76,9 +76,11 @@ const buildRecord = async (user, existing) => {
   }
 }
 
-export const reportDeviceStatusNow = async (user) => {
+export const reportDeviceStatusNow = async (user, { force = false } = {}) => {
   try {
     if (!user || user.role === 'Visitor') return
+    // the signed-in user object can be re-created by the app; never write more often than every 30 s unless something real changed
+    if (!force && Date.now() - lastWriteAt < 30 * 1000) return
     const existing = await db.deviceStatus.get(getDeviceId())
     await db.deviceStatus.put(await buildRecord(user, existing))
     lastWriteAt = Date.now()
@@ -94,7 +96,7 @@ export const startDeviceStatusWorker = (user) => {
   const timer = setInterval(() => reportDeviceStatusNow(user), REPORT_INTERVAL_MS)
   const onVisible = () => { if (document.visibilityState === 'visible' && Date.now() - lastWriteAt > MIN_GAP_MS) reportDeviceStatusNow(user) }
   document.addEventListener('visibilitychange', onVisible)
-  const onBackupDone = () => reportDeviceStatusNow(user)
+  const onBackupDone = () => reportDeviceStatusNow(user, { force: true })
   window.addEventListener('bsm:device-backup-done', onBackupDone)
   stopSyncSub?.()
   const sub = db.cloud?.syncState?.subscribe?.((s) => { if (s?.phase === 'in-sync') lastInSyncAt = new Date().toISOString() })

@@ -49,7 +49,7 @@ export const chooseBackupFolder = async () => {
     if (existing?.handle) {
       // The folder was chosen before: only ask the browser for permission again (one click).
       const p = await existing.handle.requestPermission({ mode: 'readwrite' })
-      if (p === 'granted') { await reportDeviceStatusNow(window.__bsmUser); return { ok: true, message: 'Backup folder allowed again.' } }
+      if (p === 'granted') { await reportDeviceStatusNow(window.__bsmUser, { force: true }); return { ok: true, message: 'Backup folder allowed again.' } }
     }
     const handle = await window.showDirectoryPicker({ id: 'bsm-backup', mode: 'readwrite', startIn: 'documents' })
     // A marker file remembers this PC's id, so a PC whose browser data was cleared is recognised again.
@@ -65,7 +65,7 @@ export const chooseBackupFolder = async () => {
     await w.write(JSON.stringify({ deviceId: getDeviceId(), deviceName: getDeviceLabel(), chosenAt: new Date().toISOString() }, null, 1))
     await w.close()
     await setInfo('folder', { handle, name: handle.name, chosenAt: new Date().toISOString() })
-    await reportDeviceStatusNow(window.__bsmUser)
+    await reportDeviceStatusNow(window.__bsmUser, { force: true })
     window.dispatchEvent(new Event('bsm:device-backup-folder'))
     scheduleSoon()
     return { ok: true, message: `Backup folder set: ${handle.name}` }
