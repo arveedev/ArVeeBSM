@@ -1,5 +1,7 @@
 # BSM Restore Runbook
 
+> The complete step-by-step manual for the Admin is `docs/backup-restore-manual.md` (also `BSM-Safety\BSM-Backup-and-Restore-Manual.html`). This page is the short operator reference.
+
 Built 2026-10-16 (tools in `tools/restore/restore.mjs` and `tools/gap-recovery/gap.mjs`). Companion to
 `backup-and-restore-plan.md`. This is the page to open when something is wrong with the data.
 
