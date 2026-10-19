@@ -48,7 +48,8 @@ When unsure, use option 0 first: it changes nothing.
 4. The app's web address is allowed on it (you type it), the backup is loaded, and the new database is compared with the
    backup record by record. Anything but an exact match **stops** the rebuild; nothing is switched.
 5. **You** then switch the system: four values in Vercel (`DEXIE_CLOUD_DB_URL`, `DEXIE_CLOUD_CLIENT_ID`, `DEXIE_CLOUD_CLIENT_SECRET` and the app's own address `VITE_DEXIE_CLOUD_DB_URL`), then redeploy. No code edit is needed any more (v1.10-402; before that the address was written in `src/db/dexie.js`). System health shows the database id the app is using.
-6. Each device must then run Admin > Backup > Export All Data, clear its local data once and sign in again. A device
+6. **GitHub too:** the nightly backup uses its own copy of the address and key. In the bsm-backups repository (Settings, Secrets) update `DEXIE_DB_URL`, `DEXIE_BACKUP_CLIENT_ID` and `DEXIE_BACKUP_CLIENT_SECRET` for the new database (create a backup client for it first), then run "Daily database backup" once. Until then the nightly job keeps backing up the old database.
+7. Each device must then run Admin > Backup > Export All Data, clear its local data once and sign in again. A device
    stays tied to the database it first synced with and the new one refuses it until it is cleared (found in the rehearsal
    of 2026-10-16). **Do option 3 first** if entries were made after the backup.
 

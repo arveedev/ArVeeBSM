@@ -334,6 +334,8 @@ const optionRebuild = async (ctx) => {
   out(`        VITE_DEXIE_CLOUD_DB_URL   = ${nd.url}   (the address the app itself uses; no code edit is needed any more)`)
   out(`   2. Also set DEXIE_CLOUD_DB_URL to ${nd.url} (kept in step; the server function reads VITE_DEXIE_CLOUD_DB_URL first).`)
   out('   3. Redeploy.')
+  out('   4. The nightly backup (GitHub, repository bsm-backups > Settings > Secrets) still points at the OLD database. Create a backup client for the NEW')
+  out('      database, then update the three secrets DEXIE_DB_URL, DEXIE_BACKUP_CLIENT_ID and DEXIE_BACKUP_CLIENT_SECRET, and run "Daily database backup" once.')
   out('   Each device then needs: Admin > Backup > Export All Data, clear its local data once, and sign in again.')
   out('   (a device stays tied to the database it first synced with and the new one refuses it until it is cleared)')
   if ((await ask('\n   Type  DONE  when you have finished all three >  ')) !== 'DONE') { out('   Not confirmed. The new database is ready and the old one is untouched; run this step by hand when ready.') }
