@@ -6,6 +6,7 @@ Status: PLANNING, not a design yet (2026-10-19). Source: the owner's real report
 - The Admin generates the GSR **from the app**; the file appears in a **designated Google Drive folder**.
 - The distribution scheme is **set by the Admin** (a settings screen), not hardcoded.
 - The report counts **from September (data start) forward only**; no year-to-date baseline for earlier months.
+- The generated file must contain **the same 13 sheets** as the real report (in the same order and layout), refreshed **daily or for a chosen period** (the example is `GSR OCTOBER 16-18`: a period file named for the period reported).
 - The existing Google Apps Script generator (docs/gsr-*.js, August) is "not even near" the real report, so it is replaced, not extended.
 
 ## The real report, sheet by sheet (what it shows and where the app's data would come from)
@@ -42,3 +43,6 @@ Status: PLANNING, not a design yet (2026-10-19). Source: the owner's real report
 - Output format: Excel (.xlsx, opens in Drive) or a Google Sheet?
 - Catanduanes: is its data in the app (warehouses and users) or still entered elsewhere?
 - Which weekday/lag rule: a GSR dated today covers yesterday's transactions (as in the August notes)?
+
+## Still in planning (owner, 2026-10-19: "leave the GSR on plan mode")
+Nothing is built. Open item to settle in planning: the `_Config_` sheet (the old hide/unhide helper) is one of the 13 sheets, but the earlier decision was to drop that mechanism; confirm whether it is reproduced as it is or left out of the 13.
