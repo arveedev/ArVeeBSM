@@ -726,7 +726,7 @@ counted them and the two stopped tallying. An ordinary transfer needs no new cal
 CLOSING RESIDUE with the other pile's name), the Stock Report and the Stock Desk read it as they read any transfer, and it nets to zero at
 variety level. Using the closing date keeps earlier reports unchanged.
 
-### 2.48 The opening balance is a frozen snapshot; authorities always deduct in full
+### 2.48 The opening balance is a frozen snapshot; authorities always deduct in full (and only the authorized amount, 2026-10-19)
 
 **Decision**: saving the Daily inventory Opening balance stores the whole balance of that day (`inventoryOpening.cells`, every cell as shown, with `full: true`). At report time every computed cell on that day that is not in the list is brought to nothing and every listed cell is brought to its typed value (`withOpening`), worked into the lots so it ages and is used up; documents dated after the day add and take as usual. An override without `full` (saved before this decision) keeps the earlier partial behaviour. With a frozen opening, a pile's beginning balance (INIT row) dated after the opening day is ignored by these reports, because it is not a document. The Stock Desk deducts an authority's full authorized amount (or what it issued if more) from its date whether or not it was completed.
 

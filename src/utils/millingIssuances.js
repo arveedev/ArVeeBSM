@@ -77,8 +77,9 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
     if (!inCutoff(pl.wh, a.date)) continue
     const alloc = a.totalAllocationKilos || (a.totalAllocationBags ?? 0) * NET_BAG_KG
     const issued = a.totalIssuedKilos ?? 0
-    // what the authority authorizes, even when it was marked complete with nothing issued
-    const kilos = Math.max(alloc, issued)
+    // exactly what the authority authorizes (even when it was marked complete with nothing issued, and whatever the
+    // slips issued against it weigh); an authority with no authorized amount falls back to what it issued
+    const kilos = alloc > 0 ? alloc : issued
     if (!(kilos > 0)) continue
     const type = norm(a.transactionTypeName)
     const row = {

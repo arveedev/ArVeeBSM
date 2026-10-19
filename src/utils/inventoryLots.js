@@ -197,11 +197,12 @@ const run = ({ piles, transactions, warehouses, globalDataStartDate = null, asOf
       if (!a.aiNumber || !a.varietyId || !a.date || !whById.has(a.assignedWarehouse)) continue
       const cut = effectiveCutoffDate(whById.get(a.assignedWarehouse).reportingCutoffDate, globalDataStartDate)
       if (cut && a.date <= cut) continue
-      // An authority always deducts its full authorized amount (or what it issued if that is more), whether or
-      // not it was later marked complete: once authorized, the stock is committed.
+      // An authority deducts EXACTLY its authorized amount, whether or not it was later marked complete and whatever
+      // the withdrawal slips issued against it weigh (owner's rule: this report is less authorized, plus received;
+      // a WSI never changes it). Only an authority that carries no authorized amount at all falls back to what it issued.
       const alloc = a.totalAllocationKilos || (a.totalAllocationBags ?? 0) * 50
       const issued = a.totalIssuedKilos ?? 0
-      const amount = Math.max(alloc, issued)
+      const amount = alloc > 0 ? alloc : issued
       if (amount <= 0 || a.date > asOf) continue
       reservingAi.add(a.aiNumber)
       events.push({ rank: 0.5, when: a.date, auth: { a, amount } })
