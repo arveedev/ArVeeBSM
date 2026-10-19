@@ -705,7 +705,7 @@ export const checksModel = (checks, unit, { asOf }) => {
     for (const it of items) rows.push({ kind: 'row', ...line(it) })
   }
   section('Stock book self-check', checks.selfCheck ?? [], (r) => ({ first: r.title, cells: [r.ok ? 'passed' : r.detail.join('; '), null] }))
-  section('Documents dated after their pile was closed (move them to an open pile, Admin > Data Care > Move Records)', checks.afterClose ?? [], (o) => ({ first: `${o.type} ${o.serial} · ${o.warehouse} · ${o.pile}`, cells: [`pile closed ${longDate(o.closedDate)}, document ${longDate(o.date)}${o.openPiles.length ? ` · open: ${o.openPiles.join(', ')}` : ''}`, o.bags] }))
+  section('Documents dated after their pile was closed (move them to an open pile)', checks.afterClose ?? [], (o) => ({ first: `${o.type} ${o.serial} · ${o.warehouse} · ${o.pile}`, cells: [`pile closed ${longDate(o.closedDate)}, document ${longDate(o.date)}${o.openPiles.length ? ` · open: ${o.openPiles.join(', ')}` : ''}`, o.bags] }))
   section('Warehouses using a start-date override', checks.overrides, (o) => ({ first: o.warehouse, cells: [`starts after ${longDate(o.date)}`, null] }))
   section('Authorized more than the stock available', checks.overAuthorized ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Authority age group blank or unreadable (deducted from the oldest stock)', checks.noAgeGroup ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}${o.ageGroup ? ` · "${o.ageGroup}"` : ''}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))

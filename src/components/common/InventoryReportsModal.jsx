@@ -22,6 +22,7 @@ import {
 import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/procurementStatus.js'
 import { buildEndingStockData, endingStockModels } from '../../utils/endingStockReport.js'
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
+import { reassignDocumentToPile } from '../../utils/pileReassign.js'
 import { buildMillingIssuances, issuancesText as buildIssuancesText, perRicemill } from '../../utils/millingIssuances.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
@@ -480,12 +481,37 @@ function DocLink({ type, serial, warehouseId, openDoc, children }) {
   )
 }
 
-function CheckView({ checks, unit, openDoc }) {
+// "Move to PILE 3": re-assigns one document to the open pile (Admin only). Asks first, says what it did.
+function MoveToPileButtons({ o }) {
+  const [busy, setBusy] = useState(false)
+  if (!o.openPileList?.length) return null
+  const move = async (target) => {
+    if (!window.confirm(`Move ${o.type} ${o.serial} (${o.bags} bags, ${fmtDay(o.date)}) from ${o.pile} (closed ${fmtDay(o.closedDate)}) to ${target.pileName}?
+
+Only the pile of this document changes. Both piles' balances are rebuilt from their history.`)) return
+    setBusy(true)
+    try {
+      const r = await reassignDocumentToPile(o.txId, o.pileId, target.pileId)
+      toast.success(`${r.type} ${r.serial} moved from ${r.from} to ${r.to}`)
+    } catch (e) {
+      toast.error(e?.message ?? 'Could not move the document')
+    } finally { setBusy(false) }
+  }
+  return (
+    <span className="ml-1 inline-flex flex-wrap gap-1.5 align-middle">
+      {o.openPileList.map((t) => (
+        <button key={t.pileId} type="button" disabled={busy} onClick={() => move(t)} className="rounded-md border border-brand-neon/60 px-2 py-0.5 text-[11px] font-semibold text-brand-neon hover:bg-brand-neon/10 disabled:opacity-50">Move to {t.pileName}</button>
+      ))}
+    </span>
+  )
+}
+
+function CheckView({ checks, unit, openDoc, canFix }) {
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
       <SelfCheckCard results={checks.selfCheck ?? []} />
-      <CheckSection title="Documents dated after their pile was closed (move them to an open pile: Admin > Data Care > Move Records)" tone="text-brand-crimson" items={checks.afterClose ?? []} ok="No document is dated after its pile was closed."
-        render={(o, i) => checkLine(<><DocLink type={o.type} serial={o.serial} warehouseId={o.warehouseId} openDoc={openDoc} /> · {o.warehouse} · {o.pile}</>, `${fmtNum(o.bags)} bags · pile closed ${fmtDay(o.closedDate)}, document ${fmtDay(o.date)}${o.openPiles.length ? ` · open: ${o.openPiles.join(', ')}` : ''}`, i)} />
+      <CheckSection title="Documents dated after their pile was closed (Admin: tap Move to the open pile)" tone="text-brand-crimson" items={checks.afterClose ?? []} ok="No document is dated after its pile was closed."
+        render={(o, i) => checkLine(<><DocLink type={o.type} serial={o.serial} warehouseId={o.warehouseId} openDoc={openDoc} /> · {o.warehouse} · {o.pile}{canFix && <MoveToPileButtons o={o} />}</>, `${fmtNum(o.bags)} bags · pile closed ${fmtDay(o.closedDate)}, document ${fmtDay(o.date)}`, i)} />
       <CheckSection title="Warehouses using a start-date override" tone="text-amber-400" items={checks.overrides} ok="None. Every warehouse follows the Data Start Date."
         render={(o, i) => checkLine(o.warehouse, `starts after ${fmtDay(o.date)}`, i)} />
       <CheckSection title="Authorized more than the stock available" tone="text-brand-crimson" items={checks.overAuthorized ?? []} ok="No authority reserves more than the warehouse had."
@@ -1304,7 +1330,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             )}
             {loading || !built ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p> : (
               <>
-                {view === 'check' ? <CheckView checks={built.checks} unit={unit} openDoc={isAdmin ? openDoc : null} /> : (
+                {view === 'check' ? <CheckView checks={built.checks} unit={unit} openDoc={isAdmin ? openDoc : null} canFix={isAdmin} /> : (
                   <>
                     {view === 'procurement' && <p className="mb-2 text-xs text-neutral-400">{model.subtitle}</p>}
                     {view === 'age' ? (

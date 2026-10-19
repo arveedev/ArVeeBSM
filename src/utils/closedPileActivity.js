@@ -38,12 +38,12 @@ export const documentsAfterClose = (piles, transactions, { asOf = '9999-12-31', 
       if (!p?.closedDate || !(t.date > p.closedDate)) continue
       const cut = cutoffFor(t.warehouseId)
       if (cut && t.date <= cut) continue
-      const open = piles
-        .filter((x) => !x.closedDate && x.warehouseId === p.warehouseId && x.varietyId === p.varietyId && x.pileId !== p.pileId)
-        .map((x) => x.pileName)
+      const openList = piles.filter((x) => !x.closedDate && x.warehouseId === p.warehouseId && x.varietyId === p.varietyId && x.pileId !== p.pileId)
+      const open = openList.map((x) => x.pileName)
       out.push({
         type: t.type, serial: t.serialNo, date: t.date, bags: t.numberOfBags ?? t.issuedBags ?? 0, warehouseId: t.warehouseId,
-        pile: p.pileName, pileId: p.pileId, closedDate: p.closedDate, openPiles: open,
+        txId: t.id, pile: p.pileName, pileId: p.pileId, closedDate: p.closedDate, openPiles: open,
+        openPileList: openList.map((x) => ({ pileId: x.pileId, pileName: x.pileName })),
       })
     }
   }
