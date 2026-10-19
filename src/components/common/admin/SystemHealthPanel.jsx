@@ -6,6 +6,8 @@ import { ChevronDown, RefreshCw, Pencil } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { getDeviceId } from '../../../utils/errorLog.js'
 import { agoText } from '../../../utils/healthRules.js'
+import { DEXIE_CLOUD_DB_URL } from '../../../db/dexie.js'
+import { databaseIdOf } from '../../../utils/deviceRestore.js'
 import { useSystemHealth } from '../../../hooks/useSystemHealth.js'
 
 const DOT = { ok: 'bg-brand-neon', amber: 'bg-brand-amber sh-pulse', red: 'bg-red-500 sh-pulse', unknown: 'bg-neutral-600' }
@@ -140,7 +142,7 @@ function SystemHealthPanel() {
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-app-text">System health</h2>
         <button type="button" onClick={() => setTick((t) => t + 1)} className="flex items-center gap-1.5 text-xs text-neutral-400 hover:text-app-text" aria-label="Refresh">
-          Checked {new Date(health.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} <RefreshCw key={tick} size={13} className="sh-spin-once" />
+          Database {databaseIdOf(DEXIE_CLOUD_DB_URL)} · checked {new Date(health.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} <RefreshCw key={tick} size={13} className="sh-spin-once" />
         </button>
       </div>
 

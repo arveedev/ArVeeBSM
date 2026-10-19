@@ -10,7 +10,9 @@
 // lets writes actually reach Dexie Cloud (the built-in email-OTP login
 // is intentionally never shown to warehouse staff).
 
-const DB_URL = process.env.DEXIE_CLOUD_DB_URL
+// VITE_DEXIE_CLOUD_DB_URL (the address the app itself is built with) wins, so setting that one variable keeps the app and this
+// function pointed at the same database; DEXIE_CLOUD_DB_URL remains the fallback and should be kept in step with it.
+const DB_URL = process.env.VITE_DEXIE_CLOUD_DB_URL || process.env.DEXIE_CLOUD_DB_URL
 const CLIENT_ID = process.env.DEXIE_CLOUD_CLIENT_ID
 const CLIENT_SECRET = process.env.DEXIE_CLOUD_CLIENT_SECRET
 // Same value as the client's VITE_APP_SHARED_KEY - Vercel exposes every

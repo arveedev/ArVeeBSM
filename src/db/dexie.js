@@ -1134,8 +1134,12 @@ db.table('serialCounterCache').count()
   .then((n) => console.log('[DEXIE-CLOUD-DIAGNOSTIC] *** serialCounterCache table exists locally, count:', n, '***'))
   .catch((e) => console.log('[DEXIE-CLOUD-DIAGNOSTIC] *** serialCounterCache does NOT exist locally yet - still running pre-fix schema:', e.message, '***'))
 
+// The database address: normally the one written here, but VITE_DEXIE_CLOUD_DB_URL (Vercel > Environment Variables, then redeploy)
+// overrides it, so moving the app to a rebuilt database needs no code edit (restore runbook, option 2).
+export const DEXIE_CLOUD_DB_URL = (import.meta.env.VITE_DEXIE_CLOUD_DB_URL || 'https://zv432njdm.dexie.cloud').trim()
+
 db.cloud.configure({
-  databaseUrl: 'https://zv432njdm.dexie.cloud',
+  databaseUrl: DEXIE_CLOUD_DB_URL,
   // serialCounters and preloadState are explicitly per-device
   // performance caches (see their own definitions above) - neither is
   // meant to be shared across devices, so excluding them from sync

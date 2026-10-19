@@ -34,7 +34,7 @@ node tools/restore/restore.mjs --backups "C:\Users\DjArVee\BSM-Safety" --cwd "<f
 | The database is badly damaged or gone | **2** Rebuild into a new database (the old one is never touched) |
 | The database was lost and the newest entries exist only on devices | **3** Recover from devices, **after** option 2 and **before** any device is cleared |
 | The new database turned out wrong | **4** Switch back (instructions) |
-| The Google Sheet may be out of step | **5** Not built yet (instructions) |
+| The Google Sheet may be out of step | **5** Check the Sheet against the database or a backup (reads only; built 2026-10-19) |
 | The cloud is just unreachable | **6** Nothing to restore; wait |
 | Anything else | **9** Stop and get help |
 
@@ -47,7 +47,7 @@ When unsure, use option 0 first: it changes nothing.
 3. A new database is created: you type your Dexie manager e-mail and the one-time code that is mailed to it.
 4. The app's web address is allowed on it (you type it), the backup is loaded, and the new database is compared with the
    backup record by record. Anything but an exact match **stops** the rebuild; nothing is switched.
-5. **You** then switch the system: three values in Vercel, the app's database address (`src/db/dexie.js`), redeploy.
+5. **You** then switch the system: four values in Vercel (`DEXIE_CLOUD_DB_URL`, `DEXIE_CLOUD_CLIENT_ID`, `DEXIE_CLOUD_CLIENT_SECRET` and the app's own address `VITE_DEXIE_CLOUD_DB_URL`), then redeploy. No code edit is needed any more (v1.10-402; before that the address was written in `src/db/dexie.js`). System health shows the database id the app is using.
 6. Each device must then run Admin > Backup > Export All Data, clear its local data once and sign in again. A device
    stays tied to the database it first synced with and the new one refuses it until it is cleared (found in the rehearsal
    of 2026-10-16). **Do option 3 first** if entries were made after the backup.
@@ -63,7 +63,7 @@ When unsure, use option 0 first: it changes nothing.
 | Creating the database | Done by hand on 2026-10-16 (`npx dexie-cloud create`, e-mail code); the tool starts the same command and you answer it |
 
 Not rehearsed: option 2 creating a database from inside the tool, and option 2 on a damaged live system. The monthly
-automatic restore test (plan phase 6b) and the Google Sheet check (option 5) are not built.
+automatic restore test (plan phase 6b) is built and running; option 5 (Sheet check) is built, see section 8.
 
 ## 6. If something looks wrong
 
@@ -78,3 +78,7 @@ Each office PC saves a daily checked file `bsm-<device>-<id>-<date>.json.gz` in 
 - **A PC lost or damaged its own data:** on that PC, Admin > Data Care > Backup > Restore this PC from a backup file (works offline), choose the newest file. It adds only what is missing.
 - **The cloud lost entries:** option 3 above now accepts a folder of device files: for each PC only the newest file is used, damaged files are skipped with the reason, and a device that had entries waiting to send is flagged. Same insert-only rules and typed phrase as before.
 - **Rehearsed 2026-10-19 on the practice database zwz12553b:** device files built from real exports verified; a flipped byte, a cut-short file, a non-gzip file and an edited-but-valid-gzip file were all refused; the gap preview read a device file and found 72 missing records; applying them inserted 72 of 72 with 0 existing records changed or removed and the per-table counts growing by exactly those numbers. The in-app restore was rehearsed in a real browser database: 2 deleted records came back, a locally changed record was left alone, and a file from another database was refused.
+
+## 8. Option 5: check the Google Sheet (added 2026-10-19)
+
+Reads only. Choose the database in the folder (a fresh read-only export) or a backup file, then "last 7 days" (a few minutes) or "everything since the reporting start" (10 to 20 minutes). It runs the same audit as the nightly job (`sheet_audit.py` in the bsm-backups repository, found automatically or with `--audit-script <path>`), looks up the documents and Purchase Receipts in the real Sheet, and prints each finding with what it means and what to do about it in plain words. Nothing is written to the Sheet or the database. Use it after any restore: fix what it lists in the app, then run it again until it says nothing was found. Rehearsed 2026-10-19 on the practice database against the live Sheet (both modes; it reported the practice copy's stale entries and the PR that differs in price).

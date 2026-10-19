@@ -327,11 +327,12 @@ const optionRebuild = async (ctx) => {
 
   header(8, 9, 'Switch the system to the new database', 'YOU DO THIS')
   out('   The tool cannot do this part. Do these in order:\n')
-  out('   1. Vercel -> Project -> Settings -> Environment Variables. Set:')
+  out('   1. Vercel -> Project -> Settings -> Environment Variables. Set (all four, Production):')
   out(`        DEXIE_CLOUD_DB_URL        = ${nd.url}`)
   out(`        DEXIE_CLOUD_CLIENT_ID     = (the clientId in ${path.join(newFolder, 'dexie-cloud.key')})`)
   out(`        DEXIE_CLOUD_CLIENT_SECRET = (the clientSecret in the same file)`)
-  out(`   2. Set the app's database address (src/db/dexie.js, databaseUrl) to ${nd.url}.`)
+  out(`        VITE_DEXIE_CLOUD_DB_URL   = ${nd.url}   (the address the app itself uses; no code edit is needed any more)`)
+  out(`   2. Also set DEXIE_CLOUD_DB_URL to ${nd.url} (kept in step; the server function reads VITE_DEXIE_CLOUD_DB_URL first).`)
   out('   3. Redeploy.')
   out('   Each device then needs: Admin > Backup > Export All Data, clear its local data once, and sign in again.')
   out('   (a device stays tied to the database it first synced with and the new one refuses it until it is cleared)')
@@ -388,6 +389,94 @@ const optionDevices = async (ctx) => {
   out(`   Log saved: ${logFile}`)
 }
 
+// What each finding of the Sheet audit means and what to do, in plain words.
+const SHEET_HELP = {
+  'transaction-missing-from-sheet': 'The app says a document was sent to the Sheet but it is not there. In the app (Admin), use Force Sync for that warehouse and month, then run this check again.',
+  'pr-missing-from-sheet': 'A Purchase Receipt the app says was sent is not in the Sheet. Open the PR in the app and save it again so it is re-sent.',
+  'pr-values-differ': 'A Purchase Receipt row in the Sheet has different bags, kilos or total than the app. Open the PR in the app, check it, and save it again.',
+  'stuck-unsynced': 'Records have been waiting to reach the Sheet for days. Check Admin > Error Log (Sheet sync) and the Sheet source address.',
+  'waiting-to-sync': 'Some records are still waiting to be sent. This clears by itself when the app is open and online.',
+  'bad-source-address': 'A Sheet source address in Admin > Reports & Sheets is not a valid script address.',
+  'source-not-answering': 'A Sheet source did not answer. The Sheet script may need to be redeployed, or the address is wrong.',
+  'no-transaction-source-today': 'There is no Sheet source for the current month, so new documents have nowhere to be sent. Add one in Admin > Reports & Sheets > Sheet Sources.',
+  'no-pr-source-today': 'There is no PR Sheet source for the current month. Add one in Admin > Reports & Sheets > PR Sheet Sources.',
+  'no-pr-source-next-month': 'Next month has no PR Sheet source yet. Add it before the month changes.',
+  'pr-without-source': 'Purchase Receipts exist for a month that has no PR Sheet source, so they cannot be backed up.',
+  'duplicate-serial-live': 'The same document number is held twice in the live period. Usually one copy is an empty placeholder; use Admin > Duplicate Cleanup.',
+  'duplicate-serial-history': 'Old (before the reporting start) duplicate numbers. Only matters for totals that ignore the reporting start.',
+  'incomplete-live-record': 'A record without pile, weights or details sits in the live period. Open it in the app and complete it or delete it.',
+  'possible-double-entry': 'Two different receipts have the same warehouse, date, bags and kilos. Check whether one was entered twice.',
+  'procurement-without-pr': 'Procurement receipts older than 3 days have no Purchase Receipt yet. The SDO still has to issue them.',
+  'remarks-formula-blank': 'The REMARKS formula is empty in some Sheet rows. The Sheet script fills it for new rows; older rows can be filled by hand.',
+  'warehouse-label-differs': 'Rows are in the Sheet under another warehouse name than the app uses. Harmless for the numbers; fix the label in the Sheet if it bothers a report.',
+}
+
+const findAuditScript = (argv) => {
+  const here = path.dirname(fileURLToPath(import.meta.url))
+  const candidates = [
+    arg(argv, '--audit-script'),
+    process.env.BSM_AUDIT_SCRIPT,
+    path.resolve(here, '..', '..', '..', '..', 'bsm-backups', 'scripts', 'sheet_audit.py'),
+    path.resolve(process.cwd(), '..', 'bsm-backups', 'scripts', 'sheet_audit.py'),
+    'C:\\Users\\DjArVee\\Documents\\GitHub\\bsm-backups\\scripts\\sheet_audit.py',
+  ].filter(Boolean)
+  return candidates.find((c) => fs.existsSync(c)) ?? null
+}
+
+/** Compares the Google Sheet with a database or backup export, read only (uses the nightly audit's own script). */
+const optionSheet = async (ctx) => {
+  logFile = path.join(ctx.logs, `sheet-check-${stampNow()}.txt`)
+  header(1, 3, 'What to check the Sheet against', READS)
+  const script = findAuditScript(process.argv.slice(2))
+  if (!script) { out('   STOPPED: the Sheet audit script (sheet_audit.py in the bsm-backups repository) was not found.\n   Pass --audit-script <path> or set BSM_AUDIT_SCRIPT. Nothing was changed.'); return }
+  out(`   Audit script: ${script}`)
+  out('   1) The database in this folder right now (a fresh read-only export)')
+  out('   2) A backup file from the backups folder')
+  const which = await ask('\n   Type 1 or 2 >  ')
+  let exportZip
+  if (which === '1') {
+    header(2, 3, 'Read the database', READS)
+    exportZip = path.join(ctx.logs, `sheet-check-export-${stampNow()}.zip`)
+    dexie(ctx.cwd, ['export', exportZip])
+    out(`   Exported database ${ctx.db.id}.`)
+  } else if (which === '2') {
+    const pick = await chooseBackup(ctx.backups, 2, 3)
+    if (!pick) return
+    exportZip = pick.file
+  } else { out('   Not a choice. Nothing was done.'); return }
+
+  out('   How far back?')
+  out('   1) The last 7 days (a few minutes)')
+  out('   2) Everything since the reporting start (slow: every document is looked up in the Sheet, 10 to 20 minutes)')
+  const mode = (await ask('\n   Type 1 or 2 >  ')) === '2' ? 'full' : 'daily'
+  header(3, 3, `Compare with the Google Sheet (read only, ${mode === 'full' ? 'whole period' : 'last 7 days'})`, READS)
+  const resultFile = path.join(ctx.logs, `sheet-check-${stampNow()}.json`)
+  const py = process.platform === 'win32' ? 'python' : 'python3'
+  const r = spawnSync(py, [script, exportZip, resultFile, mode], {
+    encoding: 'utf8', timeout: 60 * 60 * 1000, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+  })
+  if (r.error) { out(`   STOPPED: could not run Python (${r.error.message}). Nothing was changed.`); return }
+  out(String(r.stdout ?? '').trimEnd())
+  if (!fs.existsSync(resultFile)) {
+    const err = String(r.stderr ?? '').trim().split('\n').filter(Boolean).slice(-3).join(' | ')
+    out(`\n   The check could not finish (exit ${r.status}${r.signal ? `, ${r.signal}` : ''}): ${err || 'no message from Python'}`)
+    return
+  }
+  let result = null
+  try { result = JSON.parse(fs.readFileSync(resultFile, 'utf8')) } catch { /* the printed output above is still the answer */ }
+  if (result) {
+    out(`\n   RESULT: ${result.errors} error(s), ${result.warnings} warning(s). Checked ${result.checked?.transactions ?? '?'} documents and ${result.checked?.purchaseReceipts ?? '?'} Purchase Receipts from ${result.scopeFrom}.`)
+    for (const f of result.findings ?? []) {
+      out(`\n   ${f.level}  ${f.code}${f.count ? ` (${f.count})` : ''}`)
+      out(`      ${SHEET_HELP[f.code] ?? f.message}`)
+    }
+    if ((result.findings ?? []).length === 0) out('\n   Nothing found: the Sheet and the database agree.')
+  }
+  out('\n   Nothing was changed anywhere. Fix what is listed in the app, then run this check again.')
+  out(`   Log saved: ${logFile}   (full result: ${resultFile})`)
+}
+
 const textScreen = (title, body) => { out(`\n ${title}\n`); out(body) }
 
 const main = async () => {
@@ -412,7 +501,7 @@ const main = async () => {
    2)  The database is badly damaged, or gone  -> REBUILD into a new database   (recommended for anything serious)
    3)  The database was lost and the newest entries exist only on devices  -> RECOVER from devices   (run AFTER option 2)
    4)  I rebuilt into a new database and want to GO BACK to the old one
-   5)  Check the Google Sheet against the database   (not built yet)
+   5)  Check the Google Sheet against the database or a backup   (changes nothing)
    6)  The cloud is just unreachable / down  -> what to do
    9)  My situation is not listed  -> STOP and get help
    q)  Quit
@@ -424,7 +513,7 @@ const main = async () => {
       else if (choice === '2') await optionRebuild(ctx)
       else if (choice === '3') await optionDevices(ctx)
       else if (choice === '4') textScreen('SWITCH BACK to the old database', `   Use this only after option 2, if the new database turns out to be wrong. The old database was never changed.\n   Anything entered on the NEW database since the switch will not be on the old one (it stays safe in the new one).\n\n   1. Vercel -> Environment Variables: set the three values back to the OLD database (url, client id, client secret from your saved old key file).\n   2. Set the app's database address (src/db/dexie.js, databaseUrl) back to the old address.\n   3. Redeploy.\n   Devices that already signed in to the new database must export, clear their local data and sign in again (they are bound to the new one).\n   This database's address, for reference: ${db.url}`)
-      else if (choice === '5') textScreen('CHECK THE GOOGLE SHEET', '   Not built yet (plan phase 7c). After any restore, compare the Sheet by hand for the days around the restore and use the app\'s "Force Sync Now" for records that show as not pushed.')
+      else if (choice === '5') await optionSheet(ctx)
       else if (choice === '6') textScreen('THE CLOUD IS UNREACHABLE', '   Nothing to restore. Devices keep working offline and sync by themselves when the database is reachable again.\n   Do NOT clear, reinstall or log out any device. Check https://status.dexie.cloud and your internet connection, then wait.')
       else if (choice === '9') textScreen('NOT LISTED', '   STOP. Do not run anything. Write down what you see (take a screenshot) and get help before changing any data.')
       else if (choice === 'q' || choice === 'quit') break
