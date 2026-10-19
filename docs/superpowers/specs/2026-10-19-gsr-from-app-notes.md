@@ -52,3 +52,10 @@ Nothing is built. Open item to settle in planning: the `_Config_` sheet (the old
 - Build order follows the sheet order, starting with the palay inventory.
 - Drive folder: `NEWGSR/{year}/{MM MONTHNAME}/` (the `NEWGSR` prefix separates the app's reports from the old ones).
 - Still open: output as an Excel file or a Google Sheet; whether Catanduanes data is in the app; the reporting lag rule; whether to keep or correct the "PROCURMENT" spelling.
+
+## Settled in planning, part 2 (2026-10-19)
+- Output: a **Google Sheet** (not an Excel file), saved in `NEWGSR/{year}/{MM MONTHNAME}/`.
+- Spelling: the new file says **PROCUREMENT 1 / PROCUREMENT 2** (corrected).
+- Catanduanes **is in the app**: warehouses CTD-GID 2, CTD-GID 2 A and CTD-NFAO RM (province Catanduanes). The real report has Catanduanes columns GID 1 and GID 2; the app has no "GID 1" warehouse, so the mapping of report columns to app warehouses must be an Admin-maintained list.
+- **Report date versus period reported** (from the two example screenshots): the memo date is the day the GSR is made; the data reported is the PREVIOUS working day. A GSR dated Friday October 16 reports October 15 ("GRAINS SITUATIONER REPORT FOR OCTOBER 15, 2026"); a GSR dated Monday October 19 reports Friday to Sunday ("... FOR OCTOBER 16-18, 2026"). The file is named for the period reported (for example `GSR OCTOBER 16-18`). Default rule: Monday covers the previous Friday to Sunday, any other day covers yesterday; the Admin can change the dates before generating (holidays, special periods).
+- Still open: how the report's warehouse columns map to the app's warehouses (including GSR columns such as ROREDO GYM, BSI-B, GID 1 that may have no matching app warehouse).

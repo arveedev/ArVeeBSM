@@ -18647,3 +18647,5 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 2026-10-19 (night): Owner confirmed the Remote Control watchdog works (task permission mode set to Auto). GSR stays in planning: the generated file must reproduce the same 13 sheets as the real report, daily or by period (example 'GSR OCTOBER 16-18'). Planning notes updated. The backup and restore manual and the notes were pushed.
 
 2026-10-19 (night): GSR planning settled: `_Config_` left out (12 sheets), sheet order as in the real report starting with PALAY INVENTORY, Drive folder `NEWGSR/{year}/{MM MONTHNAME}/`. Notes updated; still planning only.
+
+2026-10-19 (night): GSR planning part 2: Google Sheet output, corrected PROCUREMENT spelling, Catanduanes confirmed in the app (CTD-GID 2, CTD-GID 2 A, CTD-NFAO RM), and the date rule from the owner's two screenshots (memo dated Oct 19 reports Oct 16-18; memo dated Oct 16 reports Oct 15). Planning only.
