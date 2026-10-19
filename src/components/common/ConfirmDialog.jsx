@@ -20,7 +20,7 @@ import { useEscapeClose } from '../../utils/useEscapeClose.js'
 // Must match the transition duration used on the box below.
 const BOX_ANIMATION_MS = 220
 
-function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon, rotate = false, children, confirmDisabled = false, destructive = true }) {
+function ConfirmDialog({ open, title = 'Delete this item?', description, confirmLabel = 'Delete', cancelLabel = 'Cancel', onConfirm, onCancel, icon: Icon, rotate = false, children, confirmDisabled = false, destructive = true, accent = false }) {
   const [shouldRender, setShouldRender] = useState(open)
   const [hasEntered, setHasEntered] = useState(false)
   const cancelButtonRef = useRef(null)
@@ -173,7 +173,8 @@ function ConfirmDialog({ open, title = 'Delete this item?', description, confirm
             type="button"
             onClick={onConfirm}
             disabled={confirmDisabled}
-            className="flex-1 rounded-xl bg-brand-crimson px-3 py-3 text-sm font-semibold text-app-text transition-all hover:brightness-110 hover:shadow-[0_0_16px_rgba(239,68,68,0.45)] active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+            // accent: a plain "do it" confirmation (Move, Use) in the app's green, not the red of a delete
+            className={`flex-1 rounded-xl px-3 py-3 text-sm font-semibold transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:pointer-events-none ${accent ? 'bg-brand-neon text-brand-contrast hover:shadow-[0_0_16px_rgba(0,255,163,0.45)]' : 'bg-brand-crimson text-app-text hover:shadow-[0_0_16px_rgba(239,68,68,0.45)]'}`}
           >
             {confirmLabel}
           </button>

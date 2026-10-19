@@ -42,7 +42,7 @@ export const getFolderState = async () => {
 }
 
 /** Needs a user click (browser rule). Returns { ok, message }. */
-export const chooseBackupFolder = async () => {
+export const chooseBackupFolder = async ({ askAdopt = null } = {}) => {
   if (!folderSupported()) return { ok: false, message: 'This browser cannot save to a folder. Use Chrome or Edge.' }
   try {
     const existing = await getInfo('folder')
@@ -52,18 +52,13 @@ export const chooseBackupFolder = async () => {
       if (p === 'granted') { await reportDeviceStatusNow(window.__bsmUser, { force: true }); return { ok: true, message: 'Backup folder allowed again.' } }
     }
     const handle = await window.showDirectoryPicker({ id: 'bsm-backup', mode: 'readwrite', startIn: 'documents' })
-    // every PC uses the same folder name; a different one is allowed only on purpose
-    if (handle.name !== 'BSM-Backup' && !window.confirm(`You chose the folder "${handle.name}". Every PC should use a folder named BSM-Backup (C:\\BSM-Backup).
-
-OK = use "${handle.name}" anyway
-Cancel = choose again`)) {
-      return { ok: false, message: 'Choose the folder named BSM-Backup (C:\\BSM-Backup).' }
-    }
+    // every PC uses the same folder name by convention; another name is accepted and the message says so
+    const nameNote = handle.name !== 'BSM-Backup' ? ' Note: the agreed folder name is BSM-Backup (C:\\BSM-Backup).' : ''
     // A marker file remembers this PC's id, so a PC whose browser data was cleared is recognised again.
     let marker = null
     try { marker = JSON.parse(await (await (await handle.getFileHandle(MARKER)).getFile()).text()) } catch { /* no marker yet */ }
     if (marker?.deviceId && marker.deviceId !== getDeviceId()) {
-      const adopt = window.confirm(`This folder already holds backups of "${marker.deviceName || 'another device'}". Use it for this PC and take over that device's identity?\n\nOK = yes (this PC replaces it)\nCancel = pick another folder`)
+      const adopt = askAdopt ? await askAdopt(marker.deviceName || 'another device') : false
       if (!adopt) return { ok: false, message: 'Pick a different folder for this PC.' }
       setDeviceId(marker.deviceId)
     }
@@ -75,7 +70,7 @@ Cancel = choose again`)) {
     await reportDeviceStatusNow(window.__bsmUser, { force: true })
     window.dispatchEvent(new Event('bsm:device-backup-folder'))
     scheduleSoon()
-    return { ok: true, message: `Backup folder set: ${handle.name}. This PC will save a backup here once a day by itself.` }
+    return { ok: true, message: `Backup folder set: ${handle.name}. This PC will save a backup here once a day by itself.${nameNote}` }
   } catch (e) {
     if (e?.name === 'AbortError') return { ok: false, message: 'No folder chosen.' }
     return { ok: false, message: e?.message ?? 'Could not set the folder.' }

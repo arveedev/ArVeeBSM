@@ -23,6 +23,7 @@ import { buildProcurementStatus, monthOptions, monthLabel } from '../../utils/pr
 import { buildEndingStockData, endingStockModels } from '../../utils/endingStockReport.js'
 import { canViewReport } from '../../utils/inventoryReportsAccess.js'
 import { reassignDocumentToPile } from '../../utils/pileReassign.js'
+import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { buildMillingIssuances, issuancesText as buildIssuancesText, perRicemill } from '../../utils/millingIssuances.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
@@ -484,11 +485,15 @@ function DocLink({ type, serial, warehouseId, openDoc, children }) {
 // "Move to PILE 3": re-assigns one document to the open pile (Admin only). Asks first, says what it did.
 function MoveToPileButtons({ o }) {
   const [busy, setBusy] = useState(false)
+  const [ask, confirmDialog] = useConfirm()
   if (!o.openPileList?.length) return null
   const move = async (target) => {
-    if (!window.confirm(`Move ${o.type} ${o.serial} (${o.bags} bags, ${fmtDay(o.date)}) from ${o.pile} (closed ${fmtDay(o.closedDate)}) to ${target.pileName}?
-
-Only the pile of this document changes. Both piles' balances are rebuilt from their history.`)) return
+    const yes = await ask({
+      title: `Move ${o.type} ${o.serial} to ${target.pileName}?`,
+      description: `${o.bags} bags, ${fmtDay(o.date)}. It is recorded on ${o.pile}, which was closed ${fmtDay(o.closedDate)}. Only the pile of this document changes; both piles' balances are rebuilt from their history.`,
+      confirmLabel: `Move to ${target.pileName}`,
+    })
+    if (!yes) return
     setBusy(true)
     try {
       const r = await reassignDocumentToPile(o.txId, o.pileId, target.pileId)
@@ -502,6 +507,7 @@ Only the pile of this document changes. Both piles' balances are rebuilt from th
       {o.openPileList.map((t) => (
         <button key={t.pileId} type="button" disabled={busy} onClick={() => move(t)} className="rounded-md border border-brand-neon/60 px-2 py-0.5 text-[11px] font-semibold text-brand-neon hover:bg-brand-neon/10 disabled:opacity-50">Move to {t.pileName}</button>
       ))}
+      {confirmDialog}
     </span>
   )
 }

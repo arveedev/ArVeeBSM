@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { FolderOpen } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { deviceKind } from '../../services/deviceStatusWorker.js'
+import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { chooseBackupFolder, getFolderState } from '../../services/deviceBackup.js'
 import BackupFolderSteps, { BackupFolderNote, BACKUP_FOLDER_PATH } from './BackupFolderSteps.jsx'
 
@@ -16,6 +17,8 @@ const DeviceBackupBanner = () => {
   const [later, setLater] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [ask, confirmDialog] = useConfirm()
+  const askAdopt = (name) => ask({ title: 'Use this folder for this PC?', description: `This folder already holds backups of "${name}". Use it for this PC and take over that device's identity?`, confirmLabel: 'Use this folder' })
 
   useEffect(() => {
     let alive = true
@@ -33,7 +36,7 @@ const DeviceBackupBanner = () => {
 
   const click = async () => {
     setBusy(true)
-    const r = await chooseBackupFolder()
+    const r = await chooseBackupFolder({ askAdopt })
     setBusy(false)
     if (r.ok) { toast.success(r.message); setState('ok') } else if (r.message) toast(r.message)
   }
@@ -55,6 +58,7 @@ const DeviceBackupBanner = () => {
           {renew ? 'Allow' : 'Choose folder'}
         </button>
       </div>
+      {confirmDialog}
     </div>
   )
 }

@@ -46,10 +46,11 @@ function HistoryStrip({ days }) {
 
 function DeviceTable({ rows, now }) {
   const me = getDeviceId()
-  const rename = async (r) => {
-    const name = window.prompt('Name for this device', r.name)
-    if (name == null || !name.trim()) return
-    await db.deviceStatus.update(r.id, { name: name.trim(), nameSetByAdmin: true })
+  const [editing, setEditing] = useState(null) // { id, text }
+  const saveName = async () => {
+    const name = editing?.text.trim()
+    if (name) await db.deviceStatus.update(editing.id, { name, nameSetByAdmin: true })
+    setEditing(null)
   }
   const backupText = (b) => {
     if (!b) return 'phone: status only'
@@ -65,14 +66,22 @@ function DeviceTable({ rows, now }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className="border-t border-neutral-800 align-top">
-              <td className="px-1.5 py-2 text-app-text"><Dot level={r.level} />{r.name}{r.id === me ? <span className="ml-1 text-neutral-500">(this device)</span> : null}</td>
+              <td className="px-1.5 py-2 text-app-text">
+                {editing?.id === r.id ? (
+                  <span className="flex items-center gap-1">
+                    <input autoFocus value={editing.text} onChange={(e) => setEditing({ id: r.id, text: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditing(null) }} className="w-36 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-app-text" aria-label="Device name" />
+                    <button type="button" onClick={saveName} className="text-xs text-brand-neon">Save</button>
+                    <button type="button" onClick={() => setEditing(null)} className="text-xs text-neutral-500">Cancel</button>
+                  </span>
+                ) : (<><Dot level={r.level} />{r.name}{r.id === me ? <span className="ml-1 text-neutral-500">(this device)</span> : null}</>)}
+              </td>
               <td className="px-1.5 py-2 text-neutral-300">{r.user || '-'}{r.warehouse ? <div className="text-neutral-500">{r.warehouse}</div> : null}</td>
               <td className="px-1.5 py-2 text-neutral-300">{agoText(r.lastSync, now)}</td>
               <td className="px-1.5 py-2 text-neutral-300">{r.appVersion || '-'}</td>
               <td className="px-1.5 py-2 text-neutral-300">{num(r.pending)}</td>
               <td className="px-1.5 py-2 text-neutral-300">{r.matches === 'yes' ? 'Yes' : r.matches === 'behind' ? 'Behind' : 'Unknown'}</td>
               <td className="px-1.5 py-2 text-neutral-300">{backupText(r.backup)}</td>
-              <td className="px-1.5 py-2"><button type="button" aria-label={`Rename ${r.name}`} onClick={() => rename(r)} className="text-neutral-500 hover:text-brand-neon"><Pencil size={13} /></button></td>
+              <td className="px-1.5 py-2"><button type="button" aria-label={`Rename ${r.name}`} onClick={() => setEditing({ id: r.id, text: r.name })} className="text-neutral-500 hover:text-brand-neon"><Pencil size={13} /></button></td>
             </tr>
           ))}
         </tbody>
