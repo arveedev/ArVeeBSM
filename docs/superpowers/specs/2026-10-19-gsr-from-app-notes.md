@@ -6,7 +6,7 @@ Status: PLANNING, not a design yet (2026-10-19). Source: the owner's real report
 - The Admin generates the GSR **from the app**; the file appears in a **designated Google Drive folder**.
 - The distribution scheme is **set by the Admin** (a settings screen), not hardcoded.
 - The report counts **from September (data start) forward only**; no year-to-date baseline for earlier months.
-- The generated file must contain **the same 13 sheets** as the real report (in the same order and layout), refreshed **daily or for a chosen period** (the example is `GSR OCTOBER 16-18`: a period file named for the period reported).
+- The generated file must contain **the same sheets** as the real report, in the **same order, starting with PALAY INVENTORY** (all of them except `_Config_`, which is left out: 12 sheets) and in the same layout, refreshed **daily or for a chosen period** (the example is `GSR OCTOBER 16-18`: a period file named for the period reported).
 - The existing Google Apps Script generator (docs/gsr-*.js, August) is "not even near" the real report, so it is replaced, not extended.
 
 ## The real report, sheet by sheet (what it shows and where the app's data would come from)
@@ -46,3 +46,9 @@ Status: PLANNING, not a design yet (2026-10-19). Source: the owner's real report
 
 ## Still in planning (owner, 2026-10-19: "leave the GSR on plan mode")
 Nothing is built. Open item to settle in planning: the `_Config_` sheet (the old hide/unhide helper) is one of the 13 sheets, but the earlier decision was to drop that mechanism; confirm whether it is reproduced as it is or left out of the 13.
+
+## Settled in planning (2026-10-19)
+- `_Config_` is left out. The file has the other 12 sheets, in the real order: PALAY INVENTORY, RICE INVENTORY, DISTRIBUTION PER VARIETY, DIST. (TODAY), DIST. (MONTH), DIST. (YEAR), DISPERSAL, PROCUREMENT 1, PROCUREMENT 2, PROC.MILL, PRICES, INVENTORY. (The sheet name "PROCURMENT" in the old file is a typo; confirm whether the new file keeps or corrects it.)
+- Build order follows the sheet order, starting with the palay inventory.
+- Drive folder: `NEWGSR/{year}/{MM MONTHNAME}/` (the `NEWGSR` prefix separates the app's reports from the old ones).
+- Still open: output as an Excel file or a Google Sheet; whether Catanduanes data is in the app; the reporting lag rule; whether to keep or correct the "PROCURMENT" spelling.
