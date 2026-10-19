@@ -14,6 +14,7 @@ import { useWarehouse } from '../context/WarehouseContext.jsx'
 import { usePageHeader } from '../context/PageHeaderContext.jsx'
 import { fmtBags, fmtKilos, isProcurementTypeName, effectiveCutoffDate, getPalayMoistureState } from '../utils/calculations.js'
 import { fuzzyMatchesAny, fuzzyMatchesAnyRank } from '../utils/fuzzySearch.js'
+import { combineMultiPileGroups, primaryIdMap } from '../utils/multiPile.js'
 import {
   computeCashOnHand, resolveBuyingPrice, computeWsrProcurementCost, buyingPricesForSdo,
 } from '../utils/sdoCalculations.js'
@@ -165,10 +166,13 @@ function SdoHome() {
     [warehouseIds.join(','), transactionTypes.length]
   ) ?? []
 
-  const visibleWsrTransactions = dedupeWsrTransactions(wsrTransactions).filter((t) => {
+  // A receipt put into several piles is saved as one record per pile ("11766812", "11766812-A"). To the SDO it is ONE WSR:
+  // one number, one payment, the receipt of all its piles added together (see utils/multiPile.js).
+  const visibleWsrTransactions = combineMultiPileGroups(dedupeWsrTransactions(wsrTransactions).filter((t) => {
     const cutoff = effectiveCutoffDate(warehouseMap.get(t.warehouseId)?.reportingCutoffDate, globalDataStartDate)
     return !cutoff || t.date > cutoff
-  })
+  }))
+  const primaryOfWsr = primaryIdMap(wsrTransactions)
 
   const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), []) ?? []
   // Normally exactly one Active PR per WSR. More than one can only mean
@@ -179,12 +183,15 @@ function SdoHome() {
   const activePrsByWsrId = useMemo(() => {
     const map = new Map()
     for (const pr of activePrs) {
-      const list = map.get(pr.wsrTransactionId) ?? []
+      // a PR filed against an extra pile counts for the whole document
+      const key = primaryOfWsr.get(pr.wsrTransactionId) ?? pr.wsrTransactionId
+      const list = map.get(key) ?? []
       list.push(pr)
-      map.set(pr.wsrTransactionId, list)
+      map.set(key, list)
     }
     return map
-  }, [activePrs])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePrs, wsrTransactions])
   const activePrByWsrId = new Map([...activePrsByWsrId].map(([wsrId, list]) => [wsrId, list[0]]))
   const duplicatePrWsrIds = useMemo(
     () => new Set([...activePrsByWsrId].filter(([, list]) => list.length > 1).map(([wsrId]) => wsrId)),

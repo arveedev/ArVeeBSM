@@ -96,7 +96,7 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
   // individually cancellable here, not silently collapsed to whichever
   // one `.first()` happened to return.
   const existingPrs = useLiveQuery(
-    () => db.purchaseReceipts.where('wsrTransactionId').equals(wsr.id).and((pr) => pr.status === 'Active').toArray()
+    () => db.purchaseReceipts.where('wsrTransactionId').anyOf(wsr.groupIds ?? [wsr.id]).and((pr) => pr.status === 'Active').toArray()
       // by PR number
       .then((rows) => rows.sort((a, b) => String(a.prNo).localeCompare(String(b.prNo), undefined, { numeric: true }))),
     [wsr.id]
@@ -186,7 +186,7 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
       // detection and banner on SdoHome.jsx.
       let blockedByDuplicate = false
       await db.transaction('rw', db.purchaseReceipts, async () => {
-        const dup = await db.purchaseReceipts.where('wsrTransactionId').equals(wsr.id).and((pr) => pr.status === 'Active').first()
+        const dup = await db.purchaseReceipts.where('wsrTransactionId').anyOf(wsr.groupIds ?? [wsr.id]).and((pr) => pr.status === 'Active').first()
         if (dup) {
           blockedByDuplicate = true
           return

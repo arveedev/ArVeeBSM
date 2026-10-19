@@ -22,6 +22,7 @@ import { db } from '../../db/dexie.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { fmtBags, fmtWeight, fmtNetBags, calculateNetBags, isProcurementTypeName, effectiveCutoffDate, getPeriodPresetRanges } from '../../utils/calculations.js'
 import { fuzzyMatchesAny } from '../../utils/fuzzySearch.js'
+import { combineMultiPileGroups, primaryIdMap } from '../../utils/multiPile.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import CalendarDatePicker from './CalendarDatePicker.jsx'
 import ProcurementSortFilterModal from './ProcurementSortFilterModal.jsx'
@@ -273,7 +274,7 @@ function ProcurementMonitor() {
   const transactionTypes = useLiveQuery(() => db.transactionTypes.toArray(), []) ?? []
   const globalDataStartDate = useLiveQuery(async () => (await db.reportConfig.get('global'))?.dataStartDate || null, []) ?? null
   const activePrs = useLiveQuery(() => db.purchaseReceipts.where('status').equals('Active').toArray(), []) ?? []
-  const paidWsrIds = new Set(activePrs.map((pr) => pr.wsrTransactionId).filter(Boolean))
+  // paidWsrIds is filled in below, once the multi-pile receipts are known (a PR filed against an extra pile counts for the document)
 
   const warehouseMap = new Map(warehouses.map((w) => [w.warehouseId, w]))
   const varietyMap = new Map(varieties.map((v) => [v.varietyId, v]))
@@ -297,10 +298,14 @@ function ProcurementMonitor() {
   // Same reporting-cutoff-date rule Reports.jsx/SdoHome.jsx already
   // apply everywhere else - a warehouse's own override, or the global
   // Data Start Date, whichever is later wins.
-  const cutoffFilteredTx = rawTx.filter((t) => {
+  // A receipt put into several piles is saved as one record per pile ("11766812", "11766812-A"): one WSR here, with the
+  // receipt of all its piles added together (see utils/multiPile.js).
+  const cutoffFilteredTx = combineMultiPileGroups(rawTx.filter((t) => {
     const cutoff = effectiveCutoffDate(warehouseMap.get(t.warehouseId)?.reportingCutoffDate, globalDataStartDate)
     return !cutoff || t.date > cutoff
-  })
+  }))
+  const primaryOfWsr = primaryIdMap(rawTx)
+  const paidWsrIds = new Set(activePrs.map((pr) => primaryOfWsr.get(pr.wsrTransactionId) ?? pr.wsrTransactionId).filter(Boolean))
 
   // Per explicit request, this tab now always scopes to one month
   // (default the current one), not "every Procurement transaction ever" -

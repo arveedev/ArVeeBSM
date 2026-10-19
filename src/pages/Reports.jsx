@@ -31,6 +31,7 @@ import PeriodPresetPicker from '../components/common/PeriodPresetPicker.jsx'
 import CalendarDatePicker from '../components/common/CalendarDatePicker.jsx'
 import StickyWarehouseIndicator from '../components/common/StickyWarehouseIndicator.jsx'
 import ExportFormatDialog from '../components/common/ExportFormatDialog.jsx'
+import { combineMultiPileGroups } from '../utils/multiPile.js'
 
 // The Stock/Sack + Receipts/Issues merged segmented control (see its
 // render site below) - one entry per combination, in reading order so a
@@ -134,25 +135,6 @@ const resolveOrphanCategories = (list) => {
       ? (prevCat === nextCat ? prevCat : null)
       : (prevCat ?? nextCat)
     return resolved ? { ...t, cerealCategory: resolved } : t
-  })
-}
-
-const combineMultiPileGroups = (transactions) => {
-  const groups = new Map()
-  for (const t of transactions) {
-    const key = t.groupSerialNo ?? t.id
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(t)
-  }
-  return [...groups.values()].map((group) => {
-    if (group.length === 1) return group[0]
-    const primary = group.find((t) => t.serialNo === t.groupSerialNo) ?? group[0]
-    return {
-      ...primary,
-      numberOfBags: group.reduce((sum, t) => sum + (t.numberOfBags ?? 0), 0),
-      grossKilos: group.reduce((sum, t) => sum + (t.grossKilos ?? 0), 0),
-      netKilos: group.reduce((sum, t) => sum + (t.netKilos ?? 0), 0),
-    }
   })
 }
 
