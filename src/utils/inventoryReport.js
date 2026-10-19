@@ -6,6 +6,7 @@
 // Home > Stocks), MT = kilos / 1000.
 
 import { buildLots, buildLotsDetailed, lotAgeMonths, addMonthsISO } from './inventoryLots.js'
+import { documentsAfterClose } from './closedPileActivity.js'
 
 export const NET_BAG_KG = 50
 export const toUnit = (kilos, unit) => (unit === 'mt' ? kilos / 1000 : kilos / NET_BAG_KG)
@@ -704,6 +705,7 @@ export const checksModel = (checks, unit, { asOf }) => {
     for (const it of items) rows.push({ kind: 'row', ...line(it) })
   }
   section('Stock book self-check', checks.selfCheck ?? [], (r) => ({ first: r.title, cells: [r.ok ? 'passed' : r.detail.join('; '), null] }))
+  section('Documents dated after their pile was closed (move them to an open pile, Admin > Data Care > Move Records)', checks.afterClose ?? [], (o) => ({ first: `${o.type} ${o.serial} · ${o.warehouse} · ${o.pile}`, cells: [`pile closed ${longDate(o.closedDate)}, document ${longDate(o.date)}${o.openPiles.length ? ` · open: ${o.openPiles.join(', ')}` : ''}`, o.bags] }))
   section('Warehouses using a start-date override', checks.overrides, (o) => ({ first: o.warehouse, cells: [`starts after ${longDate(o.date)}`, null] }))
   section('Authorized more than the stock available', checks.overAuthorized ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
   section('Authority age group blank or unreadable (deducted from the oldest stock)', checks.noAgeGroup ?? [], (o) => ({ first: `AI ${o.aiNumber} · ${o.warehouse} · ${o.variety}`, cells: [`${o.customer} · ${longDate(o.date)}${o.ageGroup ? ` · "${o.ageGroup}"` : ''}`, Math.round(toUnit(o.kilos, unit) * 100) / 100] }))
@@ -920,6 +922,10 @@ export const buildAgeLists = (ctx0, inputs0, { asOf, filters = {}, windowDays = 
  * differs from the pile's stored balance (as of today only).
  */
 export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
+  const afterClose = documentsAfterClose(inputs.piles, inputs.transactions, {
+    asOf,
+    cutoffFor: (wid) => [ctx.whById.get(wid)?.reportingCutoffDate, inputs.globalDataStartDate].filter(Boolean).sort().pop() ?? null,
+  }).map((o) => ({ ...o, warehouse: warehouseLabel(ctx.whById.get(o.warehouseId)?.name, false) }))
   // piles are compared with PHYSICAL stock; authorities are checked on their own below
   const state = buildLots({ ...inputs, asOf, reserve: false })
   const reservedState = buildLots({ ...inputs, asOf, reserve: true })
@@ -991,7 +997,7 @@ export const buildChecks = (ctx, inputs, { asOf, todayISO }) => {
   }))
   const byName = (a, b) => natural(a.name, b.name)
   const selfCheck = buildSelfCheck(ctx, inputs, { asOf })
-  return { selfCheck, overrides, overAuthorized, noAgeGroup, uncoveredWsi, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
+  return { selfCheck, afterClose, overrides, overAuthorized, noAgeGroup, uncoveredWsi, shortages: shortages.sort(byName), approx: approx.sort(byName), mismatches: mismatches.sort(byName), unassigned }
 }
 
 /**

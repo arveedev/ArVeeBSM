@@ -484,6 +484,8 @@ function CheckView({ checks, unit, openDoc }) {
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
       <SelfCheckCard results={checks.selfCheck ?? []} />
+      <CheckSection title="Documents dated after their pile was closed (move them to an open pile: Admin > Data Care > Move Records)" tone="text-brand-crimson" items={checks.afterClose ?? []} ok="No document is dated after its pile was closed."
+        render={(o, i) => checkLine(<><DocLink type={o.type} serial={o.serial} warehouseId={o.warehouseId} openDoc={openDoc} /> · {o.warehouse} · {o.pile}</>, `${fmtNum(o.bags)} bags · pile closed ${fmtDay(o.closedDate)}, document ${fmtDay(o.date)}${o.openPiles.length ? ` · open: ${o.openPiles.join(', ')}` : ''}`, i)} />
       <CheckSection title="Warehouses using a start-date override" tone="text-amber-400" items={checks.overrides} ok="None. Every warehouse follows the Data Start Date."
         render={(o, i) => checkLine(o.warehouse, `starts after ${fmtDay(o.date)}`, i)} />
       <CheckSection title="Authorized more than the stock available" tone="text-brand-crimson" items={checks.overAuthorized ?? []} ok="No authority reserves more than the warehouse had."

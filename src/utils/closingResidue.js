@@ -191,7 +191,9 @@ export const closePileWithResidue = async (pileId, closedDate, createdByName = n
       message = `${preview.kilos.toLocaleString('en-US', { maximumFractionDigits: 3 })} kg net could not be moved: no open pile of the same variety in this warehouse`
     }
   }
-  await closePile(pileId, closedDate)
+  const closed = await closePile(pileId, closedDate)
+  // the pile still had documents dated later than the date asked for: it was closed on the day of its last one
+  if (closed?.moved) message = `${message ? `${message}. ` : ''}Closed on ${closed.closedDate} (the date of its last document), not ${closedDate}`
   return message
 }
 

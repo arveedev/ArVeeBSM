@@ -7,6 +7,7 @@
 
 import { db } from '../db/dexie.js'
 import { normalizeAgeToDays, todayLocalISO, round3, effectiveCutoffDate } from './calculations.js'
+import { effectiveCloseDate } from './closedPileActivity.js'
 
 // Cheap primary-key lookup (not a table scan) - fine to call once per
 // function invocation, even in a per-pile loop, unlike sackTypes'
@@ -815,7 +816,13 @@ export const recalculatePileStatesForWarehouses = async (warehouseIds) => {
  * including the entry-form pile picker's date-aware exclusion and the
  * fresh-recompute functions above, keys off this value directly).
  */
-export const closePile = async (pileId, closedDate = todayLocalISO()) => {
+export const closePile = async (pileId, requestedDate = todayLocalISO()) => {
+  // A pile cannot be closed before its own last document: closing zeroes it on that date and every statement starts a
+  // closed pile at 0, so a later receipt or issue would count in its period but vanish from the next period's beginning
+  // balance (the weekly summaries then stop agreeing). The date moves to the day of the last document instead.
+  const all = await db.transactions.where('pileId').equals(pileId).toArray()
+  const wts = await db.transactions.where('type').equals('WTS').and((t) => t.issuedPileId === pileId || t.receivedPileId === pileId).toArray()
+  const closedDate = effectiveCloseDate(pileId, requestedDate, [...all, ...wts])
   const { bags, kilos } = await recalculatePileCurrentState(pileId)
   await db.piles.update(pileId, {
     closedDate,
@@ -824,7 +831,7 @@ export const closePile = async (pileId, closedDate = todayLocalISO()) => {
     zeroedDate: closedDate,
   })
   await vacateBoxForPile(pileId, closedDate)
-  return { previousBags: bags, previousKilos: kilos }
+  return { previousBags: bags, previousKilos: kilos, closedDate, moved: closedDate !== requestedDate }
 }
 
 /**
