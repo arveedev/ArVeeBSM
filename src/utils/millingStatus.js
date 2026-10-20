@@ -8,7 +8,7 @@
 //
 // The app only adds two columns:
 //   Total issued = the "issued so far" the milling authorities report for that lot, as of the period's last day
-//   Remarks      = the date of that total (as of) and the last batch issued (the net bags of that latest tranche)
+//   Remarks      = the date of that total (as of) and the last batch number (each authority is one batch of the lot)
 // How a lot is found among the authorities: each milling authority (AI) is one tranche of a lot and its note reads "<issued so far> / <QTY>"
 // (for example "6000 / 7205.05", or "KINALE 3B 500 / 6263.35"). A tranche belongs to the table row of the same ricemill whose QTY equals the
 // number after the slash; the number before it, on the latest tranche up to the period's last day, is the lot's total issued. A row with no
@@ -66,7 +66,7 @@ export const buildMillingStatus = ({ table = DEFAULT_MILLING_TABLE, issues = [],
   for (const r of issues) {
     if (r.date > to) continue
     const p = parseLotNote(r.note)
-    if (p) tranches.push({ miller: r.customer, date: r.date, issued: p.issued, qty: p.qty, aiNumber: r.aiNumber, bags: r.bags })
+    if (p) tranches.push({ miller: r.customer, date: r.date, issued: p.issued, qty: p.qty, aiNumber: r.aiNumber, ran: r.ran ?? '' })
   }
   const rows = table.map((t, i) => {
     const qty = Number(t.qty) || 0
@@ -77,7 +77,9 @@ export const buildMillingStatus = ({ table = DEFAULT_MILLING_TABLE, issues = [],
     return {
       index: i, lotNo: t.lotNo ?? '', pile: t.pile ?? '', warehouse: t.warehouse ?? '', miller: t.miller ?? '', qty, gmr,
       expected: gmr != null ? qty * (gmr / 100) : null, receiving: t.receiving ?? '',
-      totalIssued: last ? last.issued : null, asOf: last ? last.date : null, lastBatch: last ? last.bags : null,
+      totalIssued: last ? last.issued : null, asOf: last ? last.date : null,
+      // the batch number: the one written on the latest authority ("BATCH 7/14") when there is one, otherwise how many batches (authorities) the lot has had
+      lastBatchNo: last ? (/batch\s*(\d+)/i.exec(last.ran)?.[1] ? Number(/batch\s*(\d+)/i.exec(last.ran)[1]) : mine.length) : null,
     }
   })
   // blocks of consecutive rows of the same ricemill, in the table's own order
@@ -96,8 +98,8 @@ export const buildMillingStatus = ({ table = DEFAULT_MILLING_TABLE, issues = [],
 const n2 = (n) => (n == null ? '' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const dateText = (iso) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '')
 
-/** Remarks: the as-of date of the total issued and the last batch issued, in net bags (nothing for a row with no issuance yet). */
-export const remarksText = (r) => (r.asOf ? `As of ${dateText(r.asOf)}; last batch issued ${n2(r.lastBatch)} bags` : '')
+/** Remarks: the as-of date of the total issued and the last batch number (nothing for a row with no issuance yet). */
+export const remarksText = (r) => (r.asOf ? `As of ${dateText(r.asOf)}; last batch no. ${r.lastBatchNo}` : '')
 
 /** Tab-separated, pastes into a Sheet or Excel with the same columns. A group with two or more rows ends with a Total row. */
 export const millingStatusText = (data) => {

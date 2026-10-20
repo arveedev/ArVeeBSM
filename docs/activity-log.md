@@ -18681,3 +18681,5 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 2026-10-20: Milling status table and image layout cleaned (v1.10-412): fixed column widths, Arial, even row heights, centred text, right-aligned numbers.
 
 2026-10-20: Milling status (v1.10-413): app font and size restored, Remarks = as-of date + last batch issued (net bags).
+
+2026-10-20: Milling status Remarks now gives the last batch number (v1.10-414).
