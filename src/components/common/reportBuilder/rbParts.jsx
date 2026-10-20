@@ -33,7 +33,7 @@ export function DropArea({ area, onDropField, children, hint }) {
     <div
       onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
       onDrop={(e) => { e.preventDefault(); setOver(false); const id = e.dataTransfer.getData('text/plain'); if (id) onDropField(area, id) }}
-      className={`flex min-h-[40px] flex-wrap items-center gap-1.5 rounded-xl border-[1.5px] border-dashed p-1.5 transition-colors ${over ? 'border-brand-neon bg-brand-neon/10' : 'border-neutral-700'}`}
+      className={`flex min-h-[36px] flex-wrap items-center gap-1.5 rounded-xl border-[1.5px] border-dashed p-1 transition-colors ${over ? 'border-brand-neon bg-brand-neon/10' : 'border-neutral-700'}`}
     >
       {children}{!children?.length && <span className="px-1 text-xs text-neutral-500">{hint}</span>}
     </div>
@@ -100,14 +100,14 @@ export function FieldPicker({ groups, used, onPick, query, setQuery }) {
   const shown = groups.map((g) => ({ ...g, fields: q ? g.fields.filter((f) => f.label.toLowerCase().includes(q)) : g.fields })).filter((g) => g.fields.length)
   return (
     <div>
-      <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a field" className={`${input} mb-2 w-full`} />
-      <div className="max-h-[22rem] space-y-1 overflow-y-auto pr-1">
+      <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a field" className={`${input} mb-1.5 w-full`} />
+      <div className="max-h-[12.5rem] space-y-1 overflow-y-auto pr-1">
         {shown.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No field has that name.</p>}
         {shown.map((g) => {
           const isOpen = q ? true : !!open[g.id]
           return (
             <div key={g.id} className="rounded-xl border border-neutral-800 bg-neutral-950/60">
-              <button type="button" onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold text-neutral-300 transition-colors hover:text-brand-neon" aria-expanded={isOpen}>
+              <button type="button" onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))} className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs font-semibold text-neutral-300 transition-colors hover:text-brand-neon" aria-expanded={isOpen}>
                 <span>{g.label} <span className="font-normal text-neutral-500">{g.fields.length}</span></span>
                 <span className="text-neutral-500 transition-transform duration-200" style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}>&#9656;</span>
               </button>

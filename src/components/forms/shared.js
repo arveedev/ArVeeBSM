@@ -165,10 +165,13 @@ export const attachCenterFocusScroll = (containerEl) => {
     const rootRect = containerEl.getBoundingClientRect()
     const topLimit = Math.max(0, rootRect.top)
     const bottomLimit = Math.min(viewportH, footer ? footer.getBoundingClientRect().top : viewportH)
-    const comfortablyVisible = rect.top >= topLimit + margin / 2 && rect.bottom <= bottomLimit - margin / 2
+    // Room is kept BELOW the field as well: what sits right under it (Net kg under Gross kg, the computed lines of the
+    // form) must be readable while typing, so a field near the bottom edge counts as not visible, and a field that has
+    // to scroll is placed in the upper part of the visible area (a third of the way down), not the middle.
+    const roomBelow = Math.min(190, (bottomLimit - topLimit) * 0.4)
+    const comfortablyVisible = rect.top >= topLimit + margin / 2 && rect.bottom <= bottomLimit - roomBelow
     if (comfortablyVisible) return
-    // centre the field in the visible area
-    const delta = (rect.top + rect.bottom) / 2 - (topLimit + bottomLimit) / 2
+    const delta = (rect.top + rect.bottom) / 2 - (topLimit + (bottomLimit - topLimit) * 0.35)
     containerEl.scrollBy({ top: delta, behavior: 'smooth' })
   }
   containerEl.addEventListener('focusin', handleFocusIn)

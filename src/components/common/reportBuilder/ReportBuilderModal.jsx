@@ -207,8 +207,8 @@ function ReportBuilderModal({ user, onClose }) {
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {/* ---------------- the period, and saving the layout ---------------- */}
-        <div className="rb-fade mb-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-3">
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+        <div className="rb-fade mb-2 space-y-2 rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
             <div className="flex flex-wrap items-end gap-2">
               <div className="w-40"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">From</p><CalendarDatePicker value={period.from} label="From" onChange={(iso) => setPeriod({ from: iso, to: period.to < iso ? iso : period.to })} /></div>
               <div className="w-40"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">To</p><CalendarDatePicker value={period.to} label="To" onChange={(iso) => setPeriod({ from: period.from > iso ? iso : period.from, to: iso })} /></div>
@@ -229,7 +229,7 @@ function ReportBuilderModal({ user, onClose }) {
             </div>
           </div>
           {layouts.length > 0 && (
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-neutral-800 pt-2.5">
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-neutral-800 pt-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Saved</span>
               {layouts.map((l) => (
                 <span key={l.id} className={`rb-pop inline-flex items-center gap-1.5 rounded-full border bg-neutral-950 py-0.5 pl-1 pr-2 text-xs ${editingId === l.id ? 'border-brand-neon/60' : 'border-neutral-800'}`}>
@@ -239,16 +239,7 @@ function ReportBuilderModal({ user, onClose }) {
               ))}
             </div>
           )}
-          <p className="mt-2 text-xs text-neutral-500">
-            {sourceDated
-              ? `Records dated ${longDay(period.from)} to ${longDay(period.to)}. Nothing before ${longDay(floor)} is ever shown.`
-              : 'This source has no dates (it lists what exists now), so the period does not cut it.'}
-            {!isWideRole(role) && ' You see only the records of your own warehouses.'}
-          </p>
-        </div>
-
-        <>
-            <div className="rb-fade mb-3 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 border-t border-neutral-800 pt-2">
               <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-500" htmlFor="rb-source">Data</label>
               <select id="rb-source" value={sourceId} onChange={(e) => chooseSource(e.target.value)} className={`${input} max-w-full`}>
                 {grouped.map(([g, list]) => <optgroup key={g} label={g}>{list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>)}
@@ -263,30 +254,39 @@ function ReportBuilderModal({ user, onClose }) {
               <button type="button" onClick={startOver} className={pill}><RotateCcw size={13} />Start over</button>
               {loading && <Loader2 size={16} className="animate-spin text-brand-neon" />}
             </div>
+          <p className="mt-1.5 text-[11px] text-neutral-500">
+            {sourceDated
+              ? `Records dated ${longDay(period.from)} to ${longDay(period.to)}. Nothing before ${longDay(floor)} is ever shown.`
+              : 'This source has no dates (it lists what exists now), so the period does not cut it.'}
+            {!isWideRole(role) && ' You see only the records of your own warehouses.'}
+          </p>
+        </div>
+
+        <>
             {error && <p className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
 
             {/* ---------------- the builder: fields, and the boxes to drop them in ---------------- */}
             <button type="button" onClick={() => setPanelOpen((v) => !v)} className={`${pill} mb-3 lg:hidden`}>{panelOpen ? 'Hide' : 'Show'} fields, rows, columns and values</button>
-            <div className={`mb-4 gap-3 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] ${panelOpen ? 'grid' : 'hidden'}`}>
-              <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-3">
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400">Fields <span className="font-normal normal-case tracking-normal text-neutral-500">drag one into a box, or tap it</span></p>
+            <div className={`mb-3 gap-2 lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] ${panelOpen ? 'grid' : 'hidden'}`}>
+              <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-400">Fields <span className="font-normal normal-case tracking-normal text-neutral-500">drag one into a box, or tap it</span></p>
                 <FieldPicker key={sourceId + layout.mode} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)} />
                 <button type="button" onClick={() => { setEditingCalc(null); setPop('calc') }} className={`${pill} mt-2`}>+ Calculated field (a formula)</button>
               </div>
-              <div className="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-3 lg:mt-0">
-                <p className="mb-2 text-[11px] leading-snug text-neutral-500">Build a pivot table: drag fields into the boxes. Rows go down the side, Columns across the top, Values are the numbers added up. Or choose &quot;List of records&quot; under the boxes to see the records themselves.</p>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Rows</p><DropArea area="rows" onDropField={addTo} hint="Drop fields to group down the side">{layout.rows.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ rows: layout.rows.filter((x) => x !== id) })} />)}</DropArea></div>
-                  <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Columns</p><DropArea area="cols" onDropField={addTo} hint="Drop fields to spread across the top">{layout.cols.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ cols: layout.cols.filter((x) => x !== id) })} />)}</DropArea></div>
-                  <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Values</p><DropArea area="vals" onDropField={addTo} hint="Drop numbers to add up (none = count of records)">{layout.vals.filter((v) => fields.map[v.f]).map((v, i) => <ValueChip key={v.f} f={fields.map[v.f]} v={v} onAgg={(a) => patch({ vals: layout.vals.map((x, k) => (k === i ? { ...x, a } : x)) })} onRemove={() => patch({ vals: layout.vals.filter((x) => x.f !== v.f) })} />)}</DropArea></div>
-                  <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Filter</p><DropArea area="filt" onDropField={addTo} hint="Drop a field here to keep only some records" /></div>
+              <div className="mt-2 rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5 lg:mt-0">
+                <p className="mb-1.5 text-[11px] leading-snug text-neutral-500">Drag fields into the boxes: Rows down the side, Columns across the top, Values added up. Or choose &quot;List of records&quot; to see the records.</p>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  <div><p className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Rows</p><DropArea area="rows" onDropField={addTo} hint="Drop fields to group down the side">{layout.rows.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ rows: layout.rows.filter((x) => x !== id) })} />)}</DropArea></div>
+                  <div><p className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Columns</p><DropArea area="cols" onDropField={addTo} hint="Drop fields to spread across the top">{layout.cols.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ cols: layout.cols.filter((x) => x !== id) })} />)}</DropArea></div>
+                  <div><p className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Values</p><DropArea area="vals" onDropField={addTo} hint="Drop numbers to add up (none = count of records)">{layout.vals.filter((v) => fields.map[v.f]).map((v, i) => <ValueChip key={v.f} f={fields.map[v.f]} v={v} onAgg={(a) => patch({ vals: layout.vals.map((x, k) => (k === i ? { ...x, a } : x)) })} onRemove={() => patch({ vals: layout.vals.filter((x) => x.f !== v.f) })} />)}</DropArea></div>
+                  <div><p className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Filter</p><DropArea area="filt" onDropField={addTo} hint="Drop a field here to keep only some records" /></div>
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               <div className="min-w-0">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
                   <input type="search" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search every field (name, serial, warehouse, number)" className={`${input} min-w-[12rem] flex-1`} />
                   <div className="inline-flex overflow-hidden rounded-lg border border-neutral-700">
                     {[['list', 'List of records'], ['pivot', 'Pivot table']].map(([k, n]) => <button key={k} type="button" onClick={() => setMode(k)} className={`px-3 py-1.5 text-sm transition-colors ${layout.mode === k ? 'bg-brand-neon/10 text-brand-neon' : 'bg-neutral-900 text-neutral-300 hover:text-app-text'}`}>{n}</button>)}

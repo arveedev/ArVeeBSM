@@ -8476,4 +8476,5 @@
 //   1.10-418 - Report Builder: Compare two sources removed (it crashed on the ready checks); the Technical details field group removed; the Rows / Columns / Values / Filter boxes are always shown (dropping a field in switches to a pivot table); the Home icon beside the Stock Desk icon removed (entry stays in Settings); Ctrl+Alt+R now caught before the browser/other handlers.
 //   1.10-419 - Report Builder: the Settings card now shows for the Admin too (it was hidden for the Admin once the Home icon went); Ctrl+Alt+B added as a second shortcut.
 //   1.10-420 - Report Builder: the Administration sources (users, devices, export log) removed for everyone; the fields and the Rows / Columns / Values / Filter boxes sit above the table; the layout name, Save and sharing sit inline with the period (saved layouts as chips); the table starts empty until fields are dropped in.
-export const APP_VERSION = '1.10-420'
+//   1.10-421 - Report Builder made compact (period, Data and Save in one card; Rows/Columns/Values/Filter in one row; smaller field list) so the table shows without scrolling. Entry forms: a focused field that has to scroll into view now lands a third of the way down and needs room below it, so the field under it (Net kg under Gross kg) stays visible.
+export const APP_VERSION = '1.10-421'
