@@ -670,9 +670,8 @@ function SubtotalRow({ total, pct }) {
 // Milling status: the office's own table of the on-going milling operations (printed-sheet look, always light), kept exactly as the
 // office wrote it, with two added columns: Total issued and Remarks (the as-of date). "Save as image" exports the whole table as a light
 // PNG. The Admin can edit the table's rows (Edit table); the two added columns are worked out from the authorities.
-// a plain system font and explicit line heights, so the table and its exported image are laid out the same way (html2canvas places web-font text unevenly)
-const PAPER_FONT = 'Arial, "Segoe UI", Helvetica, sans-serif'
-const PAPER_COLS = [52, 64, 124, 112, 112, 78, 116, 176, 122, 112]
+// the app's own font (it read better), with explicit line heights so the table and its exported image are laid out the same way
+const PAPER_COLS = [56, 70, 134, 120, 122, 84, 126, 190, 132, 300]
 const RED = '#c0392b'
 const EMPTY_ROW = { lotNo: '', pile: '', warehouse: '', miller: '', qty: '', gmr: '', receiving: '' }
 function MillingStatusModal({ open, status, table, from, to, isAdmin, onSaveTable, onClose }) {
@@ -726,8 +725,8 @@ function MillingStatusModal({ open, status, table, from, to, isAdmin, onSaveTabl
       if (err?.name !== 'AbortError') { console.error('Milling status image error:', err); toast.error('Could not save the image, try again') }
     } finally { setExporting(false) }
   }
-  const cell = { border: '1px solid #000', padding: '0 10px', height: 34, lineHeight: '20px', verticalAlign: 'middle', color: '#000', background: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', fontFamily: PAPER_FONT, fontSize: 14, fontVariantNumeric: 'normal' }
-  const head = { ...cell, height: 'auto', padding: '8px 10px', lineHeight: '19px', fontWeight: 700, textAlign: 'center', whiteSpace: 'normal', background: '#eef0f2' }
+  const cell = { border: '1px solid #000', padding: '0 10px', height: 38, lineHeight: '22px', verticalAlign: 'middle', color: '#000', background: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', fontSize: 15, fontVariantNumeric: 'normal' }
+  const head = { ...cell, height: 'auto', padding: '9px 10px', lineHeight: '21px', fontWeight: 700, textAlign: 'center', whiteSpace: 'normal', background: '#eef0f2' }
   const num = { ...cell, textAlign: 'right' }
   const ctr = { ...cell, textAlign: 'center' }
   const red = { ...cell, color: RED, textAlign: 'right', fontWeight: 600 }
@@ -761,8 +760,8 @@ function MillingStatusModal({ open, status, table, from, to, isAdmin, onSaveTabl
         </div>
         <p className="mt-1 text-xs text-neutral-500">{editing ? 'Edit the office table here (Expected Rice Recovery is QTY x GMR). Rows with no ricemill and no QTY are dropped when you save.' : 'The table is the office\'s own. Total issued and Remarks are worked out from the milling authorities (the "issued / QTY" in their notes) of the same ricemill and QTY; a row with no issuance yet is left empty.'}</p>
         <div ref={boxRef} className="mt-3 min-h-0 flex-1 overflow-auto rounded bg-white">
-          <div ref={paperRef} style={{ display: 'inline-block', width: 'max-content', background: '#fff', padding: 8, fontFamily: PAPER_FONT }}>
-            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: PAPER_COLS.reduce((a, b) => a + b, 0) + (editing ? 36 : 0), fontSize: 14, background: '#fff', fontFamily: PAPER_FONT }}>
+          <div ref={paperRef} style={{ display: 'inline-block', width: 'max-content', background: '#fff', padding: 8 }}>
+            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: PAPER_COLS.reduce((a, b) => a + b, 0) + (editing ? 36 : 0), fontSize: 15, background: '#fff' }}>
               <colgroup>{PAPER_COLS.map((w, k) => <col key={k} style={{ width: w }} />)}{editing && <col style={{ width: 36 }} />}</colgroup>
               <thead>
                 <tr>

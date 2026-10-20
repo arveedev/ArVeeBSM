@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildMillingStatus, millingStatusText, remarksText, parseLotNote, DEFAULT_MILLING_TABLE } from '../src/utils/millingStatus.js'
 
-const tr = (ai, miller, note, date) => ({ aiNumber: ai, customer: miller, note, date })
+const tr = (ai, miller, note, date, bags = 0) => ({ aiNumber: ai, customer: miller, note, date, bags })
 
 test('the note is read as issued-so-far / QTY', () => {
   assert.deepEqual(parseLotNote('6000 / 7205.05'), { issued: 6000, qty: 7205.05 })
@@ -32,14 +32,15 @@ test('a row with no issuance yet shows no total issued and no as-of date', () =>
 
 test('total issued: the latest tranche of the lot (same ricemill, same QTY) up to the period end', () => {
   const issues = [
-    tr('1', 'MAGAYON RM', '1000 / 7205.05', '2026-09-30'), tr('2', 'MAGAYON RICEMILL', '7000 / 7205.05', '2026-10-10'), tr('3', 'MAGAYON RICEMILL', '7205 / 7205.05', '2026-10-12'),
+    tr('1', 'MAGAYON RM', '1000 / 7205.05', '2026-09-30'), tr('2', 'MAGAYON RICEMILL', '7000 / 7205.05', '2026-10-10'), tr('3', 'MAGAYON RICEMILL', '7205 / 7205.05', '2026-10-12', 205),
     tr('4', 'Borromeo Ricemill', '750 / 6482.15', '2026-10-06'), tr('5', 'Borromeo Ricemill', '4500 / 6482.15', '2026-10-15'),
     tr('6', 'Borromeo Ricemill', '5250 / 6124.18', '2026-10-03'), tr('7', 'Dens Marketing Corporation', '3000 / 4012.57', '2026-10-08'),
   ]
   const r = buildMillingStatus({ issues, to: '2026-10-12' })
   const by = (lot) => r.rows.find((x) => x.lotNo === lot)
   assert.equal(by('7').totalIssued, 7205)
-  assert.equal(remarksText(by('7')), 'As of Oct 12')
+  assert.equal(by('7').lastBatch, 205)
+  assert.equal(remarksText(by('7')), 'As of Oct 12; last batch issued 205.00 bags')
   assert.equal(by('2').totalIssued, 750) // the Oct 15 tranche is after the period end
   assert.equal(by('1').totalIssued, 5250)
   assert.equal(by('12').totalIssued, 3000) // "Dens Marketing Corporation" is the table's Dens
