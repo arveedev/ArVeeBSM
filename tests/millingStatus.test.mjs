@@ -1,50 +1,54 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildMillingStatus, millingStatusText, remarksText } from '../src/utils/millingStatus.js'
+import { buildMillingStatus, millingStatusText, remarksText, parseLotNote, lotKey } from '../src/utils/millingStatus.js'
 
-const issue = (id, ai, customer, bags, warehouse = 'TABACO GID', date = '2026-10-05') => ({ id, aiNumber: ai, customer, bags, warehouse, date, withdrawn: 0 })
-const piles = [{ pileId: 'p1', pileName: 'PILE 1' }, { pileId: 'p4', pileName: 'Pile 4B' }]
-const wsi = (id, ai, pileId, bags, date, createdAt = 1) => ({ id, type: 'WSI', status: 'Active', aiNumber: ai, pileId, netKilos: bags * 50, date, createdAt })
-const orders = [
-  { aiNumber: 'A1', ricemillName: 'BORROMEO RM', recoveryPercent: 63.27, receivingWarehouse: 'Abacorp/ Leg Gid' },
-  { aiNumber: 'A2', ricemillName: 'Borromeo Ricemill', recoveryPercent: 64.84, receivingWarehouse: 'Leg GID' },
-]
+// A tranche is one milling authority; its note reads "<issued so far> / <QTY of the lot>"
+const tr = (ai, miller, note, bags, date, source = 'BSI') => ({ id: ai, aiNumber: ai, customer: miller, note, bags, date, source, warehouse: `ALB-${source}` })
 
-test('rows: QTY, GMR, expected recovery, receiving warehouse, pile, total issuance and the last issuance', () => {
-  const r = buildMillingStatus({
-    issues: [issue('1', 'A1', 'Borromeo Ricemill', 6124.18)],
-    transactions: [wsi('w1', 'A1', 'p1', 1000, '2026-10-06'), wsi('w2', 'A1', 'p1', 500, '2026-10-09'), wsi('w3', 'A1', 'p1', 250, '2026-10-08')],
-    piles, millingOrders: orders,
-  })
+test('the note is read as issued-so-far / QTY, with the pile in front when there is one', () => {
+  assert.deepEqual(parseLotNote('6000 / 7205.05'), { issued: 6000, qty: 7205.05, pile: '' })
+  assert.deepEqual(parseLotNote('KINALE 3B 500 / 6263.35'), { issued: 500, qty: 6263.35, pile: '3B' })
+  assert.deepEqual(parseLotNote('TAB GID A 4 500 / 4996.96'), { issued: 500, qty: 4996.96, pile: '4' })
+  assert.equal(parseLotNote('PARTIAL'), null)
+  assert.equal(parseLotNote('ALB-2026-B-020'), null)
+})
+
+test('Magayon: eight tranches are ONE lot; QTY is the lot quantity, total issued and the last issuance come from the latest tranche', () => {
+  const issues = [
+    tr('1', 'MAGAYON RM', '1000 / 7205.05', 1000, '2026-09-30'), tr('2', 'MAGAYON RM', '2000 / 7205.05', 1000, '2026-09-30'),
+    tr('3', 'MAGAYON RICEMILL', '6000 / 7205.05', 1000, '2026-10-09'), tr('4', 'MAGAYON RICEMILL', '7000 / 7205.05', 1000, '2026-10-10'),
+    tr('5', 'MAGAYON RICEMILL', '7205 / 7205.05', 205, '2026-10-12'),
+  ]
+  const r = buildMillingStatus({ issues, millingOrders: [{ aiNumber: '5', ricemillName: 'MAGAYON RICEMILL', recoveryPercent: 64.3, receivingWarehouse: 'Abacorp/ Leg Gid' }] })
+  assert.equal(r.rows.length, 1)
   const row = r.rows[0]
-  assert.equal(row.qty, 6124.18)
-  assert.equal(row.gmr, 63.27)
-  assert.equal(Math.round(row.expected * 100) / 100, 3874.77) // the office's own figure
+  assert.equal(row.qty, 7205.05) // as the office's table: never a sum of tranches
+  assert.equal(row.totalIssued, 7205)
+  assert.equal(row.lastBags, 205)
+  assert.equal(row.asOf, '2026-10-12')
+  assert.equal(Math.round(row.expected * 100) / 100, 4632.85) // the office's own figure
   assert.equal(row.receiving, 'Abacorp/ Leg Gid')
-  assert.equal(row.pile, '1')
-  assert.equal(row.issued, 1750)
-  assert.equal(Math.round(row.balance * 100) / 100, 4374.18) // authorized 6,124.18 - issued 1,750
-  assert.equal(Math.round(row.pctIssued * 10) / 10, 28.6)
-  assert.equal(row.lastBags, 500) // the latest by date, not the biggest
-  assert.equal(remarksText(row), 'Last issuance: 500.00 bags (Oct 9)')
+  assert.equal(remarksText(row), 'As of Oct 12; last issuance 205.00 net bags')
 })
 
-test('no issuance yet and no matching MO are shown plainly, not as zero figures', () => {
-  const r = buildMillingStatus({ issues: [issue('1', 'ZZ', 'Buama Ricemill', 100)], piles, millingOrders: orders })
-  assert.equal(r.rows[0].gmr, null)
-  assert.equal(r.rows[0].expected, null)
-  assert.equal(remarksText(r.rows[0]), 'No issuance yet')
+test('Lot No. is never the row count: blank until the Admin types it, then exactly what was typed', () => {
+  const issues = [tr('1', 'Borromeo Ricemill', '750 / 6482.15', 750, '2026-10-06', 'TAB GID A'), tr('2', 'Borromeo Ricemill', '5250 / 6124.18', 750, '2026-10-03', 'TAB GID A')]
+  const blank = buildMillingStatus({ issues })
+  assert.deepEqual(blank.rows.map((x) => x.lotNo), ['', ''])
+  const typed = buildMillingStatus({ issues, lotInfo: { [lotKey('Borromeo Ricemill', 6124.18)]: { lotNo: '1', pile: '1' }, [lotKey('Borromeo Ricemill', 6482.15)]: { lotNo: '2' } } })
+  assert.deepEqual(typed.rows.map((x) => [x.lotNo, x.qty, x.pile]), [['1', 6124.18, '1'], ['2', 6482.15, '']])
+  assert.equal(typed.rows[0].warehouse, 'TAB GID') // the lettered variant is shown as the warehouse
 })
 
-test('grouped by ricemill (spellings merged), lot numbers run on, group totals add up', () => {
-  const r = buildMillingStatus({
-    issues: [issue('1', 'A1', 'Borromeo Ricemill', 100), issue('2', 'A2', 'BORROMEO RM', 50, 'BSI', '2026-10-06'), issue('3', 'A3', 'Buama Ricemill', 40)],
-    piles, millingOrders: orders,
-  })
+test('grouped by ricemill (spellings merged); a Total only for a group of 2 or more lots; authorities with no lot note are listed apart', () => {
+  const issues = [
+    tr('1', 'Borromeo Ricemill', '750 / 6482.15', 750, '2026-10-06', 'TAB GID A'), tr('2', 'BORROMEO RM', '5250 / 6124.18', 750, '2026-10-03', 'TAB GID A'),
+    tr('3', 'Buama Ricemill', '500 / 3000', 500, '2026-10-13', 'TAB GID A'), tr('4', 'Buama Ricemill', 'PARTIAL', 100, '2026-10-14'),
+  ]
+  const r = buildMillingStatus({ issues })
   assert.equal(r.groups.length, 2)
-  assert.deepEqual(r.rows.map((x) => x.lot), [1, 2, 3])
-  assert.equal(r.groups[0].total.qty, 150)
-  assert.equal(r.total.qty, 190)
-  const text = millingStatusText(r)
-  assert.equal(text.split('\n').filter((l) => l.includes('\tTotal\t')).length, 1) // only the group of 2 rows has a Total
+  assert.equal(r.groups[0].total.qty, 6124.18 + 6482.15)
+  assert.deepEqual(r.unassigned.map((x) => x.aiNumber), ['4'])
+  const lines = millingStatusText(r).split('\n')
+  assert.equal(lines.filter((l) => l.includes('\tTotal\t')).length, 1)
 })

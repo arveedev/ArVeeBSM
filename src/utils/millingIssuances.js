@@ -92,7 +92,7 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
     const type = norm(a.transactionTypeName)
     const row = {
       id: a.authId ?? a.aiNumber, date: a.date, aiNumber: a.aiNumber ?? '', province: pl.province, warehouse: pl.warehouse, customer: a.customerName ?? '',
-      kilos, bags: netBags(kilos), withdrawn: netBags(issued), ran: a.regionalAuthorityNumber ?? '',
+      kilos, bags: netBags(kilos), withdrawn: netBags(issued), ran: a.regionalAuthorityNumber ?? '', note: a.note1 ?? '', source: a.sourceWarehouse ?? '',
     }
     const isNfa = nfaRans.has(a.regionalAuthorityNumber)
     let target = null

@@ -25,6 +25,7 @@ import { canViewReport } from '../../utils/inventoryReportsAccess.js'
 import { reassignDocumentToPile } from '../../utils/pileReassign.js'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { buildMillingIssuances, issuancesText as buildIssuancesText, perRicemill } from '../../utils/millingIssuances.js'
+import html2canvas from 'html2canvas'
 import { buildMillingStatus, millingStatusText, remarksText } from '../../utils/millingStatus.js'
 import PeriodPresetPicker from './PeriodPresetPicker.jsx'
 import { useWarehouse } from '../../context/WarehouseContext.jsx'
@@ -666,82 +667,121 @@ function SubtotalRow({ total, pct }) {
   )
 }
 
-// Milling status: the office's status table of the on-going milling operations, plus Total issuance and Remarks (last issuance).
-function MillingStatusModal({ open, status, from, to, onClose }) {
+// Milling status: the office's own status table of the on-going milling operations (printed-sheet look, always light) with two added
+// columns, Total issued and Remarks. "Save as image" exports the whole table as a light PNG. Lot No. (and Pile No. when it cannot be read)
+// is typed by the Admin once per lot.
+const PAPER_FONT = '"Segoe UI", Calibri, Arial, sans-serif'
+const RED = '#c0392b'
+function MillingStatusModal({ open, status, from, to, isAdmin, onSaveInfo, onClose }) {
   const boxRef = useRef(null)
+  const paperRef = useRef(null)
+  const [exporting, setExporting] = useState(false)
   useCrosshair(boxRef)
   useTableScroll(boxRef)
-  const th = 'border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-center text-xs font-semibold text-neutral-200'
-  const td = 'border border-neutral-800 px-2 py-1 text-app-text'
   const copy = async () => {
     try { await navigator.clipboard.writeText(millingStatusText(status)); toast.success('Copied: paste it into a Sheet or Excel') } catch { toast.error('Could not copy') }
   }
-  const totalRow = (label, t, key, strong) => {
-    const c = strong ? td : `${td} border-brand-neon/40 text-brand-neon`
-    return (
-      <tr key={key} className={strong ? 'bg-neutral-800/80 font-bold' : 'bg-brand-neon/10 font-bold text-brand-neon'}>
-        <td className={c} colSpan={4}>{label}</td>
-        <td className={`${c} text-right`}>{fmtNum(t.qty)}</td>
-        <td className={c} />
-        <td className={`${c} text-right`}>{fmtNum(t.expected)}</td>
-        <td className={c} />
-        <td className={`${c} text-right`}>{fmtNum(t.issued)}</td>
-        <td className={`${c} text-right`}>{fmtNum(t.balance)}</td>
-        <td className={`${c} text-right`}>{t.pctIssued == null ? '' : `${fmtNum(t.pctIssued)}%`}</td>
-        <td className={c} />
-      </tr>
-    )
+  const saveImage = async () => {
+    if (!paperRef.current) return
+    setExporting(true)
+    try {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))) // let the typed boxes turn into plain text
+      await document.fonts?.ready
+      const el = paperRef.current
+      const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2, useCORS: true, width: el.scrollWidth, height: el.scrollHeight, windowWidth: el.scrollWidth })
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+      const filename = `Milling-status-${from}_to_${to}.png`
+      const file = new File([blob], filename, { type: 'image/png' })
+      if (navigator.canShare?.({ files: [file] })) {
+        toast.success('Choose "Save Image" to add it to your photo gallery')
+        await navigator.share({ files: [file], title: filename })
+      } else {
+        const link = document.createElement('a')
+        link.download = filename
+        link.href = URL.createObjectURL(blob)
+        link.click()
+        URL.revokeObjectURL(link.href)
+        toast.success('Image saved: check your Downloads folder')
+      }
+    } catch (err) {
+      if (err?.name !== 'AbortError') { console.error('Milling status image error:', err); toast.error('Could not save the image, try again') }
+    } finally { setExporting(false) }
   }
+  const cell = { border: '1px solid #000', padding: '4px 8px', color: '#000', background: '#fff', whiteSpace: 'nowrap' }
+  const head = { ...cell, fontWeight: 700, textAlign: 'center', whiteSpace: 'normal' }
+  const num = { ...cell, textAlign: 'right' }
+  const ctr = { ...cell, textAlign: 'center' }
+  const red = { ...cell, color: RED, textAlign: 'right' }
+  const typed = (r, field, value, width) => (isAdmin && !exporting
+    ? <input key={`${r.key}-${field}-${value}`} defaultValue={value} aria-label={field === 'lotNo' ? 'Lot No.' : 'Pile No.'} placeholder="-" onBlur={(e) => { if (e.target.value.trim() !== value) onSaveInfo(r.key, { [field]: e.target.value.trim() }) }}
+        style={{ width, textAlign: 'center', border: '1px dashed #888', background: '#fffbe6', color: '#000', borderRadius: 3, padding: '1px 2px' }} />
+    : value)
+  const cols = 10
   return (
-    <SdOverlay open={open} onClose={onClose} z="z-[95]" panelClassName="sd-table flex max-h-[88vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-6xl sm:rounded-2xl">
+    <SdOverlay open={open} onClose={onClose} z="z-[95]" panelClassName="sd-table flex max-h-[90vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-7xl sm:rounded-2xl">
       <>
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-app-text">Milling status</h3>
-            <p className="text-xs text-neutral-400">{from === to ? longDate(from) : `${longDate(from)} to ${longDate(to)}`} · milling authorities of the private ricemills dated in this period · net bags</p>
+            <p className="text-xs text-neutral-400">{from === to ? longDate(from) : `${longDate(from)} to ${longDate(to)}`} · lots with an issuance to a private ricemill in this period</p>
           </div>
           <div className="flex items-center gap-2">
+            <button type="button" onClick={saveImage} disabled={!status || status.rows.length === 0 || exporting} className="flex items-center gap-1.5 rounded-full border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40"><FileSpreadsheet size={14} /> {exporting ? 'Saving…' : 'Save as image'}</button>
             <button type="button" onClick={copy} disabled={!status || status.rows.length === 0} className="flex items-center gap-1.5 rounded-full border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 disabled:opacity-40"><ClipboardList size={14} /> Copy</button>
             <button type="button" onClick={onClose} aria-label="Close" className={closeButtonClass}><X size={16} /></button>
           </div>
         </div>
-        <p className="mt-1 text-xs text-neutral-500">QTY is what the authority authorizes. GMR and the receiving warehouse come from the MO with the same authority number; expected rice recovery is QTY x GMR. Total issuance is what the withdrawal slips issued so far; Balance is authorized minus issued (red when more was issued than authorized); Remarks shows the last issuance.</p>
-        <div ref={boxRef} className="mt-3 min-h-0 flex-1 overflow-auto">
-          <table className="min-w-full border-separate border-spacing-0 text-sm tabular-nums">
-            <thead>
-              <tr>
-                <th className={th}>Lot No.</th><th className={th}>Pile No.</th><th className={th}>Issuing Warehouse</th><th className={th}>Name of Ricemill</th>
-                <th className={th}>QTY authorized<br /><span className="font-normal">(bag of 50kg)</span></th><th className={th}>GMR</th><th className={th}>Expected Rice Recovery</th>
-                <th className={th}>RECEIVING Whse</th><th className={th}>Total issuance<br /><span className="font-normal">(net bags)</span></th><th className={th}>Balance to issue<br /><span className="font-normal">(net bags)</span></th><th className={th}>% issued</th><th className={th}>Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(!status || status.rows.length === 0) && <tr><td colSpan={12} className="px-2 py-3 text-xs text-neutral-500">No milling authorities of a private ricemill in this period.</td></tr>}
-              {status?.groups.map((g) => (
-                <Fragment key={g.key}>
-                  {g.rows.map((r) => (
-                    <tr key={r.id}>
-                      <td className={`${td} text-center`}>{r.lot}</td>
-                      <td className={`${td} text-center`}>{r.pile}</td>
-                      <td className={`${td} break-words`}>{r.warehouse}</td>
-                      <td className={`${td} break-words`}>{r.miller}</td>
-                      <td className={`${td} text-right`}>{fmtNum(r.qty)}</td>
-                      <td className={`${td} text-right`}>{r.gmr == null ? '' : `${fmtNum(r.gmr)}%`}</td>
-                      <td className={`${td} text-right`}>{r.expected == null ? '' : fmtNum(r.expected)}</td>
-                      <td className={`${td} break-words`}>{r.receiving}</td>
-                      <td className={`${td} text-right`}>{fmtNum(r.issued)}</td>
-                      <td className={`${td} text-right ${r.balance < 0 ? 'font-semibold text-brand-crimson' : ''}`}>{fmtNum(r.balance)}</td>
-                      <td className={`${td} text-right`}>{r.pctIssued == null ? '' : `${fmtNum(r.pctIssued)}%`}</td>
-                      <td className={`${td} whitespace-nowrap`}>{remarksText(r)}</td>
-                    </tr>
-                  ))}
-                  {g.rows.length >= 2 && totalRow('Total', g.total, `t-${g.key}`, false)}
-                </Fragment>
-              ))}
-              {status && status.rows.length > 0 && totalRow('Grand total', status.total, 'grand', true)}
-            </tbody>
-          </table>
+        <p className="mt-1 text-xs text-neutral-500">QTY is the quantity authorized to be issued to the miller for the lot (the number after the slash in the authority's note). Total issued is as of the last issuance, which Remarks gives. Type the Lot No. once per lot (yellow boxes); it is kept.</p>
+        <div ref={boxRef} className="mt-3 min-h-0 flex-1 overflow-auto rounded bg-white">
+          <div ref={paperRef} style={{ display: 'inline-block', minWidth: '100%', background: '#fff', padding: 12, fontFamily: PAPER_FONT }}>
+            <p style={{ margin: '0 0 6px', color: '#000', fontWeight: 700, fontSize: 14 }}>MILLING STATUS &nbsp;·&nbsp; {from === to ? longDate(from) : `${longDate(from)} to ${longDate(to)}`}</p>
+            <table style={{ borderCollapse: 'collapse', fontSize: 14, fontVariantNumeric: 'tabular-nums', background: '#fff' }}>
+              <thead>
+                <tr>
+                  <th style={head} rowSpan={2}>Lot No.</th><th style={head} rowSpan={2}>Pile No.</th><th style={head} rowSpan={2}>Issuing<br />Warehouse</th><th style={head} rowSpan={2}>Name of<br />Ricemill</th>
+                  <th style={{ ...head, borderBottom: 'none' }}>QTY</th><th style={head} rowSpan={2}>GMR</th><th style={head} rowSpan={2}>Expected<br />Rice<br />Recovery</th><th style={head} rowSpan={2}>RECEIVING Whse</th>
+                  <th style={head} rowSpan={2}>Total issued<br /><span style={{ fontWeight: 400 }}>(net bags)</span></th><th style={head} rowSpan={2}>Remarks</th>
+                </tr>
+                <tr><th style={{ ...head, borderTop: 'none', fontWeight: 600 }}>(bag of<br />50kg)</th></tr>
+              </thead>
+              <tbody>
+                {(!status || status.rows.length === 0) && <tr><td colSpan={cols} style={{ ...cell, whiteSpace: 'normal' }}>No lot of a private ricemill had an issuance in this period.</td></tr>}
+                {status?.groups.map((g) => (
+                  <Fragment key={g.key}>
+                    {g.rows.map((r, i) => {
+                      const top = i === 0 ? { borderTop: '2px solid #000' } : null
+                      return (
+                        <tr key={r.key}>
+                          <td style={{ ...ctr, ...top }}>{typed(r, 'lotNo', r.lotNo, 44)}</td>
+                          <td style={{ ...ctr, ...top }}>{typed(r, 'pile', r.pile, 44)}</td>
+                          <td style={{ ...cell, ...top }}>{r.warehouse}</td>
+                          <td style={{ ...cell, ...top }}>{r.miller}</td>
+                          <td style={{ ...num, ...top }}>{fmtNum(r.qty)}</td>
+                          <td style={{ ...num, ...top }}>{r.gmr == null ? '' : `${fmtNum(r.gmr)}%`}</td>
+                          <td style={{ ...num, ...top }}>{r.expected == null ? '' : fmtNum(r.expected)}</td>
+                          <td style={{ ...cell, ...top }}>{r.receiving}</td>
+                          <td style={{ ...num, ...top }}>{fmtNum(r.totalIssued)}</td>
+                          <td style={{ ...cell, ...top }}>{remarksText(r)}</td>
+                        </tr>
+                      )
+                    })}
+                    {g.rows.length >= 2 && (
+                      <tr>
+                        <td style={cell} /><td style={cell} />
+                        <td style={{ ...cell, color: RED, textAlign: 'center' }} colSpan={2}>Total</td>
+                        <td style={red}>{fmtNum(g.total.qty)}</td><td style={cell} /><td style={red}>{g.total.expected == null ? '' : fmtNum(g.total.expected)}</td><td style={cell} />
+                        <td style={red}>{fmtNum(g.total.issued)}</td><td style={cell} />
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+        {status?.unassigned?.length > 0 && (
+          <p className="mt-2 text-xs text-amber-300">Not in the table (no "issued / QTY" in the authority's note, so no lot can be read): {status.unassigned.map((u) => `${u.aiNumber || '(no number)'} ${u.miller}`).join(' · ')}</p>
+        )}
       </>
     </SdOverlay>
   )
@@ -1108,8 +1148,16 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     ? buildMillingIssuances({ transactions, authorities, warehouses: warehousesRaw, provinces, varieties, transactionTypes, ricemillAllocations: ricemillAllocations ?? [], globalDataStartDate: config?.dataStartDate ?? null, from, to: to < from ? from : to, filters: issFilters })
     : null), [isAdmin, view, loading, transactions, authorities, warehousesRaw, provinces, varieties, transactionTypes, ricemillAllocations, config, from, to, issFilters])
   const millingStatus = useMemo(() => (showStatus && issuancesData
-    ? buildMillingStatus({ issues: issuancesData.milling.issues, transactions, piles, millingOrders: millingOrdersAll ?? [] })
-    : null), [showStatus, issuancesData, transactions, piles, millingOrdersAll])
+    ? buildMillingStatus({ issues: issuancesData.milling.issues, transactions, piles, millingOrders: millingOrdersAll ?? [], lotInfo: config?.millingLotInfo ?? {} })
+    : null), [showStatus, issuancesData, transactions, piles, millingOrdersAll, config?.millingLotInfo])
+  const saveLotInfo = async (key, patch) => {
+    const cur = (await db.reportConfig.get('global'))?.millingLotInfo ?? {}
+    const next = { ...cur, [key]: { ...(cur[key] ?? {}), ...patch } }
+    for (const k of Object.keys(next[key])) if (next[key][k] === '') delete next[key][k]
+    if (Object.keys(next[key]).length === 0) delete next[key]
+    if (await db.reportConfig.get('global')) await db.reportConfig.update('global', { millingLotInfo: next })
+    else await db.reportConfig.put({ id: 'global', millingLotInfo: next })
+  }
   const issuanceFilterCount = [issFilters.provinceId, issFilters.warehouseIds, issFilters.customer, issFilters.sort !== 'date'].filter(Boolean).length
   const issuancesText = () => buildIssuancesText(issuancesData, from, to < from ? from : to)
   const copyIssuances = async () => {
@@ -1349,7 +1397,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
             <div className="mb-3">
               <PeriodPresetPicker onSelectRange={(f, t) => { setFrom(f); setTo(t) }} currentFrom={from} currentTo={to} />
             </div>
-            <MillingStatusModal open={showStatus} status={millingStatus} from={from} to={to < from ? from : to} onClose={() => setShowStatus(false)} />
+            <MillingStatusModal open={showStatus} status={millingStatus} from={from} to={to < from ? from : to} isAdmin={isAdmin} onSaveInfo={saveLotInfo} onClose={() => setShowStatus(false)} />
             <RicemillModal open={showMillers} data={issuancesData} from={from} to={to < from ? from : to} onClose={() => setShowMillers(false)} />
             <IssuanceFilterSheet
               open={showIssFilters} draft={issDraft} setDraft={setIssDraft} provinces={provinces ?? []} warehouses={warehouses} customers={issuancesData?.customers ?? []}

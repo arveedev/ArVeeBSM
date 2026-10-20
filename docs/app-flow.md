@@ -493,6 +493,7 @@ A WSR received into more than one pile is stored as one record per pile (the ext
 
 ## 21. Milling status (Stock Desk > Milling and Issuances, Admin only)
 
-1. Set the period, press "Milling status". One row per milling authority of a private ricemill dated in the period, grouped by ricemill: lot number, pile number(s) the withdrawals came from, issuing warehouse, ricemill, QTY authorized (net bags), GMR and receiving warehouse (from the MO carrying the same authority number), expected rice recovery (QTY x GMR).
-2. Added columns: Total issuance (net bags issued so far on the authority's withdrawal slips), Balance to issue (authorized minus issued, red when more was issued than authorized), % issued, and Remarks = the last issuance in net bags with its date.
-3. A ricemill with two or more rows ends with a Total; a grand total ends the table. Copy pastes the table, tab-separated, into a Sheet.
+1. Set the period, press "Milling status". One row per LOT of a private ricemill that had an issuance in the period, grouped by ricemill, in the office's own layout: Lot No., Pile No., Issuing Warehouse, Name of Ricemill, QTY (bag of 50kg), GMR, Expected Rice Recovery, RECEIVING Whse. A lot is read from the authority notes: each milling authority is a tranche whose note says "issued so far / QTY"; QTY is the lot quantity authorized to the miller. GMR and the receiving warehouse come from the MO with one of the lot's authority numbers.
+2. Two added columns: Total issued (the issued-so-far of the latest tranche) and Remarks (as-of date of that total and the last issuance in net bags).
+3. The Admin types the Lot No. once per lot in the yellow boxes (kept; never the row count). A ricemill with two or more lots ends with a red Total. Authorities whose note has no "issued / QTY" are listed under the table.
+4. Save as image exports the whole table as a light PNG; Copy pastes it into a Sheet.
