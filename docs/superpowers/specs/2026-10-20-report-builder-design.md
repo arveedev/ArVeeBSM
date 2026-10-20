@@ -1,6 +1,6 @@
 # Report Builder (read-only report and pivot table maker) - plan
 
-Status: PLAN FOR APPROVAL (2026-10-20). Nothing is built. Interactive sample (made-up records): https://claude.ai/artifact/1FLM4GZtwckpGkcCAwZxeY
+Status: BUILT 2026-10-20 (v1.10-416) after the owner's answers below. Interactive sample (made-up records): https://claude.ai/artifact/1FLM4GZtwckpGkcCAwZxeY
 
 ## 1. What it is, and the rules it must keep
 A tool where a person picks any data the app holds, and builds their own list, table or pivot table from it: search, filter, sort, group, total, compare, save the layout, and export to Excel, PDF, CSV or the clipboard. It is meant for **reconciliation** and as another way to look at the app's data.
@@ -85,7 +85,15 @@ Never offered: `users.accessCode`, tokens, `reportConfig` secrets, `deviceInfo`,
 4. **Compare two sources** and sharing layouts.
 Tests per step: engine unit tests, adapter tests with a fixture database, the no-write test, the staff-scope test, the Stock Desk parity test, a phone-width layout check, and exports opened to confirm the numbers.
 
-## 9. Open decisions
+## 9. Decisions (owner, 2026-10-20)
+1. Role name: **Analyst**.
+2. The SDO has no Builder of their own, but the data the SDO side provides (purchase receipts, cash ledger, cut-offs, buying prices) is included as sources.
+3. The Visitor never has access: only the Admin, warehouse staff and Analysts.
+4. Every export and share is logged for the Admin.
+5. Every layout can be shared with the Admin, Analysts and warehouse staff (the Visitor cannot open the Builder, so there is nobody to share with there).
+6. Sources: every table the app can supply (28), including the Stock Desk's own figures.
+
+## 9b. The original open questions
 1. **Role name**: "Analyst" (proposed). Another name is a one-word change.
 2. **SDO**: leave out for now (proposed), or give the SDO a version limited to their own receipts and cash ledger.
 3. **Visitor**: no access by default (proposed); the Admin can switch it on.

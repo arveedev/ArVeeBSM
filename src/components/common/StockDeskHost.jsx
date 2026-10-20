@@ -6,6 +6,7 @@ import { db } from '../../db/dexie.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { REPORT_SCREENS, canViewReport } from '../../utils/inventoryReportsAccess.js'
 import InventoryReportsModal from './InventoryReportsModal.jsx'
+import { isViewerRole } from '../../utils/roles.js'
 
 export const OPEN_STOCK_DESK_EVENT = 'bsm:open-stock-desk'
 export const openStockDesk = () => window.dispatchEvent(new Event(OPEN_STOCK_DESK_EVENT))
@@ -14,7 +15,7 @@ function StockDeskHost() {
   const { user } = useAuth()
   const reportAccess = useLiveQuery(() => db.reportConfig.get('global').then((c) => c?.inventoryReportsAccess ?? null), [])
   const isAdmin = user?.role === 'Admin'
-  const canOpen = isAdmin || (user?.role === 'Visitor' && REPORT_SCREENS.some((s) => canViewReport(s.id, false, reportAccess)))
+  const canOpen = isAdmin || (isViewerRole(user?.role) && REPORT_SCREENS.some((s) => canViewReport(s.id, false, reportAccess)))
   const [open, setOpen] = useState(false)
 
   useEffect(() => {

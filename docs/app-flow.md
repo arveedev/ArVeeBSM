@@ -496,3 +496,13 @@ A WSR received into more than one pile is stored as one record per pile (the ext
 1. Set the period, press "Milling status". The screen shows the office's own table exactly as the office wrote it (Lot No., Pile No., Issuing Warehouse, Name of Ricemill, QTY (bag of 50kg), GMR, Expected Rice Recovery = QTY x GMR, RECEIVING Whse), kept in the app and editable by the Admin (Edit table).
 2. Two added columns: Total issued and Remarks. For each row the app finds the milling authorities of the same ricemill whose note says "issued so far / QTY" with that QTY; Total issued is the issued-so-far of the latest one up to the period's last day and Remarks gives its date ("As of Oct 12"). A row with no issuance yet is left empty.
 3. A ricemill with two or more rows ends with a red Total. Save as image exports the whole table as a light PNG; Copy pastes it into a Sheet.
+
+## 22. Report Builder (Admin, Analyst, warehouse staff)
+
+1. Open it with Ctrl + Alt + R, the small table icon beside the Stock Desk icon on the Admin / Analyst Home, or the "Report Builder" card in Settings (staff). The Visitor and the SDO have no entry. The Admin can switch it off for Analysts or for staff in Admin > Access > Tools Access.
+2. Choose a data source (documents, sack lines, authorities, milling orders, purchase receipts, buying prices, piles, logistics, directories, or the Stock Desk's own figures). Staff are shown only the sources their role may open and only the records of their own warehouses; the SDO cash ledger, users and devices are Admin and Analyst only; the export log is Admin only.
+3. Pick a ready-made layout or build one: drag or tap fields into Rows, Columns and Values (Sum, Average, Count, Smallest, Largest, Different), search every field, add filters with rules, sort (shift-click for more levels), show / hide / reorder columns in the list view, add calculated fields, shade or highlight cells, show percentages, subtotals, top 5 / 10 / 20.
+4. Click any number to see the exact records behind it, and export just those.
+5. Compare two sources: choose what identifies a record on each side and a number to total; matches, differences, and records only in A or B are listed, with a tolerance for rounding.
+6. Save the layout under a name, optionally shared with the Admin, Analysts and warehouse staff (never records). Export to Excel, PDF, CSV or Copy; every export is recorded in the Report export log for the Admin.
+7. The Builder reads a copy of the records on the device and writes nothing but the saved layouts and the export log.

@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ChevronRight, ChevronDown, ClipboardList } from 'lucide-react'
+import { ChevronRight, ChevronDown, ClipboardList, Table2 } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { db } from '../db/dexie.js'
 import { calculateCurrentAge, fmtBags, fmtNetBags, fmtWeight, AGE_BUCKETS } from '../utils/calculations.js'
@@ -22,6 +22,7 @@ import { computeWarehouseCategoryStock } from '../utils/warehouseCategoryStock.j
 import UnwithdrawnDetailModal from '../components/common/UnwithdrawnDetailModal.jsx'
 import PillToggle from '../components/common/PillToggle.jsx'
 import { openStockDesk } from '../components/common/StockDeskHost.jsx'
+import { openReportBuilder, useCanUseReportBuilder } from '../components/common/ReportBuilderHost.jsx'
 import { REPORT_SCREENS, canViewReport } from '../utils/inventoryReportsAccess.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import CountUpNumber from '../components/common/CountUpNumber.jsx'
@@ -85,6 +86,7 @@ function AdminHomeStocks({ onWarehouseSelect }) {
   // the quiet reports icon shows for a Visitor only when at least one screen is shared with them
   const reportAccess = useLiveQuery(() => db.reportConfig.get('global').then((c) => c?.inventoryReportsAccess ?? null), [])
   const canOpenReports = authUser?.role === 'Admin' || REPORT_SCREENS.some((s) => canViewReport(s.id, false, reportAccess))
+  const canBuild = useCanUseReportBuilder() // Admin and Analyst (never the Visitor)
   const [breakdownShowPotential, setBreakdownShowPotential] = useState(false)
   // Age Grouping used to always show Potential with no toggle of its
   // own - per explicit request, it now gets the same Actual/Potential
@@ -302,6 +304,16 @@ function AdminHomeStocks({ onWarehouseSelect }) {
                   className="ml-1 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
                 >
                   <ClipboardList size={14} />
+                </button>
+              )}
+              {canBuild && (
+                <button
+                  type="button"
+                  onClick={openReportBuilder}
+                  aria-label="Report Builder"
+                  className="ml-0.5 inline-flex translate-y-[2px] items-center justify-center p-1 text-neutral-700 transition-colors hover:text-neutral-400"
+                >
+                  <Table2 size={14} />
                 </button>
               )}
             </span>

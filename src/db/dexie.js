@@ -1121,6 +1121,15 @@ db.version(48).stores({
   deviceInfo: 'id',
 })
 
+// v49 - Report Builder (read-only report and pivot tool; see docs/superpowers/specs/2026-10-20-report-builder-design.md).
+// reportLayouts: a person's saved layout (only the choices - fields, filters, sorting - never records), optionally shared with the Admin,
+// the Analysts and the warehouse staff. reportExportLog: one small row each time something is exported or a layout is shared, so the
+// Admin can see who took which data out. Both are SYNCED, string-id, ownerless like errorLogs; who may read what is enforced in the app.
+db.version(49).stores({
+  reportLayouts: 'id, ownerUid, source, updatedAt',
+  reportExportLog: 'id, uid, at',
+})
+
 // Directly confirms whether this exact browser session is actually
 // running the schema version that includes the serialCounters ->
 // serialCounterCache rename, rather than assuming it based on the

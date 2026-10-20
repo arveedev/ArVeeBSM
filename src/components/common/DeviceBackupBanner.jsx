@@ -10,6 +10,7 @@ import { deviceKind } from '../../services/deviceStatusWorker.js'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { chooseBackupFolder, getFolderState } from '../../services/deviceBackup.js'
 import BackupFolderSteps, { BackupFolderNote, BACKUP_FOLDER_PATH } from './BackupFolderSteps.jsx'
+import { isViewerRole } from '../../utils/roles.js'
 
 const DeviceBackupBanner = () => {
   const { user } = useAuth()
@@ -30,7 +31,7 @@ const DeviceBackupBanner = () => {
     return () => { alive = false; clearInterval(poll); window.removeEventListener('bsm:device-backup-folder', refresh); window.removeEventListener('focus', refresh) }
   }, [])
 
-  if (!user || user.role === 'Visitor' || deviceKind() !== 'pc' || later || formOpen) return null
+  if (!user || isViewerRole(user.role) || deviceKind() !== 'pc' || later || formOpen) return null
   if (state !== 'none' && state !== 'needs-permission') return null
   const renew = state === 'needs-permission'
 

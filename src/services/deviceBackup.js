@@ -15,6 +15,7 @@ import { APP_VERSION } from '../version.js'
 import { getDeviceId, getDeviceLabel, setDeviceId } from '../utils/errorLog.js'
 import { buildDeviceFileText, verifyDeviceFile, deviceFileBaseName, filesToPrune, isOwnDeviceFileName } from '../utils/deviceFile.js'
 import { deviceKind, setBackupStatusProvider, reportDeviceStatusNow } from './deviceStatusWorker.js'
+import { isViewerRole } from '../utils/roles.js'
 
 const CHECK_EVERY_MS = 5 * 60 * 1000
 const IDLE_NEEDED_MS = 60 * 1000
@@ -225,7 +226,7 @@ const scheduleSoon = () => { setTimeout(tick, 2000) }
 
 /** Starts the automatic PC backup for the signed-in user; returns the cleanup. PCs only. */
 export const startDeviceBackup = (user) => {
-  if (!user || user.role === 'Visitor' || deviceKind() !== 'pc') return () => {}
+  if (!user || isViewerRole(user.role) || deviceKind() !== 'pc') return () => {}
   currentUser = user
   window.__bsmUser = user
   setBackupStatusProvider(getBackupStatus)

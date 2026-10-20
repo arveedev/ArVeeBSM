@@ -27,7 +27,7 @@ export const deleteIconClass = `${iconButtonClass} text-brand-crimson hover:drop
 
 // Title Case role labels — also used directly as the stored `role` value.
 export const ROLES = [
-  'Admin', 'Warehouse Supervisor', 'Acting Warehouse Supervisor',
+  'Admin', 'Analyst', 'Warehouse Supervisor', 'Acting Warehouse Supervisor',
   'Warehouse Assistant', 'Acting Warehouse Assistant',
   'MPO III', 'Acting MPO III', 'SDO',
 ]

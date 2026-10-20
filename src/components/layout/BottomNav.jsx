@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Home, LayoutGrid, FileText, Settings, Plus, Radar } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { isViewerRole } from '../../utils/roles.js'
 
 // Retriggers the squash-and-stretch keyframe on every column change - a
 // CSS animation (unlike a transition) does not restart on its own just
@@ -82,7 +83,7 @@ const SDO_NAV_COLUMN = { '/': 0, '/settings': 1 }
 function BottomNav({ onFabClick, hidden = false }) {
   const { user } = useAuth() ?? {}
   const isAdmin = user?.role === 'Admin'
-  const isVisitor = user?.role === 'Visitor'
+  const isVisitor = isViewerRole(user?.role)
   const isSdo = user?.role === 'SDO'
   const [hasEntered, setHasEntered] = useState(false)
   const { pathname } = useLocation()

@@ -19,6 +19,7 @@ import SectionErrorBoundary from './components/common/SectionErrorBoundary.jsx'
 import BottomNav, { REGULAR_NAV_COLUMN } from './components/layout/BottomNav.jsx'
 import AppHeader from './components/layout/AppHeader.jsx'
 import StockDeskHost from './components/common/StockDeskHost.jsx'
+import ReportBuilderHost from './components/common/ReportBuilderHost.jsx'
 import SystemHealthHost from './components/common/SystemHealthHost.jsx'
 import { useSettings } from './context/SettingsContext.jsx'
 import TransactionModal from './components/common/TransactionModal.jsx'
@@ -41,6 +42,7 @@ import AnimatedToast from './components/common/AnimatedToast.jsx'
 import UpdateChecker from './components/common/UpdateChecker.jsx'
 import useDelayedUnmount from './hooks/useDelayedUnmount.js'
 import { isTextEditable } from './hooks/useEntryFormShortcuts.js'
+import { isViewerRole } from './utils/roles.js'
 
 // Must match the form's own pop-out exit transition duration (see
 // StockFormBase/SackFormBase/WTSForm) - keeps the form mounted long
@@ -122,7 +124,7 @@ function App() {
   const [activeFormPrefill, setActiveFormPrefill] = useState(null)
 
   const isAdmin = user?.role === 'Admin'
-  const isVisitor = user?.role === 'Visitor'
+  const isVisitor = isViewerRole(user?.role) // Visitor and Analyst: read-only viewers
   const isSdo = user?.role === 'SDO'
 
   // Ctrl + Alt + A opens the Admin Dashboard from any page. Only an Admin who is logged in; nothing happens for
@@ -333,6 +335,8 @@ function App() {
       {user && pathname !== '/login' && <AppHeader hidden={barsHidden} />}
       {/* the Stock Desk, from the Home icon or Ctrl + Alt + D on any page (Admin / Visitor with access only) */}
       {user && pathname !== '/login' && <StockDeskHost />}
+      {/* the Report Builder (read-only tables and pivots): Admin, Analyst and warehouse staff; Ctrl + Alt + R */}
+      {user && pathname !== '/login' && <ReportBuilderHost />}
       {user && pathname !== '/login' && <SystemHealthHost />}
       {user && pathname !== '/login' && <DeviceBackupBanner />}
       {/* No page-slide for /admin - it's a fixed-position overlay with
@@ -356,7 +360,7 @@ function App() {
         <Route
           path="/piles"
           element={
-            <ProtectedRoute denyRoles={['Visitor', 'SDO']}>
+            <ProtectedRoute denyRoles={['Visitor', 'Analyst', 'SDO']}>
               <SectionErrorBoundary user={user} fullPage label="Piles">
                 <Piles />
               </SectionErrorBoundary>
@@ -366,7 +370,7 @@ function App() {
         <Route
           path="/monitoring"
           element={
-            <ProtectedRoute requireRole={['Admin', 'Visitor']}>
+            <ProtectedRoute requireRole={['Admin', 'Visitor', 'Analyst']}>
               <SectionErrorBoundary user={user} fullPage label="Monitoring">
                 <AdminMonitoring />
               </SectionErrorBoundary>
@@ -376,7 +380,7 @@ function App() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute denyRoles={['Visitor', 'SDO']}>
+            <ProtectedRoute denyRoles={['Visitor', 'Analyst', 'SDO']}>
               <SectionErrorBoundary user={user} fullPage label="Reports">
                 <Reports />
               </SectionErrorBoundary>
@@ -386,7 +390,7 @@ function App() {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute denyRoles={['Visitor']}>
+            <ProtectedRoute denyRoles={['Visitor', 'Analyst']}>
               <SectionErrorBoundary user={user} fullPage label="Settings">
                 <Settings />
               </SectionErrorBoundary>

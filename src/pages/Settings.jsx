@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLiveQuery, useObservable } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
-import { Pencil, ShieldCheck, User, Clock, Check, X, Trash2, Wallet, History, Banknote } from 'lucide-react'
+import { Pencil, ShieldCheck, User, Clock, Check, X, Trash2, Wallet, History, Banknote, Table2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useWarehouse } from '../context/WarehouseContext.jsx'
@@ -30,6 +30,7 @@ import CancelPrModal from '../components/common/sdo/CancelPrModal.jsx'
 import CashOnBankModal from '../components/common/sdo/CashOnBankModal.jsx'
 import CpfDisbursementExportModal from '../components/common/sdo/CpfDisbursementExportModal.jsx'
 import HealthDot from '../components/common/HealthDot.jsx'
+import { openReportBuilder, useCanUseReportBuilder } from '../components/common/ReportBuilderHost.jsx'
 
 const initialsOf = (name = '') =>
   name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')
@@ -920,6 +921,7 @@ function Settings() {
   // use for it at all, so it's skipped entirely rather than shown
   // disabled, matching the same fix on AppHeader.jsx's own avatar.
   const isVisitor = user?.role === 'Visitor'
+  const canBuild = useCanUseReportBuilder()
 
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
@@ -979,6 +981,13 @@ function Settings() {
             <p className="text-xs text-brand-neon/70">Warehouses, users, sheet sources, and more</p>
           </div>
         </Link>
+      )}
+
+      {canBuild && user?.role !== 'Admin' && (
+        <button type="button" onClick={openReportBuilder} className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-left transition-colors hover:border-brand-neon/60">
+          <Table2 size={22} className="shrink-0 text-brand-neon" />
+          <span className="min-w-0"><span className="block text-sm font-semibold text-app-text">Report Builder</span><span className="block text-xs text-neutral-400">Make your own tables and pivot tables from the records. Read-only.</span></span>
+        </button>
       )}
 
       {user?.role === 'Admin' && (

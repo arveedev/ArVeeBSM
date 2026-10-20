@@ -53,6 +53,7 @@ import { recordSerialUsed } from '../utils/serialNumber.js'
 import { recalculatePileStatesForWarehouses } from '../utils/pileLedger.js'
 import { isTransactionSyncPaused } from './syncPauseState.js'
 import { logError } from '../utils/errorLog.js'
+import { isViewerRole } from '../utils/roles.js'
 
 const PRELOAD_TYPES = ['WSR', 'WSI', 'ESR', 'ESI']
 const SERIAL_COLUMN_BY_TYPE = { WSR: 'WSR #', WSI: 'WSI #', ESR: 'ESR#', ESI: 'ESI#' }
@@ -432,7 +433,7 @@ const runPreloadTransactionsForUser = async (user, { onProgress } = {}) => {
   // scoped to just their own assignedWarehouses - preloading every
   // warehouse in the branch for every regular user would be far more
   // than they'd ever need and needlessly expensive.
-  const isBroadAccessRole = user.role === 'Admin' || user.role === 'Visitor'
+  const isBroadAccessRole = user.role === 'Admin' || isViewerRole(user.role)
   const warehouseIds = isBroadAccessRole
     ? (await db.warehouses.toArray()).map((w) => w.warehouseId)
     : (user.assignedWarehouses ?? [])

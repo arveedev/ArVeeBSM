@@ -22,6 +22,7 @@ import RicemillAllocationsPanel from '../components/common/admin/RicemillAllocat
 import AuthoritiesInfoPanel from '../components/common/admin/AuthoritiesInfoPanel.jsx'
 import SignatoriesPanel from '../components/common/admin/SignatoriesPanel.jsx'
 import VisitorAccessPanel from '../components/common/admin/VisitorAccessPanel.jsx'
+import ToolsAccessPanel from '../components/common/admin/ToolsAccessPanel.jsx'
 import TransactionTypesPanel from '../components/common/admin/TransactionTypesPanel.jsx'
 import SheetSourcesPanel from '../components/common/admin/SheetSourcesPanel.jsx'
 import PrSheetSourcesPanel from '../components/common/admin/PrSheetSourcesPanel.jsx'
@@ -119,6 +120,7 @@ const GROUPS = [
     label: 'Access',
     tabs: [
       { id: 'visitor', label: 'Visitor Access', Panel: VisitorAccessPanel },
+      { id: 'toolsAccess', label: 'Tools Access', Panel: ToolsAccessPanel },
       { id: 'sessionTimeouts', label: 'Session Timeouts', Panel: SessionTimeoutsPanel },
     ],
   },

@@ -485,3 +485,21 @@ This browser's own facts: `folder` (the chosen backup folder handle) and `backup
 gzip of two lines: line 1 meta (format `bsm-device-backup`, version 1, deviceId, deviceName, user, appVersion, schemaVersion, dbId, exportedAt, lastSyncAt, `pending` per table, `counts` per table, `tablesSha256`); line 2 the Export All Data JSON. The checksum is the SHA-256 of line 2's bytes. See `src/utils/deviceFile.js`.
 
 `reportConfig` also carries `gsrSettings` (object; any part not stored falls back to the defaults in `src/utils/gsr/settings.js`: memo header, palay variety blocks, grade letters, warehouse column titles / order / hidden) and `gsrFirstRun` (boolean, default true: label the GSR files "FIRST RUN - HAND CHECK").
+
+### `reportLayouts` *(synced, v49)*
+A person's saved Report Builder layout: their choices only (source, mode, rows, columns, values, filters, search, sort, hidden / ordered columns, calculated fields, format, highlight), never records.
+| Field | Type | Notes |
+|---|---|---|
+| `id` (PK) | string | |
+| `ownerUid`, `ownerName` | string | Who made it. Only the owner or the Admin can change or delete it |
+| `name`, `source` | string | `source` is a Report Builder source id (`docs`, `auth`, `sd_summary` ...); indexed |
+| `layout` | object | The choices above; a field that no longer exists is dropped with a note when the layout is opened |
+| `params` | object | Non-date source options (age brackets, days) |
+| `share` | `{ admin, analysts, staff }` | Who else may open it (never the Visitor, who cannot open the Builder) |
+| `createdAt`, `updatedAt` | number (ms) | |
+
+### `reportExportLog` *(synced, v49)*
+One row per export or share, for the Admin (Report Builder > data source "Report export log"). `id`, `uid`, `userName`, `role`, `at` (ms, indexed), `action` (`export`, `export records`, `share layout`), `source`, `layout`, `format`, `rows`, `filters` (text), `scope` ("All warehouses" or "Own warehouses").
+
+`reportConfig` also carries `toolsAccess: { reportBuilder: { analyst, staff } }` (absent = on; the Admin always has it; the Visitor and the SDO never can).
+`users.role` may now be `'Analyst'`: a real user (own PIN, no assigned warehouses, sees every warehouse) with the Visitor's read-only screens plus the Tools.

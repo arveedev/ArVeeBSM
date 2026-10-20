@@ -60,7 +60,7 @@ function UsersPanel() {
     aliasesByUid.get(a.uid).push(a.displayLabel)
   }
 
-  const isAdmin = form.role === 'Admin'
+  const isAdmin = form.role === 'Admin' || form.role === 'Analyst' // both see every warehouse, so neither is given a list
   const isAliasEligible = ALIAS_ELIGIBLE_ROLES.includes(form.role)
 
   const updateField = (field, value) => setForm((f) => ({ ...f, [field]: value }))
@@ -204,7 +204,7 @@ function UsersPanel() {
     }))
 
   const describeAccess = (user) => {
-    if (user.role === 'Admin') return 'All Warehouses'
+    if (user.role === 'Admin' || user.role === 'Analyst') return 'All Warehouses'
     const names = (user.assignedWarehouses ?? [])
       .map((id) => warehouseMap.get(id)?.name)
       .filter(Boolean)

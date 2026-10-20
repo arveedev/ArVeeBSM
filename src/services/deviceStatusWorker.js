@@ -8,6 +8,7 @@
 import { db } from '../db/dexie.js'
 import { APP_VERSION } from '../version.js'
 import { getDeviceId, getDeviceLabel } from '../utils/errorLog.js'
+import { isViewerRole } from '../utils/roles.js'
 
 const REPORT_INTERVAL_MS = 10 * 60 * 1000
 const MIN_GAP_MS = 2 * 60 * 1000          // coming back to the screen reports again only if this long since the last write
@@ -78,7 +79,7 @@ const buildRecord = async (user, existing) => {
 
 export const reportDeviceStatusNow = async (user, { force = false } = {}) => {
   try {
-    if (!user || user.role === 'Visitor') return
+    if (!user || isViewerRole(user.role)) return
     // the signed-in user object can be re-created by the app; never write more often than every 30 s unless something real changed
     if (!force && Date.now() - lastWriteAt < 30 * 1000) return
     const existing = await db.deviceStatus.get(getDeviceId())
@@ -91,7 +92,7 @@ export const reportDeviceStatusNow = async (user, { force = false } = {}) => {
 
 /** Starts reporting for the signed-in `user`; returns the cleanup. */
 export const startDeviceStatusWorker = (user) => {
-  if (!user || user.role === 'Visitor') return () => {}
+  if (!user || isViewerRole(user.role)) return () => {}
   reportDeviceStatusNow(user)
   const timer = setInterval(() => reportDeviceStatusNow(user), REPORT_INTERVAL_MS)
   const onVisible = () => { if (document.visibilityState === 'visible' && Date.now() - lastWriteAt > MIN_GAP_MS) reportDeviceStatusNow(user) }
