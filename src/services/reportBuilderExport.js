@@ -35,15 +35,17 @@ export async function exportXlsx(t, meta, fileBase) {
   const headRows = t.hr ?? [t.head]
   for (const hr of headRows) {
     const r = ws.addRow(hr)
-    r.font = { bold: true }
+    r.font = { bold: true, color: { argb: 'FFFFFFFF' } }
     r.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-    r.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDEDED' } }; c.border = { bottom: { style: 'thin', color: { argb: 'FF999999' } } } })
+    r.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } } })
   }
-  for (const row of t.body) {
+  for (const [ri, row] of t.body.entries()) {
     const r = ws.addRow(row)
+    if (t.rowCls?.[ri] === 'subt') { r.font = { bold: true, color: { argb: 'FF064E3B' } }; r.eachCell({ includeEmpty: true }, (c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCDECDC' } }; c.border = { top: { style: 'thin', color: { argb: 'FF10966E' } }, bottom: { style: 'thin', color: { argb: 'FF10966E' } } } }) }
+    else if (t.colCls) row.forEach((_, ci) => { if (/\btc\b/.test(t.colCls[ci] || '')) { const c = r.getCell(ci + 1); c.font = { bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF6' } } } })
     row.forEach((v, i) => { if (typeof v === 'number') { const c = r.getCell(i + 1); c.numFmt = Number.isInteger(v) ? '#,##0' : '#,##0.00'; c.alignment = { horizontal: 'right' } } })
   }
-  if (t.foot) { const r = ws.addRow(t.foot); r.font = { bold: true }; r.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDEDED' } }; if (typeof c.value === 'number') c.numFmt = '#,##0.00' }) }
+  if (t.foot) { const r = ws.addRow(t.foot); r.font = { bold: true, color: { argb: 'FFFFFFFF' } }; r.eachCell({ includeEmpty: true }, (c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }; if (typeof c.value === 'number') c.numFmt = '#,##0.00' }) }
   const widths = lastHead(t).map((h, i) => Math.max(10, Math.min(36, String(h ?? '').length + 3, ...t.body.slice(0, 200).map((r) => String(r[i] ?? '').length + 2))))
   widths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
   if (!t.hr) ws.autoFilter = { from: { row: 6 + 1, column: 1 }, to: { row: 6 + 1, column: cols } }
@@ -55,22 +57,43 @@ export async function exportPdf(t, meta, fileBase) {
   const [pdfMod, tableMod] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
   const jsPDF = pdfMod.jsPDF ?? pdfMod.default?.jsPDF ?? pdfMod.default
   const autoTable = typeof tableMod.default === 'function' ? tableMod.default : tableMod.default?.default ?? tableMod.autoTable
-  const wide = lastHead(t).length > 12
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: wide ? 'legal' : 'a4' })
+  const ncol = lastHead(t).length
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: ncol > 18 ? 'legal' : 'a4' })
   const W = doc.internal.pageSize.getWidth()
-  doc.setFontSize(13); doc.setTextColor(20); doc.text(meta.title, 10, 12)
-  doc.setFontSize(8.5); doc.setTextColor(90)
-  doc.text(`Source: ${meta.sourceName}`, 10, 17)
-  doc.text(`Filters: ${meta.filters.length ? meta.filters.join('; ') : 'none'}`, 10, 21, { maxWidth: W - 20 })
-  doc.text(`Made on ${stamp()}${meta.who ? ` by ${meta.who}` : ''} - read-only copy of the app's records`, 10, 25)
-  const nf = (x) => (typeof x === 'number' ? x.toLocaleString('en-US', { maximumFractionDigits: 2 }) : x ?? '')
+  const H = doc.internal.pageSize.getHeight()
+  const NAVY = [30, 41, 59]
+  // the title block
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(17, 24, 39)
+  doc.text(meta.title, 10, 13, { maxWidth: W - 20 })
+  doc.setDrawColor(16, 185, 129); doc.setLineWidth(0.8); doc.line(10, 16.2, 38, 16.2)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90, 98, 110)
+  doc.text(`Source: ${meta.sourceName}`, 10, 21, { maxWidth: W - 20 })
+  doc.text(`Filters: ${meta.filters.length ? meta.filters.join('; ') : 'none'}`, 10, 25, { maxWidth: W - 20 })
+  doc.text(`Made on ${stamp()}${meta.who ? ` by ${meta.who}` : ''} - read-only copy of the app's records`, 10, 29, { maxWidth: W - 20 })
+  const nf = (x) => (typeof x === 'number' ? (x === 0 ? '' : x.toLocaleString('en-US', { maximumFractionDigits: 2 })) : x ?? '')
+  const rh = t.rhCols ?? 0
+  const isNum = (ci) => (t.kinds ? t.kinds[ci] === 'num' : ci >= rh)
+  const head = t.hdr
+    ? t.hdr.map((row) => row.map((c) => ({ content: c.content, colSpan: c.colSpan, rowSpan: c.rowSpan, styles: { halign: c.left ? 'left' : 'center', valign: 'middle', fillColor: c.tc ? [15, 90, 66] : NAVY, textColor: 255, fontStyle: 'bold' } })))
+    : [t.head.map((h, ci) => ({ content: h, styles: { halign: isNum(ci) ? 'right' : 'left', fillColor: NAVY, textColor: 255, fontStyle: 'bold' } }))]
+  const body = t.body.map((r, ri) => {
+    const sub = t.rowCls?.[ri] === 'subt'
+    return r.map((v, ci) => {
+      const tc = /\btc\b/.test(t.colCls?.[ci] || '')
+      const lead = ci < rh
+      const styles = { halign: isNum(ci) ? 'right' : 'left', fontStyle: sub || tc || lead ? 'bold' : 'normal' }
+      if (sub) { styles.fillColor = [205, 236, 220]; styles.textColor = [6, 78, 59]; styles.lineColor = [16, 150, 110]; styles.lineWidth = 0.35 } else if (tc) styles.fillColor = [232, 238, 246]
+      return { content: nf(v), styles }
+    })
+  })
+  const foot = t.foot ? [t.foot.map((v, ci) => ({ content: nf(v), styles: { halign: isNum(ci) ? 'right' : 'left', fillColor: NAVY, textColor: 255, fontStyle: 'bold' } }))] : undefined
   autoTable(doc, {
-    startY: 29, head: t.hr ?? [t.head], body: t.body.map((r) => r.map(nf)), foot: t.foot ? [t.foot.map(nf)] : undefined, theme: 'grid', showFoot: 'lastPage',
-    styles: { fontSize: wide ? 6.5 : 7.5, cellPadding: 1.3, halign: 'right', lineColor: [200, 200, 200] }, headStyles: { fillColor: [235, 235, 235], textColor: 20, halign: 'center' }, footStyles: { fillColor: [235, 235, 235], textColor: 20 },
-    columnStyles: { 0: { halign: 'left' } }, margin: { left: 10, right: 10, bottom: 12 },
+    startY: 33, head, body, foot, theme: 'grid', showFoot: 'lastPage', showHead: 'everyPage', horizontalPageBreak: true, horizontalPageBreakRepeat: rh ? Array.from({ length: rh }, (_, i) => i) : undefined,
+    styles: { font: 'helvetica', fontSize: ncol > 10 ? 7.8 : 9, cellPadding: { top: 1.9, bottom: 1.9, left: 2.2, right: 2.2 }, lineColor: [214, 219, 226], lineWidth: 0.15, textColor: [31, 41, 55], valign: 'middle' },
+    alternateRowStyles: { fillColor: [249, 250, 252] }, margin: { left: 10, right: 10, bottom: 12 },
   })
   const n = doc.getNumberOfPages()
-  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Page ${i} of ${n}`, W - 10, doc.internal.pageSize.getHeight() - 5, { align: 'right' }) }
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Page ${i} of ${n}`, W - 10, H - 5, { align: 'right' }) }
   saveBlob(doc.output('blob'), `${safe(fileBase)}.pdf`)
 }
 

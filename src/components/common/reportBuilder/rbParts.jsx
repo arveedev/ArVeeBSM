@@ -209,6 +209,8 @@ export function FormatPanel({ layout, onChange }) {
     <div className="rb-drop mb-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-300">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label className="flex items-center gap-2"><input type="checkbox" checked={layout.heat} onChange={(e) => set({ heat: e.target.checked })} />Shade by size</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={layout.totCol !== false} onChange={(e) => set({ totCol: e.target.checked })} />Total column (at the right)</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={layout.totRow !== false} onChange={(e) => set({ totRow: e.target.checked })} />Total row (at the bottom)</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={layout.subt} onChange={(e) => set({ subt: e.target.checked })} />Subtotals</label>
         <label className="flex items-center gap-2">Show as
           <select value={layout.pct} onChange={(e) => set({ pct: e.target.value })} className={input}><option value="none">Numbers</option><option value="total">% of grand total</option><option value="row">% of row</option><option value="col">% of column</option></select>
@@ -235,22 +237,29 @@ export function ResultTable({ table, layout, onSort, onCell }) {
   if (!body.length) return <div className="p-10 text-center text-sm text-neutral-500">No records match the search and filters.</div>
   const cls = (c, base = '') => `${base} ${(c.cls || '').split(' ').map((x) => hlStyle[x] ?? '').join(' ')}`
   const sortMark = (id) => { const i = layout.sort.findIndex((s) => s.f === id); return i < 0 ? null : <span className="text-brand-neon"> {layout.sort[i].dir > 0 ? '▲' : '▼'}{layout.sort.length > 1 ? i + 1 : ''}</span> }
-  const td = (c, key) => (
-    <td
-      key={key} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id && /\bcl\b/.test(c.cls || '') ? () => onCell(c.id) : undefined}
-      style={c.heat ? { background: `rgba(0,255,163,${c.heat.toFixed(2)})` } : undefined}
-      className={cls(c, `whitespace-nowrap border-b border-neutral-900 px-3 py-1.5 tabular-nums ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'} ${/\brh\b/.test(c.cls || '') ? 'sticky left-0 z-[1] bg-neutral-950 font-semibold text-app-text' : 'text-neutral-200'} ${/\bsb\b/.test(c.cls || '') ? 'text-transparent' : ''} ${/\btc\b/.test(c.cls || '') ? 'bg-emerald-950/40 font-bold' : ''} ${/\bcl\b/.test(c.cls || '') ? 'cursor-pointer hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-brand-neon' : ''}`)}
-    >{c.t}</td>
-  )
+  const td = (c, key) => {
+    const k = c.cls || ''
+    const st = /\bst\b/.test(k)
+    const rh = /\brh\b/.test(k)
+    const tc = /\btc\b/.test(k)
+    const bg = st ? (rh ? 'bg-emerald-950' : 'bg-emerald-950/80') : rh ? 'bg-neutral-950' : tc ? 'bg-emerald-950/40' : ''
+    return (
+      <td
+        key={key} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id && /\bcl\b/.test(k) ? () => onCell(c.id) : undefined}
+        style={c.heat ? { background: `rgba(0,255,163,${c.heat.toFixed(2)})` } : undefined}
+        className={cls(c, `whitespace-nowrap border-b px-4 py-2 tabular-nums ${st ? 'border-y border-brand-neon/40 font-extrabold text-brand-neon' : 'border-neutral-900'} ${bg} ${/\bl\b/.test(k) ? 'text-left' : 'text-right'} ${rh ? `sticky left-0 z-[1] ${st ? '' : 'font-semibold text-app-text'}` : st ? '' : 'text-neutral-200'} ${/\bsb\b/.test(k) ? 'text-transparent' : ''} ${tc && !st ? 'font-bold' : ''} ${/\bcl\b/.test(k) ? 'cursor-pointer hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-brand-neon' : ''}`)}
+      >{c.t}</td>
+    )
+  }
   return (
-    <table className="w-full border-separate border-spacing-0 text-[13px]">
+    <table className="w-full border-separate border-spacing-0 text-[15px]">
       <thead>
         {head.map((r, ri) => (
           <tr key={ri}>
             {r.map((c, i) => (
               <th
                 key={i} colSpan={c.span > 1 ? c.span : undefined} rowSpan={c.rs > 1 ? c.rs : undefined} onClick={c.id ? () => onSort(c.id) : undefined}
-                className={`sticky top-0 z-[2] whitespace-nowrap border-b border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs font-bold text-neutral-400 ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'} ${/\brh\b/.test(c.cls || '') ? 'left-0 z-[3]' : ''} ${/\btc\b/.test(c.cls || '') ? 'bg-emerald-950' : ''} ${c.id ? 'cursor-pointer hover:text-brand-neon' : ''}`}
+                className={`sticky top-0 z-[2] whitespace-nowrap border-b border-neutral-800 bg-neutral-900 px-4 py-2 text-[13px] font-bold text-neutral-300 ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'} ${/\brh\b/.test(c.cls || '') ? 'left-0 z-[3]' : ''} ${/\btc\b/.test(c.cls || '') ? 'bg-emerald-950' : ''} ${c.id ? 'cursor-pointer hover:text-brand-neon' : ''}`}
               >{c.t}{c.id && c.id !== '__tot' ? sortMark(c.id) : null}</th>
             ))}
           </tr>
@@ -261,7 +270,7 @@ export function ResultTable({ table, layout, onSort, onCell }) {
           ? body.map((r, ri) => <tr key={ri} style={ri < 24 ? { animationDelay: `${ri * 14}ms` } : undefined} className={`hover:bg-neutral-900/60 ${ri < 24 ? 'rb-fade' : ''}`}>{r.map((c, i) => td(c, i))}</tr>)
           : body.map((r, ri) => <tr key={ri} style={ri < 24 ? { animationDelay: `${ri * 14}ms` } : undefined} className={`${ri < 24 ? 'rb-fade' : ''} ${r.cls === 'subt' ? 'bg-neutral-900 font-bold' : ''}`}>{r.cells.map((c, i) => td(c, i))}</tr>)}
       </tbody>
-      {foot && <tfoot><tr className="sticky bottom-0 bg-neutral-900 font-extrabold text-brand-neon">{foot.map((c, i) => <td key={i} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id ? () => onCell(c.id) : undefined} className={`sticky bottom-0 cursor-pointer whitespace-nowrap bg-neutral-900 px-3 py-1.5 tabular-nums ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'}`}>{c.t}</td>)}</tr></tfoot>}
+      {foot && <tfoot><tr className="sticky bottom-0 bg-neutral-900 font-extrabold text-brand-neon">{foot.map((c, i) => <td key={i} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id ? () => onCell(c.id) : undefined} className={`sticky bottom-0 cursor-pointer whitespace-nowrap bg-neutral-900 px-4 py-2 tabular-nums ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'}`}>{c.t}</td>)}</tr></tfoot>}
     </table>
   )
 }

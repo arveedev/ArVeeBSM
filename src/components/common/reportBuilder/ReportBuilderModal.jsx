@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
-import { ArrowLeft, X, Loader2, ShieldCheck, Save, Trash2, Share2, RotateCcw, ChevronDown } from 'lucide-react'
+import { ArrowLeft, X, Loader2, ShieldCheck, Save, Trash2, Share2, RotateCcw } from 'lucide-react'
 import useEscapeKey from '../../../hooks/useEscapeKey.js'
 import useBodyScrollLock from '../../../hooks/useBodyScrollLock.js'
 import { buildFields, readValue } from '../../../utils/reportBuilder/fields.js'
@@ -19,7 +19,7 @@ import { loadSource, sourcesFor, sourceById, defaultParams, isWideRole } from '.
 import { listLayouts, saveLayout, deleteLayout, logReportEvent } from '../../../services/reportLayouts.js'
 import { exportXlsx, exportPdf } from '../../../services/reportBuilderExport.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
-import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, ColumnsPanel, FormatPanel, ResultTable, Collapse, pill, pillOn, input } from './rbParts.jsx'
+import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, ColumnsPanel, FormatPanel, ResultTable, pill, pillOn, input } from './rbParts.jsx'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const longDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -31,11 +31,11 @@ const emptyVal = (v, f) => v == null || String(v).trim() === '' || (f.kind === '
 // the table starts empty: nothing is built until the person puts fields in the boxes
 const freshLayout = (sourceId) => blankLayout(sourceId)
 
-// one row of the builder: its name, then the box the fields are dropped in
+// one box of the builder: its name, then the box the fields are dropped in
 function BoxRow({ name, children }) {
   return (
-    <div className="grid grid-cols-[4.4rem_minmax(0,1fr)] items-start gap-2">
-      <p className={`${label} pt-2.5`}>{name}</p>
+    <div>
+      <p className={`${label} mb-0.5`}>{name}</p>
       {children}
     </div>
   )
@@ -47,6 +47,31 @@ function Dialog({ onClose, children }) {
     <div className="rb-bd fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-black/60 px-3 pb-6 pt-[10vh]" onClick={onClose}>
       <div className="rb-pop w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>{children}</div>
     </div>
+  )
+}
+
+// a saved layout: click its name to open it. The delete icon only appears after the pointer rests on it a moment (or a long press), and
+// asks before anything is deleted, so it cannot be hit by accident.
+function SavedChip({ l, src, active, byOther, canDelete, onOpen, onAsk }) {
+  const [show, setShow] = useState(false)
+  const t = useRef(null)
+  const arm = (ms) => { clearTimeout(t.current); if (canDelete) t.current = setTimeout(() => setShow(true), ms) }
+  const disarm = () => { clearTimeout(t.current); setShow(false) }
+  useEffect(() => { if (!show) return undefined; const x = setTimeout(() => setShow(false), 5000); return () => clearTimeout(x) }, [show])
+  useEffect(() => () => clearTimeout(t.current), [])
+  return (
+    <span
+      onMouseEnter={() => arm(900)} onMouseLeave={disarm} onTouchStart={() => arm(550)} onTouchEnd={() => clearTimeout(t.current)} onTouchMove={() => clearTimeout(t.current)}
+      className={`rb-pop inline-flex items-center rounded-full border bg-neutral-950 py-0.5 pl-1 pr-1 text-xs ${active ? 'border-brand-neon/60' : 'border-neutral-800'}`}
+    >
+      <button type="button" onClick={onOpen} className="rounded-full px-2 py-0.5 text-neutral-200 transition-colors hover:text-brand-neon" title={src?.name ?? l.source}>{l.name}{byOther ? <span className="text-neutral-500"> &middot; by {l.ownerName || 'someone'}</span> : null}</button>
+      {canDelete && (
+        <button
+          type="button" onClick={onAsk} aria-label="Delete layout" tabIndex={show ? 0 : -1}
+          className={`overflow-hidden rounded-full text-neutral-500 transition-all duration-300 hover:text-red-400 ${show ? 'ml-1.5 max-w-[1.6rem] p-1 opacity-100' : 'pointer-events-none max-w-0 opacity-0'}`}
+        ><Trash2 size={12} /></button>
+      )}
+    </span>
   )
 }
 
@@ -75,6 +100,7 @@ function ReportBuilderModal({ user, onClose }) {
   const [searchText, setSearchText] = useState('')
   const [fieldQuery, setFieldQuery] = useState('')
   const [busy, setBusy] = useState('')
+  const [askDel, setAskDel] = useState(null) // the saved layout the person is about to delete
   const [dragging, setDragging] = useState(false) // a field that is already in a box is being dragged
   const [panelOpen, setPanelOpen] = useState(true)
   const pendingLayout = useRef(null)
@@ -84,7 +110,7 @@ function ReportBuilderModal({ user, onClose }) {
     if (document.querySelector('[data-sd-overlay]')) return
     const t = e?.target
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return
-    if (pop) setPop(null); else if (drill) setDrill(null); else onClose()
+    if (askDel) setAskDel(null); else if (pop) setPop(null); else if (drill) setDrill(null); else onClose()
   })
 
   // the period: never before September 1, 2026 (the data of this app is complete from then)
@@ -265,31 +291,30 @@ function ReportBuilderModal({ user, onClose }) {
       </div>
 
       <div
-        className="relative mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+        className="mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col overflow-y-auto px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:overflow-hidden"
         onDragStartCapture={(e) => { if (e.target?.dataset?.rbFrom) setDragging(true) }}
         onDragEnd={() => setDragging(false)}
         onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-rb-from')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' } }}
         onDrop={(e) => { setDragging(false); dropOutside(e) }}
       >
-        {/* ---------------- the period, the data and the saved layouts ---------------- */}
-        <div className="rb-fade mb-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-3">
-          <div className="grid gap-x-5 gap-y-3 lg:grid-cols-[minmax(0,25rem)_minmax(0,1fr)_minmax(0,24rem)]">
+        {/* ---------------- one compact bar: period, data, save ---------------- */}
+        <div className="rb-fade mb-2 shrink-0 rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
+          <div className="flex flex-wrap items-end gap-x-5 gap-y-2.5">
             <div>
               <p className={`${label} mb-1`}>Period</p>
-              <div className="grid grid-cols-2 gap-2">
-                <CalendarDatePicker value={period.from} label="From" onChange={(iso) => setPeriod({ from: iso, to: period.to < iso ? iso : period.to })} />
-                <CalendarDatePicker value={period.to} label="To" onChange={(iso) => setPeriod({ from: period.from > iso ? iso : period.from, to: iso })} />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div className="w-36"><CalendarDatePicker value={period.from} label="From" onChange={(iso) => setPeriod({ from: iso, to: period.to < iso ? iso : period.to })} /></div>
+                <span className="text-xs text-neutral-500">to</span>
+                <div className="w-36"><CalendarDatePicker value={period.to} label="To" onChange={(iso) => setPeriod({ from: period.from > iso ? iso : period.from, to: iso })} /></div>
                 {quick.map(([n, f, t]) => <button key={n} type="button" onClick={() => setPeriod({ from: f, to: t })} className={`${pill} !px-2.5 !py-1 ${period.from === f && period.to === t ? pillOn : ''}`}>{n}</button>)}
               </div>
             </div>
-            <div className="min-w-0">
+            <div className="min-w-[15rem] flex-1">
               <label className={`${label} mb-1 block`} htmlFor="rb-source">Data</label>
-              <select id="rb-source" value={sourceId} onChange={(e) => chooseSource(e.target.value)} className={`${input} w-full`}>
-                {grouped.map(([g, list]) => <optgroup key={g} label={g}>{list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>)}
-              </select>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <select id="rb-source" value={sourceId} onChange={(e) => chooseSource(e.target.value)} className={`${input} min-w-0 flex-1`}>
+                  {grouped.map(([g, list]) => <optgroup key={g} label={g}>{list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>)}
+                </select>
                 {(src?.params ?? []).map((p) => (
                   <label key={p.id} className="flex items-center gap-1.5 text-xs text-neutral-400">{p.label}
                     {p.type === 'select'
@@ -297,123 +322,111 @@ function ReportBuilderModal({ user, onClose }) {
                       : <input type="number" value={params[p.id] ?? ''} onChange={(e) => setParams({ ...params, [p.id]: e.target.value })} className={`${input} w-20`} />}
                   </label>
                 ))}
-                <button type="button" onClick={startOver} className={`${pill} !px-2.5 !py-1`}><RotateCcw size={12} />Start over</button>
+                <button type="button" onClick={startOver} className={`${pill} !px-2.5 !py-1.5`}><RotateCcw size={12} />Start over</button>
                 {loading && <Loader2 size={15} className="animate-spin text-brand-neon" />}
               </div>
             </div>
-            <div className="min-w-0">
-              <p className={`${label} mb-1`}>Save this layout</p>
+            <div className="min-w-[17rem] flex-1 lg:max-w-md">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <p className={label}>Save this layout</p>
+                <div className="flex flex-wrap items-center gap-x-2.5 text-[11px] text-neutral-400">
+                  <span className="inline-flex items-center gap-1 text-neutral-500"><Share2 size={11} />Share</span>
+                  {[['admin', 'Admin'], ['analysts', 'Analysts'], ['staff', 'Staff']].map(([k, n]) => <label key={k} className="flex items-center gap-1"><input type="checkbox" checked={!!share[k]} onChange={(e) => setShare({ ...share, [k]: e.target.checked })} />{n}</label>)}
+                </div>
+              </div>
               <div className="flex gap-1.5">
                 <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name this layout" className={`${input} min-w-0 flex-1`} />
                 <button type="button" onClick={doSave} disabled={isBlank} className="inline-flex items-center gap-1 rounded-lg bg-brand-neon px-3 py-1.5 text-sm font-semibold text-brand-contrast transition-transform active:scale-95 disabled:opacity-40"><Save size={14} />Save</button>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-300">
-                <span className="inline-flex items-center gap-1 text-neutral-500"><Share2 size={12} />Share with</span>
-                {[['admin', 'Admin'], ['analysts', 'Analysts'], ['staff', 'Warehouse staff']].map(([k, n]) => <label key={k} className="flex items-center gap-1.5"><input type="checkbox" checked={!!share[k]} onChange={(e) => setShare({ ...share, [k]: e.target.checked })} />{n}</label>)}
-              </div>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-neutral-800 pt-2.5">
-            <p className="text-[11px] text-neutral-500">
-              {sourceDated ? `Records dated ${longDay(period.from)} to ${longDay(period.to)}. Nothing before ${longDay(floor)} is ever shown.` : 'This source has no dates (it lists what exists now), so the period does not cut it.'}
-              {!isWideRole(role) && ' You see only the records of your own warehouses.'}
-            </p>
-            {layouts.length > 0 && (
-              <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                <span className={label}>Saved</span>
-                {layouts.map((l) => (
-                  <span key={l.id} className={`rb-pop inline-flex items-center gap-1 rounded-full border bg-neutral-950 py-0.5 pl-1 pr-2 text-xs ${editingId === l.id ? 'border-brand-neon/60' : 'border-neutral-800'}`}>
-                    <button type="button" onClick={() => openLayout(l)} className="rounded-full px-2 py-0.5 text-neutral-200 transition-colors hover:text-brand-neon" title={sourceById(l.source)?.name ?? l.source}>{l.name}{l.ownerUid !== user?.uid ? <span className="text-neutral-500"> &middot; by {l.ownerName || 'someone'}</span> : null}</button>
-                    {(l.ownerUid === user?.uid || role === 'Admin') && <button type="button" onClick={() => removeLayout(l)} aria-label="Delete layout" className="text-neutral-500 transition-colors hover:text-red-400"><Trash2 size={12} /></button>}
+          {layouts.length > 0 && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-neutral-800 pt-2">
+              <span className={label}>Saved</span>
+              {layouts.map((l) => <SavedChip key={l.id} l={l} src={sourceById(l.source)} active={editingId === l.id} byOther={l.ownerUid !== user?.uid} canDelete={l.ownerUid === user?.uid || role === 'Admin'} onOpen={() => openLayout(l)} onAsk={() => setAskDel(l)} />)}
+            </div>
+          )}
+        </div>
+        {error && <p className="mb-2 shrink-0 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
+
+        {/* ---------------- the builder on the left, the table taking the rest ---------------- */}
+        <div className={`grid gap-3 lg:min-h-0 lg:flex-1 ${panelOpen ? 'lg:grid-cols-[23rem_minmax(0,1fr)]' : ''}`}>
+          {panelOpen && (
+            <div className="rb-fade space-y-2.5 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+              <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
+                <FieldPicker
+                  key={sourceId} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)}
+                  extra={<button type="button" onClick={calcOpen} className={`${pill} shrink-0 !px-2.5`}>+ Formula</button>}
+                />
+              </div>
+              <div className="space-y-2 rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
+                <BoxRow name="Rows"><DropArea area="rows" onDropField={place} hint="Drop fields to group down the side">{layout.rows.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} from="rows" onRemove={() => patch({ rows: layout.rows.filter((x) => x !== id) })} />)}</DropArea></BoxRow>
+                <BoxRow name="Columns"><DropArea area="cols" onDropField={place} hint="Drop fields to spread across the top">{layout.cols.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} from="cols" onRemove={() => patch({ cols: layout.cols.filter((x) => x !== id) })} />)}</DropArea></BoxRow>
+                <BoxRow name="Values"><DropArea area="vals" onDropField={place} hint="Drop numbers to add up">{layout.vals.filter((v) => fields.map[v.f]).map((v, i) => <ValueChip key={v.f} f={fields.map[v.f]} v={v} onAgg={(a) => patch({ vals: layout.vals.map((x, k) => (k === i ? { ...x, a } : x)) })} onRemove={() => patch({ vals: layout.vals.filter((x) => x.f !== v.f) })} />)}</DropArea></BoxRow>
+                <BoxRow name="Filter">
+                  <DropArea area="filt" onDropField={place} hint="Drop a field to keep only some records">
+                    {layout.filters.map((ft, i) => { const f = fields.map[ft.f]; if (!f) return null; return <span key={`${ft.f}${i}`} className="rb-pop inline-flex items-center gap-1.5 rounded-full border border-brand-neon/35 bg-brand-neon/10 py-0.5 pl-2.5 pr-1.5 text-xs text-app-text">{filterText({ filters: [ft], search: '' }, fields)[0]}<button type="button" onClick={() => patch({ filters: layout.filters.filter((_, k) => k !== i) })} aria-label="Remove filter" className="text-neutral-400 hover:text-red-400"><X size={12} /></button></span> })}
+                  </DropArea>
+                </BoxRow>
+                {dragging && <p className="rb-pop rounded-lg bg-red-500/15 px-2.5 py-1 text-center text-[11px] text-red-300">Let go outside the boxes to remove it</p>}
+              </div>
+            </div>
+          )}
+
+          {/* ---------------- the table ---------------- */}
+          <div className="flex min-w-0 flex-col lg:min-h-0">
+            <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
+              <input type="search" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search every field" className={`${input} min-w-[10rem] flex-1`} />
+              <div className="inline-flex overflow-hidden rounded-lg border border-neutral-700">
+                {[['list', 'List of records'], ['pivot', 'Pivot table']].map(([k, n]) => <button key={k} type="button" onClick={() => setMode(k)} className={`px-3 py-1.5 text-sm transition-colors ${layout.mode === k ? 'bg-brand-neon/10 text-brand-neon' : 'bg-neutral-900 text-neutral-300 hover:text-app-text'}`}>{n}</button>)}
+              </div>
+              {layout.mode === 'list' && <button type="button" onClick={() => setPop('cols')} className={pill}>Columns</button>}
+              <button type="button" onClick={() => setPop('fmt')} className={pill}>Format</button>
+              <button type="button" onClick={() => setPanelOpen((v) => !v)} className={`${pill} ${panelOpen ? '' : pillOn}`}>{panelOpen ? 'Hide builder' : 'Show builder'}</button>
+              <div className="ml-auto flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 py-1 pl-3 pr-1">
+                <span className={label}>Export</span>
+                <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('xlsx')} className={pill}>{busy === 'xlsx' ? 'Making…' : 'Excel'}</button>
+                <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('pdf')} className={pill}>{busy === 'pdf' ? 'Making…' : 'PDF'}</button>
+              </div>
+            </div>
+
+            <div className="sd-table max-h-[70vh] min-h-[16rem] overflow-auto rounded-xl border border-neutral-800 bg-neutral-950 lg:max-h-none lg:flex-1">
+              {isBlank
+                ? <div className="p-10 text-center"><p className="text-sm font-semibold text-neutral-300">The table is empty</p><p className="mx-auto mt-1 max-w-md text-xs text-neutral-500">Drag fields into Rows, Columns or Values to build a pivot table, or choose &quot;List of records&quot; to see the records themselves.</p></div>
+                : loading && !table
+                  ? <div className="p-10 text-center text-sm text-neutral-500">Loading&hellip;</div>
+                  : table ? <div key={tableKey} className="rb-fade"><ResultTable table={table} layout={layout} onSort={onSort} onCell={openDrill} /></div> : <div className="p-10 text-center text-sm text-neutral-500">Nothing to show.</div>}
+            </div>
+            <div className="mt-1.5 flex shrink-0 flex-wrap justify-between gap-2 text-xs text-neutral-500">
+              <span>
+                {stats && !isBlank && layout.mode === 'list' && `${stats.records.toLocaleString('en-US')} records${stats.more > 0 ? ` (first ${stats.shown} shown; the exports have all ${stats.records.toLocaleString('en-US')})` : ''}`}
+                {stats && !isBlank && layout.mode === 'pivot' && `${stats.records.toLocaleString('en-US')} records counted, ${stats.rows} rows${stats.cols ? `, ${stats.cols} columns` : ''}. Click any number to see the records behind it.`}
+              </span>
+              <span>Read from this device&apos;s copy of the records</span>
+            </div>
+
+            {drill && (
+              <div className="rb-drop mt-2 shrink-0 rounded-xl border border-brand-neon/40 bg-neutral-900 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <b className="text-sm text-app-text">{drill.recs.length.toLocaleString('en-US')} records behind: {drill.label}</b>
+                  <span className="flex gap-1.5">
+                    <button type="button" onClick={() => doExport('xlsx', drillFlat(), `Records behind ${drill.label}`)} className={pill}>Excel</button>
+                    <button type="button" onClick={() => doExport('pdf', drillFlat(), `Records behind ${drill.label}`)} className={pill}>PDF</button>
+                    <button type="button" onClick={() => setDrill(null)} className={pill}>Close</button>
                   </span>
-                ))}
+                </div>
+                <div className="sd-table max-h-[28vh] overflow-auto rounded-lg border border-neutral-800 bg-neutral-950">
+                  <table className="w-full border-separate border-spacing-0 text-sm">
+                    <thead><tr>{drillCols().map((f) => <th key={f.id} className={`sticky top-0 whitespace-nowrap border-b border-neutral-800 bg-neutral-900 px-3 py-1.5 font-bold text-neutral-400 ${f.kind === 'num' ? 'text-right' : 'text-left'}`}>{f.label}</th>)}</tr></thead>
+                    <tbody>
+                      {drill.recs.slice(0, 200).map((r, i) => <tr key={i} className="hover:bg-neutral-900/60">{drillCols().map((f) => { const v = f.calc ? '' : (f.get ? f.get(r) : r[f.id]); return <td key={f.id} className={`whitespace-nowrap border-b border-neutral-900 px-3 py-1.5 tabular-nums ${f.kind === 'num' ? 'text-right' : ''}`}>{f.kind === 'num' && typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(v ?? '')}</td> })}</tr>)}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-1 text-xs text-neutral-500">{drill.recs.length > 200 ? 'First 200 shown. ' : ''}The Excel and PDF contain every field of all {drill.recs.length.toLocaleString('en-US')} records.</p>
               </div>
             )}
           </div>
-        </div>
-        {error && <p className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
-
-        {/* ---------------- the builder: fields, and the boxes to drop them in ---------------- */}
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="text-[11px] text-neutral-500">Drag a field into Rows, Columns, Values or Filter. Drag it from one box to another to move it, or out of the boxes to remove it.</p>
-          <button type="button" onClick={() => setPanelOpen((v) => !v)} className={`${pill} shrink-0 !px-2.5 !py-1`}>{panelOpen ? 'Hide' : 'Show'} builder<ChevronDown size={12} className={`transition-transform duration-200 ${panelOpen ? 'rotate-180' : ''}`} /></button>
-        </div>
-        <Collapse open={panelOpen}>
-          <div className="mb-3 grid gap-2.5 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
-            <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
-              <FieldPicker
-                key={sourceId} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)}
-                extra={<button type="button" onClick={calcOpen} className={`${pill} shrink-0 !px-2.5`}>+ Formula</button>}
-              />
-            </div>
-            <div className="space-y-2 rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
-              <BoxRow name="Rows"><DropArea area="rows" onDropField={place} hint="Drop fields to group down the side">{layout.rows.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} from="rows" onRemove={() => patch({ rows: layout.rows.filter((x) => x !== id) })} />)}</DropArea></BoxRow>
-              <BoxRow name="Columns"><DropArea area="cols" onDropField={place} hint="Drop fields to spread across the top">{layout.cols.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} from="cols" onRemove={() => patch({ cols: layout.cols.filter((x) => x !== id) })} />)}</DropArea></BoxRow>
-              <BoxRow name="Values"><DropArea area="vals" onDropField={place} hint="Drop numbers to add up (none = count of records)">{layout.vals.filter((v) => fields.map[v.f]).map((v, i) => <ValueChip key={v.f} f={fields.map[v.f]} v={v} onAgg={(a) => patch({ vals: layout.vals.map((x, k) => (k === i ? { ...x, a } : x)) })} onRemove={() => patch({ vals: layout.vals.filter((x) => x.f !== v.f) })} />)}</DropArea></BoxRow>
-              <BoxRow name="Filter">
-                <DropArea area="filt" onDropField={place} hint="Drop a field here to keep only some records">
-                  {layout.filters.map((ft, i) => { const f = fields.map[ft.f]; if (!f) return null; return <span key={`${ft.f}${i}`} className="rb-pop inline-flex items-center gap-1.5 rounded-full border border-brand-neon/35 bg-brand-neon/10 py-0.5 pl-2.5 pr-1.5 text-xs text-app-text">{filterText({ filters: [ft], search: '' }, fields)[0]}<button type="button" onClick={() => patch({ filters: layout.filters.filter((_, k) => k !== i) })} aria-label="Remove filter" className="text-neutral-400 hover:text-red-400"><X size={12} /></button></span> })}
-                </DropArea>
-              </BoxRow>
-              <div className="h-5 pl-[4.9rem] text-[11px]">
-                {dragging ? <span className="rb-pop inline-block rounded-full bg-red-500/15 px-2.5 py-0.5 text-red-300">Let go anywhere outside the boxes to remove it from the table</span> : <span className="text-neutral-600">{keptRows.length.toLocaleString('en-US')} records match, {offered.list.filter((f) => !f.d).length} fields have something in them</span>}
-              </div>
-            </div>
-          </div>
-        </Collapse>
-
-        {/* ---------------- the table ---------------- */}
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <input type="search" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search every field (name, serial, warehouse, number)" className={`${input} min-w-[12rem] flex-1`} />
-            <div className="inline-flex overflow-hidden rounded-lg border border-neutral-700">
-              {[['list', 'List of records'], ['pivot', 'Pivot table']].map(([k, n]) => <button key={k} type="button" onClick={() => setMode(k)} className={`px-3 py-1.5 text-sm transition-colors ${layout.mode === k ? 'bg-brand-neon/10 text-brand-neon' : 'bg-neutral-900 text-neutral-300 hover:text-app-text'}`}>{n}</button>)}
-            </div>
-            {layout.mode === 'list' && <button type="button" onClick={() => setPop('cols')} className={pill}>Columns</button>}
-            <button type="button" onClick={() => setPop('fmt')} className={pill}>Format</button>
-            <div className="ml-auto flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 py-1 pl-3 pr-1">
-              <span className={label}>Export</span>
-              <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('xlsx')} className={pill}>{busy === 'xlsx' ? 'Making…' : 'Excel'}</button>
-              <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('pdf')} className={pill}>{busy === 'pdf' ? 'Making…' : 'PDF'}</button>
-            </div>
-          </div>
-
-          <div className="max-h-[62vh] overflow-auto rounded-xl border border-neutral-800 bg-neutral-950">
-            {isBlank
-              ? <div className="p-10 text-center"><p className="text-sm font-semibold text-neutral-300">The table is empty</p><p className="mx-auto mt-1 max-w-md text-xs text-neutral-500">Drag fields into Rows, Columns or Values above to build a pivot table, or choose &quot;List of records&quot; to see the records themselves.</p></div>
-              : loading && !table
-                ? <div className="p-10 text-center text-sm text-neutral-500">Loading&hellip;</div>
-                : table ? <div key={tableKey} className="rb-fade"><ResultTable table={table} layout={layout} onSort={onSort} onCell={openDrill} /></div> : <div className="p-10 text-center text-sm text-neutral-500">Nothing to show.</div>}
-          </div>
-          <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-neutral-500">
-            <span>
-              {stats && !isBlank && layout.mode === 'list' && `${stats.records.toLocaleString('en-US')} records${stats.more > 0 ? ` (first ${stats.shown} shown; the exports have all ${stats.records.toLocaleString('en-US')})` : ''}`}
-              {stats && !isBlank && layout.mode === 'pivot' && `${stats.records.toLocaleString('en-US')} records counted, ${stats.rows} rows${stats.cols ? `, ${stats.cols} columns` : ''}. Click any number to see the records behind it.`}
-            </span>
-            <span>Read from this device&apos;s copy of the records</span>
-          </div>
-
-          {drill && (
-            <div className="rb-drop mt-3 rounded-xl border border-brand-neon/40 bg-neutral-900 p-3">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <b className="text-sm text-app-text">{drill.recs.length.toLocaleString('en-US')} records behind: {drill.label}</b>
-                <span className="flex gap-1.5">
-                  <button type="button" onClick={() => doExport('xlsx', drillFlat(), `Records behind ${drill.label}`)} className={pill}>Excel</button>
-                  <button type="button" onClick={() => doExport('pdf', drillFlat(), `Records behind ${drill.label}`)} className={pill}>PDF</button>
-                  <button type="button" onClick={() => setDrill(null)} className={pill}>Close</button>
-                </span>
-              </div>
-              <div className="max-h-[34vh] overflow-auto rounded-lg border border-neutral-800 bg-neutral-950">
-                <table className="w-full border-separate border-spacing-0 text-xs">
-                  <thead><tr>{drillCols().map((f) => <th key={f.id} className={`sticky top-0 whitespace-nowrap border-b border-neutral-800 bg-neutral-900 px-2.5 py-1 font-bold text-neutral-400 ${f.kind === 'num' ? 'text-right' : 'text-left'}`}>{f.label}</th>)}</tr></thead>
-                  <tbody>
-                    {drill.recs.slice(0, 200).map((r, i) => <tr key={i} className="hover:bg-neutral-900/60">{drillCols().map((f) => { const v = f.calc ? '' : (f.get ? f.get(r) : r[f.id]); return <td key={f.id} className={`whitespace-nowrap border-b border-neutral-900 px-2.5 py-1 tabular-nums ${f.kind === 'num' ? 'text-right' : ''}`}>{f.kind === 'num' && typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(v ?? '')}</td> })}</tr>)}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-1 text-xs text-neutral-500">{drill.recs.length > 200 ? 'First 200 shown. ' : ''}The Excel and PDF contain every field of all {drill.recs.length.toLocaleString('en-US')} records.</p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -424,6 +437,19 @@ function ReportBuilderModal({ user, onClose }) {
           {pop === 'cols' && layout.mode === 'list' && <ColumnsPanel fields={listFields} layout={layout} onChange={patch} />}
           {pop === 'fmt' && <FormatPanel layout={layout} onChange={patch} />}
           {(pop === 'cols' || pop === 'fmt') && <div className="flex justify-end"><button type="button" onClick={() => setPop(null)} className="rounded-lg bg-brand-neon px-4 py-1.5 text-sm font-semibold text-brand-contrast">Done</button></div>}
+        </Dialog>
+      )}
+
+      {askDel && (
+        <Dialog onClose={() => setAskDel(null)}>
+          <div className="mx-auto max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-4 shadow-2xl">
+            <p className="text-sm font-semibold text-app-text">Delete this saved layout?</p>
+            <p className="mt-1 break-words text-sm text-neutral-300">&ldquo;{askDel.name}&rdquo; will be deleted for good{askDel.share && (askDel.share.admin || askDel.share.analysts || askDel.share.staff) ? ', for everyone it was shared with too' : ''}. The records are not touched.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setAskDel(null)} className={pill}>Keep it</button>
+              <button type="button" onClick={() => { const l = askDel; setAskDel(null); removeLayout(l) }} className="rounded-lg bg-red-500/90 px-4 py-1.5 text-sm font-semibold text-white transition-transform active:scale-95">Delete</button>
+            </div>
+          </div>
         </Dialog>
       )}
 
