@@ -1,119 +1,103 @@
 // Milling status report (Stock Desk > Milling and Issuances > "Milling status", Admin only) - READ-ONLY, pure functions.
-// The office's own status table of the on-going milling operations, one row per LOT, grouped by ricemill:
-//   Lot No. | Pile No. | Issuing Warehouse | Name of Ricemill | QTY (bag of 50kg) | GMR | Expected Rice Recovery | RECEIVING Whse
-// and two added columns: Total issued, and Remarks (the as-of date of that total).
 //
-// How a lot is read from the app: a milling authority (AI) is one TRANCHE of a lot. Its note is written "<issued so far> / <QTY of the lot>"
-// (for example "6000 / 7205.05", or "KINALE 3B 500 / 6263.35" with the warehouse and pile in front). The number after the slash is the QTY
-// authorized to be issued to the miller for the whole lot; the number before it is the total issued up to that tranche. So:
-//   QTY            = the number after the slash (never changed, never a sum of tranches)
-//   Total issued   = the number before the slash of the latest tranche (as of that tranche's date)
-// GMR and the receiving warehouse come from the MO (milling order) that carries one of the lot's authority numbers; expected rice recovery =
-// QTY x GMR. Lot No. is NOT in the data: the Admin types it once per lot in the table (it is never the row count). Pile No. is read from the
-// note or the withdrawal slips, and can be overridden the same way.
+// The office's own status table of the on-going milling operations:
+//   Lot No. | Pile No. | Issuing Warehouse | Name of Ricemill | QTY (bag of 50kg) | GMR | Expected Rice Recovery | RECEIVING Whse
+// IS the table: its rows (lot, pile, warehouse, ricemill, QTY, GMR, receiving warehouse) are kept exactly as the office wrote them, in
+// `reportConfig.millingStatusTable` (the Admin edits it in the screen); it starts as the office's table of October 2026 (DEFAULT_MILLING_TABLE).
+// Expected Rice Recovery = QTY x GMR (checked against every row of the office's table). Nothing in those columns is worked out from other data.
+//
+// The app only adds two columns:
+//   Total issued = the "issued so far" the milling authorities report for that lot, as of the period's last day
+//   Remarks      = the date of that total (as of)
+// How a lot is found among the authorities: each milling authority (AI) is one tranche of a lot and its note reads "<issued so far> / <QTY>"
+// (for example "6000 / 7205.05", or "KINALE 3B 500 / 6263.35"). A tranche belongs to the table row of the same ricemill whose QTY equals the
+// number after the slash; the number before it, on the latest tranche up to the period's last day, is the lot's total issued. A row with no
+// tranche yet shows nothing in the two added columns.
 
 import { millerKey } from './millingLiquidation.js'
 
-const NET_BAG_KG = 50
 const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
 const num = (s) => Number(String(s).replace(/,/g, ''))
-const pileNo = (name) => String(name ?? '').replace(/^pile\s*/i, '').replace(/^dryer\s*/i, 'D').trim() // "Pile 4B" -> 4B, "Dryer 2" -> D2 (as the office writes them)
 // "TAB GID A" -> "TAB GID" (a trailing single letter marks a lettered variant of the same warehouse)
 const baseWarehouse = (name) => String(name ?? '').replace(/^[A-Z]{2,6}-/, '').replace(/\s[A-Z]$/, '').trim()
-
-/** "6000 / 7205.05" -> { issued: 6000, qty: 7205.05, pile: '' };  "KINALE 3B 500 / 6263.35" -> { issued: 500, qty: 6263.35, pile: '3B' }; otherwise null. */
-export const parseLotNote = (note) => {
-  const m = /(\d[\d,]*(?:\.\d+)?)\s*\/\s*(\d[\d,]*(?:\.\d+)?)/.exec(String(note ?? ''))
-  if (!m) return null
-  const qty = num(m[2])
-  if (!(qty > 0)) return null
-  const prefix = String(note).slice(0, m.index).trim()
-  const last = prefix.split(/\s+/).pop() ?? ''
-  return { issued: num(m[1]), qty, pile: /^\d+[A-Za-z]?$/.test(last) ? last.toUpperCase() : '' }
-}
-
-// The office writes the short name: "Dens Marketing Corporation" and "DENS MARKETING CORP" -> Dens, "MAGAYON RM" -> Magayon, "Borromeo Ricemill" -> Borromeo
 const titleWord = (w) => (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1).toLowerCase())
+
+/** The office's short name: "Dens Marketing Corporation", "MAGAYON RM", "Borromeo Ricemill" -> Dens, Magayon, Borromeo. */
 export const shortMiller = (name) => {
   const cleaned = String(name ?? '').replace(/\b(rice\s*mill|ricemill|rm|marketing|corporation|corp|enterprises|trading|inc)\b\.?/gi, ' ').replace(/\s+/g, ' ').trim()
   return (cleaned || String(name ?? '').trim()).split(' ').map(titleWord).join(' ')
 }
-// "TABACO GID A" -> Tabaco GID, "KINALE" -> Kinale, "BSI" -> BSI, "VRT" -> VRT (short words are initials)
 export const shortWarehouse = (name) => baseWarehouse(name).split(' ').filter(Boolean).map(titleWord).join(' ')
 
-export const lotKey = (miller, qty) => `${millerKey(miller)}|${qty.toFixed(2)}`
+/** The office's table (October 2026), row for row. */
+export const DEFAULT_MILLING_TABLE = [
+  { lotNo: '1', pile: '1', warehouse: 'Tabaco GID', miller: 'Borromeo', qty: 6124.18, gmr: 63.27, receiving: 'Abacorp/ Leg Gid' },
+  { lotNo: '2', pile: '2', warehouse: 'Tabaco GID', miller: 'Borromeo', qty: 6482.15, gmr: 64.84, receiving: 'Abacorp/ Leg Gid' },
+  { lotNo: '8', pile: '4B', warehouse: 'BSI', miller: 'Borromeo', qty: 424.32, gmr: 63.68, receiving: 'Leg GID' },
+  { lotNo: '9', pile: '3', warehouse: 'Kinale', miller: 'Borromeo', qty: 6879.0, gmr: 63.36, receiving: 'Leg GID/ VRT' },
+  { lotNo: '10', pile: '2', warehouse: 'Kinale', miller: 'Borromeo', qty: 4183.74, gmr: 64.1, receiving: 'LegGID/VRT' },
+  { lotNo: '3', pile: '4', warehouse: 'Tabaco GID', miller: 'Kipshoven', qty: 4996.96, gmr: 64.13, receiving: 'Abacorp' },
+  { lotNo: '11', pile: '3B', warehouse: 'Kinale', miller: 'Kipshoven', qty: 6263.35, gmr: 65.04, receiving: 'Leg GID/VRT' },
+  { lotNo: '13', pile: '2', warehouse: 'VRT', miller: 'Kipshoven', qty: 2981.29, gmr: 64.09, receiving: 'Leg GID / VRT' },
+  { lotNo: '4', pile: '3', warehouse: 'Tabaco GID', miller: 'Buama', qty: 5394.16, gmr: 64.92, receiving: 'Abacorp' },
+  { lotNo: '5', pile: '5', warehouse: 'Tabaco GID', miller: 'Buama', qty: 9546.43, gmr: 64.84, receiving: 'Abacorp' },
+  { lotNo: '6', pile: 'D1', warehouse: 'BSI', miller: 'Dens', qty: 15693.87, gmr: 64.37, receiving: 'Leg GID/ VRT' },
+  { lotNo: '12', pile: '1A', warehouse: 'Kinale', miller: 'Dens', qty: 4012.57, gmr: 64.35, receiving: 'Leg GID/ VRT' },
+  { lotNo: '7', pile: 'D2', warehouse: 'BSI', miller: 'Magayon', qty: 7205.05, gmr: 64.3, receiving: 'Abacorp/ Leg Gid' },
+]
+
+/** "6000 / 7205.05" -> { issued: 6000, qty: 7205.05 };  "KINALE 3B 500 / 6263.35" -> { issued: 500, qty: 6263.35 }; otherwise null. */
+export const parseLotNote = (note) => {
+  const m = /(\d[\d,]*(?:\.\d+)?)\s*\/\s*(\d[\d,]*(?:\.\d+)?)/.exec(String(note ?? ''))
+  if (!m) return null
+  const qty = num(m[2])
+  return qty > 0 ? { issued: num(m[1]), qty } : null
+}
+
+const sameMiller = (a, b) => shortMiller(a).toLowerCase() === shortMiller(b).toLowerCase() || millerKey(a) === millerKey(b)
 
 /**
- * @param issues        the private milling rows of buildMillingIssuances (data.milling.issues; each has note, source, aiNumber, date, bags, customer)
- * @param transactions  all transactions (WSIs give a pile when the note has none)
- * @param piles         all piles
- * @param millingOrders the synced MO / TMO records (GMR = recoveryPercent, receivingWarehouse)
- * @param lotInfo       { [lotKey]: { lotNo, pile } } typed by the Admin
+ * @param table   the office's table rows (DEFAULT_MILLING_TABLE or what the Admin saved)
+ * @param issues  the private milling authorities up to the period's last day (rows of buildMillingIssuances: note, customer, date, aiNumber)
+ * @param to      the period's last day (the total issued is as of this day)
  */
-export const buildMillingStatus = ({ issues, transactions = [], piles = [], millingOrders = [], lotInfo = {} }) => {
-  const pileById = new Map(piles.map((p) => [p.pileId, p]))
-  const pilesByAi = new Map()
-  for (const t of transactions) {
-    if (t.type !== 'WSI' || t.status !== 'Active' || !t.aiNumber) continue
-    const list = pilesByAi.get(t.aiNumber) ?? new Set()
-    const p = pileNo(pileById.get(t.pileId)?.pileName)
-    if (p) list.add(p)
-    pilesByAi.set(t.aiNumber, list)
-  }
-  const orderByAi = new Map(millingOrders.filter((o) => o.aiNumber).map((o) => [o.aiNumber, o]))
-
-  const lots = new Map()
-  const unassigned = []
+export const buildMillingStatus = ({ table = DEFAULT_MILLING_TABLE, issues = [], to = '9999-12-31' }) => {
+  const tranches = []
   for (const r of issues) {
+    if (r.date > to) continue
     const p = parseLotNote(r.note)
-    if (!p) { unassigned.push({ aiNumber: r.aiNumber, miller: r.customer, date: r.date, bags: r.bags, note: r.note ?? '' }); continue }
-    const key = lotKey(r.customer, p.qty)
-    const lot = lots.get(key) ?? { key, miller: r.customer, qty: p.qty, tranches: [] }
-    lot.tranches.push({ ...r, issuedTo: p.issued, notePile: p.pile })
-    lots.set(key, lot)
+    if (p) tranches.push({ miller: r.customer, date: r.date, issued: p.issued, qty: p.qty, aiNumber: r.aiNumber })
   }
-
-  const rows = [...lots.values()].map((lot) => {
-    const t = lot.tranches.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.issuedTo - b.issuedTo || natural(a.aiNumber, b.aiNumber)))
-    const last = t.at(-1)
-    const order = t.map((x) => orderByAi.get(x.aiNumber)).find(Boolean) ?? null
-    const gmr = order?.recoveryPercent != null && Number.isFinite(Number(order.recoveryPercent)) ? Number(order.recoveryPercent) : null
-    const notePile = [...new Set(t.map((x) => x.notePile).filter(Boolean))].sort(natural).join(', ')
-    const slipPile = [...new Set(t.flatMap((x) => [...(pilesByAi.get(x.aiNumber) ?? [])]))].sort(natural).join(', ')
-    const info = lotInfo[lot.key] ?? {}
+  const rows = table.map((t, i) => {
+    const qty = Number(t.qty) || 0
+    const gmr = t.gmr === '' || t.gmr == null || !Number.isFinite(Number(t.gmr)) ? null : Number(t.gmr)
+    const mine = tranches.filter((x) => Math.abs(x.qty - qty) < 0.005 && sameMiller(x.miller, t.miller))
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.issued - b.issued || natural(a.aiNumber, b.aiNumber)))
+    const last = mine.at(-1) ?? null
     return {
-      key: lot.key, lotNo: info.lotNo ?? '', pile: info.pile ?? (notePile || slipPile),
-      warehouse: [...new Set(t.map((x) => shortWarehouse(x.warehouse || x.source)).filter(Boolean))].join(' / '),
-      miller: shortMiller(lot.miller), fullMiller: lot.miller, qty: lot.qty, gmr, expected: gmr != null ? lot.qty * (gmr / 100) : null,
-      receiving: order?.receivingWarehouse ?? '',
-      totalIssued: last.issuedTo, asOf: last.date, lastBags: last.bags, tranches: t.length, aiNumbers: t.map((x) => x.aiNumber),
+      index: i, lotNo: t.lotNo ?? '', pile: t.pile ?? '', warehouse: t.warehouse ?? '', miller: t.miller ?? '', qty, gmr,
+      expected: gmr != null ? qty * (gmr / 100) : null, receiving: t.receiving ?? '',
+      totalIssued: last ? last.issued : null, asOf: last ? last.date : null,
     }
   })
-
-  const groups = new Map()
+  // blocks of consecutive rows of the same ricemill, in the table's own order
+  const groups = []
   for (const r of rows) {
-    const k = millerKey(r.miller)
-    const g = groups.get(k) ?? { key: k, miller: r.miller, rows: [] }
-    g.rows.push(r)
-    groups.set(k, g)
+    const g = groups.at(-1)
+    if (g && g.miller.toLowerCase() === r.miller.toLowerCase()) g.rows.push(r)
+    else groups.push({ key: `${r.miller}-${r.index}`, miller: r.miller, rows: [r] })
   }
   const sum = (list, key) => list.reduce((s, r) => s + (r[key] ?? 0), 0)
-  const totalOf = (list) => ({ qty: sum(list, 'qty'), expected: list.some((r) => r.expected != null) ? sum(list, 'expected') : null, issued: sum(list, 'totalIssued') })
-  // lots in the order of their number when typed; ricemills in the order of their first lot number (as the office table), then A-Z
-  const firstLot = (g) => { const n = g.rows.map((r) => parseFloat(r.lotNo)).filter(Number.isFinite); return n.length ? Math.min(...n) : Infinity }
-  const out = [...groups.values()].map((g) => ({ ...g, miller: shortMiller(g.miller) })).sort((a, b) => (firstLot(a) - firstLot(b)) || natural(a.miller, b.miller)).map((g) => {
-    g.rows.sort((a, b) => (a.lotNo !== '' && b.lotNo !== '' ? natural(a.lotNo, b.lotNo) : 0) || natural(a.pile, b.pile) || a.qty - b.qty)
-    return { ...g, total: totalOf(g.rows) }
-  })
-  const all = out.flatMap((g) => g.rows)
-  return { groups: out, total: totalOf(all), rows: all, unassigned }
+  const any = (list, key) => list.some((r) => r[key] != null)
+  const totalOf = (list) => ({ qty: sum(list, 'qty'), expected: any(list, 'expected') ? sum(list, 'expected') : null, issued: any(list, 'totalIssued') ? sum(list, 'totalIssued') : null })
+  return { groups: groups.map((g) => ({ ...g, total: totalOf(g.rows) })), rows, total: totalOf(rows) }
 }
 
 const n2 = (n) => (n == null ? '' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const dateText = (iso) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '')
 
-/** Remarks: the as-of date of the total issued. */
-export const remarksText = (r) => `As of ${dateText(r.asOf)}`
+/** Remarks: the as-of date of the total issued (nothing for a row with no issuance yet). */
+export const remarksText = (r) => (r.asOf ? `As of ${dateText(r.asOf)}` : '')
 
 /** Tab-separated, pastes into a Sheet or Excel with the same columns. A group with two or more rows ends with a Total row. */
 export const millingStatusText = (data) => {

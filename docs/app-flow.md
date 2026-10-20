@@ -493,7 +493,6 @@ A WSR received into more than one pile is stored as one record per pile (the ext
 
 ## 21. Milling status (Stock Desk > Milling and Issuances, Admin only)
 
-1. Set the period, press "Milling status". One row per LOT of a private ricemill that had an issuance in the period, grouped by ricemill, in the office's own layout: Lot No., Pile No., Issuing Warehouse, Name of Ricemill, QTY (bag of 50kg), GMR, Expected Rice Recovery, RECEIVING Whse. A lot is read from the authority notes: each milling authority is a tranche whose note says "issued so far / QTY"; QTY is the lot quantity authorized to the miller. GMR and the receiving warehouse come from the MO with one of the lot's authority numbers.
-2. Two added columns: Total issued (the issued-so-far of the latest tranche) and Remarks (as-of date of that total and the last issuance in net bags).
-3. The Admin types the Lot No. once per lot in the yellow boxes (kept; never the row count). A ricemill with two or more lots ends with a red Total. Authorities whose note has no "issued / QTY" are listed under the table.
-4. Save as image exports the whole table as a light PNG; Copy pastes it into a Sheet.
+1. Set the period, press "Milling status". The screen shows the office's own table exactly as the office wrote it (Lot No., Pile No., Issuing Warehouse, Name of Ricemill, QTY (bag of 50kg), GMR, Expected Rice Recovery = QTY x GMR, RECEIVING Whse), kept in the app and editable by the Admin (Edit table).
+2. Two added columns: Total issued and Remarks. For each row the app finds the milling authorities of the same ricemill whose note says "issued so far / QTY" with that QTY; Total issued is the issued-so-far of the latest one up to the period's last day and Remarks gives its date ("As of Oct 12"). A row with no issuance yet is left empty.
+3. A ricemill with two or more rows ends with a red Total. Save as image exports the whole table as a light PNG; Copy pastes it into a Sheet.

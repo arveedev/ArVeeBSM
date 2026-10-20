@@ -18673,3 +18673,5 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 2026-10-20: Milling status corrected (v1.10-408): the office's table exactly, lots read from the authority notes (issued / QTY), Total issued + Remarks columns, Lot No. typed by the Admin, Save as image (light PNG). Removed Balance and % issued.
 
 2026-10-20: Milling status (v1.10-409): short ricemill and warehouse names, ricemills ordered by first lot number, Remarks = as-of date only.
+
+2026-10-20: Milling status rebuilt on the office's own table (v1.10-410): rows stored in reportConfig.millingStatusTable (default = the October 2026 table, 13 rows, every printed Expected Rice Recovery and group total reproduced by test), Admin Edit table, two added columns Total issued + Remarks only, empty when no issuance yet.
