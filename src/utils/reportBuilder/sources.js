@@ -7,6 +7,7 @@ import { inferFields, N, D, T } from './fields.js'
 import { makeContext, buildSummary, buildLedger, buildAgeLists } from '../inventoryReport.js'
 import { buildMillingIssuances } from '../millingIssuances.js'
 import { parseLotNote } from '../millingStatus.js'
+import { applyPeriod, clampPeriod } from './engine.js'
 
 const NET_BAG_KG = 50
 const WIDE = ['Admin', 'Analyst']
@@ -47,7 +48,7 @@ const ordered = (fields, first = [], hide = []) => {
   const rest = fields.filter((f) => !first.includes(f.id) && !hide.includes(f.id)).sort((a, b) => a.label.localeCompare(b.label))
   return [...head, ...rest]
 }
-const build = (rows, overrides, first, hide = []) => ({ rows, fields: ordered(inferFields(rows, overrides), first, hide) })
+const build = (rows, overrides, first, hide = []) => { const fields = ordered(inferFields(rows, overrides), first, hide); return { rows, fields, main: first.filter((id) => fields.some((f) => f.id === id)) } }
 const cut = (rows, allowed) => (allowed ? rows.filter((r) => r.__wh == null || allowed.has(r.__wh)) : rows)
 const cutStrict = (rows, allowed) => (allowed ? rows.filter((r) => r.__wh != null && allowed.has(r.__wh)) : rows)
 
@@ -58,7 +59,7 @@ const L = (label, kind) => ({ label, kind })
 // ------------------------------------------------------------------------------------------------ source definitions
 // access: 'all' = every role that may use the Builder; 'wide' = Admin and Analyst only. scoped: rows carry __wh and a staff member's are cut.
 export const SOURCES = [
-  { id: 'docs', group: 'Documents', name: 'Documents (WSR, WSI, WTS, ESR, ESI)', access: 'all', scoped: true, load: async ({ allowed }) => {
+  { id: 'docs', dateField: 'date', group: 'Documents', name: 'Documents (WSR, WSI, WTS, ESR, ESI)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [tx, lk] = await Promise.all([db.transactions.toArray(), lookups()])
     const rows = tx.map((t) => {
       const v = lk.variety.get(t.varietyId)
@@ -78,13 +79,13 @@ export const SOURCES = [
       createdByName: L('Entered by'), recordedByName: L('Recorded by'), editedBy: L('Edited by'), mts: L('MTS'), moistureContent: L('Moisture %'), ...Object.fromEntries(FK.map((k) => [k, { hide: true }])),
     }, ['date', 'serialNo', 'type', 'transactionType', 'status', 'warehouse', 'province', 'pile', 'cereal', 'variety', 'customerName', 'aiNumber', 'moNumber', 'numberOfBags', 'netKilos', 'netBags', 'createdByName'])
   } },
-  { id: 'docs_sacks', group: 'Documents', name: 'Sack lines (ESR and ESI, one row per sack type)', access: 'all', scoped: true, load: async ({ allowed }) => {
+  { id: 'docs_sacks', dateField: 'date', group: 'Documents', name: 'Sack lines (ESR and ESI, one row per sack type)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [tx, lk] = await Promise.all([db.transactions.toArray(), lookups()])
     const rows = []
     for (const t of tx) for (const s of Array.isArray(t.sackLines) ? t.sackLines : []) rows.push({ date: t.date, serialNo: t.serialNo, type: t.type, status: t.status, ...lk.place(t.warehouseId), customerName: t.customerName ?? '', sackType: lk.name(lk.sack, s.sackTypeId, 'code'), condition: s.condition ?? '', pieces: s.pieces ?? 0, siaNumber: t.siaNumber ?? '', createdByName: t.createdByName ?? '' })
     return build(cut(rows, allowed), { serialNo: L('Serial no.'), type: L('Document'), customerName: L('Customer'), sackType: L('Sack type'), siaNumber: L('Authority no. (SIA)'), createdByName: L('Entered by') }, ['date', 'serialNo', 'type', 'status', 'warehouse', 'province', 'sackType', 'condition', 'pieces'])
   } },
-  { id: 'auth', group: 'Authorities and milling', name: 'Authorities (AI and SIA)', access: 'all', scoped: true, load: async ({ allowed }) => {
+  { id: 'auth', dateField: 'date', group: 'Authorities and milling', name: 'Authorities (AI and SIA)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [au, lk] = await Promise.all([db.authorities.toArray(), lookups()])
     const rows = au.map((a) => {
       const lot = parseLotNote(a.note1)
@@ -101,13 +102,13 @@ export const SOURCES = [
       note1: L('Note 1'), note2: L('Note 2'), assignedWarehouse: { hide: true }, ...Object.fromEntries(FK.map((k) => [k, { hide: true }])),
     }, ['date', 'aiNumber', 'siaNumber', 'type', 'transactionTypeName', 'customerName', 'warehouse', 'variety', 'totalAllocationBags', 'totalIssuedBags', 'balanceBags', 'status', 'regionalAuthorityNumber', 'ageGroup'])
   } },
-  { id: 'auth_sacks', group: 'Authorities and milling', name: 'Authority sack lines (SIA)', access: 'all', scoped: true, load: async ({ allowed }) => {
+  { id: 'auth_sacks', dateField: 'date', group: 'Authorities and milling', name: 'Authority sack lines (SIA)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [au, lk] = await Promise.all([db.authorities.toArray(), lookups()])
     const rows = []
     for (const a of au) for (const s of Array.isArray(a.sackLines) ? a.sackLines : []) rows.push({ date: a.date ?? '', siaNumber: a.siaNumber ?? '', customer: a.customerName ?? '', status: a.status ?? '', ...lk.place(a.assignedWarehouse), sackType: lk.name(lk.sack, s.sackTypeId, 'code') || s.sackTypeCode || '', condition: s.condition ?? '', authorizedPieces: s.pieces ?? s.allocation ?? 0, issuedPieces: s.issued ?? 0 })
     return build(cut(rows, allowed), { siaNumber: L('SIA no.') }, ['date', 'siaNumber', 'customer', 'warehouse', 'sackType', 'condition', 'authorizedPieces', 'issuedPieces', 'status'])
   } },
-  { id: 'mo', group: 'Authorities and milling', name: 'Milling orders (MO and TMO)', access: 'all', load: async () => {
+  { id: 'mo', dateField: 'dateOfMilling', group: 'Authorities and milling', name: 'Milling orders (MO and TMO)', access: 'all', load: async () => {
     const [mo, done] = await Promise.all([db.millingOrders.toArray(), db.millingOrderCompletions.toArray()])
     const doneBy = new Map(done.map((d) => [d.orderId, d]))
     const rows = mo.map((o) => ({ ...scalars(o), completedInApp: doneBy.get(o.orderId)?.completed ? 'Yes' : 'No', completedAt: iso(doneBy.get(o.orderId)?.updatedAt) }))
@@ -122,7 +123,7 @@ export const SOURCES = [
     ]
     return build(rows, { kind: L('Kind'), regionalAuthorityNumber: L('Regional authority no.'), totalNetKgs: L('Total net kg'), millingInputCapacityBags: L('Daily input (bags)'), id: { hide: true } }, ['kind', 'regionalAuthorityNumber', 'ricemillName', 'totalNetKgs', 'millingInputCapacityBags'])
   } },
-  { id: 'pr', group: 'Purchases and cash (SDO)', name: 'Purchase receipts (PR)', access: 'all', scoped: true, load: async ({ allowed }) => {
+  { id: 'pr', dateField: 'date', group: 'Purchases and cash (SDO)', name: 'Purchase receipts (PR)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [prs, tx, lk] = await Promise.all([db.purchaseReceipts.toArray(), db.transactions.toArray(), lookups()])
     const wsr = new Map(tx.map((t) => [t.id, t]))
     const rows = prs.map((p) => {
@@ -134,7 +135,7 @@ export const SOURCES = [
       wsrSerial: L('WSR no.'), wsrNetKilos: L('WSR net kg'), amountVsWsr: L('Amount minus WSR kg x unit cost'), ...Object.fromEntries(FK.map((k) => [k, { hide: true }])),
     }, ['date', 'prNo', 'wsrSerial', 'payeeName', 'payeeAddress', 'warehouse', 'variety', 'numberOfBags', 'netKilos', 'unitCost', 'totalAmount', 'sdo', 'paymentMethod', 'status'])
   } },
-  { id: 'cash', group: 'Purchases and cash (SDO)', name: 'Cash ledger (replenishments and liquidations)', access: 'wide', load: async () => {
+  { id: 'cash', dateField: 'date', group: 'Purchases and cash (SDO)', name: 'Cash ledger (replenishments and liquidations)', access: 'wide', load: async () => {
     const [c, lk] = await Promise.all([db.cashLedgerV2.toArray(), lookups()])
     const rows = c.map((r) => ({ ...scalars(r), sdo: lk.name(lk.user, r.sdoUid), createdAt: iso(r.createdAt), voidedAt: iso(r.voidedAt), editedAt: iso(r.editedAt), voided: r.voided ? 'Yes' : 'No', voidedBy: lk.name(lk.user, r.voidedByUid), editedBy: lk.name(lk.user, r.editedByUid) }))
     return build(rows, { date: L('Date'), type: L('Type'), refNo: L('Check / OR no.'), amount: L('Amount (PHP)'), sdo: L('Disbursing officer'), dvNo: L('DV no.'), entryKind: L('Entry kind'), ...Object.fromEntries(FK.map((k) => [k, { hide: true }])) }, ['date', 'type', 'entryKind', 'refNo', 'dvNo', 'amount', 'sdo', 'voided', 'remarks'])
@@ -145,7 +146,7 @@ export const SOURCES = [
     for (const r of c) for (const [den, v] of Object.entries(r.counts ?? {})) rows.push({ sdo: lk.name(lk.user, r.sdoUid), denomination: den, bundles: v?.bundles ?? 0, pieces: v?.pcs ?? 0 })
     return build(rows, { denomination: L('Denomination'), sdo: L('Disbursing officer') }, ['sdo', 'denomination', 'bundles', 'pieces'])
   } },
-  { id: 'cutoffs', group: 'Purchases and cash (SDO)', name: 'SDO report cut-offs', access: 'wide', load: async () => {
+  { id: 'cutoffs', dateField: 'cutoffDate', group: 'Purchases and cash (SDO)', name: 'SDO report cut-offs', access: 'wide', load: async () => {
     const [c, lk] = await Promise.all([db.sdoReportCutoffs.toArray(), lookups()])
     const rows = c.map((r) => ({ ...scalars(r), sdo: lk.name(lk.user, r.sdoUid), createdAt: iso(r.createdAt), prsReported: Array.isArray(r.reportedPrIds) ? r.reportedPrIds.length : 0 }))
     return build(rows, { cutoffDate: L('Cut-off date'), endingBalance: L('Ending balance'), sdo: L('Disbursing officer'), ...Object.fromEntries(FK.map((k) => [k, { hide: true }])) }, ['cutoffDate', 'sdo', 'endingBalance', 'prsReported'])
@@ -166,7 +167,7 @@ export const SOURCES = [
     const rows = b.map((x) => ({ ...scalars(x), ...lk.place(x.warehouseId), pile: lk.name(lk.pile, x.pileId, 'pileName') }))
     return build(cut(rows, allowed), { label: L('Box label'), ...Object.fromEntries(FK.map((k) => [k, { hide: true }])) }, ['warehouse', 'label', 'pile', 'assignedDate'])
   } },
-  { id: 'pile_hist', group: 'Piles, sacks and logistics', name: 'Pile layout history', access: 'all', scoped: true, load: async ({ allowed }) => {
+  { id: 'pile_hist', dateField: 'occupiedTo', group: 'Piles, sacks and logistics', name: 'Pile layout history', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [b, lk] = await Promise.all([db.pileLayoutHistory.toArray(), lookups()])
     const rows = b.map((x) => ({ ...scalars(x), ...lk.place(x.warehouseId), pile: lk.name(lk.pile, x.pileId, 'pileName') }))
     return build(cut(rows, allowed), { ...Object.fromEntries(FK.map((k) => [k, { hide: true }])) }, ['warehouse', 'pile', 'occupiedTo'])
@@ -184,7 +185,7 @@ export const SOURCES = [
 
   // ---- computed with the Stock Desk's own functions, so the numbers are the Stock Desk's numbers ----
   { id: 'sd_summary', group: 'Stock Desk (same figures)', name: 'Stock by warehouse, variety and age (Summary)', access: 'all', scoped: true, computed: true,
-    params: [{ id: 'asOf', type: 'date', label: 'As of' }, { id: 'ageSet', type: 'select', label: 'Age brackets', options: [['coarse', 'Coarse'], ['fine', 'Fine'], ['monthly', 'Every month']], def: 'fine' }],
+    params: [{ id: 'ageSet', type: 'select', label: 'Age brackets', options: [['coarse', 'Coarse'], ['fine', 'Fine'], ['monthly', 'Every month']], def: 'fine' }],
     load: async ({ allowed, params }) => {
       const e = await engine(params, allowed)
       const s = buildSummary(e.ctx(params.ageSet ?? 'fine'), e.inputs, { asOf: params.asOf, filters: { ...e.filters, byProducts: true } })
@@ -196,7 +197,7 @@ export const SOURCES = [
       return build(rows, { asOf: L('As of'), age: L('Age bracket'), netBags: L('Net bags'), netKilos: L('Net kg') }, ['asOf', 'province', 'warehouse', 'cereal', 'variety', 'age', 'netBags', 'netKilos'])
     } },
   { id: 'sd_daily', group: 'Stock Desk (same figures)', name: 'Daily inventory (beginning, ADD, LESS, ending)', access: 'all', scoped: true, computed: true,
-    params: [{ id: 'from', type: 'date', label: 'From' }, { id: 'to', type: 'date', label: 'To' }, { id: 'ageSet', type: 'select', label: 'Age brackets', options: [['coarse', 'Coarse'], ['fine', 'Fine']], def: 'coarse' }],
+    params: [{ id: 'ageSet', type: 'select', label: 'Age brackets', options: [['coarse', 'Coarse'], ['fine', 'Fine']], def: 'coarse' }],
     load: async ({ allowed, params }) => {
       const e = await engine(params, allowed)
       const led = buildLedger(e.ctx(params.ageSet ?? 'coarse'), e.inputs, { from: params.from, to: params.to, filters: { ...e.filters, byProducts: true } })
@@ -213,7 +214,6 @@ export const SOURCES = [
       return build(rows, { age: L('Age bracket'), movement: L('Movement'), netKilos: L('Net kg'), netBags: L('Net bags'), signedNetBags: L('Change in net bags (+ADD, -LESS)') }, ['date', 'province', 'warehouse', 'cereal', 'variety', 'age', 'movement', 'netBags', 'signedNetBags', 'netKilos'])
     } },
   { id: 'sd_lots', group: 'Stock Desk (same figures)', name: 'Every lot on hand (receipt date, age, pile)', access: 'all', scoped: true, computed: true,
-    params: [{ id: 'asOf', type: 'date', label: 'As of' }],
     load: async ({ allowed, params }) => {
       const e = await engine(params, allowed)
       const a = buildAgeLists(e.ctx('fine'), e.inputs, { asOf: params.asOf, filters: { ...e.filters, byProducts: true }, windowDays: 36500, topOld: 1e9 })
@@ -221,7 +221,7 @@ export const SOURCES = [
       return build(rows, { asOf: L('As of'), receivedOn: L('Received on'), ageMonths: L('Age (months)'), bracket: L('Age bracket'), netKilos: L('Net kg'), netBags: L('Net bags'), approximateAge: L('Age is approximate') }, ['asOf', 'province', 'warehouse', 'pile', 'cereal', 'variety', 'receivedOn', 'ageMonths', 'bracket', 'netBags', 'netKilos', 'approximateAge'])
     } },
   { id: 'sd_cross', group: 'Stock Desk (same figures)', name: 'Lots about to move to the next age bracket', access: 'all', scoped: true, computed: true,
-    params: [{ id: 'asOf', type: 'date', label: 'As of' }, { id: 'days', type: 'number', label: 'Within (days)', def: 30 }],
+    params: [{ id: 'days', type: 'number', label: 'Within (days)', def: 30 }],
     load: async ({ allowed, params }) => {
       const e = await engine(params, allowed)
       const a = buildAgeLists(e.ctx('fine'), e.inputs, { asOf: params.asOf, filters: { ...e.filters, byProducts: true }, windowDays: Number(params.days) || 30, topOld: 1 })
@@ -229,7 +229,6 @@ export const SOURCES = [
       return build(rows, { receivedOn: L('Received on'), ageMonths: L('Age (months)'), fromBracket: L('From bracket'), toBracket: L('To bracket'), movesOn: L('Moves on'), netKilos: L('Net kg'), netBags: L('Net bags') }, ['movesOn', 'province', 'warehouse', 'pile', 'variety', 'fromBracket', 'toBracket', 'netBags', 'receivedOn', 'ageMonths'])
     } },
   { id: 'sd_milling', group: 'Stock Desk (same figures)', name: 'Milling and Issuances (issuances and recoveries)', access: 'all', scoped: true, computed: true,
-    params: [{ id: 'from', type: 'date', label: 'From' }, { id: 'to', type: 'date', label: 'To' }],
     load: async ({ allowed, params }) => {
       const e = await engine(params, allowed)
       const d = buildMillingIssuances({ transactions: e.raw.tx, authorities: e.raw.au, warehouses: e.raw.wh, provinces: e.raw.prov, varieties: e.raw.var, transactionTypes: e.raw.types, ricemillAllocations: e.raw.alloc, globalDataStartDate: e.raw.cfg?.dataStartDate ?? null, from: params.from, to: params.to, filters: allowed ? { warehouseIds: allowed } : {} })
@@ -274,7 +273,7 @@ export const SOURCES = [
     const d = await db.deviceStatus.toArray()
     return build(d.map((x) => ({ ...scalars(x), lastSeen: iso(x.lastSeen) })), { id: { hide: true } }, ['name', 'kind', 'userName', 'lastSeen'])
   } },
-  { id: 'reportlog', group: 'Administration', name: 'Report export log', access: 'admin', load: async () => {
+  { id: 'reportlog', dateField: 'at', group: 'Administration', name: 'Report export log', access: 'admin', load: async () => {
     const d = await db.reportExportLog.toArray()
     return build(d.map((x) => ({ ...scalars(x), at: iso(x.at) })), { at: L('When'), uid: { hide: true }, id: { hide: true } }, ['at', 'userName', 'role', 'action', 'source', 'layout', 'format', 'rows', 'filters', 'scope'])
   } },
@@ -296,25 +295,25 @@ export const sourcesFor = (role) => SOURCES.filter((s) => canUseSource(s, role))
 export const sourceById = (id) => SOURCES.find((s) => s.id === id) ?? null
 
 /**
- * Load one source: { rows, fields }. `user` decides the scope: Admin and Analyst see everything; staff only their assigned warehouses.
- * A source the role may not open is refused here, not just hidden on screen.
+ * Load one source: { rows, fields, main }. `user` decides the scope: Admin and Analyst see everything; staff only their assigned
+ * warehouses. `period` ({ from, to }, never before REPORT_FLOOR) cuts every dated source to those days; the Stock Desk sources work
+ * out their figures for the same period. A source the role may not open is refused here, not just hidden on screen.
  */
-export async function loadSource(id, { user, params = {} } = {}) {
+export async function loadSource(id, { user, params = {}, period } = {}) {
   const src = sourceById(id)
   if (!src) throw new Error(`Unknown source ${id}`)
   if (!canUseSource(src, user?.role)) throw new Error('This data is not available to your role.')
   const allowed = isWideRole(user?.role) ? null : new Set(user?.assignedWarehouses ?? [])
-  const out = await src.load({ allowed, params })
-  return { ...out, source: src }
+  const per = clampPeriod(period)
+  const out = await src.load({ allowed, params: { ...params, asOf: per.to, from: per.from, to: per.to } })
+  const rows = src.dateField ? applyPeriod(out.rows, src.dateField, per) : out.rows
+  return { ...out, rows, source: src, dated: !!src.dateField || !!src.computed, period: per }
 }
 
-export const defaultParams = (src, todayISO, startISO) => {
+/** Options of a source that are not dates (the dates come from the period). */
+export const defaultParams = (src) => {
   const o = {}
-  for (const p of src.params ?? []) {
-    if (p.id === 'asOf' || p.id === 'to') o[p.id] = todayISO
-    else if (p.id === 'from') o[p.id] = startISO ?? `${todayISO.slice(0, 8)}01`
-    else o[p.id] = p.def ?? ''
-  }
+  for (const p of src.params ?? []) o[p.id] = p.def ?? ''
   return o
 }
 

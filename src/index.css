@@ -1198,3 +1198,12 @@ select {
   .sh-card:hover { transform: none; }
   .sh-collapse { transition: none; }
 }
+
+/* Report Builder motion: panels drop in, chips pop, table rows rise one after another */
+@keyframes rb-drop { from { opacity: 0; transform: translateY(-8px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes rb-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes rb-pop { 0% { opacity: 0; transform: scale(0.85); } 70% { transform: scale(1.04); } 100% { opacity: 1; transform: none; } }
+.rb-drop { animation: rb-drop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.rb-fade { animation: rb-fade 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.rb-pop { animation: rb-pop 0.26s ease both; }
+@media (prefers-reduced-motion: reduce) { .rb-drop, .rb-fade, .rb-pop { animation: none; } }

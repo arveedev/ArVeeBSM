@@ -3,6 +3,21 @@
 
 import { buildFields, readValue, numericOf, dayOf, monthOrder } from './fields.js'
 
+// The data of this app is complete from September 1, 2026: no table of the Report Builder ever shows an earlier date.
+export const REPORT_FLOOR = '2026-09-01'
+export const clampPeriod = (p, floor = REPORT_FLOOR) => {
+  const today = new Date().toISOString().slice(0, 10)
+  const from = dayOf(p?.from) > floor ? dayOf(p.from) : floor
+  const to = dayOf(p?.to) > floor ? dayOf(p.to) : (dayOf(p?.to) ? floor : today)
+  return { from, to: to < from ? from : to }
+}
+/** Keep the rows whose date field falls inside the period (a row with no date cannot be placed, so it is left out). */
+export const applyPeriod = (rows, dateField, period) => {
+  if (!dateField) return rows
+  const { from, to } = clampPeriod(period)
+  return rows.filter((r) => { const d = dayOf(r[dateField]); return d !== '' && d >= from && d <= to })
+}
+
 export const AGG = { sum: 'Sum', avg: 'Average', count: 'Count', min: 'Smallest', max: 'Largest', distinct: 'Different' }
 export const OPS = {
   txt: [['is', 'is'], ['isnot', 'is not'], ['has', 'contains'], ['starts', 'starts with'], ['hasno', 'does not contain'], ['blank', 'is empty'], ['filled', 'is not empty']],

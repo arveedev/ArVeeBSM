@@ -2,6 +2,8 @@
 // A source is an array of flat rows (plain objects). A field says how to read one value of a row, what kind of value it is
 // ('txt' | 'num' | 'date') and how it is labelled. Date fields also offer a week and a month version for grouping.
 
+import { parseFormula, evalTree } from './formula.js'
+
 export const KINDS = ['txt', 'num', 'date']
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -107,7 +109,29 @@ const numberOf = (row, id, map) => {
   const v = f ? readValue(row, f, map) : row[id]
   return typeof v === 'number' ? v : Number(v) || 0
 }
-export function calcValue(row, c, map) {
+// A formula names fields by the label shown on screen; resolved through an index kept per field map.
+const indexes = new WeakMap()
+const labelIndex = (map) => {
+  let m = indexes.get(map)
+  if (!m) { m = new Map(); for (const f of Object.values(map)) if (!m.has(f.label.toLowerCase())) m.set(f.label.toLowerCase(), f.id); indexes.set(map, m) }
+  return m
+}
+export function calcValue(row, c, map, depth = 0) {
+  if (c.formula != null) {
+    const p = parseFormula(c.formula)
+    if (!p.ok || depth > 6) return 0
+    const idx = labelIndex(map)
+    const get = (name) => {
+      const id = idx.get(String(name).toLowerCase()) ?? (map[name] ? name : undefined)
+      if (!id) return undefined
+      if (id === c.id) return 0
+      const f = map[id]
+      const v = f.calc ? calcValue(row, f.calc, map, depth + 1) : (f.get ? f.get(row) : row[f.id])
+      return typeof v === 'number' ? v : Number(v) || 0
+    }
+    try { return evalTree(p.tree, get) } catch { return 0 }
+  }
+  // the first version of a calculated field: A (+ - * /) B or a fixed number
   const a = numberOf(row, c.a, map)
   const b = c.b === '#' ? Number(c.k) || 0 : numberOf(row, c.b, map)
   if (c.op === '+') return a + b

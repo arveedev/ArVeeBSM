@@ -151,7 +151,7 @@ test('roles: the Analyst reads like a Visitor, the Visitor never gets the Tools,
 test('sources: unique ids, secrets never offered, wide-only data is marked, staff are scoped in the data layer', () => {
   const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'utils', 'reportBuilder')
   const text = fs.readFileSync(path.join(dir, 'sources.js'), 'utf8')
-  const ids = [...text.matchAll(/\{ id: '([a-z_]+)', group: /g)].map((m) => m[1])
+  const ids = [...text.matchAll(/\{ id: '([a-z_]+)', (?:dateField: '[A-Za-z]+', )?group: /g)].map((m) => m[1])
   assert.ok(ids.length >= 25)
   assert.equal(new Set(ids).size, ids.length)
   // the user list is built field by field (never by spreading the record), so a PIN hash cannot slip in
@@ -162,4 +162,57 @@ test('sources: unique ids, secrets never offered, wide-only data is marked, staf
   assert.ok(/access: 'admin'/.test(text.slice(text.indexOf("id: 'reportlog'"))))
   assert.ok(/allowed = isWideRole\(user\?\.role\) \? null : new Set\(user\?\.assignedWarehouses \?\? \[\]\)/.test(text))
   assert.ok(isDenied('accessCode') && isDenied('pinHash'))
+})
+
+test('formulas: arithmetic with brackets, functions, conditions; mistakes are explained, nothing is evaluated as code', async () => {
+  const { parseFormula, unknownRefs } = await import('../src/utils/reportBuilder/formula.js')
+  const f = buildFields(base, [
+    { id: 'c1', label: 'Weight check', formula: '[Net kg] * [Net bags] - [Net kg]' },
+    { id: 'c2', label: 'Per bag', formula: 'ROUND(([Net kg] / [Net bags]) * 50, 2)' },
+    { id: 'c3', label: 'Big only', formula: 'IF([Net kg] > 2500, [Net kg], 0)' },
+    { id: 'c4', label: 'Uses another', formula: '[Weight check] + 1' },
+    { id: 'c5', label: 'Divide', formula: '[Net kg] / 0' },
+    { id: 'c6', label: 'Power and minus', formula: '-2 ^ 2 + MAX(1, 5, 3) - ABS(-4)' },
+  ])
+  const t = buildTable(L({ mode: 'list', hidden: [] }), base, rows.slice(0, 1))
+  void t
+  const r = rows[0] // 100 bags (field 'bags'), 5000 kg
+  const get = (id) => buildTable(L({ rows: [], vals: [{ f: id, a: 'sum' }], calc: f.list.filter((x) => x.calc).map((x) => x.calc) }), base, [r]).foot ?? null
+  const sum = (id) => buildTable(L({ vals: [{ f: id, a: 'sum' }], calc: f.list.filter((x) => x.calc).map((x) => x.calc) }), base, [r]).body[0].cells.at(-1).v
+  assert.equal(sum('c1'), 5000 * 100 - 5000)
+  assert.equal(sum('c2'), 2500)
+  assert.equal(sum('c3'), 5000)
+  assert.equal(sum('c4'), 5000 * 100 - 5000 + 1)
+  assert.equal(sum('c5'), 0)
+  assert.equal(sum('c6'), 4 + 5 - 4) // unary minus binds tighter than ^ here: (-2)^2 = 4
+  void get
+  assert.equal(parseFormula('[a] +').ok, false)
+  assert.match(parseFormula('process.exit(1)').error, /not a function/)
+  assert.match(parseFormula('[Net kg').error, /closing/)
+  assert.match(parseFormula('').error, /Write a formula/)
+  assert.deepEqual(unknownRefs('[Net kg] + [Nope]', ['Net kg']), ['Nope'])
+})
+
+test('categories: main fields first, technical bookkeeping folded away, every field in exactly one group', async () => {
+  const { groupFields, categoryOf } = await import('../src/utils/reportBuilder/categories.js')
+  const fields = [D('date', 'Date'), T('wh', 'Warehouse'), N('bags', 'Net bags'), N('amount', 'Amount (PHP)'), T('authorityAckAt', 'Authority ack at'), T('createdByName', 'Entered by'), T('aiNumber', 'Authority no. (AI)'), T('status', 'Status'), T('zzz', 'Whatever')]
+  const g = groupFields(fields, ['date', 'wh', 'bags'])
+  assert.deepEqual(g[0].fields.map((f) => f.id), ['date', 'wh', 'bags'])
+  assert.equal(g.reduce((n, x) => n + x.fields.length, 0), fields.length)
+  assert.equal(categoryOf(fields[4], []), 'tech')
+  assert.equal(categoryOf(fields[3], []), 'money')
+  assert.equal(categoryOf(fields[5], []), 'people')
+  assert.equal(categoryOf(fields[6], []), 'authority')
+  assert.equal(categoryOf({ id: 'c', label: 'x', kind: 'num', calc: {} }, []), 'calc')
+})
+
+test('the period: nothing before September 1, 2026 ever shows, and a row with no date is left out', async () => {
+  const { REPORT_FLOOR, clampPeriod, applyPeriod } = await import('../src/utils/reportBuilder/engine.js')
+  assert.equal(REPORT_FLOOR, '2026-09-01')
+  assert.deepEqual(clampPeriod({ from: '2026-01-01', to: '2026-10-05' }), { from: '2026-09-01', to: '2026-10-05' })
+  assert.deepEqual(clampPeriod({ from: '2026-08-01', to: '2026-08-20' }), { from: '2026-09-01', to: '2026-09-01' })
+  assert.equal(clampPeriod({ from: '2026-10-10', to: '2026-10-01' }).to, '2026-10-10')
+  const data = [{ date: '2026-08-30' }, { date: '2026-09-01' }, { date: '2026-09-15T08:00' }, { date: '' }, { date: null }, { date: '2026-10-20' }]
+  assert.deepEqual(applyPeriod(data, 'date', { from: '2020-01-01', to: '2026-09-30' }).map((r) => r.date), ['2026-09-01', '2026-09-15T08:00'])
+  assert.equal(applyPeriod(data, null, { from: '2026-09-01', to: '2026-09-02' }).length, 6) // a source with no dates is not cut
 })

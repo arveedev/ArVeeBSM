@@ -1,10 +1,11 @@
 // Report Builder: the small pieces of the screen (field chips, filter builder, column chooser, format panel, result table, saved layouts).
 // Presentational only: they show and edit the LAYOUT (a few choices). Nothing here touches a record.
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { AGG, OPS } from '../../../utils/reportBuilder/engine.js'
-import { readValue } from '../../../utils/reportBuilder/fields.js'
+import { readValue, buildFields } from '../../../utils/reportBuilder/fields.js'
+import { parseFormula, unknownRefs } from '../../../utils/reportBuilder/formula.js'
 
 export const pill = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 transition-colors hover:border-brand-neon/60 disabled:opacity-40'
 export const pillOn = 'border-brand-neon bg-brand-neon/10 text-brand-neon'
@@ -18,7 +19,7 @@ export function FieldChip({ f, extra, onRemove, draggable, used, onClick, dashed
       draggable={draggable} data-field={f.id}
       onDragStart={draggable ? (e) => { e.dataTransfer.setData('text/plain', f.id); e.dataTransfer.effectAllowed = 'copy' } : undefined}
       onClick={onClick}
-      className={`inline-flex select-none items-center gap-1.5 rounded-lg border bg-neutral-900 px-2 py-1 text-xs text-app-text ${dashed ? 'border-dashed' : ''} border-neutral-700 ${draggable ? 'cursor-grab' : ''} ${used ? 'opacity-50' : ''}`}
+      className={`rb-pop inline-flex select-none items-center gap-1.5 rounded-lg border bg-neutral-900 px-2 py-1 text-xs text-app-text transition-colors hover:border-brand-neon/50 ${dashed ? 'border-dashed' : ''} border-neutral-700 ${draggable ? 'cursor-grab' : ''} ${used ? 'opacity-50' : ''}`}
     >
       <b className={`${c} text-[10px] font-extrabold`}>{m}</b>{f.label}{extra}
       {onRemove && <button type="button" onClick={onRemove} aria-label={`Remove ${f.label}`} className="text-neutral-500 hover:text-red-400"><X size={12} /></button>}
@@ -68,7 +69,7 @@ export function FilterBuilder({ fields, rows, initialField, onAdd, onCancel }) {
   const type = f.kind === 'date' ? 'date' : f.kind === 'num' ? 'number' : 'text'
   const ok = noValue || (isList ? multi.length > 0 : v !== '')
   return (
-    <div className="mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+    <div className="rb-drop mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
       <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Keep only records where&hellip;</p>
       <div className="flex flex-wrap items-start gap-2">
         <select value={fid} onChange={(e) => choose(e.target.value)} className={input}>{list.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
@@ -83,28 +84,97 @@ export function FilterBuilder({ fields, rows, initialField, onAdd, onCancel }) {
   )
 }
 
-// ------------------------------------------------------------------------------------------------ calculated field
-export function CalcBuilder({ fields, onAdd, onCancel }) {
-  const nums = fields.list.filter((f) => f.kind === 'num')
-  const [a, setA] = useState(nums[0]?.id ?? '')
-  const [op, setOp] = useState('-')
-  const [b, setB] = useState(nums[1]?.id ?? '#')
-  const [k, setK] = useState('1')
-  const [name, setName] = useState('')
-  if (!nums.length) return <div className="mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-400">This source has no numbers to calculate with. <button type="button" onClick={onCancel} className={pill}>Close</button></div>
-  const sym = { '-': 'minus', '+': 'plus', '*': 'times', '/': 'divided by' }[op]
-  const label = name.trim() || `${fields.map[a]?.label} ${sym} ${b === '#' ? k : fields.map[b]?.label}`
+// ------------------------------------------------------------------------------------------------ collapsible block (animated)
+export function Collapse({ open, children }) {
   return (
-    <div className="mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">New calculated field, to check one number against another</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <select value={a} onChange={(e) => setA(e.target.value)} className={input}>{nums.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
-        <select value={op} onChange={(e) => setOp(e.target.value)} className={input}><option value="-">minus</option><option value="+">plus</option><option value="*">times</option><option value="/">divided by</option></select>
-        <select value={b} onChange={(e) => setB(e.target.value)} className={input}>{nums.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}<option value="#">a fixed number</option></select>
-        {b === '#' && <input type="number" value={k} onChange={(e) => setK(e.target.value)} className={`${input} w-24`} />}
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, e.g. Difference" className={`${input} w-52`} />
-        <button type="button" onClick={() => onAdd({ id: `c_${Math.random().toString(36).slice(2, 8)}`, label, a, op, b, k: Number(k) || 0 })} className="rounded-lg bg-brand-neon px-3 py-1.5 text-sm font-semibold text-brand-contrast">Add field</button>
-        <button type="button" onClick={onCancel} className={pill}>Cancel</button>
+    <div style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', transition: 'grid-template-rows 260ms cubic-bezier(.22,1,.36,1)' }}>
+      <div className="min-h-0 overflow-hidden"><div style={{ opacity: open ? 1 : 0, transition: 'opacity 200ms ease' }}>{children}</div></div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------------------------------------ the field list, in plain groups
+export function FieldPicker({ groups, used, onPick, query, setQuery }) {
+  const [open, setOpen] = useState(() => Object.fromEntries(groups.map((g) => [g.id, g.open])))
+  const q = query.trim().toLowerCase()
+  const shown = groups.map((g) => ({ ...g, fields: q ? g.fields.filter((f) => f.label.toLowerCase().includes(q)) : g.fields })).filter((g) => g.fields.length)
+  return (
+    <div>
+      <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a field" className={`${input} mb-2 w-full`} />
+      <div className="max-h-[22rem] space-y-1 overflow-y-auto pr-1">
+        {shown.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No field has that name.</p>}
+        {shown.map((g) => {
+          const isOpen = q ? true : !!open[g.id]
+          return (
+            <div key={g.id} className="rounded-xl border border-neutral-800 bg-neutral-950/60">
+              <button type="button" onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold text-neutral-300 transition-colors hover:text-brand-neon" aria-expanded={isOpen}>
+                <span>{g.label} <span className="font-normal text-neutral-500">{g.fields.length}</span></span>
+                <span className="text-neutral-500 transition-transform duration-200" style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}>&#9656;</span>
+              </button>
+              <Collapse open={isOpen}>
+                <div className="flex flex-wrap gap-1.5 px-2.5 pb-2.5">
+                  {g.fields.map((f) => <FieldChip key={f.id} f={f} draggable used={used.has(f.id)} dashed={!!f.calc} onClick={(e) => { e.stopPropagation(); onPick(e, f) }} />)}
+                </div>
+                {g.id === 'tech' && <p className="px-3 pb-2 text-[11px] leading-snug text-neutral-500">Bookkeeping the app keeps for itself. For example, &quot;Authority ack&quot; is when someone last confirmed a document after its authority was changed.</p>}
+              </Collapse>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------------------------------------ calculated field: a formula
+export function FormulaBuilder({ baseFields, rows, fields, calc, editing, onSave, onCancel }) {
+  const [name, setName] = useState(editing?.label ?? '')
+  const [text, setText] = useState(editing?.formula ?? '')
+  const ref = useRef(null)
+  const parsed = parseFormula(text)
+  const labels = fields.list.filter((f) => !f.d && f.id !== editing?.id).map((f) => f.label)
+  const unknown = parsed.ok ? unknownRefs(text, labels) : []
+  const error = !text.trim() ? '' : !parsed.ok ? parsed.error : unknown.length ? `There is no field called ${unknown.map((u) => `[${u}]`).join(', ')}` : ''
+  const ok = text.trim() && parsed.ok && !unknown.length
+  const example = useMemo(() => {
+    if (!ok || !rows.length) return null
+    const tmp = { id: '__try', label: '__try', formula: text }
+    const f2 = buildFields(baseFields, [...calc.filter((c) => c.id !== editing?.id), tmp])
+    try { return readValue(rows[0], f2.map.__try, f2.map) } catch { return null }
+  }, [ok, text, rows, baseFields, calc, editing])
+  const insert = (str) => {
+    const el = ref.current
+    const a = el?.selectionStart ?? text.length
+    const z = el?.selectionEnd ?? text.length
+    setText(`${text.slice(0, a)}${str}${text.slice(z)}`)
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(a + str.length, a + str.length) })
+  }
+  const numFields = fields.list.filter((f) => !f.d && f.kind === 'num' && f.id !== editing?.id)
+  return (
+    <div className="rb-drop mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">{editing ? 'Change the calculated field' : 'New calculated field'}</p>
+      <div className="grid gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, for example Weight difference" className={`${input} w-full sm:w-72`} />
+        <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)} rows={2} spellCheck={false} placeholder="[Net kg] * [Net bags] - [Gross kg]" className={`${input} w-full font-mono`} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-neutral-500">Put in:</span>
+          <select value="" onChange={(e) => { if (e.target.value) insert(`[${e.target.value}]`) }} className={input}>
+            <option value="">a field&hellip;</option>
+            {numFields.length > 0 && <optgroup label="Numbers">{numFields.map((f) => <option key={f.id} value={f.label}>{f.label}</option>)}</optgroup>}
+            <optgroup label="Everything else">{fields.list.filter((f) => !f.d && f.kind !== 'num').map((f) => <option key={f.id} value={f.label}>{f.label}</option>)}</optgroup>
+          </select>
+          {['+', '-', '*', '/', '(', ')'].map((o) => <button key={o} type="button" onClick={() => insert(` ${o} `)} className="h-8 w-8 rounded-lg border border-neutral-700 bg-neutral-950 text-sm text-neutral-200 transition-colors hover:border-brand-neon/60">{o === '*' ? '×' : o === '/' ? '÷' : o}</button>)}
+          <select value="" onChange={(e) => { if (e.target.value) insert(e.target.value) }} className={input}>
+            <option value="">a function&hellip;</option>
+            <option value="ROUND(, 2)">ROUND(number, decimals)</option><option value="IF(, , )">IF(condition, then, otherwise)</option><option value="ABS()">ABS(number)</option><option value="MAX(, )">MAX(a, b, ...)</option><option value="MIN(, )">MIN(a, b, ...)</option><option value="FLOOR()">FLOOR(number)</option><option value="CEIL()">CEIL(number)</option>
+          </select>
+        </div>
+        <div className="min-h-[1.25rem] text-xs">
+          {error ? <span className="text-red-300">{error}</span> : ok ? <span className="text-emerald-300">Looks right.{example != null && <> The first record gives <b className="tabular-nums">{Number(example).toLocaleString('en-US', { maximumFractionDigits: 4 })}</b>.</>}</span> : <span className="text-neutral-500">Write a field name in [square brackets]. You can use + &minus; &times; &divide; ( ), numbers, and conditions such as IF([Net kg] &gt; 5000, [Net kg], 0).</span>}
+        </div>
+        <div className="flex gap-2">
+          <button type="button" disabled={!ok} onClick={() => onSave({ id: editing?.id ?? `c_${Math.random().toString(36).slice(2, 8)}`, label: name.trim() || text.trim().slice(0, 40), formula: text.trim() })} className="rounded-lg bg-brand-neon px-3 py-1.5 text-sm font-semibold text-brand-contrast transition-transform active:scale-95 disabled:opacity-40">{editing ? 'Save changes' : 'Add field'}</button>
+          <button type="button" onClick={onCancel} className={pill}>Cancel</button>
+        </div>
       </div>
     </div>
   )
@@ -117,7 +187,7 @@ export function ColumnsPanel({ fields, layout, onChange }) {
   const move = (id, d) => { const i = order.indexOf(id); const j = i + d; if (j < 0 || j >= order.length) return; const o = order.slice(); [o[i], o[j]] = [o[j], o[i]]; onChange({ order: o }) }
   const toggle = (id) => onChange({ order, hidden: layout.hidden.includes(id) ? layout.hidden.filter((x) => x !== id) : [...layout.hidden, id] })
   return (
-    <div className="mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+    <div className="rb-drop mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
       <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Columns of the list: tick to show, arrows to reorder</p>
       <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
         {order.map((id) => (
@@ -135,7 +205,7 @@ export function ColumnsPanel({ fields, layout, onChange }) {
 export function FormatPanel({ layout, onChange }) {
   const set = (o) => onChange(o)
   return (
-    <div className="mb-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-300">
+    <div className="rb-drop mb-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-300">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label className="flex items-center gap-2"><input type="checkbox" checked={layout.heat} onChange={(e) => set({ heat: e.target.checked })} />Shade by size</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={layout.subt} onChange={(e) => set({ subt: e.target.checked })} />Subtotals</label>
@@ -187,8 +257,8 @@ export function ResultTable({ table, layout, onSort, onCell }) {
       </thead>
       <tbody>
         {layout.mode === 'list'
-          ? body.map((r, ri) => <tr key={ri} className="hover:bg-neutral-900/60">{r.map((c, i) => td(c, i))}</tr>)
-          : body.map((r, ri) => <tr key={ri} className={r.cls === 'subt' ? 'bg-neutral-900 font-bold' : ''}>{r.cells.map((c, i) => td(c, i))}</tr>)}
+          ? body.map((r, ri) => <tr key={ri} style={ri < 24 ? { animationDelay: `${ri * 14}ms` } : undefined} className={`hover:bg-neutral-900/60 ${ri < 24 ? 'rb-fade' : ''}`}>{r.map((c, i) => td(c, i))}</tr>)
+          : body.map((r, ri) => <tr key={ri} style={ri < 24 ? { animationDelay: `${ri * 14}ms` } : undefined} className={`${ri < 24 ? 'rb-fade' : ''} ${r.cls === 'subt' ? 'bg-neutral-900 font-bold' : ''}`}>{r.cells.map((c, i) => td(c, i))}</tr>)}
       </tbody>
       {foot && <tfoot><tr className="sticky bottom-0 bg-neutral-900 font-extrabold text-brand-neon">{foot.map((c, i) => <td key={i} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id ? () => onCell(c.id) : undefined} className={`sticky bottom-0 cursor-pointer whitespace-nowrap bg-neutral-900 px-3 py-1.5 tabular-nums ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'}`}>{c.t}</td>)}</tr></tfoot>}
     </table>
