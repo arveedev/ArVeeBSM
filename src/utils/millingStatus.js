@@ -1,14 +1,13 @@
 // Milling status report (Stock Desk > Milling and Issuances > "Milling status", Admin only) - READ-ONLY, pure functions.
 // The office's own status table of the on-going milling operations, one row per LOT, grouped by ricemill:
 //   Lot No. | Pile No. | Issuing Warehouse | Name of Ricemill | QTY (bag of 50kg) | GMR | Expected Rice Recovery | RECEIVING Whse
-// and two added columns: Total issued, and Remarks (the as-of date of the total and the last issuance).
+// and two added columns: Total issued, and Remarks (the as-of date of that total).
 //
 // How a lot is read from the app: a milling authority (AI) is one TRANCHE of a lot. Its note is written "<issued so far> / <QTY of the lot>"
 // (for example "6000 / 7205.05", or "KINALE 3B 500 / 6263.35" with the warehouse and pile in front). The number after the slash is the QTY
 // authorized to be issued to the miller for the whole lot; the number before it is the total issued up to that tranche. So:
 //   QTY            = the number after the slash (never changed, never a sum of tranches)
 //   Total issued   = the number before the slash of the latest tranche (as of that tranche's date)
-//   Last issuance  = the net bags that latest tranche authorizes (its own amount)
 // GMR and the receiving warehouse come from the MO (milling order) that carries one of the lot's authority numbers; expected rice recovery =
 // QTY x GMR. Lot No. is NOT in the data: the Admin types it once per lot in the table (it is never the row count). Pile No. is read from the
 // note or the withdrawal slips, and can be overridden the same way.
@@ -32,6 +31,15 @@ export const parseLotNote = (note) => {
   const last = prefix.split(/\s+/).pop() ?? ''
   return { issued: num(m[1]), qty, pile: /^\d+[A-Za-z]?$/.test(last) ? last.toUpperCase() : '' }
 }
+
+// The office writes the short name: "Dens Marketing Corporation" and "DENS MARKETING CORP" -> Dens, "MAGAYON RM" -> Magayon, "Borromeo Ricemill" -> Borromeo
+const titleWord = (w) => (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1).toLowerCase())
+export const shortMiller = (name) => {
+  const cleaned = String(name ?? '').replace(/\b(rice\s*mill|ricemill|rm|marketing|corporation|corp|enterprises|trading|inc)\b\.?/gi, ' ').replace(/\s+/g, ' ').trim()
+  return (cleaned || String(name ?? '').trim()).split(' ').map(titleWord).join(' ')
+}
+// "TABACO GID A" -> Tabaco GID, "KINALE" -> Kinale, "BSI" -> BSI, "VRT" -> VRT (short words are initials)
+export const shortWarehouse = (name) => baseWarehouse(name).split(' ').filter(Boolean).map(titleWord).join(' ')
 
 export const lotKey = (miller, qty) => `${millerKey(miller)}|${qty.toFixed(2)}`
 
@@ -75,8 +83,8 @@ export const buildMillingStatus = ({ issues, transactions = [], piles = [], mill
     const info = lotInfo[lot.key] ?? {}
     return {
       key: lot.key, lotNo: info.lotNo ?? '', pile: info.pile ?? (notePile || slipPile),
-      warehouse: [...new Set(t.map((x) => baseWarehouse(x.source || x.warehouse)).filter(Boolean))].join(' / '),
-      miller: lot.miller, qty: lot.qty, gmr, expected: gmr != null ? lot.qty * (gmr / 100) : null,
+      warehouse: [...new Set(t.map((x) => shortWarehouse(x.warehouse || x.source)).filter(Boolean))].join(' / '),
+      miller: shortMiller(lot.miller), fullMiller: lot.miller, qty: lot.qty, gmr, expected: gmr != null ? lot.qty * (gmr / 100) : null,
       receiving: order?.receivingWarehouse ?? '',
       totalIssued: last.issuedTo, asOf: last.date, lastBags: last.bags, tranches: t.length, aiNumbers: t.map((x) => x.aiNumber),
     }
@@ -91,8 +99,9 @@ export const buildMillingStatus = ({ issues, transactions = [], piles = [], mill
   }
   const sum = (list, key) => list.reduce((s, r) => s + (r[key] ?? 0), 0)
   const totalOf = (list) => ({ qty: sum(list, 'qty'), expected: list.some((r) => r.expected != null) ? sum(list, 'expected') : null, issued: sum(list, 'totalIssued') })
-  // lots in the order of their number when typed, otherwise by the QTY (stable); ricemills A-Z like the office table
-  const out = [...groups.values()].sort((a, b) => natural(a.miller, b.miller)).map((g) => {
+  // lots in the order of their number when typed; ricemills in the order of their first lot number (as the office table), then A-Z
+  const firstLot = (g) => { const n = g.rows.map((r) => parseFloat(r.lotNo)).filter(Number.isFinite); return n.length ? Math.min(...n) : Infinity }
+  const out = [...groups.values()].map((g) => ({ ...g, miller: shortMiller(g.miller) })).sort((a, b) => (firstLot(a) - firstLot(b)) || natural(a.miller, b.miller)).map((g) => {
     g.rows.sort((a, b) => (a.lotNo !== '' && b.lotNo !== '' ? natural(a.lotNo, b.lotNo) : 0) || natural(a.pile, b.pile) || a.qty - b.qty)
     return { ...g, total: totalOf(g.rows) }
   })
@@ -103,8 +112,8 @@ export const buildMillingStatus = ({ issues, transactions = [], piles = [], mill
 const n2 = (n) => (n == null ? '' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const dateText = (iso) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '')
 
-/** Remarks: the as-of date of the total issued, and the last issuance in net bags. */
-export const remarksText = (r) => `As of ${dateText(r.asOf)}; last issuance ${n2(r.lastBags)} net bags`
+/** Remarks: the as-of date of the total issued. */
+export const remarksText = (r) => `As of ${dateText(r.asOf)}`
 
 /** Tab-separated, pastes into a Sheet or Excel with the same columns. A group with two or more rows ends with a Total row. */
 export const millingStatusText = (data) => {

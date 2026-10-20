@@ -731,7 +731,7 @@ function MillingStatusModal({ open, status, from, to, isAdmin, onSaveInfo, onClo
             <button type="button" onClick={onClose} aria-label="Close" className={closeButtonClass}><X size={16} /></button>
           </div>
         </div>
-        <p className="mt-1 text-xs text-neutral-500">QTY is the quantity authorized to be issued to the miller for the lot (the number after the slash in the authority's note). Total issued is as of the last issuance, which Remarks gives. Type the Lot No. once per lot (yellow boxes); it is kept.</p>
+        <p className="mt-1 text-xs text-neutral-500">QTY is the quantity authorized to be issued to the miller for the lot (the number after the slash in the authority's note). Total issued is as of the date Remarks gives. Type the Lot No. once per lot (yellow boxes); it is kept.</p>
         <div ref={boxRef} className="mt-3 min-h-0 flex-1 overflow-auto rounded bg-white">
           <div ref={paperRef} style={{ display: 'inline-block', minWidth: '100%', background: '#fff', padding: 12, fontFamily: PAPER_FONT }}>
             <p style={{ margin: '0 0 6px', color: '#000', fontWeight: 700, fontSize: 14 }}>MILLING STATUS &nbsp;·&nbsp; {from === to ? longDate(from) : `${longDate(from)} to ${longDate(to)}`}</p>

@@ -24,11 +24,11 @@ test('Magayon: eight tranches are ONE lot; QTY is the lot quantity, total issued
   const row = r.rows[0]
   assert.equal(row.qty, 7205.05) // as the office's table: never a sum of tranches
   assert.equal(row.totalIssued, 7205)
-  assert.equal(row.lastBags, 205)
   assert.equal(row.asOf, '2026-10-12')
   assert.equal(Math.round(row.expected * 100) / 100, 4632.85) // the office's own figure
   assert.equal(row.receiving, 'Abacorp/ Leg Gid')
-  assert.equal(remarksText(row), 'As of Oct 12; last issuance 205.00 net bags')
+  assert.equal(remarksText(row), 'As of Oct 12')
+  assert.equal(row.miller, 'Magayon') // the short name, as the office writes it
 })
 
 test('Lot No. is never the row count: blank until the Admin types it, then exactly what was typed', () => {
@@ -38,6 +38,18 @@ test('Lot No. is never the row count: blank until the Admin types it, then exact
   const typed = buildMillingStatus({ issues, lotInfo: { [lotKey('Borromeo Ricemill', 6124.18)]: { lotNo: '1', pile: '1' }, [lotKey('Borromeo Ricemill', 6482.15)]: { lotNo: '2' } } })
   assert.deepEqual(typed.rows.map((x) => [x.lotNo, x.qty, x.pile]), [['1', 6124.18, '1'], ['2', 6482.15, '']])
   assert.equal(typed.rows[0].warehouse, 'TAB GID') // the lettered variant is shown as the warehouse
+})
+
+test('names and order as the office table: short ricemill and warehouse names, ricemills in the order of their first lot number', () => {
+  const issues = [
+    { ...tr('1', 'Dens Marketing Corporation', '1000 / 4012.57', 1000, '2026-10-08', 'KINALE'), warehouse: 'ALB-KINALE A' },
+    { ...tr('2', 'Borromeo Ricemill', '750 / 6482.15', 750, '2026-10-06', 'TAB GID A'), warehouse: 'ALB-TABACO GID A' },
+    { ...tr('3', 'MAGAYON RM', '1000 / 7205.05', 1000, '2026-10-06', 'BSI'), warehouse: 'ALB-BSI' },
+  ]
+  const lotInfo = { [lotKey('Dens Marketing Corporation', 4012.57)]: { lotNo: '12' }, [lotKey('Borromeo Ricemill', 6482.15)]: { lotNo: '2' }, [lotKey('MAGAYON RM', 7205.05)]: { lotNo: '7' } }
+  const r = buildMillingStatus({ issues, lotInfo })
+  assert.deepEqual(r.groups.map((g) => g.miller), ['Borromeo', 'Magayon', 'Dens'])
+  assert.deepEqual(r.rows.map((x) => x.warehouse), ['Tabaco GID', 'BSI', 'Kinale'])
 })
 
 test('grouped by ricemill (spellings merged); a Total only for a group of 2 or more lots; authorities with no lot note are listed apart', () => {
