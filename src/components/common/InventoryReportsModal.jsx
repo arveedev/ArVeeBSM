@@ -870,7 +870,7 @@ function MillingIssuancesView({ data, sort }) {
   })()
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6">
-      <p className="text-xs text-neutral-500">Issuances are the authorities' own net bags (counted in the period the authority is dated), not the WSI documents. Recoveries are the WSRs of milling.</p>
+      <p className="text-xs text-neutral-500">Issuances are the authorities' own net bags (counted in the period the authority is dated), not the WSI documents. Recoveries are the WSRs of milling. NFA-owned ricemill: each day it hands out rice counts 100 net bags issued (the daily input), or 50 when that day's rice is under 60% of it.</p>
       <MainValues title="Milling (net bags)" columns={[{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }]}
         rows={milling.perProvince} total={{ issued: milling.issuedTotal, recovered: milling.recoveredTotal }} />
       <MainValues title="NFA-owned milling (net bags)" columns={[{ key: 'issued', label: 'Issued (authorities)' }, { key: 'recovered', label: 'Recovered (WSR)' }]}

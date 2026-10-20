@@ -6,9 +6,11 @@
 //  - Milling (private millers): authorities of a milling transaction type (MILLING, REMILLING, TEST MILLING, ...)
 //    that do not belong to an NFA-owned ricemill; recoveries are the rice WSRs of milling (an MO / TMO number or
 //    a milling transaction type) that did not come from an NFA-owned ricemill.
-//  - NFA-owned: milling authorities whose Regional Authority Number is set up for an NFA-owned ricemill
-//    (Admin > Miller Allocations) are the issuances; the rice the ricemill hands out (TRANSFER authorities of
-//    that Regional Authority Number, rice only) are its recoveries - both from the authorities.
+//  - NFA-owned: the ricemill processes a fixed amount of palay every day it hands out rice (100 net bags, or the daily
+//    input set in Admin > Miller Allocations). On a day when the rice it handed out is under 60% of that input it
+//    only processed half (50 bags). Those daily amounts are the issuances; the rice the ricemill hands out (TRANSFER
+//    authorities of that Regional Authority Number, rice only) are its recoveries. Milling authorities of an
+//    NFA-owned ricemill are NOT counted as issuances (the daily amounts replace them).
 //  - Issuances to LGU: authorities of type SALES whose customer name contains "LGU".
 //  - Issuances to FTI: authorities of type SALES (CONSIGNMENT).
 // A warehouse's reporting start (override) date is respected like everywhere else.
@@ -17,6 +19,10 @@ import { effectiveCutoffDate, dedupeAuthoritiesByRef } from './calculations.js'
 import { millerKey } from './millingLiquidation.js'
 
 const NET_BAG_KG = 50
+// NFA-owned ricemill: bags processed per day, and the rule for a poor day (owner, 2026-10-20)
+export const NFA_DAILY_BAGS_DEFAULT = 100
+export const NFA_LOW_RECOVERY_PCT = 60
+export const NFA_LOW_RECOVERY_FACTOR = 0.5
 const norm = (s) => String(s ?? '').trim().toUpperCase().replace(/\s+/g, ' ')
 const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
 
@@ -28,6 +34,7 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
   const varById = new Map(varieties.map((v) => [v.varietyId, v]))
   const typeName = new Map(transactionTypes.map((t) => [t.transactionTypeId, norm(t.name)]))
   const nfaRans = new Set(ricemillAllocations.map((r) => r.regionalAuthorityNumber))
+  const capacityOf = new Map(ricemillAllocations.map((r) => [r.regionalAuthorityNumber, r.millingInputCapacityBags > 0 ? r.millingInputCapacityBags : NFA_DAILY_BAGS_DEFAULT]))
   const inCutoff = (wh, date) => { const cut = effectiveCutoffDate(wh?.reportingCutoffDate, globalDataStartDate); return !(cut && date <= cut) }
   // Filter and sort (Stock Desk): a province, a set of warehouses, a ricemill / customer. Applied to every row, so the
   // per-province totals and the copied text follow it. `customers` lists every customer before filtering.
@@ -69,6 +76,7 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
   const milling = []
   const nfa = []
   const nfaRecoveries = []
+  const nfaOut = [] // every rice hand-out of an NFA-owned ricemill in the period, before any filter (a day's recovery is judged on all of it)
   const lgu = []
   const fti = []
   for (const a of dedupeAuthoritiesByRef((authorities ?? []).filter((x) => x.type === 'AI'))) {
@@ -88,11 +96,36 @@ export const buildMillingIssuances = ({ transactions, authorities, warehouses, p
     }
     const isNfa = nfaRans.has(a.regionalAuthorityNumber)
     let target = null
-    if (type.includes('MILLING')) target = isNfa ? nfa : milling
-    else if (isNfa && type === 'TRANSFER' && varById.get(a.varietyId)?.category === 'Rice') target = nfaRecoveries
+    if (type.includes('MILLING')) target = isNfa ? null : milling
+    else if (isNfa && type === 'TRANSFER' && varById.get(a.varietyId)?.category === 'Rice') {
+      target = nfaRecoveries
+      nfaOut.push({ ran: a.regionalAuthorityNumber, date: a.date, bags: row.bags, warehouseId: a.assignedWarehouse })
+    }
     else if (type === 'SALES' && /LGU/i.test(a.customerName ?? '')) target = lgu
     else if (type === 'SALES (CONSIGNMENT)') target = fti
     if (target && keep(row, a.assignedWarehouse)) target.push(row)
+  }
+
+  // NFA-owned issuances: one row per ricemill day = the daily input, or half of it when that day's rice is under 60% of the input
+  const days = new Map()
+  for (const o of nfaOut) {
+    const k = `${o.ran}|${o.date}`
+    const d = days.get(k) ?? { ran: o.ran, date: o.date, rice: 0, warehouseId: o.warehouseId }
+    d.rice += o.bags
+    days.set(k, d)
+  }
+  for (const d of days.values()) {
+    const capacity = capacityOf.get(d.ran) ?? NFA_DAILY_BAGS_DEFAULT
+    const pct = capacity > 0 ? (d.rice / capacity) * 100 : 0
+    const low = pct < NFA_LOW_RECOVERY_PCT
+    const bags = low ? capacity * NFA_LOW_RECOVERY_FACTOR : capacity
+    const pl = place(d.warehouseId)
+    const row = {
+      id: `mill-day-${d.ran}-${d.date}`, date: d.date, aiNumber: 'MILL DAY', province: pl.province, warehouse: pl.warehouse,
+      customer: `${bags.toLocaleString('en-US', { maximumFractionDigits: 2 })} bags${low ? ` only (rice out ${d.rice.toLocaleString('en-US', { maximumFractionDigits: 2 })} bags = ${pct.toLocaleString('en-US', { maximumFractionDigits: 1 })}%, under ${NFA_LOW_RECOVERY_PCT}%)` : ` (rice out ${d.rice.toLocaleString('en-US', { maximumFractionDigits: 2 })} bags = ${pct.toLocaleString('en-US', { maximumFractionDigits: 1 })}%)`}`,
+      kilos: bags * NET_BAG_KG, bags, withdrawn: 0, ran: d.ran, derived: true,
+    }
+    if (keep(row, d.warehouseId)) nfa.push(row)
   }
 
   const byDate = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : natural(a.aiNumber ?? a.serialNo, b.aiNumber ?? b.serialNo))
