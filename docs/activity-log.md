@@ -18663,3 +18663,5 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 2026-10-20: GSR step 1 built (v1.10-403): Stock Desk > GSR report (Admin only) with PALAY INVENTORY, the tally against the warehouses, the audit file and the Google Drive receiver (`api/gsr-publish.js`, `tools/gsr/gsr-drive.gs.js`, setup guide `docs/gsr-drive-setup.md`). Tested on the live Oct 19 export: all ten column tallies and three sheet ties pass (BSI 74,484.42, TABACO GID 33,553.19 ...); 14 new tests, 56 pass. Owner steps pending: the scratch Drive folder, the script, two Vercel variables. Blank cells instead of 0 and the "FIRST RUN - HAND CHECK" label are in.
 
 2026-10-20: Milling and Issuances, NFA-owned ricemill (v1.10-404): issuances = 100 net bags per ricemill day (the Miller Allocations daily input), 50 when that day's rice out is under 60% of it; NFA milling authorities no longer counted on top. Tests added (tests/millingIssuances.test.mjs).
+
+2026-10-20: Milling per ricemill now shows a subtotal for the private ricemills and one for the NFA-owned ricemill above the total (v1.10-405).

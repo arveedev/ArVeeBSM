@@ -221,7 +221,12 @@ export const perRicemill = (data) => {
   for (const r of data.nfa.issues) grp(r.ran ?? '').issued += r.bags
   for (const r of data.nfa.recoveries) grp(r.ran ?? '').recovered += r.bags
   const nfaRows = [...g.values()].sort((a, b) => natural(a.name, b.name)).map((r) => ({ ...r, pct: r.issued > 0 ? (r.recovered / r.issued) * 100 : null }))
-  const issued = rows.reduce((s, r) => s + r.issued, 0) + nfaRows.reduce((s, r) => s + r.issued, 0)
-  const recovered = rows.reduce((s, r) => s + r.recovered, 0) + nfaRows.reduce((s, r) => s + r.recovered, 0)
-  return { rows, nfaRows, total: { issued, recovered, pct: issued > 0 ? (recovered / issued) * 100 : null } }
+  const subtotal = (list) => {
+    const issued = list.reduce((s, r) => s + r.issued, 0)
+    const recovered = list.reduce((s, r) => s + r.recovered, 0)
+    return { issued, recovered, pct: issued > 0 ? (recovered / issued) * 100 : null }
+  }
+  const privateTotal = subtotal(rows)
+  const nfaTotal = subtotal(nfaRows)
+  return { rows, nfaRows, privateTotal, nfaTotal, total: subtotal([...rows, ...nfaRows]) }
 }

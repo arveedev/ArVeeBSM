@@ -33,3 +33,13 @@ test('a day outside the period is not counted; a ricemill with no capacity set u
   assert.equal(r.nfa.issues.length, 1)
   assert.equal(r.nfa.issues[0].bags, 100)
 })
+
+test('per ricemill: a subtotal for the private ricemills and one for the NFA-owned ricemill add up to the total', async () => {
+  const { perRicemill } = await import('../src/utils/millingIssuances.js')
+  const priv = { type: 'AI', authId: 'P1', aiNumber: 'P1', date: '2026-10-03', transactionTypeName: 'MILLING', varietyId: 'palay', customerName: 'ABC RICEMILL', assignedWarehouse: 'w1', totalAllocationKilos: 5000, totalIssuedKilos: 5000 }
+  const r = perRicemill(run([priv, out('A1', '2026-10-05', 70)]))
+  assert.equal(r.privateTotal.issued, 100)
+  assert.equal(r.nfaTotal.issued, 100)
+  assert.equal(r.nfaTotal.recovered, 70)
+  assert.equal(r.total.issued, 200)
+})

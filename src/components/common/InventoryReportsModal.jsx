@@ -656,7 +656,8 @@ function RicemillModal({ open, data, from, to, onClose }) {
   const boxRef = useRef(null)
   useCrosshair(boxRef)
   useTableScroll(boxRef)
-  const { rows, nfaRows = [], total } = data ? perRicemill(data) : { rows: [], nfaRows: [], total: { issued: 0, recovered: 0, pct: null } }
+  const empty = { issued: 0, recovered: 0, pct: null }
+  const { rows, nfaRows = [], privateTotal = empty, nfaTotal = empty, total } = data ? perRicemill(data) : { rows: [], nfaRows: [], total: empty }
   const pct = (v) => (v == null ? '-' : `${v.toLocaleString('en-PH', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`)
   return (
     <SdOverlay open={open} onClose={onClose} z="z-[95]" panelClassName="sd-table flex max-h-[85vh] w-full flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 p-4 sm:max-w-2xl sm:rounded-2xl">
@@ -668,7 +669,7 @@ function RicemillModal({ open, data, from, to, onClose }) {
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className={closeButtonClass}><X size={16} /></button>
         </div>
-        <p className="mt-1 text-xs text-neutral-500">Issued is what the ricemill's milling authorities authorize; recovered is the rice (no by-products) received from it.</p>
+        <p className="mt-1 text-xs text-neutral-500">Private ricemills: issued is what their milling authorities authorize. NFA-owned ricemill: issued is its daily processing (100 bags, or 50 on a day under 60% recovery). Recovered is the rice (no by-products) received from it.</p>
         <div ref={boxRef} className="mt-3 min-h-0 flex-1 overflow-auto">
           <table className="min-w-full border-separate border-spacing-0 text-sm tabular-nums">
             <thead>
@@ -681,6 +682,7 @@ function RicemillModal({ open, data, from, to, onClose }) {
             </thead>
             <tbody>
               {rows.length + nfaRows.length === 0 && <tr><td colSpan={4} className="px-2 py-3 text-xs text-neutral-500">No milling in this period.</td></tr>}
+              {rows.length > 0 && nfaRows.length > 0 && <tr><td colSpan={4} className="border-b border-neutral-800 px-2 pb-1 pt-1 text-xs font-bold uppercase tracking-wide text-brand-neon">Private ricemills</td></tr>}
               {rows.map((r) => (
                 <tr key={r.key}>
                   <td className="break-words border-b border-neutral-900 px-2 py-1 text-app-text">{r.name}</td>
@@ -689,6 +691,14 @@ function RicemillModal({ open, data, from, to, onClose }) {
                   <td className="border-b border-neutral-900 px-2 py-1 text-right text-neutral-300">{pct(r.pct)}</td>
                 </tr>
               ))}
+              {rows.length > 0 && (
+                <tr>
+                  <td className="border-b border-neutral-800 px-2 py-1 font-semibold text-app-text">Subtotal, private ricemills</td>
+                  <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-app-text">{fmtNum(privateTotal.issued)}</td>
+                  <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-app-text">{fmtNum(privateTotal.recovered)}</td>
+                  <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-neutral-300">{pct(privateTotal.pct)}</td>
+                </tr>
+              )}
               {nfaRows.length > 0 && (
                 <>
                   <tr><td colSpan={4} className="border-b border-neutral-800 px-2 pb-1 pt-3 text-xs font-bold uppercase tracking-wide text-brand-neon">NFA-owned ricemill, by authority</td></tr>
@@ -700,6 +710,12 @@ function RicemillModal({ open, data, from, to, onClose }) {
                       <td className="border-b border-neutral-900 px-2 py-1 text-right text-neutral-300">{pct(r.pct)}</td>
                     </tr>
                   ))}
+                  <tr>
+                    <td className="border-b border-neutral-800 px-2 py-1 font-semibold text-app-text">Subtotal, NFA-owned ricemill</td>
+                    <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-app-text">{fmtNum(nfaTotal.issued)}</td>
+                    <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-app-text">{fmtNum(nfaTotal.recovered)}</td>
+                    <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-neutral-300">{pct(nfaTotal.pct)}</td>
+                  </tr>
                 </>
               )}
               {rows.length + nfaRows.length > 0 && (
