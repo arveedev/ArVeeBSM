@@ -652,6 +652,19 @@ function FilterSheet({ open, draft, setDraft, provinces, warehouses, view, onApp
 }
 
 // Milling per ricemill (Admin only): issued and recovered per ricemill for the report's period.
+// A subtotal must stand out at a glance: a filled band, a bright rule above it and bright bold figures.
+function SubtotalRow({ total, pct }) {
+  const cell = 'border-y border-brand-neon/50 bg-brand-neon/10 px-2 py-1.5 font-bold text-brand-neon'
+  return (
+    <tr>
+      <td className={`${cell} uppercase tracking-wide`}>Subtotal</td>
+      <td className={`${cell} text-right`}>{fmtNum(total.issued)}</td>
+      <td className={`${cell} text-right`}>{fmtNum(total.recovered)}</td>
+      <td className={`${cell} text-right`}>{pct(total.pct)}</td>
+    </tr>
+  )
+}
+
 function RicemillModal({ open, data, from, to, onClose }) {
   const boxRef = useRef(null)
   useCrosshair(boxRef)
@@ -691,14 +704,7 @@ function RicemillModal({ open, data, from, to, onClose }) {
                   <td className="border-b border-neutral-900 px-2 py-1 text-right text-neutral-300">{pct(r.pct)}</td>
                 </tr>
               ))}
-              {rows.length > 0 && (
-                <tr>
-                  <td className="border-b border-neutral-800 px-2 py-1 font-semibold text-app-text">Subtotal, private ricemills</td>
-                  <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-app-text">{fmtNum(privateTotal.issued)}</td>
-                  <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-app-text">{fmtNum(privateTotal.recovered)}</td>
-                  <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-neutral-300">{pct(privateTotal.pct)}</td>
-                </tr>
-              )}
+              {rows.length >= 2 && <SubtotalRow total={privateTotal} pct={pct} />}
               {nfaRows.length > 0 && (
                 <>
                   <tr><td colSpan={4} className="border-b border-neutral-800 px-2 pb-1 pt-3 text-xs font-bold uppercase tracking-wide text-brand-neon">NFA-owned ricemill, by authority</td></tr>
@@ -710,12 +716,7 @@ function RicemillModal({ open, data, from, to, onClose }) {
                       <td className="border-b border-neutral-900 px-2 py-1 text-right text-neutral-300">{pct(r.pct)}</td>
                     </tr>
                   ))}
-                  <tr>
-                    <td className="border-b border-neutral-800 px-2 py-1 font-semibold text-app-text">Subtotal, NFA-owned ricemill</td>
-                    <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-app-text">{fmtNum(nfaTotal.issued)}</td>
-                    <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-app-text">{fmtNum(nfaTotal.recovered)}</td>
-                    <td className="border-b border-neutral-800 px-2 py-1 text-right font-semibold text-neutral-300">{pct(nfaTotal.pct)}</td>
-                  </tr>
+                  {nfaRows.length >= 2 && <SubtotalRow total={nfaTotal} pct={pct} />}
                 </>
               )}
               {rows.length + nfaRows.length > 0 && (

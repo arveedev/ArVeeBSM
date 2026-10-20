@@ -8461,4 +8461,5 @@
 //   1.10-403 - Stock Desk > GSR report (Admin only), step 1: the PALAY INVENTORY sheet of the Grains Situationer Report, generated from the warehouse records as a Google Sheet plus an audit file in Drive (NEWGSR/year/month). One column per warehouse code, blank cells instead of 0, every figure tallied against the warehouses' opening + received - issued = ending before the file can be created, every value read back from Drive. The other ten sheets follow in the sheet order.
 //   1.10-404 - Milling and Issuances, NFA-owned ricemill: the issuances are now the ricemill's daily processing: 100 net bags (or the daily input set in Miller Allocations) on every day it handed out rice, and 50 when that day's rice recovery is under 60%. Milling authorities of an NFA-owned ricemill no longer count on top of that. Recoveries are unchanged.
 //   1.10-405 - Milling per ricemill (Milling and Issuances): a Subtotal for the private ricemills and a Subtotal for the NFA-owned ricemill, each with issued, recovered and recovery %, above the grand Total.
-export const APP_VERSION = '1.10-405'
+//   1.10-406 - Milling per ricemill: the subtotal rows now read just 'Subtotal' and stand out (filled band, bright bold figures); a group shows a subtotal only when it has two or more rows.
+export const APP_VERSION = '1.10-406'
