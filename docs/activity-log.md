@@ -18677,3 +18677,5 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 2026-10-20: Milling status rebuilt on the office's own table (v1.10-410): rows stored in reportConfig.millingStatusTable (default = the October 2026 table, 13 rows, every printed Expected Rice Recovery and group total reproduced by test), Admin Edit table, two added columns Total issued + Remarks only, empty when no issuance yet.
 
 2026-10-20: Milling status Save as image (v1.10-411): image cropped to the table, direct download on a PC (share sheet only on phones).
+
+2026-10-20: Milling status table and image layout cleaned (v1.10-412): fixed column widths, Arial, even row heights, centred text, right-aligned numbers.
