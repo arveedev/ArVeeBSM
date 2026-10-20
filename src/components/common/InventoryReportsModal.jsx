@@ -701,20 +701,24 @@ function MillingStatusModal({ open, status, table, from, to, isAdmin, onSaveTabl
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
       await document.fonts?.ready
       const el = paperRef.current
-      const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2, useCORS: true, width: el.scrollWidth, height: el.scrollHeight, windowWidth: el.scrollWidth })
+      // exactly the table: the box is as wide and as tall as the table (no empty white area around it)
+      const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2, useCORS: true, width: el.offsetWidth, height: el.offsetHeight, windowWidth: el.offsetWidth + 80 })
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
       const filename = `Milling-status-as-of-${to}.png`
       const file = new File([blob], filename, { type: 'image/png' })
-      if (navigator.canShare?.({ files: [file] })) {
+      // a phone uses its share sheet (the only way into the photo gallery); a PC downloads the file straight away, no question asked
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.canShare?.({ files: [file] })) {
         toast.success('Choose "Save Image" to add it to your photo gallery')
         await navigator.share({ files: [file], title: filename })
       } else {
         const link = document.createElement('a')
         link.download = filename
         link.href = URL.createObjectURL(blob)
+        document.body.appendChild(link)
         link.click()
-        URL.revokeObjectURL(link.href)
-        toast.success('Image saved: check your Downloads folder')
+        link.remove()
+        setTimeout(() => URL.revokeObjectURL(link.href), 10000)
+        toast.success('Image downloaded')
       }
     } catch (err) {
       if (err?.name !== 'AbortError') { console.error('Milling status image error:', err); toast.error('Could not save the image, try again') }
@@ -755,7 +759,7 @@ function MillingStatusModal({ open, status, table, from, to, isAdmin, onSaveTabl
         </div>
         <p className="mt-1 text-xs text-neutral-500">{editing ? 'Edit the office table here (Expected Rice Recovery is QTY x GMR). Rows with no ricemill and no QTY are dropped when you save.' : 'The table is the office\'s own. Total issued and Remarks are worked out from the milling authorities (the "issued / QTY" in their notes) of the same ricemill and QTY; a row with no issuance yet is left empty.'}</p>
         <div ref={boxRef} className="mt-3 min-h-0 flex-1 overflow-auto rounded bg-white">
-          <div ref={paperRef} style={{ display: 'inline-block', minWidth: '100%', background: '#fff', padding: 12, fontFamily: PAPER_FONT }}>
+          <div ref={paperRef} style={{ display: 'inline-block', width: 'max-content', background: '#fff', padding: 6, fontFamily: PAPER_FONT }}>
             <table style={{ borderCollapse: 'collapse', fontSize: 15, fontVariantNumeric: 'tabular-nums', background: '#fff' }}>
               <thead>
                 <tr>
