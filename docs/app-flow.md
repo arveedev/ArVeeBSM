@@ -490,3 +490,9 @@ A WSR received into more than one pile is stored as one record per pile (the ext
 2. Prepare: the app works out the sheets in memory (nothing is written) and shows Checks and tally, the sheet preview and the audit-file summary. The tally compares, per warehouse column, opening stock + received - issued (+ the Stock Desk's corrections) with the ending stock and with what the sheet prints; any difference, a stock line with no report column or a palay variety with no report row stops the file (Create stays off).
 3. Create in Google Drive (after a confirmation): the GSR and `... - AUDIT` Google Sheets are created in NEWGSR/{year}/{MM MONTH}, read back, and every value compared; a mismatch renames both files "NOT VERIFIED". Until the Admin unticks "FIRST RUN - HAND CHECK", both files carry that label.
 4. Cells with no stock are blank (never 0); a total that adds up to 0 is blank through the number format.
+
+## 21. Milling status (Stock Desk > Milling and Issuances, Admin only)
+
+1. Set the period, press "Milling status". One row per milling authority of a private ricemill dated in the period, grouped by ricemill: lot number, pile number(s) the withdrawals came from, issuing warehouse, ricemill, QTY authorized (net bags), GMR and receiving warehouse (from the MO carrying the same authority number), expected rice recovery (QTY x GMR).
+2. Added columns: Total issuance (net bags issued so far on the authority's withdrawal slips), Balance to issue (authorized minus issued, red when more was issued than authorized), % issued, and Remarks = the last issuance in net bags with its date.
+3. A ricemill with two or more rows ends with a Total; a grand total ends the table. Copy pastes the table, tab-separated, into a Sheet.

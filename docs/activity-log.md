@@ -18667,3 +18667,5 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 2026-10-20: Milling per ricemill now shows a subtotal for the private ricemills and one for the NFA-owned ricemill above the total (v1.10-405).
 
 2026-10-20: Milling per ricemill subtotal rows made prominent, labelled 'Subtotal', shown only for a group of 2 or more rows (v1.10-406).
+
+2026-10-20: Milling status report added to Stock Desk > Milling and Issuances (v1.10-407): per-row QTY authorized, GMR, expected recovery, receiving warehouse, total issuance, balance (authorized vs issued), % issued and a remark with the last issuance; totals per ricemill (2+ rows) and a grand total; Copy for a Sheet. Pure builder src/utils/millingStatus.js, tests/millingStatus.test.mjs.
