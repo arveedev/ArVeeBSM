@@ -213,3 +213,26 @@ test('the period: nothing before September 1, 2026 ever shows, and a row with no
   assert.deepEqual(applyPeriod(data, 'date', { from: '2020-01-01', to: '2026-09-30' }).map((r) => r.date), ['2026-09-01', '2026-09-15T08:00'])
   assert.equal(applyPeriod(data, null, { from: '2026-09-01', to: '2026-09-02' }).length, 6) // a source with no dates is not cut
 })
+
+test('formulas: average, sum, median, count, power, sqrt, mod work over the values given', async () => {
+  const { parseFormula, evalTree } = await import('../src/utils/reportBuilder/formula.js')
+  const run = (t) => { const p = parseFormula(t); assert.ok(p.ok, t); return evalTree(p.tree, () => 0) }
+  assert.equal(run('AVERAGE(2, 4, 9)'), 5)
+  assert.equal(run('AVG(1, 2)'), 1.5)
+  assert.equal(run('SUM(1, 2, 3)'), 6)
+  assert.equal(run('MEDIAN(9, 1, 5)'), 5)
+  assert.equal(run('MEDIAN(1, 2, 3, 4)'), 2.5)
+  assert.equal(run('COUNT(0, 3, 4)'), 2)
+  assert.equal(run('POWER(2, 3)'), 8)
+  assert.equal(run('SQRT(16)'), 4)
+  assert.equal(run('MOD(10, 4)'), 2)
+})
+
+test('fields nobody needs are left out of the picker, and a pivot blank key is named', async () => {
+  const { isHiddenField } = await import('../src/utils/reportBuilder/categories.js')
+  for (const [id, label] of [['createdByName', 'Entered by'], ['date_wk', 'Date (week)'], ['residuePileTo', 'Residue pile to'], ['warehouseCode', 'Warehouse code'], ['warehouseShort', 'Warehouse short'], ['recordedByName', 'Recorded by'], ['groupSerialNo', 'Group serial no.'], ['isClosingResidue', 'Is closing residue'], ['isInitialBalance', 'Is initial balance'], ['issuedStockCondition', 'Issued stock condition'], ['receivedCondition', 'Received condition'], ['ageUnit', 'Age unit'], ['ageValue', 'Age value'], ['createdAt', 'Created at'], ['dateProcured', 'Date procured'], ['issuedVariety', 'Issued variety'], ['receivedVariety', 'Received variety'], ['linkedDocNo', 'Linked doc no.']]) {
+    assert.ok(isHiddenField({ id, label, kind: 'txt', d: id.endsWith('_wk') }), `${label} should be hidden`)
+  }
+  assert.ok(!isHiddenField({ id: 'netKilos', label: 'Net kg', kind: 'num' }))
+  assert.ok(!isHiddenField({ id: 'date_mo', label: 'Date (month)', kind: 'txt', d: true }))
+})

@@ -1207,3 +1207,6 @@ select {
 .rb-fade { animation: rb-fade 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .rb-pop { animation: rb-pop 0.26s ease both; }
 @media (prefers-reduced-motion: reduce) { .rb-drop, .rb-fade, .rb-pop { animation: none; } }
+@keyframes rb-bd { from { opacity: 0; } to { opacity: 1; } }
+.rb-bd { animation: rb-bd 0.18s ease both; }
+@media (prefers-reduced-motion: reduce) { .rb-bd { animation: none; } }

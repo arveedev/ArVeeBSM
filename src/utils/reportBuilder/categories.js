@@ -46,3 +46,17 @@ export function groupFields(fields, mainIds = []) {
   if (mainIds.length) main.sort((a, b) => mainIds.indexOf(a.id) - mainIds.indexOf(b.id))
   return CATEGORIES.filter((c) => by.get(c.id).length).map((c) => ({ ...c, fields: by.get(c.id) }))
 }
+
+// Fields nobody needs in a report: the app's own bookkeeping and near-duplicates of other fields. Matched by label or by field id,
+// ignoring case and punctuation. Every date also has a "(week)" version, which is left out (the month version stays).
+const HIDE = new Set(['enteredby', 'recordedby', 'recordedbyname', 'createdbyname', 'residuepileto', 'residuepilefrom', 'warehousecode', 'warehouseshort',
+  'groupserialno', 'groupserial', 'isclosingresidue', 'isinitialbalance', 'issuedcondition', 'issuedstockcondition', 'receivedcondition', 'receivedstockcondition',
+  'ageunit', 'agevalue', 'createdat', 'dateprocured', 'issuedvariety', 'receivedvariety', 'linkeddocno', 'linkeddocserial', 'linkeddocserialno'])
+const norm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z]/g, '')
+export function isHiddenField(f) {
+  if (f.calc) return false
+  if (f.d && /_wk$/.test(f.id)) return true
+  const a = norm(f.label)
+  const b = norm(f.id)
+  return HIDE.has(a) || HIDE.has(b) || a.startsWith('linkeddoc') || b.startsWith('linkeddoc') || a.startsWith('groupserial') || b.startsWith('groupserial')
+}

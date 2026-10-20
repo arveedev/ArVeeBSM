@@ -1,10 +1,10 @@
 // Report Builder: calculated fields written as a formula (pure, no eval, no database).
 //   [Net kg] * [Net bags] - [Gross kg]          a field is written in square brackets, by the name shown on screen
 //   ROUND(([Amount] / [Net kg]) * 50, 2)         + - * / % ^ ( ), numbers, and these functions:
-//   IF([Net kg] > 5000, [Net kg], 0)             ABS ROUND FLOOR CEIL MIN MAX IF AND OR NOT
+//   IF([Net kg] > 5000, [Net kg], 0)             ABS ROUND FLOOR CEIL MIN MAX IF AND OR NOT SQRT POWER MOD AVERAGE SUM COUNT MEDIAN
 // Conditions: > < >= <= = <>. A division by zero gives 0 (like a blank cell, never an error on screen). Text is never calculated.
 
-const FUNCS = { ABS: 1, ROUND: [1, 2], FLOOR: 1, CEIL: 1, CEILING: 1, MIN: 'n', MAX: 'n', IF: 3, AND: 'n', OR: 'n', NOT: 1 }
+const FUNCS = { ABS: 1, ROUND: [1, 2], FLOOR: 1, CEIL: 1, CEILING: 1, MIN: 'n', MAX: 'n', IF: 3, AND: 'n', OR: 'n', NOT: 1, SQRT: 1, POWER: 2, MOD: 2, AVERAGE: 'n', AVG: 'n', SUM: 'n', COUNT: 'n', MEDIAN: 'n' }
 
 class FormulaError extends Error {}
 const fail = (m) => { throw new FormulaError(m) }
@@ -144,6 +144,13 @@ export function evalTree(n, get) {
         case 'MIN': return Math.min(...v)
         case 'MAX': return Math.max(...v)
         case 'IF': return v[0] ? v[1] : v[2]
+        case 'SQRT': return v[0] > 0 ? Math.sqrt(v[0]) : 0
+        case 'POWER': return v[0] ** v[1]
+        case 'MOD': return v[1] ? v[0] % v[1] : 0
+        case 'SUM': return v.reduce((a, b) => a + b, 0)
+        case 'AVERAGE': case 'AVG': return v.reduce((a, b) => a + b, 0) / v.length
+        case 'COUNT': return v.filter((x) => x !== 0 && !Number.isNaN(x)).length
+        case 'MEDIAN': { const o = v.slice().sort((a, b) => a - b); const m = o.length >> 1; return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2 }
         case 'AND': return v.every(Boolean) ? 1 : 0
         case 'OR': return v.some(Boolean) ? 1 : 0
         default: return v[0] ? 0 : 1

@@ -121,7 +121,7 @@ export function aggregate(rows, v, fields) {
   if (v.a === 'min') return Math.min(...xs)
   return Math.max(...xs)
 }
-export const fmtNumber = (v, a) => (v == null || Number.isNaN(v) ? '' : a === 'count' || a === 'distinct' ? Math.round(v).toLocaleString('en-US') : Number(v).toLocaleString('en-US', { maximumFractionDigits: a === 'avg' ? 1 : 2 }))
+export const fmtNumber = (v, a) => (v == null || Number.isNaN(v) || Number(v) === 0 ? '' : a === 'count' || a === 'distinct' ? Math.round(v).toLocaleString('en-US') : Number(v).toLocaleString('en-US', { maximumFractionDigits: a === 'avg' ? 1 : 2 }))
 
 const hlClass = (layout, x) => {
   const h = layout.hl
@@ -209,7 +209,7 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
   const show = (x, v, d) => (layout.pct !== 'none' && pctOk(v) && x != null && d ? `${((x / d) * 100).toFixed(1)}%` : fmtNumber(x, v.a))
 
   const h1 = [{ t: srows.map((f) => fields.map[f].label).join(' / ') || 'All records', cls: 'l rh', span: nR, rs: multi ? 2 : 1 }]
-  for (const [, p] of cols) h1.push({ t: hasC ? p.join(' / ') : 'Total', span: vals.length })
+  for (const [, p] of cols) h1.push({ t: hasC ? p.map((x) => x || '(blank)').join(' / ') : 'Total', span: vals.length })
   if (hasC) h1.push({ t: 'Total', span: vals.length, cls: 'tc', id: '__tot' })
   out.head = [h1]
   if (multi) out.head.push(cols.concat(hasC ? [[]] : []).flatMap((c, i) => vals.map((v) => ({ t: `${fields.map[v.f].label} (${AGG[v.a]})`, cls: hasC && i === cols.length ? 'tc' : '' }))))
@@ -237,7 +237,7 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
     const keyParts = srows.length ? r.key : ['All']
     const lab = keyParts.map((p, i) => {
       const same = srows.length && ri > 0 && prow[ri - 1].key.slice(0, i + 1).join('|') === r.key.slice(0, i + 1).join('|')
-      return { t: same && i < nR - 1 ? '' : p, cls: `l rh${same && i < nR - 1 ? ' sb' : ''}` }
+      return { t: same && i < nR - 1 ? '' : (p || '(blank)'), cls: `l rh${same && i < nR - 1 ? ' sb' : ''}` }
     })
     const cs = cols.flatMap(([k], ci) => vals.map((v, vi) => {
       const recs = r.cells.get(k) || []

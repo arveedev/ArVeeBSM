@@ -12,14 +12,14 @@ export const pillOn = 'border-brand-neon bg-brand-neon/10 text-brand-neon'
 export const input = 'rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-app-text outline-none focus:border-brand-neon/70'
 const kindMark = { num: ['#', 'text-sky-400'], txt: ['Aa', 'text-brand-neon'], date: ['▦', 'text-amber-300'] }
 
-export function FieldChip({ f, extra, onRemove, draggable, used, onClick, dashed }) {
+export function FieldChip({ f, extra, onRemove, draggable, used, onClick, dashed, from }) {
   const [m, c] = kindMark[f.kind]
   return (
     <span
-      draggable={draggable} data-field={f.id}
-      onDragStart={draggable ? (e) => { e.dataTransfer.setData('text/plain', f.id); e.dataTransfer.effectAllowed = 'copy' } : undefined}
+      draggable={draggable || !!from} data-field={f.id} data-rb-from={from || undefined}
+      onDragStart={draggable || from ? (e) => { e.dataTransfer.setData('text/plain', f.id); if (from) e.dataTransfer.setData('application/x-rb-from', from); e.dataTransfer.effectAllowed = from ? 'move' : 'copy' } : undefined}
       onClick={onClick}
-      className={`rb-pop inline-flex select-none items-center gap-1.5 rounded-lg border bg-neutral-900 px-2 py-1 text-xs text-app-text transition-colors hover:border-brand-neon/50 ${dashed ? 'border-dashed' : ''} border-neutral-700 ${draggable ? 'cursor-grab' : ''} ${used ? 'opacity-50' : ''}`}
+      className={`rb-pop inline-flex select-none items-center gap-1.5 rounded-lg border bg-neutral-900 px-2 py-1 text-xs text-app-text transition-colors hover:border-brand-neon/50 ${dashed ? 'border-dashed' : ''} border-neutral-700 ${draggable || from ? 'cursor-grab active:cursor-grabbing' : ''} ${used ? 'opacity-50' : ''}`}
     >
       <b className={`${c} text-[10px] font-extrabold`}>{m}</b>{f.label}{extra}
       {onRemove && <button type="button" onClick={onRemove} aria-label={`Remove ${f.label}`} className="text-neutral-500 hover:text-red-400"><X size={12} /></button>}
@@ -31,9 +31,9 @@ export function DropArea({ area, onDropField, children, hint }) {
   const [over, setOver] = useState(false)
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
-      onDrop={(e) => { e.preventDefault(); setOver(false); const id = e.dataTransfer.getData('text/plain'); if (id) onDropField(area, id) }}
-      className={`flex min-h-[36px] flex-wrap items-center gap-1.5 rounded-xl border-[1.5px] border-dashed p-1 transition-colors ${over ? 'border-brand-neon bg-brand-neon/10' : 'border-neutral-700'}`}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = e.dataTransfer.types.includes('application/x-rb-from') ? 'move' : 'copy'; setOver(true) }} onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setOver(false); const id = e.dataTransfer.getData('text/plain'); const from = e.dataTransfer.getData('application/x-rb-from') || null; if (id) onDropField(area, id, from) }}
+      className={`flex min-h-[40px] flex-wrap items-center gap-1.5 rounded-xl border-[1.5px] border-dashed p-1 transition-all duration-200 ${over ? 'scale-[1.01] border-brand-neon bg-brand-neon/10' : 'border-neutral-700'}`}
     >
       {children}{!children?.length && <span className="px-1 text-xs text-neutral-500">{hint}</span>}
     </div>
@@ -43,7 +43,7 @@ export function DropArea({ area, onDropField, children, hint }) {
 export function ValueChip({ f, v, onAgg, onRemove }) {
   return (
     <FieldChip
-      f={f} onRemove={onRemove}
+      f={f} onRemove={onRemove} from="vals"
       extra={(
         <select value={v.a} onChange={(e) => onAgg(e.target.value)} className="rounded border border-neutral-700 bg-neutral-950 px-1 py-0.5 text-[11px] text-brand-neon">
           {Object.entries(AGG).filter(([k]) => f.kind === 'num' || k === 'count' || k === 'distinct').map(([k, n]) => <option key={k} value={k}>{n}</option>)}
@@ -94,13 +94,13 @@ export function Collapse({ open, children }) {
 }
 
 // ------------------------------------------------------------------------------------------------ the field list, in plain groups
-export function FieldPicker({ groups, used, onPick, query, setQuery }) {
+export function FieldPicker({ groups, used, onPick, query, setQuery, extra }) {
   const [open, setOpen] = useState(() => Object.fromEntries(groups.map((g) => [g.id, g.open])))
   const q = query.trim().toLowerCase()
   const shown = groups.map((g) => ({ ...g, fields: q ? g.fields.filter((f) => f.label.toLowerCase().includes(q)) : g.fields })).filter((g) => g.fields.length)
   return (
     <div>
-      <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a field" className={`${input} mb-1.5 w-full`} />
+      <div className="mb-1.5 flex gap-1.5"><input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a field, then drag it into a box" className={`${input} min-w-0 flex-1`} />{extra}</div>
       <div className="max-h-[12.5rem] space-y-1 overflow-y-auto pr-1">
         {shown.length === 0 && <p className="py-3 text-center text-xs text-neutral-500">No field has that name.</p>}
         {shown.map((g) => {
@@ -132,7 +132,7 @@ export function FormulaBuilder({ baseFields, rows, fields, calc, editing, onSave
   const parsed = parseFormula(text)
   const labels = fields.list.filter((f) => !f.d && f.id !== editing?.id).map((f) => f.label)
   const unknown = parsed.ok ? unknownRefs(text, labels) : []
-  const error = !text.trim() ? '' : !parsed.ok ? parsed.error : unknown.length ? `There is no field called ${unknown.map((u) => `[${u}]`).join(', ')}` : ''
+  const error = !text.trim() ? '' : !parsed.ok ? parsed.error : unknown.length ? `${unknown.map((u) => `[${u}]`).join(', ')} ${unknown.length > 1 ? 'are' : 'is'} not part of your table. Put ${unknown.length > 1 ? 'them' : 'it'} in the table first, or use a field that is.` : ''
   const ok = text.trim() && parsed.ok && !unknown.length
   const example = useMemo(() => {
     if (!ok || !rows.length) return null
@@ -164,7 +164,9 @@ export function FormulaBuilder({ baseFields, rows, fields, calc, editing, onSave
           {['+', '-', '*', '/', '(', ')'].map((o) => <button key={o} type="button" onClick={() => insert(` ${o} `)} className="h-8 w-8 rounded-lg border border-neutral-700 bg-neutral-950 text-sm text-neutral-200 transition-colors hover:border-brand-neon/60">{o === '*' ? '×' : o === '/' ? '÷' : o}</button>)}
           <select value="" onChange={(e) => { if (e.target.value) insert(e.target.value) }} className={input}>
             <option value="">a function&hellip;</option>
-            <option value="ROUND(, 2)">ROUND(number, decimals)</option><option value="IF(, , )">IF(condition, then, otherwise)</option><option value="ABS()">ABS(number)</option><option value="MAX(, )">MAX(a, b, ...)</option><option value="MIN(, )">MIN(a, b, ...)</option><option value="FLOOR()">FLOOR(number)</option><option value="CEIL()">CEIL(number)</option>
+            <option value="AVERAGE(, )">AVERAGE(a, b, ...)</option><option value="SUM(, )">SUM(a, b, ...)</option><option value="COUNT(, )">COUNT(a, b, ...) numbers that are not 0</option><option value="MEDIAN(, , )">MEDIAN(a, b, ...)</option>
+            <option value="ROUND(, 2)">ROUND(number, decimals)</option><option value="IF(, , )">IF(condition, then, otherwise)</option><option value="ABS()">ABS(number)</option><option value="MAX(, )">MAX(a, b, ...)</option><option value="MIN(, )">MIN(a, b, ...)</option>
+            <option value="SQRT()">SQRT(number)</option><option value="POWER(, 2)">POWER(number, exponent)</option><option value="MOD(, )">MOD(number, divisor)</option><option value="FLOOR()">FLOOR(number)</option><option value="CEIL()">CEIL(number)</option>
           </select>
         </div>
         <div className="min-h-[1.25rem] text-xs">
