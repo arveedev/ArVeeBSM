@@ -264,19 +264,6 @@ export const SOURCES = [
     const rows = s.map((x) => ({ ...scalars(x), warehouse: lk.name(lk.wh, x.warehouseId) }))
     return build(rows, { warehouseId: { hide: true } }, ['warehouse', 'name', 'position', 'capacity'])
   } },
-  { id: 'users', group: 'Administration', name: 'Users (no PINs)', access: 'wide', load: async () => {
-    const lk = await lookups()
-    const rows = lk.users.map((u) => ({ name: u.name ?? '', nickname: u.nickname ?? '', role: u.role ?? '', position: u.position ?? '', assignedWarehouses: (u.assignedWarehouses ?? []).map((id) => lk.name(lk.wh, id)).join(', '), warehouseCount: (u.assignedWarehouses ?? []).length, priorityWarehouse: lk.name(lk.wh, u.priorityWarehouseId), netWeightDecimals: u.netWeightDecimals ?? null }))
-    return build(rows, { name: L('Name'), nickname: L('Nickname'), role: L('Role'), assignedWarehouses: L('Assigned warehouses'), warehouseCount: L('Warehouses') }, ['name', 'nickname', 'role', 'position', 'assignedWarehouses', 'warehouseCount'])
-  } },
-  { id: 'devices', group: 'Administration', name: 'Devices (from System health)', access: 'wide', load: async () => {
-    const d = await db.deviceStatus.toArray()
-    return build(d.map((x) => ({ ...scalars(x), lastSeen: iso(x.lastSeen) })), { id: { hide: true } }, ['name', 'kind', 'userName', 'lastSeen'])
-  } },
-  { id: 'reportlog', dateField: 'at', group: 'Administration', name: 'Report export log', access: 'admin', load: async () => {
-    const d = await db.reportExportLog.toArray()
-    return build(d.map((x) => ({ ...scalars(x), at: iso(x.at) })), { at: L('When'), uid: { hide: true }, id: { hide: true } }, ['at', 'userName', 'role', 'action', 'source', 'layout', 'format', 'rows', 'filters', 'scope'])
-  } },
 ]
 
 // A computed source needs the Stock Desk's own context.

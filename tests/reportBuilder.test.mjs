@@ -154,12 +154,8 @@ test('sources: unique ids, secrets never offered, wide-only data is marked, staf
   const ids = [...text.matchAll(/\{ id: '([a-z_]+)', (?:dateField: '[A-Za-z]+', )?group: /g)].map((m) => m[1])
   assert.ok(ids.length >= 25)
   assert.equal(new Set(ids).size, ids.length)
-  // the user list is built field by field (never by spreading the record), so a PIN hash cannot slip in
-  const usersBlock = text.slice(text.indexOf("id: 'users'"), text.indexOf("id: 'devices'"))
-  assert.ok(!/scalars\(u\)|\.\.\.u[,}\s]/.test(usersBlock))
-  assert.ok(/access: 'wide'/.test(usersBlock))
-  for (const id of ['cash', 'cash_counts', 'cutoffs', 'users', 'devices']) assert.ok(new RegExp(`id: '${id}'[^\n]*access: '(wide|admin)'`).test(text), `${id} must be wide or admin only`)
-  assert.ok(/access: 'admin'/.test(text.slice(text.indexOf("id: 'reportlog'"))))
+  for (const id of ['cash', 'cash_counts', 'cutoffs']) assert.ok(new RegExp(`id: '${id}'[^\n]*access: '(wide|admin)'`).test(text), `${id} must be wide or admin only`)
+  assert.ok(!/group: 'Administration'/.test(text)) // nothing from the Administration area is offered to anyone
   assert.ok(/allowed = isWideRole\(user\?\.role\) \? null : new Set\(user\?\.assignedWarehouses \?\? \[\]\)/.test(text))
   assert.ok(isDenied('accessCode') && isDenied('pinHash'))
 })

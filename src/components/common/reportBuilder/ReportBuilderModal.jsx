@@ -25,12 +25,7 @@ const monthStart = (iso) => `${iso.slice(0, 8)}01`
 const daysBefore = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) - n * 86400000).toISOString().slice(0, 10)
 
 // A fresh layout: a plain list of the source's main fields (the rest are one tick away in Columns).
-const freshLayout = (sourceId, data) => {
-  const L = blankLayout(sourceId)
-  L.mode = 'list'
-  if (data?.main?.length) L.hidden = data.fields.filter((f) => !data.main.includes(f.id)).map((f) => f.id)
-  return L
-}
+const freshLayout = (sourceId) => blankLayout(sourceId) // the table starts empty: nothing is built until the person picks fields
 
 function ReportBuilderModal({ user, onClose }) {
   const role = user?.role
@@ -91,7 +86,7 @@ function ReportBuilderModal({ user, onClose }) {
           if (dropped.length) toast(`Opened. Left out: ${dropped.join(', ')} (no longer in the data).`)
           needsInit.current = false
         } else if (needsInit.current) {
-          setLayout(freshLayout(sourceId, d)); setSearchText('')
+          setLayout(freshLayout(sourceId)); setSearchText('')
           needsInit.current = false
         }
       })
@@ -110,13 +105,16 @@ function ReportBuilderModal({ user, onClose }) {
     setParams(defaultParams(sourceById(id)))
     setLayout(blankLayout(id)); setSearchText('')
   }
-  const startOver = () => { if (data) { setLayout(freshLayout(sourceId, data)); setSearchText(''); setEditingId(null); setSaveName(''); setDrill(null); setPop(null) } }
+  const startOver = () => { if (data) { setLayout(freshLayout(sourceId)); setSearchText(''); setEditingId(null); setSaveName(''); setDrill(null); setPop(null) } }
 
   const fields = useMemo(() => (data ? buildFields(data.fields, layout.calc) : { list: [], map: {} }), [data, layout.calc])
   const table = useMemo(() => (data ? buildTable(layout, data.fields, data.rows) : null), [data, layout])
   const groups = useMemo(() => groupFields(fields.list.filter((f) => layout.mode === 'pivot' || !f.d), data?.main ?? []), [fields, data, layout.mode])
 
   const patch = (o) => setLayout((l) => ({ ...l, ...o }))
+  const isBlank = layout.mode === 'pivot' && !layout.rows.length && !layout.cols.length && !layout.vals.length
+  // the list shows the source's main fields first; the rest are one tick away in Columns
+  const setMode = (k) => setLayout((l) => (k === 'list' && !l.hidden.length && !l.order.length && data?.main?.length ? { ...l, mode: k, hidden: data.fields.filter((f) => !data.main.includes(f.id)).map((f) => f.id) } : { ...l, mode: k }))
   const addTo = (area, id) => {
     const f = fields.map[id]
     if (!f) return
@@ -208,9 +206,9 @@ function ReportBuilderModal({ user, onClose }) {
       </div>
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        {/* ---------------- the period ---------------- */}
+        {/* ---------------- the period, and saving the layout ---------------- */}
         <div className="rb-fade mb-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-3">
-          <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
             <div className="flex flex-wrap items-end gap-2">
               <div className="w-40"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">From</p><CalendarDatePicker value={period.from} label="From" onChange={(iso) => setPeriod({ from: iso, to: period.to < iso ? iso : period.to })} /></div>
               <div className="w-40"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">To</p><CalendarDatePicker value={period.to} label="To" onChange={(iso) => setPeriod({ from: period.from > iso ? iso : period.from, to: iso })} /></div>
@@ -218,7 +216,29 @@ function ReportBuilderModal({ user, onClose }) {
                 {quick.map(([n, f, t]) => <button key={n} type="button" onClick={() => setPeriod({ from: f, to: t })} className={`${pill} ${period.from === f && period.to === t ? pillOn : ''}`}>{n}</button>)}
               </div>
             </div>
+            <div className="min-w-[16rem] flex-1">
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">Save this layout</p>
+              <div className="flex gap-1.5">
+                <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name this layout" className={`${input} min-w-0 flex-1`} />
+                <button type="button" onClick={doSave} disabled={isBlank} className="inline-flex items-center gap-1 rounded-lg bg-brand-neon px-3 py-1.5 text-sm font-semibold text-brand-contrast transition-transform active:scale-95 disabled:opacity-40"><Save size={14} />Save</button>
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-300">
+                <span className="inline-flex items-center gap-1 text-neutral-500"><Share2 size={12} />Share with</span>
+                {[['admin', 'Admin'], ['analysts', 'Analysts'], ['staff', 'Warehouse staff']].map(([k, n]) => <label key={k} className="flex items-center gap-1.5"><input type="checkbox" checked={!!share[k]} onChange={(e) => setShare({ ...share, [k]: e.target.checked })} />{n}</label>)}
+              </div>
+            </div>
           </div>
+          {layouts.length > 0 && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-neutral-800 pt-2.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Saved</span>
+              {layouts.map((l) => (
+                <span key={l.id} className={`rb-pop inline-flex items-center gap-1.5 rounded-full border bg-neutral-950 py-0.5 pl-1 pr-2 text-xs ${editingId === l.id ? 'border-brand-neon/60' : 'border-neutral-800'}`}>
+                  <button type="button" onClick={() => openLayout(l)} className="rounded-full px-2 py-0.5 text-neutral-200 transition-colors hover:text-brand-neon" title={sourceById(l.source)?.name ?? l.source}>{l.name}{l.ownerUid !== user?.uid ? <span className="text-neutral-500"> &middot; by {l.ownerName || 'someone'}</span> : null}</button>
+                  {(l.ownerUid === user?.uid || role === 'Admin') && <button type="button" onClick={() => removeLayout(l)} aria-label="Delete layout" className="text-neutral-500 transition-colors hover:text-red-400"><Trash2 size={12} /></button>}
+                </span>
+              ))}
+            </div>
+          )}
           <p className="mt-2 text-xs text-neutral-500">
             {sourceDated
               ? `Records dated ${longDay(period.from)} to ${longDay(period.to)}. Nothing before ${longDay(floor)} is ever shown.`
@@ -245,54 +265,31 @@ function ReportBuilderModal({ user, onClose }) {
             </div>
             {error && <p className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
 
-            <button type="button" onClick={() => setPanelOpen((v) => !v)} className={`${pill} mb-3 lg:hidden`}>{panelOpen ? 'Hide' : 'Show'} fields, rows, columns and saved layouts</button>
-            <div className="grid gap-4 lg:grid-cols-[19.5rem_minmax(0,1fr)]">
-              {/* ---------------- left: fields and boxes ---------------- */}
-              <div className={`space-y-3 ${panelOpen ? '' : 'hidden lg:block'}`}>
-                <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-3">
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400">Fields <span className="font-normal normal-case tracking-normal text-neutral-500">drag, or tap one</span></p>
-                  <FieldPicker key={sourceId + layout.mode} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)} />
-                  <button type="button" onClick={() => { setEditingCalc(null); setPop('calc') }} className={`${pill} mt-2`}>+ Calculated field (a formula)</button>
-                  {(
-                    <div className="rb-fade mt-3 space-y-2.5">
-                      <p className="text-[11px] leading-snug text-neutral-500">Build a pivot table: drag a field into a box below (or tap a field and choose). A list needs none of these.</p>
-                      <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Rows</p><DropArea area="rows" onDropField={addTo} hint="Drop fields to group down the side">{layout.rows.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ rows: layout.rows.filter((x) => x !== id) })} />)}</DropArea></div>
-                      <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Columns</p><DropArea area="cols" onDropField={addTo} hint="Drop fields to spread across the top">{layout.cols.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ cols: layout.cols.filter((x) => x !== id) })} />)}</DropArea></div>
-                      <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Values</p><DropArea area="vals" onDropField={addTo} hint="Drop numbers to total (none = count of records)">{layout.vals.filter((v) => fields.map[v.f]).map((v, i) => <ValueChip key={v.f} f={fields.map[v.f]} v={v} onAgg={(a) => patch({ vals: layout.vals.map((x, k) => (k === i ? { ...x, a } : x)) })} onRemove={() => patch({ vals: layout.vals.filter((x) => x.f !== v.f) })} />)}</DropArea></div>
-                      <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Filter by a field</p><DropArea area="filt" onDropField={addTo} hint="Drop a field here, or use + Filter" /></div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-3">
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400">Saved layouts</p>
-                  <div className="flex gap-1.5">
-                    <input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="Name this layout" className={`${input} min-w-0 flex-1`} />
-                    <button type="button" onClick={doSave} className="inline-flex items-center gap-1 rounded-lg bg-brand-neon px-3 py-1.5 text-sm font-semibold text-brand-contrast transition-transform active:scale-95"><Save size={14} />Save</button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-300">
-                    <span className="inline-flex items-center gap-1 text-neutral-500"><Share2 size={12} />Share with</span>
-                    {[['admin', 'Admin'], ['analysts', 'Analysts'], ['staff', 'Warehouse staff']].map(([k, n]) => <label key={k} className="flex items-center gap-1.5"><input type="checkbox" checked={!!share[k]} onChange={(e) => setShare({ ...share, [k]: e.target.checked })} />{n}</label>)}
-                  </div>
-                  <div className="mt-2 space-y-1.5">
-                    {layouts.length === 0 && <p className="text-xs text-neutral-500">Nothing saved yet. Only the layout is saved, never the records.</p>}
-                    {layouts.map((l) => (
-                      <div key={l.id} className={`rb-pop flex items-center gap-1.5 rounded-lg border bg-neutral-950 px-2 py-1.5 text-xs ${editingId === l.id ? 'border-brand-neon/60' : 'border-neutral-800'}`}>
-                        <span className="min-w-0 flex-1 break-words text-neutral-200">{l.name}<span className="text-neutral-500"> &middot; {sourceById(l.source)?.name.split(' (')[0] ?? l.source}{l.ownerUid !== user?.uid ? ` · by ${l.ownerName || 'someone'}` : ''}</span></span>
-                        <button type="button" onClick={() => openLayout(l)} className={pill}>Open</button>
-                        {(l.ownerUid === user?.uid || role === 'Admin') && <button type="button" onClick={() => removeLayout(l)} aria-label="Delete layout" className="text-neutral-500 transition-colors hover:text-red-400"><Trash2 size={14} /></button>}
-                      </div>
-                    ))}
-                  </div>
+            {/* ---------------- the builder: fields, and the boxes to drop them in ---------------- */}
+            <button type="button" onClick={() => setPanelOpen((v) => !v)} className={`${pill} mb-3 lg:hidden`}>{panelOpen ? 'Hide' : 'Show'} fields, rows, columns and values</button>
+            <div className={`mb-4 gap-3 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] ${panelOpen ? 'grid' : 'hidden'}`}>
+              <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-3">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400">Fields <span className="font-normal normal-case tracking-normal text-neutral-500">drag one into a box, or tap it</span></p>
+                <FieldPicker key={sourceId + layout.mode} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)} />
+                <button type="button" onClick={() => { setEditingCalc(null); setPop('calc') }} className={`${pill} mt-2`}>+ Calculated field (a formula)</button>
+              </div>
+              <div className="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-3 lg:mt-0">
+                <p className="mb-2 text-[11px] leading-snug text-neutral-500">Build a pivot table: drag fields into the boxes. Rows go down the side, Columns across the top, Values are the numbers added up. Or choose &quot;List of records&quot; under the boxes to see the records themselves.</p>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Rows</p><DropArea area="rows" onDropField={addTo} hint="Drop fields to group down the side">{layout.rows.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ rows: layout.rows.filter((x) => x !== id) })} />)}</DropArea></div>
+                  <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Columns</p><DropArea area="cols" onDropField={addTo} hint="Drop fields to spread across the top">{layout.cols.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ cols: layout.cols.filter((x) => x !== id) })} />)}</DropArea></div>
+                  <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Values</p><DropArea area="vals" onDropField={addTo} hint="Drop numbers to add up (none = count of records)">{layout.vals.filter((v) => fields.map[v.f]).map((v, i) => <ValueChip key={v.f} f={fields.map[v.f]} v={v} onAgg={(a) => patch({ vals: layout.vals.map((x, k) => (k === i ? { ...x, a } : x)) })} onRemove={() => patch({ vals: layout.vals.filter((x) => x.f !== v.f) })} />)}</DropArea></div>
+                  <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Filter</p><DropArea area="filt" onDropField={addTo} hint="Drop a field here to keep only some records" /></div>
                 </div>
               </div>
+            </div>
 
-              {/* ---------------- right: the table ---------------- */}
+            <div className="grid gap-4">
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <input type="search" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search every field (name, serial, warehouse, number)" className={`${input} min-w-[12rem] flex-1`} />
                   <div className="inline-flex overflow-hidden rounded-lg border border-neutral-700">
-                    {[['list', 'List of records'], ['pivot', 'Pivot table']].map(([k, n]) => <button key={k} type="button" onClick={() => patch({ mode: k })} className={`px-3 py-1.5 text-sm transition-colors ${layout.mode === k ? 'bg-brand-neon/10 text-brand-neon' : 'bg-neutral-900 text-neutral-300 hover:text-app-text'}`}>{n}</button>)}
+                    {[['list', 'List of records'], ['pivot', 'Pivot table']].map(([k, n]) => <button key={k} type="button" onClick={() => setMode(k)} className={`px-3 py-1.5 text-sm transition-colors ${layout.mode === k ? 'bg-brand-neon/10 text-brand-neon' : 'bg-neutral-900 text-neutral-300 hover:text-app-text'}`}>{n}</button>)}
                   </div>
                   <button type="button" onClick={() => { setFilterField(null); setPop(pop === 'filter' ? null : 'filter') }} className={`${pill} ${pop === 'filter' ? pillOn : ''}`}>+ Filter</button>
                   {layout.mode === 'list' && <button type="button" onClick={() => setPop(pop === 'cols' ? null : 'cols')} className={`${pill} ${pop === 'cols' ? pillOn : ''}`}>Columns</button>}
@@ -314,19 +311,19 @@ function ReportBuilderModal({ user, onClose }) {
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">{src.name}</span>
                   <div className="flex flex-wrap gap-1.5">
-                    <button type="button" disabled={!table || !!busy} onClick={() => doExport('xlsx')} className={pill}>{busy === 'xlsx' ? 'Making…' : 'Excel (.xlsx)'}</button>
-                    <button type="button" disabled={!table || !!busy} onClick={() => doExport('pdf')} className={pill}>{busy === 'pdf' ? 'Making…' : 'PDF to print'}</button>
-                    <button type="button" disabled={!table || !!busy} onClick={() => doExport('csv')} className={pill}>CSV</button>
-                    <button type="button" disabled={!table || !!busy} onClick={() => doExport('copy')} className={pill}>Copy</button>
+                    <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('xlsx')} className={pill}>{busy === 'xlsx' ? 'Making…' : 'Excel (.xlsx)'}</button>
+                    <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('pdf')} className={pill}>{busy === 'pdf' ? 'Making…' : 'PDF to print'}</button>
+                    <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('csv')} className={pill}>CSV</button>
+                    <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('copy')} className={pill}>Copy</button>
                   </div>
                 </div>
                 <div className="max-h-[62vh] overflow-auto rounded-xl border border-neutral-800 bg-neutral-950">
-                  {loading && !table ? <div className="p-10 text-center text-sm text-neutral-500">Loading&hellip;</div> : table ? <div key={`${sourceId}-${periodKey}-${layout.mode}`} className="rb-fade"><ResultTable table={table} layout={layout} onSort={onSort} onCell={openDrill} /></div> : <div className="p-10 text-center text-sm text-neutral-500">Nothing to show.</div>}
+                  {isBlank ? <div className="p-10 text-center"><p className="text-sm font-semibold text-neutral-300">The table is empty</p><p className="mx-auto mt-1 max-w-md text-xs text-neutral-500">Drag fields into Rows, Columns or Values above to build a pivot table, or choose &quot;List of records&quot; to see the records themselves.</p></div> : loading && !table ? <div className="p-10 text-center text-sm text-neutral-500">Loading&hellip;</div> : table ? <div key={`${sourceId}-${periodKey}-${layout.mode}`} className="rb-fade"><ResultTable table={table} layout={layout} onSort={onSort} onCell={openDrill} /></div> : <div className="p-10 text-center text-sm text-neutral-500">Nothing to show.</div>}
                 </div>
                 <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-neutral-500">
                   <span>
-                    {stats && layout.mode === 'list' && `${stats.records.toLocaleString('en-US')} records${stats.more > 0 ? ` (first ${stats.shown} shown; the exports have all ${stats.records.toLocaleString('en-US')})` : ''}`}
-                    {stats && layout.mode === 'pivot' && `${stats.records.toLocaleString('en-US')} records counted, ${stats.rows} rows${stats.cols ? `, ${stats.cols} columns` : ''}. Click any number to see the records behind it.`}
+                    {stats && !isBlank && layout.mode === 'list' && `${stats.records.toLocaleString('en-US')} records${stats.more > 0 ? ` (first ${stats.shown} shown; the exports have all ${stats.records.toLocaleString('en-US')})` : ''}`}
+                    {stats && !isBlank && layout.mode === 'pivot' && `${stats.records.toLocaleString('en-US')} records counted, ${stats.rows} rows${stats.cols ? `, ${stats.cols} columns` : ''}. Click any number to see the records behind it.`}
                   </span>
                   <span>Read from this device&apos;s copy of the records</span>
                 </div>
