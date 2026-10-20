@@ -463,18 +463,41 @@ export const generateCpfDisbursementRecord = ({
     8: { cellWidth: 13 }, // VARIETY CODE
     9: { cellWidth: 8 }, // MC
     10: { cellWidth: 12 }, // PURITY
-    11: { cellWidth: 18, halign: 'right' }, // GROSS KG
+    11: { cellWidth: 21, halign: 'right' }, // GROSS KG (a 13-character bold total needs ~19.2mm)
     12: { cellWidth: 11 }, // MTS
-    13: { cellWidth: 18, halign: 'right' }, // Net kg
+    13: { cellWidth: 21, halign: 'right' }, // Net kg
     14: { cellWidth: 13 }, // ENW FACTOR
-    15: { cellWidth: 19, halign: 'right' }, // ENW kg
+    15: { cellWidth: 22, halign: 'right' }, // ENW kg (a 4-decimal bold total of 7 digits needs ~20.6mm)
     16: { cellWidth: 10 }, // UNIT COST
-    17: { cellWidth: 20, halign: 'right' }, // AMOUNT
+    17: { cellWidth: 22, halign: 'right' }, // AMOUNT
     18: { cellWidth: 25, halign: 'right' }, // CASH ADVANCE/FUND BALANCE
+  }
+  // The figure columns are never narrower than the widest value they will actually print, in the BOLD of the TOTAL / SUB-TOTAL rows
+  // (those are the longest numbers): measured here from this report's own rows, so a total that grows into more digits takes its room
+  // from NAME OF FARMER instead of wrapping or falling off the column.
+  {
+    const FIGURE_COLS = new Set([6, 7, 11, 13, 15, 17, 18])
+    const need = new Map()
+    const bump = (rows, bold) => {
+      doc.setFont('helvetica', bold ? 'bold' : 'normal')
+      doc.setFontSize(7.5)
+      for (const row of rows) {
+        if (!Array.isArray(row)) continue
+        let col = 0
+        for (const cell of row) {
+          const t = cell != null && typeof cell === 'object' ? cell.content : cell
+          if (FIGURE_COLS.has(col) && t != null && t !== '') need.set(col, Math.max(need.get(col) ?? 0, doc.getTextWidth(String(t)) + 2 * 1.2 + 0.8))
+          col += (cell != null && typeof cell === 'object' && cell.colSpan) || 1
+        }
+      }
+    }
+    bump(body0, false)
+    bump(foot, true)
+    for (const [col, w] of need) columnStyles[col].cellWidth = Math.max(columnStyles[col].cellWidth, Math.ceil(w * 10) / 10)
   }
   // NAME OF FARMER absorbs every mm the other (measured) columns don't need.
   const otherColsW = Object.entries(columnStyles).filter(([i]) => Number(i) !== 3).reduce((a, [, c]) => a + c.cellWidth, 0)
-  columnStyles[3].cellWidth = Math.max(25, Math.floor((pageW - margin * 2 - otherColsW - 0.2) * 10) / 10)
+  columnStyles[3].cellWidth = Math.max(18, Math.floor((pageW - margin * 2 - otherColsW - 0.2) * 10) / 10)
   const sharedTableOptions = {
     margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP, bottom: BOTTOM_MARGIN + SUBTOTAL_ROW_RESERVE },
     head,

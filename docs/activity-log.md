@@ -18683,3 +18683,5 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 2026-10-20: Milling status (v1.10-413): app font and size restored, Remarks = as-of date + last batch issued (net bags).
 
 2026-10-20: Milling status Remarks now gives the last batch number (v1.10-414).
+
+2026-10-20: SDO CPF record and Abstract: figure columns sized from their own TOTAL/SUB-TOTAL values (bold), space taken from the name/address columns (v1.10-415). Checked by rendering both PDFs with 24 large receipts: every total fits on one line.

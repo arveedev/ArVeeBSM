@@ -8470,4 +8470,5 @@
 //   1.10-412 - Milling status: cleaner layout of the table and of its saved image: fixed column widths, one font, even row heights with the text centred in every cell, numbers aligned to the right edge, a light header fill.
 //   1.10-413 - Milling status: the font and size are back to the app's own (they read better) with the cleaner fixed layout kept; Remarks now also gives the last batch issued (the net bags of the latest authority of the lot), e.g. 'As of Oct 12; last batch issued 205.00 bags'.
 //   1.10-414 - Milling status Remarks: the last batch NUMBER (not the bags): the number written on the latest authority ('BATCH 7/14') when there is one, otherwise how many batches (authorities) the lot has had, e.g. 'As of Oct 12; last batch no. 8'.
-export const APP_VERSION = '1.10-414'
+//   1.10-415 - SDO CPF Cash Disbursement Record and Abstract of Cereal Purchases: the figure columns (bags, gross, net, ENW, amount, balance) are never narrower than the widest value they print, measured in the bold TOTAL / SUB-TOTAL rows, so a total no longer wraps ('1,385,091.00 / 0') or falls off its column; the room comes from the NAME OF FARMER / ADDRESS columns, which wrap.
+export const APP_VERSION = '1.10-415'

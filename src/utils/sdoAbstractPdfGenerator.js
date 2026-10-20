@@ -314,6 +314,30 @@ export const generateSdoAbstract = ({
   // default rowPageBreak: 'auto') - the whole row now moves to the next
   // page instead, never dividing a single farmer's data across two
   // pages.
+  // The figure columns (QTY BAGS through TOTAL AMOUNT) are never narrower than the widest value they will print, in the BOLD of the TOTAL /
+  // SUB-TOTAL rows (the longest numbers), measured from this report's own rows: a total that grows into more digits takes its room from the
+  // NAME OF FARMER / ADDRESS columns (which wrap) instead of shrinking or falling off its column.
+  const figureColumnStyles = { 2: { halign: 'left' }, 3: { halign: 'left' }, 4: { cellWidth: 26 } }
+  {
+    const need = new Map()
+    const bump = (rows, bold) => {
+      doc.setFont('helvetica', bold ? 'bold' : 'normal')
+      doc.setFontSize(8)
+      for (const row of rows) {
+        if (!Array.isArray(row)) continue
+        let col = 0
+        for (const cell of row) {
+          const t = cell != null && typeof cell === 'object' ? cell.content : cell
+          if (col >= 7 && t != null && t !== '') need.set(col, Math.max(need.get(col) ?? 0, doc.getTextWidth(String(t)) + 2 * 1.3 + 0.8))
+          col += (cell != null && typeof cell === 'object' && cell.colSpan) || 1
+        }
+      }
+    }
+    bump(body0, false)
+    bump(foot, true)
+    for (const [col, w] of need) figureColumnStyles[col] = { ...(figureColumnStyles[col] ?? {}), minCellWidth: Math.ceil(w * 10) / 10 }
+  }
+
   const sharedTableOptions = {
     startY: TABLE_START_Y,
     margin: { left: margin, right: margin, top: CONTINUATION_MARGIN_TOP },
@@ -333,7 +357,7 @@ export const generateSdoAbstract = ({
     // second line (autoTable's default overflow behavior) rather than
     // stretching the column - a plain single-value RSBSA still fits on
     // one line comfortably at this width.
-    columnStyles: { 2: { halign: 'left' }, 3: { halign: 'left' }, 4: { cellWidth: 26 } },
+    columnStyles: figureColumnStyles,
   }
 
   // PASS 1 - a throwaway measurement render (discarded jsPDF instance,
