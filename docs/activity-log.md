@@ -18657,3 +18657,5 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 2026-10-20: GSR planning part 4: the INVENTORY summary sheet is dropped (11 sheets), the old GSR is treated as an estimate and not as a reference, and the app's warehouse data is the only source of truth. Accuracy is proven by internal ties, traceability to the documents and a one-time hand check of a sample period, not by comparison with the old report. Planning only.
 
 2026-10-20: GSR design document written (docs/superpowers/specs/2026-10-20-gsr-design.md) with a samples page (docs/gsr-design-samples.html): Stock Desk Admin-only tile, Prepare/Check/Create flow, 8 Admin settings, 11 sheets, audit file (Summary, Cells, Documents, Excluded, Settings used), safeguards, build order. For owner approval; nothing built.
+
+2026-10-20: GSR design decisions recorded: all rows always print (distribution, dispersal, procurement, prices); procurement mode set by Admin in batches (default Stationary); scheme rule by keyword; weekly prices Admin only; separate Apps Script receiver. Planning only.
