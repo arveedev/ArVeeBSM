@@ -983,7 +983,7 @@ function Settings() {
         </Link>
       )}
 
-      {canBuild && user?.role !== 'Admin' && (
+      {canBuild && (
         <button type="button" onClick={openReportBuilder} className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-left transition-colors hover:border-brand-neon/60">
           <Table2 size={22} className="shrink-0 text-brand-neon" />
           <span className="min-w-0"><span className="block text-sm font-semibold text-app-text">Report Builder</span><span className="block text-xs text-neutral-400">Make your own tables and pivot tables from the records. Read-only.</span></span>
