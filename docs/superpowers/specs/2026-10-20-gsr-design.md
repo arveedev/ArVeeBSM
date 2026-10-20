@@ -123,3 +123,6 @@ Each step: unit tests for the pure calculators (`tests/gsr-*.test.mjs`), a tie t
 5. Scheme rule: **by keyword** (on the customer name and the transaction type), checked in the listed order, first match wins, no match stops the run. No customer categories.
 6. "FIRST RUN - HAND CHECK" label: explained to the owner; kept as proposed unless they say otherwise.
 7. Every row of the distribution, dispersal, procurement and prices sheets always prints, even with no data (section 6.1).
+8. Rows with no data print a **blank cell, never 0** (a total that adds up to 0 is blank through the number format). Owner, 2026-10-20.
+9. **Tally rule**: every GSR is checked against the warehouses' own totals for the period it reports (per warehouse column: opening + received - issued + the Stock Desk's corrections = ending = printed); any difference blocks the file. Owner, 2026-10-20.
+10. The "FIRST RUN - HAND CHECK" label is kept. Step 1 (PALAY INVENTORY, audit file, Drive receiver) is built; guide: `docs/gsr-drive-setup.md`.

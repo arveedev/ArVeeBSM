@@ -483,3 +483,10 @@ the step-by-step journey.*
 ## 19. A receipt put into several piles (SDO side)
 
 A WSR received into more than one pile is stored as one record per pile (the extra piles carry the same number plus a letter, e.g. 11766812-A). Reports, the exported PDF, the SDO payment list and the Procurement overview all show it as ONE WSR with the bags, gross and net kilos of all its piles added together. One Purchase Receipt is issued for the whole document and is filed against the primary record; one filed against an extra pile counts for the document too.
+
+## 20. GSR report (Stock Desk, Admin only)
+
+1. Stock Desk > GSR report. The memo date defaults to today and the period to the previous working day (Monday: Friday to Sunday); the Admin can change either.
+2. Prepare: the app works out the sheets in memory (nothing is written) and shows Checks and tally, the sheet preview and the audit-file summary. The tally compares, per warehouse column, opening stock + received - issued (+ the Stock Desk's corrections) with the ending stock and with what the sheet prints; any difference, a stock line with no report column or a palay variety with no report row stops the file (Create stays off).
+3. Create in Google Drive (after a confirmation): the GSR and `... - AUDIT` Google Sheets are created in NEWGSR/{year}/{MM MONTH}, read back, and every value compared; a mismatch renames both files "NOT VERIFIED". Until the Admin unticks "FIRST RUN - HAND CHECK", both files carry that label.
+4. Cells with no stock are blank (never 0); a total that adds up to 0 is blank through the number format.

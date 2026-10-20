@@ -483,3 +483,5 @@ This browser's own facts: `folder` (the chosen backup folder handle) and `backup
 
 ## Device backup file (not a table)
 gzip of two lines: line 1 meta (format `bsm-device-backup`, version 1, deviceId, deviceName, user, appVersion, schemaVersion, dbId, exportedAt, lastSyncAt, `pending` per table, `counts` per table, `tablesSha256`); line 2 the Export All Data JSON. The checksum is the SHA-256 of line 2's bytes. See `src/utils/deviceFile.js`.
+
+`reportConfig` also carries `gsrSettings` (object; any part not stored falls back to the defaults in `src/utils/gsr/settings.js`: memo header, palay variety blocks, grade letters, warehouse column titles / order / hidden) and `gsrFirstRun` (boolean, default true: label the GSR files "FIRST RUN - HAND CHECK").

@@ -841,3 +841,7 @@ Rationale: the owner could not tell from one place whether backups ran, whether 
   because Dexie Cloud's own `syncState.error` has been observed to
   surface as an uninformative empty object, and most field devices have
   no practical DevTools access to inspect the console directly.
+
+### 2.50 GSR report: computed in the browser from the Stock Desk's own engine, written to Drive by a separate receiver, verified by read-back
+
+Decision: the GSR is computed in the browser (`src/utils/gsr/*`, pure functions) from `buildSummary` / `buildLedger` of the Stock Desk, and only the finished values are sent through `/api/gsr-publish` to a SEPARATE Apps Script receiver (`tools/gsr/gsr-drive.gs.js`) that creates Google Sheets inside one designated folder. Rationale: the sheet can never disagree with the Stock Desk because it uses the same engine; the receiver holds no business logic and cannot read or delete outside its folder; a GSR fault cannot reach the backup receiver. Decision: no file is created unless the tally passes (per warehouse column, opening + received - issued + corrections = ending = printed) and every written value is read back and compared. Rationale: the report was an estimate before; the only accepted proof of accuracy is the warehouses' own data. Decision: settings are kept in the existing `reportConfig` record (`gsrSettings`, `gsrFirstRun`) so no schema change was needed in step 1.

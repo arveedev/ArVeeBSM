@@ -38,6 +38,7 @@ import useTableScroll from '../../hooks/useTableScroll.js'
 import useEscapeKey from '../../hooks/useEscapeKey.js'
 import useBodyScrollLock from '../../hooks/useBodyScrollLock.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
+import GsrReportPanel from './admin/GsrReportPanel.jsx'
 import { SdOverlay, ExpandCard } from './StockDeskUi.jsx'
 
 const BANK_KEY = 'inv.bankProvince'
@@ -1154,7 +1155,7 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
     }
   }
 
-  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', ending: 'Ending stock per variety', milling: 'Milling liquidation', test: 'Test milling liquidation', issuances: 'Milling and Issuances' }[view] ?? 'Stock Desk'
+  const title = { ledger: 'Daily inventory', summary: 'Summary', age: 'Age monitoring', check: 'Data check', procurement: 'Daily procurement status', ending: 'Ending stock per variety', milling: 'Milling liquidation', test: 'Test milling liquidation', issuances: 'Milling and Issuances', gsr: 'GSR report' }[view] ?? 'Stock Desk'
   // Leaving plays an exit animation before the next screen enters.
   const requestClose = () => { if (closing) return; setClosing(true); setTimeout(onClose, 200) }
   const navigate = (next) => { if (leaving || next === view) return; setLeaving(true); setTimeout(() => { setView(next); setLeaving(false) }, 190) }
@@ -1193,7 +1194,8 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
               { id: 'test', name: 'Test milling liquidation', desc: 'Test milling per ricemill: TMO and trials, by-products, summary', Icon: FlaskConical },
               { id: 'check', name: 'Data check', desc: 'Overrides in use, shortages, over-authorized stock, approximate ages, unassigned documents', Icon: ShieldCheck },
               ...(isAdmin ? [{ id: 'issuances', name: 'Milling and Issuances', desc: 'Milling, issuances to LGU and issuances to FTI per province in net bags, with the lists behind them (Admin only)', Icon: Truck }] : []),
-            ].filter((t) => t.id === 'issuances' || canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }, n) => (
+              ...(isAdmin ? [{ id: 'gsr', name: 'GSR report', desc: 'Prepare, check and create the Grains Situationer Report and its audit file in Google Drive (Admin only)', Icon: FileSpreadsheet }] : []),
+            ].filter((t) => t.id === 'issuances' || t.id === 'gsr' || canViewReport(t.id, isAdmin, config?.inventoryReportsAccess)).map(({ id, name, desc, Icon }, n) => (
               <button
                 key={id} type="button" onClick={() => navigate(id)} style={{ animationDelay: leaving ? `${n * 15}ms` : `${n * 50}ms` }}
                 className={`flex min-h-[68px] items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-left sm:min-h-[116px] sm:gap-4 sm:p-5 transition-colors hover:border-brand-neon/60 hover:bg-neutral-800/60 ${leaving ? 'sd-tile-out' : 'sd-tile-in'}`}
@@ -1210,6 +1212,12 @@ function InventoryReportsModal({ onClose, isAdmin = false }) {
         {view === 'ending' && (loading || !built?.ending
           ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>
           : <EndingStockView data={built.ending} setMonth={setEndingMonth} unit={unit} setUnit={setUnit} narrow={narrow} />)}
+
+        {view === 'gsr' && isAdmin && (
+          loading
+            ? <p className="py-10 text-center text-sm text-neutral-500">Loading…</p>
+            : <GsrReportPanel tables={{ piles, transactions, warehouses, provinces, varieties, transactionTypes, authorities }} config={config} startISO={startISO} />
+        )}
 
         {view === 'issuances' && isAdmin && (
           <>
