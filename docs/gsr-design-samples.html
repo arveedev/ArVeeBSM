@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSR Design Samples</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1f2a24;--mut:#66726b;--line:#d9ddd5;--brand:#1f5a3a;--brand2:#e8f1ea;--warn:#a96a00;--warnbg:#fff3d9;--bad:#a8261e;--badbg:#fde8e6;--ok:#1d7a45;--okbg:#e3f4ea;--head:#2c3a33;--hl:#fff7c2}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a17;--card:#1c241f;--ink:#e6ebe7;--mut:#9aa8a0;--line:#33403a;--brand:#6fc392;--brand2:#223a2c;--warn:#f0b24a;--warnbg:#3a2e12;--bad:#ff8f86;--badbg:#401c19;--ok:#6fd49a;--okbg:#17321f;--head:#0f1512;--hl:#4a4310}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif;padding-inline:16px}
+.wrap{max-width:1100px;margin:0 auto;padding-block:20px 60px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:26px 0 8px}h3{font-size:15px;margin:16px 0 6px}
+.sub{color:var(--mut);margin:0 0 14px}
+.note{background:var(--warnbg);color:var(--warn);border-radius:6px;padding:8px 12px;font-size:13px;margin:10px 0}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0;position:sticky;top:0;background:var(--bg);padding-block:8px;z-index:5}
+nav button{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 12px;border-radius:6px;font:inherit;font-size:13px;cursor:pointer}
+nav button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+@media (prefers-color-scheme:dark){nav button.on{color:#0c1410}}
+.tab{display:none}.tab.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:10px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.tile{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:12px}
+.tile b{display:block}.tile span{color:var(--mut);font-size:13px}
+.tile.new{border-color:var(--brand);background:var(--brand2)}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:var(--brand2);color:var(--brand)}
+.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.bad{background:var(--badbg);color:var(--bad)}.pill.ok{background:var(--okbg);color:var(--ok)}
+.btn{display:inline-block;background:var(--brand);color:#fff;border-radius:6px;padding:8px 14px;font-size:14px}
+@media (prefers-color-scheme:dark){.btn{color:#0c1410}}
+.btn.sec{background:transparent;color:var(--brand);border:1px solid var(--brand)}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.field{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--bg);min-width:150px}
+.field small{display:block;color:var(--mut);font-size:11px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{border:1px solid var(--line);padding:4px 7px;text-align:right;white-space:nowrap}
+th{background:var(--head);color:#fff;text-align:center;font-weight:600}
+td.l,th.l{text-align:left}td.c{text-align:center}
+tr.tot td{font-weight:700;background:var(--brand2)}
+td.hl{background:var(--hl);outline:2px solid var(--warn)}
+.sheetbar{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
+.sheetbar span{font-size:11.5px;padding:3px 8px;border:1px solid var(--line);border-bottom:3px solid var(--line);border-radius:4px;background:var(--card)}
+.sheetbar span.on{border-bottom-color:var(--brand);font-weight:700}
+.chk li{margin:4px 0}.chk{padding-left:0;list-style:none}
+.chk .i{display:inline-block;width:62px}
+code{background:var(--brand2);padding:1px 5px;border-radius:4px;font-size:12.5px}
+.memo{font-family:Georgia,serif;font-size:13.5px;line-height:1.5}
+.memo b{letter-spacing:.3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>GSR from the app: design samples</h1>
+<p class="sub">Companion to <code>docs/superpowers/specs/2026-10-20-gsr-design.md</code>. Planning only: nothing here is built.</p>
+<div class="note">Every number on this page is a made-up sample so you can judge layout and wording. The real report will use the warehouses' data from the app.</div>
+
+<nav id="nav">
+<button data-t="t1" class="on">1 Stock Desk</button>
+<button data-t="t2">2 Prepare</button>
+<button data-t="t3">3 Check page</button>
+<button data-t="t4">4 Settings</button>
+<button data-t="t5">5 Sheets</button>
+<button data-t="t6">6 Audit file</button>
+<button data-t="t7">7 Done in Drive</button>
+</nav>
+
+<!-- 1 -->
+<section class="tab on" id="t1">
+<h2>Where it appears: Stock Desk (Admin only)</h2>
+<p class="sub">One new tile after "Milling and Issuances". A Visitor never sees it.</p>
+<div class="grid">
+<div class="tile"><b>Daily inventory</b><span>Per day: ADD and LESS by type, ending stock, by warehouse and variety</span></div>
+<div class="tile"><b>Summary</b><span>Stock by warehouse, variety and age bracket with province subtotals</span></div>
+<div class="tile"><b>Age monitoring</b><span>Age brackets per variety, stock moving to the next bracket, oldest stock</span></div>
+<div class="tile"><b>Data check</b><span>Overrides in use, shortages, over-authorized stock, approximate ages, unassigned documents</span></div>
+<div class="tile"><b>Milling and Issuances</b><span>Milling, issuances to LGU and issuances to FTI per province (Admin only)</span></div>
+<div class="tile new"><b>GSR report <span class="pill">new, Admin only</span></b><span>Prepare, check and create the Grains Situationer Report and its audit file in Google Drive</span></div>
+</div>
+</section>
+
+<!-- 2 -->
+<section class="tab" id="t2">
+<h2>Prepare screen</h2>
+<div class="card">
+<div class="row">
+<div class="field"><small>Memo date (report made on)</small>Mon, Oct 19, 2026</div>
+<div class="field"><small>Period reported: from</small>Fri, Oct 16, 2026</div>
+<div class="field"><small>to</small>Sun, Oct 18, 2026</div>
+<span class="pill">Monday rule: Friday to Sunday</span>
+</div>
+<p class="sub" style="margin-top:10px">Title will read: <b>GRAINS SITUATIONER REPORT FOR OCTOBER 16-18, 2026</b> &nbsp; File: <code>GSR OCTOBER 16-18</code> in <code>NEWGSR / 2026 / 10 OCTOBER</code></p>
+<div class="row"><span class="btn">Prepare</span><span class="btn sec">Settings</span><span class="btn sec">Prices</span><span class="btn sec">Past runs</span></div>
+</div>
+<h3>While preparing</h3>
+<div class="card">
+<ul class="chk">
+<li><span class="i pill ok">done</span> 1 PALAY INVENTORY</li>
+<li><span class="i pill ok">done</span> 2 RICE INVENTORY</li>
+<li><span class="i pill ok">done</span> 3 DISTRIBUTION PER VARIETY</li>
+<li><span class="i pill warn">working</span> 4 DIST. (TODAY) ...</li>
+<li><span class="i pill">waiting</span> 5 to 11</li>
+</ul>
+<p class="sub">Nothing is written to Drive until you press Create.</p>
+</div>
+</section>
+
+<!-- 3 -->
+<section class="tab" id="t3">
+<h2>Check page (before anything is created)</h2>
+<div class="card">
+<h3>Blocking problems <span class="pill bad">1 must be fixed</span></h3>
+<ul class="chk">
+<li><span class="i pill bad">stop</span> One sale matches no scheme line: WSI 4470122, customer <b>BARANGAY SAMPLE COUNCIL</b>, 120 bags, Oct 17, TABACO GID. <span class="btn sec" style="padding:2px 8px">Set its scheme line</span></li>
+</ul>
+<h3>Warnings <span class="pill warn">2 to look at</span></h3>
+<ul class="chk">
+<li><span class="i pill warn">look</span> 3 authorities reserve more than available (information only).</li>
+<li><span class="i pill warn">look</span> Procurement mode is blank on 14 older documents; counted as Stationary.</li>
+</ul>
+<h3>Ties between sheets <span class="pill ok">all match</span></h3>
+<div class="scroll"><table>
+<tr><th class="l">Check</th><th>Sheet A</th><th>Sheet B</th><th>Result</th></tr>
+<tr><td class="l">Palay stock total = Stock Desk Summary</td><td>112,408.50</td><td>112,408.50</td><td class="c">match</td></tr>
+<tr><td class="l">Rice stock total = Stock Desk Summary</td><td>41,226.00</td><td>41,226.00</td><td class="c">match</td></tr>
+<tr><td class="l">DIST. (MONTH) total = DISTRIBUTION PER VARIETY month</td><td>6,302</td><td>6,302</td><td class="c">match</td></tr>
+<tr><td class="l">DIST. (YEAR) total = DISTRIBUTION PER VARIETY year</td><td>133,519</td><td>133,519</td><td class="c">match</td></tr>
+<tr><td class="l">PROCUREMENT 1 today = Daily procurement status</td><td>1,139.63</td><td>1,139.63</td><td class="c">match</td></tr>
+</table></div>
+<p class="sub">The Create button stays grey while any blocking problem is open.</p>
+<div class="row"><span class="btn" style="opacity:.4">Create in Google Drive</span></div>
+</div>
+</section>
+
+<!-- 4 -->
+<section class="tab" id="t4">
+<h2>Admin settings</h2>
+<p class="sub">Eight small screens. Each shows the effect on last month's data so a wrong setting is seen at once.</p>
+
+<h3>1 Warehouse columns <span class="pill">merged by code</span></h3>
+<div class="scroll"><table>
+<tr><th>Province</th><th>Column title</th><th>Code</th><th>App warehouses merged</th><th>Show</th></tr>
+<tr><td class="l">Albay</td><td class="l">LEG GID</td><td>050502</td><td class="l">LEGAZPI GID, LEGAZPI GID A</td><td class="c">yes</td></tr>
+<tr><td class="l">Albay</td><td class="l">ABACORP</td><td>050520</td><td class="l">ABACORP, ABACORP A, ABACORP B</td><td class="c">yes</td></tr>
+<tr><td class="l">Albay</td><td class="l">TABACO GID</td><td>050501</td><td class="l">TABACO GID A, TABACO GID B</td><td class="c">yes</td></tr>
+<tr><td class="l">Albay</td><td class="l">BSI</td><td>050522</td><td class="l">BSI, BSI B, BSI C</td><td class="c">yes</td></tr>
+<tr><td class="l">Catanduanes</td><td class="l">GID 2</td><td>052011</td><td class="l">CTD-GID 2, CTD-GID 2 A</td><td class="c">yes</td></tr>
+<tr><td class="l">Albay</td><td class="l">PHF SHED</td><td>-</td><td class="l">dryer (facility type not Warehouse)</td><td class="c">no</td></tr>
+</table></div>
+
+<h3>4 Distribution schemes</h3>
+<div class="scroll"><table>
+<tr><th class="l">Scheme line</th><th class="l">Matches when</th><th>Last month bags</th></tr>
+<tr><td class="l">II.D BJMP</td><td class="l">customer category = BJMP</td><td>129</td></tr>
+<tr><td class="l">II.J FTI P20 (Farmers and vulnerable)</td><td class="l">transaction type = FTI P20</td><td>2,363</td></tr>
+<tr><td class="l">I.F Local Government Units</td><td class="l">customer category = LGU and type = calamity</td><td>3,127</td></tr>
+<tr><td class="l" colspan="2"><i>Sales matching no line</i></td><td><span class="pill bad">0 allowed</span></td></tr>
+</table></div>
+
+<h3>5 Price columns</h3>
+<div class="scroll"><table>
+<tr><th>Column</th><th class="l">Price</th><th class="l">Applies to</th><th>Last month bags</th></tr>
+<tr><td>P 29.00</td><td class="l">29.00</td><td class="l">all schemes</td><td>0</td></tr>
+<tr><td>P 33.00</td><td class="l">33.00</td><td class="l">all schemes</td><td>0</td></tr>
+<tr><td>P 35.00</td><td class="l">35.00</td><td class="l">all schemes</td><td>5,507</td></tr>
+<tr><td>P 32.00</td><td class="l">32.00</td><td class="l">all schemes</td><td>129</td></tr>
+<tr><td>P 39.00</td><td class="l">39.00</td><td class="l">all schemes</td><td>0</td></tr>
+</table></div>
+<p class="sub">Also in the same place: 2 Variety names, 3 Age brackets and grades, 6 Targets and awards, 7 Memo and signatories, 8 Drive (Test connection).</p>
+</section>
+
+<!-- 5 -->
+<section class="tab" id="t5">
+<h2>The 11 sheets (samples)</h2>
+<div class="sheetbar" id="sbar"></div>
+<div id="sheetbody"></div>
+</section>
+
+<!-- 6 -->
+<section class="tab" id="t6">
+<h2>The audit file (what you asked to see first)</h2>
+<p class="sub">A second Google Sheet next to the GSR: <code>GSR OCTOBER 16-18 - AUDIT</code>. Five tabs.</p>
+<div class="sheetbar"><span class="on">Summary</span><span>Cells</span><span>Documents</span><span>Excluded</span><span>Settings used</span></div>
+
+<h3>Tab 1: Summary</h3>
+<div class="scroll"><table>
+<tr><th class="l">Item</th><th class="l">Value</th></tr>
+<tr><td class="l">Report</td><td class="l">GSR OCTOBER 16-18 (memo date Oct 19, 2026)</td></tr>
+<tr><td class="l">Period reported</td><td class="l">Oct 16 to Oct 18, 2026 (month from Oct 1, year from Sep 1)</td></tr>
+<tr><td class="l">Created by / when</td><td class="l">Admin, Oct 19, 2026 8:42 AM</td></tr>
+<tr><td class="l">App version / database</td><td class="l">1.10-402 / zv432njdm</td></tr>
+<tr><td class="l">Documents counted / excluded</td><td class="l">1,486 / 212</td></tr>
+<tr><td class="l">Blocking checks</td><td class="l">all passed</td></tr>
+<tr><td class="l">Read-back from Drive</td><td class="l">1,904 of 1,904 values match</td></tr>
+<tr><td class="l">Status</td><td class="l"><span class="pill warn">FIRST RUN - HAND CHECK</span></td></tr>
+</table></div>
+
+<h3>Tab 2: Cells (one row per figure in the GSR)</h3>
+<div class="scroll"><table>
+<tr><th class="l">Sheet</th><th>Cell</th><th class="l">Row</th><th class="l">Column</th><th>Value</th><th>Documents</th><th class="l">Documents tab</th></tr>
+<tr><td class="l">DIST. (MONTH)</td><td>D26</td><td class="l">II.D BJMP</td><td class="l">Albay P35</td><td>129</td><td>9</td><td class="l">rows 214-222</td></tr>
+<tr><td class="l">DIST. (MONTH)</td><td>G26</td><td class="l">II.D BJMP</td><td class="l">Albay total</td><td>129</td><td>9</td><td class="l">formula of D26:F26</td></tr>
+<tr><td class="l">PALAY INVENTORY</td><td>J27</td><td class="l">PDm, 9.1-10.0 months</td><td class="l">BSI</td><td>233.00</td><td>2</td><td class="l">rows 17-18</td></tr>
+<tr><td class="l">PALAY INVENTORY</td><td>G26</td><td class="l">PDm, 8.1-9.0 months</td><td class="l">ABACORP</td><td>45.00</td><td>1</td><td class="l">row 5</td></tr>
+</table></div>
+
+<h3>Tab 3: Documents (what is behind each cell)</h3>
+<div class="scroll"><table>
+<tr><th class="l">Type</th><th class="l">Number</th><th>Date</th><th class="l">Report column</th><th class="l">Pile</th><th class="l">Variety</th><th class="l">Customer / source</th><th class="l">Scheme / price</th><th>Net bags</th><th class="l">Cell(s)</th></tr>
+<tr><td class="l">WSI (authority)</td><td class="l">4470098</td><td>Oct 16</td><td class="l">TABACO GID</td><td class="l">PILE 2</td><td class="l">WD1</td><td class="l">BJMP ALBAY DISTRICT JAIL</td><td class="l">II.D / P35</td><td>20</td><td class="l">DIST.(MONTH) D26</td></tr>
+<tr><td class="l">WSI (authority)</td><td class="l">4470101</td><td>Oct 16</td><td class="l">LEG GID</td><td class="l">PILE 1</td><td class="l">WD1</td><td class="l">BJMP LEGAZPI CITY</td><td class="l">II.D / P35</td><td>14</td><td class="l">DIST.(MONTH) D26</td></tr>
+<tr><td class="l">WSR</td><td class="l">11766812 (+A)</td><td>Oct 8</td><td class="l">BSI</td><td class="l">PILE 4</td><td class="l">PD1m-A</td><td class="l">SAMPLE FARMER</td><td class="l">stationary</td><td>233.00</td><td class="l">PALAY INV. J27</td></tr>
+</table></div>
+<p class="sub">A two-pile receipt such as 11766812 and 11766812-A shows as one document with each pile's share, matching the Stock Desk.</p>
+
+<h3>Tab 4: Excluded</h3>
+<div class="scroll"><table>
+<tr><th class="l">Type</th><th class="l">Number</th><th>Date</th><th class="l">Reason</th></tr>
+<tr><td class="l">WSI</td><td class="l">4469000</td><td>Aug 28</td><td class="l">before September (data start)</td></tr>
+<tr><td class="l">WSR</td><td class="l">1176655</td><td>Oct 17</td><td class="l">facility PHF SHED is a dryer, not a Warehouse</td></tr>
+<tr><td class="l">WSI</td><td class="l">4470090</td><td>Oct 12</td><td class="l">outside the period (counted in the month only)</td></tr>
+</table></div>
+<p class="sub">Tab 5 "Settings used" is a copy of settings 1-8 as they were at that moment.</p>
+</section>
+
+<!-- 7 -->
+<section class="tab" id="t7">
+<h2>After pressing Create</h2>
+<div class="card">
+<p><span class="pill ok">Created and verified</span></p>
+<ul class="chk">
+<li>GSR OCTOBER 16-18 &nbsp; <span class="btn sec" style="padding:2px 8px">Open in Drive</span></li>
+<li>GSR OCTOBER 16-18 - AUDIT &nbsp; <span class="btn sec" style="padding:2px 8px">Open in Drive</span></li>
+<li>Folder: NEWGSR / 2026 / 10 OCTOBER</li>
+<li>Read back from Drive: 1,904 of 1,904 values match, 5 of 5 tie checks match</li>
+</ul>
+<p class="sub">If a value did not match, both files would be named "... NOT VERIFIED" and this screen would list the cells.</p>
+</div>
+</section>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id===b.dataset.t));
+  scrollTo(0,0);
+});
+const T=(h,rows,tot)=>`<div class="scroll"><table>${h}${rows}${tot||''}</table></div>`;
+const sheets={
+'PALAY INVENTORY':()=>`<div class="card memo"><b>19 October 2026</b><br>MEMO 2026 &nbsp; ALB-BSM-10-_______<br>FOR: RODRIGO O. EMBATE JR., REGIONAL MANAGER II, NFA RO5, LEGAZPI CITY<br>SUBJECT: GRAINS SITUATIONER REPORT FOR OCTOBER 16-18, 2026</div>
+<h3>I.A. PALAY INVENTORY PER VARIETY</h3>`+T(
+`<tr><th rowspan="2">VARIETY</th><th rowspan="2">AGE</th><th rowspan="2">MONTHS</th><th colspan="4">ALBAY</th><th rowspan="2">SUB-TOTAL</th><th>CATANDUANES</th><th rowspan="2">GRAND TOTAL</th></tr><tr><th>LEG GID</th><th>ABACORP</th><th>BSI</th><th>TABACO GID</th><th>GID 2</th></tr>
+<tr><td class="l">code</td><td></td><td></td><td>050502</td><td>050520</td><td>050522</td><td>050501</td><td></td><td>052011</td><td></td></tr>`,
+`<tr><td class="l">PDm</td><td class="c">A</td><td class="l">0 - 1.0</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td><td>0.00</td></tr>
+<tr><td></td><td class="c">E</td><td class="l">8.1 - 9.0</td><td>0.00</td><td>45.00</td><td>0.00</td><td>0.00</td><td>45.00</td><td>0.00</td><td>45.00</td></tr>
+<tr><td></td><td class="c">E</td><td class="l">9.1 - 10.0</td><td>0.00</td><td>306.38</td><td>233.00</td><td>0.00</td><td>539.38</td><td>0.00</td><td>539.38</td></tr>
+<tr><td></td><td class="c">E</td><td class="l">10.1 - 11.0</td><td>0.00</td><td>0.00</td><td>535.00</td><td>0.00</td><td>535.00</td><td>0.00</td><td>535.00</td></tr>`,
+`<tr class="tot"><td class="l" colspan="3">SUB-TOTAL PDm</td><td>0.00</td><td>351.38</td><td>768.00</td><td>0.00</td><td>1,119.38</td><td>0.00</td><td>1,119.38</td></tr>`)+`<p class="sub">Sample numbers. Real layout: one column per warehouse (lettered variants merged), grade letter from setting 3, sub-total per province, grand total. Totals are real spreadsheet formulas.</p>`,
+'RICE INVENTORY':()=>`<h3>I.B. RICE INVENTORY PER VARIETY - I LOCAL RICE</h3>`+T(
+`<tr><th>VARIETY</th><th>AGE</th><th>MONTHS</th><th>TABACO GID</th><th>ABACORP</th><th>LEG GID</th><th>VRT</th><th>KINALE</th><th>SUB-TOTAL</th><th>GID 2</th><th>GRAND TOTAL</th></tr>`,
+`<tr><td class="l">WD1</td><td class="c">A</td><td class="l">0 - 1.0</td><td>0.00</td><td>289.28</td><td>2,056.30</td><td>0.00</td><td>0.00</td><td>2,345.58</td><td>0.00</td><td>2,345.58</td></tr>
+<tr><td></td><td class="c">A</td><td class="l">2.1 - 3.0</td><td>0.00</td><td>0.00</td><td>105.00</td><td>0.00</td><td>0.00</td><td>105.00</td><td>0.00</td><td>105.00</td></tr>
+<tr><td></td><td class="c">C</td><td class="l">10.1 - 11.0</td><td>0.00</td><td>704.08</td><td>0.00</td><td>0.00</td><td>0.00</td><td>704.08</td><td>0.00</td><td>704.08</td></tr>`,
+`<tr class="tot"><td class="l" colspan="3">Sub-total WD1</td><td>0.00</td><td>993.36</td><td>2,161.30</td><td>0.00</td><td>0.00</td><td>3,154.66</td><td>0.00</td><td>3,154.66</td></tr>`)+`<p class="sub">Below the table: the "unwithdrawn / potential stocks" block (authorities issued but not yet withdrawn).</p>`,
+'DISTRIBUTION PER VARIETY':()=>`<h3>II.A. RICE DISTRIBUTION PER VARIETY</h3>`+T(
+`<tr><th rowspan="2">PARTICULAR</th><th colspan="3">WD</th><th colspan="3">WD2</th><th colspan="3">RWD1</th><th colspan="3">TOTAL</th></tr><tr><th>NET BAGS</th><th>NET KGS</th><th>MT</th><th>NET BAGS</th><th>NET KGS</th><th>MT</th><th>NET BAGS</th><th>NET KGS</th><th>MT</th><th>NET BAGS</th><th>NET KGS</th><th>MT</th></tr>`,
+`<tr><td class="l">SALES TODAY (period)</td><td>81</td><td>4,050</td><td>4.05</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>81</td><td>4,050</td><td>4.05</td></tr>
+<tr><td class="l">&nbsp;&nbsp;ALBAY</td><td>75</td><td>3,750</td><td>3.75</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>75</td><td>3,750</td><td>3.75</td></tr>
+<tr><td class="l">&nbsp;&nbsp;CATANDUANES</td><td>6</td><td>300</td><td>0.30</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>6</td><td>300</td><td>0.30</td></tr>
+<tr><td class="l">SALES FOR THE MONTH</td><td>7,718</td><td>385,900</td><td>385.90</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>7,718</td><td>385,900</td><td>385.90</td></tr>
+<tr><td class="l">DAILY AVERAGE SALES</td><td colspan="9"></td><td>428.78</td><td>21,438.89</td><td>21.44</td></tr>`,
+`<tr class="tot"><td class="l">CUMULATIVE (from Sep 1)</td><td>31,204</td><td>1,560,200</td><td>1,560.20</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>31,204</td><td>1,560,200</td><td>1,560.20</td></tr>`)+`<p class="sub">Sample numbers only. Daily average = month total / days elapsed in the month.</p>`,
+'DIST. (TODAY / MONTH / YEAR)':()=>`<h3>RICE DISTRIBUTION PER SCHEME PER SELLING PRICE: FOR THE MONTH</h3>`+T(
+`<tr><th rowspan="2">SCHEME</th><th colspan="6">ALBAY</th><th colspan="3">CATANDUANES (extract)</th><th rowspan="2">BRANCH</th></tr><tr><th>P 29</th><th>P 33</th><th>P 35</th><th>P 32</th><th>P 39</th><th>TOTAL</th><th>P 33</th><th>P 35</th><th>TOTAL</th></tr>`,
+`<tr class="tot"><td class="l">TOTAL SALES (LOCAL RICE)</td><td>0</td><td>0</td><td>5,507</td><td>129</td><td>0</td><td>5,636</td><td>0</td><td>666</td><td>666</td><td>6,302</td></tr>
+<tr><td class="l">I. DISASTER / RELIEF / CALAMITY</td><td>0</td><td>0</td><td>3,127</td><td>0</td><td>0</td><td>3,127</td><td>0</td><td>0</td><td>0</td><td>3,127</td></tr>
+<tr><td class="l">&nbsp;&nbsp;F. LOCAL GOVERNMENT UNITS</td><td>0</td><td>0</td><td>3,127</td><td>0</td><td>0</td><td>3,127</td><td>0</td><td>0</td><td>0</td><td>3,127</td></tr>
+<tr><td class="l">II. NON-RELIEF / SPECIAL PROJECTS</td><td>0</td><td>0</td><td>2,380</td><td>129</td><td>0</td><td>2,509</td><td>0</td><td>666</td><td>666</td><td>3,175</td></tr>
+<tr><td class="l">&nbsp;&nbsp;D. BJMP</td><td>0</td><td>0</td><td>0</td><td>129</td><td>0</td><td>129</td><td>0</td><td>35</td><td>35</td><td>164</td></tr>
+<tr><td class="l">&nbsp;&nbsp;J. FTI P20 (Farmers and vulnerable)</td><td>0</td><td>0</td><td>2,363</td><td>0</td><td>0</td><td>2,363</td><td>0</td><td>450</td><td>450</td><td>2,813</td></tr>
+<tr><td class="l">&nbsp;&nbsp;K. DOLE-DA P20</td><td>0</td><td>0</td><td>17</td><td>0</td><td>0</td><td>17</td><td>0</td><td>181</td><td>181</td><td>198</td></tr>`,'')+`<p class="sub">Sample numbers. TODAY and YEAR sheets have the same layout; only the date range changes. Every line comes from the scheme map (setting 4), every column from the price map (setting 5).</p>`,
+'DISPERSAL':()=>`<h3>III. INFLOW - A. INTER-REGIONAL</h3>`+T(
+`<tr><th rowspan="2">SOURCE</th><th rowspan="2">CARRIER</th><th rowspan="2">DESTINATION</th><th rowspan="2">WIRE AUTHORITY</th><th rowspan="2">VARIETY</th><th rowspan="2">AUTHORIZED</th><th colspan="2">TODAY</th><th colspan="2">CUMULATIVE</th><th rowspan="2">BALANCE</th></tr><tr><th>Gross</th><th>Net</th><th>Gross</th><th>Net</th></tr>`,
+`<tr><td class="l">NFA-CAMSUR</td><td class="l">NFA TRUCK</td><td class="l">NFA-ALBAY</td><td class="l">RO5-ORM-2026-A-27</td><td class="l">WD1</td><td>1,000</td><td>0</td><td>0</td><td>835</td><td>835</td><td>165</td></tr>
+<tr><td class="l">NFA-SORSOGON</td><td class="l">NFA TRUCK</td><td class="l">NFA-ALBAY</td><td class="l">ORM-2026-E-524</td><td class="l">WD1</td><td>1,000</td><td>0</td><td>0</td><td>1,000</td><td>996</td><td>0</td></tr>`,
+`<tr class="tot"><td class="l" colspan="5">TOTAL</td><td>2,000</td><td>0</td><td>0</td><td>1,835</td><td>1,831</td><td>165</td></tr>`)+`<p class="sub">Sample numbers. "Carrier" is new data captured on the transfer document (section 9 of the design). Outflow to other provinces (with vessel) is the next table on the same sheet.</p>`,
+'PROCUREMENT 1 / 2 / PROC.MILL':()=>`<h3>V.A. PALAY PROCUREMENT PER SCHEME (bags of 50 kg) - ALBAY</h3>`+T(
+`<tr><th class="l">PARTICIPANT / SCHEME</th><th>VARIETY</th><th>TODAY</th><th>FOR THE MONTH</th><th>FOR THE YEAR</th></tr>`,
+`<tr><td class="l">A. DIRECT / REGULAR - 1. STATIONARY - a. Individual farmers</td><td class="c">PD1-A</td><td>753.21</td><td>18,592.62</td><td>116,530.72</td></tr>
+<tr><td class="l"></td><td class="c">PD2-A</td><td>134.04</td><td>633.44</td><td>4,079.22</td></tr>
+<tr><td class="l">&nbsp;&nbsp;b. IPP (FOs, FAs, FCs)</td><td class="c">PD1-A</td><td>0.00</td><td>716.36</td><td>12,641.56</td></tr>
+<tr><td class="l">2. IN-FIELD (mobile) - Individual farmers</td><td class="c">PD1</td><td>0.00</td><td>0.00</td><td>0.00</td></tr>
+<tr><td class="l">B. INDIRECT - 1. PALLGUs</td><td class="c">PD1</td><td>0.00</td><td>0.00</td><td>0.00</td></tr>`,
+`<tr class="tot"><td class="l" colspan="2">GRAND TOTAL</td><td>887.25</td><td>19,942.42</td><td>133,251.50</td></tr>`)+`<p class="sub">Sample numbers. Rows 2 and B use the new "procurement mode" field. PROCUREMENT 2 (targets, % accomplishment, farmers served, CPF) and PROC.MILL (unpaid deliveries, test milling per ricemill) follow the same pattern.</p>`,
+'PRICES':()=>`<h3>WEEKLY NFA CEREAL PRICE MONITORING - ALBAY</h3>`+T(
+`<tr><th class="l">COMMODITY</th><th>THIS WEEK prevailing</th><th>low</th><th>high</th><th>LAST WEEK prevailing</th><th>change</th></tr>`,
+`<tr><td class="l">Palay, dry (farm gate)</td><td>20.00</td><td>19.00</td><td>21.00</td><td>19.50</td><td>+0.50</td></tr>
+<tr><td class="l">Palay, fresh (farm gate)</td><td>16.00</td><td>15.00</td><td>17.00</td><td>16.00</td><td>0.00</td></tr>
+<tr><td class="l">Regular milled rice (retail)</td><td>42.00</td><td>40.00</td><td>45.00</td><td>42.00</td><td>0.00</td></tr>
+<tr><td class="l">Well milled rice (retail)</td><td>48.00</td><td>45.00</td><td>52.00</td><td>47.00</td><td>+1.00</td></tr>`,'')+`<p class="sub">Sample numbers. Filled from the new weekly price form; on the first entry of a new week "this week" moves to "last week".</p>`
+};
+const keys=Object.keys(sheets);let cur=0;
+function showSheet(i){cur=i;$('#sbar').innerHTML=keys.map((k,j)=>`<span class="${j===i?'on':''}" data-i="${j}" style="cursor:pointer">${k}</span>`).join('');
+$('#sheetbody').innerHTML=sheets[keys[i]]();$('#sbar').querySelectorAll('span').forEach(s=>s.onclick=()=>showSheet(+s.dataset.i));}
+showSheet(0);
+</script>
+</body>
+</html>
