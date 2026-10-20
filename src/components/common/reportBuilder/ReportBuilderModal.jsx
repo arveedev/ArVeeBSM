@@ -18,7 +18,6 @@ import { listLayouts, saveLayout, deleteLayout, logReportEvent } from '../../../
 import { exportXlsx, exportPdf, exportCsv, copyTable } from '../../../services/reportBuilderExport.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, ColumnsPanel, FormatPanel, ResultTable, pill, pillOn, input } from './rbParts.jsx'
-import CompareView from './CompareView.jsx'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const longDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -36,7 +35,6 @@ const freshLayout = (sourceId, data) => {
 function ReportBuilderModal({ user, onClose }) {
   const role = user?.role
   const sources = useMemo(() => sourcesFor(role), [role])
-  const [tab, setTab] = useState('table')
   const [sourceId, setSourceId] = useState('docs')
   const src = sourceById(sourceId)
   const [params, setParams] = useState(() => defaultParams(sourceById('docs')))
@@ -123,6 +121,7 @@ function ReportBuilderModal({ user, onClose }) {
     const f = fields.map[id]
     if (!f) return
     if (area === 'filt') { setFilterField(id); setPop('filter'); return }
+    if (layout.mode !== 'pivot') setLayout((l) => ({ ...l, mode: 'pivot' }))
     if (area === 'vals') { if (!layout.vals.some((v) => v.f === id)) patch({ vals: [...layout.vals, { f: id, a: f.kind === 'num' ? 'sum' : 'count' }] }); return }
     if (!layout[area].includes(id)) patch({ [area]: [...layout[area], id] })
   }
@@ -136,7 +135,7 @@ function ReportBuilderModal({ user, onClose }) {
   const openDrill = (cellId) => { const c = table?.cells.get(cellId); if (c && c.recs.length) setDrill(c) }
 
   // ---- exports (everything exported is logged for the Admin)
-  const sourceDated = tab === 'compare' || data?.dated !== false
+  const sourceDated = data?.dated !== false
   const periodText = `${longDay(period.from)} to ${longDay(period.to)}`
   const meta = () => ({ title: `${src.name}${layout.mode === 'pivot' && layout.rows.length ? ` by ${layout.rows.filter((f) => fields.map[f]).map((f) => fields.map[f].label).join(' / ')}` : ''}`, sourceName: `${src.name}${sourceDated ? `, ${periodText}` : ''}`, filters: filterText(layout, fields), who: user?.name })
   const scopeText = isWideRole(role) ? 'All warehouses' : 'Own warehouses'
@@ -212,12 +211,6 @@ function ReportBuilderModal({ user, onClose }) {
         {/* ---------------- the period ---------------- */}
         <div className="rb-fade mb-3 rounded-2xl border border-neutral-800 bg-neutral-900 p-3">
           <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-            <div>
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">What to look at</p>
-              <div className="inline-flex overflow-hidden rounded-lg border border-neutral-700">
-                {[['table', 'Tables'], ['compare', 'Compare two sources']].map(([k, n]) => <button key={k} type="button" onClick={() => setTab(k)} className={`px-3 py-1.5 text-sm transition-colors ${tab === k ? 'bg-brand-neon/10 text-brand-neon' : 'bg-neutral-950 text-neutral-300 hover:text-app-text'}`}>{n}</button>)}
-              </div>
-            </div>
             <div className="flex flex-wrap items-end gap-2">
               <div className="w-40"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">From</p><CalendarDatePicker value={period.from} label="From" onChange={(iso) => setPeriod({ from: iso, to: period.to < iso ? iso : period.to })} /></div>
               <div className="w-40"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-neutral-500">To</p><CalendarDatePicker value={period.to} label="To" onChange={(iso) => setPeriod({ from: period.from > iso ? iso : period.from, to: iso })} /></div>
@@ -234,8 +227,7 @@ function ReportBuilderModal({ user, onClose }) {
           </p>
         </div>
 
-        {tab === 'compare' ? <CompareView user={user} period={period} /> : (
-          <>
+        <>
             <div className="rb-fade mb-3 flex flex-wrap items-center gap-2">
               <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-500" htmlFor="rb-source">Data</label>
               <select id="rb-source" value={sourceId} onChange={(e) => chooseSource(e.target.value)} className={`${input} max-w-full`}>
@@ -261,8 +253,9 @@ function ReportBuilderModal({ user, onClose }) {
                   <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400">Fields <span className="font-normal normal-case tracking-normal text-neutral-500">drag, or tap one</span></p>
                   <FieldPicker key={sourceId + layout.mode} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)} />
                   <button type="button" onClick={() => { setEditingCalc(null); setPop('calc') }} className={`${pill} mt-2`}>+ Calculated field (a formula)</button>
-                  {layout.mode === 'pivot' && (
+                  {(
                     <div className="rb-fade mt-3 space-y-2.5">
+                      <p className="text-[11px] leading-snug text-neutral-500">Build a pivot table: drag a field into a box below (or tap a field and choose). A list needs none of these.</p>
                       <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Rows</p><DropArea area="rows" onDropField={addTo} hint="Drop fields to group down the side">{layout.rows.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ rows: layout.rows.filter((x) => x !== id) })} />)}</DropArea></div>
                       <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Columns</p><DropArea area="cols" onDropField={addTo} hint="Drop fields to spread across the top">{layout.cols.filter((id) => fields.map[id]).map((id) => <FieldChip key={id} f={fields.map[id]} onRemove={() => patch({ cols: layout.cols.filter((x) => x !== id) })} />)}</DropArea></div>
                       <div><p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Values</p><DropArea area="vals" onDropField={addTo} hint="Drop numbers to total (none = count of records)">{layout.vals.filter((v) => fields.map[v.f]).map((v, i) => <ValueChip key={v.f} f={fields.map[v.f]} v={v} onAgg={(a) => patch({ vals: layout.vals.map((x, k) => (k === i ? { ...x, a } : x)) })} onRemove={() => patch({ vals: layout.vals.filter((x) => x.f !== v.f) })} />)}</DropArea></div>
@@ -361,15 +354,14 @@ function ReportBuilderModal({ user, onClose }) {
                 )}
               </div>
             </div>
-          </>
-        )}
+        </>
       </div>
 
       {menu && (
         <div style={{ left: menu.x, top: menu.y }} className="rb-drop fixed z-[90] min-w-[12rem] rounded-xl border border-neutral-700 bg-neutral-900 p-1.5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <p className="break-words px-3 pb-1 pt-0.5 text-[11px] font-bold text-neutral-500">{menu.f.label}</p>
           {[
-            ...(layout.mode === 'list' ? [['filt', 'Filter by this field'], ['sort', 'Sort by this field']] : [['rows', 'Add to Rows'], ['cols', 'Add to Columns'], ['vals', 'Add to Values'], ['filt', 'Filter by this field']]),
+            ['rows', 'Add to Rows (pivot)'], ['cols', 'Add to Columns (pivot)'], ['vals', 'Add to Values (pivot)'], ['filt', 'Filter by this field'], ...(layout.mode === 'list' ? [['sort', 'Sort by this field']] : []),
             ...(menu.f.calc ? [['edit', 'Change this formula'], ['del', 'Delete this field']] : []),
           ].map(([a, n]) => (
             <button key={a} type="button" onClick={() => {

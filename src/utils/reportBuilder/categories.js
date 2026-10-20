@@ -14,7 +14,6 @@ export const CATEGORIES = [
   { id: 'authority', label: 'Authority and milling', open: false },
   { id: 'status', label: 'Status, notes and condition', open: false },
   { id: 'other', label: 'Other details', open: false },
-  { id: 'tech', label: 'Technical details', open: false },
 ]
 
 const TECH = /^(authorityAck|autoComputeNet|syncFailureLogged|needsCompletion|fromSheetImport|varietyNameRaw|totalPiecesRaw|cerealCategory|staleSheetSerials|netWeightDecimals|sackLinesCount|farmerMembers|hasBeenBackedUp|orderId|sheetStatusRaw|firstSeenAt|changes$|initialAgeValue|mtsCondition|isAccountabilityPile)/i
@@ -42,7 +41,7 @@ export function categoryOf(f, mainIds = []) {
 /** [{ id, label, open, fields }] for the groups that have fields, in the order above; `fields` keep the source's own order. */
 export function groupFields(fields, mainIds = []) {
   const by = new Map(CATEGORIES.map((c) => [c.id, []]))
-  for (const f of fields) by.get(categoryOf(f, mainIds)).push(f)
+  for (const f of fields) { const c = categoryOf(f, mainIds); if (c !== 'tech') by.get(c).push(f) } // bookkeeping fields are left out of the picker
   const main = mainIds.length ? by.get('main') : []
   if (mainIds.length) main.sort((a, b) => mainIds.indexOf(a.id) - mainIds.indexOf(b.id))
   return CATEGORIES.filter((c) => by.get(c.id).length).map((c) => ({ ...c, fields: by.get(c.id) }))

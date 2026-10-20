@@ -1,4 +1,4 @@
-// Opens the Report Builder from anywhere: the quiet icon on the Admin / Analyst Home, the Reports card in Settings, or Ctrl + Alt + R.
+// Opens the Report Builder from anywhere: the Reports card in Settings, or Ctrl + Alt + R.
 // Only an Admin, an Analyst or warehouse staff can open it (and the Admin can switch it off for staff or Analysts). A Visitor and the
 // SDO never can. The Builder reads a copy of the records and writes nothing but the person's own saved layouts and an export log.
 import { useEffect, useState } from 'react'
@@ -27,11 +27,11 @@ function ReportBuilderHost() {
     if (!can) { setOpen(false); return undefined }
     const show = () => setOpen(true)
     const onKey = (e) => {
-      if (e.ctrlKey && e.altKey && !e.shiftKey && e.code === 'KeyR') { e.preventDefault(); show() }
+      if (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && (e.code === 'KeyR' || String(e.key).toLowerCase() === 'r')) { e.preventDefault(); show() }
     }
-    window.addEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
     window.addEventListener(OPEN_REPORT_BUILDER_EVENT, show)
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(OPEN_REPORT_BUILDER_EVENT, show) }
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener(OPEN_REPORT_BUILDER_EVENT, show) }
   }, [can])
 
   return open && can ? <ReportBuilderModal user={user} onClose={() => setOpen(false)} /> : null

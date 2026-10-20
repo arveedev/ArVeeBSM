@@ -115,7 +115,6 @@ export function FieldPicker({ groups, used, onPick, query, setQuery }) {
                 <div className="flex flex-wrap gap-1.5 px-2.5 pb-2.5">
                   {g.fields.map((f) => <FieldChip key={f.id} f={f} draggable used={used.has(f.id)} dashed={!!f.calc} onClick={(e) => { e.stopPropagation(); onPick(e, f) }} />)}
                 </div>
-                {g.id === 'tech' && <p className="px-3 pb-2 text-[11px] leading-snug text-neutral-500">Bookkeeping the app keeps for itself. For example, &quot;Authority ack&quot; is when someone last confirmed a document after its authority was changed.</p>}
               </Collapse>
             </div>
           )

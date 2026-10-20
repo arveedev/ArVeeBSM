@@ -18694,3 +18694,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 
 - Removed ready-made layouts; added a From/To period (custom date picker, floor 2026-09-01) applied to every dated source and to Compare.
 - Fields grouped into plain categories; calculated fields now take formulas (new formula.js); animated panels; Compare two sources rebuilt as three steps.
+
+## 2026-10-20: Report Builder cleanup (v1.10-418)
+
+- Removed Compare two sources and the Technical details group; drop boxes always visible; removed the Home icon; hardened Ctrl+Alt+R.

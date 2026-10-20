@@ -198,7 +198,8 @@ test('categories: main fields first, technical bookkeeping folded away, every fi
   const fields = [D('date', 'Date'), T('wh', 'Warehouse'), N('bags', 'Net bags'), N('amount', 'Amount (PHP)'), T('authorityAckAt', 'Authority ack at'), T('createdByName', 'Entered by'), T('aiNumber', 'Authority no. (AI)'), T('status', 'Status'), T('zzz', 'Whatever')]
   const g = groupFields(fields, ['date', 'wh', 'bags'])
   assert.deepEqual(g[0].fields.map((f) => f.id), ['date', 'wh', 'bags'])
-  assert.equal(g.reduce((n, x) => n + x.fields.length, 0), fields.length)
+  assert.equal(g.reduce((n, x) => n + x.fields.length, 0), fields.length - 1) // the bookkeeping field is left out
+  assert.ok(!g.some((x) => x.id === 'tech'))
   assert.equal(categoryOf(fields[4], []), 'tech')
   assert.equal(categoryOf(fields[3], []), 'money')
   assert.equal(categoryOf(fields[5], []), 'people')
