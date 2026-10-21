@@ -18698,3 +18698,9 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-20: Report Builder cleanup (v1.10-418)
 
 - Removed Compare two sources and the Technical details group; drop boxes always visible; removed the Home icon; hardened Ctrl+Alt+R.
+
+## 2026-10-21: Report Builder polish (v1.10-419 to 424)
+
+- Table-first layout, builder side column with smooth hide/show, reactive fields and formulas, drag between boxes, Total column/row options.
+- Exports: Excel and PDF only, user-typed title as file name, Montserrat in the PDF, custom header names and color, subtotal and total styling.
+- Redesigned Format, Filter and Formula panels; confirmations for Start over and layout delete; open/close animation.
