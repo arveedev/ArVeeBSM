@@ -96,7 +96,8 @@ const ageToDate = (refISO, months) => {
   const whole = Math.floor(months)
   const back = addMonthsISO(refISO, -whole)
   const days = Math.round((months - whole) * DAYS_PER_MONTH)
-  return new Date(Date.parse(`${back}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10)
+  const t = Date.parse(`${back}T00:00:00Z`)
+  return Number.isNaN(t) ? refISO : new Date(t - days * 86400000).toISOString().slice(0, 10)
 }
 
 /**

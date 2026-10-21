@@ -311,6 +311,19 @@ const fetchMillingOrderRows = async (source, type) => {
   return payload.orders
 }
 
+const AUTHORITY_PAGE = 120
+
+/** A date read from the sheet as YYYY-MM-DD, or null when it cannot be read (text such as "October 5," must never be stored as a date). */
+const normalizeSheetDate = (raw) => {
+  if (raw == null || raw === '') return null
+  const text = String(raw).trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return Number.isNaN(Date.parse(`${text.slice(0, 10)}T00:00:00Z`)) ? null : text.slice(0, 10)
+  const t = Date.parse(text)
+  if (Number.isNaN(t)) return null
+  const d = new Date(t)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const fetchAuthorityRows = async (source, type) => {
   const sheetName = type === 'AI' ? source.aiSheetName : source.siaSheetName
 
@@ -359,18 +372,26 @@ const fetchAuthorityRows = async (source, type) => {
   // on the same connection. Given six requests here cost nothing extra
   // in correctness (idempotent reads) and only add a few seconds in the
   // worst case, given six chances instead of three.
-  const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS, 6)
-  if (!attempt.ok) {
-    throw new Error(`Sheet request failed (${attempt.httpStatus})`)
+  // Pulled a page at a time. A full AI/SIA sheet (the SIA tab holds close to a thousand rows) is too big for one Apps Script
+  // response: the browser's request fails outright ("Sheet request failed (undefined)"), so a full sync could never finish and
+  // authorities entered since the last good sync never arrived. A server that does not know about pages (the old script) simply
+  // answers everything at once and carries no `hasMore`, which ends the loop after the first response.
+  const rows = []
+  for (let offset = 0; offset < 50000; offset += AUTHORITY_PAGE) {
+    url.searchParams.set('offset', String(offset))
+    url.searchParams.set('limit', String(AUTHORITY_PAGE))
+    const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS, 6)
+    if (!attempt.ok) {
+      throw new Error(`Sheet request failed (${attempt.httpStatus})`)
+    }
+    const payload = await attempt.response.json()
+    if (payload.status !== 'SUCCESS' || !Array.isArray(payload.rows)) {
+      throw new Error('Unexpected response shape from Apps Script')
+    }
+    rows.push(...payload.rows)
+    if (!payload.hasMore) break
   }
-  const response = attempt.response
-
-  const payload = await response.json()
-  if (payload.status !== 'SUCCESS' || !Array.isArray(payload.rows)) {
-    throw new Error('Unexpected response shape from Apps Script')
-  }
-
-  return payload.rows
+  return rows
 }
 
 /**
@@ -1037,6 +1058,7 @@ const runAuthoritiesSync = async () => {
     let aiCount = 0
     let siaCount = 0
 
+    let fetchError = null
     for (const source of sources) {
       // Captured before the fetch, since fetchAuthorityRows itself
       // branches on source.lastSyncedAt to decide modifiedSince vs a
@@ -1046,10 +1068,15 @@ const runAuthoritiesSync = async () => {
       const wasFullPull = !source.lastSyncedAt
       const seenAiNumbers = new Set()
       const seenSiaNumbers = new Set()
-      const [aiRows, siaRows] = await Promise.all([
+      // Settled separately: when one sheet cannot be read, the other one is still brought in, and a failed pull never advances lastSyncedAt
+      const [aiRes, siaRes] = await Promise.allSettled([
         fetchAuthorityRows(source, 'AI'),
         fetchAuthorityRows(source, 'SIA'),
       ])
+      const aiRows = aiRes.status === 'fulfilled' ? aiRes.value : []
+      const siaRows = siaRes.status === 'fulfilled' ? siaRes.value : []
+      const failedFetch = [aiRes, siaRes].find((r) => r.status === 'rejected')
+      if (failedFetch) fetchError = fetchError ?? failedFetch.reason
 
       for (const row of aiRows) {
         // Skip reserved-but-unused authority numbers - only the number
@@ -1073,9 +1100,10 @@ const runAuthoritiesSync = async () => {
         // always be allowed through so its fields (date included) can
         // still be refreshed.
         const aiDateRaw = findDateValue(row) ?? row['Date Column A']
-        const aiDate = aiDateRaw ? String(aiDateRaw).slice(0, 10) : null
+        const aiDate = normalizeSheetDate(aiDateRaw)
         if (aiDate && aiDate < source.dateFrom && !aiCache.has(aiNum)) continue
 
+        try {
         await upsertAuthority({
           type: 'AI',
           aiNumber: aiNum,
@@ -1117,6 +1145,12 @@ const runAuthoritiesSync = async () => {
         }, aiCache)
         seenAiNumbers.add(aiNum)
         aiCount += 1
+        } catch (err) {
+          // one authority that cannot be saved must never stop the ones after it
+          console.warn('[AUTHORITY-SYNC-DIAG] could not save AI', aiNum, err?.message)
+          seenAiNumbers.add(aiNum)
+          continue
+        }
         // TEMPORARY diagnostic - the fix chain (header restored, hybrid
         // header-name/position read) hasn't yet been confirmed actually
         // resolving a real date, and this whole sync path had NO success/
@@ -1151,7 +1185,7 @@ const runAuthoritiesSync = async () => {
         // must stay eligible for backfill regardless of its real date's
         // age.
         const siaDateRaw = row['DATE']
-        const siaDate = siaDateRaw ? String(siaDateRaw).slice(0, 10) : null
+        const siaDate = normalizeSheetDate(siaDateRaw)
         if (siaDate && siaDate < source.dateFrom && !siaCache.has(siaNum)) continue
 
         // Multi-row convention: this row is exactly one sack type + one
@@ -1230,6 +1264,7 @@ const runAuthoritiesSync = async () => {
 
       for (const [siaNum, group] of siaGroups) {
         const first = group[0]
+        try {
         await upsertSiaAuthority({
           siaNumber: siaNum,
           date: first.date,
@@ -1246,6 +1281,10 @@ const runAuthoritiesSync = async () => {
         }, siaCache)
         seenSiaNumbers.add(siaNum)
         siaCount += 1
+        } catch (err) {
+          console.warn('[AUTHORITY-SYNC-DIAG] could not save SIA', siaNum, err?.message)
+          seenSiaNumbers.add(siaNum)
+        }
       }
 
       // Confirmed, reported real bug: this write used to run
@@ -1302,7 +1341,7 @@ const runAuthoritiesSync = async () => {
         priorCounts &&
         (suspiciouslyLow(aiRows.length, priorCounts.ai) || suspiciouslyLow(siaRows.length, priorCounts.sia))
 
-      if (wasFullPull && (cameBackEmpty || cameBackTruncated)) {
+      if (failedFetch || (wasFullPull && (cameBackEmpty || cameBackTruncated))) {
         console.warn(
           '[AUTHORITY-SYNC-DIAG] full pull for source', source.id,
           'looks incomplete (aiRows:', aiRows.length, 'siaRows:', siaRows.length,
@@ -1329,6 +1368,7 @@ const runAuthoritiesSync = async () => {
     // visibility at all before this, unlike syncMillingOrdersFromSheets'
     // own console.log - meaning a failed sync here was completely
     // silent, indistinguishable from "hasn't run yet" in the console.
+    if (fetchError) throw fetchError // whatever could be read is already saved; this reports that part of the sheet could not be
     console.log('[AUTHORITY-SYNC-DIAG] sync succeeded - aiCount:', aiCount, 'siaCount:', siaCount)
     return { ok: true, aiCount, siaCount }
   } catch (error) {

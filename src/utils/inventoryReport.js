@@ -98,7 +98,7 @@ const put = (grid, rk, cid, kilos) => {
 // keeps the brackets it was typed in and the move shows the month after.
 const monthBasis = (opening, asOf) => {
   const month = asOf.slice(0, 7)
-  if (opening?.date) {
+  if (opening?.date && !Number.isNaN(Date.parse(`${opening.date}T00:00:00Z`))) {
     const m = opening.date.slice(0, 7)
     const next = new Date(Date.parse(`${opening.date}T00:00:00Z`) + 86400000).toISOString().slice(0, 7)
     if (next !== m && month === next) return `${m}-01`
@@ -243,7 +243,8 @@ const gridCols = (grids) => {
   return ids
 }
 
-const addDaysISO = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10)
+// A date that cannot be read is handed back unchanged instead of throwing (one bad date on one record must not stop the whole report).
+const addDaysISO = (iso, n) => { const t = Date.parse(`${iso}T00:00:00Z`); return Number.isNaN(t) ? iso : new Date(t + n * 86400000).toISOString().slice(0, 10) }
 const gridDiff = (a, b) => {
   const out = new Map()
   for (const [g, sign] of [[a, 1], [b, -1]]) for (const [rk, row] of g) for (const [id, v] of row) put(out, rk, id, sign * v)
@@ -271,7 +272,7 @@ const eventDays = (inputs) => {
   const out = new Set()
   const scan = (o) => {
     for (const v of Object.values(o)) {
-      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) { const d = v.slice(0, 10); out.add(d); out.add(addDaysISO(d, 1)) }
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) { const d = v.slice(0, 10); if (Number.isNaN(Date.parse(`${d}T00:00:00Z`))) continue; out.add(d); out.add(addDaysISO(d, 1)) }
     }
   }
   for (const list of [inputs.piles, inputs.transactions, inputs.warehouses, inputs.authorities]) for (const o of list ?? []) scan(o)

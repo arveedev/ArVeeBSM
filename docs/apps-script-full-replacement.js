@@ -282,8 +282,8 @@ function writeRowCells(sheet, rowIndex, headers, rowData, lastModIndex) {
 }
 
 /**
- * GET {webAppUrl}?action=fetchAuthorities&sheet={name}&type=AI|SIA&modifiedSince={ISO string, optional}
- * -> { status: "SUCCESS", rows: [...] }
+ * GET {webAppUrl}?action=fetchAuthorities&sheet={name}&type=AI|SIA&modifiedSince={ISO string, optional}&offset={n}&limit={n}
+ * -> { status: "SUCCESS", rows: [...], offset, limit, totalFiltered, hasMore }
  *
  * modifiedSince filters using column N (Last Modified, auto-stamped by
  * your existing onEdit trigger) - if a row has no Last Modified value
@@ -590,7 +590,14 @@ function doGet(e) {
       });
     }
 
-    return jsonResponse({ status: 'SUCCESS', rows });
+    // Paged, like fetchTransactionsBulk: a whole AI/SIA tab in one response is too big for the browser to receive reliably.
+    // offset/limit are optional; without them everything is returned at once, as before.
+    const offset = Number(e.parameter.offset || 0);
+    const limit = Number(e.parameter.limit || 100000);
+    const totalFiltered = rows.length;
+    const pageRows = rows.slice(offset, offset + limit);
+    const hasMore = offset + limit < totalFiltered;
+    return jsonResponse({ status: 'SUCCESS', rows: pageRows, offset, limit, totalFiltered, hasMore });
   } catch (error) {
     return jsonResponse({ status: 'ERROR', message: error.message });
   }

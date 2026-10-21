@@ -18712,3 +18712,8 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-21: Report Builder PDF widths, value-column naming, SDO fields on Documents (v1.10-426)
 
 - PDF columns no longer cramped; no-Columns pivots name their value column; Documents rows carry the Purchase Receipt (PR no., amount paid, payment, check, status, disbursing officer).
+
+## 2026-10-21: Missing authorities (sync failed on the big SIA tab) and daily inventory RangeError (v1.10-427)
+
+- Root cause of missing SIAs: authority sync full pull failed ('Sheet request failed (undefined)'); AI/SIA pull is now paged and the Apps Script needs a one-time redeploy.
+- Sync made resilient (per-side, per-authority); text dates no longer stored; daily inventory tolerates an unreadable date.
