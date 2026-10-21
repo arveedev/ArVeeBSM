@@ -21,9 +21,11 @@ function SystemHealthHost() {
     const onKey = (e) => {
       if (e.ctrlKey && e.altKey && !e.shiftKey && e.code === 'KeyQ') { e.preventDefault(); show() }
     }
+    const hide = () => setOpen(false) // an "Open it" button inside System health closes it before the document opens
     window.addEventListener('keydown', onKey)
     window.addEventListener(OPEN_SYSTEM_HEALTH_EVENT, show)
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(OPEN_SYSTEM_HEALTH_EVENT, show) }
+    window.addEventListener('bsm:close-system-health', hide)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(OPEN_SYSTEM_HEALTH_EVENT, show); window.removeEventListener('bsm:close-system-health', hide) }
   }, [isAdmin])
 
   if (!open || !isAdmin) return null

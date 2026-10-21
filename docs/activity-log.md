@@ -18725,3 +18725,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-21: Authority sync in System health, audit hints (v1.10-429)
 
 - Data checks gained an Authority sync line; audit findings explain what to do.
+
+## 2026-10-21: Actionable audit findings (v1.10-430)
+
+- System health lists the records behind each Sheet audit finding with Open / Send again buttons; bsm-backups status script sends the findings.

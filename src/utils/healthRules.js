@@ -159,7 +159,7 @@ export const SHEET_AUDIT_HELP = {
 const evalData = (sys, checks, now, T) => {
   const items = []
   const a = sys.sheetAudit
-  if (a) items.push({ level: a.errors > 0 ? 'red' : a.warnings > 0 ? 'amber' : 'ok', label: 'Google Sheet audit', value: `${a.errors ?? 0} errors, ${a.warnings ?? 0} warnings (${agoText(toMs(a.at), now)})`, lines: a.lines ?? [] })
+  if (a) items.push({ level: a.errors > 0 ? 'red' : a.warnings > 0 ? 'amber' : 'ok', label: 'Google Sheet audit', value: `${a.errors ?? 0} errors, ${a.warnings ?? 0} warnings (${agoText(toMs(a.at), now)})`, lines: a.lines ?? [], findings: a.findings ?? null })
   const c = checks ?? {}
   // The AI/SIA authority sync from the Google Sheet: pass or fail, and when it last worked
   const as = c.authoritySync
