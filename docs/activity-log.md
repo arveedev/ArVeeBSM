@@ -18708,3 +18708,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-21: Report Builder width, warehouse picker, subtotal columns (v1.10-425)
 
 - PDF now fits the full table width on the page; warehouse picker for staff with stricter scoping; subtotal columns; header scroll fix.
+
+## 2026-10-21: Report Builder PDF widths, value-column naming, SDO fields on Documents (v1.10-426)
+
+- PDF columns no longer cramped; no-Columns pivots name their value column; Documents rows carry the Purchase Receipt (PR no., amount paid, payment, check, status, disbursing officer).

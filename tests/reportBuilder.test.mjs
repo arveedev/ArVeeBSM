@@ -100,7 +100,7 @@ test('exports come from the same table: numbers stay numbers, csv and tsv are co
   const flat = flatten(layout, buildTable(layout, base, rows))
   assert.deepEqual(flat.body[0], ['BSI', 150])
   assert.deepEqual(flat.foot, ['Total', 230])
-  assert.equal(toCsv(flat).split('\n')[0], '"Warehouse","Total"')
+  assert.equal(toCsv(flat).split('\n')[0], '"Warehouse","Net bags (Sum)"')
   assert.equal(toTsv(flat).split('\n').at(-1), 'Total\t230')
   assert.deepEqual(filterText(L({ filters: [{ f: 'type', op: 'is', v: ['WSR'] }], search: 'x' }), buildFields(base)), ['Document is WSR', 'Search "x"'])
 })

@@ -60,9 +60,13 @@ const L = (label, kind) => ({ label, kind })
 // access: 'all' = every role that may use the Builder; 'wide' = Admin and Analyst only. scoped: rows carry __wh and a staff member's are cut.
 export const SOURCES = [
   { id: 'docs', dateField: 'date', group: 'Documents', name: 'Documents (WSR, WSI, WTS, ESR, ESI)', access: 'all', scoped: true, load: async ({ allowed }) => {
-    const [tx, lk] = await Promise.all([db.transactions.toArray(), lookups()])
+    const [tx, lk, prs] = await Promise.all([db.transactions.toArray(), lookups(), db.purchaseReceipts.toArray()])
+    // the Purchase Receipt (SDO side) that paid a WSR; a cancelled one only counts when there is no other
+    const prBy = new Map()
+    for (const p of prs) { if (!p.wsrTransactionId) continue; const c = prBy.get(p.wsrTransactionId); if (!c || (c.status === 'Cancelled' && p.status !== 'Cancelled')) prBy.set(p.wsrTransactionId, p) }
     const rows = tx.map((t) => {
       const v = lk.variety.get(t.varietyId)
+      const pr = prBy.get(t.id)
       return {
         ...scalars(t), ...lk.place(t.warehouseId),
         transactionType: lk.name(lk.type, t.transactionTypeId), cereal: v?.category ?? t.cerealCategory ?? '', variety: v?.name ?? t.varietyNameRaw ?? '',
@@ -70,14 +74,17 @@ export const SOURCES = [
         issuedVariety: lk.name(lk.variety, t.issuedVarietyId), receivedVariety: lk.name(lk.variety, t.receivedVarietyId),
         netBags: typeof t.netKilos === 'number' ? t.netKilos / NET_BAG_KG : null, createdAt: iso(t.createdAt), authorityAckAt: iso(t.authorityAckAt),
         farmerMembers: Array.isArray(t.farmerCoops) ? t.farmerCoops.length : 0, sackLinesCount: Array.isArray(t.sackLines) ? t.sackLines.length : 0,
+        prNo: pr?.prNo ?? '', prDate: pr?.date ?? '', prAmount: pr ? (pr.totalAmount ?? 0) : null, prUnitCost: pr?.unitCost ?? null, prPayment: pr?.paymentMethod ?? '', prCheckNo: pr?.checkNumber ?? '', prStatus: pr?.status ?? '', prSdo: pr ? lk.name(lk.user, pr.sdoUid) : '',
       }
     })
     return build(cut(rows, allowed), {
       date: L('Date'), serialNo: L('Serial no.'), type: L('Document'), transactionType: L('Transaction type'), status: L('Status'), warehouse: L('Warehouse'), warehouseCode: L('Warehouse code'),
       province: L('Province'), facility: L('Facility type'), pile: L('Pile'), cereal: L('Cereal'), variety: L('Variety'), customerName: L('Farmer / customer'), aiNumber: L('Authority no. (AI)'),
       siaNumber: L('Authority no. (SIA)'), moNumber: L('MO'), tmoNumber: L('TMO'), numberOfBags: L('Bags'), grossKilos: L('Gross kg'), netKilos: L('Net kg'), netBags: L('Net bags'),
-      createdByName: L('Entered by'), recordedByName: L('Recorded by'), editedBy: L('Edited by'), mts: L('MTS'), moistureContent: L('Moisture %'), ...Object.fromEntries(FK.map((k) => [k, { hide: true }])),
-    }, ['date', 'serialNo', 'type', 'transactionType', 'status', 'warehouse', 'province', 'pile', 'cereal', 'variety', 'customerName', 'aiNumber', 'moNumber', 'numberOfBags', 'netKilos', 'netBags', 'createdByName'])
+      createdByName: L('Entered by'), recordedByName: L('Recorded by'), editedBy: L('Edited by'), mts: L('MTS'), moistureContent: L('Moisture %'),
+      prNo: L('PR no.'), prDate: L('PR date'), prAmount: L('Amount paid (PHP)'), prUnitCost: L('PR unit cost'), prPayment: L('Payment method'), prCheckNo: L('Check no.'), prStatus: L('PR status'), prSdo: L('Disbursing officer'),
+      ...Object.fromEntries(FK.map((k) => [k, { hide: true }])),
+    }, ['date', 'serialNo', 'type', 'transactionType', 'status', 'warehouse', 'province', 'pile', 'cereal', 'variety', 'customerName', 'aiNumber', 'moNumber', 'numberOfBags', 'netKilos', 'netBags', 'prNo', 'prAmount', 'createdByName'])
   } },
   { id: 'docs_sacks', dateField: 'date', group: 'Documents', name: 'Sack lines (ESR and ESI, one row per sack type)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [tx, lk] = await Promise.all([db.transactions.toArray(), lookups()])

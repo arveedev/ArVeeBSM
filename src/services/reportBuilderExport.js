@@ -74,29 +74,38 @@ export async function exportPdf(t, meta, fileBase) {
 
   // The whole width of the table must fit on the paper: find the largest type size (and the smallest paper) at which every column fits.
   const gauge = make('a4')
-  gauge.setFont('Montserrat', 'bold')
-  const need = (fs) => {
-    gauge.setFontSize(fs)
+  const words = (s) => String(s ?? '').split(/\s+/).filter(Boolean)
+  // For each column: the width it would like (a heading may wrap onto two lines, a name may wrap up to 70 mm) and the least it can have
+  // (its widest number or longest word). Numbers are never squeezed below what they need.
+  const meas = (fs) => {
+    gauge.setFont('Montserrat', 'bold'); gauge.setFontSize(fs)
     const pad = 4.8
-    return Array.from({ length: ncol }, (_, ci) => {
-      let w = Math.max(gauge.getTextWidth(String(leaf[ci] ?? '')), ci < rh ? gauge.getTextWidth(String(t.hr?.[0]?.[ci] ?? '')) : 0)
-      for (const r of t.body) w = Math.max(w, gauge.getTextWidth(nf(r[ci])))
-      if (t.foot) w = Math.max(w, gauge.getTextWidth(nf(t.foot[ci])))
-      return w + pad
-    })
-  }
-  let pick = null
-  for (const [format, pw] of [['a4', 297], ['legal', 356], ['a3', 420]]) {
-    for (const fs of (format === 'a3' ? [9, 8.5, 8, 7.5, 7, 6.5, 6] : [9, 8.5, 8, 7.5, 7])) {
-      const w = need(fs)
-      if (!pick && w.reduce((a, b) => a + b, 0) <= pw - 20) pick = { format, fs, w, avail: pw - 20 }
+    const pref = []
+    const min = []
+    for (let ci = 0; ci < ncol; ci++) {
+      const head = String(leaf[ci] || (ci < rh ? t.hr?.[0]?.[ci] : '') || '')
+      const hw = gauge.getTextWidth(head)
+      const longestHead = Math.max(0, ...words(head).map((w) => gauge.getTextWidth(w)))
+      const texts = t.body.map((r) => nf(r[ci]))
+      if (t.foot) texts.push(nf(t.foot[ci]))
+      let body = 0
+      let longestBody = 0
+      for (const v of texts) { body = Math.max(body, gauge.getTextWidth(v)); for (const w of words(v)) longestBody = Math.max(longestBody, gauge.getTextWidth(w)) }
+      if (isNum(ci)) { pref.push(Math.max(body, Math.min(hw, Math.max(longestHead, hw / 2))) + pad); min.push(Math.max(body, longestHead) + pad) } else { pref.push(Math.min(Math.max(body, hw), 70) + pad); min.push(Math.max(longestBody, longestHead) + pad) }
     }
-    if (pick) break
+    return { pref, min }
   }
-  if (!pick) { const w = need(6); pick = { format: 'a3', fs: 6, w, avail: 400 } } // still wider: the columns share the width and long text wraps
-  const total = pick.w.reduce((a, b) => a + b, 0)
-  const scale = Math.min(pick.avail / total, 1.4)
-  const widths = pick.w.map((x) => x * scale)
+  const sum = (a) => a.reduce((x, y) => x + y, 0)
+  const sizes = (format) => (format === 'a3' ? [9, 8.5, 8, 7.5, 7, 6.5, 6] : [9, 8.5, 8, 7.5, 7])
+  const formats = [['a4', 297], ['legal', 356], ['a3', 420]]
+  let pick = null
+  for (const [format, pw] of formats) { for (const fs of sizes(format)) { if (pick) break; const m = meas(fs); if (sum(m.pref) <= pw - 20) pick = { format, fs, m, avail: pw - 20 } } if (pick) break }
+  if (!pick) for (const [format, pw] of formats) { for (const fs of sizes(format)) { if (pick) break; const m = meas(fs); if (sum(m.min) <= pw - 20) pick = { format, fs, m, avail: pw - 20 } } if (pick) break }
+  if (!pick) pick = { format: 'a3', fs: 6, m: meas(6), avail: 400 }
+  const sp = sum(pick.m.pref)
+  const sm = sum(pick.m.min)
+  let widths
+  if (sp <= pick.avail) { const k = Math.min(pick.avail / sp, 1.4); widths = pick.m.pref.map((x) => x * k) } else if (sm < pick.avail) { const f = (pick.avail - sm) / (sp - sm); widths = pick.m.pref.map((x, i) => pick.m.min[i] + (x - pick.m.min[i]) * f) } else { const k = pick.avail / sm; widths = pick.m.min.map((x) => x * k) }
 
   const doc = make(pick.format)
   const W = doc.internal.pageSize.getWidth()
