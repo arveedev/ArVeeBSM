@@ -18721,3 +18721,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-21: Authority sync safeguards (v1.10-428)
 
 - Adaptive page size, 12-hour forced full pull, recorded sync health, visible warning when the authority list may be stale, regression tests.
+
+## 2026-10-21: Authority sync in System health, audit hints (v1.10-429)
+
+- Data checks gained an Authority sync line; audit findings explain what to do.

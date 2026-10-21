@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { ChevronDown, RefreshCw, Pencil } from 'lucide-react'
 import { db } from '../../../db/dexie.js'
 import { getDeviceId } from '../../../utils/errorLog.js'
-import { agoText } from '../../../utils/healthRules.js'
+import { agoText, SHEET_AUDIT_HELP } from '../../../utils/healthRules.js'
 import { DEXIE_CLOUD_DB_URL } from '../../../db/dexie.js'
 import { databaseIdOf } from '../../../utils/deviceRestore.js'
 import { useSystemHealth } from '../../../hooks/useSystemHealth.js'
@@ -120,7 +120,7 @@ function Detail({ id, health }) {
       <ItemList items={c.items} />
       {c.items.find((i) => i.lines?.length) && (
         <div className="mt-1 rounded-lg bg-neutral-950 p-2 text-[11px] text-neutral-400">
-          {c.items.find((i) => i.lines?.length).lines.slice(0, 6).map((l, i) => <div key={i}>{l}</div>)}
+          {c.items.find((i) => i.lines?.length).lines.slice(0, 6).map((l, i) => { const help = SHEET_AUDIT_HELP[/\[([a-z-]+)\]/.exec(l)?.[1]]; return <div key={i} className="py-0.5">{l}{help && <div className="text-neutral-500">What to do: {help}</div>}</div> })}
         </div>
       )}
       <p className="pt-2 text-[11px] text-neutral-500">The Stock check is run on demand: Admin &gt; Data Care &gt; Inventory Lots Check.</p>

@@ -134,11 +134,42 @@ const evalDevices = (devices, now, T) => {
   return { level, summary, rows, items: behind.map((r) => ({ level: r.level, label: r.name, value: r.reasons.join('; ') })) }
 }
 
+/** What each finding of the nightly Google Sheet audit means and what to do (same wording as the restore tool). */
+export const SHEET_AUDIT_HELP = {
+  'transaction-missing-from-sheet': 'A document the app says was sent is not in the Sheet. Use Force Sync for that warehouse and month.',
+  'pr-missing-from-sheet': 'A Purchase Receipt the app says was sent is not in the Sheet. Open that PR in the app and save it again so it is re-sent.',
+  'pr-values-differ': 'A Purchase Receipt row in the Sheet has different bags, kilos or total than the app. Open the PR, check it and save it again.',
+  'stuck-unsynced': 'Records have waited days to reach the Sheet. Check Admin > Error Log and the Sheet source address.',
+  'waiting-to-sync': 'Some records are still waiting to be sent. This clears by itself when the app is open and online.',
+  'bad-source-address': 'A Sheet source address in Admin > Reports & Sheets is not a valid script address.',
+  'source-not-answering': 'A Sheet source did not answer. The Sheet script may need to be redeployed, or the address is wrong.',
+  'no-transaction-source-today': 'No Sheet source for the current month. Add one in Admin > Reports & Sheets > Sheet Sources.',
+  'no-pr-source-today': 'No PR Sheet source for the current month. Add one in Admin > Reports & Sheets > PR Sheet Sources.',
+  'no-pr-source-next-month': 'Next month has no PR Sheet source yet. Add it before the month changes.',
+  'pr-without-source': 'Purchase Receipts exist for a month that has no PR Sheet source, so they cannot be backed up.',
+  'duplicate-serial-live': 'The same document number is held twice. Use Admin > Duplicate Cleanup.',
+  'duplicate-serial-history': 'Old duplicate numbers (before the reporting start). Only matters for totals that ignore it.',
+  'incomplete-live-record': 'A record without pile, weights or details is in the live period. Complete it or delete it.',
+  'possible-double-entry': 'Two receipts share warehouse, date, bags and kilos. Check whether one was entered twice.',
+  'procurement-without-pr': 'Procurement receipts older than 3 days have no Purchase Receipt yet. The SDO still has to issue them.',
+  'remarks-formula-blank': 'The REMARKS formula is empty in some Sheet rows. New rows are filled by the script; older ones by hand.',
+  'warehouse-label-differs': 'Rows are in the Sheet under another warehouse name. Harmless for numbers; fix the label if a report needs it.',
+}
+
 const evalData = (sys, checks, now, T) => {
   const items = []
   const a = sys.sheetAudit
   if (a) items.push({ level: a.errors > 0 ? 'red' : a.warnings > 0 ? 'amber' : 'ok', label: 'Google Sheet audit', value: `${a.errors ?? 0} errors, ${a.warnings ?? 0} warnings (${agoText(toMs(a.at), now)})`, lines: a.lines ?? [] })
   const c = checks ?? {}
+  // The AI/SIA authority sync from the Google Sheet: pass or fail, and when it last worked
+  const as = c.authoritySync
+  if (as && (as.okAt || as.error)) {
+    const ok = toMs(as.okAt)
+    const quiet = ok == null || now - ok > 20 * 60 * 1000
+    if (as.error && quiet) items.push({ level: 'red', label: 'Authority sync', value: `FAILED: ${as.error} Last worked ${agoText(ok, now)}` })
+    else if (ok != null && now - ok > 3 * H) items.push({ level: 'amber', label: 'Authority sync', value: `No update for ${agoText(ok, now)}` })
+    else items.push({ level: 'ok', label: 'Authority sync', value: `Passed ${agoText(ok, now)}` })
+  }
   if (c.stockNotes != null) items.push({ level: c.stockNotes > 0 ? 'amber' : 'ok', label: 'Stock check', value: c.stockNotes > 0 ? `${c.stockNotes} notes` : 'no problems' })
   if (c.errorLogNew != null) items.push({ level: c.errorLogNew > 0 ? 'amber' : 'ok', label: 'Error log (last 24 h)', value: `${c.errorLogNew} new` })
   const level = items.length ? worst(items.map((i) => i.level)) : 'unknown'

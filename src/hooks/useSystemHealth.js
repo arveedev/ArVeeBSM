@@ -22,6 +22,15 @@ export const useSystemHealth = (enabled) => {
     null,
   )
 
-  const health = evaluateHealth({ systemStatus, devices, inAppBackupAt, checks: { errorLogNew }, now })
+  // the sync records its own result on the sheet source (see googleSheetsBridge.js); the newest report of any source counts
+  const authoritySync = useLiveQuery(async () => {
+    if (!enabled) return null
+    const sources = await db.sheetSources.toArray()
+    const withOk = sources.map((x) => x.lastAuthoritySyncOkAt).filter(Boolean).sort()
+    const err = sources.find((x) => x.authoritySyncError)
+    return { okAt: withOk.length ? withOk[withOk.length - 1] : null, error: err?.authoritySyncError ?? null }
+  }, [enabled, Math.floor(now / 60000)], null)
+
+  const health = evaluateHealth({ systemStatus, devices, inAppBackupAt, checks: { errorLogNew, authoritySync }, now })
   return { ...health, now, checkedAt: now }
 }
