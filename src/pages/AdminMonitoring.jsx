@@ -32,6 +32,7 @@ import NfaMillingMonitor from '../components/common/NfaMillingMonitor.jsx'
 import ProcurementMonitor from '../components/common/ProcurementMonitor.jsx'
 import ProcurementSackBreakdownModal from '../components/common/admin/ProcurementSackBreakdownModal.jsx'
 import SdoCashOverviewPanel from '../components/common/SdoCashOverviewPanel.jsx'
+import AuthoritySyncAlert from '../components/common/AuthoritySyncAlert.jsx'
 
 const TABS = ['AI', 'SIA', 'MILLING', 'NFA', 'PROCUREMENT']
 
@@ -196,6 +197,7 @@ function AdminMonitoring() {
 
   return (
     <div className="min-h-screen px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6">
+      <AuthoritySyncAlert />
       {/* Tabs, search, and the regional-authority selector all stick
           together as one cohesive block - keeping them in a single
           sticky container (rather than each computing its own top

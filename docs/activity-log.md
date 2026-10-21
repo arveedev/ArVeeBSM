@@ -18717,3 +18717,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 
 - Root cause of missing SIAs: authority sync full pull failed ('Sheet request failed (undefined)'); AI/SIA pull is now paged and the Apps Script needs a one-time redeploy.
 - Sync made resilient (per-side, per-authority); text dates no longer stored; daily inventory tolerates an unreadable date.
+
+## 2026-10-21: Authority sync safeguards (v1.10-428)
+
+- Adaptive page size, 12-hour forced full pull, recorded sync health, visible warning when the authority list may be stale, regression tests.

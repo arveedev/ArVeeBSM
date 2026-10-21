@@ -376,13 +376,16 @@ const fetchAuthorityRows = async (source, type) => {
   // response: the browser's request fails outright ("Sheet request failed (undefined)"), so a full sync could never finish and
   // authorities entered since the last good sync never arrived. A server that does not know about pages (the old script) simply
   // answers everything at once and carries no `hasMore`, which ends the loop after the first response.
+  // The page shrinks (120, 60, 30, 20 rows) whenever one will not come through, so a sheet that grows never gets stuck again.
   const rows = []
-  for (let offset = 0; offset < 50000; offset += AUTHORITY_PAGE) {
+  let size = AUTHORITY_PAGE
+  for (let offset = 0; offset < 50000;) {
     url.searchParams.set('offset', String(offset))
-    url.searchParams.set('limit', String(AUTHORITY_PAGE))
-    const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS, 6)
+    url.searchParams.set('limit', String(size))
+    const attempt = await fetchWithRetry(url.toString(), BULK_FETCH_TIMEOUT_MS, size > 20 ? 3 : 6)
     if (!attempt.ok) {
-      throw new Error(`Sheet request failed (${attempt.httpStatus})`)
+      if (size > 20) { size = Math.max(20, Math.floor(size / 2)); continue }
+      throw new Error(`Sheet request failed (${attempt.httpStatus ?? 'no answer'})`)
     }
     const payload = await attempt.response.json()
     if (payload.status !== 'SUCCESS' || !Array.isArray(payload.rows)) {
@@ -390,6 +393,7 @@ const fetchAuthorityRows = async (source, type) => {
     }
     rows.push(...payload.rows)
     if (!payload.hasMore) break
+    offset += size
   }
   return rows
 }
@@ -1065,13 +1069,18 @@ const runAuthoritiesSync = async () => {
       // full pull - this is the same signal, just read early so the
       // lastSyncedAt write below can tell a full pull apart from a
       // routine delta tick.
-      const wasFullPull = !source.lastSyncedAt
+      // A full pull is also forced every 12 hours: the routine pull only asks for rows changed since the last one, so anything it ever
+      // missed (a failed save, a row that was never stamped) is caught by the next full pull instead of staying missing for good.
+      const FULL_EVERY_MS = 12 * 3600 * 1000
+      const wasFullPull = !source.lastSyncedAt || !source.lastFullPullAt || Date.now() - Date.parse(source.lastFullPullAt) > FULL_EVERY_MS
+      const pullSource = wasFullPull ? { ...source, lastSyncedAt: null } : source
+      const failedNumbers = []
       const seenAiNumbers = new Set()
       const seenSiaNumbers = new Set()
       // Settled separately: when one sheet cannot be read, the other one is still brought in, and a failed pull never advances lastSyncedAt
       const [aiRes, siaRes] = await Promise.allSettled([
-        fetchAuthorityRows(source, 'AI'),
-        fetchAuthorityRows(source, 'SIA'),
+        fetchAuthorityRows(pullSource, 'AI'),
+        fetchAuthorityRows(pullSource, 'SIA'),
       ])
       const aiRows = aiRes.status === 'fulfilled' ? aiRes.value : []
       const siaRows = siaRes.status === 'fulfilled' ? siaRes.value : []
@@ -1148,6 +1157,7 @@ const runAuthoritiesSync = async () => {
         } catch (err) {
           // one authority that cannot be saved must never stop the ones after it
           console.warn('[AUTHORITY-SYNC-DIAG] could not save AI', aiNum, err?.message)
+          failedNumbers.push(`AI ${aiNum}`)
           seenAiNumbers.add(aiNum)
           continue
         }
@@ -1283,6 +1293,7 @@ const runAuthoritiesSync = async () => {
         siaCount += 1
         } catch (err) {
           console.warn('[AUTHORITY-SYNC-DIAG] could not save SIA', siaNum, err?.message)
+          failedNumbers.push(`SIA ${siaNum}`)
           seenSiaNumbers.add(siaNum)
         }
       }
@@ -1341,6 +1352,12 @@ const runAuthoritiesSync = async () => {
         priorCounts &&
         (suspiciouslyLow(aiRows.length, priorCounts.ai) || suspiciouslyLow(siaRows.length, priorCounts.sia))
 
+      const problems = []
+      if (failedFetch) problems.push(`Part of the Google Sheet could not be read (${failedFetch.reason?.message ?? 'no answer'}).`)
+      else if (wasFullPull && (cameBackEmpty || cameBackTruncated)) problems.push('The Google Sheet answered with far fewer rows than before.')
+      if (failedNumbers.length) problems.push(`Could not save: ${failedNumbers.slice(0, 8).join(', ')}${failedNumbers.length > 8 ? ` and ${failedNumbers.length - 8} more` : ''}.`)
+      const nowIso = new Date().toISOString()
+      const statusPatch = problems.length ? { authoritySyncError: problems.join(' '), authoritySyncErrorAt: nowIso } : { authoritySyncError: null, lastAuthoritySyncOkAt: nowIso }
       if (failedFetch || (wasFullPull && (cameBackEmpty || cameBackTruncated))) {
         console.warn(
           '[AUTHORITY-SYNC-DIAG] full pull for source', source.id,
@@ -1348,14 +1365,16 @@ const runAuthoritiesSync = async () => {
           cameBackTruncated ? ', below prior baseline ' + JSON.stringify(priorCounts) : '',
           ') - leaving lastSyncedAt unset so the next tick retries',
         )
+        if (source.authoritySyncError !== statusPatch.authoritySyncError) await db.sheetSources.update(source.id, statusPatch)
       } else {
-        const update = { lastSyncedAt: new Date().toISOString() }
+        const update = { lastSyncedAt: new Date().toISOString(), ...statusPatch }
         // Only a full pull's row counts are trustworthy as a future
         // baseline - a delta pull's low/zero count is normal and would
         // wrongly ratchet the baseline down to whatever a routine quiet
         // period happened to return.
         if (wasFullPull) {
           update.lastFullPullRowCounts = { ai: aiRows.length, sia: siaRows.length }
+          update.lastFullPullAt = new Date().toISOString()
           // Only a complete, non-suspicious full pull is trustworthy
           // enough to conclude an authority has left the Sheet.
           await markMissingAuthorities(source.id, seenAiNumbers, seenSiaNumbers)
@@ -1373,6 +1392,9 @@ const runAuthoritiesSync = async () => {
     return { ok: true, aiCount, siaCount }
   } catch (error) {
     console.error('[AUTHORITY-SYNC-DIAG] sync FAILED:', error.message)
+    try {
+      await db.sheetSources.toCollection().modify((src) => { if (src.authoritySyncError !== error.message) { src.authoritySyncError = error.message; src.authoritySyncErrorAt = new Date().toISOString() } })
+    } catch { /* recording the failure must never throw */ }
     return { ok: false, reason: 'request_failed', error: error.message }
   } finally {
     syncInProgress = false
