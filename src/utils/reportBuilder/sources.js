@@ -108,13 +108,15 @@ export const SOURCES = [
     for (const a of au) for (const s of Array.isArray(a.sackLines) ? a.sackLines : []) rows.push({ date: a.date ?? '', siaNumber: a.siaNumber ?? '', customer: a.customerName ?? '', status: a.status ?? '', ...lk.place(a.assignedWarehouse), sackType: lk.name(lk.sack, s.sackTypeId, 'code') || s.sackTypeCode || '', condition: s.condition ?? '', authorizedPieces: s.pieces ?? s.allocation ?? 0, issuedPieces: s.issued ?? 0 })
     return build(cut(rows, allowed), { siaNumber: L('SIA no.') }, ['date', 'siaNumber', 'customer', 'warehouse', 'sackType', 'condition', 'authorizedPieces', 'issuedPieces', 'status'])
   } },
-  { id: 'mo', dateField: 'dateOfMilling', group: 'Authorities and milling', name: 'Milling orders (MO and TMO)', access: 'all', load: async () => {
-    const [mo, done] = await Promise.all([db.millingOrders.toArray(), db.millingOrderCompletions.toArray()])
+  { id: 'mo', dateField: 'dateOfMilling', group: 'Authorities and milling', name: 'Milling orders (MO and TMO)', access: 'all', scoped: true, load: async ({ allowed }) => {
+    const [mo, done, lk] = await Promise.all([db.millingOrders.toArray(), db.millingOrderCompletions.toArray(), lookups()])
     const doneBy = new Map(done.map((d) => [d.orderId, d]))
-    const rows = mo.map((o) => ({ ...scalars(o), completedInApp: doneBy.get(o.orderId)?.completed ? 'Yes' : 'No', completedAt: iso(doneBy.get(o.orderId)?.updatedAt) }))
+    const nm = (x) => String(x ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    const mine = allowed ? new Set([...allowed].map((id) => nm(lk.name(lk.wh, id)))) : null
+    const rows = mo.filter((o) => !mine || mine.has(nm(o.receivingWarehouse))).map((o) => ({ ...scalars(o), completedInApp: doneBy.get(o.orderId)?.completed ? 'Yes' : 'No', completedAt: iso(doneBy.get(o.orderId)?.updatedAt) }))
     return build(rows, { type: L('Type'), number: L('Control no.'), ricemillName: L('Ricemill'), recoveryPercent: L('GMR %'), receivingWarehouse: L('Receiving warehouse'), dateOfMilling: L('Date of milling'), aiNumber: L('AI no.'), siaNumber: L('SIA no.'), orderId: { hide: true } }, ['type', 'number', 'ricemillName', 'recoveryPercent', 'receivingWarehouse', 'aiNumber', 'dateOfMilling', 'batchRaw', 'sheetStatus', 'completedInApp'])
   } },
-  { id: 'ricemill', group: 'Authorities and milling', name: 'Ricemill allocations (NFA-owned and private)', access: 'all', load: async () => {
+  { id: 'ricemill', group: 'Authorities and milling', name: 'Ricemill allocations (NFA-owned and private)', access: 'wide', load: async () => {
     const [a, b, c] = await Promise.all([db.ricemillAllocations.toArray(), db.privateMillerAllocations.toArray(), db.privateMillerShares.toArray()])
     const rows = [
       ...a.map((r) => ({ kind: 'NFA-owned ricemill', ricemill: '', ...scalars(r) })),
@@ -245,9 +247,9 @@ export const SOURCES = [
     const rows = c.map((x) => ({ ...scalars(x), isFarmerOrg: x.isFarmerOrg ? 'Yes' : 'No', members: Array.isArray(x.farmerCoopMembers) ? x.farmerCoopMembers.length : 0 }))
     return build(rows, { name: L('Name'), rsbsa: L('RSBSA'), gender: L('Gender'), address: L('Address'), isFarmerOrg: L('Farmers organization'), members: L('Members'), normalizedName: { hide: true }, ...Object.fromEntries(FK.map((k) => [k, { hide: true }])) }, ['name', 'rsbsa', 'gender', 'address', 'isFarmerOrg', 'members'])
   } },
-  { id: 'warehouses', group: 'Directories', name: 'Warehouses and facilities', access: 'all', load: async () => {
+  { id: 'warehouses', group: 'Directories', name: 'Warehouses and facilities', access: 'all', scoped: true, load: async ({ allowed }) => {
     const lk = await lookups()
-    const rows = lk.warehouses.map((w) => ({ ...scalars(w), province: lk.name(lk.prov, w.provinceId), branch: lk.name(lk.branch, lk.prov.get(w.provinceId)?.branchId) }))
+    const rows = lk.warehouses.filter((w) => !allowed || allowed.has(w.id)).map((w) => ({ ...scalars(w), province: lk.name(lk.prov, w.provinceId), branch: lk.name(lk.branch, lk.prov.get(w.provinceId)?.branchId) }))
     return build(rows, { code: L('Code'), name: L('Name'), facilityType: L('Facility type'), classifierName: L('Classifier'), ...Object.fromEntries(FK.map((k) => [k, { hide: true }])) }, ['code', 'name', 'facilityType', 'province', 'branch', 'address'])
   } },
   { id: 'varieties', group: 'Directories', name: 'Varieties, sack types and transaction types', access: 'all', load: async () => {
@@ -290,9 +292,12 @@ export async function loadSource(id, { user, params = {}, period } = {}) {
   const src = sourceById(id)
   if (!src) throw new Error(`Unknown source ${id}`)
   if (!canUseSource(src, user?.role)) throw new Error('This data is not available to your role.')
-  const allowed = isWideRole(user?.role) ? null : new Set(user?.assignedWarehouses ?? [])
+  let allowed = isWideRole(user?.role) ? null : new Set(user?.assignedWarehouses ?? [])
+  // the warehouse picker: narrow to the chosen warehouses, never beyond what the person is allowed
+  if (Array.isArray(params.warehouseIds) && params.warehouseIds.length) allowed = new Set(allowed ? params.warehouseIds.filter((id) => allowed.has(id)) : params.warehouseIds)
   const per = clampPeriod(period)
-  const out = await src.load({ allowed, params: { ...params, asOf: per.to, from: per.from, to: per.to } })
+  const { warehouseIds: _wh, ...rest } = params
+  const out = await src.load({ allowed, params: { ...rest, asOf: per.to, from: per.from, to: per.to } })
   const rows = src.dateField ? applyPeriod(out.rows, src.dateField, per) : out.rows
   return { ...out, rows, source: src, dated: !!src.dateField || !!src.computed, period: per }
 }

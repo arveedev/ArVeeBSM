@@ -18704,3 +18704,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 - Table-first layout, builder side column with smooth hide/show, reactive fields and formulas, drag between boxes, Total column/row options.
 - Exports: Excel and PDF only, user-typed title as file name, Montserrat in the PDF, custom header names and color, subtotal and total styling.
 - Redesigned Format, Filter and Formula panels; confirmations for Start over and layout delete; open/close animation.
+
+## 2026-10-21: Report Builder width, warehouse picker, subtotal columns (v1.10-425)
+
+- PDF now fits the full table width on the page; warehouse picker for staff with stricter scoping; subtotal columns; header scroll fix.

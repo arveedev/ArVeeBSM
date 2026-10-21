@@ -18,6 +18,8 @@ import { blankLayout, buildTable, flatten, filterText, selectRows, sanitizeLayou
 import { loadSource, sourcesFor, sourceById, defaultParams, isWideRole } from '../../../utils/reportBuilder/sources.js'
 import { listLayouts, saveLayout, deleteLayout, logReportEvent } from '../../../services/reportLayouts.js'
 import { exportXlsx, exportPdf } from '../../../services/reportBuilderExport.js'
+import { db } from '../../../db/dexie.js'
+import { isStaffRole } from '../../../utils/roles.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
 import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, ColumnsPanel, FormatPanel, ResultTable, btnGhost, pill, pillOn, input } from './rbParts.jsx'
 
@@ -87,6 +89,10 @@ function ReportBuilderModal({ user, onClose, open = true }) {
   const role = user?.role
   const sources = useMemo(() => sourcesFor(role), [role])
   const [sourceId, setSourceId] = useState('docs')
+  // a warehouse staff member picks all of their warehouses or just one; the data layer also cuts to their own (this is only the picker)
+  const [whNames, setWhNames] = useState([])
+  const [whSel, setWhSel] = useState('')
+  const isStaff = isStaffRole(user?.role)
   const src = sourceById(sourceId)
   const [params, setParams] = useState(() => defaultParams(sourceById('docs')))
   const [period, setPeriodRaw] = useState(() => clampPeriod({ from: REPORT_FLOOR, to: todayISO() }))
@@ -133,7 +139,7 @@ function ReportBuilderModal({ user, onClose, open = true }) {
   useEffect(() => {
     let live = true
     setLoading(true); setError('')
-    loadSource(sourceId, { user, params, period })
+    loadSource(sourceId, { user, params: whSel ? { ...params, warehouseIds: [whSel] } : params, period })
       .then((d) => {
         if (!live) return
         setData(d)
@@ -153,8 +159,13 @@ function ReportBuilderModal({ user, onClose, open = true }) {
       .finally(() => { if (live) setLoading(false) })
     return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceId, paramKey, periodKey, user?.uid])
+  }, [sourceId, paramKey, periodKey, whSel, user?.uid])
 
+  useEffect(() => {
+    if (!isStaff) return
+    const mine = new Set(user?.assignedWarehouses ?? [])
+    db.warehouses.toArray().then((all) => setWhNames(all.filter((w) => mine.has(w.id)).map((w) => ({ id: w.id, name: w.name })).sort((x, y) => String(x.name).localeCompare(String(y.name))))).catch(() => setWhNames([]))
+  }, [isStaff, user?.assignedWarehouses])
   const refreshLayouts = useCallback(() => listLayouts(user).then(setLayouts).catch(() => setLayouts([])), [user])
   useEffect(() => { refreshLayouts() }, [refreshLayouts])
 
@@ -330,6 +341,14 @@ function ReportBuilderModal({ user, onClose, open = true }) {
                 <select id="rb-source" value={sourceId} onChange={(e) => chooseSource(e.target.value)} className={`${input} min-w-0 flex-1`}>
                   {grouped.map(([g, list]) => <optgroup key={g} label={g}>{list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>)}
                 </select>
+                {isStaff && whNames.length > 0 && (
+                  <label className="flex items-center gap-1.5 text-xs text-neutral-400">Warehouse
+                    <select value={whSel} onChange={(e) => setWhSel(e.target.value)} className={input}>
+                      <option value="">{whNames.length > 1 ? 'All my warehouses' : whNames[0].name}</option>
+                      {whNames.length > 1 && whNames.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                  </label>
+                )}
                 {(src?.params ?? []).map((p) => (
                   <label key={p.id} className="flex items-center gap-1.5 text-xs text-neutral-400">{p.label}
                     {p.type === 'select'

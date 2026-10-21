@@ -268,7 +268,9 @@ export function FormatPanel({ layout, onChange, names = [], onDone }) {
         <Section title="Totals">
           <Toggle label="Total column (at the right)" checked={layout.totCol !== false} onChange={(v) => set({ totCol: v })} />
           <Toggle label="Total row (at the bottom)" checked={layout.totRow !== false} onChange={(v) => set({ totRow: v })} />
-          <Toggle label="Subtotals for each group" checked={!!layout.subt} onChange={(v) => set({ subt: v })} />
+          <Toggle label="Subtotal rows (one for each group of the first field in Rows)" checked={!!layout.subt} onChange={(v) => set({ subt: v })} />
+          <Toggle label="Subtotal columns (one for each group of the first field in Columns)" checked={!!layout.subtCol} onChange={(v) => set({ subtCol: v })} />
+          <p className="pt-1 text-[11px] text-neutral-500">Subtotals need two or more fields in Rows (for rows) or in Columns (for columns).</p>
         </Section>
         <Section title="Numbers">
           <label className="flex items-center justify-between gap-3 py-1 text-sm text-neutral-200">Show as
@@ -328,25 +330,26 @@ export function ResultTable({ table, layout, onSort, onCell }) {
     const st = /\bst\b/.test(k)
     const rh = /\brh\b/.test(k)
     const tc = /\btc\b/.test(k)
-    const bg = st ? (rh ? 'bg-emerald-950' : 'bg-emerald-950/80') : rh ? 'bg-neutral-950' : tc ? 'bg-emerald-950/40' : ''
+    const sc = /\bsc\b/.test(k)
+    const bg = st ? (rh ? 'bg-emerald-950' : 'bg-emerald-950/80') : rh ? 'bg-neutral-950' : sc ? 'bg-emerald-950/60' : tc ? 'bg-emerald-950/40' : ''
     return (
       <td
         key={key} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id && /\bcl\b/.test(k) ? () => onCell(c.id) : undefined}
         style={c.heat ? { background: `rgba(0,255,163,${c.heat.toFixed(2)})` } : undefined}
-        className={cls(c, `whitespace-nowrap border-b px-4 py-2 tabular-nums ${st ? 'border-y border-brand-neon/40 font-extrabold text-brand-neon' : 'border-neutral-900'} ${bg} ${/\bl\b/.test(k) ? 'text-left' : 'text-right'} ${rh ? `${/\brf\b/.test(k) ? 'sticky left-0 z-[1]' : ''} ${st ? '' : 'font-semibold text-app-text'}` : st ? '' : 'text-neutral-200'} ${/\bsb\b/.test(k) ? 'text-transparent' : ''} ${tc && !st ? 'font-bold' : ''} ${/\bcl\b/.test(k) ? 'cursor-pointer hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-brand-neon' : ''}`)}
+        className={cls(c, `whitespace-nowrap border-b px-4 py-2 tabular-nums ${st ? 'border-y border-brand-neon/40 font-extrabold text-brand-neon' : 'border-neutral-900'} ${bg} ${/\bl\b/.test(k) ? 'text-left' : 'text-right'} ${rh ? `${/\brf\b/.test(k) ? 'sticky left-0 z-[1]' : ''} ${st ? '' : 'font-semibold text-app-text'}` : st ? '' : 'text-neutral-200'} ${/\bsb\b/.test(k) ? 'text-transparent' : ''} ${(tc || sc) && !st ? 'font-bold' : ''} ${sc && !st ? 'text-emerald-200' : ''} ${/\bcl\b/.test(k) ? 'cursor-pointer hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-brand-neon' : ''}`)}
       >{c.t}</td>
     )
   }
   return (
     <table className="w-full border-separate border-spacing-0 text-[15px]">
-      <thead>
+      <thead className="sticky top-0 z-[2]">
         {head.map((r, ri) => (
           <tr key={ri}>
             {r.map((c, i) => (
               <th
                 key={i} colSpan={c.span > 1 ? c.span : undefined} rowSpan={c.rs > 1 ? c.rs : undefined} onClick={c.id ? () => onSort(c.id) : undefined}
-                style={/\btc\b/.test(c.cls || '') ? undefined : { background: headBg, color: inkOn(headBg) }}
-                className={`sticky top-0 z-[2] whitespace-nowrap border-b border-neutral-800 px-4 py-2 text-[13px] font-bold ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'} ${/\brf\b/.test(c.cls || '') ? 'left-0 z-[3]' : ''} ${/\btc\b/.test(c.cls || '') ? 'bg-emerald-950 text-emerald-100' : ''} ${c.id ? 'cursor-pointer hover:text-brand-neon' : ''}`}
+                style={/\b(tc|sc)\b/.test(c.cls || '') ? undefined : { background: headBg, color: inkOn(headBg) }}
+                className={`whitespace-nowrap border-b border-neutral-800 px-4 py-2 text-[13px] font-bold ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'} ${/\brf\b/.test(c.cls || '') ? 'sticky left-0 z-[3]' : ''} ${/\btc\b/.test(c.cls || '') ? 'bg-emerald-950 text-emerald-100' : ''} ${/\bsc\b/.test(c.cls || '') ? 'bg-emerald-900 text-emerald-100' : ''} ${c.id ? 'cursor-pointer hover:text-brand-neon' : ''}`}
               >{c.t}{c.id && c.id !== '__tot' ? sortMark(c.id) : null}</th>
             ))}
           </tr>

@@ -57,13 +57,48 @@ export async function exportPdf(t, meta, fileBase) {
   const [pdfMod, tableMod, fonts] = await Promise.all([import('jspdf'), import('jspdf-autotable'), import('./pdfFonts.js')])
   const jsPDF = pdfMod.jsPDF ?? pdfMod.default?.jsPDF ?? pdfMod.default
   const autoTable = typeof tableMod.default === 'function' ? tableMod.default : tableMod.default?.default ?? tableMod.autoTable
-  const ncol = lastHead(t).length
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: ncol > 18 ? 'legal' : 'a4' })
   // the same font as the table on screen (Montserrat, the Stock Desk table font)
-  doc.addFileToVFS('Montserrat-Regular.ttf', fonts.MONTSERRAT_REGULAR)
-  doc.addFont('Montserrat-Regular.ttf', 'Montserrat', 'normal')
-  doc.addFileToVFS('Montserrat-Bold.ttf', fonts.MONTSERRAT_BOLD)
-  doc.addFont('Montserrat-Bold.ttf', 'Montserrat', 'bold')
+  const make = (format) => {
+    const d = new jsPDF({ orientation: 'landscape', unit: 'mm', format })
+    d.addFileToVFS('Montserrat-Regular.ttf', fonts.MONTSERRAT_REGULAR)
+    d.addFont('Montserrat-Regular.ttf', 'Montserrat', 'normal')
+    d.addFileToVFS('Montserrat-Bold.ttf', fonts.MONTSERRAT_BOLD)
+    d.addFont('Montserrat-Bold.ttf', 'Montserrat', 'bold')
+    return d
+  }
+  const nf = (x) => (typeof x === 'number' ? (x === 0 ? '' : x.toLocaleString('en-US', { maximumFractionDigits: 2 })) : x ?? '')
+  const leaf = lastHead(t)
+  const ncol = leaf.length
+  const rh = t.rhCols ?? 0
+  const isNum = (ci) => (t.kinds ? t.kinds[ci] === 'num' : ci >= rh)
+
+  // The whole width of the table must fit on the paper: find the largest type size (and the smallest paper) at which every column fits.
+  const gauge = make('a4')
+  gauge.setFont('Montserrat', 'bold')
+  const need = (fs) => {
+    gauge.setFontSize(fs)
+    const pad = 4.8
+    return Array.from({ length: ncol }, (_, ci) => {
+      let w = Math.max(gauge.getTextWidth(String(leaf[ci] ?? '')), ci < rh ? gauge.getTextWidth(String(t.hr?.[0]?.[ci] ?? '')) : 0)
+      for (const r of t.body) w = Math.max(w, gauge.getTextWidth(nf(r[ci])))
+      if (t.foot) w = Math.max(w, gauge.getTextWidth(nf(t.foot[ci])))
+      return w + pad
+    })
+  }
+  let pick = null
+  for (const [format, pw] of [['a4', 297], ['legal', 356], ['a3', 420]]) {
+    for (const fs of (format === 'a3' ? [9, 8.5, 8, 7.5, 7, 6.5, 6] : [9, 8.5, 8, 7.5, 7])) {
+      const w = need(fs)
+      if (!pick && w.reduce((a, b) => a + b, 0) <= pw - 20) pick = { format, fs, w, avail: pw - 20 }
+    }
+    if (pick) break
+  }
+  if (!pick) { const w = need(6); pick = { format: 'a3', fs: 6, w, avail: 400 } } // still wider: the columns share the width and long text wraps
+  const total = pick.w.reduce((a, b) => a + b, 0)
+  const scale = Math.min(pick.avail / total, 1.4)
+  const widths = pick.w.map((x) => x * scale)
+
+  const doc = make(pick.format)
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
   const HEAD = hexRgb(meta.headBg) ?? [30, 41, 59]
@@ -72,9 +107,6 @@ export async function exportPdf(t, meta, fileBase) {
   // the only thing above the table: the title the person typed
   doc.setFont('Montserrat', 'bold'); doc.setFontSize(15); doc.setTextColor(17, 24, 39)
   doc.text(meta.title, 10, 13, { maxWidth: W - 20 })
-  const nf = (x) => (typeof x === 'number' ? (x === 0 ? '' : x.toLocaleString('en-US', { maximumFractionDigits: 2 })) : x ?? '')
-  const rh = t.rhCols ?? 0
-  const isNum = (ci) => (t.kinds ? t.kinds[ci] === 'num' : ci >= rh)
   const head = t.hdr
     ? t.hdr.map((row) => row.map((c) => ({ content: c.content, colSpan: c.colSpan, rowSpan: c.rowSpan, styles: { halign: c.left ? 'left' : 'center', valign: 'middle', fillColor: c.tc ? GREEN : HEAD, textColor: c.tc ? 255 : HEAD_INK, fontStyle: 'bold' } })))
     : [t.head.map((h, ci) => ({ content: h, styles: { halign: isNum(ci) ? 'right' : 'left', fillColor: HEAD, textColor: HEAD_INK, fontStyle: 'bold' } }))]
@@ -83,10 +115,13 @@ export async function exportPdf(t, meta, fileBase) {
     const cells = []
     r.forEach((v, ci) => {
       if (sub && rh > 1 && ci > 0 && ci < rh) return // the "Subtotal" label spans the row-name columns
-      const tc = /\btc\b/.test(t.colCls?.[ci] || '')
+      const kind = t.colCls?.[ci] || ''
+      const tc = /\btc\b/.test(kind)
+      const sc = /\bsc\b/.test(kind)
       const lead = ci < rh
-      const styles = { halign: isNum(ci) ? 'right' : 'left', fontStyle: sub || tc || lead ? 'bold' : 'normal' }
+      const styles = { halign: isNum(ci) ? 'right' : 'left', fontStyle: sub || tc || sc || lead ? 'bold' : 'normal' }
       if (sub) { styles.fillColor = [205, 236, 220]; styles.textColor = [6, 78, 59]; styles.lineColor = [16, 150, 110]; styles.lineWidth = 0.35 } else if (tc) styles.fillColor = [222, 242, 232]
+      else if (sc) { styles.fillColor = [232, 245, 238]; styles.textColor = [6, 78, 59] }
       const cell = { content: sub && ci === 0 ? 'Subtotal' : nf(v), styles }
       if (sub && ci === 0) { styles.halign = 'right'; if (rh > 1) cell.colSpan = rh }
       cells.push(cell)
@@ -95,8 +130,9 @@ export async function exportPdf(t, meta, fileBase) {
   })
   const foot = t.foot ? [t.foot.map((v, ci) => ({ content: nf(v), styles: { halign: isNum(ci) ? 'right' : 'left', fillColor: GREEN, textColor: 255, fontStyle: 'bold' } }))] : undefined
   autoTable(doc, {
-    startY: 19, head, body, foot, theme: 'grid', showFoot: 'lastPage', showHead: 'everyPage', horizontalPageBreak: true, horizontalPageBreakRepeat: rh ? Array.from({ length: rh }, (_, i) => i) : undefined,
-    styles: { font: 'Montserrat', fontSize: ncol > 10 ? 7.8 : 9, cellPadding: { top: 1.9, bottom: 1.9, left: 2.2, right: 2.2 }, lineColor: [214, 219, 226], lineWidth: 0.15, textColor: [31, 41, 55], valign: 'middle' },
+    startY: 19, head, body, foot, theme: 'grid', showFoot: 'lastPage', showHead: 'everyPage', tableWidth: widths.reduce((a, b) => a + b, 0),
+    columnStyles: Object.fromEntries(widths.map((w, i) => [i, { cellWidth: w }])),
+    styles: { font: 'Montserrat', fontSize: pick.fs, cellPadding: { top: 1.9, bottom: 1.9, left: 2.4, right: 2.4 }, lineColor: [214, 219, 226], lineWidth: 0.15, textColor: [31, 41, 55], valign: 'middle', overflow: 'linebreak' },
     alternateRowStyles: { fillColor: [249, 250, 252] }, margin: { left: 10, right: 10, bottom: 12 },
   })
   const n = doc.getNumberOfPages()

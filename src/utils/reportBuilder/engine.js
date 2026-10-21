@@ -214,9 +214,18 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
   const totCol = layout.totCol !== false // a Total column at the right (when there are columns)
   const totRow = layout.totRow !== false // a Total row at the bottom
   const multi = vals.length > 1
-  const sameKey = (k) => (r) => key(r, scols).join('\u0001') === k
+  // Subtotal columns: with two or more fields in Columns, each group of the first field gets a subtotal column after its columns.
+  const subCol = !!layout.subtCol && scols.length > 1
+  const ents = []
+  cols.forEach(([k, p], i) => {
+    ents.push({ k, p, sub: false })
+    if (subCol && (i === cols.length - 1 || cols[i + 1][1][0] !== p[0])) ents.push({ k: `\u0002${p[0]}`, p: [p[0]], sub: true, g: p[0] })
+  })
+  const sameKey = (e) => (e.sub ? (r) => key(r, scols)[0] === e.g : (r) => key(r, scols).join('\u0001') === e.k)
+  const recsOf = (row, e) => (e.sub ? [...row.cells.entries()].filter(([kk]) => kk.split('\u0001')[0] === e.g).flatMap(([, v]) => v) : (row.cells.get(e.k) || []))
+  const colName = (e) => (e.sub ? `${e.p[0] || '(blank)'} subtotal` : e.p.map((x) => x || '(blank)').join(' / '))
   const gt = vals.map((v) => aggregate(rs, v, fields))
-  const colTot = cols.map(([k]) => vals.map((v) => aggregate(rs.filter(sameKey(k)), v, fields)))
+  const colTot = ents.map((e) => vals.map((v) => aggregate(rs.filter(sameKey(e)), v, fields)))
   const pctOk = (v) => v.a === 'sum' || v.a === 'count'
   const show = (x, v, d) => (layout.pct !== 'none' && pctOk(v) && x != null && d ? `${((x / d) * 100).toFixed(1)}%` : fmtNumber(x, v.a))
 
@@ -226,15 +235,15 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
   const h1 = srows.length
     ? srows.map((id, i) => ({ t: nameOf(layout, fields.map[id]), cls: i === 0 ? 'l rh rf' : 'l rh', span: 1, rs: multi ? 2 : 1 }))
     : [{ t: 'All records', cls: 'l rh rf', span: 1, rs: multi ? 2 : 1 }]
-  for (const [, p] of cols) h1.push({ t: hasC ? p.map((x) => x || '(blank)').join(' / ') : (solo || 'Total'), span: vals.length })
+  for (const e of ents) h1.push({ t: hasC ? colName(e) : (solo || 'Total'), span: vals.length, cls: e.sub ? 'sc' : '' })
   if (hasC && totCol) h1.push({ t: 'Total', span: vals.length, cls: 'tc', id: '__tot' })
   out.head = [h1]
-  if (multi) out.head.push(cols.concat(hasC && totCol ? [[]] : []).flatMap((c, i) => vals.map((v) => ({ t: valName(v), cls: hasC && i === cols.length ? 'tc' : '' }))))
+  if (multi) out.head.push(ents.concat(hasC && totCol ? [{ total: true }] : []).flatMap((e) => vals.map((v) => ({ t: valName(v), cls: e.total ? 'tc' : e.sub ? 'sc' : '' }))))
 
   let max = 0
-  const grid = prow.map((r) => cols.map(([k]) => vals.map((v) => {
-    const x = aggregate(r.cells.get(k) || [], v, fields)
-    if (x != null && pctOk(v)) max = Math.max(max, Math.abs(x))
+  const grid = prow.map((r) => ents.map((e) => vals.map((v) => {
+    const x = aggregate(recsOf(r, e), v, fields)
+    if (x != null && pctOk(v) && !e.sub) max = Math.max(max, Math.abs(x))
     return x
   })))
 
@@ -242,7 +251,7 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
   const flushSub = () => {
     if (layout.subt && srows.length > 1 && group.length) {
       const all = group.flatMap((r) => r.all)
-      const cs = cols.flatMap(([k]) => vals.map((v) => { const x = aggregate(all.filter(sameKey(k)), v, fields); return { t: show(x, v, 0), v: x, cls: 'st' } }))
+      const cs = ents.flatMap((e) => vals.map((v) => { const x = aggregate(all.filter(sameKey(e)), v, fields); return { t: show(x, v, 0), v: x, cls: 'st' } }))
       const tot = hasC && totCol ? vals.map((v) => { const x = aggregate(all, v, fields); return { t: fmtNumber(x, v.a), v: x, cls: 'tc st' } }) : []
       out.body.push({ cls: 'subt', cells: [{ t: 'Subtotal', cls: 'rh rf st', span: nR }, ...cs, ...tot] })
     }
@@ -256,13 +265,13 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
       const same = srows.length && ri > 0 && prow[ri - 1].key.slice(0, i + 1).join('|') === r.key.slice(0, i + 1).join('|')
       return { t: same && i < nR - 1 ? '' : (p || '(blank)'), cls: `l rh${i === 0 ? ' rf' : ''}${same && i < nR - 1 ? ' sb' : ''}` }
     })
-    const cs = cols.flatMap(([k], ci) => vals.map((v, vi) => {
-      const recs = r.cells.get(k) || []
+    const cs = ents.flatMap((e, ci) => vals.map((v, vi) => {
+      const recs = recsOf(r, e)
       const x = grid[ri][ci][vi]
       const id = ++cid
-      cells.set(id, { recs, label: `${keyParts.join(' / ')}${hasC ? ` - ${cols[ci][1].join(' / ')}` : ''}` })
+      cells.set(id, { recs, label: `${keyParts.join(' / ')}${hasC ? ` - ${colName(e)}` : ''}` })
       const d = layout.pct === 'total' ? gt[vi] : layout.pct === 'row' ? aggregate(r.all, v, fields) : colTot[ci][vi]
-      return { t: show(x, v, d), v: x, id, cls: `${recs.length ? 'cl' : ''}${hlClass(layout, x)}`, heat: layout.heat && x != null && max && pctOk(v) ? Math.min(0.55, (Math.abs(x) / max) * 0.55) : 0 }
+      return { t: show(x, v, d), v: x, id, cls: `${recs.length ? 'cl' : ''}${e.sub ? ' sc' : ''}${hlClass(layout, x)}`, heat: layout.heat && !e.sub && x != null && max && pctOk(v) ? Math.min(0.55, (Math.abs(x) / max) * 0.55) : 0 }
     }))
     const tot = hasC && totCol ? vals.map((v, vi) => {
       const x = aggregate(r.all, v, fields)
@@ -275,11 +284,11 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
   flushSub()
 
   const ft = [{ t: 'Total', cls: 'l', span: nR }]
-  cols.forEach(([k], ci) => vals.forEach((v, vi) => {
+  ents.forEach((e, ci) => vals.forEach((v, vi) => {
     const x = colTot[ci][vi]
     const id = ++cid
-    cells.set(id, { recs: rs.filter(sameKey(k)), label: `Total - ${cols[ci][1].join(' / ')}` })
-    ft.push({ t: show(x, v, layout.pct === 'total' ? gt[vi] : layout.pct === 'col' ? x : 0), v: x, id, cls: 'cl' })
+    cells.set(id, { recs: rs.filter(sameKey(e)), label: `Total - ${colName(e)}` })
+    ft.push({ t: show(x, v, layout.pct === 'total' ? gt[vi] : layout.pct === 'col' ? x : 0), v: x, id, cls: e.sub ? 'cl sc' : 'cl' })
   }))
   if (hasC && totCol) vals.forEach((v, vi) => {
     const id = ++cid
@@ -302,7 +311,7 @@ export function flatten(layout, table) {
   const hr = table.head.map((r, ri) => [...Array(ri === 0 ? 0 : table.head[ri - 1].filter((c) => (c.rs || 1) > 1).reduce((n, c) => n + (c.span || 1), 0)).fill(''), ...r.flatMap((c) => [c.t, ...Array(Math.max(0, (c.span || 1) - 1)).fill('')])])
   const first = table.body.find((r) => r.cls !== 'subt')
   const colCls = (first ? first.cells : []).flatMap((c) => Array(Math.max(1, c.span || 1)).fill(c.cls || ''))
-  const hdr = table.head.map((r) => r.map((c) => ({ content: c.t, colSpan: c.span || 1, rowSpan: c.rs || 1, tc: /\btc\b/.test(c.cls || ''), left: /\bl\b/.test(c.cls || '') })))
+  const hdr = table.head.map((r) => r.map((c) => ({ content: c.t, colSpan: c.span || 1, rowSpan: c.rs || 1, tc: /\b(tc|sc)\b/.test(c.cls || ''), left: /\bl\b/.test(c.cls || '') })))
   return {
     hr, hdr, head: hr[hr.length - 1], body: table.body.map((r) => r.cells.flatMap((c) => spread(c, layout.pct))), foot: table.foot ? table.foot.flatMap((c) => spread(c, layout.pct)) : null,
     rowCls: table.body.map((r) => r.cls || ''), colCls, rhCols: Math.max(1, srowsCount(table)),
