@@ -3,7 +3,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { AGG, OPS } from '../../../utils/reportBuilder/engine.js'
+import { AGG, OPS, inkOn } from '../../../utils/reportBuilder/engine.js'
 import { readValue, buildFields } from '../../../utils/reportBuilder/fields.js'
 import { parseFormula, unknownRefs } from '../../../utils/reportBuilder/formula.js'
 
@@ -54,6 +54,12 @@ export function ValueChip({ f, v, onAgg, onRemove }) {
 }
 
 // ------------------------------------------------------------------------------------------------ filter builder
+// shared look of the pop-up panels
+export const fieldLabel = 'text-[11px] font-bold uppercase tracking-wider text-neutral-500'
+export const ctl = 'w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-app-text outline-none transition-colors focus:border-brand-neon/70'
+export const btnPrimary = 'rounded-xl bg-brand-neon px-5 py-2 text-sm font-semibold text-brand-contrast transition-transform active:scale-95 disabled:opacity-40'
+export const btnGhost = 'rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-2 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500'
+
 export function FilterBuilder({ fields, rows, initialField, onAdd, onCancel }) {
   const list = fields.list
   const [fid, setFid] = useState(initialField && fields.map[initialField] ? initialField : list.find((f) => !f.d)?.id ?? list[0].id)
@@ -62,23 +68,41 @@ export function FilterBuilder({ fields, rows, initialField, onAdd, onCancel }) {
   const [v, setV] = useState('')
   const [v2, setV2] = useState('')
   const [multi, setMulti] = useState([])
-  const choose = (id) => { setFid(id); setOp(OPS[fields.map[id].kind][0][0]); setV(''); setV2(''); setMulti([]) }
-  const values = useMemo(() => (f.kind === 'txt' ? [...new Set(rows.map((r) => String(readValue(r, f, fields.map) ?? '')))].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).slice(0, 200) : []), [f, rows, fields])
+  const [find, setFind] = useState('')
+  const choose = (id) => { setFid(id); setOp(OPS[fields.map[id].kind][0][0]); setV(''); setV2(''); setMulti([]); setFind('') }
+  const values = useMemo(() => (f.kind === 'txt' ? [...new Set(rows.map((r) => String(readValue(r, f, fields.map) ?? '')))].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).slice(0, 300) : []), [f, rows, fields])
+  const shownVals = find.trim() ? values.filter((x) => x.toLowerCase().includes(find.trim().toLowerCase())) : values
   const noValue = ['blank', 'filled'].includes(op)
   const isList = f.kind === 'txt' && (op === 'is' || op === 'isnot')
   const type = f.kind === 'date' ? 'date' : f.kind === 'num' ? 'number' : 'text'
   const ok = noValue || (isList ? multi.length > 0 : v !== '')
+  const toggle = (x) => setMulti((m) => (m.includes(x) ? m.filter((y) => y !== x) : [...m, x]))
   return (
-    <div className="rb-drop mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Keep only records where&hellip;</p>
-      <div className="flex flex-wrap items-start gap-2">
-        <select value={fid} onChange={(e) => choose(e.target.value)} className={input}>{list.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
-        <select value={op} onChange={(e) => { setOp(e.target.value); setV(''); setMulti([]) }} className={input}>{OPS[f.kind].map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
-        {!noValue && (isList
-          ? <select multiple size={4} value={multi} onChange={(e) => setMulti([...e.target.selectedOptions].map((o) => o.value))} className={`${input} min-w-[11rem]`}>{values.map((x) => <option key={x}>{x}</option>)}</select>
-          : <><input type={type} value={v} onChange={(e) => setV(e.target.value)} placeholder="value" className={`${input} w-40`} />{op === 'btw' && <><span className="py-1.5 text-sm text-neutral-400">and</span><input type={type} value={v2} onChange={(e) => setV2(e.target.value)} className={`${input} w-40`} /></>}</>)}
-        <button type="button" disabled={!ok} onClick={() => onAdd({ f: fid, op, v: isList ? multi : v, v2 })} className="rounded-lg bg-brand-neon px-3 py-1.5 text-sm font-semibold text-brand-contrast disabled:opacity-40">Add filter</button>
-        <button type="button" onClick={onCancel} className={pill}>Cancel</button>
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1"><span className={fieldLabel}>Field</span><select value={fid} onChange={(e) => choose(e.target.value)} className={ctl}>{list.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
+        <label className="grid gap-1"><span className={fieldLabel}>Keep the records where it</span><select value={op} onChange={(e) => { setOp(e.target.value); setV(''); setMulti([]) }} className={ctl}>{OPS[f.kind].map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>
+      </div>
+      {!noValue && (isList ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className={fieldLabel}>Pick one or more <span className="font-normal normal-case tracking-normal text-neutral-400">&middot; {multi.length} picked</span></span>
+            <input type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search the choices" className={`${ctl} !w-52 !py-1.5`} />
+          </div>
+          <div className="flex max-h-60 flex-wrap content-start gap-1.5 overflow-y-auto rounded-xl border border-neutral-800 bg-neutral-950 p-2.5">
+            {shownVals.map((x) => <button key={x} type="button" onClick={() => toggle(x)} className={`rounded-full border px-3 py-1 text-sm transition-colors ${multi.includes(x) ? 'border-brand-neon bg-brand-neon/15 text-brand-neon' : 'border-neutral-700 text-neutral-200 hover:border-neutral-500'}`}>{x}</button>)}
+            {!shownVals.length && <span className="p-1 text-sm text-neutral-500">Nothing to choose.</span>}
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1"><span className={fieldLabel}>{op === 'btw' ? 'From' : 'Value'}</span><input type={type} value={v} onChange={(e) => setV(e.target.value)} className={ctl} /></label>
+          {op === 'btw' && <label className="grid gap-1"><span className={fieldLabel}>To</span><input type={type} value={v2} onChange={(e) => setV2(e.target.value)} className={ctl} /></label>}
+        </div>
+      ))}
+      <div className="flex justify-end gap-2 border-t border-neutral-800 pt-4">
+        <button type="button" onClick={onCancel} className={btnGhost}>Cancel</button>
+        <button type="button" disabled={!ok} onClick={() => onAdd({ f: fid, op, v: isList ? multi : v, v2 })} className={btnPrimary}>Add filter</button>
       </div>
     </div>
   )
@@ -125,12 +149,15 @@ export function FieldPicker({ groups, used, onPick, query, setQuery, extra }) {
 }
 
 // ------------------------------------------------------------------------------------------------ calculated field: a formula
+const FN_CHIPS = [['AVERAGE', 'Average of the values'], ['SUM', 'Add the values'], ['COUNT', 'How many are not 0'], ['MEDIAN', 'Middle value'], ['ROUND', 'ROUND(number, decimals)'], ['IF', 'IF(condition, then, otherwise)'], ['ABS', 'Without the minus sign'], ['MAX', 'Largest'], ['MIN', 'Smallest'], ['SQRT', 'Square root'], ['POWER', 'POWER(number, exponent)'], ['MOD', 'Remainder'], ['FLOOR', 'Round down'], ['CEIL', 'Round up']]
+
 export function FormulaBuilder({ baseFields, rows, fields, calc, editing, onSave, onCancel }) {
   const [name, setName] = useState(editing?.label ?? '')
   const [text, setText] = useState(editing?.formula ?? '')
   const ref = useRef(null)
   const parsed = parseFormula(text)
-  const labels = fields.list.filter((f) => !f.d && f.id !== editing?.id).map((f) => f.label)
+  const usable = fields.list.filter((f) => !f.d && f.id !== editing?.id)
+  const labels = usable.map((f) => f.label)
   const unknown = parsed.ok ? unknownRefs(text, labels) : []
   const error = !text.trim() ? '' : !parsed.ok ? parsed.error : unknown.length ? `${unknown.map((u) => `[${u}]`).join(', ')} ${unknown.length > 1 ? 'are' : 'is'} not part of your table. Put ${unknown.length > 1 ? 'them' : 'it'} in the table first, or use a field that is.` : ''
   const ok = text.trim() && parsed.ok && !unknown.length
@@ -140,92 +167,150 @@ export function FormulaBuilder({ baseFields, rows, fields, calc, editing, onSave
     const f2 = buildFields(baseFields, [...calc.filter((c) => c.id !== editing?.id), tmp])
     try { return readValue(rows[0], f2.map.__try, f2.map) } catch { return null }
   }, [ok, text, rows, baseFields, calc, editing])
-  const insert = (str) => {
+  const insert = (str, back = 0) => {
     const el = ref.current
     const a = el?.selectionStart ?? text.length
     const z = el?.selectionEnd ?? text.length
     setText(`${text.slice(0, a)}${str}${text.slice(z)}`)
-    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(a + str.length, a + str.length) })
+    requestAnimationFrame(() => { el?.focus(); const p = a + str.length - back; el?.setSelectionRange(p, p) })
   }
-  const numFields = fields.list.filter((f) => !f.d && f.kind === 'num' && f.id !== editing?.id)
   return (
-    <div className="rb-drop mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">{editing ? 'Change the calculated field' : 'New calculated field'}</p>
-      <div className="grid gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, for example Weight difference" className={`${input} w-full sm:w-72`} />
-        <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)} rows={2} spellCheck={false} placeholder="[Net kg] * [Net bags] - [Gross kg]" className={`${input} w-full font-mono`} />
+    <div className="space-y-4">
+      <label className="grid gap-1"><span className={fieldLabel}>Name of the new column</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="For example: Weight difference" className={ctl} /></label>
+      <div className="grid gap-1">
+        <span className={fieldLabel}>Formula</span>
+        <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)} rows={3} spellCheck={false} placeholder="[Net kg] * [Net bags] - [Gross kg]" className={`${ctl} font-mono leading-relaxed`} />
+      </div>
+      <div className="grid gap-1.5">
+        <span className={fieldLabel}>Fields of your table <span className="font-normal normal-case tracking-normal text-neutral-500">&middot; tap to put one in</span></span>
+        <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+          {usable.length === 0 && <span className="text-sm text-neutral-500">Put some fields in the table first.</span>}
+          {usable.map((f) => <button key={f.id} type="button" onClick={() => insert(`[${f.label}]`)} className={`rounded-lg border px-2.5 py-1 text-sm transition-colors hover:border-brand-neon/60 ${f.kind === 'num' ? 'border-sky-500/30 bg-sky-500/10 text-sky-200' : 'border-neutral-700 bg-neutral-950 text-neutral-200'}`}>{f.label}</button>)}
+        </div>
+      </div>
+      <div className="grid gap-1.5">
+        <span className={fieldLabel}>Signs and functions</span>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-neutral-500">Put in:</span>
-          <select value="" onChange={(e) => { if (e.target.value) insert(`[${e.target.value}]`) }} className={input}>
-            <option value="">a field&hellip;</option>
-            {numFields.length > 0 && <optgroup label="Numbers">{numFields.map((f) => <option key={f.id} value={f.label}>{f.label}</option>)}</optgroup>}
-            <optgroup label="Everything else">{fields.list.filter((f) => !f.d && f.kind !== 'num').map((f) => <option key={f.id} value={f.label}>{f.label}</option>)}</optgroup>
-          </select>
-          {['+', '-', '*', '/', '(', ')'].map((o) => <button key={o} type="button" onClick={() => insert(` ${o} `)} className="h-8 w-8 rounded-lg border border-neutral-700 bg-neutral-950 text-sm text-neutral-200 transition-colors hover:border-brand-neon/60">{o === '*' ? '×' : o === '/' ? '÷' : o}</button>)}
-          <select value="" onChange={(e) => { if (e.target.value) insert(e.target.value) }} className={input}>
-            <option value="">a function&hellip;</option>
-            <option value="AVERAGE(, )">AVERAGE(a, b, ...)</option><option value="SUM(, )">SUM(a, b, ...)</option><option value="COUNT(, )">COUNT(a, b, ...) numbers that are not 0</option><option value="MEDIAN(, , )">MEDIAN(a, b, ...)</option>
-            <option value="ROUND(, 2)">ROUND(number, decimals)</option><option value="IF(, , )">IF(condition, then, otherwise)</option><option value="ABS()">ABS(number)</option><option value="MAX(, )">MAX(a, b, ...)</option><option value="MIN(, )">MIN(a, b, ...)</option>
-            <option value="SQRT()">SQRT(number)</option><option value="POWER(, 2)">POWER(number, exponent)</option><option value="MOD(, )">MOD(number, divisor)</option><option value="FLOOR()">FLOOR(number)</option><option value="CEIL()">CEIL(number)</option>
-          </select>
+          {['+', '-', '*', '/', '(', ')'].map((o) => <button key={o} type="button" onClick={() => insert(` ${o} `)} className="h-9 w-9 rounded-lg border border-neutral-700 bg-neutral-950 text-base text-neutral-100 transition-colors hover:border-brand-neon/60">{o === '*' ? '×' : o === '/' ? '÷' : o}</button>)}
+          <span className="mx-1 h-6 w-px bg-neutral-700" />
+          {FN_CHIPS.map(([n, tip]) => <button key={n} type="button" title={tip} onClick={() => insert(`${n}()`, 1)} className="rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-xs font-semibold text-brand-neon transition-colors hover:border-brand-neon/60">{n}</button>)}
         </div>
-        <div className="min-h-[1.25rem] text-xs">
-          {error ? <span className="text-red-300">{error}</span> : ok ? <span className="text-emerald-300">Looks right.{example != null && <> The first record gives <b className="tabular-nums">{Number(example).toLocaleString('en-US', { maximumFractionDigits: 4 })}</b>.</>}</span> : <span className="text-neutral-500">Write a field name in [square brackets]. You can use + &minus; &times; &divide; ( ), numbers, and conditions such as IF([Net kg] &gt; 5000, [Net kg], 0).</span>}
-        </div>
-        <div className="flex gap-2">
-          <button type="button" disabled={!ok} onClick={() => onSave({ id: editing?.id ?? `c_${Math.random().toString(36).slice(2, 8)}`, label: name.trim() || text.trim().slice(0, 40), formula: text.trim() })} className="rounded-lg bg-brand-neon px-3 py-1.5 text-sm font-semibold text-brand-contrast transition-transform active:scale-95 disabled:opacity-40">{editing ? 'Save changes' : 'Add field'}</button>
-          <button type="button" onClick={onCancel} className={pill}>Cancel</button>
-        </div>
+      </div>
+      <div className={`min-h-[2.75rem] rounded-xl border px-3 py-2 text-sm ${error ? 'border-red-500/40 bg-red-500/10 text-red-200' : ok ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-neutral-800 bg-neutral-950 text-neutral-500'}`}>
+        {error || (ok ? <>Looks right.{example != null && <> The first record gives <b className="tabular-nums">{Number(example).toLocaleString('en-US', { maximumFractionDigits: 4 })}</b>.</>}</> : 'Write the field names in [square brackets]. For example IF([Net kg] > 5000, [Net kg], 0).')}
+      </div>
+      <div className="flex justify-end gap-2 border-t border-neutral-800 pt-4">
+        <button type="button" onClick={onCancel} className={btnGhost}>Cancel</button>
+        <button type="button" disabled={!ok} onClick={() => onSave({ id: editing?.id ?? `c_${Math.random().toString(36).slice(2, 8)}`, label: name.trim() || text.trim().slice(0, 40), formula: text.trim() })} className={btnPrimary}>{editing ? 'Save changes' : 'Add the column'}</button>
       </div>
     </div>
   )
 }
 
 // ------------------------------------------------------------------------------------------------ columns and format
-export function ColumnsPanel({ fields, layout, onChange }) {
+export function ColumnsPanel({ fields, layout, onChange, onDone }) {
   const base = fields.list.filter((f) => !f.d).map((f) => f.id)
   const order = [...new Set([...layout.order.filter((id) => fields.map[id]), ...base])]
   const move = (id, d) => { const i = order.indexOf(id); const j = i + d; if (j < 0 || j >= order.length) return; const o = order.slice(); [o[i], o[j]] = [o[j], o[i]]; onChange({ order: o }) }
   const toggle = (id) => onChange({ order, hidden: layout.hidden.includes(id) ? layout.hidden.filter((x) => x !== id) : [...layout.hidden, id] })
   return (
-    <div className="rb-drop mb-3 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Columns of the list: tick to show, arrows to reorder</p>
-      <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
-        {order.map((id) => (
-          <div key={id} className="flex items-center gap-1.5 text-sm">
-            <label className="flex flex-1 items-center gap-2 text-neutral-200"><input type="checkbox" checked={!layout.hidden.includes(id)} onChange={() => toggle(id)} />{fields.map[id].label}</label>
-            <button type="button" onClick={() => move(id, -1)} className="rounded border border-neutral-700 px-1.5 text-xs" aria-label="Move up">&#9650;</button>
-            <button type="button" onClick={() => move(id, 1)} className="rounded border border-neutral-700 px-1.5 text-xs" aria-label="Move down">&#9660;</button>
-          </div>
-        ))}
+    <div className="space-y-4">
+      <p className="text-sm text-neutral-400">Tick the columns to show. Use the arrows to move one left or right.</p>
+      <div className="grid max-h-[55vh] gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
+        {order.map((id) => {
+          const on = !layout.hidden.includes(id)
+          return (
+            <div key={id} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${on ? 'border-brand-neon/40 bg-brand-neon/5 text-app-text' : 'border-neutral-800 bg-neutral-950 text-neutral-400'}`}>
+              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2"><input type="checkbox" checked={on} onChange={() => toggle(id)} /><span className="truncate">{fields.map[id].label}</span></label>
+              <button type="button" onClick={() => move(id, -1)} className="rounded-lg border border-neutral-700 px-2 py-0.5 text-xs hover:border-brand-neon/60" aria-label="Move left">&#9650;</button>
+              <button type="button" onClick={() => move(id, 1)} className="rounded-lg border border-neutral-700 px-2 py-0.5 text-xs hover:border-brand-neon/60" aria-label="Move right">&#9660;</button>
+            </div>
+          )
+        })}
       </div>
+      <div className="flex justify-end border-t border-neutral-800 pt-4"><button type="button" onClick={onDone} className={btnPrimary}>Done</button></div>
     </div>
   )
 }
 
-export function FormatPanel({ layout, onChange }) {
-  const set = (o) => onChange(o)
+const SWATCHES = ['#1e293b', '#0f5a42', '#1d4ed8', '#7c2d12', '#4c1d95', '#111827', '#0e7490', '#9f1239']
+export const DEFAULT_HEAD = '#1e293b'
+
+function Section({ title, hint, children }) {
   return (
-    <div className="rb-drop mb-3 space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-300">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <label className="flex items-center gap-2"><input type="checkbox" checked={layout.heat} onChange={(e) => set({ heat: e.target.checked })} />Shade by size</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={layout.totCol !== false} onChange={(e) => set({ totCol: e.target.checked })} />Total column (at the right)</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={layout.totRow !== false} onChange={(e) => set({ totRow: e.target.checked })} />Total row (at the bottom)</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={layout.subt} onChange={(e) => set({ subt: e.target.checked })} />Subtotals</label>
-        <label className="flex items-center gap-2">Show as
-          <select value={layout.pct} onChange={(e) => set({ pct: e.target.value })} className={input}><option value="none">Numbers</option><option value="total">% of grand total</option><option value="row">% of row</option><option value="col">% of column</option></select>
-        </label>
-        <label className="flex items-center gap-2">Top
-          <select value={layout.topn} onChange={(e) => set({ topn: +e.target.value })} className={input}><option value={0}>All rows</option><option value={5}>5</option><option value={10}>10</option><option value={20}>20</option></select>
-        </label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={layout.sortTot} onChange={(e) => set({ sortTot: e.target.checked })} />Biggest first</label>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+      <p className={fieldLabel}>{title}{hint ? <span className="ml-2 font-normal normal-case tracking-normal text-neutral-500">{hint}</span> : null}</p>
+      <div className="mt-2">{children}</div>
+    </div>
+  )
+}
+
+function Toggle({ label, checked, onChange }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 py-1 text-sm text-neutral-200">
+      <span>{label}</span>
+      <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${checked ? 'bg-brand-neon' : 'bg-neutral-700'}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${checked ? 'left-[1.1rem]' : 'left-0.5'}`} />
+      </span>
+      <input type="checkbox" className="sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  )
+}
+
+export function FormatPanel({ layout, onChange, names = [], onDone }) {
+  const set = (o) => onChange(o)
+  const bg = layout.headBg || DEFAULT_HEAD
+  const heads = layout.headers ?? {}
+  const rename = (id, val) => { const h = { ...heads }; if (val.trim()) h[id] = val; else delete h[id]; set({ headers: h }) }
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-2">
+        <Section title="Totals">
+          <Toggle label="Total column (at the right)" checked={layout.totCol !== false} onChange={(v) => set({ totCol: v })} />
+          <Toggle label="Total row (at the bottom)" checked={layout.totRow !== false} onChange={(v) => set({ totRow: v })} />
+          <Toggle label="Subtotals for each group" checked={!!layout.subt} onChange={(v) => set({ subt: v })} />
+        </Section>
+        <Section title="Numbers">
+          <label className="flex items-center justify-between gap-3 py-1 text-sm text-neutral-200">Show as
+            <select value={layout.pct} onChange={(e) => set({ pct: e.target.value })} className={`${ctl} !w-auto !py-1.5`}><option value="none">Numbers</option><option value="total">% of grand total</option><option value="row">% of row</option><option value="col">% of column</option></select>
+          </label>
+          <label className="flex items-center justify-between gap-3 py-1 text-sm text-neutral-200">Only the top
+            <select value={layout.topn} onChange={(e) => set({ topn: +e.target.value })} className={`${ctl} !w-auto !py-1.5`}><option value={0}>All rows</option><option value={5}>5</option><option value={10}>10</option><option value={20}>20</option></select>
+          </label>
+          <Toggle label="Biggest first" checked={!!layout.sortTot} onChange={(v) => set({ sortTot: v })} />
+          <Toggle label="Shade by size" checked={!!layout.heat} onChange={(v) => set({ heat: v })} />
+        </Section>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Highlight cells</span>
-        <select value={layout.hl.op} onChange={(e) => set({ hl: { ...layout.hl, op: e.target.value } })} className={input}><option value="">off</option><option value=">">greater than</option><option value="<">less than</option><option value="=">equal to</option><option value="!">not equal to</option></select>
-        <input type="number" value={layout.hl.val} onChange={(e) => set({ hl: { ...layout.hl, val: e.target.value } })} className={`${input} w-24`} />
-        <select value={layout.hl.col} onChange={(e) => set({ hl: { ...layout.hl, col: e.target.value } })} className={input}><option value="red">red</option><option value="amber">amber</option><option value="green">green</option></select>
-      </div>
+      <Section title="Highlight cells" hint="paint the numbers that pass a test">
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={layout.hl.op} onChange={(e) => set({ hl: { ...layout.hl, op: e.target.value } })} className={`${ctl} !w-auto`}><option value="">off</option><option value=">">greater than</option><option value="<">less than</option><option value="=">equal to</option><option value="!">not equal to</option></select>
+          <input type="number" value={layout.hl.val} onChange={(e) => set({ hl: { ...layout.hl, val: e.target.value } })} className={`${ctl} !w-28`} />
+          <select value={layout.hl.col} onChange={(e) => set({ hl: { ...layout.hl, col: e.target.value } })} className={`${ctl} !w-auto`}><option value="red">red</option><option value="amber">amber</option><option value="green">green</option></select>
+        </div>
+      </Section>
+      <Section title="Header color" hint="shown on screen, in the Excel file and in the PDF">
+        <div className="flex flex-wrap items-center gap-2">
+          {SWATCHES.map((c) => <button key={c} type="button" aria-label={`Header color ${c}`} onClick={() => set({ headBg: c })} style={{ background: c }} className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${bg.toLowerCase() === c ? 'border-white' : 'border-transparent'}`} />)}
+          <label className="flex items-center gap-2 pl-2 text-xs text-neutral-400">Other<input type="color" value={bg} onChange={(e) => set({ headBg: e.target.value })} className="h-8 w-10 cursor-pointer rounded border border-neutral-700 bg-transparent p-0.5" /></label>
+          {layout.headBg && <button type="button" onClick={() => set({ headBg: '' })} className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-500">Reset</button>}
+        </div>
+        <div className="mt-3 overflow-hidden rounded-lg border border-neutral-700 text-xs">
+          <div className="grid grid-cols-4 px-3 py-2 font-bold transition-colors duration-200" style={{ background: bg, color: inkOn(bg) }}><span>Customer</span><span className="text-right">BIN</span><span className="text-right">DKA</span><span className="text-right">Total</span></div>
+          {[['Borromeo', '199.59', '3,343.17', '3,542.76'], ['Buama', '34.9', '2,110.21', '2,145.11']].map((r) => <div key={r[0]} className="grid grid-cols-4 border-t border-neutral-800 px-3 py-1.5 text-neutral-300"><span className="font-semibold">{r[0]}</span>{r.slice(1).map((x, i) => <span key={i} className="text-right tabular-nums">{x}</span>)}</div>)}
+        </div>
+      </Section>
+      {names.length > 0 && (
+        <Section title="Header names" hint="only if you want a different name; leave empty to keep the field's own name">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {names.map((n) => (
+              <label key={n.id} className="grid gap-1 text-xs text-neutral-400">{n.label}
+                <input value={heads[n.id] ?? ''} onChange={(e) => rename(n.id, e.target.value)} placeholder={n.label} className={`${ctl} !py-2`} />
+              </label>
+            ))}
+          </div>
+        </Section>
+      )}
+      <div className="flex justify-end border-t border-neutral-800 pt-4"><button type="button" onClick={onDone} className={btnPrimary}>Done</button></div>
     </div>
   )
 }
@@ -234,6 +319,7 @@ export function FormatPanel({ layout, onChange }) {
 const hlStyle = { 'hl-red': 'bg-red-500/30 text-red-100', 'hl-amber': 'bg-amber-500/30', 'hl-green': 'bg-emerald-400/25' }
 export function ResultTable({ table, layout, onSort, onCell }) {
   const { head, body, foot } = table
+  const headBg = layout.headBg || DEFAULT_HEAD
   if (!body.length) return <div className="p-10 text-center text-sm text-neutral-500">No records match the search and filters.</div>
   const cls = (c, base = '') => `${base} ${(c.cls || '').split(' ').map((x) => hlStyle[x] ?? '').join(' ')}`
   const sortMark = (id) => { const i = layout.sort.findIndex((s) => s.f === id); return i < 0 ? null : <span className="text-brand-neon"> {layout.sort[i].dir > 0 ? '▲' : '▼'}{layout.sort.length > 1 ? i + 1 : ''}</span> }
@@ -247,7 +333,7 @@ export function ResultTable({ table, layout, onSort, onCell }) {
       <td
         key={key} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id && /\bcl\b/.test(k) ? () => onCell(c.id) : undefined}
         style={c.heat ? { background: `rgba(0,255,163,${c.heat.toFixed(2)})` } : undefined}
-        className={cls(c, `whitespace-nowrap border-b px-4 py-2 tabular-nums ${st ? 'border-y border-brand-neon/40 font-extrabold text-brand-neon' : 'border-neutral-900'} ${bg} ${/\bl\b/.test(k) ? 'text-left' : 'text-right'} ${rh ? `sticky left-0 z-[1] ${st ? '' : 'font-semibold text-app-text'}` : st ? '' : 'text-neutral-200'} ${/\bsb\b/.test(k) ? 'text-transparent' : ''} ${tc && !st ? 'font-bold' : ''} ${/\bcl\b/.test(k) ? 'cursor-pointer hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-brand-neon' : ''}`)}
+        className={cls(c, `whitespace-nowrap border-b px-4 py-2 tabular-nums ${st ? 'border-y border-brand-neon/40 font-extrabold text-brand-neon' : 'border-neutral-900'} ${bg} ${/\bl\b/.test(k) ? 'text-left' : 'text-right'} ${rh ? `${/\brf\b/.test(k) ? 'sticky left-0 z-[1]' : ''} ${st ? '' : 'font-semibold text-app-text'}` : st ? '' : 'text-neutral-200'} ${/\bsb\b/.test(k) ? 'text-transparent' : ''} ${tc && !st ? 'font-bold' : ''} ${/\bcl\b/.test(k) ? 'cursor-pointer hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-brand-neon' : ''}`)}
       >{c.t}</td>
     )
   }
@@ -259,7 +345,8 @@ export function ResultTable({ table, layout, onSort, onCell }) {
             {r.map((c, i) => (
               <th
                 key={i} colSpan={c.span > 1 ? c.span : undefined} rowSpan={c.rs > 1 ? c.rs : undefined} onClick={c.id ? () => onSort(c.id) : undefined}
-                className={`sticky top-0 z-[2] whitespace-nowrap border-b border-neutral-800 bg-neutral-900 px-4 py-2 text-[13px] font-bold text-neutral-300 ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'} ${/\brh\b/.test(c.cls || '') ? 'left-0 z-[3]' : ''} ${/\btc\b/.test(c.cls || '') ? 'bg-emerald-950' : ''} ${c.id ? 'cursor-pointer hover:text-brand-neon' : ''}`}
+                style={/\btc\b/.test(c.cls || '') ? undefined : { background: headBg, color: inkOn(headBg) }}
+                className={`sticky top-0 z-[2] whitespace-nowrap border-b border-neutral-800 px-4 py-2 text-[13px] font-bold ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'} ${/\brf\b/.test(c.cls || '') ? 'left-0 z-[3]' : ''} ${/\btc\b/.test(c.cls || '') ? 'bg-emerald-950 text-emerald-100' : ''} ${c.id ? 'cursor-pointer hover:text-brand-neon' : ''}`}
               >{c.t}{c.id && c.id !== '__tot' ? sortMark(c.id) : null}</th>
             ))}
           </tr>
@@ -270,7 +357,7 @@ export function ResultTable({ table, layout, onSort, onCell }) {
           ? body.map((r, ri) => <tr key={ri} style={ri < 24 ? { animationDelay: `${ri * 14}ms` } : undefined} className={`hover:bg-neutral-900/60 ${ri < 24 ? 'rb-fade' : ''}`}>{r.map((c, i) => td(c, i))}</tr>)
           : body.map((r, ri) => <tr key={ri} style={ri < 24 ? { animationDelay: `${ri * 14}ms` } : undefined} className={`${ri < 24 ? 'rb-fade' : ''} ${r.cls === 'subt' ? 'bg-neutral-900 font-bold' : ''}`}>{r.cells.map((c, i) => td(c, i))}</tr>)}
       </tbody>
-      {foot && <tfoot><tr className="sticky bottom-0 bg-neutral-900 font-extrabold text-brand-neon">{foot.map((c, i) => <td key={i} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id ? () => onCell(c.id) : undefined} className={`sticky bottom-0 cursor-pointer whitespace-nowrap bg-neutral-900 px-4 py-2 tabular-nums ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'}`}>{c.t}</td>)}</tr></tfoot>}
+      {foot && <tfoot><tr className="sticky bottom-0 bg-emerald-950 font-extrabold text-brand-neon">{foot.map((c, i) => <td key={i} colSpan={c.span > 1 ? c.span : undefined} onClick={c.id ? () => onCell(c.id) : undefined} className={`sticky bottom-0 cursor-pointer whitespace-nowrap border-t border-brand-neon/40 bg-emerald-950 px-4 py-2 tabular-nums ${/\bl\b/.test(c.cls || '') ? 'text-left' : 'text-right'}`}>{c.t}</td>)}</tr></tfoot>}
     </table>
   )
 }

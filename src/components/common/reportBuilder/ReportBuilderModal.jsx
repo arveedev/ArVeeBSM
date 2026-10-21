@@ -19,7 +19,7 @@ import { loadSource, sourcesFor, sourceById, defaultParams, isWideRole } from '.
 import { listLayouts, saveLayout, deleteLayout, logReportEvent } from '../../../services/reportLayouts.js'
 import { exportXlsx, exportPdf } from '../../../services/reportBuilderExport.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
-import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, ColumnsPanel, FormatPanel, ResultTable, pill, pillOn, input } from './rbParts.jsx'
+import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, ColumnsPanel, FormatPanel, ResultTable, btnGhost, pill, pillOn, input } from './rbParts.jsx'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const longDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -42,10 +42,16 @@ function BoxRow({ name, children }) {
 }
 
 // a panel (filter, formula, columns, format) opens over the screen, so nothing below it has to be scrolled to
-function Dialog({ onClose, children }) {
+function Dialog({ title, onClose, children, width = 'max-w-xl' }) {
   return (
-    <div className="rb-bd fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-black/60 px-3 pb-6 pt-[10vh]" onClick={onClose}>
-      <div className="rb-pop w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>{children}</div>
+    <div className="rb-bd fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-black/65 px-3 pb-6 pt-[8vh] backdrop-blur-[2px]" onClick={onClose}>
+      <div className={`rb-pop w-full ${width} rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 border-b border-neutral-800 px-5 py-3.5">
+          <h3 className="text-base font-semibold text-app-text">{title}</h3>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-app-text"><X size={18} /></button>
+        </div>
+        <div className="max-h-[72vh] overflow-y-auto px-5 py-4">{children}</div>
+      </div>
     </div>
   )
 }
@@ -77,7 +83,7 @@ function SavedChip({ l, src, active, byOther, canDelete, onOpen, onAsk }) {
 
 const removeFrom = (l, from, id) => (from === 'vals' ? { ...l, vals: l.vals.filter((v) => v.f !== id) } : { ...l, [from]: l[from].filter((x) => x !== id) })
 
-function ReportBuilderModal({ user, onClose }) {
+function ReportBuilderModal({ user, onClose, open = true }) {
   const role = user?.role
   const sources = useMemo(() => sourcesFor(role), [role])
   const [sourceId, setSourceId] = useState('docs')
@@ -100,17 +106,18 @@ function ReportBuilderModal({ user, onClose }) {
   const [searchText, setSearchText] = useState('')
   const [fieldQuery, setFieldQuery] = useState('')
   const [busy, setBusy] = useState('')
-  const [askDel, setAskDel] = useState(null) // the saved layout the person is about to delete
+  const [confirm, setConfirm] = useState(null) // { title, body, ok, run }: asks before something is thrown away
+  const titleRef = useRef(null)
   const [dragging, setDragging] = useState(false) // a field that is already in a box is being dragged
   const [panelOpen, setPanelOpen] = useState(true)
   const pendingLayout = useRef(null)
   const needsInit = useRef(true)
   useBodyScrollLock(true)
-  useEscapeKey(true, (e) => {
+  useEscapeKey(open, (e) => {
     if (document.querySelector('[data-sd-overlay]')) return
     const t = e?.target
     if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return
-    if (askDel) setAskDel(null); else if (pop) setPop(null); else if (drill) setDrill(null); else onClose()
+    if (confirm) setConfirm(null); else if (pop) setPop(null); else if (drill) setDrill(null); else onClose()
   })
 
   // the period: never before September 1, 2026 (the data of this app is complete from then)
@@ -188,6 +195,11 @@ function ReportBuilderModal({ user, onClose }) {
   const listFields = useMemo(() => ({ list: offered.list.filter((f) => !f.d), map: fields.map }), [offered, fields])
 
   const patch = (o) => setLayout((l) => ({ ...l, ...o }))
+  // the headings that can be renamed: the fields of the table (the column field's values are the data, not a heading)
+  const nameItems = useMemo(() => {
+    const ids = layout.mode === 'pivot' ? [...new Set([...layout.rows, ...layout.vals.map((v) => v.f)])] : fields.list.filter((f) => !f.d && tableIds.has(f.id)).map((f) => f.id)
+    return ids.filter((id) => fields.map[id]).map((id) => ({ id, label: fields.map[id].label }))
+  }, [layout, fields, tableIds])
   // the list shows the source's main fields first; the rest are one tick away in Columns
   const setMode = (k) => setLayout((l) => (k === 'list' && !l.hidden.length && !l.order.length && data?.main?.length ? { ...l, mode: k, hidden: data.fields.filter((f) => !data.main.includes(f.id)).map((f) => f.id) } : { ...l, mode: k }))
   // put a field in a box; `from` is the box it was dragged out of (it leaves that one)
@@ -225,11 +237,14 @@ function ReportBuilderModal({ user, onClose }) {
   const scopeText = isWideRole(role) ? 'All warehouses' : 'Own warehouses'
   const doExport = async (kind, t = null, title = null) => {
     if (!data) return
+    const ttl = title ?? (layout.title ?? '').trim()
+    if (!ttl) { toast('Type a title for the report first. It also becomes the file name.'); titleRef.current?.focus(); return }
     setBusy(kind)
     try {
       const flat = t ?? flatten(layout, buildTable(layout, data.fields, data.rows, { full: true }))
       const m = meta()
-      if (title) m.title = title
+      m.title = ttl
+      m.headBg = layout.headBg
       const base = m.title
       if (kind === 'xlsx') await exportXlsx(flat, m, base)
       else await exportPdf(flat, m, base)
@@ -280,7 +295,7 @@ function ReportBuilderModal({ user, onClose }) {
   const calcOpen = () => { if (tableIds.size === 0) { toast('Put some fields in the table first. A formula can only use the fields of the table.'); return } setEditingCalc(null); setPop('calc') }
 
   return createPortal(
-    <div className="sd-pop-in fixed inset-0 z-[80] flex flex-col bg-neutral-950" onClick={() => setMenu(null)}>
+    <div className={`fixed inset-0 z-[80] flex flex-col bg-neutral-950 ${open ? 'sd-pop-in' : 'sd-pop-out'}`} onClick={() => setMenu(null)}>
       <div className="mx-auto flex w-full max-w-[110rem] items-center justify-between gap-2 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <div className="flex min-w-0 items-center gap-2">
           <button type="button" onClick={onClose} aria-label="Back" className="rounded-lg border border-brand-amber/40 bg-neutral-900 p-1.5 text-brand-amber transition-colors hover:bg-brand-amber/10"><ArrowLeft size={18} /></button>
@@ -322,7 +337,7 @@ function ReportBuilderModal({ user, onClose }) {
                       : <input type="number" value={params[p.id] ?? ''} onChange={(e) => setParams({ ...params, [p.id]: e.target.value })} className={`${input} w-20`} />}
                   </label>
                 ))}
-                <button type="button" onClick={startOver} className={`${pill} !px-2.5 !py-1.5`}><RotateCcw size={12} />Start over</button>
+                <button type="button" onClick={() => (isBlank ? startOver() : setConfirm({ title: 'Start over?', body: 'The table you are building, with its filters and formulas, will be cleared. Your saved layouts are not touched.', ok: 'Start over', run: startOver }))} className={`${pill} !px-2.5 !py-1.5`}><RotateCcw size={12} />Start over</button>
                 {loading && <Loader2 size={15} className="animate-spin text-brand-neon" />}
               </div>
             </div>
@@ -343,16 +358,16 @@ function ReportBuilderModal({ user, onClose }) {
           {layouts.length > 0 && (
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-neutral-800 pt-2">
               <span className={label}>Saved</span>
-              {layouts.map((l) => <SavedChip key={l.id} l={l} src={sourceById(l.source)} active={editingId === l.id} byOther={l.ownerUid !== user?.uid} canDelete={l.ownerUid === user?.uid || role === 'Admin'} onOpen={() => openLayout(l)} onAsk={() => setAskDel(l)} />)}
+              {layouts.map((l) => <SavedChip key={l.id} l={l} src={sourceById(l.source)} active={editingId === l.id} byOther={l.ownerUid !== user?.uid} canDelete={l.ownerUid === user?.uid || role === 'Admin'} onOpen={() => openLayout(l)} onAsk={() => setConfirm({ title: 'Delete this saved layout?', body: `\u201C${l.name}\u201D will be deleted for good${l.share && (l.share.admin || l.share.analysts || l.share.staff) ? ', for everyone it was shared with too' : ''}. The records are not touched.`, ok: 'Delete', run: () => removeLayout(l) })} />)}
             </div>
           )}
         </div>
         {error && <p className="mb-2 shrink-0 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
 
         {/* ---------------- the builder on the left, the table taking the rest ---------------- */}
-        <div className={`grid gap-3 lg:min-h-0 lg:flex-1 ${panelOpen ? 'lg:grid-cols-[23rem_minmax(0,1fr)]' : ''}`}>
-          {panelOpen && (
-            <div className="rb-fade space-y-2.5 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+        <div className={`grid transition-[grid-template-columns,gap] duration-300 ease-out lg:min-h-0 lg:flex-1 lg:grid-cols-[var(--bw)_minmax(0,1fr)] ${panelOpen ? 'gap-3' : 'gap-0'}`} style={{ '--bw': panelOpen ? '23rem' : '0rem' }}>
+          <div className={`min-w-0 overflow-hidden transition-all duration-300 ease-out ${panelOpen ? 'opacity-100 max-lg:max-h-[300vh]' : 'pointer-events-none opacity-0 max-lg:max-h-0'}`}>
+            <div className="space-y-2.5 lg:h-full lg:w-[23rem] lg:overflow-y-auto lg:pr-1">
               <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
                 <FieldPicker
                   key={sourceId} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)}
@@ -371,7 +386,7 @@ function ReportBuilderModal({ user, onClose }) {
                 {dragging && <p className="rb-pop rounded-lg bg-red-500/15 px-2.5 py-1 text-center text-[11px] text-red-300">Let go outside the boxes to remove it</p>}
               </div>
             </div>
-          )}
+          </div>
 
           {/* ---------------- the table ---------------- */}
           <div className="flex min-w-0 flex-col lg:min-h-0">
@@ -383,7 +398,11 @@ function ReportBuilderModal({ user, onClose }) {
               {layout.mode === 'list' && <button type="button" onClick={() => setPop('cols')} className={pill}>Columns</button>}
               <button type="button" onClick={() => setPop('fmt')} className={pill}>Format</button>
               <button type="button" onClick={() => setPanelOpen((v) => !v)} className={`${pill} ${panelOpen ? '' : pillOn}`}>{panelOpen ? 'Hide builder' : 'Show builder'}</button>
-              <div className="ml-auto flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 py-1 pl-3 pr-1">
+            </div>
+
+            <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
+              <input ref={titleRef} value={layout.title ?? ''} onChange={(e) => patch({ title: e.target.value })} placeholder="Report title (needed to export; it becomes the file name)" className={`${input} min-w-[12rem] flex-1`} />
+              <div className="flex items-center gap-1.5 rounded-xl border border-neutral-800 bg-neutral-900 py-1 pl-3 pr-1">
                 <span className={label}>Export</span>
                 <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('xlsx')} className={pill}>{busy === 'xlsx' ? 'Making…' : 'Excel'}</button>
                 <button type="button" disabled={!table || isBlank || !!busy} onClick={() => doExport('pdf')} className={pill}>{busy === 'pdf' ? 'Making…' : 'PDF'}</button>
@@ -430,25 +449,21 @@ function ReportBuilderModal({ user, onClose }) {
         </div>
       </div>
 
-      {pop && data && (
-        <Dialog onClose={() => { setPop(null); setEditingCalc(null) }}>
-          {pop === 'filter' && <FilterBuilder key={filterField ?? 'x'} fields={listFields} rows={keptRows} initialField={filterField} onAdd={(ft) => { patch({ filters: [...layout.filters, ft] }); setPop(null) }} onCancel={() => setPop(null)} />}
-          {pop === 'calc' && <FormulaBuilder key={editingCalc?.id ?? 'new'} baseFields={data.fields} rows={keptRows} fields={formulaFields} calc={layout.calc} editing={editingCalc} onSave={(c) => { patch({ calc: editingCalc ? layout.calc.map((x) => (x.id === c.id ? c : x)) : [...layout.calc, c], ...(!editingCalc && layout.mode === 'pivot' ? { vals: [...layout.vals, { f: c.id, a: 'sum' }] } : {}) }); setPop(null); setEditingCalc(null); toast.success(editingCalc ? 'Calculated field changed' : `Calculated field added: ${c.label}`) }} onCancel={() => { setPop(null); setEditingCalc(null) }} />}
-          {pop === 'cols' && layout.mode === 'list' && <ColumnsPanel fields={listFields} layout={layout} onChange={patch} />}
-          {pop === 'fmt' && <FormatPanel layout={layout} onChange={patch} />}
-          {(pop === 'cols' || pop === 'fmt') && <div className="flex justify-end"><button type="button" onClick={() => setPop(null)} className="rounded-lg bg-brand-neon px-4 py-1.5 text-sm font-semibold text-brand-contrast">Done</button></div>}
+      {pop === 'filter' && data && <Dialog title="Keep only some records" onClose={() => setPop(null)}><FilterBuilder key={filterField ?? 'x'} fields={listFields} rows={keptRows} initialField={filterField} onAdd={(ft) => { patch({ filters: [...layout.filters, ft] }); setPop(null) }} onCancel={() => setPop(null)} /></Dialog>}
+      {pop === 'calc' && data && (
+        <Dialog title={editingCalc ? 'Change the calculated column' : 'New calculated column'} width="max-w-2xl" onClose={() => { setPop(null); setEditingCalc(null) }}>
+          <FormulaBuilder key={editingCalc?.id ?? 'new'} baseFields={data.fields} rows={keptRows} fields={formulaFields} calc={layout.calc} editing={editingCalc} onSave={(c) => { patch({ calc: editingCalc ? layout.calc.map((x) => (x.id === c.id ? c : x)) : [...layout.calc, c], ...(!editingCalc && layout.mode === 'pivot' ? { vals: [...layout.vals, { f: c.id, a: 'sum' }] } : {}) }); setPop(null); setEditingCalc(null); toast.success(editingCalc ? 'Calculated column changed' : `Calculated column added: ${c.label}`) }} onCancel={() => { setPop(null); setEditingCalc(null) }} />
         </Dialog>
       )}
+      {pop === 'cols' && data && layout.mode === 'list' && <Dialog title="Columns of the list" onClose={() => setPop(null)}><ColumnsPanel fields={listFields} layout={layout} onChange={patch} onDone={() => setPop(null)} /></Dialog>}
+      {pop === 'fmt' && data && <Dialog title="Format the table" width="max-w-3xl" onClose={() => setPop(null)}><FormatPanel layout={layout} onChange={patch} names={nameItems} onDone={() => setPop(null)} /></Dialog>}
 
-      {askDel && (
-        <Dialog onClose={() => setAskDel(null)}>
-          <div className="mx-auto max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-4 shadow-2xl">
-            <p className="text-sm font-semibold text-app-text">Delete this saved layout?</p>
-            <p className="mt-1 break-words text-sm text-neutral-300">&ldquo;{askDel.name}&rdquo; will be deleted for good{askDel.share && (askDel.share.admin || askDel.share.analysts || askDel.share.staff) ? ', for everyone it was shared with too' : ''}. The records are not touched.</p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setAskDel(null)} className={pill}>Keep it</button>
-              <button type="button" onClick={() => { const l = askDel; setAskDel(null); removeLayout(l) }} className="rounded-lg bg-red-500/90 px-4 py-1.5 text-sm font-semibold text-white transition-transform active:scale-95">Delete</button>
-            </div>
+      {confirm && (
+        <Dialog title={confirm.title} width="max-w-md" onClose={() => setConfirm(null)}>
+          <p className="break-words text-sm leading-relaxed text-neutral-300">{confirm.body}</p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" onClick={() => setConfirm(null)} className={btnGhost}>Keep it as it is</button>
+            <button type="button" onClick={() => { const run = confirm.run; setConfirm(null); run() }} className="rounded-xl bg-red-500/90 px-5 py-2 text-sm font-semibold text-white transition-transform active:scale-95">{confirm.ok}</button>
           </div>
         </Dialog>
       )}

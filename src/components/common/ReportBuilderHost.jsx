@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/dexie.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { canUseReportBuilder } from '../../utils/roles.js'
+import useDelayedUnmount from '../../hooks/useDelayedUnmount.js'
 import ReportBuilderModal from './reportBuilder/ReportBuilderModal.jsx'
 
 export const OPEN_REPORT_BUILDER_EVENT = 'bsm:open-report-builder'
@@ -34,7 +35,9 @@ function ReportBuilderHost() {
     return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener(OPEN_REPORT_BUILDER_EVENT, show) }
   }, [can])
 
-  return open && can ? <ReportBuilderModal user={user} onClose={() => setOpen(false)} /> : null
+  const show = open && can
+  const mounted = useDelayedUnmount(show, 220) // keeps it on screen while the closing animation plays
+  return mounted ? <ReportBuilderModal user={user} open={show} onClose={() => setOpen(false)} /> : null
 }
 
 export default ReportBuilderHost

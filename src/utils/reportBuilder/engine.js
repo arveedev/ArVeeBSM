@@ -121,6 +121,16 @@ export function aggregate(rows, v, fields) {
   if (v.a === 'min') return Math.min(...xs)
   return Math.max(...xs)
 }
+/** Black or white writing, whichever reads on this background colour. */
+export const inkOn = (hex) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex ?? ''))
+  if (!m) return '#ffffff'
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16))
+  return r * 0.299 + g * 0.587 + b * 0.114 > 150 ? '#111827' : '#ffffff'
+}
+/** The header the person typed for a field, or the field's own name. */
+const nameOf = (layout, f) => String(layout.headers?.[f.id] ?? '').trim() || f.label
+
 export const fmtNumber = (v, a) => (v == null || Number.isNaN(v) || Number(v) === 0 ? '' : a === 'count' || a === 'distinct' ? Math.round(v).toLocaleString('en-US') : Number(v).toLocaleString('en-US', { maximumFractionDigits: a === 'avg' ? 1 : 2 }))
 
 const hlClass = (layout, x) => {
@@ -159,7 +169,7 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
     }
     const lim = full ? sorted.length : listLimit
     out.cols = cols
-    out.head = [cols.map((f) => ({ t: f.label, id: f.id, cls: f.kind === 'num' ? '' : 'l' }))]
+    out.head = [cols.map((f) => ({ t: nameOf(layout, f), id: f.id, cls: f.kind === 'num' ? '' : 'l' }))]
     out.body = sorted.slice(0, lim).map((r) => cols.map((f) => {
       const v = readValue(r, f, fields.map)
       return { t: f.kind === 'num' ? fmtNumber(v, 'sum') : String(v ?? ''), v: f.kind === 'num' ? v : null, cls: f.kind === 'num' ? hlClass(layout, v).trim() : 'l' }
@@ -210,11 +220,16 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
   const pctOk = (v) => v.a === 'sum' || v.a === 'count'
   const show = (x, v, d) => (layout.pct !== 'none' && pctOk(v) && x != null && d ? `${((x / d) * 100).toFixed(1)}%` : fmtNumber(x, v.a))
 
-  const h1 = [{ t: srows.map((f) => fields.map[f].label).join(' / ') || 'All records', cls: 'l rh', span: nR, rs: multi ? 2 : 1 }]
-  for (const [, p] of cols) h1.push({ t: hasC ? p.map((x) => x || '(blank)').join(' / ') : 'Total', span: vals.length })
+  const valName = (v) => String(layout.headers?.[v.f] ?? '').trim() || `${fields.map[v.f].label} (${AGG[v.a]})`
+  const solo = !multi && !hasC ? String(layout.headers?.[vals[0].f] ?? '').trim() : ''
+  // one heading for each field in Rows, so every column that the rows create has its own name
+  const h1 = srows.length
+    ? srows.map((id, i) => ({ t: nameOf(layout, fields.map[id]), cls: i === 0 ? 'l rh rf' : 'l rh', span: 1, rs: multi ? 2 : 1 }))
+    : [{ t: 'All records', cls: 'l rh rf', span: 1, rs: multi ? 2 : 1 }]
+  for (const [, p] of cols) h1.push({ t: hasC ? p.map((x) => x || '(blank)').join(' / ') : (solo || 'Total'), span: vals.length })
   if (hasC && totCol) h1.push({ t: 'Total', span: vals.length, cls: 'tc', id: '__tot' })
   out.head = [h1]
-  if (multi) out.head.push(cols.concat(hasC && totCol ? [[]] : []).flatMap((c, i) => vals.map((v) => ({ t: `${fields.map[v.f].label} (${AGG[v.a]})`, cls: hasC && i === cols.length ? 'tc' : '' }))))
+  if (multi) out.head.push(cols.concat(hasC && totCol ? [[]] : []).flatMap((c, i) => vals.map((v) => ({ t: valName(v), cls: hasC && i === cols.length ? 'tc' : '' }))))
 
   let max = 0
   const grid = prow.map((r) => cols.map(([k]) => vals.map((v) => {
@@ -229,7 +244,7 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
       const all = group.flatMap((r) => r.all)
       const cs = cols.flatMap(([k]) => vals.map((v) => { const x = aggregate(all.filter(sameKey(k)), v, fields); return { t: show(x, v, 0), v: x, cls: 'st' } }))
       const tot = hasC && totCol ? vals.map((v) => { const x = aggregate(all, v, fields); return { t: fmtNumber(x, v.a), v: x, cls: 'tc st' } }) : []
-      out.body.push({ cls: 'subt', cells: [{ t: `${group[0].key[0] || '(blank)'} subtotal`, cls: 'l rh st', span: nR }, ...cs, ...tot] })
+      out.body.push({ cls: 'subt', cells: [{ t: 'Subtotal', cls: 'rh rf st', span: nR }, ...cs, ...tot] })
     }
     group = []
   }
@@ -239,7 +254,7 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
     const keyParts = srows.length ? r.key : ['All']
     const lab = keyParts.map((p, i) => {
       const same = srows.length && ri > 0 && prow[ri - 1].key.slice(0, i + 1).join('|') === r.key.slice(0, i + 1).join('|')
-      return { t: same && i < nR - 1 ? '' : (p || '(blank)'), cls: `l rh${same && i < nR - 1 ? ' sb' : ''}` }
+      return { t: same && i < nR - 1 ? '' : (p || '(blank)'), cls: `l rh${i === 0 ? ' rf' : ''}${same && i < nR - 1 ? ' sb' : ''}` }
     })
     const cs = cols.flatMap(([k], ci) => vals.map((v, vi) => {
       const recs = r.cells.get(k) || []
@@ -281,9 +296,10 @@ const spread = (c, pct) => [c.v != null && pct === 'none' ? c.v : c.t, ...Array(
 const srowsCount = (table) => { const f = table.body.find((r) => r.cls !== 'subt'); return f ? f.cells.filter((c) => /\brh\b/.test(c.cls || '')).length : 1 }
 export function flatten(layout, table) {
   if (layout.mode === 'list') {
-    return { head: table.cols.map((f) => f.label), hr: null, body: table.body.map((r) => r.map((c, i) => (table.cols[i].kind === 'num' ? c.v : c.t))), foot: null, kinds: table.cols.map((f) => f.kind) }
+    return { head: table.cols.map((f) => nameOf(layout, f)), hr: null, body: table.body.map((r) => r.map((c, i) => (table.cols[i].kind === 'num' ? c.v : c.t))), foot: null, kinds: table.cols.map((f) => f.kind) }
   }
-  const hr = table.head.map((r) => r.flatMap((c) => [c.t, ...Array(Math.max(0, (c.span || 1) - 1)).fill('')]))
+  // a heading that reaches down two rows leaves its columns empty in the second row of the flat form
+  const hr = table.head.map((r, ri) => [...Array(ri === 0 ? 0 : table.head[ri - 1].filter((c) => (c.rs || 1) > 1).reduce((n, c) => n + (c.span || 1), 0)).fill(''), ...r.flatMap((c) => [c.t, ...Array(Math.max(0, (c.span || 1) - 1)).fill('')])])
   const first = table.body.find((r) => r.cls !== 'subt')
   const colCls = (first ? first.cells : []).flatMap((c) => Array(Math.max(1, c.span || 1)).fill(c.cls || ''))
   const hdr = table.head.map((r) => r.map((c) => ({ content: c.t, colSpan: c.span || 1, rowSpan: c.rs || 1, tc: /\btc\b/.test(c.cls || ''), left: /\bl\b/.test(c.cls || '') })))
