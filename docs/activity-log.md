@@ -18729,3 +18729,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-21: Actionable audit findings (v1.10-430)
 
 - System health lists the records behind each Sheet audit finding with Open / Send again buttons; bsm-backups status script sends the findings.
+
+## 2026-10-22: Report Builder groups and cereal type on authorities (v1.10-431)
+
+- Custom groups of a text field; cereal type on authorities and sack-line sources.

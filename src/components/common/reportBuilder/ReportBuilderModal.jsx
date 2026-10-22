@@ -21,7 +21,7 @@ import { exportXlsx, exportPdf } from '../../../services/reportBuilderExport.js'
 import { db } from '../../../db/dexie.js'
 import { isStaffRole } from '../../../utils/roles.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
-import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, ColumnsPanel, FormatPanel, ResultTable, btnGhost, pill, pillOn, input } from './rbParts.jsx'
+import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, GroupBuilder, ColumnsPanel, FormatPanel, ResultTable, btnGhost, pill, pillOn, input } from './rbParts.jsx'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const longDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -202,7 +202,7 @@ function ReportBuilderModal({ user, onClose, open = true }) {
     const order = [...new Set([...layout.order.filter((id) => fields.map[id]), ...base])]
     return new Set(order.filter((id) => !layout.hidden.includes(id)))
   }, [layout, fields])
-  const formulaFields = useMemo(() => ({ list: offered.list.filter((f) => !f.d && tableIds.has(f.id)), map: fields.map }), [offered, tableIds, fields])
+  const formulaFields = useMemo(() => ({ list: offered.list.filter((f) => !f.d && tableIds.has(f.id) && !f.calc?.group), map: fields.map }), [offered, tableIds, fields])
   const listFields = useMemo(() => ({ list: offered.list.filter((f) => !f.d), map: fields.map }), [offered, fields])
 
   const patch = (o) => setLayout((l) => ({ ...l, ...o }))
@@ -303,6 +303,7 @@ function ReportBuilderModal({ user, onClose, open = true }) {
   const today = todayISO()
   const quick = [['Since Sept 1', floor, today], ['This month', monthStart(today) < floor ? floor : monthStart(today), today], ['Last 7 days', daysBefore(today, 6) < floor ? floor : daysBefore(today, 6), today]]
   const tableKey = `${sourceId}|${periodKey}|${layout.mode}|${JSON.stringify([layout.rows, layout.cols, layout.vals, layout.filters.length, layout.hidden.length, layout.search])}`
+  const groupOpen = () => { setEditingCalc(null); setPop('group') }
   const calcOpen = () => { if (tableIds.size === 0) { toast('Put some fields in the table first. A formula can only use the fields of the table.'); return } setEditingCalc(null); setPop('calc') }
 
   return createPortal(
@@ -390,7 +391,7 @@ function ReportBuilderModal({ user, onClose, open = true }) {
               <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
                 <FieldPicker
                   key={sourceId} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)}
-                  extra={<button type="button" onClick={calcOpen} className={`${pill} shrink-0 !px-2.5`}>+ Formula</button>}
+                  extra={<span className="flex shrink-0 gap-1.5"><button type="button" onClick={calcOpen} className={`${pill} shrink-0 !px-2.5`}>+ Formula</button><button type="button" onClick={groupOpen} className={`${pill} shrink-0 !px-2.5`}>+ Group</button></span>}
                 />
               </div>
               <div className="space-y-2 rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
@@ -403,6 +404,14 @@ function ReportBuilderModal({ user, onClose, open = true }) {
                   </DropArea>
                 </BoxRow>
                 {dragging && <p className="rb-pop rounded-lg bg-red-500/15 px-2.5 py-1 text-center text-[11px] text-red-300">Let go outside the boxes to remove it</p>}
+              </div>
+              <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Group the data</p>
+                <p className="mb-2 mt-0.5 text-[11px] leading-snug text-neutral-500">Put values into your own groups, for example every customer whose name has FTI, then drag the group into Rows or Columns.</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {layout.calc.filter((c) => c.group && fields.map[c.id]).map((c) => <FieldChip key={c.id} f={fields.map[c.id]} draggable dashed used={used.has(c.id)} onClick={(e) => { e.stopPropagation(); openMenu(e, fields.map[c.id]) }} />)}
+                  <button type="button" onClick={groupOpen} className={`${pill} !px-2.5 !py-1`}>+ New group</button>
+                </div>
               </div>
             </div>
           </div>
@@ -474,6 +483,11 @@ function ReportBuilderModal({ user, onClose, open = true }) {
           <FormulaBuilder key={editingCalc?.id ?? 'new'} baseFields={data.fields} rows={keptRows} fields={formulaFields} calc={layout.calc} editing={editingCalc} onSave={(c) => { patch({ calc: editingCalc ? layout.calc.map((x) => (x.id === c.id ? c : x)) : [...layout.calc, c], ...(!editingCalc && layout.mode === 'pivot' ? { vals: [...layout.vals, { f: c.id, a: 'sum' }] } : {}) }); setPop(null); setEditingCalc(null); toast.success(editingCalc ? 'Calculated column changed' : `Calculated column added: ${c.label}`) }} onCancel={() => { setPop(null); setEditingCalc(null) }} />
         </Dialog>
       )}
+      {pop === 'group' && data && (
+        <Dialog title={editingCalc ? 'Change the group' : 'New group'} width="max-w-2xl" onClose={() => { setPop(null); setEditingCalc(null) }}>
+          <GroupBuilder key={editingCalc?.id ?? 'new'} fields={offered} rows={keptRows} editing={editingCalc} onSave={(c) => { patch({ calc: editingCalc ? layout.calc.map((x) => (x.id === c.id ? c : x)) : [...layout.calc, c], ...(!editingCalc ? { mode: 'pivot', rows: [...layout.rows, c.id] } : {}) }); setPop(null); setEditingCalc(null); toast.success(editingCalc ? 'Group changed' : `Group added to Rows: ${c.label}`) }} onCancel={() => { setPop(null); setEditingCalc(null) }} />
+        </Dialog>
+      )}
       {pop === 'cols' && data && layout.mode === 'list' && <Dialog title="Columns of the list" onClose={() => setPop(null)}><ColumnsPanel fields={listFields} layout={layout} onChange={patch} onDone={() => setPop(null)} /></Dialog>}
       {pop === 'fmt' && data && <Dialog title="Format the table" width="max-w-3xl" onClose={() => setPop(null)}><FormatPanel layout={layout} onChange={patch} names={nameItems} onDone={() => setPop(null)} /></Dialog>}
 
@@ -492,11 +506,11 @@ function ReportBuilderModal({ user, onClose, open = true }) {
           <p className="break-words px-3 pb-1 pt-0.5 text-[11px] font-bold text-neutral-500">{menu.f.label}</p>
           {[
             ['rows', 'Add to Rows'], ['cols', 'Add to Columns'], ['vals', 'Add to Values'], ['filt', 'Filter by this field'], ...(layout.mode === 'list' ? [['sort', 'Sort by this field']] : []),
-            ...(menu.f.calc ? [['edit', 'Change this formula'], ['del', 'Delete this field']] : []),
+            ...(menu.f.calc ? [['edit', menu.f.calc.group ? 'Change this group' : 'Change this formula'], ['del', menu.f.calc.group ? 'Delete this group' : 'Delete this field']] : []),
           ].map(([a, n]) => (
             <button key={a} type="button" onClick={() => {
               if (a === 'sort') patch({ sort: [{ f: menu.f.id, dir: 1 }] })
-              else if (a === 'edit') { setEditingCalc(layout.calc.find((c) => c.id === menu.f.id) ?? null); setPop('calc') }
+              else if (a === 'edit') { setEditingCalc(layout.calc.find((c) => c.id === menu.f.id) ?? null); setPop(menu.f.calc?.group ? 'group' : 'calc') }
               else if (a === 'del') patch({ calc: layout.calc.filter((c) => c.id !== menu.f.id), rows: layout.rows.filter((x) => x !== menu.f.id), cols: layout.cols.filter((x) => x !== menu.f.id), vals: layout.vals.filter((v) => v.f !== menu.f.id), filters: layout.filters.filter((x) => x.f !== menu.f.id) })
               else place(a, menu.f.id)
               setMenu(null)

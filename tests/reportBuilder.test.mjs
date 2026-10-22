@@ -236,3 +236,23 @@ test('fields nobody needs are left out of the picker, and a pivot blank key is n
   assert.ok(!isHiddenField({ id: 'netKilos', label: 'Net kg', kind: 'num' }))
   assert.ok(!isHiddenField({ id: 'date_mo', label: 'Date (month)', kind: 'txt', d: true }))
 })
+
+test('groups: the person\'s own groups of a text field (part of the name, first word, first letters) work in a pivot', async () => {
+  const { groupValue } = await import('../src/utils/reportBuilder/fields.js')
+  const base2 = [{ id: 'c', label: 'Customer', kind: 'txt' }, { id: 'n', label: 'Net kg', kind: 'num' }]
+  const g = { from: 'c', mode: 'rules', rules: [{ op: 'contains', text: 'fti', label: 'FTI' }, { op: 'starts', text: 'borro', label: '' }, { op: 'is', text: 'buama ricemill', label: 'Buama' }], other: 'Others' }
+  const f = buildFields(base2, [{ id: 'g1', label: 'Customer group', group: g }])
+  assert.equal(f.map.g1.kind, 'txt')
+  const val = (name) => groupValue({ c: name }, g, f.map)
+  assert.equal(val('FTI BY MARIA MABEL C. CIDRO'), 'FTI')
+  assert.equal(val('Borromeo Ricemill'), 'borro')
+  assert.equal(val('Buama Ricemill'), 'Buama')
+  assert.equal(val('Dens Marketing Corporation'), 'Others')
+  assert.equal(val(''), 'Others')
+  assert.equal(groupValue({ c: 'MAGAYON RICEMILL' }, { from: 'c', mode: 'firstWord' }, f.map), 'MAGAYON')
+  assert.equal(groupValue({ c: 'Kipshoven Ricemill' }, { from: 'c', mode: 'letters', n: 3 }, f.map), 'KIP')
+  const rows2 = [{ c: 'FTI A', n: 10 }, { c: 'FTI B', n: 5 }, { c: 'Dens', n: 7 }]
+  const L = { ...blankLayout('x'), rows: ['g1'], vals: [{ f: 'n', a: 'sum' }], calc: [{ id: 'g1', label: 'Customer group', group: g }] }
+  const t = buildTable(L, base2, rows2, { full: true })
+  assert.deepEqual(t.body.map((r) => r.cells[0].t).sort(), ['FTI', 'Others'])
+})

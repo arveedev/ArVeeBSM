@@ -95,7 +95,7 @@ export const withDateParts = (fields) => {
 /** Fields of a source plus the layout's own calculated fields, as { list, map }. */
 export const buildFields = (base, calc = []) => {
   const list = withDateParts(base)
-  for (const c of calc) list.push({ id: c.id, label: c.label, kind: 'num', calc: c })
+  for (const c of calc) list.push({ id: c.id, label: c.label, kind: c.group ? 'txt' : 'num', calc: c })
   const map = Object.fromEntries(list.map((f) => [f.id, f]))
   return { list, map }
 }
@@ -116,7 +116,26 @@ const labelIndex = (map) => {
   if (!m) { m = new Map(); for (const f of Object.values(map)) if (!m.has(f.label.toLowerCase())) m.set(f.label.toLowerCase(), f.id); indexes.set(map, m) }
   return m
 }
+/** The group a row falls in, by the person's own rules over one text field ("customer name contains FTI" -> "FTI"). */
+export const groupValue = (row, g, map) => {
+  const f = map[g.from]
+  const raw = String((f ? readValue(row, f, map) : row[g.from]) ?? '').trim()
+  const other = g.other || 'Other'
+  if (!raw) return other
+  if (g.mode === 'firstWord') return raw.split(/\s+/)[0]
+  if (g.mode === 'letters') return raw.slice(0, Math.max(1, Number(g.n) || 3)).toUpperCase()
+  const low = raw.toLowerCase()
+  for (const r of g.rules ?? []) {
+    const t = String(r.text ?? '').trim().toLowerCase()
+    if (!t) continue
+    const hit = r.op === 'starts' ? low.startsWith(t) : r.op === 'ends' ? low.endsWith(t) : r.op === 'is' ? low === t : low.includes(t)
+    if (hit) return String(r.label ?? '').trim() || String(r.text).trim()
+  }
+  return other
+}
+
 export function calcValue(row, c, map, depth = 0) {
+  if (c.group) return groupValue(row, c.group, map)
   if (c.formula != null) {
     const p = parseFormula(c.formula)
     if (!p.ok || depth > 6) return 0

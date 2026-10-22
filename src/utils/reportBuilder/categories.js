@@ -4,7 +4,7 @@
 // changed); they stay available but folded away.
 
 export const CATEGORIES = [
-  { id: 'calc', label: 'Calculated fields', open: true },
+  { id: 'calc', label: 'Calculated fields and groups', open: true },
   { id: 'main', label: 'Main fields', open: true },
   { id: 'numbers', label: 'Quantities', open: false },
   { id: 'money', label: 'Money', open: false },

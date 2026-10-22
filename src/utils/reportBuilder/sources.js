@@ -89,8 +89,8 @@ export const SOURCES = [
   { id: 'docs_sacks', dateField: 'date', group: 'Documents', name: 'Sack lines (ESR and ESI, one row per sack type)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [tx, lk] = await Promise.all([db.transactions.toArray(), lookups()])
     const rows = []
-    for (const t of tx) for (const s of Array.isArray(t.sackLines) ? t.sackLines : []) rows.push({ date: t.date, serialNo: t.serialNo, type: t.type, status: t.status, ...lk.place(t.warehouseId), customerName: t.customerName ?? '', sackType: lk.name(lk.sack, s.sackTypeId, 'code'), condition: s.condition ?? '', pieces: s.pieces ?? 0, siaNumber: t.siaNumber ?? '', createdByName: t.createdByName ?? '' })
-    return build(cut(rows, allowed), { serialNo: L('Serial no.'), type: L('Document'), customerName: L('Customer'), sackType: L('Sack type'), siaNumber: L('Authority no. (SIA)'), createdByName: L('Entered by') }, ['date', 'serialNo', 'type', 'status', 'warehouse', 'province', 'sackType', 'condition', 'pieces'])
+    for (const t of tx) for (const s of Array.isArray(t.sackLines) ? t.sackLines : []) rows.push({ date: t.date, serialNo: t.serialNo, type: t.type, status: t.status, ...lk.place(t.warehouseId), customerName: t.customerName ?? '', sackType: lk.name(lk.sack, s.sackTypeId, 'code'), cereal: lk.sack.get(s.sackTypeId)?.category ?? '', condition: s.condition ?? '', pieces: s.pieces ?? 0, siaNumber: t.siaNumber ?? '', createdByName: t.createdByName ?? '' })
+    return build(cut(rows, allowed), { serialNo: L('Serial no.'), type: L('Document'), customerName: L('Customer'), sackType: L('Sack type'), siaNumber: L('Authority no. (SIA)'), createdByName: L('Entered by') }, ['date', 'serialNo', 'type', 'status', 'warehouse', 'province', 'cereal', 'sackType', 'condition', 'pieces'])
   } },
   { id: 'auth', dateField: 'date', group: 'Authorities and milling', name: 'Authorities (AI and SIA)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [au, lk] = await Promise.all([db.authorities.toArray(), lookups()])
@@ -98,6 +98,9 @@ export const SOURCES = [
       const lot = parseLotNote(a.note1)
       return {
         ...scalars(a), ...lk.place(a.assignedWarehouse), variety: lk.name(lk.variety, a.varietyId),
+        // the cereal type: an AI by its variety; an SIA by the sack types it authorizes (Palay, Rice, By Products)
+        cereal: a.type === 'AI' ? (lk.variety.get(a.varietyId)?.category ?? '') : [...new Set((Array.isArray(a.sackLines) ? a.sackLines : []).map((l) => lk.sack.get(l.sackTypeId)?.category).filter(Boolean))].join(' / '),
+        sackTypes: [...new Set((Array.isArray(a.sackLines) ? a.sackLines : []).map((l) => lk.name(lk.sack, l.sackTypeId, 'code')).filter(Boolean))].join(', '),
         balanceBags: (a.totalAllocationBags ?? (a.totalAllocationKilos ?? 0) / NET_BAG_KG) - (a.totalIssuedBags ?? (a.totalIssuedKilos ?? 0) / NET_BAG_KG),
         balanceKilos: (a.totalAllocationKilos ?? 0) - (a.totalIssuedKilos ?? 0), allocationNetBags: (a.totalAllocationKilos ?? 0) / NET_BAG_KG, issuedNetBags: (a.totalIssuedKilos ?? 0) / NET_BAG_KG,
         lotQty: lot ? lot.qty : null, lotIssuedSoFar: lot ? lot.issued : null, firstSeenAt: a.firstSeenAt ?? '', changes: Array.isArray(a.changeLog) ? a.changeLog.length : 0,
@@ -107,13 +110,13 @@ export const SOURCES = [
       type: L('Type'), aiNumber: L('AI no.'), siaNumber: L('SIA no.'), customerName: L('Customer'), transactionTypeName: L('Transaction type'), regionalAuthorityNumber: L('Regional authority no.'), totalAllocationBags: L('Authorized bags'), totalAllocationKilos: L('Authorized kg'),
       totalIssuedBags: L('Issued bags'), totalIssuedKilos: L('Issued kg'), balanceBags: L('Balance bags'), balanceKilos: L('Balance kg'), allocationNetBags: L('Authorized net bags'), issuedNetBags: L('Issued net bags'), lotQty: L('Lot QTY (from the note)'), lotIssuedSoFar: L('Lot issued so far (from the note)'),
       note1: L('Note 1'), note2: L('Note 2'), assignedWarehouse: { hide: true }, ...Object.fromEntries(FK.map((k) => [k, { hide: true }])),
-    }, ['date', 'aiNumber', 'siaNumber', 'type', 'transactionTypeName', 'customerName', 'warehouse', 'variety', 'totalAllocationBags', 'totalIssuedBags', 'balanceBags', 'status', 'regionalAuthorityNumber', 'ageGroup'])
+    }, ['date', 'aiNumber', 'siaNumber', 'type', 'transactionTypeName', 'customerName', 'warehouse', 'cereal', 'variety', 'sackTypes', 'totalAllocationBags', 'totalIssuedBags', 'balanceBags', 'status', 'regionalAuthorityNumber', 'ageGroup'])
   } },
   { id: 'auth_sacks', dateField: 'date', group: 'Authorities and milling', name: 'Authority sack lines (SIA)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [au, lk] = await Promise.all([db.authorities.toArray(), lookups()])
     const rows = []
-    for (const a of au) for (const s of Array.isArray(a.sackLines) ? a.sackLines : []) rows.push({ date: a.date ?? '', siaNumber: a.siaNumber ?? '', customer: a.customerName ?? '', status: a.status ?? '', ...lk.place(a.assignedWarehouse), sackType: lk.name(lk.sack, s.sackTypeId, 'code') || s.sackTypeCode || '', condition: s.condition ?? '', authorizedPieces: s.pieces ?? s.allocation ?? 0, issuedPieces: s.issued ?? 0 })
-    return build(cut(rows, allowed), { siaNumber: L('SIA no.') }, ['date', 'siaNumber', 'customer', 'warehouse', 'sackType', 'condition', 'authorizedPieces', 'issuedPieces', 'status'])
+    for (const a of au) for (const s of Array.isArray(a.sackLines) ? a.sackLines : []) rows.push({ date: a.date ?? '', siaNumber: a.siaNumber ?? '', customer: a.customerName ?? '', status: a.status ?? '', ...lk.place(a.assignedWarehouse), sackType: lk.name(lk.sack, s.sackTypeId, 'code') || s.sackTypeCode || '', cereal: lk.sack.get(s.sackTypeId)?.category ?? '', condition: s.condition ?? '', authorizedPieces: s.pieces ?? s.allocation ?? 0, issuedPieces: s.issued ?? 0 })
+    return build(cut(rows, allowed), { siaNumber: L('SIA no.') }, ['date', 'siaNumber', 'customer', 'warehouse', 'cereal', 'sackType', 'condition', 'authorizedPieces', 'issuedPieces', 'status'])
   } },
   { id: 'mo', dateField: 'dateOfMilling', group: 'Authorities and milling', name: 'Milling orders (MO and TMO)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [mo, done, lk] = await Promise.all([db.millingOrders.toArray(), db.millingOrderCompletions.toArray(), lookups()])
@@ -183,7 +186,7 @@ export const SOURCES = [
   } },
   { id: 'sack_inv', group: 'Piles, sacks and logistics', name: 'Sack inventory (opening snapshot)', access: 'all', scoped: true, load: async ({ allowed }) => {
     const [s, lk] = await Promise.all([db.sackInventory.toArray(), lookups()])
-    const rows = s.map((x) => ({ ...scalars(x), ...lk.place(x.warehouseId), sackType: lk.name(lk.sack, x.sackTypeId, 'code') }))
+    const rows = s.map((x) => ({ ...scalars(x), ...lk.place(x.warehouseId), sackType: lk.name(lk.sack, x.sackTypeId, 'code'), cereal: lk.sack.get(x.sackTypeId)?.category ?? '' }))
     return build(cut(rows, allowed), { asOfDate: L('As of'), sackType: L('Sack type'), ...Object.fromEntries(FK.map((k) => [k, { hide: true }])) }, ['warehouse', 'sackType', 'condition', 'pieces', 'asOfDate'])
   } },
   { id: 'logistics', group: 'Piles, sacks and logistics', name: 'Logistics equipment', access: 'all', scoped: true, load: async ({ allowed }) => {

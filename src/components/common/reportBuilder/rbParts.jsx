@@ -208,6 +208,72 @@ export function FormulaBuilder({ baseFields, rows, fields, calc, editing, onSave
 }
 
 // ------------------------------------------------------------------------------------------------ columns and format
+// ------------------------------------------------------------------------------------------------ groups: the person's own groupings of a field's values
+const GROUP_OPS = [['contains', 'contains'], ['starts', 'starts with'], ['ends', 'ends with'], ['is', 'is exactly']]
+
+export function GroupBuilder({ fields, rows, editing, onSave, onCancel }) {
+  const sources = fields.list.filter((f) => !f.d && !f.calc && f.kind === 'txt')
+  const [name, setName] = useState(editing?.label ?? '')
+  const [from, setFrom] = useState(editing?.group?.from ?? sources.find((f) => /customer|farmer/i.test(f.label))?.id ?? sources[0]?.id ?? '')
+  const [mode, setMode] = useState(editing?.group?.mode ?? 'rules')
+  const [n, setN] = useState(editing?.group?.n ?? 3)
+  const [rules, setRules] = useState(editing?.group?.rules?.length ? editing.group.rules : [{ op: 'contains', text: '', label: '' }])
+  const [other, setOther] = useState(editing?.group?.other ?? 'Other')
+  const group = { from, mode, n: Number(n) || 3, rules: rules.filter((r) => String(r.text).trim()), other: other.trim() || 'Other' }
+  const preview = useMemo(() => {
+    if (!from || !fields.map[from]) return []
+    const tmp = { id: '__g', label: '__g', group }
+    const f2 = { list: fields.list, map: { ...fields.map, __g: { id: '__g', label: '__g', kind: 'txt', calc: tmp } } }
+    const counts = new Map()
+    for (const r of rows) { const v = String(readValue(r, f2.map.__g, f2.map) ?? ''); counts.set(v, (counts.get(v) ?? 0) + 1) }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, fields, from, mode, n, JSON.stringify(rules), other])
+  const ok = from && (mode !== 'rules' || group.rules.length > 0)
+  const setRule = (i, o) => setRules((rs) => rs.map((r, k) => (k === i ? { ...r, ...o } : r)))
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1"><span className={fieldLabel}>Name of the group</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="For example: Customer group" className={ctl} /></label>
+        <label className="grid gap-1"><span className={fieldLabel}>Group the values of</span><select value={from} onChange={(e) => setFrom(e.target.value)} className={ctl}>{sources.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}</select></label>
+      </div>
+      <div className="grid gap-1.5">
+        <span className={fieldLabel}>How to group</span>
+        <div className="flex flex-wrap gap-1.5">
+          {[['rules', 'By words I choose'], ['firstWord', 'By the first word'], ['letters', 'By the first letters']].map(([k, t]) => <button key={k} type="button" onClick={() => setMode(k)} className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${mode === k ? 'border-brand-neon bg-brand-neon/15 text-brand-neon' : 'border-neutral-700 text-neutral-200 hover:border-neutral-500'}`}>{t}</button>)}
+        </div>
+      </div>
+      {mode === 'rules' && (
+        <div className="space-y-2">
+          <p className="text-xs text-neutral-400">Each value goes into the first group whose rule it matches. For example: name <b>contains</b> &ldquo;FTI&rdquo; &rarr; group &ldquo;FTI&rdquo;.</p>
+          {rules.map((r, i) => (
+            <div key={i} className="grid grid-cols-[7.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
+              <select value={r.op} onChange={(e) => setRule(i, { op: e.target.value })} className={ctl}>{GROUP_OPS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+              <input value={r.text} onChange={(e) => setRule(i, { text: e.target.value })} placeholder="this text" className={ctl} />
+              <input value={r.label} onChange={(e) => setRule(i, { label: e.target.value })} placeholder="group name (or leave empty)" className={ctl} />
+              <button type="button" onClick={() => setRules((rs) => (rs.length > 1 ? rs.filter((_, k) => k !== i) : rs))} aria-label="Remove rule" className="rounded-lg px-2 py-1 text-neutral-500 hover:text-red-400">&times;</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setRules((rs) => [...rs, { op: 'contains', text: '', label: '' }])} className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-200 hover:border-brand-neon">+ Another rule</button>
+        </div>
+      )}
+      {mode === 'letters' && <label className="grid max-w-[10rem] gap-1"><span className={fieldLabel}>How many letters</span><input type="number" min="1" max="12" value={n} onChange={(e) => setN(e.target.value)} className={ctl} /></label>}
+      {mode === 'rules' && <label className="grid gap-1 sm:max-w-xs"><span className={fieldLabel}>Everything else is called</span><input value={other} onChange={(e) => setOther(e.target.value)} className={ctl} /></label>}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3">
+        <p className={fieldLabel}>What the groups look like now</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {preview.length === 0 && <span className="text-sm text-neutral-500">Nothing to show yet.</span>}
+          {preview.map(([label, c]) => <span key={label} className="rounded-full border border-neutral-700 px-3 py-1 text-sm text-neutral-200">{label || '(blank)'} <b className="text-brand-neon">{c.toLocaleString('en-US')}</b></span>)}
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 border-t border-neutral-800 pt-4">
+        <button type="button" onClick={onCancel} className={btnGhost}>Cancel</button>
+        <button type="button" disabled={!ok} onClick={() => onSave({ id: editing?.id ?? `g_${Math.random().toString(36).slice(2, 8)}`, label: name.trim() || `${fields.map[from]?.label ?? 'Group'} group`, group })} className={btnPrimary}>{editing ? 'Save changes' : 'Add the group'}</button>
+      </div>
+    </div>
+  )
+}
+
 export function ColumnsPanel({ fields, layout, onChange, onDone }) {
   const base = fields.list.filter((f) => !f.d).map((f) => f.id)
   const order = [...new Set([...layout.order.filter((id) => fields.map[id]), ...base])]
