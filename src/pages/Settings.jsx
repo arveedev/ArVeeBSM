@@ -151,7 +151,7 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
   // Whether the Disbursement Voucher and the Budget Utilization Request particulars end with "DATED OCT. 9-10, 2026".
   // Off by default.
   const dvDatedText = userRecord?.dvDatedText === true
-  // Net weight and Equivalent Net Weight to 3 decimals (default) or 2 - changes how new Purchase Receipts are computed.
+  // Net weight to 3 decimals (default) or 2 - changes how new Purchase Receipts are computed (the Equivalent Net Weight is never cut to 2).
   const netDecimals = userRecord?.netWeightDecimals === 2 ? 2 : 3
   const setNetDecimals = async (d) => { await db.users.update(uid, { netWeightDecimals: d }) }
   const toggleDvDated = async () => {
@@ -212,7 +212,7 @@ function SdoAbstractDisplaySection({ userRecord, uid }) {
         <div>
           <h2 className="text-base font-semibold text-app-text">Net weight decimals</h2>
           <p className="mt-1 text-xs text-neutral-500">
-            With 2, the Net Weight and the Equivalent Net Weight are both rounded to 2 decimals, and the amount paid is worked out from them. Applies to Purchase Receipts issued from now on; issued ones keep theirs.
+            With 2, only the Net Weight is rounded to 2 decimals. The Equivalent Net Weight keeps its own 3 or 4 decimals, so the amount paid stays exact. Applies to Purchase Receipts issued from now on; issued ones keep theirs.
           </p>
         </div>
         <div className="flex shrink-0 overflow-hidden rounded-lg border border-neutral-800">

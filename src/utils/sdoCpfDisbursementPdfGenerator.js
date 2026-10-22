@@ -202,7 +202,7 @@ const drawHeader = (doc, { branchLabel, cityLabel, periodLabel, officer, isFirst
  */
 export const generateCpfDisbursementRecord = ({
   branchLabel, cityLabel, dateFrom, dateTo,
-  purchaseReceipts, ledgerEntries, openingBalance, purityDisplayFormat = 'range', officer, capture = null, netDecimals = 3,
+  purchaseReceipts, ledgerEntries, openingBalance, purityDisplayFormat = 'range', officer, capture = null,
 }) => {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
   const periodLabel = fmtPeriodLabel(dateFrom, dateTo)
@@ -216,12 +216,10 @@ export const generateCpfDisbursementRecord = ({
   // spent" rather than briefly going negative on paper for a same-day
   // replenishment that actually happened first.
   const prEvents = purchaseReceipts.map((pr) => ({ kind: 'pr', date: pr.date, pr }))
-  // Net Wt / Equivalent Net Wt print with 2 decimals for receipts issued by an SDO working to 2; totals only when all are.
-  // When the exporting SDO works to 2 decimals, every row and every total prints Net Wt and Equivalent Net Wt with 2 (older receipts are
-  // shown rounded; their stored figures and amounts are not touched). A cancelled receipt carries no weights, so it never decides this.
-  const dec2 = (pr) => netDecimals === 2 || pr.netWeightDecimals === 2
+  // Net Wt prints with 2 decimals for receipts issued by an SDO working to 2 (the Equivalent Net Wt always keeps its 4); the net total only when
+  // every counted receipt does. A cancelled receipt carries no weights, so it never decides this.
   const counted = purchaseReceipts.filter((pr) => pr.status !== 'Cancelled')
-  const totalsTwo = netDecimals === 2 || (counted.length > 0 && counted.every(dec2))
+  const totalsTwo = counted.length > 0 && counted.every((pr) => pr.netWeightDecimals === 2)
   const ledgerEvents = ledgerEntries.map((e) => ({ kind: 'ledger', date: e.date, entry: e }))
   const events = [...ledgerEvents, ...prEvents].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1
@@ -329,8 +327,8 @@ export const generateCpfDisbursementRecord = ({
       hyphenWrap((pr.rsbsa ?? '').toUpperCase()), 'CASH', '',
       fmtBags(pr.numberOfBags), baseVarietyCode(pr.classification).toUpperCase(),
       fmtKilos(pr.moistureContent, 1), purityText(pr).toUpperCase(),
-      fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos, dec2(pr) ? 2 : 3),
-      pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, dec2(pr) ? 2 : 4), fmtKilos(pr.unitCost, 2),
+      fmtKilos(pr.grossKilos), fmtKilos(pr.sackKilos), fmtKilos(pr.netKilos, pr.netWeightDecimals === 2 ? 2 : 3),
+      pr.enwFactor?.toFixed(4) ?? '', fmtKilos(pr.enw, 4), fmtKilos(pr.unitCost, 2),
       fmtPeso(pr.totalAmount),
       fmtPeso(running),
     ]
@@ -373,7 +371,7 @@ export const generateCpfDisbursementRecord = ({
   const buildTotalsRowCells = (t, runningBalance) => [
     fmtBags(t.bags), '', '', '',
     fmtKilos(t.gross), '', fmtKilos(t.net, totalsTwo ? 2 : 3),
-    '', fmtKilos(t.enw, totalsTwo ? 2 : 4), '',
+    '', fmtKilos(t.enw, 4), '',
     fmtPeso(t.amount),
     runningBalance == null ? '' : fmtPeso(runningBalance),
   ]

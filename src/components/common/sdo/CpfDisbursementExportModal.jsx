@@ -97,7 +97,6 @@ function CpfDisbursementExportModal({ onClose }) {
       const capture = kind === 'excel' ? [] : null
       const doc = generateCpfDisbursementRecord({
         capture,
-        netDecimals: userRecord?.netWeightDecimals === 2 ? 2 : 3,
         branchLabel,
         cityLabel,
         dateFrom,

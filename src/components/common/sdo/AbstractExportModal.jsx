@@ -373,7 +373,6 @@ function AbstractExportModal({ onClose }) {
       const capture = kind === 'excel' ? [] : null
       const doc = generateSdoAbstract({
         capture,
-        netDecimals: userRecord?.netWeightDecimals === 2 ? 2 : 3,
         branchLabel,
         dateFrom,
         dateTo,

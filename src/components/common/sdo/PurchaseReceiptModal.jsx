@@ -543,13 +543,13 @@ function PurchaseReceiptModal({ wsr, cashOnHand, onClose }) {
             <div className="mt-1 grid grid-cols-2 gap-2">
               <p>Bags <span className="font-semibold tabular-nums text-app-text">{fmtBags(wsr.numberOfBags)}</span></p>
               <p>Gross <span className="font-semibold tabular-nums text-app-text">{fmtKilos(wsr.grossKilos)}</span></p>
-              <p>Net <span className="font-semibold tabular-nums text-app-text">{fmtKilos(netKilos, netDec)}</span></p>
+              <p>Net <span className="font-semibold tabular-nums text-app-text">{netKilos.toLocaleString('en-PH', { minimumFractionDigits: netDec, maximumFractionDigits: netDec })}</span></p>
               {/* Per explicit request, Equivalent Net Weight always
                   DISPLAYS 4 decimals everywhere - the underlying stored
                   value's own truncation precision (enwDecimalsForFactor,
                   3 vs 4 depending on the ENW factor) is unchanged, this
                   only affects how many places are shown/padded. */}
-              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: netDec === 2 ? 2 : 4, maximumFractionDigits: netDec === 2 ? 2 : 4 }) : '—'}</span></p>
+              <p>Equiv. Net Wt <span className="font-semibold tabular-nums text-brand-neon">{displayed.enw != null ? displayed.enw.toLocaleString('en-PH', { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : '—'}</span></p>
             </div>
           </div>
 

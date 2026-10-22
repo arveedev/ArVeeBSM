@@ -18762,6 +18762,6 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 
 - Apps Script returns whole SIAs on delta pulls; form and Home count sack stock like the MTS report; breakdown shown under the available line.
 
-## 2026-10-22: SDO 2-decimal setting applied to every ENW on the Abstract and CPF (v1.10-439)
+## 2026-10-22: SDO 2-decimal setting is net weight only (v1.10-440)
 
-- Net Wt and Equivalent Net Wt print with 2 decimals everywhere when the SDO works to 2.
+- ENW keeps its own decimals so the amount paid is exact; reverted the earlier 2-decimal ENW display change.

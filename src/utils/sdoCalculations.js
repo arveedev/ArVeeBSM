@@ -97,14 +97,16 @@ export const lookupEnwFactor = (enwFactors, variety, mcValue) => {
   return row?.factor ?? null
 }
 
-/** Equivalent Net Weight = Net Kilos × ENW factor, truncated to 3 decimals when factor is exactly 1, 4 otherwise. */
-export const computeEquivalentNetWeight = (netKilos, factor, netDecimals = 3) => (
-  normalizeNetDecimals(netDecimals) === 2 ? roundTo(netKilos * factor, 2) : truncTo(netKilos * factor, enwDecimalsForFactor(factor))
-)
+/**
+ * Equivalent Net Weight = Net Kilos × ENW factor, truncated to 3 decimals when factor is exactly 1, 4 otherwise. The SDO's 2-decimal
+ * setting is about the NET weight only (see netKilosForPr): the ENW is never cut to 2 decimals, or the amount paid would be wrong.
+ * `netDecimals` is kept as a parameter so callers need no change.
+ */
+export const computeEquivalentNetWeight = (netKilos, factor) => truncTo(netKilos * factor, enwDecimalsForFactor(factor))
 
 /**
- * Some Disbursing Officers work to 2 decimals on the net weight (and so on the Equivalent Net Weight, which then is also
- * rounded to 2). `netDecimals` is that SDO's own setting (users.netWeightDecimals), 3 unless set to 2.
+ * Some Disbursing Officers work to 2 decimals on the net weight only. The Equivalent Net Weight keeps its own 3 or 4 decimals.
+ * `netDecimals` is that SDO's own setting (users.netWeightDecimals), 3 unless set to 2.
  */
 export const normalizeNetDecimals = (d) => (Number(d) === 2 ? 2 : 3)
 
