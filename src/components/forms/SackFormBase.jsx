@@ -289,30 +289,25 @@ const SackFormBase = forwardRef(function SackFormBase(
       : []),
     [type, linkedDocNo],
   ) ?? []
+  // Stock as of the document's date, counted the way the MTS report counts it: the beginning balances dated on or before that day, plus
+  // every receipt and issuance after the reporting cutoff up to that day. `trail` keeps what was counted so it can be shown.
   const availablePieces = {}
-  const addAvailable = (sackTypeId, condition, delta) => {
+  const trail = {}
+  const addAvailable = (sackTypeId, condition, delta, label) => {
     const key = `${sackTypeId}::${condition}`
     availablePieces[key] = (availablePieces[key] ?? 0) + delta
+    ;(trail[key] ??= []).push({ label, delta })
   }
-  const asOfDateByKey = {}
   for (const rec of sackInventory) {
-    addAvailable(rec.sackTypeId, rec.condition, rec.pieces ?? 0)
-    asOfDateByKey[`${rec.sackTypeId}::${rec.condition}`] = rec.asOfDate ?? null
+    if (rec.asOfDate && date && rec.asOfDate > date) continue
+    addAvailable(rec.sackTypeId, rec.condition, rec.pieces ?? 0, `Beginning balance${rec.asOfDate ? ` as of ${rec.asOfDate}` : ''}`)
   }
-  for (const t of allSackTx) {
+  for (const t of [...allSackTx].sort((x, y) => String(x.date).localeCompare(String(y.date)))) {
     if (loadedTransaction && t.id === loadedTransaction.id) continue
     if (reportingCutoffDate && t.date <= reportingCutoffDate) continue
     if (date && t.date > date) continue
     const sign = t.type === 'ESR' ? 1 : -1
-    for (const line of t.sackLines ?? []) {
-      const key = `${line.sackTypeId}::${line.condition}`
-      const cutoff = asOfDateByKey[key]
-      // A transaction dated before the beginning balance's own as-of
-      // date is pre-seed history, already accounted for in the seed
-      // value itself - counting it again here would double-count it.
-      if (cutoff && t.date < cutoff) continue
-      addAvailable(line.sackTypeId, line.condition, (line.pieces ?? 0) * sign)
-    }
+    for (const line of t.sackLines ?? []) addAvailable(line.sackTypeId, line.condition, (line.pieces ?? 0) * sign, `${t.type} ${t.serialNo}, ${t.date}`)
   }
   const getAvailablePieces = (sackTypeId, condition) => availablePieces[`${sackTypeId}::${condition}`] ?? 0
 
@@ -1747,10 +1742,19 @@ const SackFormBase = forwardRef(function SackFormBase(
                       // checks whether the physical sacks to issue exist.
                       const exceedsAvailable = parseFormattedNumber(line.pieces) > available
                       return (
+                        <>
                         <p className={`mt-1 text-xs tabular-nums ${exceedsAvailable ? 'text-brand-crimson' : 'text-neutral-500'}`}>
                           Available (physical stock): {fmtBags(available)} pcs
                           {exceedsAvailable ? ' — exceeds what this warehouse has on hand, not an SIA limit' : ''}
                         </p>
+                        <details className="mt-0.5 text-[11px] text-neutral-500">
+                          <summary className="cursor-pointer select-none hover:text-neutral-300">How this is counted</summary>
+                          <ul className="mt-1 space-y-0.5 pl-2">
+                            {(trail[`${line.sackTypeId}::${line.condition}`] ?? []).map((r, k) => <li key={k} className="tabular-nums">{r.label}: {r.delta > 0 ? '+' : ''}{fmtBags(r.delta)}</li>)}
+                            {!(trail[`${line.sackTypeId}::${line.condition}`] ?? []).length && <li>Nothing recorded for this sack type and condition up to {date || 'today'}.</li>}
+                          </ul>
+                        </details>
+                        </>
                       )
                     })()}
                   </div>

@@ -43,17 +43,15 @@ function HomeSacks({ warehouseId } = {}) {
     sackPieces[sackTypeId] ??= {}
     sackPieces[sackTypeId][condition] = (sackPieces[sackTypeId][condition] ?? 0) + delta
   }
-  const sackAsOfDateByKey = {}
+  // Counted the way the MTS report counts it, so Home, the issuance form and the printed report always agree: the beginning balances
+  // plus every receipt and issuance after the reporting cutoff.
   for (const rec of sackInventory) {
     addSackPieces(rec.sackTypeId, rec.condition, rec.pieces ?? 0)
-    sackAsOfDateByKey[`${rec.sackTypeId}::${rec.condition}`] = rec.asOfDate ?? null
   }
   for (const t of sackTx) {
     if (reportingCutoffDate && t.date <= reportingCutoffDate) continue
     const sign = t.type === 'ESR' ? 1 : -1
     for (const line of t.sackLines ?? []) {
-      const cutoff = sackAsOfDateByKey[`${line.sackTypeId}::${line.condition}`]
-      if (cutoff && t.date < cutoff) continue
       addSackPieces(line.sackTypeId, line.condition, (line.pieces ?? 0) * sign)
     }
   }

@@ -39,3 +39,9 @@ test('a routine pull that brings only some rows of an SIA must not wipe the SIA\
   assert.ok(/partial && existing\?\.sackLines\?\.length/.test(bridge))
   assert.ok(/\{ partial: !wasFullPull \}/.test(bridge))
 })
+
+test('the Apps Script returns every row of an SIA whenever any of its rows is returned (old app versions cannot lose lines)', () => {
+  const at = script.indexOf("action !== 'fetchAuthorities'")
+  const tail = script.slice(at)
+  assert.ok(/e\.parameter\.type === 'SIA'/.test(tail) && /keys\.has\(/.test(tail))
+})

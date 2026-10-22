@@ -583,11 +583,19 @@ function doGet(e) {
       const lastModHeader = headers[LAST_MODIFIED_COLUMN_INDEX];
       const cutoff = new Date(modifiedSince);
 
-      rows = rows.filter((row) => {
+      const all = rows;
+      rows = all.filter((row) => {
         const stamped = row[lastModHeader];
         if (!stamped) return true; // never stamped - include rather than risk dropping it
         return new Date(stamped) >= cutoff;
       });
+      // An SIA is one authorization with one sheet row per sack type and condition. When ANY row of it is returned, every row of it
+      // is: a changed row on its own would make the app think the SIA has only that line (and an unstamped row is returned on every
+      // pull, so its stamped sibling would be dropped from the app each time).
+      if (e.parameter.type === 'SIA') {
+        const keys = new Set(rows.map((r) => String(r['SIA'] == null ? '' : r['SIA']).trim()).filter(Boolean));
+        rows = all.filter((r) => keys.has(String(r['SIA'] == null ? '' : r['SIA']).trim()));
+      }
     }
 
     // Paged, like fetchTransactionsBulk: a whole AI/SIA tab in one response is too big for the browser to receive reliably.

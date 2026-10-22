@@ -18757,3 +18757,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-22: SIA lines no longer wiped by a partial pull (v1.10-437)
 
 - A delta pull merges lines instead of replacing them; Force Resync repairs damaged SIAs.
+
+## 2026-10-22: SIA lines lost by older app versions, sack stock rule unified (v1.10-438)
+
+- Apps Script returns whole SIAs on delta pulls; form and Home count sack stock like the MTS report; breakdown shown under the available line.
