@@ -14,5 +14,5 @@ test('with the 2-decimal setting the net is rounded to 2 but the ENW is not', ()
 test('the ENW keeps 3 decimals when the factor is 1, 4 otherwise, in both settings', () => {
   assert.equal(computeEquivalentNetWeight(860.39, 1, 2), 860.39)
   assert.equal(computeEquivalentNetWeight(1290.4357, 1, 3), 1290.435)
-  assert.equal(computeEquivalentNetWeight(1000.123, 0.9532, 3), 953.3196)
+  assert.equal(computeEquivalentNetWeight(1000.123, 0.9532, 3), 953.3172)
 })
