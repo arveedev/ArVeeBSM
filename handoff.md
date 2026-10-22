@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-21, app v1.10-435, pushed to main; Report Builder v1.10-416 to 426 shipped; authority sync fix 427 + safeguards 428) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-21, app v1.10-436, pushed to main; Report Builder v1.10-416 to 426 shipped; authority sync fix 427 + safeguards 428) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
@@ -59,6 +59,7 @@ the latest code commit). Update it before saying a task is done.
 7. Opening balance (v1.10-370): the owner must open Opening balance and Save once so the old partial override becomes a frozen one (the button says "not frozen" until then). The opening must never move once set; no change log wanted.
 8. Milling and Issuances (Admin only): test milling (TMO) is included and an LGU is matched by the letters LGU anywhere in the customer name; neither was confirmed by the owner.
 16e. REPORT BUILDER BUILT 2026-10-20 (v1.10-416, schema v49; plan docs/superpowers/specs/2026-10-20-report-builder-design.md): read-only tables and pivots for Admin, the new Analyst role and warehouse staff (own warehouses only); Ctrl+Alt+R; Admin > Access > Tools Access; export log = Report Builder data source 'Report export log' (Admin). Owner step after deploy: add an Analyst user in Admin > Users.
+16t. 1.10-436 (2026-10-22): SIA 0112393 BN 4,901 line dropped from the ESI form as 'fully issued' although the MTS 5,000 BN is ESI 713065 under SIA 0112371. The form now names the ESI documents behind a fully-issued line (esiOfLinkedSia) and offers Add this line when none exists. OPEN: owner to read that note for 0112393 to find which ESI (any warehouse) carries siaNumber 0112393 BN; recalculateAuthorityIssuedTotals counts every Active ESI with that siaNumber.
 16s. 1.10-435 (2026-10-22): SackFormBase availablePieces now skips t.date <= reportingCutoffDate and t.date > the form's date (matches HomeSacks / Reports MTS); fully-issued SIA lines are listed in a note. Case: SIA 0112393 (BSI C) showed only the SH 1,752 line and 'Available -5,674' for SH while MTS showed 5,315. BN 4,901 line is dropped by AuthorityMonitor because it is fully issued (MTS shows 5,000 BN issued from BSI C). OPEN: owner to check whether 5,000 BN against SIA 0112393 is right (4,901 authorized) or belongs to SIA 0112399 (BSI, 5,000 BN).
 16r. 1.10-434 (2026-10-22): export summary title is 'Summary'; group rules accept comma-separated words (fields.js groupValue), first matching rule wins.
 16q. 1.10-433 (2026-10-22): summary and groups merged: layout.summary = {levels:[{by, rules?, other}], vals, subt, total, biggest}; a level with rules becomes an internal group field (__sgN) in summaryLayout, 'leave out' adds an isnot filter on it. Old layout.summary.by[] still read. The standalone '+ Group' entry was removed from the UI (groupValue/GroupBuilder remain for layouts that already contain groups).

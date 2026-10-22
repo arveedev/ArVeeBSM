@@ -18749,3 +18749,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-22: ESI physical-stock check fixed (v1.10-435)
 
 - Availability uses the reporting cutoff and the document date; fully issued SIA lines are named in the form.
+
+## 2026-10-22: Fully issued SIA lines traced to their documents (v1.10-436)
+
+- The ESI form names the documents behind a fully issued line and can add it back.

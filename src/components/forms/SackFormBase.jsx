@@ -282,6 +282,13 @@ const SackFormBase = forwardRef(function SackFormBase(
   // AS OF THE DOCUMENT'S OWN DATE (an issuance entered late for Oct 7 must not be refused because of what was issued after Oct 7).
   const globalConfig = useLiveQuery(() => db.reportConfig.get('global'), [])
   const reportingCutoffDate = effectiveCutoffDate(currentWarehouse?.reportingCutoffDate, globalConfig?.dataStartDate)
+  // every Active ESI already issued against the linked SIA (any warehouse), so a line that shows as fully issued can be traced to its documents
+  const esiOfLinkedSia = useLiveQuery(
+    () => (type === 'ESI' && linkedDocNo.trim()
+      ? db.transactions.where('type').equals('ESI').and((t) => t.siaNumber === linkedDocNo.trim() && t.status === 'Active').toArray()
+      : []),
+    [type, linkedDocNo],
+  ) ?? []
   const availablePieces = {}
   const addAvailable = (sackTypeId, condition, delta) => {
     const key = `${sackTypeId}::${condition}`
@@ -1757,7 +1764,12 @@ const SackFormBase = forwardRef(function SackFormBase(
               if (!done.length) return null
               return (
                 <p className="mt-2 rounded-lg border border-neutral-700 bg-neutral-950/60 px-2.5 py-1.5 text-xs text-neutral-300">
-                  Already fully issued on this SIA, so not listed: {done.map((l) => `${sackTypeMap.get(l.sackTypeId)?.code ?? 'sack'} ${l.condition} (${fmtBags(l.totalIssuedBags ?? 0)} of ${fmtBags(l.totalAllocationBags)} pcs issued)`).join('; ')}.
+                  <b>Already fully issued on this SIA, so not listed:</b>
+                  {done.map((l) => {
+                    const docs = esiOfLinkedSia.filter((t) => (t.sackLines ?? []).some((x) => x.sackTypeId === l.sackTypeId && x.condition === l.condition))
+                      .map((t) => `ESI ${t.serialNo} (${(accessibleWarehouses ?? []).find((w) => w.warehouseId === t.warehouseId)?.name ?? 'another warehouse'}, ${t.date}, ${fmtBags((t.sackLines ?? []).filter((x) => x.sackTypeId === l.sackTypeId && x.condition === l.condition).reduce((n, x) => n + (x.pieces ?? 0), 0))} pcs)`)
+                    return <span key={`${l.sackTypeId}${l.condition}`} className="mt-0.5 block">{sackTypeMap.get(l.sackTypeId)?.code ?? 'sack'} {l.condition}: {fmtBags(l.totalIssuedBags ?? 0)} of {fmtBags(l.totalAllocationBags)} pcs issued{docs.length ? ` by ${docs.join('; ')}` : ' (no issuance document found, so the count on the SIA is out of date)'}{docs.length === 0 && <button type="button" onClick={() => setSackLines((rows) => [...rows.filter((r) => r.sackTypeId || r.condition || r.pieces), { sackTypeId: l.sackTypeId, condition: l.condition, pieces: liveFormatNumber(String(l.totalAllocationBags)) }])} className="ml-2 rounded-full border border-brand-neon/60 px-2 py-0.5 text-[11px] text-brand-neon hover:bg-brand-neon/10">Add this line</button>}</span>
+                  })}
                 </p>
               )
             })()}
