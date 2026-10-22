@@ -45,7 +45,7 @@ import { fetchTransactionBySerial, fetchSerialFloorFromSheet, resolveCanonicalAu
 import { isPreloadComplete, waitForPreloadComplete, getPreloadFailureInfo } from '../../services/transactionPreload.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { queueTransactionDeletion, pauseTransactionSync, resumeTransactionSync } from '../../services/syncWorker.js'
-import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName, isAuthorityComplete, TRIAL_ALL, expandTrialNumbers } from '../../utils/calculations.js'
+import { liveFormatNumber, parseFormattedNumber, fmtBags, todayLocalISO, isMillingTypeName, isTestMillingTypeName, isAuthorityComplete, TRIAL_ALL, expandTrialNumbers, effectiveCutoffDate } from '../../utils/calculations.js'
 import CustomerNameAutocomplete from './CustomerNameAutocomplete.jsx'
 import ConfirmDialog from '../common/ConfirmDialog.jsx'
 import AnimatedBanner from '../common/AnimatedBanner.jsx'
@@ -277,6 +277,11 @@ const SackFormBase = forwardRef(function SackFormBase(
     [currentWarehouseId]
   ) ?? []
 
+  // The same two rules as the sack stock shown on Home and printed on the MTS report, so the form can never disagree with them:
+  // nothing dated on or before the reporting cutoff counts (the beginning balance already holds it), and the stock is the stock
+  // AS OF THE DOCUMENT'S OWN DATE (an issuance entered late for Oct 7 must not be refused because of what was issued after Oct 7).
+  const globalConfig = useLiveQuery(() => db.reportConfig.get('global'), [])
+  const reportingCutoffDate = effectiveCutoffDate(currentWarehouse?.reportingCutoffDate, globalConfig?.dataStartDate)
   const availablePieces = {}
   const addAvailable = (sackTypeId, condition, delta) => {
     const key = `${sackTypeId}::${condition}`
@@ -289,6 +294,8 @@ const SackFormBase = forwardRef(function SackFormBase(
   }
   for (const t of allSackTx) {
     if (loadedTransaction && t.id === loadedTransaction.id) continue
+    if (reportingCutoffDate && t.date <= reportingCutoffDate) continue
+    if (date && t.date > date) continue
     const sign = t.type === 'ESR' ? 1 : -1
     for (const line of t.sackLines ?? []) {
       const key = `${line.sackTypeId}::${line.condition}`
@@ -1743,6 +1750,17 @@ const SackFormBase = forwardRef(function SackFormBase(
                 )
               })}
             </div>
+
+            {type === 'ESI' && (() => {
+              const done = (linkedSiaAuthority?.sackLines ?? []).filter((l) => l.sackTypeId && l.condition && (l.totalAllocationBags ?? 0) > 0 && (l.totalIssuedBags ?? 0) >= l.totalAllocationBags
+                && !sackLines.some((x) => x.sackTypeId === l.sackTypeId && x.condition === l.condition))
+              if (!done.length) return null
+              return (
+                <p className="mt-2 rounded-lg border border-neutral-700 bg-neutral-950/60 px-2.5 py-1.5 text-xs text-neutral-300">
+                  Already fully issued on this SIA, so not listed: {done.map((l) => `${sackTypeMap.get(l.sackTypeId)?.code ?? 'sack'} ${l.condition} (${fmtBags(l.totalIssuedBags ?? 0)} of ${fmtBags(l.totalAllocationBags)} pcs issued)`).join('; ')}.
+                </p>
+              )
+            })()}
 
             <button type="button" onClick={addLine} className={`mt-2 ${smallButtonClass}`}>
               <span className="flex items-center gap-1">
