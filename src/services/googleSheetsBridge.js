@@ -570,7 +570,7 @@ const upsertAuthority = async (incoming, cacheByAiNumber = null) => {
  */
 // cacheBySiaNumber (optional): same batching purpose as upsertAuthority's
 // cacheByAiNumber above - see its comment for the full reasoning.
-const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null) => {
+const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null, { partial = false } = {}) => {
   // Every record sharing this SIA number - under the previous
   // architecture (one record per sack-type+condition combination) there
   // could be several. Only one becomes the canonical record below; any
@@ -586,10 +586,17 @@ const upsertSiaAuthority = async (incoming, cacheBySiaNumber = null) => {
   const existingLineFor = (sackTypeId, condition) =>
     existing?.sackLines?.find((l) => l.sackTypeId === sackTypeId && l.condition === condition)
 
-  const mergedLines = incoming.sackLines.map((line) => {
+  const incomingLines = incoming.sackLines.map((line) => {
     const match = existingLineFor(line.sackTypeId, line.condition)
     return { ...line, totalIssuedBags: match?.totalIssuedBags ?? 0 }
   })
+  // A routine (delta) pull only brings the sheet rows changed since the last pull, so an SIA whose other rows did not change arrives
+  // with just SOME of its lines. Those lines update the ones the app already has; they must never wipe the rest (that is how an SIA
+  // lost its BN line when only its SH row was edited). Only a full pull is the whole truth and replaces the lines.
+  const sameLine = (a, b) => a.sackTypeId === b.sackTypeId && a.condition === b.condition
+  const mergedLines = partial && existing?.sackLines?.length
+    ? [...existing.sackLines.map((l) => incomingLines.find((n) => sameLine(n, l)) ?? l), ...incomingLines.filter((n) => !existing.sackLines.some((l) => sameLine(n, l)))]
+    : incomingLines
 
   const staleDuplicateIds = allMatching.filter((a) => a.authId !== existing?.authId).map((a) => a.authId)
   if (staleDuplicateIds.length > 0) {
@@ -1288,7 +1295,7 @@ const runAuthoritiesSync = async () => {
             totalAllocationBags: g.pieces,
           })),
           sourceId: source.id,
-        }, siaCache)
+        }, siaCache, { partial: !wasFullPull })
         seenSiaNumbers.add(siaNum)
         siaCount += 1
         } catch (err) {

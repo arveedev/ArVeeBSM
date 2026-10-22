@@ -18753,3 +18753,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-22: Fully issued SIA lines traced to their documents (v1.10-436)
 
 - The ESI form names the documents behind a fully issued line and can add it back.
+
+## 2026-10-22: SIA lines no longer wiped by a partial pull (v1.10-437)
+
+- A delta pull merges lines instead of replacing them; Force Resync repairs damaged SIAs.

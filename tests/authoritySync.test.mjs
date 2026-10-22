@@ -33,3 +33,9 @@ test('the Apps Script answers fetchAuthorities a page at a time', () => {
   const tail = script.slice(at)
   assert.ok(/offset/.test(tail) && /hasMore/.test(tail))
 })
+
+test('a routine pull that brings only some rows of an SIA must not wipe the SIA\'s other lines', () => {
+  assert.ok(/upsertSiaAuthority = async \(incoming, cacheBySiaNumber = null, \{ partial = false \} = \{\}\)/.test(bridge))
+  assert.ok(/partial && existing\?\.sackLines\?\.length/.test(bridge))
+  assert.ok(/\{ partial: !wasFullPull \}/.test(bridge))
+})
