@@ -21,7 +21,7 @@ import { exportXlsx, exportPdf } from '../../../services/reportBuilderExport.js'
 import { db } from '../../../db/dexie.js'
 import { isStaffRole } from '../../../utils/roles.js'
 import CalendarDatePicker from '../CalendarDatePicker.jsx'
-import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, GroupBuilder, ColumnsPanel, FormatPanel, ResultTable, btnGhost, pill, pillOn, input } from './rbParts.jsx'
+import { FieldChip, FieldPicker, DropArea, ValueChip, FilterBuilder, FormulaBuilder, GroupBuilder, SummaryBuilder, ColumnsPanel, FormatPanel, ResultTable, btnGhost, pill, pillOn, input } from './rbParts.jsx'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const longDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -206,6 +206,18 @@ function ReportBuilderModal({ user, onClose, open = true }) {
   const listFields = useMemo(() => ({ list: offered.list.filter((f) => !f.d), map: fields.map }), [offered, fields])
 
   const patch = (o) => setLayout((l) => ({ ...l, ...o }))
+  // the summary table under the table: the same records (same filters), grouped by what the person chose
+  const summaryLayout = useMemo(() => {
+    const sm = layout.summary
+    const by = (sm?.by ?? []).filter((id) => fields.map[id])
+    if (!by.length) return null
+    return {
+      ...blankLayout(sourceId), mode: 'pivot', rows: by, vals: (sm.vals ?? []).filter((v) => fields.map[v.f]), filters: layout.filters, search: layout.search, calc: layout.calc,
+      headers: layout.headers, headBg: layout.headBg, totCol: false, totRow: sm.total !== false, subt: !!sm.subt && by.length > 1, sortTot: !!sm.biggest, pct: 'none',
+    }
+  }, [layout, fields, sourceId])
+  const summaryTable = useMemo(() => (summaryLayout && data ? buildTable(summaryLayout, data.fields, data.rows) : null), [summaryLayout, data])
+  const summaryTitle = summaryLayout ? `Summary by ${summaryLayout.rows.map((id) => fields.map[id].label).join(' / ')}` : ''
   // the headings that can be renamed: the fields of the table (the column field's values are the data, not a heading)
   const nameItems = useMemo(() => {
     const ids = layout.mode === 'pivot' ? [...new Set([...layout.rows, ...layout.vals.map((v) => v.f)])] : fields.list.filter((f) => !f.d && tableIds.has(f.id)).map((f) => f.id)
@@ -253,12 +265,13 @@ function ReportBuilderModal({ user, onClose, open = true }) {
     setBusy(kind)
     try {
       const flat = t ?? flatten(layout, buildTable(layout, data.fields, data.rows, { full: true }))
+      const extra = !t && summaryLayout ? { title: summaryTitle, table: flatten(summaryLayout, buildTable(summaryLayout, data.fields, data.rows, { full: true })) } : null
       const m = meta()
       m.title = ttl
       m.headBg = layout.headBg
       const base = m.title
-      if (kind === 'xlsx') await exportXlsx(flat, m, base)
-      else await exportPdf(flat, m, base)
+      if (kind === 'xlsx') await exportXlsx(flat, m, base, extra)
+      else await exportPdf(flat, m, base, extra)
       logReportEvent(user, { action: title ? 'export records' : 'export', source: src.name, layout: layouts.find((l) => l.id === editingId)?.name ?? '', format: kind, rows: flat.body.length, filters: [...m.filters, sourceDated ? periodText : ''].filter(Boolean).join('; '), scope: scopeText })
       toast.success(kind === 'xlsx' ? 'Excel file made' : 'PDF made')
     } catch (e) {
@@ -303,6 +316,7 @@ function ReportBuilderModal({ user, onClose, open = true }) {
   const today = todayISO()
   const quick = [['Since Sept 1', floor, today], ['This month', monthStart(today) < floor ? floor : monthStart(today), today], ['Last 7 days', daysBefore(today, 6) < floor ? floor : daysBefore(today, 6), today]]
   const tableKey = `${sourceId}|${periodKey}|${layout.mode}|${JSON.stringify([layout.rows, layout.cols, layout.vals, layout.filters.length, layout.hidden.length, layout.search])}`
+  const summaryOpen = () => setPop('summary')
   const groupOpen = () => { setEditingCalc(null); setPop('group') }
   const calcOpen = () => { if (tableIds.size === 0) { toast('Put some fields in the table first. A formula can only use the fields of the table.'); return } setEditingCalc(null); setPop('calc') }
 
@@ -406,24 +420,28 @@ function ReportBuilderModal({ user, onClose, open = true }) {
                 {dragging && <p className="rb-pop rounded-lg bg-red-500/15 px-2.5 py-1 text-center text-[11px] text-red-300">Let go outside the boxes to remove it</p>}
               </div>
               <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Group the data</p>
-                <p className="mb-2 mt-0.5 text-[11px] leading-snug text-neutral-500">Put values into your own groups, for example every customer whose name has FTI, then drag the group into Rows or Columns.</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Summary and groups</p>
+                <p className="mb-2 mt-0.5 text-[11px] leading-snug text-neutral-500">Add a summary table under your table, grouped by province, warehouse, customer or anything else, with a total for each group. Make your own groups from part of a name too.</p>
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  <button type="button" onClick={summaryOpen} className={`${pill} !px-2.5 !py-1 ${layout.summary?.by?.length ? pillOn : ''}`}>{layout.summary?.by?.length ? 'Change the summary table' : '+ Summary table below'}</button>
+                </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {layout.calc.filter((c) => c.group && fields.map[c.id]).map((c) => <FieldChip key={c.id} f={fields.map[c.id]} draggable dashed used={used.has(c.id)} onClick={(e) => { e.stopPropagation(); openMenu(e, fields.map[c.id]) }} />)}
-                  <button type="button" onClick={groupOpen} className={`${pill} !px-2.5 !py-1`}>+ New group</button>
+                  <button type="button" onClick={groupOpen} className={`${pill} !px-2.5 !py-1`}>+ New group (part of a name)</button>
                 </div>
               </div>
             </div>
           </div>
 
           {/* ---------------- the table ---------------- */}
-          <div className="flex min-w-0 flex-col lg:min-h-0">
+          <div className="flex min-w-0 flex-col lg:min-h-0 lg:overflow-y-auto">
             <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
               <input type="search" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search every field" className={`${input} min-w-[10rem] flex-1`} />
               <div className="inline-flex overflow-hidden rounded-lg border border-neutral-700">
                 {[['list', 'List of records'], ['pivot', 'Pivot table']].map(([k, n]) => <button key={k} type="button" onClick={() => setMode(k)} className={`px-3 py-1.5 text-sm transition-colors ${layout.mode === k ? 'bg-brand-neon/10 text-brand-neon' : 'bg-neutral-900 text-neutral-300 hover:text-app-text'}`}>{n}</button>)}
               </div>
               {layout.mode === 'list' && <button type="button" onClick={() => setPop('cols')} className={pill}>Columns</button>}
+              <button type="button" onClick={summaryOpen} className={`${pill} ${summaryLayout ? pillOn : ''}`}>Summary below</button>
               <button type="button" onClick={() => setPop('fmt')} className={pill}>Format</button>
               <button type="button" onClick={() => setPanelOpen((v) => !v)} className={`${pill} ${panelOpen ? '' : pillOn}`}>{panelOpen ? 'Hide builder' : 'Show builder'}</button>
             </div>
@@ -437,7 +455,7 @@ function ReportBuilderModal({ user, onClose, open = true }) {
               </div>
             </div>
 
-            <div className="sd-table max-h-[70vh] min-h-[16rem] overflow-auto rounded-xl border border-neutral-800 bg-neutral-950 lg:max-h-none lg:flex-1">
+            <div className={`sd-table max-h-[70vh] min-h-[16rem] overflow-auto rounded-xl border border-neutral-800 bg-neutral-950 ${summaryTable ? 'lg:max-h-[56vh] lg:shrink-0' : 'lg:max-h-none lg:flex-1'}`}>
               {isBlank
                 ? <div className="p-10 text-center"><p className="text-sm font-semibold text-neutral-300">The table is empty</p><p className="mx-auto mt-1 max-w-md text-xs text-neutral-500">Drag fields into Rows, Columns or Values to build a pivot table, or choose &quot;List of records&quot; to see the records themselves.</p></div>
                 : loading && !table
@@ -451,6 +469,18 @@ function ReportBuilderModal({ user, onClose, open = true }) {
               </span>
               <span>Read from this device&apos;s copy of the records</span>
             </div>
+
+            {summaryTable && !isBlank && (
+              <div className="rb-fade mt-3 shrink-0">
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">{summaryTitle}</p>
+                  <span className="flex gap-1.5"><button type="button" onClick={summaryOpen} className={`${pill} !px-2.5 !py-1`}>Change</button><button type="button" onClick={() => patch({ summary: null })} className={`${pill} !px-2.5 !py-1`}>Remove</button></span>
+                </div>
+                <div className="sd-table max-h-[46vh] overflow-auto rounded-xl border border-neutral-800 bg-neutral-950">
+                  <div key={`s-${tableKey}-${JSON.stringify(layout.summary)}`} className="rb-fade"><ResultTable table={summaryTable} layout={summaryLayout} onSort={() => {}} onCell={(id) => { const c = summaryTable.cells.get(id); if (c && c.recs.length) setDrill(c) }} /></div>
+                </div>
+              </div>
+            )}
 
             {drill && (
               <div className="rb-drop mt-2 shrink-0 rounded-xl border border-brand-neon/40 bg-neutral-900 p-3">
@@ -481,6 +511,11 @@ function ReportBuilderModal({ user, onClose, open = true }) {
       {pop === 'calc' && data && (
         <Dialog title={editingCalc ? 'Change the calculated column' : 'New calculated column'} width="max-w-2xl" onClose={() => { setPop(null); setEditingCalc(null) }}>
           <FormulaBuilder key={editingCalc?.id ?? 'new'} baseFields={data.fields} rows={keptRows} fields={formulaFields} calc={layout.calc} editing={editingCalc} onSave={(c) => { patch({ calc: editingCalc ? layout.calc.map((x) => (x.id === c.id ? c : x)) : [...layout.calc, c], ...(!editingCalc && layout.mode === 'pivot' ? { vals: [...layout.vals, { f: c.id, a: 'sum' }] } : {}) }); setPop(null); setEditingCalc(null); toast.success(editingCalc ? 'Calculated column changed' : `Calculated column added: ${c.label}`) }} onCancel={() => { setPop(null); setEditingCalc(null) }} />
+        </Dialog>
+      )}
+      {pop === 'summary' && data && (
+        <Dialog title={layout.summary?.by?.length ? 'Change the summary table' : 'Summary table below'} width="max-w-3xl" onClose={() => setPop(null)}>
+          <SummaryBuilder fields={offered} mainVals={layout.vals} editing={layout.summary?.by?.length ? layout.summary : null} onSave={(sm) => { patch({ summary: sm }); setPop(null); toast.success('Summary table added below the table') }} onRemove={() => { patch({ summary: null }); setPop(null) }} onCancel={() => setPop(null)} />
         </Dialog>
       )}
       {pop === 'group' && data && (

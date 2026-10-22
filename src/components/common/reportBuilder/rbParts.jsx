@@ -215,8 +215,8 @@ export function GroupBuilder({ fields, rows, editing, onSave, onCancel }) {
   const sources = fields.list.filter((f) => !f.d && !f.calc && f.kind === 'txt')
   const [name, setName] = useState(editing?.label ?? '')
   const [from, setFrom] = useState(editing?.group?.from ?? sources.find((f) => /customer|farmer/i.test(f.label))?.id ?? sources[0]?.id ?? '')
-  const [mode, setMode] = useState(editing?.group?.mode ?? 'rules')
-  const [n, setN] = useState(editing?.group?.n ?? 3)
+  const mode = 'rules' // a group is always made of the person's own rules
+  const n = 3
   const [rules, setRules] = useState(editing?.group?.rules?.length ? editing.group.rules : [{ op: 'contains', text: '', label: '' }])
   const [other, setOther] = useState(editing?.group?.other ?? 'Other')
   const group = { from, mode, n: Number(n) || 3, rules: rules.filter((r) => String(r.text).trim()), other: other.trim() || 'Other' }
@@ -228,7 +228,7 @@ export function GroupBuilder({ fields, rows, editing, onSave, onCancel }) {
     for (const r of rows) { const v = String(readValue(r, f2.map.__g, f2.map) ?? ''); counts.set(v, (counts.get(v) ?? 0) + 1) }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, fields, from, mode, n, JSON.stringify(rules), other])
+  }, [rows, fields, from, JSON.stringify(rules), other])
   const ok = from && (mode !== 'rules' || group.rules.length > 0)
   const setRule = (i, o) => setRules((rs) => rs.map((r, k) => (k === i ? { ...r, ...o } : r)))
   return (
@@ -237,15 +237,9 @@ export function GroupBuilder({ fields, rows, editing, onSave, onCancel }) {
         <label className="grid gap-1"><span className={fieldLabel}>Name of the group</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="For example: Customer group" className={ctl} /></label>
         <label className="grid gap-1"><span className={fieldLabel}>Group the values of</span><select value={from} onChange={(e) => setFrom(e.target.value)} className={ctl}>{sources.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}</select></label>
       </div>
-      <div className="grid gap-1.5">
-        <span className={fieldLabel}>How to group</span>
-        <div className="flex flex-wrap gap-1.5">
-          {[['rules', 'By words I choose'], ['firstWord', 'By the first word'], ['letters', 'By the first letters']].map(([k, t]) => <button key={k} type="button" onClick={() => setMode(k)} className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${mode === k ? 'border-brand-neon bg-brand-neon/15 text-brand-neon' : 'border-neutral-700 text-neutral-200 hover:border-neutral-500'}`}>{t}</button>)}
-        </div>
-      </div>
       {mode === 'rules' && (
         <div className="space-y-2">
-          <p className="text-xs text-neutral-400">Each value goes into the first group whose rule it matches. For example: name <b>contains</b> &ldquo;FTI&rdquo; &rarr; group &ldquo;FTI&rdquo;.</p>
+          <p className="text-sm text-neutral-400">Make your own groups from part of the text. Each value goes into the first group whose rule it matches, for example: customer name <b>contains</b> &ldquo;FTI&rdquo; &rarr; the group &ldquo;FTI&rdquo;.</p>
           {rules.map((r, i) => (
             <div key={i} className="grid grid-cols-[7.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
               <select value={r.op} onChange={(e) => setRule(i, { op: e.target.value })} className={ctl}>{GROUP_OPS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
@@ -257,7 +251,6 @@ export function GroupBuilder({ fields, rows, editing, onSave, onCancel }) {
           <button type="button" onClick={() => setRules((rs) => [...rs, { op: 'contains', text: '', label: '' }])} className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-200 hover:border-brand-neon">+ Another rule</button>
         </div>
       )}
-      {mode === 'letters' && <label className="grid max-w-[10rem] gap-1"><span className={fieldLabel}>How many letters</span><input type="number" min="1" max="12" value={n} onChange={(e) => setN(e.target.value)} className={ctl} /></label>}
       {mode === 'rules' && <label className="grid gap-1 sm:max-w-xs"><span className={fieldLabel}>Everything else is called</span><input value={other} onChange={(e) => setOther(e.target.value)} className={ctl} /></label>}
       <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3">
         <p className={fieldLabel}>What the groups look like now</p>
@@ -269,6 +262,63 @@ export function GroupBuilder({ fields, rows, editing, onSave, onCancel }) {
       <div className="flex justify-end gap-2 border-t border-neutral-800 pt-4">
         <button type="button" onClick={onCancel} className={btnGhost}>Cancel</button>
         <button type="button" disabled={!ok} onClick={() => onSave({ id: editing?.id ?? `g_${Math.random().toString(36).slice(2, 8)}`, label: name.trim() || `${fields.map[from]?.label ?? 'Group'} group`, group })} className={btnPrimary}>{editing ? 'Save changes' : 'Add the group'}</button>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------------------------------------ the summary table under the table
+export function SummaryBuilder({ fields, mainVals, editing, onSave, onRemove, onCancel }) {
+  const groupable = fields.list.filter((f) => f.kind !== 'num')
+  const nums = fields.list.filter((f) => f.kind === 'num' && !f.d)
+  const first = editing?.by ?? [groupable.find((f) => /^warehouse$/i.test(f.label))?.id ?? groupable[0]?.id ?? '']
+  const [by, setBy] = useState([first[0] ?? '', first[1] ?? '', first[2] ?? ''])
+  const [vals, setVals] = useState(editing?.vals?.length ? editing.vals : mainVals.length ? mainVals.filter((v) => fields.map[v.f]) : (nums[0] ? [{ f: nums[0].id, a: 'sum' }] : []))
+  const [subt, setSubt] = useState(!!editing?.subt)
+  const [total, setTotal] = useState(editing?.total !== false)
+  const [biggest, setBiggest] = useState(!!editing?.biggest)
+  const chosen = by.filter(Boolean)
+  const setAt = (i, v) => setBy((b) => b.map((x, k) => (k === i ? v : x)))
+  const usedIds = new Set(vals.map((v) => v.f))
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-neutral-400">A second table is shown under your table, grouping the same records by what you choose, with a total for each group. The Excel and PDF carry it too.</p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <label key={i} className="grid gap-1">
+            <span className={fieldLabel}>{i === 0 ? 'Group by' : 'Then by (optional)'}</span>
+            <select value={by[i]} onChange={(e) => setAt(i, e.target.value)} className={ctl} disabled={i > 0 && !by[i - 1]}>
+              {i > 0 && <option value="">&mdash; none &mdash;</option>}
+              {groupable.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+      <div className="grid gap-1.5">
+        <span className={fieldLabel}>Numbers to add up <span className="font-normal normal-case tracking-normal text-neutral-500">&middot; none = a count of the records</span></span>
+        <div className="flex flex-wrap items-center gap-2">
+          {vals.map((v, i) => (
+            <span key={v.f} className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-app-text">
+              {fields.map[v.f]?.label}
+              <select value={v.a} onChange={(e) => setVals((vs) => vs.map((x, k) => (k === i ? { ...x, a: e.target.value } : x)))} className="rounded border border-neutral-700 bg-neutral-900 px-1 py-0.5 text-xs text-brand-neon">{Object.entries(AGG).filter(([k]) => k !== 'distinct').map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+              <button type="button" onClick={() => setVals((vs) => vs.filter((_, k) => k !== i))} aria-label="Remove" className="text-neutral-500 hover:text-red-400">&times;</button>
+            </span>
+          ))}
+          <select value="" onChange={(e) => { if (e.target.value) setVals((vs) => [...vs, { f: e.target.value, a: 'sum' }]) }} className={`${ctl} !w-auto`}>
+            <option value="">+ add a number&hellip;</option>
+            {nums.filter((f) => !usedIds.has(f.id)).map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid gap-2 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3 sm:grid-cols-3">
+        <Toggle label="Total row" checked={total} onChange={setTotal} />
+        <Toggle label="Biggest first" checked={biggest} onChange={setBiggest} />
+        <Toggle label={chosen.length > 1 ? `Subtotal for each ${fields.map[chosen[0]]?.label ?? 'group'}` : 'Subtotals (needs two groups)'} checked={subt && chosen.length > 1} onChange={(v) => chosen.length > 1 && setSubt(v)} />
+      </div>
+      <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-800 pt-4">
+        {editing && <button type="button" onClick={onRemove} className="mr-auto rounded-xl border border-red-500/50 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10">Remove the summary</button>}
+        <button type="button" onClick={onCancel} className={btnGhost}>Cancel</button>
+        <button type="button" disabled={chosen.length === 0} onClick={() => onSave({ by: chosen, vals, subt: subt && chosen.length > 1, total, biggest })} className={btnPrimary}>{editing ? 'Save changes' : 'Show the summary'}</button>
       </div>
     </div>
   )

@@ -18733,3 +18733,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-22: Report Builder groups and cereal type on authorities (v1.10-431)
 
 - Custom groups of a text field; cereal type on authorities and sack-line sources.
+
+## 2026-10-22: Report Builder summary table under the table (v1.10-432)
+
+- Second table grouped by chosen fields with totals/subtotals, in exports too; group dialog simplified to rules.

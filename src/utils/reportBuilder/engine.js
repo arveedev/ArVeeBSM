@@ -236,7 +236,7 @@ export function buildTable(layout, baseFields, rows, { full = false, listLimit =
   const h1 = srows.length
     ? srows.map((id, i) => ({ t: nameOf(layout, fields.map[id]), cls: i === 0 ? 'l rh rf' : 'l rh', span: 1, rs: multi ? 2 : 1 }))
     : [{ t: 'All records', cls: 'l rh rf', span: 1, rs: multi ? 2 : 1 }]
-  for (const e of ents) h1.push({ t: hasC ? colName(e) : (multi ? 'Values' : (solo || (noVals ? 'Records' : valName(vals[0])))), span: vals.length, cls: e.sub ? 'sc' : '' })
+  for (const e of ents) h1.push({ t: hasC ? colName(e) : (multi ? '' : (solo || (noVals ? 'Records' : valName(vals[0])))), span: vals.length, cls: e.sub ? 'sc' : '' })
   if (hasC && totCol) h1.push({ t: 'Total', span: vals.length, cls: 'tc', id: '__tot' })
   out.head = [h1]
   if (multi) out.head.push(ents.concat(hasC && totCol ? [{ total: true }] : []).flatMap((e) => vals.map((v) => ({ t: valName(v), cls: e.total ? 'tc' : e.sub ? 'sc' : '' }))))
