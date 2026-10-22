@@ -18737,3 +18737,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-22: Report Builder summary table under the table (v1.10-432)
 
 - Second table grouped by chosen fields with totals/subtotals, in exports too; group dialog simplified to rules.
+
+## 2026-10-22: Summary and groups merged (v1.10-433)
+
+- One Summary table below dialog with per-level own groups, leave-out option and stacked switches.

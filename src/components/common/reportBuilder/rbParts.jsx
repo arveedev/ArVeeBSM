@@ -4,7 +4,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { AGG, OPS, inkOn } from '../../../utils/reportBuilder/engine.js'
-import { readValue, buildFields } from '../../../utils/reportBuilder/fields.js'
+import { readValue, buildFields, groupValue } from '../../../utils/reportBuilder/fields.js'
 import { parseFormula, unknownRefs } from '../../../utils/reportBuilder/formula.js'
 
 export const pill = 'flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 transition-colors hover:border-brand-neon/60 disabled:opacity-40'
@@ -268,32 +268,70 @@ export function GroupBuilder({ fields, rows, editing, onSave, onCancel }) {
 }
 
 // ------------------------------------------------------------------------------------------------ the summary table under the table
-export function SummaryBuilder({ fields, mainVals, editing, onSave, onRemove, onCancel }) {
-  const groupable = fields.list.filter((f) => f.kind !== 'num')
+export function SummaryBuilder({ fields, rows, mainVals, editing, onSave, onRemove, onCancel }) {
+  const groupable = fields.list.filter((f) => f.kind !== 'num' && !f.calc?.group)
   const nums = fields.list.filter((f) => f.kind === 'num' && !f.d)
-  const first = editing?.by ?? [groupable.find((f) => /^warehouse$/i.test(f.label))?.id ?? groupable[0]?.id ?? '']
-  const [by, setBy] = useState([first[0] ?? '', first[1] ?? '', first[2] ?? ''])
+  const start = editing?.levels ?? (editing?.by ?? []).map((id) => ({ by: id }))
+  const toLevel = (l) => ({ by: l.by, own: !!l.rules?.length, rules: l.rules?.length ? l.rules : [{ op: 'contains', text: '', label: '' }], other: l.other == null && l.rules?.length ? '' : (l.other ?? 'Other'), leave: !!l.rules?.length && l.other == null })
+  const [levels, setLevels] = useState(start.length ? start.map(toLevel) : [toLevel({ by: groupable.find((f) => /^warehouse$/i.test(f.label))?.id ?? groupable[0]?.id ?? '' })])
   const [vals, setVals] = useState(editing?.vals?.length ? editing.vals : mainVals.length ? mainVals.filter((v) => fields.map[v.f]) : (nums[0] ? [{ f: nums[0].id, a: 'sum' }] : []))
   const [subt, setSubt] = useState(!!editing?.subt)
   const [total, setTotal] = useState(editing?.total !== false)
   const [biggest, setBiggest] = useState(!!editing?.biggest)
-  const chosen = by.filter(Boolean)
-  const setAt = (i, v) => setBy((b) => b.map((x, k) => (k === i ? v : x)))
+  const setLevel = (i, o) => setLevels((ls) => ls.map((l, k) => (k === i ? { ...l, ...o } : l)))
+  const setRule = (i, ri, o) => setLevel(i, { rules: levels[i].rules.map((r, k) => (k === ri ? { ...r, ...o } : r)) })
   const usedIds = new Set(vals.map((v) => v.f))
+  const preview = (lv) => {
+    const g = { from: lv.by, mode: 'rules', rules: lv.rules.filter((r) => String(r.text).trim()), other: lv.leave ? '\u0001' : (lv.other.trim() || 'Other') }
+    const counts = new Map()
+    for (const r of rows) { const v = groupValue(r, g, fields.map); counts.set(v, (counts.get(v) ?? 0) + 1) }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
+  }
+  const ready = levels.every((l) => l.by && (!l.own || l.rules.some((r) => String(r.text).trim())))
+  const save = () => onSave({
+    levels: levels.map((l) => (l.own ? { by: l.by, rules: l.rules.filter((r) => String(r.text).trim()), other: l.leave ? null : (l.other.trim() || 'Other') } : { by: l.by })),
+    vals, subt: subt && levels.length > 1, total, biggest,
+  })
   return (
     <div className="space-y-4">
-      <p className="text-sm text-neutral-400">A second table is shown under your table, grouping the same records by what you choose, with a total for each group. The Excel and PDF carry it too.</p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <label key={i} className="grid gap-1">
-            <span className={fieldLabel}>{i === 0 ? 'Group by' : 'Then by (optional)'}</span>
-            <select value={by[i]} onChange={(e) => setAt(i, e.target.value)} className={ctl} disabled={i > 0 && !by[i - 1]}>
-              {i > 0 && <option value="">&mdash; none &mdash;</option>}
-              {groupable.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-            </select>
-          </label>
-        ))}
-      </div>
+      <p className="text-sm text-neutral-400">A second table under your table, made from the same records. Choose what it is grouped by, and what to add up. You can make your own groups from part of a name, for example only the customers that contain &ldquo;FTI&rdquo;.</p>
+      {levels.map((lv, i) => {
+        const field = fields.map[lv.by]
+        return (
+          <div key={i} className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`${fieldLabel} w-16`}>{i === 0 ? 'Group by' : 'Then by'}</span>
+              <select value={lv.by} onChange={(e) => setLevel(i, { by: e.target.value })} className={`${ctl} min-w-0 flex-1`}>{groupable.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}</select>
+              {i > 0 && <button type="button" onClick={() => setLevels((ls) => ls.filter((_, k) => k !== i))} aria-label="Remove" className="rounded-lg px-2 py-1 text-neutral-500 hover:text-red-400">&times;</button>}
+            </div>
+            {field?.kind === 'txt' && !field.d && <Toggle label={`Make my own groups from part of the text of ${field.label}`} checked={lv.own} onChange={(v) => setLevel(i, { own: v })} />}
+            {lv.own && (
+              <div className="space-y-2">
+                <p className="text-xs text-neutral-400">Each value goes into the first group whose rule it matches. Example: <b>contains</b> &ldquo;FTI&rdquo; &rarr; group &ldquo;FTI&rdquo;.</p>
+                {lv.rules.map((r, ri) => (
+                  <div key={ri} className="grid grid-cols-[7.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
+                    <select value={r.op} onChange={(e) => setRule(i, ri, { op: e.target.value })} className={ctl}>{GROUP_OPS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
+                    <input value={r.text} onChange={(e) => setRule(i, ri, { text: e.target.value })} placeholder="this text" className={ctl} />
+                    <input value={r.label} onChange={(e) => setRule(i, ri, { label: e.target.value })} placeholder="group name (or leave empty)" className={ctl} />
+                    <button type="button" onClick={() => setLevel(i, { rules: lv.rules.length > 1 ? lv.rules.filter((_, k) => k !== ri) : lv.rules })} aria-label="Remove rule" className="rounded-lg px-2 py-1 text-neutral-500 hover:text-red-400">&times;</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setLevel(i, { rules: [...lv.rules, { op: 'contains', text: '', label: '' }] })} className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-200 hover:border-brand-neon">+ Another rule</button>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className={fieldLabel}>Everything else</span>
+                  <button type="button" onClick={() => setLevel(i, { leave: false })} className={`rounded-full border px-3 py-1 text-sm ${!lv.leave ? 'border-brand-neon bg-brand-neon/15 text-brand-neon' : 'border-neutral-700 text-neutral-200'}`}>Call it</button>
+                  {!lv.leave && <input value={lv.other} onChange={(e) => setLevel(i, { other: e.target.value })} placeholder="Other" className={`${ctl} !w-36 !py-1.5`} />}
+                  <button type="button" onClick={() => setLevel(i, { leave: true })} className={`rounded-full border px-3 py-1 text-sm ${lv.leave ? 'border-brand-neon bg-brand-neon/15 text-brand-neon' : 'border-neutral-700 text-neutral-200'}`}>Leave it out of the summary</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {preview(lv).map(([label, c]) => <span key={label} className={`rounded-full border px-3 py-1 text-xs ${label === '\u0001' ? 'border-neutral-800 text-neutral-500 line-through' : 'border-neutral-700 text-neutral-200'}`}>{label === '\u0001' ? 'left out' : (label || '(blank)')} <b className="text-brand-neon">{c.toLocaleString('en-US')}</b></span>)}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {levels.length < 3 && <button type="button" onClick={() => setLevels((ls) => [...ls, toLevel({ by: groupable[0]?.id ?? '' })])} className="rounded-full border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:border-brand-neon">+ Then by another field</button>}
       <div className="grid gap-1.5">
         <span className={fieldLabel}>Numbers to add up <span className="font-normal normal-case tracking-normal text-neutral-500">&middot; none = a count of the records</span></span>
         <div className="flex flex-wrap items-center gap-2">
@@ -310,15 +348,15 @@ export function SummaryBuilder({ fields, mainVals, editing, onSave, onRemove, on
           </select>
         </div>
       </div>
-      <div className="grid gap-2 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3 sm:grid-cols-3">
-        <Toggle label="Total row" checked={total} onChange={setTotal} />
+      <div className="space-y-1 rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2">
+        <Toggle label="Show a Total row at the bottom" checked={total} onChange={setTotal} />
         <Toggle label="Biggest first" checked={biggest} onChange={setBiggest} />
-        <Toggle label={chosen.length > 1 ? `Subtotal for each ${fields.map[chosen[0]]?.label ?? 'group'}` : 'Subtotals (needs two groups)'} checked={subt && chosen.length > 1} onChange={(v) => chosen.length > 1 && setSubt(v)} />
+        {levels.length > 1 && <Toggle label={`Show a subtotal for each ${fields.map[levels[0].by]?.label ?? 'group'}`} checked={subt} onChange={setSubt} />}
       </div>
       <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-800 pt-4">
         {editing && <button type="button" onClick={onRemove} className="mr-auto rounded-xl border border-red-500/50 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10">Remove the summary</button>}
         <button type="button" onClick={onCancel} className={btnGhost}>Cancel</button>
-        <button type="button" disabled={chosen.length === 0} onClick={() => onSave({ by: chosen, vals, subt: subt && chosen.length > 1, total, biggest })} className={btnPrimary}>{editing ? 'Save changes' : 'Show the summary'}</button>
+        <button type="button" disabled={!ready} onClick={save} className={btnPrimary}>{editing ? 'Save changes' : 'Show the summary'}</button>
       </div>
     </div>
   )

@@ -209,15 +209,28 @@ function ReportBuilderModal({ user, onClose, open = true }) {
   // the summary table under the table: the same records (same filters), grouped by what the person chose
   const summaryLayout = useMemo(() => {
     const sm = layout.summary
-    const by = (sm?.by ?? []).filter((id) => fields.map[id])
-    if (!by.length) return null
+    const levels = sm?.levels ?? (sm?.by ?? []).map((id) => ({ by: id }))
+    const calc = [...layout.calc]
+    const rows = []
+    const extraFilters = []
+    levels.forEach((lv, i) => {
+      if (!fields.map[lv.by]) return
+      if (lv.rules?.length) {
+        // the person's own groups of the field's text; "leave it out" keeps only the records that matched a rule
+        const id = `__sg${i}`
+        calc.push({ id, label: fields.map[lv.by].label, group: { from: lv.by, mode: 'rules', rules: lv.rules, other: lv.other == null ? '\u0001' : (lv.other || 'Other') } })
+        rows.push(id)
+        if (lv.other == null) extraFilters.push({ f: id, op: 'isnot', v: ['\u0001'] })
+      } else rows.push(lv.by)
+    })
+    if (!rows.length) return null
     return {
-      ...blankLayout(sourceId), mode: 'pivot', rows: by, vals: (sm.vals ?? []).filter((v) => fields.map[v.f]), filters: layout.filters, search: layout.search, calc: layout.calc,
-      headers: layout.headers, headBg: layout.headBg, totCol: false, totRow: sm.total !== false, subt: !!sm.subt && by.length > 1, sortTot: !!sm.biggest, pct: 'none',
+      ...blankLayout(sourceId), mode: 'pivot', rows, vals: (sm.vals ?? []).filter((v) => fields.map[v.f]), filters: [...layout.filters, ...extraFilters], search: layout.search, calc,
+      headers: layout.headers, headBg: layout.headBg, totCol: false, totRow: sm.total !== false, subt: !!sm.subt && rows.length > 1, sortTot: !!sm.biggest, pct: 'none',
     }
   }, [layout, fields, sourceId])
   const summaryTable = useMemo(() => (summaryLayout && data ? buildTable(summaryLayout, data.fields, data.rows) : null), [summaryLayout, data])
-  const summaryTitle = summaryLayout ? `Summary by ${summaryLayout.rows.map((id) => fields.map[id].label).join(' / ')}` : ''
+  const summaryTitle = summaryLayout ? `Summary by ${summaryLayout.rows.map((id) => (id.startsWith('__sg') ? `${summaryLayout.calc.find((c) => c.id === id).label} (my groups)` : fields.map[id].label)).join(' / ')}` : ''
   // the headings that can be renamed: the fields of the table (the column field's values are the data, not a heading)
   const nameItems = useMemo(() => {
     const ids = layout.mode === 'pivot' ? [...new Set([...layout.rows, ...layout.vals.map((v) => v.f)])] : fields.list.filter((f) => !f.d && tableIds.has(f.id)).map((f) => f.id)
@@ -405,7 +418,7 @@ function ReportBuilderModal({ user, onClose, open = true }) {
               <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
                 <FieldPicker
                   key={sourceId} groups={groups} used={used} query={fieldQuery} setQuery={setFieldQuery} onPick={(e, f) => openMenu(e, f)}
-                  extra={<span className="flex shrink-0 gap-1.5"><button type="button" onClick={calcOpen} className={`${pill} shrink-0 !px-2.5`}>+ Formula</button><button type="button" onClick={groupOpen} className={`${pill} shrink-0 !px-2.5`}>+ Group</button></span>}
+                  extra={<button type="button" onClick={calcOpen} className={`${pill} shrink-0 !px-2.5`}>+ Formula</button>}
                 />
               </div>
               <div className="space-y-2 rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
@@ -420,15 +433,9 @@ function ReportBuilderModal({ user, onClose, open = true }) {
                 {dragging && <p className="rb-pop rounded-lg bg-red-500/15 px-2.5 py-1 text-center text-[11px] text-red-300">Let go outside the boxes to remove it</p>}
               </div>
               <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-2.5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Summary and groups</p>
-                <p className="mb-2 mt-0.5 text-[11px] leading-snug text-neutral-500">Add a summary table under your table, grouped by province, warehouse, customer or anything else, with a total for each group. Make your own groups from part of a name too.</p>
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  <button type="button" onClick={summaryOpen} className={`${pill} !px-2.5 !py-1 ${layout.summary?.by?.length ? pillOn : ''}`}>{layout.summary?.by?.length ? 'Change the summary table' : '+ Summary table below'}</button>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {layout.calc.filter((c) => c.group && fields.map[c.id]).map((c) => <FieldChip key={c.id} f={fields.map[c.id]} draggable dashed used={used.has(c.id)} onClick={(e) => { e.stopPropagation(); openMenu(e, fields.map[c.id]) }} />)}
-                  <button type="button" onClick={groupOpen} className={`${pill} !px-2.5 !py-1`}>+ New group (part of a name)</button>
-                </div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Summary table below</p>
+                <p className="mb-2 mt-0.5 text-[11px] leading-snug text-neutral-500">A second table under your table, grouped by what you choose (province, warehouse, customer, or your own groups such as every customer whose name has FTI), with a total for each group.</p>
+                <button type="button" onClick={summaryOpen} className={`${pill} !px-2.5 !py-1 ${layout.summary ? pillOn : ''}`}>{layout.summary ? 'Change the summary table' : '+ Summary table below'}</button>
               </div>
             </div>
           </div>
@@ -514,8 +521,8 @@ function ReportBuilderModal({ user, onClose, open = true }) {
         </Dialog>
       )}
       {pop === 'summary' && data && (
-        <Dialog title={layout.summary?.by?.length ? 'Change the summary table' : 'Summary table below'} width="max-w-3xl" onClose={() => setPop(null)}>
-          <SummaryBuilder fields={offered} mainVals={layout.vals} editing={layout.summary?.by?.length ? layout.summary : null} onSave={(sm) => { patch({ summary: sm }); setPop(null); toast.success('Summary table added below the table') }} onRemove={() => { patch({ summary: null }); setPop(null) }} onCancel={() => setPop(null)} />
+        <Dialog title={layout.summary ? 'Change the summary table' : 'Summary table below'} width="max-w-3xl" onClose={() => setPop(null)}>
+          <SummaryBuilder fields={offered} rows={keptRows} mainVals={layout.vals} editing={layout.summary ?? null} onSave={(sm) => { patch({ summary: sm }); setPop(null); toast.success('Summary table added below the table') }} onRemove={() => { patch({ summary: null }); setPop(null) }} onCancel={() => setPop(null)} />
         </Dialog>
       )}
       {pop === 'group' && data && (

@@ -256,3 +256,16 @@ test('groups: the person\'s own groups of a text field (part of the name, first 
   const t = buildTable(L, base2, rows2, { full: true })
   assert.deepEqual(t.body.map((r) => r.cells[0].t).sort(), ['FTI', 'Others'])
 })
+
+test('a summary of only the customers that contain FTI: own groups, everything else left out, with a total', () => {
+  const base2 = [{ id: 'c', label: 'Customer', kind: 'txt' }, { id: 'p', label: 'Province', kind: 'txt' }, { id: 'n', label: 'Net kg', kind: 'num' }]
+  const rows2 = [{ c: 'FTI A', p: 'Albay', n: 10 }, { c: 'FTI B', p: 'Albay', n: 5 }, { c: 'FTI C', p: 'Sorsogon', n: 2 }, { c: 'Dens', p: 'Albay', n: 7 }]
+  const g = { from: 'c', mode: 'rules', rules: [{ op: 'contains', text: 'fti', label: 'FTI' }], other: '\u0001' }
+  const L = { ...blankLayout('x'), rows: ['__sg0', 'p'], vals: [{ f: 'n', a: 'sum' }], totCol: false, totRow: true, subt: true, calc: [{ id: '__sg0', label: 'Customer', group: g }], filters: [{ f: '__sg0', op: 'isnot', v: ['\u0001'] }] }
+  const t = buildTable(L, base2, rows2, { full: true })
+  const flat = flatten(L, t)
+  assert.equal(flat.body.length, 3) // FTI / Albay, FTI / Sorsogon, and the FTI subtotal... plus none for Dens
+  const text = flat.body.map((r) => r.join('|')).join('\n')
+  assert.ok(!/Dens/.test(text))
+  assert.deepEqual(flat.foot.filter((x) => typeof x === 'number'), [17])
+})
