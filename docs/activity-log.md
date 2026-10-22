@@ -18761,3 +18761,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-22: SIA lines lost by older app versions, sack stock rule unified (v1.10-438)
 
 - Apps Script returns whole SIAs on delta pulls; form and Home count sack stock like the MTS report; breakdown shown under the available line.
+
+## 2026-10-22: SDO 2-decimal setting applied to every ENW on the Abstract and CPF (v1.10-439)
+
+- Net Wt and Equivalent Net Wt print with 2 decimals everywhere when the SDO works to 2.

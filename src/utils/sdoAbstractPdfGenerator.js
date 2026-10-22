@@ -168,13 +168,15 @@ const drawBranchHeader = (doc, { branchLabel, periodLabel, isFirstPage = true })
  */
 export const generateSdoAbstract = ({
   branchLabel, dateFrom, dateTo, purchaseReceipts, purityDisplayFormat = 'range',
-  reconciliation, signatories, capture = null,
+  reconciliation, signatories, capture = null, netDecimals = 3,
 }) => {
   const pricerEnabled = purchaseReceipts.some((pr) => pr.pricerAmount != null)
   // A receipt issued by an SDO working to 2 decimals prints its Net Wt and Equivalent Net Wt with 2; the totals use 2
   // only when every counted receipt does.
-  const dec2 = (pr) => pr.netWeightDecimals === 2
-  const totalsTwo = purchaseReceipts.filter((pr) => pr.status !== 'Cancelled').length > 0 && purchaseReceipts.filter((pr) => pr.status !== 'Cancelled').every(dec2)
+  // When the exporting SDO works to 2 decimals, EVERY row and every total prints Net Wt and Equivalent Net Wt with 2 (a receipt issued
+  // before the setting was switched on is shown rounded to 2; its stored figures and amounts are not touched).
+  const dec2 = (pr) => netDecimals === 2 || pr.netWeightDecimals === 2
+  const totalsTwo = netDecimals === 2 || (purchaseReceipts.filter((pr) => pr.status !== 'Cancelled').length > 0 && purchaseReceipts.filter((pr) => pr.status !== 'Cancelled').every(dec2))
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [pageW, pageH] })
   const periodLabel = fmtPeriodLabel(dateFrom, dateTo)
 
