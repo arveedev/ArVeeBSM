@@ -278,7 +278,7 @@ function ReportBuilderModal({ user, onClose, open = true }) {
     setBusy(kind)
     try {
       const flat = t ?? flatten(layout, buildTable(layout, data.fields, data.rows, { full: true }))
-      const extra = !t && summaryLayout ? { title: summaryTitle, table: flatten(summaryLayout, buildTable(summaryLayout, data.fields, data.rows, { full: true })) } : null
+      const extra = !t && summaryLayout ? { title: 'Summary', table: flatten(summaryLayout, buildTable(summaryLayout, data.fields, data.rows, { full: true })) } : null
       const m = meta()
       m.title = ttl
       m.headBg = layout.headBg

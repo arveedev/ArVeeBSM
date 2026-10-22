@@ -243,7 +243,7 @@ export function GroupBuilder({ fields, rows, editing, onSave, onCancel }) {
           {rules.map((r, i) => (
             <div key={i} className="grid grid-cols-[7.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
               <select value={r.op} onChange={(e) => setRule(i, { op: e.target.value })} className={ctl}>{GROUP_OPS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
-              <input value={r.text} onChange={(e) => setRule(i, { text: e.target.value })} placeholder="this text" className={ctl} />
+              <input value={r.text} onChange={(e) => setRule(i, { text: e.target.value })} placeholder="this text, or several separated by commas" className={ctl} />
               <input value={r.label} onChange={(e) => setRule(i, { label: e.target.value })} placeholder="group name (or leave empty)" className={ctl} />
               <button type="button" onClick={() => setRules((rs) => (rs.length > 1 ? rs.filter((_, k) => k !== i) : rs))} aria-label="Remove rule" className="rounded-lg px-2 py-1 text-neutral-500 hover:text-red-400">&times;</button>
             </div>
@@ -307,11 +307,11 @@ export function SummaryBuilder({ fields, rows, mainVals, editing, onSave, onRemo
             {field?.kind === 'txt' && !field.d && <Toggle label={`Make my own groups from part of the text of ${field.label}`} checked={lv.own} onChange={(v) => setLevel(i, { own: v })} />}
             {lv.own && (
               <div className="space-y-2">
-                <p className="text-xs text-neutral-400">Each value goes into the first group whose rule it matches. Example: <b>contains</b> &ldquo;FTI&rdquo; &rarr; group &ldquo;FTI&rdquo;.</p>
+                <p className="text-xs text-neutral-400">Each record goes into the <b>first</b> group whose rule it matches, so it is never counted twice; put the more specific rule first. Example: <b>contains</b> &ldquo;P20&rdquo; &rarr; group &ldquo;FTI P20&rdquo;. Several words can share one group: &ldquo;LGU, PLGU&rdquo;.</p>
                 {lv.rules.map((r, ri) => (
                   <div key={ri} className="grid grid-cols-[7.5rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
                     <select value={r.op} onChange={(e) => setRule(i, ri, { op: e.target.value })} className={ctl}>{GROUP_OPS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select>
-                    <input value={r.text} onChange={(e) => setRule(i, ri, { text: e.target.value })} placeholder="this text" className={ctl} />
+                    <input value={r.text} onChange={(e) => setRule(i, ri, { text: e.target.value })} placeholder="this text, or several separated by commas" className={ctl} />
                     <input value={r.label} onChange={(e) => setRule(i, ri, { label: e.target.value })} placeholder="group name (or leave empty)" className={ctl} />
                     <button type="button" onClick={() => setLevel(i, { rules: lv.rules.length > 1 ? lv.rules.filter((_, k) => k !== ri) : lv.rules })} aria-label="Remove rule" className="rounded-lg px-2 py-1 text-neutral-500 hover:text-red-400">&times;</button>
                   </div>

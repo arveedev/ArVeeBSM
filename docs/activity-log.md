@@ -18741,3 +18741,7 @@ Owner follow-ups: SETUP-DRIVE-AND-RESTORE-TEST.md section C in bsm-backups.
 ## 2026-10-22: Summary and groups merged (v1.10-433)
 
 - One Summary table below dialog with per-level own groups, leave-out option and stacked switches.
+
+## 2026-10-22: Summary title and multi-word group rules (v1.10-434)
+
+- PDF/Excel summary titled Summary; group rules take several words; first match wins.

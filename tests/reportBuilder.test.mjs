@@ -269,3 +269,15 @@ test('a summary of only the customers that contain FTI: own groups, everything e
   assert.ok(!/Dens/.test(text))
   assert.deepEqual(flat.foot.filter((x) => typeof x === 'number'), [17])
 })
+
+test('groups: several words in one rule, and a record lands in the first matching group only', async () => {
+  const { groupValue } = await import('../src/utils/reportBuilder/fields.js')
+  const g = { from: 'c', mode: 'rules', rules: [{ op: 'contains', text: 'p20', label: 'FTI P20' }, { op: 'contains', text: 'dole', label: 'FTI DOLE' }, { op: 'contains', text: 'apao', label: 'FTI APAO' }, { op: 'contains', text: 'lgu, plgu', label: 'FTI LGU' }], other: 'Other' }
+  const map2 = { c: { id: 'c', label: 'Customer', kind: 'txt' } }
+  const v = (n) => groupValue({ c: n }, g, map2)
+  assert.equal(v('FTI P20 BY MARIELLE MINAS'), 'FTI P20')
+  assert.equal(v('FTI DOLE'), 'FTI DOLE')
+  assert.equal(v('FTI APAO ALBAY C/O ENGR. DAPHNE'), 'FTI APAO')
+  assert.equal(v('FTI PLGU CATANDUANES C/O GARNET'), 'FTI LGU')
+  assert.equal(v('FTI P20 APAO'), 'FTI P20') // matches two rules: the first one wins, so it is counted once
+})

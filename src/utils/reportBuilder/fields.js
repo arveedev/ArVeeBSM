@@ -125,11 +125,13 @@ export const groupValue = (row, g, map) => {
   if (g.mode === 'firstWord') return raw.split(/\s+/)[0]
   if (g.mode === 'letters') return raw.slice(0, Math.max(1, Number(g.n) || 3)).toUpperCase()
   const low = raw.toLowerCase()
+  // First matching rule wins, so a record is in one group only. A rule's text may hold several words separated by commas (any one matches).
   for (const r of g.rules ?? []) {
-    const t = String(r.text ?? '').trim().toLowerCase()
-    if (!t) continue
-    const hit = r.op === 'starts' ? low.startsWith(t) : r.op === 'ends' ? low.endsWith(t) : r.op === 'is' ? low === t : low.includes(t)
-    if (hit) return String(r.label ?? '').trim() || String(r.text).trim()
+    const raw = String(r.text ?? '')
+    const tokens = raw.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)
+    if (!tokens.length) continue
+    const hit = tokens.some((t) => (r.op === 'starts' ? low.startsWith(t) : r.op === 'ends' ? low.endsWith(t) : r.op === 'is' ? low === t : low.includes(t)))
+    if (hit) return String(r.label ?? '').trim() || raw.split(',')[0].trim()
   }
   return other
 }

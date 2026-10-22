@@ -1,6 +1,6 @@
 # Project Handoff — BSM App
 
-## CURRENT STATE (verified 2026-10-21, app v1.10-433, pushed to main; Report Builder v1.10-416 to 426 shipped; authority sync fix 427 + safeguards 428) - READ THIS FIRST
+## CURRENT STATE (verified 2026-10-21, app v1.10-434, pushed to main; Report Builder v1.10-416 to 426 shipped; authority sync fix 427 + safeguards 428) - READ THIS FIRST
 
 Everything below the "Historical record" heading near the end of this section was last verified between August and
 2026-10-05 (app v1.10-271) and is background only. This section is the maintained one: **it must be updated in every
@@ -59,6 +59,7 @@ the latest code commit). Update it before saying a task is done.
 7. Opening balance (v1.10-370): the owner must open Opening balance and Save once so the old partial override becomes a frozen one (the button says "not frozen" until then). The opening must never move once set; no change log wanted.
 8. Milling and Issuances (Admin only): test milling (TMO) is included and an LGU is matched by the letters LGU anywhere in the customer name; neither was confirmed by the owner.
 16e. REPORT BUILDER BUILT 2026-10-20 (v1.10-416, schema v49; plan docs/superpowers/specs/2026-10-20-report-builder-design.md): read-only tables and pivots for Admin, the new Analyst role and warehouse staff (own warehouses only); Ctrl+Alt+R; Admin > Access > Tools Access; export log = Report Builder data source 'Report export log' (Admin). Owner step after deploy: add an Analyst user in Admin > Users.
+16r. 1.10-434 (2026-10-22): export summary title is 'Summary'; group rules accept comma-separated words (fields.js groupValue), first matching rule wins.
 16q. 1.10-433 (2026-10-22): summary and groups merged: layout.summary = {levels:[{by, rules?, other}], vals, subt, total, biggest}; a level with rules becomes an internal group field (__sgN) in summaryLayout, 'leave out' adds an isnot filter on it. Old layout.summary.by[] still read. The standalone '+ Group' entry was removed from the UI (groupValue/GroupBuilder remain for layouts that already contain groups).
 16p. 1.10-432 (2026-10-22): Report Builder summary table = layout.summary {by[], vals[], subt, total, biggest}; rendered by the same buildTable as a second pivot under the main table (summaryLayout in ReportBuilderModal.jsx), exported as `extra` (exportXlsx/exportPdf 4th argument). Custom groups now rules only (GroupBuilder). OPEN: owner to try 'Summary below' with Sales grouped by Province / Warehouse.
 16o. 1.10-431 (2026-10-22): Report Builder groups = layout.calc entries with a `group` {from, mode: rules|firstWord|letters, rules[{op,text,label}], other} (fields.js groupValue; kind txt); GroupBuilder in rbParts.jsx; authorities source has cereal (AI by variety category, SIA by sack-type categories) + sackTypes; docs_sacks/auth_sacks/sack_inv carry cereal. Remote Control: checked, on for this session and the default setting is On; the app cannot explain a drop (usually app restart, sleep or network).
